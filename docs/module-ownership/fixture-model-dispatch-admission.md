@@ -1,0 +1,7 @@
+# Proving a fixture dispatch no admission holds
+
+Generated from `scripts/ownership/fixture-model-dispatch-admission.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                         | Owner                                                     | Enforcement                                                                                                   | Summary                                                                                                                                                            |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fixture-model-dispatch-admission` — Proving a fixture dispatch no admission holds | `apps/api/src/lib/rate-limit/model-dispatch-admission.ts` | import `admitFixtureModelDispatch` from `@/api/lib/rate-limit/model-dispatch-admission` (plus 1 allowed file) | Production proofs live only inside the run an admission wrapper admitted; only offline evaluations (and tests) mint a standalone proof for a fixture organization. |

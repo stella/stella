@@ -11,7 +11,7 @@ type ChatProjectableReadToolName = ChatProjectableToolName<
 
 const CHAT_READ_SCRIPT_POLICIES = ["script", "direct-only"] as const;
 
-export type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
+type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
 
 /**
  * A script runs without outbound approval and holds no third-party outbound

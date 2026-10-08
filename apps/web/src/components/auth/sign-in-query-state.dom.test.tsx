@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { AuthCapabilities } from "./sign-in-panel.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
@@ -27,9 +29,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await sleep(0);
   await GlobalRegistrator.unregister();
 });
 

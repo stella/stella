@@ -15,6 +15,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
+  admitFiniteAction,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
@@ -22,6 +23,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
@@ -131,18 +133,19 @@ export const cleanSuggestionsText = (text: string): string[] => {
 
 const getSuggestedPrompts = createSafeRootHandler(
   config,
-  async function* ({
-    getWorkspaceAccess,
-    orgAIConfig,
-    managedAIResidency,
-    orgAIConfigStatus,
-    params: { threadId },
-    promptCachingEnabled,
-    query: { workspaceId },
-    safeDb,
-    session,
-    user,
-  }) {
+  async function* (ctx) {
+    const {
+      getWorkspaceAccess,
+      orgAIConfig,
+      managedAIResidency,
+      orgAIConfigStatus,
+      params: { threadId },
+      promptCachingEnabled,
+      query: { workspaceId },
+      safeDb,
+      session,
+      user,
+    } = ctx;
     if (
       Result.isError(
         requireTanStackAIAvailableForRole({
@@ -261,39 +264,60 @@ const getSuggestedPrompts = createSafeRootHandler(
       traceId: Bun.randomUUIDv7(),
     });
 
-    try {
-      const text = await generateTanStackTextForRole({
-        dataClass: "customer",
-        finishPolicy: "allow-incomplete",
-        role: "fast",
-        orgAIConfig,
-        managedAIResidency,
-        organizationId: session.activeOrganizationId,
-        analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
+    const suggestPrompts = async ({
+      actionSignal,
+      modelAdmission,
+    }: {
+      actionSignal: AbortSignal;
+      modelAdmission: ModelDispatchAdmission;
+    }): Promise<Result<SuggestedPromptsResult, never>> => {
+      try {
+        const text = await generateTanStackTextForRole({
+          dataClass: "customer",
+          finishPolicy: "allow-incomplete",
           role: "fast",
-          scopeKey: threadId,
-        }),
-        tenantWorkspaceIds: persistedWorkspaceId ? [persistedWorkspaceId] : [],
-        system: SUGGESTIONS_SYSTEM_PROMPT,
-        systemPromptOrigin: "server-built",
-        prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
-        maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
-        temperature: 0.3,
-        serviceTier: "standard",
-        abortSignal: AbortSignal.timeout(15_000),
-      });
-
-      const prompts = cleanSuggestionsText(text);
-      return Result.ok<SuggestedPromptsResult>({ prompts });
-    } catch (error) {
-      aiAnalytics.captureError(error);
-      if (isUnanticipatedAIFailure(error)) {
-        captureError(error, { threadId, feature: "chat.suggested_prompts" });
+          orgAIConfig,
+          managedAIResidency,
+          organizationId: session.activeOrganizationId,
+          admission: modelAdmission,
+          analytics: aiAnalytics,
+          caching: resolveCaching({
+            promptCachingEnabled,
+            role: "fast",
+            scopeKey: threadId,
+          }),
+          tenantWorkspaceIds: persistedWorkspaceId
+            ? [persistedWorkspaceId]
+            : [],
+          system: SUGGESTIONS_SYSTEM_PROMPT,
+          systemPromptOrigin: "server-built",
+          prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
+          maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
+          temperature: 0.3,
+          serviceTier: "standard",
+          abortSignal: AbortSignal.any([
+            actionSignal,
+            AbortSignal.timeout(15_000),
+          ]),
+        });
+        return Result.ok({ prompts: cleanSuggestionsText(text) });
+      } catch (error) {
+        aiAnalytics.captureError(error);
+        if (isUnanticipatedAIFailure(error)) {
+          captureError(error, { threadId, feature: "chat.suggested_prompts" });
+        }
+        return Result.ok<SuggestedPromptsResult>({ prompts: [] });
       }
-      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
-    }
+    };
+
+    return yield* admitFiniteAction({
+      actionKind: "chat.suggested-prompts",
+      ctx,
+      async *handler(admitted) {
+        const suggestions = yield* Result.await(suggestPrompts(admitted));
+        return Result.ok(suggestions);
+      },
+    });
   },
 );
 

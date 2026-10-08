@@ -48,7 +48,7 @@ export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
  * mentions (imports, re-exports) and only matches a call or generic
  * instantiation, so an `import { createSafeHandler }` line is never counted.
  */
-export const SAFE_HANDLER_CALL_PATTERN = new RegExp(
+const SAFE_HANDLER_CALL_PATTERN = new RegExp(
   `(?:${SAFE_HANDLER_FACTORY_NAMES.join("|")})[<(]`,
   "gu",
 );
@@ -63,7 +63,7 @@ const FACTORY_KIND_PATTERNS = Object.entries(SAFE_HANDLER_FACTORIES).map(
 );
 
 /** The distinct factory kinds a file's source textually calls. */
-export const detectHandlerKinds = (source: string): HandlerKind[] => {
+const detectHandlerKinds = (source: string): HandlerKind[] => {
   const kinds = new Set<HandlerKind>();
   for (const { kind, pattern } of FACTORY_KIND_PATTERNS) {
     if (pattern.test(source)) {
@@ -175,7 +175,7 @@ export type CollectedEndpoint = {
  * exported as both default and a name is recorded once under the default id, so
  * existing baseline entries stay valid. Pure (a plain record in, no I/O).
  */
-export const collectModuleEndpoints = (
+const collectModuleEndpoints = (
   mod: Record<string, unknown>,
   moduleId: string,
 ): CollectedEndpoint[] => {
@@ -222,12 +222,12 @@ export const enumerateModuleEndpoints = (
     exposure,
   }));
 
-export type DiscoveredEndpoint = CollectedEndpoint & {
+type DiscoveredEndpoint = CollectedEndpoint & {
   /** Repo-relative path of the file this endpoint was discovered in. */
   file: string;
 };
 
-export type DiscoveredFile = {
+type DiscoveredFile = {
   /** Repo-relative file path. */
   id: string;
   callCount: number;

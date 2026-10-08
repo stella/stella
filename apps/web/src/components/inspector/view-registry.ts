@@ -76,7 +76,7 @@ export type StructuredCloneable<T> = [T] extends [StructuredCloneLeaf]
  * rail-icon functions. Mirrors `InspectorTab` but typed against the
  * registration's payload so callers don't have to re-narrow.
  */
-export type InspectorViewTab<P> = {
+type InspectorViewTab<P> = {
   id: string;
   label: string;
   payload: P;
@@ -158,10 +158,6 @@ class InspectorViewRegistry {
     return this.registrations.get(type);
   }
 
-  kinds() {
-    return [...this.registrations.keys()];
-  }
-
   registerPersistence(
     type: InspectorViewKind,
     persistence: InspectorPersistenceReference,
@@ -236,7 +232,3 @@ export const registerInspectorView = <P>(
 export const getInspectorView = (
   type: InspectorViewKind,
 ): StoredRegistration | undefined => registry.get(type);
-
-export const getRegisteredKinds = (): readonly InspectorViewKind[] => [
-  ...registry.kinds(),
-];

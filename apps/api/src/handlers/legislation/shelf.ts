@@ -45,7 +45,6 @@ type LegislationShelfQuery = Static<typeof legislationShelfQuerySchema>;
 export type LegislationShelf = Static<
   typeof legislationShelfSuccessResponseSchema
 >;
-export type LegislationShelfItem = LegislationShelf["recentlyInForce"][number];
 
 class LegislationShelfError extends TaggedError("LegislationShelfError")<{
   message: string;

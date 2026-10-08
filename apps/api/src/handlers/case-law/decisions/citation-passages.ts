@@ -17,6 +17,7 @@
 import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -33,7 +34,6 @@ import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabula
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import { chunked } from "@/api/lib/chunked";
 import { errorTag } from "@/api/lib/errors/utils";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
@@ -247,7 +247,7 @@ const readDecisionTextByDecision = async (
   pointers: readonly PassageSourcePointer[],
 ): Promise<Map<string, DecisionText>> => {
   const textByDecision = new Map<string, DecisionText>();
-  for (const group of chunked(pointers, PASSAGE_AST_GROUP_SIZE)) {
+  for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
     const columns = await readDecisionTextColumns(
       caseLawDb,
       group.map((pointer) => pointer.id),

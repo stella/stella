@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -20,6 +21,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { UsagePlansCard } from "@/routes/_protected.settings/-components/organization/usage-plans-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
@@ -49,9 +51,13 @@ function UsageSettingsPage() {
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data, isLoading } = useQuery(
+  const entitlementQuery = useQuery(
     usageEntitlementOptions({ organizationId: activeOrganizationId }),
   );
+  const entitlementView = useQueryView(entitlementQuery);
+  const data =
+    entitlementView.type === "items" ? entitlementView.items : undefined;
+  const isLoading = entitlementView.type === "pending";
   const entitlement = data?.entitlement;
   const packsPurchasable =
     entitlement?.source === "hosted" &&
@@ -63,7 +69,15 @@ function UsageSettingsPage() {
         description={t("settings.organization.usageDescription")}
         title={t("settings.organization.usage")}
       />
-      <UsageBody data={data?.entitlement ? data : null} isLoading={isLoading} />
+      {entitlementView.type !== "pending" && (
+        <QueryViewFeedback view={entitlementView} />
+      )}
+      {entitlementView.type !== "error" && (
+        <UsageBody
+          data={data?.entitlement ? data : null}
+          isLoading={isLoading}
+        />
+      )}
       {env.VITE_FEATURE_USAGE && (
         <div className="mt-6 space-y-6">
           <UsagePlansCard packsPurchasable={packsPurchasable} />
@@ -90,7 +104,7 @@ function UsageBody({
 }
 
 // Mirrors ActiveEntitlementCard: title + meta row with a trailing action,
-// then the usage label/value row above the meter, so the card does not
+// then the usage label/value row and percentage, so the card does not
 // jump when the entitlement query resolves.
 function EntitlementCardSkeleton() {
   return (
@@ -109,7 +123,7 @@ function EntitlementCardSkeleton() {
             <Skeleton className="h-4 w-36" />
             <Skeleton className="h-4 w-24" />
           </div>
-          <Skeleton className="h-2 w-full rounded-full" />
+          <Skeleton className="h-4 w-12" />
         </div>
       </FramePanel>
     </Frame>
@@ -185,19 +199,9 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
               })}
             </span>
           </div>
-          <div
-            aria-label={t("settings.organization.usageUnitsThisPeriod")}
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={usedPct}
-            className="bg-muted h-2 w-full overflow-hidden rounded-full"
-            role="progressbar"
-          >
-            <div
-              className="bg-foreground h-full transition-[width]"
-              style={{ width: `${usedPct}%` }}
-            />
-          </div>
+          <p className="text-muted-foreground text-sm tabular-nums">
+            {format.number(usedPct / 100, { style: "percent" })}
+          </p>
         </div>
       </FramePanel>
     </Frame>

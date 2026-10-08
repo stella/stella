@@ -43,7 +43,7 @@ import {
 import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
 import { optionalArray } from "@/lib/arrays";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -67,9 +67,11 @@ export const ProvisionInspectorView = ({
   const { payload } = tab;
   const textScale = useReaderTextScale();
   const updateView = useInspectorTabsStore((state) => state.updateView);
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const availableVersions = optionalArray(versions);
   // The opener's seed stands only until the list arrives: an opener with no
   // reason to read the work's versions carries one.

@@ -138,7 +138,7 @@ runtime validation, or integration tests.
 
 ### React, routing, query state, and performance
 
-- [`query-data-requires-state`](./query-data-requires-state.ts) (`query-data-requires-state`): requires query data consumers to inspect response state through the owned query view or an explicit state read; existing bindings are held to a shrinking baseline.
+- [`query-data-requires-state`](./query-data-requires-state.ts) (`query-data-requires-state`): requires query data consumers to inspect response state through the owned query view or an explicit state read, with no grandfathered bindings. Rendered state uses `useQueryView` and retry feedback; optional reads use `useQueryViewError` to report failures while retaining cached content.
 - [`no-beforeload-redirect`](./no-beforeload-redirect.ts) (`no-beforeload-redirect`): rejects unconditional redirects from `beforeLoad` or `loader`; redirect-only routes must mount a navigation component so abandoned pending trees cannot leak.
 - [`no-centered-scroll-column`](./no-centered-scroll-column.ts) (`no-centered-scroll-column`): keeps the scrollbar on the full content pane instead of a centered, width-capped inner column.
 - [`no-detached-void`](./no-detached-void.ts) (`no-detached-void`): prevents `void promise` from hiding rejection ownership; use `await`, return the promise, or the monitored `detached()` helper.
@@ -181,7 +181,7 @@ runtime validation, or integration tests.
 - [`icon-button-requires-tooltip`](./icon-button-requires-tooltip.ts) (`icon-button-requires-tooltip`): requires icon-only buttons to expose an accessible label through the owned tooltip contract.
 - [`no-decorated-search-input`](./no-decorated-search-input.ts) (`no-decorated-search-input`): rejects a second search icon or a leading `ps-`/`pl-` utility beside an `@stll/ui` `Input`/`InputGroupInput` with `type="search"`, which already draws the icon and reserves its space.
 - [`require-in-flow-viewport-popup`](./require-in-flow-viewport-popup.ts) (`require-in-flow-viewport-popup`): requires a Base UI positioner that renders a `Viewport` to size itself and keep its popup in flow through the shared `positioner-sizing` constants, so collision handling measures the real popup on every side.
-- [`no-adhoc-loader`](./no-adhoc-loader.ts) (`no-adhoc-loader`): requires the owned `Loader` primitive for indeterminate loading states instead of ad hoc spinners; a ratchet over the files that still carry one.
+- [`no-adhoc-loader`](./no-adhoc-loader.ts) (`no-adhoc-loader`): requires `Loader`/`LoaderState` for indeterminate loading and `Skeleton` for known content shapes; rejects ad hoc spinners, spin/pulse utilities (including variants), and progress bars without file exemptions.
 - [`no-ad-hoc-find-shortcut`](./no-ad-hoc-find-shortcut.ts) (`no-ad-hoc-find-shortcut`): keeps the find shortcut on its single registry listener, so no surface recognises the press itself and reopens the two-bar bug.
 - [`no-hand-rolled-typed-character`](./no-hand-rolled-typed-character.ts) (`no-hand-rolled-typed-character`): rejects a function that reads `altKey` or the AltGraph state and tests `key` for one typed character; `typedCharacter` (`@stll/ui/typed-character`) decides, since Option types text on macOS layouts and AltGr arrives as Ctrl+Alt on Windows. A function that requires the Mod chord (`metaKey || ctrlKey`) is a shortcut and stays exempt.
 - [`no-ambient-hotkey-format`](./no-ambient-hotkey-format.ts) (`no-ambient-hotkey-format`): keeps platform detection and hotkey display formatting behind the hydration-safe helper so server and client output cannot diverge.
@@ -254,7 +254,7 @@ runtime validation, or integration tests.
 - [`no-condition-combinator-outside-conditions`](./no-condition-combinator-outside-conditions.ts) (`no-condition-combinator-outside-conditions`): keeps condition-tree `combinator`/`negated` reads behind `@stll/conditions`'s own fold/walk/evaluate helpers instead of call sites re-implementing tree semantics; the condition builders in `@stll/conditions` and `@stll/workspace-ui` are exempt; elsewhere only group callbacks actually passed to `foldCondition`/`foldConditions` from the owner may read these fields. Importing a fold does not exempt the module or its leaf callbacks.
 - [`no-crypto-random-uuid`](./no-crypto-random-uuid.ts) (`no-crypto-random-uuid`): requires Bun's UUIDv7 generator in backend runtime code.
 - [`no-eager-singleton`](./no-eager-singleton.ts) (`no-eager-singleton`): prevents side-effecting clients from being constructed at module evaluation time; use lazy getters.
-- [`no-facade-imports`](./no-facade-imports.ts) (`no-facade-imports`): requires imports from the owning leaf module instead of broad facades that hide boundaries and side effects.
+- [`no-facade-imports`](./no-facade-imports.ts) (`no-facade-imports`): requires imports from the owning leaf module instead of broad facades that hide boundaries and side effects; rejects the removed API document-AST facades through aliases and relative paths, directing consumers to `@stll/legal-ast/document-ast`.
 - [`no-nanoid`](./no-nanoid.ts) (`no-nanoid`): prevents the removed Nano ID dependency from returning; use UUIDv7 or Web Crypto for custom alphabets.
 - [`confine-server-reads`](./confine-server-reads.ts) (`confine-server-reads`): keeps Start request metadata access behind the approved server helper.
 - [`no-partial-record-satisfies`](./no-partial-record-satisfies.ts) (`no-partial-record-satisfies`): rejects `satisfies Partial<Record<Union, T>>`, which defeats exhaustive companion-map checking.
@@ -265,6 +265,8 @@ runtime validation, or integration tests.
 - [`no-static-devtools-import`](./no-static-devtools-import.ts) (`no-static-devtools-import`): prevents development-only modules from entering eager production dependency graphs.
 - [`require-function-replacer`](./require-function-replacer.ts) (`require-function-replacer`): requires function-valued state updates to use an explicit replacer wrapper so they are not invoked as updater callbacks.
 - [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`, `canonical-rule-id`): requires explained suppressions, autofixes rule IDs to their configured spelling, and rejects directives for another lint engine.
+
+- [`confine-aggregate-lock`](./confine-aggregate-lock.ts) (`confine-aggregate-lock`): confines raw aggregate acquisitions and API transaction/savepoint boundaries to the owner and migrations, with an enumerated shrinking legacy baseline.
 
 ## Native and shared rules
 
@@ -340,3 +342,7 @@ implies a hazard that is gone.
 - [`no-ad-hoc-inline-rename`](./no-ad-hoc-inline-rename.ts) (`no-ad-hoc-inline-rename`): enumerates native and UI input aliases in view/edit owners with blur/keyboard commit handlers and rename bindings or autofocus; requires `@stll/ui/inline-rename`. Permanent, creation, numeric and multiline fields stay outside this detection boundary.
 
 - [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.
+
+### Shared concurrency primitives
+
+- [`no-hand-rolled-concurrency`](./no-hand-rolled-concurrency.ts) rejects direct promise resolver timers and the named duplicate sleep, API `chunked`, web research `chunk`, and adapter `backoffMs` helpers. The owner is private `@stll/concurrency`, through `/sleep`, `/chunk`, and `/backoff-delay`. It deliberately does not infer retry policy from arithmetic or array partitioning from generic slice loops. Native `Bun.sleep`, retained deadline timers, string/byte slices, overlapping windows, dynamic budgets, and atomic SQL retry updates retain their contracts. Exact exceptions with reasons live in [`no-hand-rolled-concurrency-exceptions.json`](./no-hand-rolled-concurrency-exceptions.json); `bun scripts/check-concurrency-exceptions.ts` prevents additions, moves, widening, and duplicate allowances after the introducing PR.

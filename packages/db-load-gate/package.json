@@ -22,6 +22,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/concurrency": "workspace:*",
     "@stll/time": "workspace:*",
     "better-result": "catalog:"
   },

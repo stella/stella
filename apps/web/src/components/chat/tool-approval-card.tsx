@@ -12,13 +12,8 @@ import {
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { Button } from "@stll/ui/button";
-import {
-  CheckIcon,
-  GlobeIcon,
-  LoaderIcon,
-  PencilIcon,
-  XIcon,
-} from "@stll/ui/icons";
+import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
@@ -74,7 +69,7 @@ import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -556,10 +551,10 @@ export const ToolApprovalCard = ({
         <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
         <span className="font-medium">{label}</span>
         {isProcessing && (
-          <LoaderIcon
-            aria-label={t("common.running")}
-            className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin"
-            role="img"
+          <Loader
+            className="ms-auto size-3.5 shrink-0"
+            label={t("common.running")}
+            size="sm"
           />
         )}
         {isApproved && (
@@ -755,13 +750,16 @@ type SummaryMatter = { color: string | null; id: string; name: string };
 const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   const { activeOrganizationId } = useChatApproval();
   const user = useMaybeAuthenticatedUser();
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
     }),
     enabled: user !== null,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
     return byId;

@@ -25,7 +25,7 @@ export const caseLawCorpusDocumentCanRecur = (generation: string) =>
   ), 0) <> 1`;
 
 /** The physical index this generation projects a decision's current country into. */
-export const caseLawDecisionCorpusIndexIdSql = (generation: string) =>
+const caseLawDecisionCorpusIndexIdSql = (generation: string) =>
   caseLawIndexIdSql(sql`${generation}`, caseLawDecisions.country);
 
 /**

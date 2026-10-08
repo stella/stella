@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   downloadAction,
   downloadNoticeMessage,
@@ -224,9 +226,7 @@ describe("holding a download for its judgement", () => {
         }
       });
       // The frame lookup is still running: nothing may be suggested yet.
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
+      await sleep(20);
       expect(events).toEqual([]);
 
       releaseFrames();
@@ -410,9 +410,7 @@ describe("recording and taking download notices", () => {
       for (const release of waiting.splice(0)) {
         release();
       }
-      await new Promise((resolve) => {
-        setTimeout(resolve, 5);
-      });
+      await sleep(5);
     };
     return { releaseReads, stored };
   };
@@ -427,9 +425,7 @@ describe("recording and taking download notices", () => {
       return undefined;
     });
     // Both updates are started before any read is let through.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 5);
-    });
+    await sleep(5);
     for (let round = 0; round < 10; round += 1) {
       if (progress.done) {
         break;

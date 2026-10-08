@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   CriticalQueryTimeoutError,
   ROUTE_QUERY_STALE_TIME_MS,
@@ -10,11 +12,6 @@ import {
   prefetchNonCriticalQuery,
   routeQueryOptions,
 } from "@/lib/react-query";
-
-const wait = async (ms: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 describe("ensureCriticalQueryData", () => {
   test("cancels timed-out critical queries and reports the query key", async () => {
@@ -60,7 +57,7 @@ describe("ensureCriticalQueryData", () => {
     expect(caughtError.queryKey).toEqual(queryKey);
     expect(caughtError.message).toContain(JSON.stringify(queryKey));
 
-    await wait(0);
+    await sleep(0);
 
     expect(abortReceived).toBe(true);
     expect(queryClient.getQueryCache().find({ queryKey })?.state).toMatchObject(
@@ -90,7 +87,7 @@ describe("ensureCriticalQueryData", () => {
       { timeoutMs: 1 },
     );
 
-    await wait(5);
+    await sleep(5);
 
     expect(result).toBe("ok");
     expect(abortReceived).toBe(false);

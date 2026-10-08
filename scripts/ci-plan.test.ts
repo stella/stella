@@ -3553,7 +3553,9 @@ test("the selector plans the same with its detector CLIs spawned as served in pr
     ciJobs["ci-plan"],
   );
   const outputs = Object.entries(plan.outputs).flatMap(([name, value]) =>
-    value.includes("steps.changed-files.outputs.") ? [name] : [],
+    /^\$\{\{ steps\.changed-files\.outputs\.\w+ \}\}$/u.test(value)
+      ? [name]
+      : [],
   );
   expect(outputs).toContain("service_suites_pr_required");
   expect(outputs).toContain("dependency_malware_required");
@@ -3888,13 +3890,15 @@ const queueOnlyJobs = Object.fromEntries(
   Object.entries(eventPolicies.jobs)
     .filter(
       ([key, policy]) =>
-        policy === "queue" &&
+        (policy === "queue" || key === "ci.yml/service-suites") &&
         key.startsWith("ci.yml/") &&
         gatedJobs.includes(key.slice("ci.yml/".length)),
     )
     .map(([key]) => [
       key.slice("ci.yml/".length),
-      "queue-only because its declared event policy certifies the merged tree",
+      key === "ci.yml/service-suites"
+        ? "Postgres PR switch is off by default"
+        : "queue-only because its declared event policy certifies the merged tree",
     ]),
 );
 
@@ -3935,6 +3939,8 @@ const runsAtDepth = (
         "needs.ci-plan.outputs.suite_depth": depth,
         "needs.ci-plan.outputs.queue_depth": selectedQueueDepth,
         "vars.QUEUE_BROWSER_SUITES": queueBrowserSuites,
+        "vars.CI_POSTGRES_PR_SELECTION": "off",
+        "needs.ci-plan.outputs.postgres_pr_required": "false",
         "needs.ci-plan.outputs.ci_browser_required": browserPlanOutput({
           event,
           depth,
@@ -4656,7 +4662,7 @@ test("API planning only loads dependencies after installation and emits install-
     (step) => step.name === "Select affected API test files",
   );
   expect(select?.if).toBe(
-    "steps.completed-depth.outputs.run_required != 'false' && (steps.api-test-deps.outcome == 'success')",
+    "steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'pull_request' && steps.api-test-deps.outcome == 'success'",
   );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
@@ -4711,6 +4717,180 @@ test("API planning only loads dependencies after installation and emits install-
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("Postgres plans are visible on PRs while execution requires explicit opt-in", () => {
+  const steps = jobSteps(ciJobs["ci-plan"]);
+  const planner = steps.find(
+    (step) => step.name === "Select affected Postgres test files",
+  );
+  const runner = jobSteps(ciJobs["service-suites"]).find(
+    (step) => step.name === "Run Postgres-gated API suites",
+  );
+  const runnerSelection =
+    runner?.env?.["CI_POSTGRES_TEST_SELECTION"] ??
+    panic("Missing Postgres selection wiring");
+  const jobCondition = jobIf(ciJobs["service-suites"]);
+  for (const mode of ["selected", "all", "none"] as const) {
+    const selection = JSON.stringify(
+      mode === "selected"
+        ? { mode, files: ["src/synthetic.db.test.ts"] }
+        : { mode },
+    );
+    for (const event of [
+      EVENT.mergeGroup,
+      EVENT.workflowDispatch,
+      EVENT.pullRequest,
+    ]) {
+      for (const prSwitch of ["", "off", "on"]) {
+        const enabled = event === EVENT.pullRequest && prSwitch === "on";
+        const values = {
+          "github.event_name": event,
+          "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
+          "steps.completed-depth.outputs.run_required": "true",
+          "steps.api-test-deps.outcome": "success",
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.queue_depth": "full",
+          "needs.ci-plan.outputs.service_suites_required": "true",
+          "needs.ci-plan.outputs.service_suites_pr_required": "true",
+          "needs.ci-plan.outputs.postgres_suites_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.suite_depth":
+            event === EVENT.pullRequest ? "fast" : "full",
+          "needs.ci-plan.outputs.postgres_pr_required": String(enabled),
+          "needs.ci-plan.outputs.postgres_test_selection": selection,
+        };
+        expect(evaluate(planner?.if ?? "false", { values })).toBe(
+          event === EVENT.mergeGroup || event === EVENT.pullRequest,
+        );
+        expect(evaluate(jobCondition, { values })).toBe(
+          event !== EVENT.pullRequest || enabled,
+        );
+        expect(evaluate(runner?.if ?? "false", { values })).toBe(true);
+        expect(evaluate(runnerSelection, { values })).toBe(
+          event === EVENT.mergeGroup || enabled ? selection : '{"mode":"all"}',
+        );
+        expect(
+          evaluate(runnerSelection, {
+            values: {
+              ...values,
+              "needs.ci-plan.outputs.postgres_test_selection": "",
+            },
+          }),
+        ).toBe('{"mode":"all"}');
+      }
+    }
+  }
+  expect(planner?.run).toContain('postgres_test_selection={"mode":"all"}');
+  for (const result of ["success", "skipped", "failure"]) {
+    expect(
+      evaluateResult({
+        event: EVENT.pullRequest,
+        results: { "service-suites": result },
+        plannedOutputs: { postgres_pr_required: "true" },
+      }),
+    ).toBe(result === "success" ? 0 : 1);
+  }
+});
+
+test("Postgres planning generates ignored runtime inputs and widens when any stage fails", () => {
+  const planner = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Select affected Postgres test files",
+  );
+  const commands = [
+    "--cwd=packages/cli run codegen:runtime",
+    "--cwd=apps/api run generate:capability-runtime",
+    "scripts/ci-postgres-test-plan.ts",
+  ];
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "postgres-runtime-plan-"),
+  );
+  try {
+    for (const failedCommand of ["", ...commands]) {
+      const output = nodePath.join(directory, "output");
+      const trace = nodePath.join(directory, "trace");
+      writeFileSync(output, "");
+      writeFileSync(trace, "");
+      const result = Bun.spawnSync({
+        cmd: [
+          "bash",
+          "-e",
+          "-c",
+          `timeout() { shift 2; "$@"; }
+bun() {
+  printf '%s\\n' "$*" >> "$TRACE"
+  if [[ "$*" == "$FAILED_COMMAND" ]]; then return 1; fi
+  if [[ "$*" == scripts/ci-postgres-test-plan.ts ]]; then
+    printf '%s\\n' 'postgres_test_selection={"mode":"selected","files":["src/db.test.ts"]}' >> "$GITHUB_OUTPUT"
+  fi
+}
+${planner?.run ?? panic("Missing Postgres planner")}`,
+        ],
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          TRACE: trace,
+          FAILED_COMMAND: failedCommand,
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const invoked = readFileSync(trace, "utf-8").trim().split("\n");
+      expect(invoked).toEqual(
+        failedCommand === ""
+          ? commands
+          : commands.slice(0, commands.indexOf(failedCommand) + 1),
+      );
+      expect(readFileSync(output, "utf-8")).toContain(
+        failedCommand === "" ? '"mode":"selected"' : '"mode":"all"',
+      );
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("full Postgres failures trigger selector replay only on main-heavy", () => {
+  const steps = jobSteps(ciJobs["service-suites"]);
+  const runner = steps.find(
+    (step) => step.name === "Run Postgres-gated API suites",
+  );
+  const missCheck = steps.find(
+    (step) => step.name === "Check full Postgres failures for selector misses",
+  );
+  expect(runner?.run).toContain("--reporter=junit");
+  expect(runner?.run).toContain("postgres-tests.xml");
+  expect(missCheck?.env?.["POSTGRES_JUNIT_FILE"]).toContain(
+    "postgres-tests.xml",
+  );
+  expect(missCheck?.run).toContain("bun scripts/ci-postgres-selector-miss.ts");
+  for (const heavyOnly of [false, true]) {
+    for (const outcome of ["success", "failure", "skipped"]) {
+      for (const cancelled of [false, true]) {
+        expect(
+          evaluate(missCheck?.if ?? "false", {
+            values: {
+              "inputs.heavy_only": heavyOnly,
+              "steps.postgres-tests.outcome": outcome,
+            },
+            status: { always: true, success: false, failure: true, cancelled },
+          }),
+        ).toBe(heavyOnly && outcome === "failure" && !cancelled);
+      }
+    }
+  }
+  const summary = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Summarize Postgres test selection",
+  );
+  expect(summary?.run).toContain("GITHUB_STEP_SUMMARY");
+  expect(summary?.run).toContain('"full"');
+  expect(summary?.env?.["SELECTION"]).toContain(
+    "steps.postgres-test-plan.outputs.postgres_test_selection",
+  );
+  expect(summary?.env?.["REASON"]).toContain(
+    "steps.postgres-test-plan.outputs.postgres_selection_reason",
+  );
 });
 
 type BrowserPlanOptions = {
@@ -4963,5 +5143,36 @@ test("desktop browser detector failures and malformed output cannot skip the PR 
   )) {
     expect(exitCode, stderr).toBe(0);
     expect(stdout).toBe(item.expected);
+  }
+});
+
+test("Postgres PR required checks follow trust, run eligibility and the general opt-in", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const trusted of ["true", "false"]) {
+    for (const runRequired of ["true", "false"]) {
+      for (const prSwitch of ["on", "off", ""]) {
+        for (const scope of ["true", "false"]) {
+          const enabled =
+            trusted === "true" &&
+            runRequired === "true" &&
+            prSwitch === "on" &&
+            scope === "true";
+          expect(
+            evaluate(plan.outputs["postgres_pr_required"] ?? "", {
+              values: {
+                "github.event_name": EVENT.pullRequest,
+                "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
+                "steps.completed-depth.outputs.run_required": runRequired,
+                "steps.check.outputs.trusted": trusted,
+                "steps.changed-files.outputs.service_suites_pr_required": scope,
+              },
+            }),
+          ).toBe(enabled);
+        }
+      }
+    }
   }
 });

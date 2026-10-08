@@ -77,7 +77,7 @@ type BuildExportTableOptions = {
 
 type ExportCellStyle = "default" | CellFlagId;
 
-export type ExportTextCell = {
+type ExportTextCell = {
   type: "text";
   value: string;
   style: ExportCellStyle;

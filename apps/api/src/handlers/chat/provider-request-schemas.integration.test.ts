@@ -54,6 +54,7 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   ATTACHMENTS,
   cassetteForModel,
@@ -617,6 +618,7 @@ const converse = async (combination: ChatCombination): Promise<Conversation> =>
               orgAIConfig: orgConfigOf(origin),
               managedAIResidency: "eu",
               organizationId: ids.orgA,
+              admission: testModelAdmission(ids.orgA),
               preserveTokens: 1,
               safeDb,
               threadId,

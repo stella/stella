@@ -7,7 +7,11 @@ import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -29,6 +33,7 @@ const rewriteSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "skills.rewrite-resource" },
   description:
     "Rewrite one file of an agent skill with the model, from a free-text " +
     "instruction and the file's current content. Returns the proposed " +
@@ -49,6 +54,7 @@ const config = {
 const rewriteSkillResource = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     memberRole,
     orgAIConfig,
@@ -129,6 +135,7 @@ const rewriteSkillResource = createSafeRootHandler(
       try: async () =>
         await generateTanStackTextForRole({
           dataClass: "customer",
+          admission: configuredModelAdmission({ modelAdmission }),
           abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
           finishPolicy: "require-complete",
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,

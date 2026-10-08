@@ -17,11 +17,13 @@ import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { InlineEdit } from "@/components/inline-edit";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import { useQueryView } from "@/lib/use-query-view";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 
@@ -50,10 +52,12 @@ export const MatterCard = ({
   const [previewEnabled, setPreviewEnabled] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const { data: preview } = useQuery({
+  const previewQuery = useQuery({
     ...overviewOptions(workspace.id),
     enabled: previewEnabled,
   });
+  const previewView = useQueryView(previewQuery);
+  const preview = previewView.type === "items" ? previewView.items : undefined;
 
   const hasPreviewContent =
     !!preview &&
@@ -207,7 +211,22 @@ export const MatterCard = ({
             </div>
           </PreviewCardTrigger>
 
-          {hasPreviewContent && <PreviewPopupContent preview={preview} />}
+          {previewEnabled &&
+            !hasPreviewContent &&
+            (previewView.type === "pending" ||
+              previewView.type === "error" ||
+              (previewView.type === "items" &&
+                previewView.refetchError !== undefined)) && (
+              <PreviewCardPopup sideOffset={8}>
+                <QueryViewFeedback view={previewView} />
+              </PreviewCardPopup>
+            )}
+          {hasPreviewContent && (
+            <PreviewPopupContent
+              preview={preview}
+              feedback={<QueryViewFeedback view={previewView} />}
+            />
+          )}
         </PreviewCard>
       )}
     </MatterContextMenu>
@@ -279,13 +298,18 @@ const getDeadlineInfo = (deadline: string | null): DeadlineInfo | null => {
 
 type PreviewPopupContentProps = {
   preview: OverviewData;
+  feedback: React.ReactNode;
 };
 
-const PreviewPopupContent = ({ preview }: PreviewPopupContentProps) => {
+const PreviewPopupContent = ({
+  preview,
+  feedback,
+}: PreviewPopupContentProps) => {
   const t = useTranslations();
 
   return (
     <PreviewCardPopup className="p-3" sideOffset={8}>
+      {feedback}
       <div className="min-w-0 flex-1">
         {(preview.documentCount > 0 || preview.taskCount > 0) && (
           <div className="mb-2 flex gap-1">

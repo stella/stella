@@ -30,6 +30,7 @@ import {
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   instanceWireErrorModel,
@@ -974,6 +975,7 @@ describe("provider failure HTTP response", () => {
                 dataClass: "public_corpus",
                 role: "chat",
                 organizationId: null,
+                admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",
                 finishPolicy: "require-complete",
                 resolveTextModel: async () => model,

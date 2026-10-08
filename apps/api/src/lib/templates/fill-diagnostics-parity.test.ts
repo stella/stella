@@ -58,6 +58,7 @@ import type {
 } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -341,6 +342,7 @@ const chatVerdict = async (
       throw new Error("no metered step runs in this test");
     }),
     organizationId,
+    modelAdmission: testModelAdmission(organizationId),
     userId,
     thirdPartyBoundary: anonymizedBoundary(),
     dependencies: {

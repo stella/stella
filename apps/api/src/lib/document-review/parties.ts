@@ -31,6 +31,7 @@ import {
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 
@@ -86,6 +87,7 @@ export type DetectReviewPartiesArgs = {
   target: PreparedDocxFile;
   targetEntityVersionId: SafeId<"entityVersion">;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -101,6 +103,7 @@ export const detectReviewParties = async ({
   target,
   targetEntityVersionId,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -138,6 +141,7 @@ export const detectReviewParties = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         analytics: aiAnalytics,
         caching,
         serviceTier,

@@ -70,7 +70,7 @@
     "message": "Permite que a stella controle uma guia dedicada do Chrome após sua autorização."
   },
   "extensionName": {
-    "message": "Navegador da stella"
+    "message": "stella"
   },
   "grantAccess": {
     "message": "Permitir todos os sites"

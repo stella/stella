@@ -8,6 +8,7 @@ import type {
   NotificationKind,
   NotificationMetadataByKind,
 } from "@stll/api-contract/notifications";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member as organizationMember, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -15,7 +16,6 @@ import type { Transaction } from "@/api/db/root";
 import { notifications, workspaceMembers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastToUser } from "@/api/lib/sse";
@@ -159,7 +159,7 @@ const insertNotifications = async (
   }));
 
   const inserted: NotificationInsertRow[] = [];
-  for (const batch of chunked(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
+  for (const batch of chunkItems(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
     const batchRows = await writeBatch(
       async (tx) =>
         await tx

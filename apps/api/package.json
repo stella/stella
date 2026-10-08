@@ -68,6 +68,7 @@
     "db:backfill-legislation-work-names": "bun run --env-file=.env src/scripts/backfill-legislation-work-names.ts",
     "db:import-cz-us-judges": "bun run --env-file=.env src/handlers/case-law/judges/import-cz-us-roster.ts",
     "db:verify-decision-identifiers": "bun run --env-file=.env src/scripts/backfill-decision-identifiers.ts --verify",
+    "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
     "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts"

@@ -480,6 +480,39 @@ class StaticTree {
 export const sourceOwners = (files: SourceTree): SourceOwnersResult =>
   new StaticTree(files).owners();
 
+// Match the original source rather than transpiled output: local types and
+// unused imports can be erased, but deleting them still needs a version decision.
+const isReexportOnlyModule = (source: string): boolean => {
+  const tokenPattern =
+    /\s+|\/\/[^\r\n]*|\/\*[\s\S]*?\*\/|"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'|[$_\p{ID_Start}][$_\u200c\u200d\p{ID_Continue}]*|[{}*,;]/uy;
+  const tokens: string[] = [];
+  let offset = 0;
+  while (offset < source.length) {
+    tokenPattern.lastIndex = offset;
+    const token = tokenPattern.exec(source)?.at(0);
+    if (token === undefined) {
+      return false;
+    }
+    offset = tokenPattern.lastIndex;
+    if (
+      /^\s/u.test(token) ||
+      token.startsWith("//") ||
+      token.startsWith("/*")
+    ) {
+      continue;
+    }
+    tokens.push(
+      token.startsWith('"') || token.startsWith("'") ? '"specifier"' : token,
+    );
+  }
+  const identifier = "[$_\\p{ID_Start}][$_\\u200c\\u200d\\p{ID_Continue}]*";
+  const name = `(?:${identifier}|"specifier")`;
+  const binding = `(?:type )?${name}(?: as ${name})?`;
+  const bindings = `\\{(?: ${binding}(?: , ${binding})*(?: ,)?)? \\}`;
+  const reexport = `export (?:type )?(?:\\*|${bindings}) from "specifier"(?: ;)?`;
+  return new RegExp(`^(?:${reexport}(?: |$))*$`, "u").test(tokens.join(" "));
+};
+
 type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
 
 export const checkParserVersions = ({
@@ -491,6 +524,12 @@ export const checkParserVersions = ({
   const before = baseTree.owners();
   const after = headTree.owners();
   const errors = [...before.errors, ...after.errors];
+  const deletedReexports = new Set<string>();
+  for (const [file, source] of base) {
+    if (!head.has(file) && isReexportOnlyModule(source)) {
+      deletedReexports.add(file);
+    }
+  }
   for (const [key, current] of after.owners) {
     const previous = before.owners.get(key);
     if (previous === undefined) {
@@ -512,6 +551,9 @@ export const checkParserVersions = ({
       continue;
     }
     const unexempted = changed.filter((file) => {
+      if (deletedReexports.has(file)) {
+        return false;
+      }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));
       return !(head.get(file) ?? "").split("\n").some((line) => {
         if (baseLines.has(line)) {
