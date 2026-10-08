@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
@@ -6,12 +8,15 @@ import {
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
 } from "./playbook-editor.logic";
+import type { PlaybookDraft } from "./playbook-editor.logic";
 import {
+  beginParkedPlaybookPaneSave,
   completeParkedPlaybookPaneSave,
   discardParkedPlaybookPane,
   discardParkedPlaybookDraft,
   markParkedPlaybookPaneSaveFailed,
   parkPlaybookPane,
+  recordParkedPlaybookPaneSave,
   registerPlaybookPaneLeaveGuard,
   resolvePaneDraftState,
 } from "./playbook-pane-parking";
@@ -53,6 +58,24 @@ export const usePlaybookPaneLifecycle = ({
   flush,
   readScrollTop,
 }: PaneLifecycleOptions) => {
+  const parkedOwner = useRef<{
+    tabId: string;
+    snapshot: ParkedPlaybookPane;
+  } | null>(null);
+  const recordSave = useLatestCallback(
+    (savedDraft: PlaybookDraft, updatedAt: string | null) => {
+      const owner = parkedOwner.current;
+      if (owner === null) {
+        return;
+      }
+      recordParkedPlaybookPaneSave({
+        tabId: owner.tabId,
+        parkedState: owner.snapshot,
+        savedDraft,
+        updatedAt,
+      });
+    },
+  );
   const pane =
     host.type === "pane" && playbookId !== null
       ? { tabId: host.tabId, playbookId, isTabOpen: host.isTabOpen }
@@ -86,8 +109,18 @@ export const usePlaybookPaneLifecycle = ({
     async ({ snapshot, tabId, mode }: FlushParkedOptions) => {
       const canSaveDraft =
         !isDeleting() && canSave && valid && (mode === "retry" || autosaves);
+      if (canSaveDraft) {
+        beginParkedPlaybookPaneSave({ tabId, parkedState: snapshot });
+      }
       const outcome = await flush(canSaveDraft);
       if (outcome === null) {
+        if (canSaveDraft) {
+          completeParkedPlaybookPaneSave({
+            tabId,
+            parkedState: snapshot,
+            updatedAt: snapshot.updatedAt,
+          });
+        }
         return false;
       }
       if (outcome.type !== "saved") {
@@ -116,6 +149,10 @@ export const usePlaybookPaneLifecycle = ({
     if (current === null) {
       return false;
     }
+    parkedOwner.current = {
+      tabId: current.pane.tabId,
+      snapshot: current.snapshot,
+    };
     parkPlaybookPane({
       tabId: current.pane.tabId,
       state: current.snapshot,
@@ -145,7 +182,7 @@ export const usePlaybookPaneLifecycle = ({
     });
   }, [tabId, panePlaybookId, leaveState, saveBeforeLeave]);
 
-  return useLatestCallback(() => {
+  const leavePane = useLatestCallback(() => {
     const current = capture();
     if (current === null) {
       return;
@@ -161,6 +198,10 @@ export const usePlaybookPaneLifecycle = ({
       discardParkedPlaybookPane(current.pane.tabId);
       return;
     }
+    parkedOwner.current = {
+      tabId: current.pane.tabId,
+      snapshot: current.snapshot,
+    };
     parkPlaybookPane({
       tabId: current.pane.tabId,
       state: current.snapshot,
@@ -175,4 +216,5 @@ export const usePlaybookPaneLifecycle = ({
       "playbook-editor.flush-on-leave",
     );
   });
+  return { leavePane, recordSave };
 };

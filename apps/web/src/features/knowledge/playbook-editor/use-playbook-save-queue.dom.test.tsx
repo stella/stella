@@ -173,7 +173,10 @@ test("Retry saves after a rejected request and leaves no failed request in the q
   expect(sent).toHaveLength(2);
   expect(view.getByText("saved")).toBeDefined();
   view.unmount();
-  expect(requests).toHaveLength(2);
+  await act(async () => {
+    await Promise.all(requests);
+  });
+  expect(sent).toHaveLength(2);
   expect(outcomes.map((outcome) => outcome.type)).toEqual(["failed", "saved"]);
 });
 

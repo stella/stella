@@ -291,7 +291,9 @@ describe("following a reconciled playbook save", () => {
       await followReconciledPlaybookSave({
         reconciliation,
         isCurrent: () => true,
-        follow: (playbookId) => followed.push(playbookId),
+        follow: (playbookId) => {
+          followed.push(playbookId);
+        },
       });
     };
     await reconcileCompletion("input-complete");
@@ -323,7 +325,9 @@ describe("following a reconciled playbook save", () => {
     await followReconciledPlaybookSave({
       reconciliation,
       isCurrent: () => true,
-      follow: (playbookId) => opened.push(playbookId),
+      follow: (playbookId) => {
+        opened.push(playbookId);
+      },
     });
     expect(opened).toEqual([]);
     expect(
@@ -364,7 +368,9 @@ describe("following a reconciled playbook save", () => {
         reconciliation,
         isCurrent: () =>
           currentRuntime === requestedRuntime && currentSequence === 1,
-        follow: (playbookId) => followed.push(playbookId),
+        follow: (playbookId) => {
+          followed.push(playbookId);
+        },
       });
       expect(queryClient.isFetching({ queryKey: DETAIL_KEY })).toBe(1);
       if (change === "thread switch") {

@@ -72,6 +72,7 @@ import {
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
   readParkedPlaybookPane,
+  useParkedPlaybookPaneSavePending,
   clearPlaybookPaneDraft,
 } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
@@ -265,6 +266,17 @@ const PlaybookEditorLoader = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const parkedWritePending = useParkedPlaybookPaneSavePending(
+    host.type === "pane" ? host.tabId : null,
+    playbookId,
+  );
+  const [parkedSeed, setParkedSeed] = useState(() =>
+    parkedWritePending ? ("waiting" as const) : ("ready" as const),
+  );
+  // Reopening waits for the old owner; parking an active form must not unmount it.
+  if (parkedSeed === "waiting" && !parkedWritePending) {
+    setParkedSeed("ready");
+  }
   const detailOptions = playbookDetailOptions(organizationId, playbookId);
   // The gate is computed just before the form takes its initial values: at
   // mount, and on each reload (after a version restore or a rejected stale
@@ -376,7 +388,10 @@ const PlaybookEditorLoader = ({
       return panic("Unhandled playbook detail query state");
   }
 
-  if (seed.type === "wait") {
+  if (
+    seed.type === "wait" ||
+    (parkedSeed === "waiting" && parkedWritePending)
+  ) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -1047,6 +1062,7 @@ const PlaybookEditorForm = ({
     setPersisted((current) =>
       resolveSavedPlaybookState({ current, savedAt, savedDraft }),
     );
+    recordSave(savedDraft, savedAt);
     // Every update returns the playbook to draft.
     setStatus("draft");
     setApprovedAt(null);
@@ -1204,7 +1220,7 @@ const PlaybookEditorForm = ({
     return outcome;
   };
 
-  const leavePane = usePlaybookPaneLifecycle({
+  const { leavePane, recordSave } = usePlaybookPaneLifecycle({
     host,
     playbookId,
     state: {

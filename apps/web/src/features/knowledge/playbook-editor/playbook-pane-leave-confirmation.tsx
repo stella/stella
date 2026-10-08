@@ -29,8 +29,7 @@ export const PlaybookPaneLeaveConfirmation = () => {
   const failed =
     request.type === "confirm" && request.leaveState === "save-failed";
   const saving = request.type === "confirm" && request.phase === "saving";
-  const retryUnavailable =
-    failed && request.type === "confirm" && request.saveBeforeLeave === null;
+  const retryUnavailable = failed && request.saveBeforeLeave === null;
   return (
     <AlertDialog
       open={request.type === "confirm"}

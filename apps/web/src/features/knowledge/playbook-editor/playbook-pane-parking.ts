@@ -9,6 +9,7 @@ import { detached } from "@/lib/detached";
 import type { PlaybookApprovalStatus } from "@/lib/knowledge/playbook-types";
 
 import { resolveSavedPlaybookState } from "./playbook-editor-sync.logic";
+import { hasPlaybookDraftChanges } from "./playbook-editor.logic";
 
 export type PaneDraftState =
   | "saved"
@@ -59,8 +60,14 @@ export type ParkedPlaybookPane = {
   leaveState: PaneDraftState;
 };
 
+type ParkedPaneEntry = {
+  owner: ParkedPlaybookPane;
+  state: ParkedPlaybookPane;
+  write: "waiting" | "settled";
+};
+
 const useParkedPlaybookPanes = create<
-  Readonly<Record<string, Readonly<Record<string, ParkedPlaybookPane>>>>
+  Readonly<Record<string, Readonly<Record<string, ParkedPaneEntry>>>>
 >(() => ({}));
 
 type ParkPlaybookPaneArgs = {
@@ -80,7 +87,10 @@ export const parkPlaybookPane = ({
       ...Object.fromEntries(
         Object.entries(current).filter(([id]) => isTabOpen(id)),
       ),
-      [tabId]: { ...current[tabId], [state.playbookId]: state },
+      [tabId]: {
+        ...current[tabId],
+        [state.playbookId]: { owner: state, state, write: "settled" },
+      },
     }),
     true,
   );
@@ -91,7 +101,44 @@ export const readParkedPlaybookPane = (
   tabId: string,
   playbookId: string,
 ): ParkedPlaybookPane | null =>
-  useParkedPlaybookPanes.getState()[tabId]?.[playbookId] ?? null;
+  useParkedPlaybookPanes.getState()[tabId]?.[playbookId]?.state ?? null;
+
+export const useParkedPlaybookPaneSavePending = (
+  tabId: string | null,
+  playbookId: string,
+) =>
+  useParkedPlaybookPanes(
+    (tabs) => tabId !== null && tabs[tabId]?.[playbookId]?.write === "waiting",
+  );
+
+type BeginParkedPlaybookPaneSaveArgs = {
+  tabId: string;
+  parkedState: ParkedPlaybookPane;
+};
+
+export const beginParkedPlaybookPaneSave = ({
+  tabId,
+  parkedState,
+}: BeginParkedPlaybookPaneSaveArgs) => {
+  useParkedPlaybookPanes.setState((current) => {
+    const tab = current[tabId];
+    const entry = tab?.[parkedState.playbookId];
+    if (entry?.owner !== parkedState) {
+      return current;
+    }
+    return {
+      ...current,
+      [tabId]: {
+        ...tab,
+        [parkedState.playbookId]: {
+          owner: entry.owner,
+          state: entry.state,
+          write: "waiting",
+        },
+      },
+    };
+  }, true);
+};
 
 type CompleteParkedPlaybookPaneSaveArgs = {
   tabId: string;
@@ -106,19 +153,17 @@ export const completeParkedPlaybookPaneSave = ({
 }: CompleteParkedPlaybookPaneSaveArgs) => {
   useParkedPlaybookPanes.setState((current) => {
     const tab = current[tabId];
-    if (tab?.[parkedState.playbookId] !== parkedState) {
+    const entry = tab?.[parkedState.playbookId];
+    if (entry?.owner !== parkedState) {
       return current;
     }
     const persisted = resolveSavedPlaybookState({
-      current: parkedState,
+      current: entry.state,
       savedAt: updatedAt,
-      savedDraft: parkedState.draft,
+      savedDraft: entry.state.draft,
     });
-    if (persisted === parkedState) {
-      return current;
-    }
     const savedState = {
-      ...parkedState,
+      ...entry.state,
       updatedAt: persisted.updatedAt,
       baseline: persisted.baseline,
       status: "draft",
@@ -127,7 +172,63 @@ export const completeParkedPlaybookPaneSave = ({
     } satisfies ParkedPlaybookPane;
     return {
       ...current,
-      [tabId]: { ...tab, [parkedState.playbookId]: savedState },
+      [tabId]: {
+        ...tab,
+        [parkedState.playbookId]: {
+          owner: entry.owner,
+          state: savedState,
+          write: "settled",
+        },
+      },
+    };
+  }, true);
+};
+
+type RecordParkedPlaybookPaneSaveArgs = {
+  tabId: string;
+  parkedState: ParkedPlaybookPane;
+  savedDraft: PlaybookDraft;
+  updatedAt: string | null;
+};
+
+/** Advance the baseline of the same parked owner while its final write waits. */
+export const recordParkedPlaybookPaneSave = ({
+  tabId,
+  parkedState,
+  savedDraft,
+  updatedAt,
+}: RecordParkedPlaybookPaneSaveArgs) => {
+  useParkedPlaybookPanes.setState((current) => {
+    const tab = current[tabId];
+    const entry = tab?.[parkedState.playbookId];
+    if (entry?.owner !== parkedState) {
+      return current;
+    }
+    const persisted = resolveSavedPlaybookState({
+      current: entry.state,
+      savedAt: updatedAt,
+      savedDraft,
+    });
+    if (persisted === entry.state) {
+      return current;
+    }
+    const state = {
+      ...entry.state,
+      updatedAt: persisted.updatedAt,
+      baseline: persisted.baseline,
+      status: "draft",
+      approvedAt: null,
+    } satisfies ParkedPlaybookPane;
+    return {
+      ...current,
+      [tabId]: {
+        ...tab,
+        [parkedState.playbookId]: {
+          owner: entry.owner,
+          state,
+          write: entry.write,
+        },
+      },
     };
   }, true);
 };
@@ -143,16 +244,31 @@ export const markParkedPlaybookPaneSaveFailed = ({
 }: MarkParkedPlaybookPaneSaveFailedArgs) => {
   useParkedPlaybookPanes.setState((current) => {
     const tab = current[tabId];
-    if (tab?.[parkedState.playbookId] !== parkedState) {
+    const entry = tab?.[parkedState.playbookId];
+    if (entry?.owner !== parkedState) {
       return current;
     }
     const failedState = {
-      ...parkedState,
-      leaveState: "save-failed",
+      ...entry.state,
+      leaveState: resolvePaneDraftState({
+        isDirty: hasPlaybookDraftChanges({
+          baseline: entry.state.baseline,
+          current: entry.state.draft,
+        }),
+        canAutosave: false,
+        saveFailed: true,
+      }),
     } satisfies ParkedPlaybookPane;
     return {
       ...current,
-      [tabId]: { ...tab, [parkedState.playbookId]: failedState },
+      [tabId]: {
+        ...tab,
+        [parkedState.playbookId]: {
+          owner: entry.owner,
+          state: failedState,
+          write: "settled",
+        },
+      },
     };
   }, true);
 };
@@ -269,7 +385,7 @@ export const usePlaybookPaneHasUnsavedWork = () => {
   );
   const parkedDirty = useParkedPlaybookPanes((tabs) =>
     Object.values(tabs).some((panes) =>
-      Object.values(panes).some(({ leaveState }) => leaveState !== "saved"),
+      Object.values(panes).some(({ state }) => state.leaveState !== "saved"),
     ),
   );
   return liveDirty || parkedDirty;
