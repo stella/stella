@@ -1,8 +1,10 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -32,7 +34,7 @@ Object.defineProperty(globalThis, "Highlight", {
 });
 
 const { useRef } = await import("react");
-const { cleanup, fireEvent, render, waitFor, within } =
+const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -505,4 +507,63 @@ test("a hard-wrapped decision finds words inside both drawn paragraphs", async (
     "Krajský",
     "Krajský",
   ]);
+});
+
+test("Next and Previous take the reader back to a lone match, while repaints leave the view alone", async () => {
+  // Happy DOM has no scroller around the reader, so every move to a match
+  // lands in the element's own scrollIntoView.
+  const scrolledTo: string[] = [];
+  const ownScrollIntoView = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "scrollIntoView",
+  );
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value(this: HTMLElement) {
+      scrolledTo.push(this.textContent);
+    },
+  });
+  try {
+    const screen = renderReaders([
+      { initialQuery: "samostatný", name: "decision" },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+    );
+    await waitFor(() => expect(scrolledTo).toHaveLength(1));
+
+    // The text changing under the open bar repaints the marks only.
+    const text =
+      screen.getByText(readerText.damagesParagraph).parentElement ??
+      panic("The reader did not render its text");
+    const note = text.ownerDocument.createElement("p");
+    note.textContent = "Poznámka pod textem.";
+    text.append(note);
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(scrolledTo).toHaveLength(1);
+
+    // The reader has scrolled away; each explicit step returns to the match,
+    // though it stays the first of one.
+    for (const name of [
+      messages.common.nextMatch,
+      messages.common.previousMatch,
+    ]) {
+      const before = scrolledTo.length;
+      fireEvent.click(screen.getByRole("button", { name }));
+      await waitFor(() => expect(scrolledTo).toHaveLength(before + 1));
+      expect(scrolledTo.at(-1)).toBe(readerText.damagesParagraph);
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy();
+    }
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    if (ownScrollIntoView !== undefined) {
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "scrollIntoView",
+        ownScrollIntoView,
+      );
+    }
+  }
 });
