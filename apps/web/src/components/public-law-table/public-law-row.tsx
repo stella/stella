@@ -19,7 +19,10 @@ import { cn } from "@stll/ui/utils";
 
 import type { PublicLawRowData } from "@/components/public-law-table/public-law-table";
 import type { TableRowRenderInput } from "@/components/workspaces/table/row-host";
-import { SelectRowContent } from "@/components/workspaces/table/select-row-content";
+import {
+  RowNumberLabel,
+  SelectRowContent,
+} from "@/components/workspaces/table/select-row-content";
 import type { TableCell } from "@/components/workspaces/table/types";
 import {
   WorkspaceGridCell,
@@ -154,9 +157,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
               table={table}
             />
           ) : (
-            <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums">
-              {rowLabel}
-            </span>
+            <RowNumberLabel label={rowLabel} />
           )
         }
         visibleCells={visibleCells}

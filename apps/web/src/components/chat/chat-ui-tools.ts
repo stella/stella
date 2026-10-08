@@ -402,8 +402,7 @@ const CHAT_TOOL_GRANT_POLICY_KIND = {
   approveOnce: "approve-once",
   /**
    * May never be auto-approved by a stored grant or any shared auto-approve
-   * path — stronger than `approveOnce` (see
-   * {@link isNonPersistentGrantChatToolName}). The one exception is the
+   * path, which is stronger than `approveOnce`. The one exception is the
    * opt-in browser page-read allowance for `use-browser`.
    */
   neverAuto: "never-auto",
@@ -470,15 +469,9 @@ const getChatToolGrantPolicy = (toolName: string): ChatToolGrantPolicy =>
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
   getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
-/**
- * Chat tools that no stored grant may cover and no shared auto-approve path
- * may run — the public-official and DOCX-batch paths in
- * `hasAutomaticApproval` included. The browser tool's opt-in page-read
- * allowance (`isBrowserCommandAutoApproved`) is the only tool-specific
- * exception.
- */
+/** Chat tools that require per-call approval instead of a persistent grant. */
 export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
-  getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.neverAuto;
+  getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**
  * Chat tools whose approval card renders the shared registry-write summary

@@ -1,4 +1,7 @@
+import { panic } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -183,7 +186,11 @@ const invokeValidateOnly = async (
   await handleMcpToolCall({
     args: { capability, input, validate_only: true },
     context: createContext(),
-    toolName: "invoke_capability",
+    toolName:
+      MCP_CAPABILITY_EXECUTORS[
+        capabilityCatalog.find((entry) => entry.id === capability)?.access ??
+          panic("Test capability is not registered")
+      ],
   });
 
 beforeEach(() => {
@@ -282,7 +289,7 @@ describe("static tools accept explicit null on nullable ('pass null to clear') f
 
 // --- Path 2: capability invoke path (TypeBox Default->Convert->Clean->Check) --
 
-describe("invoke_capability reads explicit null on plain optional fields as omission", () => {
+describe("capability executors read explicit null on plain optional fields as omission", () => {
   // A contact body with everything the schema requires, so each case below
   // differs from its omitted twin in exactly the one null under test.
   const contact = {
@@ -391,7 +398,7 @@ describe("invoke_capability reads explicit null on plain optional fields as omis
   });
 });
 
-describe("invoke_capability accepts explicit null on nullable fields", () => {
+describe("capability executors accept explicit null on nullable fields", () => {
   // TypeBox null-union fields (catalog `nullable: true`) accept null: Check
   // passes and validate_only reports valid, with the null carried through.
   const cases: {

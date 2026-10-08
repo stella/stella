@@ -3,7 +3,7 @@ import { Worker } from "node:worker_threads";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { createDetached } from "@stll/errors";
-import type { SanctionsSource } from "@stll/sanctions";
+import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import {
   RUNTIME_WORKER_FILES,
@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/runtime-worker-path";
 
 import type {
+  SanctionsMatcherLoad,
   SanctionsMatcherReply,
   SanctionsMatcherMessage,
   SanctionsMatcherRequest,
@@ -24,13 +25,14 @@ export const SANCTIONS_MATCHER_CONFIG = {
   poolSize: 1,
   poolSizeMax: 2,
   deadlineMs: 250,
-  warmupDeadlineMs: 10_000,
 } as const;
 
 export type SanctionsMatcherSession = {
   signal: AbortSignal;
   hasEdition: (source: SanctionsSource, editionId: string) => boolean;
   match: (request: SanctionsMatcherRequest) => Promise<SanctionsMatcherReply>;
+  /** Index one edition in this worker, ahead of any screening against it. */
+  load: (request: SanctionsMatcherLoad) => Promise<"indexed" | "unavailable">;
 };
 
 type MatcherDeadlineClock = {
@@ -61,6 +63,8 @@ type Slot = {
   worker: Worker | null;
   busy: boolean;
   editions: Map<SanctionsSource, string>;
+  /** A message was sent and its reply has not arrived; the worker is busy. */
+  awaitingReply: boolean;
   fail: ((cause: SanctionsMatcherFailureCause, error?: unknown) => void) | null;
   termination: Promise<void> | null;
 };
@@ -86,6 +90,7 @@ const retireMatcherSlot = async (
   const worker = slot.worker;
   slot.worker = null;
   slot.editions.clear();
+  slot.awaitingReply = false;
   if (worker === null) {
     await (slot.termination ?? Promise.resolve());
     return;
@@ -169,6 +174,7 @@ const createMatcherWorker = () =>
 const MATCHER_TRANSFER_ENTRIES = 1000;
 
 type ExchangeMatcherMessageOptions = {
+  slot: Slot;
   worker: Worker;
   signal: AbortSignal;
   message: SanctionsMatcherMessage;
@@ -176,6 +182,7 @@ type ExchangeMatcherMessageOptions = {
 };
 
 const exchangeMatcherMessage = async ({
+  slot,
   worker,
   signal,
   message,
@@ -192,11 +199,15 @@ const exchangeMatcherMessage = async ({
       },
       reply: (response: SanctionsMatcherReply) => {
         signal.removeEventListener("abort", listeners.abort);
+        slot.awaitingReply = false;
         resolve(response);
       },
     };
     signal.addEventListener("abort", listeners.abort, { once: true });
     worker.once("message", listeners.reply);
+    // Cleared only by the reply: an abandoned exchange leaves a worker that
+    // may still answer, which no other lease can safely reuse.
+    slot.awaitingReply = true;
     const sent = Result.try(() => worker.postMessage(message, []));
     if (sent.isErr()) {
       fail("worker-send", sent.error);
@@ -205,13 +216,41 @@ const exchangeMatcherMessage = async ({
 };
 
 type MatchSanctionsRequestOptions = {
+  slot: Slot;
   worker: Worker;
   signal: AbortSignal;
   request: SanctionsMatcherRequest;
   fail: (cause: SanctionsMatcherFailureCause, error?: unknown) => void;
 };
 
+const transferEntries = async (
+  exchange: (
+    message: SanctionsMatcherMessage,
+  ) => Promise<SanctionsMatcherReply>,
+  { source, editionId, list }: SanctionsMatcherLoad,
+): Promise<boolean> => {
+  // An empty edition still opens its transfer, so the worker owns its index.
+  const batches: SanctionsEntry[][] =
+    list.entries.length === 0
+      ? [[]]
+      : chunkItems(list.entries, MATCHER_TRANSFER_ENTRIES);
+  for (const [batchIndex, itemBatch] of batches.entries()) {
+    const response = await exchange({
+      type: "entries",
+      source,
+      editionId,
+      offset: batchIndex * MATCHER_TRANSFER_ENTRIES,
+      entries: itemBatch,
+    });
+    if (response.status !== "entries-loaded") {
+      return false;
+    }
+  }
+  return true;
+};
+
 const matchSanctionsRequest = async ({
+  slot,
   worker,
   signal,
   request,
@@ -219,28 +258,17 @@ const matchSanctionsRequest = async ({
 }: MatchSanctionsRequestOptions): Promise<SanctionsMatcherReply> => {
   const exchange = async (message: SanctionsMatcherMessage) =>
     await exchangeMatcherMessage({
+      slot,
       worker,
       signal,
       message,
       fail,
     });
-  if (request.list !== null) {
-    for (const [batchIndex, itemBatch] of chunkItems(
-      request.list.entries,
-      MATCHER_TRANSFER_ENTRIES,
-    ).entries()) {
-      const offset = batchIndex * MATCHER_TRANSFER_ENTRIES;
-      const response = await exchange({
-        type: "entries",
-        source: request.source,
-        editionId: request.editionId,
-        offset,
-        entries: itemBatch,
-      });
-      if (response.status !== "entries-loaded") {
-        return { status: "unavailable" };
-      }
-    }
+  if (
+    request.list !== null &&
+    !(await transferEntries(exchange, { ...request, list: request.list }))
+  ) {
+    return { status: "unavailable" };
   }
   return await exchange({
     type: "screen",
@@ -251,6 +279,79 @@ const matchSanctionsRequest = async ({
     cutoff: request.cutoff,
     limit: request.limit,
   });
+};
+
+type MatcherSessionOptions = {
+  slot: Slot;
+  worker: Worker;
+  signal: AbortSignal;
+  fail: (cause: SanctionsMatcherFailureCause, error?: unknown) => void;
+};
+
+/** One lease's view of its worker: screen against, or load, its editions. */
+const createMatcherSession = ({
+  slot,
+  worker,
+  signal,
+  fail,
+}: MatcherSessionOptions): SanctionsMatcherSession => {
+  const exchange = async (message: SanctionsMatcherMessage) =>
+    await exchangeMatcherMessage({ slot, worker, signal, message, fail });
+  return {
+    signal,
+    hasEdition: (source, editionId) => slot.editions.get(source) === editionId,
+    match: async (request) => {
+      if (isSanctionsMatcherCancelled(signal)) {
+        return { status: "unavailable" };
+      }
+      const response = await matchSanctionsRequest({
+        slot,
+        worker,
+        signal,
+        request,
+        fail,
+      });
+      if (
+        response.status !== "screened" &&
+        response.status !== "work-limit" &&
+        !isSanctionsMatcherCancelled(signal)
+      ) {
+        fail("worker-reply");
+      }
+      if (
+        !isSanctionsMatcherCancelled(signal) &&
+        (response.status === "screened" || response.status === "work-limit")
+      ) {
+        slot.editions.set(request.source, request.editionId);
+      }
+      return response;
+    },
+    load: async (request) => {
+      if (isSanctionsMatcherCancelled(signal)) {
+        return "unavailable";
+      }
+      // The worker drops the previous index when the transfer opens.
+      slot.editions.delete(request.source);
+      const transferred = await transferEntries(exchange, request);
+      const response = transferred
+        ? await exchange({
+            type: "index",
+            source: request.source,
+            editionId: request.editionId,
+            version: request.list.version,
+          })
+        : ({ status: "unavailable" } as const);
+      if (isSanctionsMatcherCancelled(signal)) {
+        return "unavailable";
+      }
+      if (response.status !== "indexed") {
+        fail("worker-reply");
+        return "unavailable";
+      }
+      slot.editions.set(request.source, request.editionId);
+      return "indexed";
+    },
+  };
 };
 
 type EnsureMatcherWorkerOptions = {
@@ -350,6 +451,7 @@ export const createSanctionsMatcherPoolCore = ({
     worker: null,
     busy: false,
     editions: new Map(),
+    awaitingReply: false,
     fail: null,
     termination: null,
   }));
@@ -390,6 +492,8 @@ export const createSanctionsMatcherPoolCore = ({
     return await acquire(signal);
   };
   return {
+    /** Workers in the pool; each holds its own indexes. */
+    size,
     run: async <T>(
       operation: (session: SanctionsMatcherSession) => Promise<T>,
       options?: { deadlineMs?: number; onSettled?: () => void },
@@ -415,7 +519,13 @@ export const createSanctionsMatcherPoolCore = ({
         failure.outcome = outcome;
         reportFailure({ stage: "matcher-pool", reason: cause, error });
         controller.abort();
-        if (lease.slot !== null && lease.retirement === null) {
+        // A deadline alone keeps the worker and its indexes: only one that
+        // still owes a reply is unsafe to lend again.
+        if (
+          lease.slot !== null &&
+          lease.retirement === null &&
+          (cause !== "deadline" || lease.slot.awaitingReply)
+        ) {
           lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
         }
         failed.resolve(outcome);
@@ -449,39 +559,14 @@ export const createSanctionsMatcherPoolCore = ({
         if (worker === null) {
           return fail("worker-create");
         }
-        const session: SanctionsMatcherSession = {
+        const session = createMatcherSession({
+          slot,
+          worker,
           signal: controller.signal,
-          hasEdition: (source, editionId) =>
-            slot.editions.get(source) === editionId,
-          match: async (request) => {
-            if (isSanctionsMatcherCancelled(controller.signal)) {
-              return { status: "unavailable" };
-            }
-            const response = await matchSanctionsRequest({
-              worker,
-              signal: controller.signal,
-              request,
-              fail: (cause, error) => {
-                fail(cause, error);
-              },
-            });
-            if (
-              response.status !== "screened" &&
-              response.status !== "work-limit" &&
-              !isSanctionsMatcherCancelled(controller.signal)
-            ) {
-              fail("worker-reply");
-            }
-            if (
-              !isSanctionsMatcherCancelled(controller.signal) &&
-              (response.status === "screened" ||
-                response.status === "work-limit")
-            ) {
-              slot.editions.set(request.source, request.editionId);
-            }
-            return response;
+          fail: (cause, error) => {
+            fail(cause, error);
           },
-        };
+        });
         const result = await Result.tryPromise(
           async () => await operation(session),
         );

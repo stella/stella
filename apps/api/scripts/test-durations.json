@@ -95,6 +95,10 @@
     "seconds": 0.725639,
     "source": "estimated"
   },
+  "scripts/generate-schema-index.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/generate-status-tables.test.ts": {
     "seconds": 0.260595,
     "source": "estimated"
@@ -221,6 +225,10 @@
   },
   "src/db-url.test.ts": {
     "seconds": 0.261725,
+    "source": "estimated"
+  },
+  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/db/account-issuer-nullable-migration.db.test.ts": {
@@ -692,6 +700,10 @@
     "source": "estimated"
   },
   "src/handlers/case-law/analysis/generate.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/generate.read-budget.db.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -4855,6 +4867,30 @@
     "seconds": 0.493191,
     "source": "estimated"
   },
+  "src/lib/db/aggregate-lock-extension.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-order.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-query.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/db/arabic-normalize.test.ts": {
     "seconds": 1.739487,
     "source": "estimated"
@@ -4889,6 +4925,10 @@
   },
   "src/lib/db/feedback-report-store.db.test.ts": {
     "seconds": 1.317473,
+    "source": "estimated"
+  },
+  "src/lib/db/lock-for-write.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/db/member-access-hold.postgres.test.ts": {
@@ -5077,6 +5117,10 @@
   },
   "src/lib/document-processing-reconciliation-feeds.db.test.ts": {
     "seconds": 3.84235,
+    "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/document-reference.test.ts": {
@@ -6915,6 +6959,10 @@
     "seconds": 5.4,
     "source": "measured"
   },
+  "src/lib/observability/event-loop-delay.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/observability/failure-evidence.test.ts": {
     "seconds": 0.16359,
     "source": "estimated"
@@ -7585,6 +7633,10 @@
   },
   "src/lib/search/process-extraction.test.ts": {
     "seconds": 0.586685,
+    "source": "estimated"
+  },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/search/projection-repair-queue.db.test.ts": {
@@ -8807,6 +8859,10 @@
     "seconds": 0.4,
     "source": "measured"
   },
+  "src/scripts/review-account.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/scripts/review-account.logic.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -8941,6 +8997,10 @@
   },
   "src/tests/security/account-wide-auth-revocation.test.ts": {
     "seconds": 1.93918,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/security/ai-memories-rls.test.ts": {
@@ -9175,6 +9235,10 @@
     "seconds": 1.08544,
     "source": "estimated"
   },
+  "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/tests/test-batch-plan.test.ts": {
     "seconds": 4.8145,
     "source": "estimated"
@@ -9185,42 +9249,6 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
-    "source": "estimated"
-  },
-  "src/scripts/review-account.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-lock.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-lock.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-mutation-declaration.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/tests/security/aggregate-mutations.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/tests/setup-env.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/chat/tools/secret-tools.postgres.test.ts": {
@@ -9236,30 +9264,6 @@
     "source": "estimated"
   },
   "src/handlers/chat/secret-permissions.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/lock-for-write.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-lock-extension.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-lock-query.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-lock-order.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/handlers/case-law/analysis/generate.read-budget.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/observability/event-loop-delay.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }
