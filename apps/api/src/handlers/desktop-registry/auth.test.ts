@@ -62,16 +62,28 @@ const assertIssuanceReference = (
   node: ts.Node,
   { filename, ast, isMachineOwner }: IssuanceContext,
 ) => {
+  // An operation-name constant such as `REVIEW_ACCOUNT_OPERATION.createApiKey`
+  // holds a label, not the provider issuance function.
+  const isConstantLabel =
+    (ts.isPropertyAccessExpression(node) ||
+      ts.isElementAccessExpression(node)) &&
+    ts.isIdentifier(node.expression) &&
+    /^[A-Z][A-Z0-9_]*$/u.test(node.expression.text);
   const isMemberReference =
-    (ts.isPropertyAccessExpression(node) &&
+    !isConstantLabel &&
+    ((ts.isPropertyAccessExpression(node) &&
       node.name.text === "createApiKey") ||
-    (ts.isElementAccessExpression(node) &&
-      ts.isStringLiteral(node.argumentExpression) &&
-      node.argumentExpression.text === "createApiKey");
+      (ts.isElementAccessExpression(node) &&
+        ts.isStringLiteral(node.argumentExpression) &&
+        node.argumentExpression.text === "createApiKey"));
   const isBareReference =
     ts.isIdentifier(node) &&
     node.text === "createApiKey" &&
-    !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node);
+    !(
+      ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+    ) &&
+    // A property key names a slot; its value is checked as its own reference.
+    !(ts.isPropertyAssignment(node.parent) && node.parent.name === node);
   if (isMemberReference || isBareReference) {
     const directCall =
       ts.isCallExpression(node.parent) && node.parent.expression === node;
