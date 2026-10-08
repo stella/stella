@@ -24,12 +24,13 @@
     "generate": "bun scripts/generate-manifest.ts",
     "validate": "bun scripts/validate.ts",
     "check-upstream": "bun scripts/check-upstream.ts",
-    "check-pinned": "bun scripts/check-pinned-content.ts",
+    "check-pinned": "bun --preload ../../scripts/offline-network-preload.ts scripts/check-pinned-content.ts --check",
     "test": "bun scripts/generate-manifest.ts --check && bun scripts/validate.ts && bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/catalogue",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/catalogue",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "refresh-pinned": "bun scripts/check-pinned-content.ts --refresh"
   },
   "dependencies": {
     "better-result": "catalog:",
@@ -37,7 +38,9 @@
   },
   "devDependencies": {
     "@stll/concurrency": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
+    "@stll/stable-stringify": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   }
