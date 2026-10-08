@@ -999,6 +999,10 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "attach-files": notRecorded(
     "The recorder posts text messages only; attachments need stored files.",
   ),
+  "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
+  "continue-private-input": notRecorded(
+    "The recorder posts text messages only; private input cards submit through their own endpoint.",
+  ),
   copy: OUTSIDE_THE_CONVERSATION,
   "delete-thread": OUTSIDE_THE_CONVERSATION,
   deny: recordedAs(approvedAs("deny")),
@@ -1030,6 +1034,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder scripts one model; a model switch needs a second one.",
   ),
   send: recordedAs(({ type }) => type === "send"),
+  "submit-private-input": notRecorded(
+    "The recorder posts text messages only; private input cards submit through their own endpoint.",
+  ),
   "send-queued-message-now": notRecorded(
     "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),

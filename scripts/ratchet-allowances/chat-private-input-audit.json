@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
-  "delta": 4,
-  "reason": "Receipt creation and future-use storage share the submission transaction audit. Reference consumption updates an ephemeral use counter; expiry clears payloads under scheduler bookkeeping. These writes add no separate user action and keep values out of audit changes."
+  "delta": 5,
+  "reason": "Receipt creation and future-use storage share the submission transaction audit. Reference consumption updates an ephemeral use counter, and same-decision retries update an ephemeral attempt counter; expiry clears payloads under scheduler bookkeeping. These writes add no separate user action and keep values out of audit changes."
 }

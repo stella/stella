@@ -1602,12 +1602,6 @@
     "reason": "builder-for in apps/api/src/handlers/lists/items/fact-details/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",
-    "fingerprint": "8e1197c7c80ccf5b32760181cc89d1a737e695fa4547747f7fc48d144fee0528",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/mcp-connectors/oauth-callback.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
     "file": "apps/api/src/handlers/memories/update.ts",
     "fingerprint": "57d76d747519bcd8783087297221d3bc1f79297d2e24cc71a984fa7cc5eaad27",
     "count": 1,

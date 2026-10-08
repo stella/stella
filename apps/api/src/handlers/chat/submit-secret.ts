@@ -246,9 +246,11 @@ const readEnabledConnector = async ({
       ),
     )
     .limit(2);
-  const connector = connectors.length === 1 ? connectors.at(0) : undefined;
-
-  return connector;
+  // An ambiguous slug resolves to no connector.
+  if (connectors.length > 1) {
+    return undefined;
+  }
+  return connectors.at(0);
 };
 
 type SubmitOutcome =

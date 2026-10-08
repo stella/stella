@@ -9194,5 +9194,17 @@
   "src/tests/security/aggregate-mutations.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/handlers/chat/tools/secret-tools.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/chat/chat-secrets.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/chat/chat-secret-retry.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

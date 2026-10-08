@@ -35,7 +35,7 @@ type RequestSecretCardProps = {
 
 const REQUEST_SECRET_KIND_KEYS = {
   token: "chat.requestSecret.kind.token",
-  password: "common.password",
+  password: "auth.password",
   key: "common.key",
 } as const satisfies Record<RequestSecretInput["kind"], TranslationKey>;
 
@@ -189,7 +189,9 @@ const RequestSecretContinuationRetry = ({
       </p>
       <div className="flex flex-wrap justify-end gap-2">
         <Button disabled={isSubmitting} onClick={onRetry} type="button">
-          {isSubmitting ? <Loader className="size-4" /> : null}
+          {isSubmitting ? (
+            <Loader className="size-4" variant="decorative" />
+          ) : null}
           {t("chat.requestSecret.retryContinuationAction")}
         </Button>
       </div>
@@ -229,11 +231,11 @@ export const RequestSecretCard = ({
   const savedSecretQuery = useQuery({
     queryKey: ["chat-saved-secret", secretAvailabilityKey, connectorSlug],
     enabled: isPending && connectorSlug !== undefined,
-    queryFn: ({ signal }) => {
+    queryFn: async ({ signal }) => {
       if (connectorSlug === undefined) {
         return panic("Saved credential query requires a connector");
       }
-      return resolveSecretTarget(connectorSlug, signal);
+      return await resolveSecretTarget(connectorSlug, signal);
     },
   });
   const secretTarget = savedSecretQuery.isSuccess
@@ -242,8 +244,8 @@ export const RequestSecretCard = ({
 
   const continueWithReceipt = async (receipt: RequestSecretOutput) => {
     setIsSubmitting(true);
-    const result = await Result.tryPromise(() =>
-      continueRequestSecret(part.id, receipt),
+    const result = await Result.tryPromise(
+      async () => await continueRequestSecret(part.id, receipt),
     );
     setHasContinuationError(Result.isError(result));
     setIsSubmitting(false);
@@ -276,8 +278,7 @@ export const RequestSecretCard = ({
     if (
       decision === "provide" &&
       saveForFuture &&
-      secretTarget !== undefined &&
-      secretTarget.connector.responseDisposition === "normal" &&
+      secretTarget?.connector.responseDisposition === "normal" &&
       normalConnectionAction !== "replace-with-receipt-only"
     ) {
       return;
@@ -318,11 +319,11 @@ export const RequestSecretCard = ({
         break;
       default: {
         decision satisfies never;
-        return panic("Unhandled private input decision");
+        panic("Unhandled private input decision");
       }
     }
-    const result = await Result.tryPromise(() =>
-      handleRequestSecret(part.id, submission),
+    const result = await Result.tryPromise(
+      async () => await handleRequestSecret(part.id, submission),
     );
     if (Result.isError(result)) {
       setHasError(true);
@@ -437,7 +438,9 @@ export const RequestSecretCard = ({
                 }
                 type="button"
               >
-                {isSubmitting ? <Loader className="size-4" /> : null}
+                {isSubmitting ? (
+                  <Loader className="size-4" variant="decorative" />
+                ) : null}
                 {t("chat.requestSecret.provideAction")}
               </Button>
             ) : null}

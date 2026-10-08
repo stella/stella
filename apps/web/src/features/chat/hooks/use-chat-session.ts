@@ -967,12 +967,13 @@ export const useChatSession = ({
       connectorSlug: string,
       signal: AbortSignal,
     ): Promise<SecretTargetResolution> => {
-      const response = await api.chat
-        .threads({ threadId: toSafeId<"chatThread">(conversationId) })
-        ["saved-secret"].get({
-          query: { connectorSlug },
-          fetch: { signal },
-        });
+      const thread = api.chat.threads({
+        threadId: toSafeId<"chatThread">(conversationId),
+      });
+      const response = await thread["saved-secret"].get({
+        query: { connectorSlug },
+        fetch: { signal },
+      });
       return unwrapEden(response);
     },
     [conversationId],

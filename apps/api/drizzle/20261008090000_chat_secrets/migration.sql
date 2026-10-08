@@ -91,6 +91,4 @@ CREATE POLICY "chat_secrets_owner_access" ON "chat_secrets" AS PERMISSIVE FOR AL
 ALTER TABLE "mcp_user_connections" ADD COLUMN "response_disposition" text DEFAULT 'normal' NOT NULL;--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD COLUMN "response_target_url" text;--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD CONSTRAINT "mcp_user_connections_response_disposition_check" CHECK (response_disposition IN ('normal', 'receipt-only')) NOT VALID;--> statement-breakpoint
-ALTER TABLE "mcp_user_connections" ADD CONSTRAINT "mcp_user_connections_response_target_check" CHECK (response_disposition = 'normal' OR (response_target_url IS NOT NULL AND static_token_encrypted IS NOT NULL AND static_token_iv IS NOT NULL AND access_token_encrypted IS NULL AND access_token_iv IS NULL AND refresh_token_encrypted IS NULL AND refresh_token_iv IS NULL)) NOT VALID;--> statement-breakpoint
-ALTER TABLE "mcp_user_connections" VALIDATE CONSTRAINT "mcp_user_connections_response_disposition_check";--> statement-breakpoint
-ALTER TABLE "mcp_user_connections" VALIDATE CONSTRAINT "mcp_user_connections_response_target_check";
+ALTER TABLE "mcp_user_connections" ADD CONSTRAINT "mcp_user_connections_response_target_check" CHECK (response_disposition = 'normal' OR (response_target_url IS NOT NULL AND static_token_encrypted IS NOT NULL AND static_token_iv IS NOT NULL AND access_token_encrypted IS NULL AND access_token_iv IS NULL AND refresh_token_encrypted IS NULL AND refresh_token_iv IS NULL)) NOT VALID;

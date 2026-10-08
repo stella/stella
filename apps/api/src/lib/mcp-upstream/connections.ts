@@ -778,6 +778,27 @@ export const createSafeMcpFetch = (
   return safeFetch;
 };
 
+type BearerMcpClientOptions = {
+  url: string;
+  credential: string;
+  permit: ThirdPartyOutboundPermit;
+};
+
+/** A one-off client for a credential the caller resolved; nothing is cached. */
+export const createBearerMcpClient = async ({
+  url,
+  credential,
+  permit,
+}: BearerMcpClientOptions): Promise<MCPClient> =>
+  await createMCPClient({
+    transport: {
+      type: "http",
+      url,
+      headers: { Authorization: `Bearer ${credential}` },
+      fetch: createSafeMcpFetch(safeOutboundFetchStream, permit),
+    },
+  });
+
 const mcpRequestTimeoutMs = (
   body: SafeOutboundFetchBody | undefined,
 ): number => {

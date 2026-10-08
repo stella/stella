@@ -157,7 +157,9 @@ describe("request secret card", () => {
       }),
     ).toBeNull();
     expect(credentialField.getAttribute("type")).toBe("password");
-    fireEvent.change(credentialField, { target: { value: "sample-value" } });
+    await act(async () =>
+      fireEvent.change(credentialField, { target: { value: "sample-value" } }),
+    );
     await act(async () =>
       fireEvent.click(
         screen.getByRole("button", {
@@ -220,7 +222,9 @@ describe("request secret card", () => {
     const credentialField = await screen.findByLabelText(
       messages.chat.requestSecret.valueLabel,
     );
-    fireEvent.change(credentialField, { target: { value: "sample-value" } });
+    await act(async () =>
+      fireEvent.change(credentialField, { target: { value: "sample-value" } }),
+    );
     await act(async () =>
       fireEvent.click(
         screen.getByRole("button", {
@@ -286,7 +290,9 @@ describe("request secret card", () => {
     const credentialField = await screen.findByLabelText(
       messages.chat.requestSecret.valueLabel,
     );
-    fireEvent.change(credentialField, { target: { value: "sample-value" } });
+    await act(async () =>
+      fireEvent.change(credentialField, { target: { value: "sample-value" } }),
+    );
     await act(async () =>
       fireEvent.click(
         screen.getByRole("button", {
@@ -342,20 +348,26 @@ describe("request secret card", () => {
     const credentialField = await screen.findByLabelText(
       messages.chat.requestSecret.valueLabel,
     );
-    fireEvent.change(credentialField, { target: { value: "sample-value" } });
-    fireEvent.click(
-      screen.getByRole("checkbox", {
-        name: messages.chat.requestSecret.saveForFuture,
-      }),
+    await act(async () =>
+      fireEvent.change(credentialField, { target: { value: "sample-value" } }),
+    );
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: messages.chat.requestSecret.saveForFuture,
+        }),
+      ),
     );
     const provideButton = screen.getByRole("button", {
       name: messages.chat.requestSecret.provideAction,
     });
     expect(provideButton.hasAttribute("disabled")).toBe(true);
-    fireEvent.click(
-      screen.getByRole("checkbox", {
-        name: messages.chat.requestSecret.replaceOrdinaryConnection,
-      }),
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: messages.chat.requestSecret.replaceOrdinaryConnection,
+        }),
+      ),
     );
     expect(provideButton.hasAttribute("disabled")).toBe(false);
     await act(async () => fireEvent.click(provideButton));

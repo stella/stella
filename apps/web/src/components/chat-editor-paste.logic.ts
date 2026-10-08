@@ -18,7 +18,9 @@ type ChatPaste =
   | { type: "credential" }
   | { type: "text"; content: JSONContent[] };
 
-export type CredentialPasteEditor = Pick<Editor, "commands" | "isDestroyed">;
+export type CredentialPasteEditor = Pick<Editor, "isDestroyed"> & {
+  commands: { insertContent: (content: string) => boolean };
+};
 
 export const insertCredentialPasteRequest = (
   editor: CredentialPasteEditor,

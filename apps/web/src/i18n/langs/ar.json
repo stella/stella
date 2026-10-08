@@ -1318,7 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "جارٍ التحقق من تفاصيل الموصل…",
       "connectionDisposition": "نوع الاتصال: {disposition}",
-      "continuationError": "تم حفظ إجابتك، لكن تعذّر متابعة المحادثة.",
+      "continuationError": "تم حفظ إجابتك، لكن تعذّرت متابعة الدردشة.",
       "declined": "تم الرفض",
       "description": "يحتاج المساعد إليها للمتابعة",
       "error": "تعذر إرسال بيانات الاعتماد. حاول مرة أخرى.",
@@ -1332,7 +1332,7 @@
       "purposeByAi": "الغرض الذي كتبه الذكاء الاصطناعي: {purpose}",
       "receiptOnlyConnection": "اتصال خاص فقط",
       "replaceOrdinaryConnection": "استبدال الاتصال العادي للاستخدام الخاص فقط",
-      "retryContinuationAction": "متابعة المحادثة",
+      "retryContinuationAction": "متابعة الدردشة",
       "saveForFuture": "حفظ للدردشات المستقبلية",
       "savedAvailabilityError": "تعذر التحقق من وجود بيانات اعتماد محفوظة.",
       "target": "الهدف: {target}",

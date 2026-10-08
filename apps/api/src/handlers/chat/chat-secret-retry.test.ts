@@ -18,6 +18,7 @@ const scriptedTransaction = (selects: unknown[][]) => {
     };
     return chain;
   };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- scripted handle answers only the calls recovery makes
   return {
     execute: async () => [{ id: "locked" }],
     select,

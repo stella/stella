@@ -14,14 +14,23 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const config = {
-  permissions: { chat: ["create"], integration: ["create"] },
+  // Connector access is checked in the handler, as on submission: this read
+  // writes nothing, so it declares no integration write.
+  permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ connectorSlug: t.String({ minLength: 1, maxLength: 80 }) }),
 } satisfies HandlerConfig;
+
+const connectorUnavailable = () =>
+  new HandlerError({
+    status: 404,
+    message: "Enable this connector in settings before providing a credential",
+  });
 
 const savedSecret = createSafeRootHandler(
   config,
@@ -31,7 +40,16 @@ const savedSecret = createSafeRootHandler(
     safeDb,
     session,
     user,
+    memberRole,
   }) {
+    if (!hasMemberPermission(memberRole, { integration: ["create"] })) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "Connector access is unavailable",
+        }),
+      );
+    }
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const thread = (
@@ -98,16 +116,13 @@ const savedSecret = createSafeRootHandler(
             ),
           )
           .limit(2);
-        const connector =
-          connectors.length === 1 ? connectors.at(0) : undefined;
+        // An ambiguous slug resolves to no connector.
+        if (connectors.length > 1) {
+          return Result.err(connectorUnavailable());
+        }
+        const connector = connectors.at(0);
         if (!connector || connector.authType !== "bearer") {
-          return Result.err(
-            new HandlerError({
-              status: 404,
-              message:
-                "Enable this connector in settings before providing a credential",
-            }),
-          );
+          return Result.err(connectorUnavailable());
         }
         const stored = await readSavedChatSecret({
           tx,

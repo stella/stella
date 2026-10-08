@@ -344,6 +344,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_search_legislation: true,
   fetch_url: true,
+  use_connector_secret: true,
   "use-browser": true,
   web_search: true,
 } as const satisfies Record<ExternalInputToolName, true>;
@@ -525,6 +526,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "update-current-skill-resource": false,
   "update-entity-fields": false,
   update_reader_annotation: true,
+  use_connector_secret: false,
   "use-browser": false,
   web_search: false,
 } as const satisfies Record<

@@ -70,8 +70,8 @@ export const createSecretTools = ({
     inputSchema: toTanStackToolSchema(useSecretInputSchema),
     outputSchema: toTanStackToolSchema(useSecretOutputSchema),
   }).server(async ({ secretRef, target, toolName, arguments: args }) => {
-    const rows = await safeDb((tx) =>
-      tx
+    const rows = await safeDb(async (tx) => {
+      const candidates = await tx
         .select({
           id: mcpConnectors.id,
           connectionId: mcpUserConnections.id,
@@ -106,10 +106,14 @@ export const createSecretTools = ({
             approvedMcpAuthorizationReview,
           ),
         )
-        .limit(2),
-    );
-    const connector =
-      rows.isOk() && rows.value.length === 1 ? rows.value.at(0) : undefined;
+        .limit(2);
+      // An ambiguous slug resolves to no connector.
+      if (candidates.length > 1) {
+        return [];
+      }
+      return candidates;
+    });
+    const connector = rows.isOk() ? rows.value.at(0) : undefined;
     if (!connector || connector.authType !== "bearer") {
       return {
         status: "unavailable" as const,

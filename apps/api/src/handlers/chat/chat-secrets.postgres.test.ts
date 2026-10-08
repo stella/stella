@@ -174,8 +174,8 @@ const answerPendingRequest = async (
     interactionToolCallId: toolCallId,
   });
   const safeDb = safeDbFromScoped(async (run) => await db.transaction(run));
-  const submit = (body: unknown) =>
-    submitSecret.handler(
+  const submit = async (body: unknown) =>
+    await submitSecret.handler(
       createTestHandlerContext<Parameters<typeof submitSecret.handler>[0]>({
         safeDb,
         session: { activeOrganizationId: scope.organizationId },
@@ -202,8 +202,8 @@ const answerPendingRequest = async (
   if (!v.safeParse(requestSecretOutputSchema, first).success) {
     return panic("Expected stored receipt");
   }
-  const retryWithValue = () =>
-    submit({
+  const retryWithValue = async () =>
+    await submit({
       decision: "provide",
       targetConnection,
       value: credential,
@@ -284,8 +284,8 @@ if (!databaseUrl || !runPostgres) {
           const safeDb = safeDbFromScoped(
             async (run) => await db.transaction(run),
           );
-          const submit = (body: unknown) =>
-            submitSecret.handler(
+          const submit = async (body: unknown) =>
+            await submitSecret.handler(
               createTestHandlerContext<
                 Parameters<typeof submitSecret.handler>[0]
               >({
@@ -304,7 +304,7 @@ if (!databaseUrl || !runPostgres) {
               .where(eq(mcpUserConnections.connectorId, scope.connectorId))
           ).at(0);
           if (!connection) {
-            return panic("Expected saved connection");
+            panic("Expected saved connection");
           }
           const targetConnection = {
             connectionId: connection.id,
@@ -316,7 +316,7 @@ if (!databaseUrl || !runPostgres) {
           });
           const parsed = v.safeParse(requestSecretOutputSchema, first);
           if (!parsed.success) {
-            return panic("Expected stored receipt");
+            panic("Expected stored receipt");
           }
           // The client continuation can fail independently after the submission commits.
           const continuation = await Result.tryPromise(async () => {
@@ -677,7 +677,7 @@ if (!databaseUrl || !runPostgres) {
               }),
           );
           if (receipt.status !== "provided") {
-            return panic("Expected provided receipt");
+            panic("Expected provided receipt");
           }
           const initial =
             (

@@ -1318,7 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Vérification des détails du connecteur…",
       "connectionDisposition": "Connexion : {disposition}",
-      "continuationError": "Votre réponse a été enregistrée, mais la discussion n’a pas pu continuer.",
+      "continuationError": "Votre réponse a été enregistrée, mais la conversation n’a pas pu continuer.",
       "declined": "Refusé",
       "description": "L’assistant en a besoin pour continuer",
       "error": "Impossible d’envoyer l’identifiant. Réessayez.",
@@ -1332,7 +1332,7 @@
       "purposeByAi": "Objectif rédigé par l’IA : {purpose}",
       "receiptOnlyConnection": "Connexion privée uniquement",
       "replaceOrdinaryConnection": "Remplacer la connexion standard par un usage privé uniquement",
-      "retryContinuationAction": "Continuer la discussion",
+      "retryContinuationAction": "Continuer la conversation",
       "saveForFuture": "Enregistrer pour les prochaines conversations",
       "savedAvailabilityError": "Impossible de vérifier si un identifiant est enregistré.",
       "target": "Cible : {target}",

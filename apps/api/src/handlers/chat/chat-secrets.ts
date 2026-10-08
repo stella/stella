@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, gt, isNotNull, lte, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -15,8 +15,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { EncryptedSecret } from "@/api/lib/mcp-upstream/crypto";
-
-export const CHAT_SECRET_PURGE_BATCH_SIZE = 100;
 
 const CHAT_SECRET_LIFETIME_MS = DAY_IN_MS;
 
@@ -239,28 +237,6 @@ export const consumeChatSecret = async ({
   return consumed.mapError(transactionAbortError);
 };
 
-// Keep receipts stable for replay after the encrypted payload has expired.
-export const purgeExpiredChatSecrets = async (tx: Transaction) => {
-  // audit: skip - Scheduled expiry clears ephemeral payloads under the aggregated scheduler audit.
-  const expired = tx
-    .select({ id: chatSecrets.id })
-    .from(chatSecrets)
-    .where(
-      and(
-        lte(chatSecrets.expiresAt, new Date()),
-        isNotNull(chatSecrets.ciphertext),
-      ),
-    )
-    .orderBy(chatSecrets.expiresAt)
-    .limit(CHAT_SECRET_PURGE_BATCH_SIZE);
-  const rows = await tx
-    .update(chatSecrets)
-    .set({ ciphertext: null, iv: null, remainingUses: 0 })
-    .where(sql`${chatSecrets.id} IN (${expired})`)
-    .returning({ id: chatSecrets.id });
-  return rows.length;
-};
-
 type SavedChatSecretOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
@@ -334,7 +310,7 @@ export const saveChatSecretForFuture = async ({
     })
     .returning({ id: mcpUserConnections.id });
   if (written.length === 0) {
-    return abortTransaction(
+    abortTransaction(
       new HandlerError({
         status: 409,
         code: "CHAT_SAVED_CONNECTION_EXISTS",

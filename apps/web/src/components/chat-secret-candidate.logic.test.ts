@@ -4,7 +4,7 @@ import { containsCredentialCandidate } from "@/components/chat-secret-candidate.
 
 describe("credential paste detection", () => {
   test("recognizes a synthetic token with a known prefix", () => {
-    expect(containsCredentialCandidate(`draft ${"sk-"}${"a".repeat(32)}`)).toBe(
+    expect(containsCredentialCandidate(`draft sk-${"a".repeat(32)}`)).toBe(
       true,
     );
   });
