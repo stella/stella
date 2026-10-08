@@ -1,7 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { InferDataFromTag } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
 import { parseTimeZoneId } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
@@ -97,13 +99,29 @@ const settings = {
 const clients: InstanceType<typeof QueryClient>[] = [];
 const spies: { mockRestore: () => void }[] = [];
 const requests: Request[] = [];
+type MountActionOptions = {
+  locale?: string;
+  messages?: typeof english;
+  granted?: boolean;
+  role?: OrganizationRoleName;
+  showSources?: boolean;
+};
+type ListSourcesData = InferDataFromTag<
+  unknown,
+  ReturnType<typeof legalListSourcesOptions>["queryKey"]
+>;
+const emptySources = {
+  items: [],
+  nextCursor: null,
+  limit: 200,
+} satisfies ListSourcesData;
 const mountAction = async ({
   locale = "en",
   messages = english,
   granted = true,
   role = "owner",
   showSources = false,
-} = {}) => {
+}: MountActionOptions = {}) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity, gcTime: Infinity },
@@ -124,7 +142,7 @@ const mountAction = async ({
   client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, files);
   client.setQueryData(
     legalListSourcesOptions(workspaceId, listId, itemEntityId).queryKey,
-    { items: [], nextCursor: null },
+    emptySources,
   );
   client.setQueryData(legalListKeys.items(workspaceId, listId), { pages: [] });
   client.setQueryData(
@@ -429,7 +447,10 @@ test("a server refusal preserves the draft, reports an error, and leaves sources
   expect(mounted.invalidation).not.toHaveBeenCalled();
   expect(mounted.created).toHaveLength(0);
 });
-for (const options of [{ granted: false }, { role: "intern" }]) {
+for (const options of [
+  { granted: false },
+  { role: "intern" },
+] as const satisfies readonly MountActionOptions[]) {
   test(`the attach action is hidden with ${JSON.stringify(options)}`, async () => {
     answer();
     const mounted = await mountAction(options);

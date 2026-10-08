@@ -170,7 +170,7 @@ export const ListSourceForm = ({
               }}
             />
             <FieldError role="alert" match={field.state.meta.errors.length > 0}>
-              {formErrors?.sourceEntityId}
+              {formErrors?.["sourceEntityId"]}
             </FieldError>
           </Field>
         )}
@@ -195,7 +195,7 @@ export const ListSourceForm = ({
                 role="alert"
                 match={field.state.meta.errors.length > 0}
               >
-                {formErrors?.page}
+                {formErrors?.["page"]}
               </FieldError>
             </Field>
           )}
@@ -212,7 +212,7 @@ export const ListSourceForm = ({
               onBlur={field.handleBlur}
             />
             <FieldError role="alert" match={field.state.meta.errors.length > 0}>
-              {formErrors?.quote}
+              {formErrors?.["quote"]}
             </FieldError>
           </Field>
         )}

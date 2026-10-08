@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { foldSearchMatchText } from "@stll/text-normalize";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Checkbox } from "@stll/ui/checkbox";
+import { DialogFormState } from "@stll/ui/dialog";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 
@@ -36,6 +37,7 @@ export const MatterDocumentPicker = ({
 }: MatterDocumentPickerProps) => {
   const t = useTranslations();
   const [search, setSearch] = useState("");
+  const [initialPickedEntityIds] = useState(() => [...pickedEntityIds]);
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
   const filesView = useQueryView(filesQuery);
   useQueryViewError(filesView);
@@ -73,6 +75,16 @@ export const MatterDocumentPicker = ({
 
   return (
     <div className="flex flex-col gap-1.5">
+      <DialogFormState
+        dirty={
+          pickedEntityIds.length !== initialPickedEntityIds.length ||
+          pickedEntityIds.some((id) => !initialPickedEntityIds.includes(id))
+        }
+        onDiscard={() => {
+          onChange(initialPickedEntityIds);
+          setSearch("");
+        }}
+      />
       <QueryViewFeedback view={filesView} />
       <span className="text-muted-foreground text-xs font-medium">
         {label ?? t("templates.prefillMatterDocuments")}
