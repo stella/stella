@@ -143,39 +143,6 @@ const queryResultOf = (
   }
 };
 
-const readAnalysis = async ({
-  decisionId,
-  retry,
-  signal,
-}: {
-  decisionId: string;
-  retry: boolean;
-  signal?: AbortSignal | undefined;
-}): Promise<AnalysisQueryResult> => {
-  const path = `/case/decisions/${decisionId}/analysis`;
-  const response = await fetchWithTimeout(
-    apiUrl(retry ? `${path}?retry=true` : path),
-    {
-      credentials: "include",
-      ...(signal === undefined ? {} : { signal }),
-      timeoutMs: 15_000,
-    },
-  );
-  const data: unknown = await response.json();
-  return queryResultOf(parseAnalysisResponse(data));
-};
-
-/**
- * Asks for a new run after a failed one. A plain read keeps answering the
- * failure, so polling never restarts the run that just failed; this is the
- * reader's explicit request to try again. Its answer (normally `generating`)
- * replaces the cached failure, which resumes polling.
- */
-export const retryDecisionAnalysis = async (
-  decisionId: string,
-): Promise<AnalysisQueryResult> =>
-  await readAnalysis({ decisionId, retry: true });
-
 /**
  * The AI analysis of one decision: the only place the reader holds it, as the
  * public decision read never carries it. The read is authenticated and asking
@@ -198,14 +165,35 @@ export type DecisionAnalysisKey = {
   decisionUpdatedAt: PublicCaseLawDecision["updatedAt"];
 };
 
+/**
+ * `retry` asks for a new run after a failed one. A plain read keeps answering
+ * the failure, so polling never restarts the run that just failed; the
+ * reader's explicit Retry fetches this same query with `retry`, and its answer
+ * (normally `generating`) replaces the cached failure, resuming polling. It
+ * travels in the query's `meta`, not its key: both reads hold the one
+ * analysis, and the observer's own next poll reads plainly again.
+ */
 export const decisionAnalysisOptions = ({
   decisionId,
   decisionUpdatedAt,
-}: DecisionAnalysisKey) =>
+  retry = false,
+}: DecisionAnalysisKey & { retry?: boolean }) =>
   queryOptions({
     queryKey: ["case-law-decision-analysis", decisionId, { decisionUpdatedAt }],
-    queryFn: async ({ signal }): Promise<AnalysisQueryResult> =>
-      await readAnalysis({ decisionId, retry: false, signal }),
+    meta: { retry },
+    queryFn: async ({ meta, signal }): Promise<AnalysisQueryResult> => {
+      const path: `/${string}` = `/case/decisions/${decisionId}/analysis`;
+      const response = await fetchWithTimeout(
+        apiUrl(meta?.["retry"] === true ? `${path}?retry=true` : path),
+        {
+          credentials: "include",
+          signal,
+          timeoutMs: 15_000,
+        },
+      );
+      const data: unknown = await response.json();
+      return queryResultOf(parseAnalysisResponse(data));
+    },
     refetchInterval: ({ state }) =>
       isTerminalAnalysisResult(state.data) ? false : POLL_INTERVAL_MS,
     refetchOnWindowFocus: false,

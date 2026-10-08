@@ -191,6 +191,7 @@ describe("answering a stored or in-flight analysis", () => {
           orgAIConfig,
           orgAIConfigStatus,
           promptCachingEnabled: false,
+          retry: false,
         });
         return { response: result, statements: queries.count };
       },
@@ -269,8 +270,10 @@ describe("answering a stored or in-flight analysis", () => {
     }
 
     for (const { response, statements } of answers) {
-      expect(response.status).toBe("done");
-      expect(response.analysis?.inputFingerprint).toBe(fingerprint);
+      expect(response).toMatchObject({
+        status: "done",
+        analysis: { inputFingerprint: fingerprint },
+      });
       expect(statements).toBe(STORED_ANSWER_STATEMENTS);
     }
   });

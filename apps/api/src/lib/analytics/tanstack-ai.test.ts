@@ -880,7 +880,9 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
     const { logger } = await import("@/api/lib/observability/logger");
+    // A cut-off answer is a named, anticipated outcome: WARN, never ERROR.
     const errorSpy = spyOn(logger, "error");
+    const warnSpy = spyOn(logger, "warn");
     const callbacks = createTanStackAIAnalyticsCallbacks({
       dataClass: "public_corpus",
       analytics: {
@@ -970,19 +972,26 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         errorSpy.mock.calls.filter(
           ([event]) => event === "tanstack_ai.generation.failed",
         ),
+      ).toHaveLength(0);
+      expect(
+        warnSpy.mock.calls.filter(
+          ([event]) => event === "tanstack_ai.generation.failed",
+        ),
       ).toHaveLength(1);
-      expect(errorSpy).toHaveBeenCalledWith(
+      expect(warnSpy).toHaveBeenCalledWith(
         "tanstack_ai.generation.failed",
         expect.objectContaining({
+          "ai.error_kind": "output_incomplete",
           "ai.finish_reason": "length",
           "ai.output_tokens": 2000,
         }),
       );
-      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+      expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(
         "private unfinished output",
       );
     } finally {
       errorSpy.mockRestore();
+      warnSpy.mockRestore();
     }
   });
 

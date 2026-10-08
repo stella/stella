@@ -16,7 +16,6 @@ import {
   type AnalysisQueryResult,
   type DecisionAnalysisKey,
   decisionAnalysisOptions,
-  retryDecisionAnalysis,
 } from "@/features/case-law/queries/decision-analysis";
 import { detached } from "@/lib/detached";
 
@@ -98,13 +97,13 @@ export const useDecisionAnalysis = ({
   // Disabled, the observer still reads the cache, so an analysis finished
   // earlier is drawn without asking for a run.
   const query = useQuery({ ...options, enabled });
-  // The server's answer to the retry (normally `generating`) replaces the
-  // cached failure, and the observer resumes polling from it.
+  // The same query fetched with `retry`: its answer (normally `generating`)
+  // replaces the cached failure, and the observer resumes polling from it.
   const retry = useMutation({
-    mutationFn: async () => await retryDecisionAnalysis(key.decisionId),
-    onSuccess: (result) => {
-      queryClient.setQueryData(options.queryKey, result);
-    },
+    mutationFn: async () =>
+      await queryClient.fetchQuery(
+        decisionAnalysisOptions({ ...key, retry: true }),
+      ),
   });
   const finishedAnalysis =
     query.data?.kind === "done" ? query.data.analysis : null;
@@ -145,7 +144,7 @@ export const useDecisionAnalysis = ({
         return;
       default:
         action satisfies never;
-        return panic("Unhandled analysis retry");
+        panic("Unhandled analysis retry");
     }
   };
 

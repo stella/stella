@@ -2469,7 +2469,7 @@ const structuredStreamModel = (
   const adapter: AnyTextAdapter = {
     ...providerAdapter,
     structuredOutputStream: (options) =>
-      stream(options.chatOptions.request?.signal),
+      stream(options.chatOptions.request?.signal ?? undefined),
   };
   // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives; the rest
   // is `testModel`'s bookkeeping.
@@ -2753,7 +2753,7 @@ describe("a generation bounded by its own deadline", () => {
       ...providerAdapter,
       async *chatStream(options) {
         yield runStarted;
-        await untilAborted(options.request?.signal);
+        await untilAborted(options.request?.signal ?? undefined);
       },
     };
     const caught = await generateTanStackTextForRole({

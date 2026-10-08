@@ -178,7 +178,10 @@ const fakeGoogle = (answers: ProviderAnswer[]) => {
       if (answer === undefined) {
         return panic("An unexpected provider run");
       }
-      return answerChunks(answer, options.chatOptions.request?.signal);
+      return answerChunks(
+        answer,
+        options.chatOptions.request?.signal ?? undefined,
+      );
     },
   };
   // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives; the rest
