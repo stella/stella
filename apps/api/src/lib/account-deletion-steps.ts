@@ -104,7 +104,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { searchHistoryAuditEvent } from "@/api/lib/search-history-audit";
+import { searchHistoryAuditEvent } from "@/api/lib/search-history/audit";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 

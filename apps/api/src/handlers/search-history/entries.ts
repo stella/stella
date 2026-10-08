@@ -26,7 +26,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
-import { searchHistoryAuditEvent } from "@/api/lib/search-history-audit";
+import { searchHistoryAuditEvent } from "@/api/lib/search-history/audit";
 
 const documentIdSchema = t.String({
   minLength: 1,

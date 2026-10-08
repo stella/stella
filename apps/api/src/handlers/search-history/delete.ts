@@ -8,7 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { searchHistoryAuditEvent } from "@/api/lib/search-history-audit";
+import { searchHistoryAuditEvent } from "@/api/lib/search-history/audit";
 
 const config = {
   description:
