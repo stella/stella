@@ -203,7 +203,10 @@ import {
   providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
-import { createProviderDiagnostic } from "@/api/lib/provider-diagnostic";
+import {
+  createProviderDiagnostic,
+  redactedProviderDiagnostic,
+} from "@/api/lib/provider-diagnostic";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
@@ -1829,12 +1832,16 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   };
 };
 
+/**
+ * The diagnostic a run error carries on its way to the page and the stored
+ * turn, redacted again at this boundary whatever produced the chunk.
+ */
 const providerDiagnosticFromChunk = (chunk: RunErrorChunk) => {
   const parsed = v.safeParse(
     providerDiagnosticSchema,
     chunk.metadata?.["providerDiagnostic"],
   );
-  return parsed.success ? parsed.output : undefined;
+  return parsed.success ? redactedProviderDiagnostic(parsed.output) : undefined;
 };
 
 type AwaitingInteraction = Extract<

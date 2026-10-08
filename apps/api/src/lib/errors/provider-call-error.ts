@@ -1,5 +1,4 @@
 import type { AIErrorKind } from "@stll/api-contract";
-import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import {
@@ -8,6 +7,7 @@ import {
 } from "@/api/lib/chat/provider-stream-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
+import type { RedactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 export const PROVIDER_CALL_ERROR_MESSAGE = "AI provider request failed";
@@ -52,10 +52,13 @@ type ProviderCallErrorOptions = {
   kind: AIErrorKind;
   facts?: { status: number; isRetryable?: boolean } | undefined;
   requestId?: string | undefined;
-  providerDiagnostic?: ProviderDiagnostic | undefined;
+  providerDiagnostic?: RedactedProviderDiagnostic | undefined;
 };
 
-const diagnostics = new WeakMap<ProviderCallError, ProviderDiagnostic>();
+const diagnostics = new WeakMap<
+  ProviderCallError,
+  RedactedProviderDiagnostic
+>();
 
 export class ProviderCallError extends HandlerError {
   declare code?: ProviderCallErrorCode | undefined;
@@ -65,7 +68,7 @@ export class ProviderCallError extends HandlerError {
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
 
-  get providerDiagnostic(): ProviderDiagnostic | undefined {
+  get providerDiagnostic(): RedactedProviderDiagnostic | undefined {
     return diagnostics.get(this);
   }
 

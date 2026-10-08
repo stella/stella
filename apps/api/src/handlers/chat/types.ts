@@ -3,7 +3,6 @@ import type { MessagePart, UIMessage } from "@tanstack/ai-client";
 import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
-import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -36,6 +35,7 @@ import type {
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
+import type { RedactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 
@@ -135,7 +135,7 @@ export type ChatTurnOutcome =
   | {
       type: "failed";
       error: AIErrorKind;
-      providerDiagnostic?: ProviderDiagnostic;
+      providerDiagnostic?: RedactedProviderDiagnostic;
       refusal?: ActionAdmissionRefusal;
     }
   | {

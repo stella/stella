@@ -13,6 +13,7 @@ import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { redactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import * as generation from "@/api/lib/tanstack-ai-generate";
@@ -144,11 +145,11 @@ for (const status of ["done", "generating"] as const) {
   });
 }
 
-const diagnostic = {
+const diagnostic = redactedProviderDiagnostic({
   provider: "openai",
   code: "ai_config_openai_insufficient_quota",
   message: "Full provider quota reason",
-} as const;
+});
 
 const terminalFailureStore = async () => {
   const values = new Map<string, string>();

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { redactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 
 import {
   AnalysisFailureStoreError,
@@ -13,11 +14,11 @@ const scope = {
   decisionId: toSafeId<"caseLawDecision">("decision_failure_fixture"),
   fingerprint: "f".repeat(64),
 };
-const diagnostic = {
+const diagnostic = redactedProviderDiagnostic({
   provider: "anthropic",
   code: "ai_config_anthropic_workspace_required",
   message: "Workspace required: full provider reason",
-} as const;
+});
 
 const fakeRedis = () => {
   const values = new Map<string, { value: string; expiresAt: number }>();

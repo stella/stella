@@ -11,7 +11,6 @@ import { t } from "elysia";
 
 import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import type { AnalysisRequestMode } from "@stll/api-contract/case-law-analysis";
-import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type {
   AnalysisGenerating,
   PersistedDecisionAnalysis,
@@ -41,6 +40,10 @@ import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  redactedProviderDiagnostic,
+  type RedactedProviderDiagnostic,
+} from "@/api/lib/provider-diagnostic";
 import {
   createDetachedModelActionStarter,
   createModelActionAdmitter,
@@ -194,7 +197,11 @@ const runGeneration = async ({
 type GenerateAnalysisResponse =
   | { status: "done"; analysis: PersistedDecisionAnalysis }
   | { status: "generating" }
-  | { status: "error"; error: string; providerDiagnostic?: ProviderDiagnostic };
+  | {
+      status: "error";
+      error: string;
+      providerDiagnostic?: RedactedProviderDiagnostic;
+    };
 
 type GenerateAnalysisOptions = {
   mode: AnalysisRequestMode;
@@ -324,7 +331,11 @@ export const generateAnalysis = async ({
       error: "Analysis generation failed",
       ...(failure.value.providerDiagnostic === undefined
         ? {}
-        : { providerDiagnostic: failure.value.providerDiagnostic }),
+        : {
+            providerDiagnostic: redactedProviderDiagnostic(
+              failure.value.providerDiagnostic,
+            ),
+          }),
     });
   }
 

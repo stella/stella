@@ -247,14 +247,32 @@ describe("a replayed provider through the chat pipeline", () => {
         );
         expect(logs.records.length).toBeGreaterThan(0);
         expect(analytics.exceptions()).toEqual([]);
+        const sentinel = providerCallErrorSentinel(cassette);
+        // The provider's raw reply never reaches logs, product analytics or
+        // the error tracker.
         expect(
           JSON.stringify({
-            stored,
-            recording,
             logs: logs.records,
             analytics: analytics.events,
           }),
-        ).not.toContain(providerCallErrorSentinel(cassette));
+        ).not.toContain(sentinel);
+        // The reader keeps the provider's reason, redacted, as part of the
+        // turn: in the thread's own stored message content, the column that
+        // holds its text, and in the stream that settled the turn. Nowhere
+        // else in either does the reply appear.
+        const outcome = assistant.metadata?.turnOutcome;
+        const kept =
+          outcome?.type === "failed"
+            ? outcome.providerDiagnostic?.message
+            : undefined;
+        const withoutKept = (text: string) =>
+          kept === undefined
+            ? text
+            : text.replaceAll(JSON.stringify(kept).slice(1, -1), "");
+        expect(withoutKept(JSON.stringify(stored))).not.toContain(sentinel);
+        expect(withoutKept(recording.at(0)?.response.body ?? "")).not.toContain(
+          sentinel,
+        );
       } finally {
         logs.restore();
         analytics.restore();

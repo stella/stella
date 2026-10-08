@@ -2,9 +2,9 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
-import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { RedactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
@@ -122,7 +122,7 @@ export const createAnalysisFailureStore = ({
   return {
     write: async (
       scope: AnalysisFailureScope,
-      providerDiagnostic: ProviderDiagnostic | undefined,
+      providerDiagnostic: RedactedProviderDiagnostic | undefined,
     ) => {
       const failure = {
         failureId: Bun.randomUUIDv7(),

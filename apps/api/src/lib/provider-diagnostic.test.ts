@@ -9,6 +9,8 @@ import { ProviderCallError } from "./errors/provider-call-error";
 import { createProviderCallError } from "./errors/provider-call-failure";
 import {
   createProviderDiagnostic,
+  PROVIDER_ERROR_TEXT_MAX_BYTES,
+  redactedProviderDiagnostic,
   registerProviderDiagnosticCredentials,
 } from "./provider-diagnostic";
 
@@ -166,4 +168,60 @@ test("unknown provider error bodies without a code retain their full reason", ()
       evidence: { error: { message } },
     }),
   ).toEqual({ provider: "mistral", code: null, message });
+});
+
+/** A provider reason carrying every credential shape a provider echoes back. */
+const CREDENTIAL_LADEN_REASON = [
+  "Incorrect API key provided: sk-proj-****************abcd.",
+  "Retried with Bearer fixture.bearer.token-value.",
+  "Endpoint https://fixture-user:fixture-password@provider.example.test/v1 refused.",
+].join(" ");
+const CREDENTIAL_FRAGMENTS = [
+  "abcd",
+  "fixture.bearer.token-value",
+  "fixture-user",
+  "fixture-password",
+];
+
+test("a provider reason keeps its words and loses every credential it carries", () => {
+  const model = { provider: "openai", keySource: "byok" } as const;
+  const message =
+    createProviderDiagnostic({
+      model,
+      evidence: { status: 401, message: CREDENTIAL_LADEN_REASON },
+    })?.message ?? "";
+  expect(message).toContain("Incorrect API key provided:");
+  expect(message).toContain("provider.example.test/v1 refused.");
+  for (const fragment of CREDENTIAL_FRAGMENTS) {
+    expect(message).not.toContain(fragment);
+  }
+});
+
+test("a diagnostic read back from a stream or store is redacted again", () => {
+  const { message } = redactedProviderDiagnostic({
+    provider: "openai",
+    code: null,
+    message: CREDENTIAL_LADEN_REASON,
+  });
+  for (const fragment of CREDENTIAL_FRAGMENTS) {
+    expect(message).not.toContain(fragment);
+  }
+  // Redaction is idempotent, so a second pass keeps what the first kept.
+  expect(
+    redactedProviderDiagnostic({ provider: "openai", code: null, message })
+      .message,
+  ).toBe(message);
+});
+
+test("a provider reason is capped at the diagnostic size bound", () => {
+  const { message } = redactedProviderDiagnostic({
+    provider: "openai",
+    code: null,
+    message: "é".repeat(PROVIDER_ERROR_TEXT_MAX_BYTES),
+  });
+  expect(new TextEncoder().encode(message).byteLength).toBeLessThanOrEqual(
+    PROVIDER_ERROR_TEXT_MAX_BYTES,
+  );
+  expect(message).not.toContain("\uFFFD");
+  expect(message.length).toBeGreaterThan(0);
 });
