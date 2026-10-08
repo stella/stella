@@ -520,26 +520,32 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
           })),
           target: { provider, modelId: requested.model },
         });
-  const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
+  // Every request path closes its transcript here, so none can send a
+  // continuation whose thinking options the closed transcript cannot honour.
+  const closeRequest = (
+    requested: ChatStreamOptions,
+  ): ClosedProviderRequest | undefined => {
     const closed = closeMessages(requested, reasoning);
-    const options =
-      closed === undefined
-        ? requested
-        : withContinuationThinking(
-            { ...requested, messages: closed },
-            provider === undefined
-              ? "as-requested"
-              : continuationThinkingFor({
-                  transcript: closed,
-                  target: { provider, modelId: requested.model },
-                  thinkingRequested: requestsThinking(requested.modelOptions),
-                }),
-          );
+    if (closed === undefined || provider === undefined) {
+      return undefined;
+    }
+    return withContinuationThinking(
+      { ...requested, messages: closed },
+      continuationThinkingFor({
+        transcript: closed,
+        target: { provider, modelId: requested.model },
+        thinkingRequested: requestsThinking(requested.modelOptions),
+      }),
+    );
+  };
+  const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
+    const closedRequest = closeRequest(requested);
+    const options = closedRequest ?? requested;
     refuseTurnPausingRequest(provider, options);
     const dispatched =
-      closed === undefined
+      closedRequest === undefined
         ? adapter.chatStream(requested)
-        : dispatchClosedRequest(adapter, { ...options, messages: closed });
+        : dispatchClosedRequest(adapter, closedRequest);
     const produced =
       provider === undefined
         ? dispatched
@@ -567,12 +573,12 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
     );
   };
   const structuredOutput: AnyTextAdapter["structuredOutput"] = (requested) => {
-    const closed = closeMessages(requested.chatOptions, reasoning);
-    return closed === undefined
+    const closedRequest = closeRequest(requested.chatOptions);
+    return closedRequest === undefined
       ? adapter.structuredOutput(requested)
       : dispatchClosedStructuredRequest(adapter, {
           ...requested,
-          chatOptions: { ...requested.chatOptions, messages: closed },
+          chatOptions: closedRequest,
         });
   };
   const rawStructuredStream = adapter.structuredOutputStream;
@@ -580,16 +586,13 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
     rawStructuredStream === undefined
       ? undefined
       : (requested) => {
-          const closed = closeMessages(requested.chatOptions, reasoning);
-          return closed === undefined
+          const closedRequest = closeRequest(requested.chatOptions);
+          return closedRequest === undefined
             ? rawStructuredStream.call(adapter, requested)
             : dispatchClosedStructuredStream({
                 adapter,
                 stream: rawStructuredStream,
-                options: {
-                  ...requested,
-                  chatOptions: { ...requested.chatOptions, messages: closed },
-                },
+                options: { ...requested, chatOptions: closedRequest },
               });
         };
   const proxy = new Proxy(adapter, {

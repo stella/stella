@@ -552,6 +552,34 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
     function: { name: "delete", arguments: "{}" },
   } as const;
 
+  /** A tool-use turn holding `thinking`, its call answered. */
+  const openTurn = (thinking: ModelMessage["thinking"]): ModelMessage[] => [
+    { role: "user", content: "Delete the draft." },
+    {
+      role: "assistant",
+      content: null,
+      toolCalls: [openCall],
+      ...(thinking === undefined ? {} : { thinking }),
+    },
+    {
+      role: "tool",
+      toolCallId: openCall.id,
+      content: JSON.stringify({ status: "completed" }),
+    },
+  ];
+  /** Reasoning stored before reasoning carried provenance. */
+  const legacyReasoning = [
+    { content: REASONING, signature: "stored-signature" },
+  ];
+  const anthropicThinking = { thinking: { type: "adaptive" } };
+  const outputSchema = { type: "object", properties: {}, required: [] };
+
+  const onlyBody = (bodies: readonly unknown[]) => {
+    expect(bodies).toHaveLength(1);
+    const body: unknown = bodies.at(0);
+    return isRecord(body) ? body : panic("The request body is not an object");
+  };
+
   /** The body `provider` sends to continue a tool-use turn holding `thinking`. */
   const continuationBody = async (
     provider: ReasoningProvider,
@@ -562,28 +590,13 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
     const adapter = reasoningAdapter(provider, fetch);
     for await (const _chunk of adapter.chatStream({
       logger: resolveDebugOption(false),
-      messages: [
-        { role: "user", content: "Delete the draft." },
-        {
-          role: "assistant",
-          content: null,
-          toolCalls: [openCall],
-          ...(thinking === undefined ? {} : { thinking }),
-        },
-        {
-          role: "tool",
-          toolCallId: openCall.id,
-          content: JSON.stringify({ status: "completed" }),
-        },
-      ],
+      messages: openTurn(thinking),
       model: adapter.model,
       modelOptions,
     })) {
       // The refusal ends the stream once the request is written.
     }
-    expect(bodies).toHaveLength(1);
-    const body: unknown = bodies.at(0);
-    return isRecord(body) ? body : panic("The request body is not an object");
+    return onlyBody(bodies);
   };
 
   /** Each Anthropic content block as role, type and the call it names. */
@@ -610,13 +623,9 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
     );
   };
 
-  test("Anthropic continues it with thinking disabled for that request and the call still answered", async () => {
-    // Stored before reasoning carried provenance: it cannot be replayed.
-    const body = await continuationBody(
-      "anthropic",
-      [{ content: REASONING, signature: "stored-signature" }],
-      { thinking: { type: "adaptive" } },
-    );
+  const expectAnthropicContinuationWithoutThinking = (
+    body: Record<string, unknown>,
+  ) => {
     expect(body["thinking"]).toEqual({ type: "disabled" });
     const blocks = anthropicBlocks(body);
     expect(blocks.filter(({ type }) => type === "thinking")).toEqual([]);
@@ -633,6 +642,84 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
       call: openCall.id,
     });
     expect(result).toBeGreaterThan(use);
+  };
+
+  test("Anthropic continues it with thinking disabled for that request and the call still answered", async () => {
+    // Stored before reasoning carried provenance: it cannot be replayed.
+    const body = await continuationBody(
+      "anthropic",
+      legacyReasoning,
+      anthropicThinking,
+    );
+    expectAnthropicContinuationWithoutThinking(body);
+  });
+
+  test("Anthropic structured output continues it with thinking disabled and the call still answered", async () => {
+    const { bodies, fetch } = recordingFetch(refused);
+    const adapter = reasoningAdapter("anthropic", fetch);
+    const refusal: unknown = await adapter
+      .structuredOutput({
+        chatOptions: {
+          logger: resolveDebugOption(false),
+          messages: openTurn(legacyReasoning),
+          model: adapter.model,
+          modelOptions: anthropicThinking,
+        },
+        outputSchema,
+      })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    // The recorded answer refuses; only the request matters here.
+    expect(refusal).toBeInstanceOf(Error);
+    expectAnthropicContinuationWithoutThinking(onlyBody(bodies));
+  });
+
+  test("a structured output stream continues it with thinking disabled and the call still answered", async () => {
+    const requests: unknown[] = [];
+    const adapter = withProviderStreamContract(
+      asTestRaw<AnyTextAdapter>({
+        ...adapterOf([]),
+        model: "claude-sonnet-4-6",
+        structuredOutput: async () => panic("Only the stream is requested"),
+        async *structuredOutputStream(options: { chatOptions: unknown }) {
+          requests.push(options.chatOptions);
+          await Promise.resolve();
+          yield* [];
+        },
+      }),
+      "anthropic",
+    );
+    const stream =
+      adapter.structuredOutputStream ??
+      panic("The contract hides the structured output stream");
+    for await (const _chunk of stream({
+      chatOptions: {
+        logger: resolveDebugOption(false),
+        messages: openTurn(legacyReasoning),
+        model: adapter.model,
+        modelOptions: anthropicThinking,
+      },
+      outputSchema,
+    })) {
+      // The fixture answers nothing; only the request matters here.
+    }
+    expect(requests).toHaveLength(1);
+    expect(requests.at(0)).toMatchObject({
+      modelOptions: { thinking: { type: "disabled" } },
+      messages: [
+        { role: "user" },
+        { role: "assistant", toolCalls: [{ id: openCall.id }] },
+        { role: "tool", toolCallId: openCall.id },
+      ],
+    });
+    const request = requests.at(0);
+    const assistant =
+      isRecord(request) && Array.isArray(request["messages"])
+        ? request["messages"].at(1)
+        : undefined;
+    expect(isRecord(assistant) && "thinking" in assistant).toBe(false);
   });
 
   test("OpenAI continues it with its reasoning options unchanged", async () => {
