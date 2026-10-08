@@ -1694,7 +1694,7 @@ test("signed-in screenings pass through every reason but warming, which is a def
       practiceJurisdictions: [],
       now: FRESH_NOW,
     });
-    expect(signedInScreening(screening)).toEqual(screening);
+    expect(screening).toEqual(signedInScreening(screening));
   }
   expect(() =>
     signedInScreening(
