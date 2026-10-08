@@ -8,6 +8,7 @@ import {
   CHAT_THREAD_ORIGIN,
   type ChatThreadOrigin,
 } from "@stll/api-contract/chat";
+import { classifyFailure } from "@stll/errors";
 
 import {
   chatMessages,
@@ -32,10 +33,10 @@ import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
-import { logger } from "@/api/lib/observability/logger";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 /** The matters a thread's pinned or embedded matter ids name, for search. */
@@ -69,6 +70,11 @@ type ChatThreadListItem = {
  * is not worth failing someone's history over, so a failed read marks the
  * rows that have a decision instead of failing the page.
  */
+const decisionBadgesUnavailable = failureSink({
+  event: "chat.thread_list.decision_badges_unavailable",
+  expected: [],
+});
+
 const readThreadDecisions = async (
   subjectDecisionIds: readonly (SafeId<"caseLawDecision"> | null)[],
 ) => {
@@ -76,9 +82,9 @@ const readThreadDecisions = async (
     decisionIds: subjectDecisionIds.filter((id) => id !== null),
   });
   if (Result.isError(badges)) {
-    logger.warn("chat.thread_list.decision_badges_unavailable", {
-      "error.type": errorTag(badges.error),
-      effect: "decision_unavailable",
+    observeFailure(classifyFailure(badges.error, "upstream_unavailable"), {
+      sink: decisionBadgesUnavailable,
+      ctx: { step: "getThreads.readThreadDecisions" },
     });
   }
   return (

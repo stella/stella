@@ -21,7 +21,7 @@ type CourtBadgeProps = {
   /** The court's own abbreviation, in the language its name is in. */
   abbreviation: string;
   weight: CourtBadgeWeight;
-  size?: CourtBadgeSize;
+  size?: CourtBadgeSize | undefined;
   className?: string;
 };
 

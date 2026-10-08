@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import en from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 
 import {
   ChatThreadDecisionLabel,
@@ -18,7 +19,7 @@ const DECISION: ChatThreadDecision = {
   courtAbbreviation: "NS",
   courtTier: "supreme",
   decisionDate: "2021-03-12",
-  id: "00000000-0000-0000-0000-000000000006",
+  id: toSafeId<"caseLawDecision">("00000000-0000-0000-0000-000000000006"),
   language: "cs",
   languageAlternates: [],
   slug: "open-case",

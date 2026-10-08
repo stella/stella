@@ -23,7 +23,7 @@ const TIER_BADGE_WEIGHT = {
 type CourtTierBadgeProps = {
   abbreviation: string;
   tier: CourtTier;
-  size?: CourtBadgeSize;
+  size?: CourtBadgeSize | undefined;
   className?: string;
 };
 

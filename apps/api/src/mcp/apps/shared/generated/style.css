@@ -2228,6 +2228,9 @@
   .px-0 {
     padding-inline: 0px;
   }
+  .px-0\.5 {
+    padding-inline: calc(var(--spacing) * 0.5);
+  }
   .px-1 {
     padding-inline: var(--spacing);
   }
@@ -2476,6 +2479,10 @@
   }
   .text-\[13px\] {
     font-size: 13px;
+  }
+  .leading-3\.5 {
+    --tw-leading: calc(var(--spacing) * 3.5);
+    line-height: calc(var(--spacing) * 3.5);
   }
   .leading-4 {
     --tw-leading: calc(var(--spacing) * 4);
