@@ -36,6 +36,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@stll/concurrency": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"

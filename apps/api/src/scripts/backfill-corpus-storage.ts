@@ -13,7 +13,8 @@ import {
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Backfill: copy existing canonical text/sections/AST from the Postgres
  * columns into object storage and record the keys + content hash. Run
@@ -260,8 +261,7 @@ await runScriptWithErrorOutput(async () => {
       break;
     }
 
-    for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      const chunk = rows.slice(i, i + CONCURRENCY);
+    for (const chunk of chunkItems(rows, CONCURRENCY)) {
       // One pack per chunk: the rows hand their payloads to one transfer
       // instead of three object PUTs each, and every row still settles under
       // its own fence once that pack is durable.

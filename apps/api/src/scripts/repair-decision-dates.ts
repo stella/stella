@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Repair `case_law_decisions.decision_date` values no publisher could have
  * meant.

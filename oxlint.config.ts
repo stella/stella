@@ -7,6 +7,7 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
@@ -1409,6 +1410,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
+    "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1629,6 +1631,20 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/**/*.{ts,tsx,js,mjs}",
+        "packages/**/*.{ts,tsx,js,mjs}",
+        "scripts/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/no-hand-rolled-concurrency.fixture.ts",
+      ],
+      rules: {
+        "no-hand-rolled-concurrency/no-hand-rolled-concurrency": [
+          "error",
+          { exceptions: concurrencyExceptions },
+        ],
+      },
+    },
     {
       files: ["apps/api/src/**/*.ts"],
       rules: {

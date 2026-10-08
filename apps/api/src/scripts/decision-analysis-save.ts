@@ -31,7 +31,7 @@
 
 import { Result } from "better-result";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { applyAnalysisUpdate } from "@/api/handlers/case-law/analysis/analysis-update";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";

@@ -24,7 +24,7 @@ import { sql } from "drizzle-orm";
  *   bun run src/scripts/build-expansion-dictionary.ts --language pl \
  *     --out expansion-pl.tsv
  */
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";

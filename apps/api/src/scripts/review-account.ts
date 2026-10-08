@@ -10,7 +10,7 @@
  * Better Auth's password hashing, and ends the account's browser sessions;
  * OAuth grants stay. Only fixed outcome words and counts are printed.
  */
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { bindOwnerReviewAccountOrganizationStore } from "@/api/db/root";
 import { env } from "@/api/env";

@@ -15,6 +15,8 @@ import {
 } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sanitizeQueryErrorText } from "@stll/errors";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -797,7 +799,12 @@ export const runCanaryProbe = async ({
       ) {
         return { attempts: attempt, error, signal, status: "failed" };
       }
-      await wait(retryDelayMs * CANARY_PROBE_RETRY_BACKOFF ** (attempt - 1));
+      await wait(
+        backoffDelay(attempt - 1, {
+          baseMs: retryDelayMs,
+          factor: CANARY_PROBE_RETRY_BACKOFF,
+        }),
+      );
     }
   }
 
@@ -1705,7 +1712,9 @@ const recordProbeResult = ({
   }
 
   console.error(
-    `[ai-canary] ${provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+    sanitizeQueryErrorText(
+      `[ai-canary] ${provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+    ),
   );
   return 1;
 };
@@ -2032,7 +2041,7 @@ if (import.meta.main) {
   await run().catch((error: unknown) => {
     // Never print provider errors: bodies can echo request content or headers.
     const message = CanaryError.is(error) ? error.message : "Canary failed.";
-    console.error(`[ai-canary] ${message}`);
+    console.error(sanitizeQueryErrorText(`[ai-canary] ${message}`));
     process.exitCode = 1;
   });
 }

@@ -1,4 +1,5 @@
-import { printError, runScriptWithErrorOutput } from "@stll/errors";
+import { printError } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";

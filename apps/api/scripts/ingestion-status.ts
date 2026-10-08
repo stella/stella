@@ -10,7 +10,7 @@ import { count, desc, gte, sql } from "drizzle-orm";
  *   bun apps/api/scripts/ingestion-status.ts
  */
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   caseLawDecisions,

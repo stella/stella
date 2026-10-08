@@ -254,14 +254,3 @@ export const sanitizeQueryErrorText = (text: string): string => {
   }
   return text;
 };
-
-/** Catch a script entrypoint before the runtime prints a raw rejection. */
-export const runScriptWithErrorOutput = async (
-  run: () => Promise<void>,
-): Promise<void> => {
-  const result = await Result.tryPromise(run);
-  if (result.isErr()) {
-    printError(result.error);
-    process.exit(1);
-  }
-};

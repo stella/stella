@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { open } from "node:fs/promises";
 
-import { printError, runScriptWithErrorOutput } from "@stll/errors";
+import { printError } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawSources } from "@/api/db/schema";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";

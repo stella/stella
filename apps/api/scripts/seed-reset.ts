@@ -13,7 +13,7 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
 import { requireLocalDevOpen } from "@/api/runtime-mode";

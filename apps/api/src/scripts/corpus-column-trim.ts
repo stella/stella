@@ -50,7 +50,7 @@ import type { SQL } from "drizzle-orm";
  * covered: by a list of spans, not by one cursor.
  */
 import { mapWithConcurrency } from "@stll/concurrency";
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";

@@ -14,7 +14,7 @@ import { and, eq, or, sql } from "drizzle-orm";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
 import { caseLawPolarityRules } from "@/api/db/schema";

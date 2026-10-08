@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
-import { runScriptWithErrorOutput, sanitizeErrorForOutput } from "@stll/errors";
+import { sanitizeErrorForOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 // oxlint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv

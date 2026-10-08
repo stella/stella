@@ -24,6 +24,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { printError } from "@stll/errors";
 
 import { sessionCookieNameForDevPort } from "@/api/lib/auth/auth-cookie-name";
@@ -396,7 +397,7 @@ const rateLimitDelayMs = (response: Response, attempt: number): number => {
   const seconds = Number(response.headers.get("retry-after"));
   return Number.isFinite(seconds) && seconds > 0
     ? seconds * 1000
-    : RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt;
+    : backoffDelay(attempt, { baseMs: RATE_LIMIT_BASE_DELAY_MS });
 };
 
 const createApiClient = (apiOrigin: string, cookie: string) => {

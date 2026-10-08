@@ -4,8 +4,8 @@ import {
   errorOutputLogger as sharedLogger,
   logErrorOutput,
   printError,
-  runScriptWithErrorOutput,
 } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 declare const runQuery: () => Promise<void>;
 
@@ -30,8 +30,8 @@ void runQuery().catch((error) => logger.error("query.failed", { error }));
 declare const logger: {
   error: (event: string, fields: Record<string, unknown>) => void;
 };
+// expect-clean: no-raw-error-output/no-raw-error-output
 void runScriptWithErrorOutput(run);
 
-// expect-clean: no-raw-error-output/no-raw-error-output
 // oxlint-disable-next-line no-console -- fixture exercises the direct output contract
 console.error("query failed");

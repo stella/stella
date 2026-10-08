@@ -1,4 +1,4 @@
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Move the sheet number out of `case_number` into `sheet_number`.
  *

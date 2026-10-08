@@ -35,7 +35,8 @@ import { Result } from "better-result";
  */
 import * as v from "valibot";
 
-import { printError, runScriptWithErrorOutput } from "@stll/errors";
+import { printError } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   enterCaseLawMaintenanceLane,

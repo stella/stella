@@ -8,7 +8,7 @@ import type { SQLWrapper } from "drizzle-orm";
  */
 import * as v from "valibot";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";

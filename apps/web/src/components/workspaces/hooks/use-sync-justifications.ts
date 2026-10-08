@@ -3,6 +3,8 @@ import { useCallback, useMemo, useRef } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceJustification } from "@/lib/types";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
@@ -17,22 +19,7 @@ export const chunkJustificationEntityIds = (
   entityIds: readonly string[],
 ): string[][] => {
   const normalizedEntityIds = normalizeEntityIds(entityIds);
-  const chunks: string[][] = [];
-
-  for (
-    let startIndex = 0;
-    startIndex < normalizedEntityIds.length;
-    startIndex += JUSTIFICATION_ENTITY_IDS_CHUNK_SIZE
-  ) {
-    chunks.push(
-      normalizedEntityIds.slice(
-        startIndex,
-        startIndex + JUSTIFICATION_ENTITY_IDS_CHUNK_SIZE,
-      ),
-    );
-  }
-
-  return chunks;
+  return chunkItems(normalizedEntityIds, JUSTIFICATION_ENTITY_IDS_CHUNK_SIZE);
 };
 
 type UseSyncJustificationsInput = {

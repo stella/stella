@@ -3,7 +3,7 @@ import { and, eq, exists, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { mkdir } from "node:fs/promises";
 
 import { mapWithConcurrency } from "@stll/concurrency";
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";

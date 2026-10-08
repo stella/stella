@@ -8,7 +8,7 @@
  */
 import { panic } from "better-result";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";

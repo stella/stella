@@ -60,7 +60,7 @@
 
 import { and, eq } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";

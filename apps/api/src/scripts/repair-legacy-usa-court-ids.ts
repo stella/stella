@@ -24,7 +24,7 @@
  */
 import { sql } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import {

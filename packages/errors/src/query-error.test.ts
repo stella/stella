@@ -2,12 +2,9 @@ import { Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import { inspect } from "node:util";
 
-import {
-  sanitizeErrorForOutput,
-  errorOutputLogger,
-  runScriptWithErrorOutput,
-} from "./query-error";
+import { sanitizeErrorForOutput, errorOutputLogger } from "./query-error";
 import { QUERY_ERROR_OUTPUT_FIELDS } from "./query-field-policy";
+import { runScriptWithErrorOutput } from "./script-error";
 
 const SECRET = "fixture-private-query-value-92ab";
 const failure = (query: string) =>

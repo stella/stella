@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawSources } from "@/api/db/schema";
 /**

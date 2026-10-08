@@ -24,7 +24,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";

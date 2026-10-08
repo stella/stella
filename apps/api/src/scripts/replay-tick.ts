@@ -10,7 +10,7 @@ import {
   type HealthConfig,
   type Verdict,
 } from "@stll/db-load-gate/health";
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";

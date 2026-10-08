@@ -10,7 +10,7 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   auditLogs,

@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
 import { streamWithConcurrency } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -756,15 +757,10 @@ const confirmProjectionAppend = async ({
   indexId,
   entries,
 }: ConfirmProjectionAppendOptions): Promise<Result<void, CorpusIndexError>> => {
-  for (
-    let offset = 0;
-    offset < entries.length;
-    offset += CORPUS_PROJECTION_DELETE_MAX_REVISIONS
-  ) {
-    const batch = entries.slice(
-      offset,
-      offset + CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-    );
+  for (const batch of chunkItems(
+    entries,
+    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  )) {
     const census = await censusCorpusProjectionRevisions({
       client,
       indexId,

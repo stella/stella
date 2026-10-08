@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * One unit of listing reconciliation for one source.
  *
@@ -22,8 +23,6 @@
  * on are counted in the summary and excluded from both, since a slice that
  * counted them could never settle.
  */
-
-import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -40,6 +39,8 @@ import {
   asc,
 } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { sanitizeQueryErrorText } from "@stll/errors";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -357,8 +358,8 @@ const forEachChunk = async <T>(
   values: readonly T[],
   visit: (chunk: T[]) => Promise<void>,
 ): Promise<void> => {
-  for (let index = 0; index < values.length; index += HELD_LOOKUP_CHUNK) {
-    await visit(values.slice(index, index + HELD_LOOKUP_CHUNK));
+  for (const itemBatch of chunkItems(values, HELD_LOOKUP_CHUNK)) {
+    await visit(itemBatch);
   }
 };
 
@@ -2077,7 +2078,7 @@ export const runReconciliationWorkUnit = async ({
     // the process only through this record.
     logger.error("case_law.reconciliation.floor_rejected", {
       adapterKey,
-      reason: floored.error.message,
+      reason: sanitizeQueryErrorText(floored.error.message),
     });
     return { type: "misconfigured" };
   }

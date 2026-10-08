@@ -1,3 +1,5 @@
+import { sleep } from "@stll/concurrency/sleep";
+
 import { detached } from "@/lib/detached";
 import { transformUnknownError } from "@/lib/errors/client";
 
@@ -57,11 +59,6 @@ type EventHandler<T> = (data: T) => void;
 type ListenerMap<T> = {
   [K in keyof EventMap<T>]: Set<EventHandler<EventMap<T>[K]>>;
 };
-
-const sleep = async (ms: number) =>
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /**
  * Concurrent upload queue with 429-awareness, pause,

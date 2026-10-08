@@ -2,7 +2,8 @@ import { panic } from "better-result";
 import { SQL } from "bun";
 import nodePath from "node:path";
 
-import { printError, runScriptWithErrorOutput } from "@stll/errors";
+import { printError } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 // Relative imports: this entrypoint also ships as a loose file without tsconfig.
 import { resolveDatabaseUrl } from "../db-url";

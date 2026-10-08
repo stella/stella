@@ -9,7 +9,7 @@ import { panic } from "better-result";
  * legacy resolver bridge, in a later release.
  */
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   runDecisionIdentifierBackfill,

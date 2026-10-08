@@ -9,7 +9,7 @@
  * missing row is denied once the state is enforced. Existing rows are never
  * changed, so re-running is safe.
  */
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { recordMissingOrganizationAccessStates } from "@/api/lib/usage/organization-access-state";

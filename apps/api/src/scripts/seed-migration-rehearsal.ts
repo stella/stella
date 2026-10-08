@@ -14,7 +14,7 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
 import type { RehearsalSeedStep } from "@/api/scripts/seed-migration-rehearsal-plan";

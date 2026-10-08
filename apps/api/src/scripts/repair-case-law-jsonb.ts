@@ -33,7 +33,7 @@ import { sql } from "drizzle-orm";
  *   object, and the WHERE clause skips it.
  */
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";

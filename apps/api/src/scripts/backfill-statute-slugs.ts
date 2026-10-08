@@ -10,7 +10,7 @@
  * a single source of truth for the algorithm.
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { backfillStatuteSlugsPage } from "@/api/handlers/legislation/slug-backfill";

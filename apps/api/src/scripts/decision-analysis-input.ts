@@ -26,7 +26,7 @@
 
 import { Result } from "better-result";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";

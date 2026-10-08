@@ -1,4 +1,4 @@
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 /**
  * Reduce stored reference passages to ids (`lib/document-review/

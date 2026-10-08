@@ -14,7 +14,7 @@ import { panic } from "better-result";
  *   bun apps/api/src/scripts/readjudicate-ambiguous-citations.ts [--after <citingDecisionId>:<citationId>]
  */
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { isUuid } from "@stll/uuid-codec";
 
 import {

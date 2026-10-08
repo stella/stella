@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import type {
   CorpusIndexClient,

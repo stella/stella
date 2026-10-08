@@ -9,7 +9,7 @@
  * Slug assignment reuses the same helper the ingestion pipeline and the
  * dev seed use, so there is a single source of truth for the slug algorithm.
  */
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";

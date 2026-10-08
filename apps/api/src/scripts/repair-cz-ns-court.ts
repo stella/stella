@@ -49,7 +49,7 @@
 
 import { panic } from "better-result";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {

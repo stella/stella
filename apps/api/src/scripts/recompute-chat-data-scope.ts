@@ -19,7 +19,7 @@ import { panic, Result } from "better-result";
 import { asc, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { chatMessages, chatThreads, workspaces } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";

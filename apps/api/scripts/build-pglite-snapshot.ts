@@ -5,7 +5,7 @@
 // process, dumped as a PGlite data dir. Test processes then boot via
 // loadDataDir and skip the ~2.2 GB drizzle-kit push peak entirely.
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { buildFullTestPglite } from "../src/tests/pglite-test-db";
 

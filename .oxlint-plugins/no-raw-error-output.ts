@@ -521,7 +521,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawErrorOutput:
-            "Do not print a raw error or its message. Use printError(error) or runScriptWithErrorOutput(...) from @stll/errors.",
+            "Do not print a raw error or its message. Use printError(error) from @stll/errors or runScriptWithErrorOutput(...) from @stll/errors/script-error.",
           missingBetterAuthLogger:
             "Configure betterAuth with errorOutputLogger from @stll/errors to keep SDK errors on the shared output boundary.",
         },

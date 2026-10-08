@@ -30,7 +30,7 @@
 
 import { Result } from "better-result";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";

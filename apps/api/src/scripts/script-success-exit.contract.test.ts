@@ -75,7 +75,7 @@ for (const { path, output, fixtures } of [
         "--no-env-file",
         "--eval",
         `
-        import { runScriptWithErrorOutput } from ${JSON.stringify(import.meta.resolve("@stll/errors"))};
+        import { runScriptWithErrorOutput } from ${JSON.stringify(import.meta.resolve("@stll/errors/script-error"))};
         setInterval(() => {}, 1000);
         ${fixtures}
         await runScriptWithErrorOutput(async () => { ${successPhase(source)} });

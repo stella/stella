@@ -10,7 +10,7 @@
 import { panic, Result } from "better-result";
 import { asc, eq, gt } from "drizzle-orm";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";

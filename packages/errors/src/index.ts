@@ -39,7 +39,6 @@ export {
   printError,
   logErrorOutput,
   errorOutputLogger,
-  runScriptWithErrorOutput,
 } from "./query-error";
 
 export {

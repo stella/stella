@@ -5,7 +5,7 @@
  * source writer continues to run.
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";

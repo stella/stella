@@ -19,11 +19,8 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
-import {
-  printError,
-  runScriptWithErrorOutput,
-  sanitizeErrorForOutput,
-} from "@stll/errors";
+import { printError, sanitizeErrorForOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { caseLawJudges } from "@/api/db/schema";

@@ -26,7 +26,7 @@ import { Result, TaggedError, panic } from "better-result";
 import { eq } from "drizzle-orm";
 import { parseArgs } from "node:util";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";

@@ -3,7 +3,7 @@ import type { ReservedSQL } from "bun";
 import { eq } from "drizzle-orm";
 
 import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
 import { readEuCompletionTickEnvironment } from "@/api/env-eu-completion";

@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Seed templates & clauses (Knowledge section).
  *

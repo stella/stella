@@ -19,6 +19,7 @@
  */
 import { Result, TaggedError } from "better-result";
 
+import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import {
   isAllowedResourcePath,
   normalizeResourcePath,
@@ -79,14 +80,10 @@ type FetchWithBoundedRetryOptions<T> = {
   sleep?: RetrySleep;
 };
 
-const sleep = async (delayMs: number): Promise<void> => {
-  await Bun.sleep(delayMs);
-};
-
 /** Retry rejected transports twice; tagged response failures stay single-pass. */
 export const fetchWithBoundedRetry = async <T>({
   fetchValue,
-  sleep: wait = sleep,
+  sleep: wait = ownerSleep,
 }: FetchWithBoundedRetryOptions<T>): Promise<T> => {
   const attempt = async (retryIndex: number): Promise<T> => {
     const fetched = await Result.tryPromise({
@@ -182,7 +179,7 @@ export const fetchPinnedTextFile = async ({
   label,
   maxBytes,
   repoRelativePath,
-  sleep: wait = sleep,
+  sleep: wait = ownerSleep,
   target,
 }: FetchPinnedTextFileOptions): Promise<PinnedTextFile | null> => {
   const fetchValue = async () => {
@@ -254,7 +251,7 @@ type FetchDirectoryContentsOptions = {
 export const fetchDirectoryContents = async ({
   fetcher = fetch,
   repoRelativePath,
-  sleep: wait = sleep,
+  sleep: wait = ownerSleep,
   target,
 }: FetchDirectoryContentsOptions): Promise<GithubContentItem[]> => {
   const fetchValue = async () => {

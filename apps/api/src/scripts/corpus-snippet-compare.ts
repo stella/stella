@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { mkdir } from "node:fs/promises";
 
-import { runScriptWithErrorOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { envBase } from "@/api/env-base";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
