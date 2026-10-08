@@ -310,7 +310,7 @@ test("restoring a fatal recording lookup prevents the required exact-base fallba
   expect(result.commands).toBe("");
 });
 
-for (const installerExit of [0, 75]) {
+for (const installerExit of [0, 64, 75, 127]) {
   test(`local exact-base preparation uses the admitted installer (status ${installerExit})`, () => {
     const result = runFallback({ failure: "none", local: true, installerExit });
     expect(result.exitCode).toBe(installerExit);

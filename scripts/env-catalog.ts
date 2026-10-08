@@ -1316,6 +1316,11 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Local verification host configuration, remote recursion guard, and base preparation.
+  "STELLA_VERIFY_CONFIG",
+  "REMOTE_CHECK",
+  "CHECK_BASE_REF",
+  "STELLA_VERIFY_LOCAL",
   // Manual document-fetch input is scoped to its workflow invocation.
   "PUBLIC_DOCUMENT_URLS",
   // Session ownership is passed from agent:up to its detached dev runner.

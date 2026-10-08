@@ -17,7 +17,7 @@ type AdmissionOptions = {
   report: (message: string) => void;
 };
 
-/** Remote admission covers the remote execution; the local gate is never bypassed. */
+/** Remote admission covers remote execution; configured gates remain mandatory. */
 export const withCheckAdmission = ({
   alreadyRemote,
   admitLocal,
@@ -55,8 +55,8 @@ export const withCheckAdmission = ({
 
 export type HostConfig = {
   localGate: string[] | null;
-  remote: string[];
-  installer: string[];
+  remote: string[] | null;
+  installer: string[] | null;
 };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -79,27 +79,27 @@ export const hostConfig = (): HostConfig => {
   const file =
     process.env["STELLA_VERIFY_CONFIG"] ??
     path.join(homedir(), ".config/stella/verify.json");
-  if (!existsSync(file)) {
-    return {
-      localGate: Bun.which("load-admit") === null ? null : ["load-admit", "--"],
-      remote: ["remote-check"],
-      installer: ["serial-install"],
-    };
-  }
-  const config: unknown = JSON.parse(readFileSync(file, "utf-8"));
+  const config: unknown = existsSync(file)
+    ? JSON.parse(readFileSync(file, "utf-8"))
+    : {};
   if (!isRecord(config)) {
     throw new VerifyError(`${file} must contain an object`);
   }
+  const optionalCommand = (
+    name: string,
+    fallback: [string, ...string[]],
+  ): string[] | null => {
+    const configured = config[name];
+    if (configured !== undefined) {
+      return commandArguments(configured, name);
+    }
+    const executable = fallback[0];
+    return Bun.which(executable) === null ? null : fallback;
+  };
   return {
-    localGate: commandArguments(
-      config["localGate"] ?? ["load-admit", "--"],
-      "localGate",
-    ),
-    remote: commandArguments(config["remote"] ?? ["remote-check"], "remote"),
-    installer: commandArguments(
-      config["installer"] ?? ["serial-install"],
-      "installer",
-    ),
+    localGate: optionalCommand("localGate", ["load-admit", "--"]),
+    remote: optionalCommand("remote", ["remote-check"]),
+    installer: optionalCommand("installer", ["serial-install"]),
   };
 };
 
@@ -124,9 +124,13 @@ export const admitLocal = ({
   }).exitCode;
 };
 
-export const probeRemote = (config: HostConfig, repo: string): number =>
-  Bun.spawnSync([...config.remote, "--probe"], {
+export const probeRemote = (config: HostConfig, repo: string): number => {
+  if (config.remote === null) {
+    return BOTH_GATES_REFUSED;
+  }
+  return Bun.spawnSync([...config.remote, "--probe"], {
     cwd: repo,
     stdout: "inherit",
     stderr: "inherit",
   }).exitCode;
+};

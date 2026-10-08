@@ -101,8 +101,13 @@ export const parseVerifyWorkflow = (
   source: string,
   mode: VerifyWorkflowMode,
 ): VerifyWorkflowStep[] => {
-  if (mode !== "verify" && mode !== "autofix") {
-    throw new VerifyError(`Unknown workflow mode: ${String(mode)}`);
+  switch (mode) {
+    case "verify":
+    case "autofix":
+      break;
+    default:
+      mode satisfies never;
+      throw new VerifyError(`Unknown workflow mode: ${String(mode)}`);
   }
   const parsed: unknown = Bun.YAML.parse(source);
   const workflow = record(parsed, "Workflow");

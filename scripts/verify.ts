@@ -25,7 +25,10 @@ export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
   let scope: VerifyOptions["scope"] = "affected";
   let mode: VerifyOptions["mode"] = "check";
   for (let index = 0; index < args.length; index += 1) {
-    switch (args[index]) {
+    const argument = args[index];
+    switch (argument) {
+      case undefined:
+        throw new VerifyError("Missing verify argument");
       case "--emit-fix-patch":
         emitPatch = true;
         break;
@@ -50,7 +53,7 @@ export const parseVerifyArgs = (args: readonly string[]): VerifyOptions => {
         break;
       }
       default:
-        throw new VerifyError(`Unknown verify argument: ${args[index]}`);
+        throw new VerifyError(`Unknown verify argument: ${argument}`);
     }
   }
   return {
@@ -126,7 +129,10 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
   const temporary = mkdtempSync(path.join(tmpdir(), "stella-verify-"));
   const mergeBase = git(["merge-base", options.base, "HEAD"]).trim();
   const installerArgs = path.join(temporary, "installer-argv");
-  writeFileSync(installerArgs, `${config.installer.join("\0")}\0`);
+  writeFileSync(
+    installerArgs,
+    config.installer === null ? "" : `${config.installer.join("\0")}\0`,
+  );
   const env = {
     ...process.env,
     GENERATOR_IDS: "",
@@ -308,6 +314,9 @@ const remoteChecks = ({
   options,
   config,
 }: RemoteCheckOptions): number => {
+  if (config.remote === null) {
+    return BOTH_GATES_REFUSED;
+  }
   const fixes = options.mode === "fix" || options.mode === "fix-check";
   // Transport carries HEAD ancestry, not this checkout's named remote refs.
   const base = git(["merge-base", options.base, "HEAD"]).trim();

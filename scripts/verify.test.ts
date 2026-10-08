@@ -25,6 +25,19 @@ import { VerifyError } from "./verify-error";
 import { readVerifyWorkflow, type VerifyWorkflowStep } from "./verify-workflow";
 
 const root = path.resolve(import.meta.dirname, "..");
+const HOST_EXECUTABLES = ["load-admit", "remote-check", "serial-install"];
+
+test("host executable census is guarded by the isolated entry paths", () => {
+  const source = readFileSync(
+    path.join(root, "scripts/verify-admission.ts"),
+    "utf-8",
+  );
+  const executables = [
+    ...source.matchAll(/optionalCommand\("\w+", \["([^"\n]+)"/gu),
+  ].map((match) => match.at(1));
+  expect(executables).toHaveLength(HOST_EXECUTABLES.length);
+  expect(new Set(executables)).toEqual(new Set(HOST_EXECUTABLES));
+});
 
 test.each([0, 1, 2, 64, 127])(
   "local acceptance propagates status %i without remote execution",
@@ -46,7 +59,9 @@ test.each([0, 1, 2, 64, 127])(
           events.push("remote");
           return 0;
         },
-        report: (message) => events.push(message),
+        report: (message) => {
+          events.push(message);
+        },
       }),
     ).toBe(status);
     expect(events).toEqual(["local"]);
@@ -72,7 +87,9 @@ test.each([0, 1, 2, 75])(
           events.push("remote");
           return status;
         },
-        report: (message) => events.push(message),
+        report: (message) => {
+          events.push(message);
+        },
       }),
     ).toBe(status);
     expect(events).toEqual([
@@ -99,7 +116,9 @@ test.each([1, 2, 64, 75, 127, 255])(
           events.push("remote");
           return 0;
         },
-        report: (message) => events.push(message),
+        report: (message) => {
+          events.push(message);
+        },
       }),
     ).toBe(status);
     expect(events).toEqual(
@@ -145,7 +164,9 @@ test.each([0, BOTH_GATES_REFUSED])(
           return 0;
         },
         runRemote: unexpected,
-        report: (message) => events.push(message),
+        report: (message) => {
+          events.push(message);
+        },
       }),
     ).toBe(status);
     expect(events).toEqual([
@@ -177,7 +198,9 @@ for (const alreadyRemote of [false, true]) {
             events.push("remote");
             return remote;
           },
-          report: (message) => events.push(message),
+          report: (message) => {
+            events.push(message);
+          },
         });
         if (alreadyRemote) {
           expect(status).toBe(BOTH_GATES_REFUSED);
@@ -342,7 +365,9 @@ test.each([false, true])(
           remoteRuns += 1;
           return 0;
         },
-        report: (message) => messages.push(message),
+        report: (message) => {
+          messages.push(message);
+        },
       }),
     ).toBe(alreadyRemote ? BOTH_GATES_REFUSED : 0);
     const firstCheck = steps.findIndex(({ phase }) => phase === "check");
@@ -606,9 +631,10 @@ printf '%s\\0' "$@" > "$ADMISSION_RECEIPT"
     const defaults = run("config");
     expect(defaults.exitCode, defaults.stderr.toString()).toBe(0);
     expect(JSON.parse(defaults.stdout.toString())).toEqual({
-      localGate: ["load-admit", "--"],
-      remote: ["remote-check"],
-      installer: ["serial-install"],
+      localGate: Bun.which("load-admit") === null ? null : ["load-admit", "--"],
+      remote: Bun.which("remote-check") === null ? null : ["remote-check"],
+      installer:
+        Bun.which("serial-install") === null ? null : ["serial-install"],
     });
 
     for (const field of ["localGate", "remote", "installer"]) {
@@ -642,8 +668,9 @@ for (const ci of [undefined, "true"]) {
       "available",
       "configured-missing",
       "configured-usage",
+      "local-refusal",
     ] as const) {
-      test(`local entry ${entry} handles gate=${gate} with CI=${ci}`, () => {
+      test(`local entry ${entry} handles gate=${gate} with CI=${String(ci)}`, () => {
         const fixture = realpathSync(
           mkdtempSync(path.join(tmpdir(), "verify-local-entry-")),
         );
@@ -656,14 +683,59 @@ for (const ci of [undefined, "true"]) {
           const bin = path.join(fixture, "bin");
           mkdirSync(path.join(home, ".config/stella"), { recursive: true });
           mkdirSync(bin);
-          for (const name of ["bash", "git", "dirname"]) {
+          for (const name of [
+            "bash",
+            "git",
+            "dirname",
+            "jq",
+            "mktemp",
+            "mkdir",
+            "cat",
+            "rm",
+            "sleep",
+            "unzip",
+            "cp",
+            "awk",
+            "basename",
+            "sed",
+            "uname",
+            "grep",
+            "tr",
+            "cut",
+            "sort",
+            "expr",
+            "wc",
+            "env",
+            "date",
+            "head",
+            "tail",
+          ]) {
             const executable = Bun.which(name);
             if (executable === null) {
               throw new TypeError(`Fixture needs ${name}`);
             }
             symlinkSync(executable, path.join(bin, name));
           }
-          symlinkSync(process.execPath, path.join(bin, "bun"));
+          // Exercise the real orchestration; package-owned checks stop at the Bun boundary.
+          writeFileSync(
+            path.join(bin, "bun"),
+            `#!/bin/bash
+if [[ "$1" == install ]]; then
+  printf '%s\\n' "$*" >> "$TEST_INSTALL_RECEIPT"
+  exit 0
+fi
+case "$1" in
+  */verify.ts|*fixture-typegen.ts|*autofix-protected-paths.ts) exec '${process.execPath}' "$@" ;;
+  run) if [[ "$2" == typegen ]]; then exec '${process.execPath}' "$@"; fi ;;
+  *check-tauri-package-alignment.ts) printf false ;;
+  scripts/*|apps/*|packages/*|test|--bun|--no-install) ;;
+  *) echo "Unexpected fixture Bun command: $1" >&2; exit 127 ;;
+esac
+printf '%s executed' "$TEST_ENTRY" > "$TEST_ENTRY_RECEIPT"
+exit 0
+`,
+          );
+          chmodSync(path.join(bin, "bun"), 0o755);
           for (const file of [
             "verify.ts",
             "verify-admission.ts",
@@ -672,6 +744,8 @@ for (const ci of [undefined, "true"]) {
             "workflow-steps.ts",
             "verify.sh",
             "autofix-local.sh",
+            "prepare-typecheck-base.sh",
+            "gh-retry.sh",
           ]) {
             copyFileSync(
               path.join(root, "scripts", file),
@@ -679,12 +753,20 @@ for (const ci of [undefined, "true"]) {
             );
           }
           for (const mode of ["verify", "autofix"] as const) {
+            if (gate === "absent") {
+              const workflow = `.github/workflows/${mode === "verify" ? "ci" : "autofix"}.yml`;
+              copyFileSync(
+                path.join(root, workflow),
+                path.join(fixture, workflow),
+              );
+              continue;
+            }
             writeFileSync(
               path.join(
                 fixture,
                 `.github/workflows/${mode === "verify" ? "ci" : "autofix"}.yml`,
               ),
-              `jobs:\n  fixture:\n    steps:\n      - name: Execute\n        env: { ${mode === "verify" ? "STELLA_VERIFY: check" : 'STELLA_LOCAL_AUTOFIX: "true"'} }\n        run: printf '${mode} executed' > ${mode}-receipt\n`,
+              `jobs:\n  fixture:\n    steps:\n      - name: Execute\n        env: { ${mode === "verify" ? "STELLA_VERIFY: check" : 'STELLA_LOCAL_AUTOFIX: "true"'} }\n        run: |\n${mode === "verify" || entry === "autofix" ? "          bash scripts/prepare-typecheck-base.sh\n" : ""}          printf '${mode} executed' > ${mode}-receipt\n`,
             );
           }
           mkdirSync(path.join(fixture, "packages/scripts/src"), {
@@ -692,11 +774,42 @@ for (const ci of [undefined, "true"]) {
           });
           for (const file of [
             "scripts/autofix-plan.ts",
+            "scripts/autofix-protected-paths.ts",
+            "scripts/baseline-paths.ts",
             "scripts/generated-files.ts",
             "packages/scripts/src/generated-files.ts",
           ]) {
             copyFileSync(path.join(root, file), path.join(fixture, file));
           }
+          for (const app of ["api", "web"]) {
+            mkdirSync(path.join(fixture, "apps", app), { recursive: true });
+            writeFileSync(path.join(fixture, "apps", app, ".env.example"), "");
+          }
+          mkdirSync(path.join(fixture, "apps/web/src/generated"), {
+            recursive: true,
+          });
+          writeFileSync(
+            path.join(fixture, "apps/web/src/generated/api-routes.gen.ts"),
+            "",
+          );
+          writeFileSync(
+            path.join(fixture, "apps/web/src/routeTree.gen.ts"),
+            "",
+          );
+          writeFileSync(
+            path.join(fixture, "package.json"),
+            JSON.stringify({
+              scripts: { typegen: "bun scripts/fixture-typegen.ts" },
+            }),
+          );
+          writeFileSync(
+            path.join(fixture, "scripts/fixture-typegen.ts"),
+            'await Bun.write(process.env["TEST_BASE_RECEIPT"], "prepared");',
+          );
+          writeFileSync(
+            path.join(fixture, "scripts/typecheck-baseline.ts"),
+            "",
+          );
           const git = (args: string[]) => {
             const result = Bun.spawnSync(["git", ...args], {
               cwd: fixture,
@@ -706,6 +819,14 @@ for (const ci of [undefined, "true"]) {
             expect(result.exitCode, result.stderr.toString()).toBe(0);
           };
           git(["init", "-q"]);
+          git([
+            "add",
+            "scripts",
+            "packages",
+            "apps",
+            "package.json",
+            ".github",
+          ]);
           git([
             "-c",
             "user.name=Fixture",
@@ -719,6 +840,12 @@ for (const ci of [undefined, "true"]) {
             "fixture",
           ]);
           const config = path.join(home, ".config/stella/verify.json");
+          if (gate === "absent") {
+            writeFileSync(config, "{}");
+            for (const executable of HOST_EXECUTABLES) {
+              expect(existsSync(path.join(bin, executable))).toBe(false);
+            }
+          }
           if (gate === "available") {
             writeFileSync(
               path.join(bin, "load-admit"),
@@ -737,10 +864,17 @@ for (const ci of [undefined, "true"]) {
               }),
             );
           }
+          if (gate === "local-refusal") {
+            writeFileSync(
+              config,
+              JSON.stringify({ localGate: ["bash", "-c", "exit 75"] }),
+            );
+          }
           const result = Bun.spawnSync(
             [
               path.join(bin, "bash"),
               `scripts/${entry === "verify" ? "verify.sh" : "autofix-local.sh"}`,
+              ...(entry === "verify" && gate === "absent" ? ["--fix"] : []),
               "--base",
               "HEAD",
             ],
@@ -751,6 +885,10 @@ for (const ci of [undefined, "true"]) {
                 HOME: home,
                 PATH: bin,
                 CI: ci,
+                TEST_ENTRY: entry,
+                TEST_ENTRY_RECEIPT: path.join(fixture, `${entry}-receipt`),
+                TEST_BASE_RECEIPT: path.join(fixture, "base-receipt"),
+                TEST_INSTALL_RECEIPT: path.join(fixture, "install-receipt"),
                 STELLA_VERIFY_CONFIG: undefined,
                 REMOTE_CHECK: undefined,
               },
@@ -759,12 +897,15 @@ for (const ci of [undefined, "true"]) {
             },
           );
           const refused =
-            gate === "configured-missing" || gate === "configured-usage";
+            gate === "configured-missing" ||
+            gate === "configured-usage" ||
+            gate === "local-refusal";
           const expectedStatus = {
             absent: 0,
             available: 0,
             "configured-missing": 2,
             "configured-usage": 64,
+            "local-refusal": BOTH_GATES_REFUSED,
           };
           expect(result.exitCode, result.stderr.toString()).toBe(
             expectedStatus[gate],
@@ -773,6 +914,14 @@ for (const ci of [undefined, "true"]) {
             !refused,
           );
           if (!refused) {
+            if (gate !== "absent" || entry === "verify") {
+              expect(
+                readFileSync(path.join(fixture, "base-receipt"), "utf-8"),
+              ).toBe("prepared");
+              expect(
+                readFileSync(path.join(fixture, "install-receipt"), "utf-8"),
+              ).toBe("install --frozen-lockfile\n");
+            }
             expect(
               readFileSync(path.join(fixture, `${entry}-receipt`), "utf-8"),
             ).toBe(`${entry} executed`);
@@ -781,6 +930,9 @@ for (const ci of [undefined, "true"]) {
             expect(
               readFileSync(path.join(fixture, "gate-receipt"), "utf-8"),
             ).toBe("admitted");
+          }
+          if (gate === "local-refusal") {
+            expect(result.stderr.toString()).toContain(BOTH_GATES_MESSAGE);
           }
           if (gate === "configured-missing") {
             expect(result.stderr.toString()).toContain("missing-gate");
