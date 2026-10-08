@@ -54,7 +54,7 @@ const renewDesktopAccount = createSafePublicHandler(
     }
     if (body.type === "probe") {
       const recovered = yield* Result.await(
-        await probeDesktopCredential({
+        probeDesktopCredential({
           keyId: context.keyId,
           userId: context.userId,
           organizationId: context.organizationId,
@@ -77,7 +77,7 @@ const renewDesktopAccount = createSafePublicHandler(
       server: null,
     });
     const rotated = yield* Result.await(
-      await renewDesktopCredential({
+      renewDesktopCredential({
         keyId: context.keyId,
         userId: context.userId,
         organizationId: context.organizationId,
