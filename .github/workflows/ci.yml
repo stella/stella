@@ -804,6 +804,11 @@ jobs:
             exit 1
           fi
           read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$service_suite_scopes"
+          # Corpus engine suites have no file-level selection; pull requests
+          # leave them to full-depth runs.
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            corpus_suites_required=false
+          fi
           service_suites_pr_required=false
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
