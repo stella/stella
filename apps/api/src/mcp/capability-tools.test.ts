@@ -1980,6 +1980,52 @@ describe("capability executor execution", () => {
     });
   });
 
+  test("destructive write dispatch requires confirmation", async () => {
+    const categoryId = "a1111111-1111-4111-8111-111111111111";
+    const deleteRow = mock(async () => undefined);
+    const updateRow = mock(async () => undefined);
+    const auditRows = mock(async () => undefined);
+    const findCategory = mock(async () => ({
+      id: categoryId,
+      name: "Synthetic Category",
+      parentId: null,
+    }));
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: { clauseCategories: { findFirst: findCategory } },
+      update: () => ({ set: () => ({ where: updateRow }) }),
+      delete: () => ({ where: deleteRow }),
+      insert: () => ({ values: auditRows }),
+    });
+    const context = createContext({ safeDb, scopedDb });
+    const args = {
+      capability: "clauses.categories.delete",
+      input: { params: { categoryId } },
+    };
+    const unconfirmed = await handleMcpToolCall({
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+      args,
+      context,
+    });
+    expect(errorEnvelope(unconfirmed).code).toBe("confirmation_required");
+    expect(findCategory).not.toHaveBeenCalled();
+    expect(deleteRow).not.toHaveBeenCalled();
+    expect(auditRows).not.toHaveBeenCalled();
+
+    const confirmed = await handleMcpToolCall({
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+      args: { ...args, confirm: true },
+      context,
+    });
+    expect(confirmed.isError).not.toBe(true);
+    const payload = parseToolPayload(confirmed);
+    expect(payload).toEqual({});
+    expect(findCategory).toHaveBeenCalledTimes(1);
+    expect(updateRow).toHaveBeenCalledTimes(1);
+    expect(deleteRow).toHaveBeenCalledTimes(1);
+    expect(auditRows).toHaveBeenCalledTimes(1);
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
   test("a role without permission -> permission_denied", async () => {
     const result = await handleCapabilityCall({
       args: {
@@ -3584,14 +3630,16 @@ for (const grants of [
         }
       };
       expectUnknownId(schema);
-      for (const validate_only of [false, true]) {
-        expectUnknownId(
-          await handleMcpToolCall({
-            toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
-            args: { capability: entry.id, validate_only },
-            context,
-          }),
-        );
+      for (const toolName of Object.values(MCP_CAPABILITY_EXECUTORS)) {
+        for (const validate_only of [false, true]) {
+          expectUnknownId(
+            await handleMcpToolCall({
+              toolName,
+              args: { capability: entry.id, validate_only },
+              context,
+            }),
+          );
+        }
       }
     }
   });
@@ -3600,7 +3648,23 @@ for (const grants of [
 describe("capability executor access isolation", () => {
   const enabledContext = () => {
     const context = createContext({ grantedScopes: [...MCP_OAUTH_SCOPES] });
-    return {
+    const grants = Object.fromEntries(
+      Object.keys(FEATURE_REGISTRY).map((featureId) => [
+        featureId,
+        [
+          {
+            type: "organization" as const,
+            organizationId: context.organizationId,
+          },
+        ],
+      ]),
+    );
+    const enrolments = Object.keys(FEATURE_REGISTRY).map((featureId) => ({
+      featureId,
+      organizationId: context.organizationId,
+      userId: context.userId,
+    }));
+    const enabled = {
       ...context,
       featureAccessSnapshot: createFeatureAccessSnapshot({
         organizationId: context.organizationId,
@@ -3610,31 +3674,25 @@ describe("capability executor access isolation", () => {
             featureId,
             decideFeatureAccess({
               registry: FEATURE_REGISTRY,
-              grants: {
-                [featureId]: [
-                  {
-                    type: "organization",
-                    organizationId: context.organizationId,
-                  },
-                ],
-              },
+              grants,
               featureId,
               organizationId: context.organizationId,
               userId: context.userId,
               user: { email: "standard@example.test", emailVerified: true },
               membership: true,
-              enrolments: [
-                {
-                  featureId,
-                  organizationId: context.organizationId,
-                  userId: context.userId,
-                },
-              ],
+              enrolments,
             }),
           ]),
         ),
       }),
     };
+    for (const featureId of Object.keys(FEATURE_REGISTRY)) {
+      expect(
+        isFeatureEnabled(enabled.featureAccessSnapshot, featureId, enabled),
+        featureId,
+      ).toBe(true);
+    }
+    return enabled;
   };
 
   test("every catalog capability is refused by the opposite executor before dispatch", async () => {

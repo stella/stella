@@ -106,7 +106,7 @@ workspaces.last_activity_at   timestamptz         default,not null  contacts.ts:
 workspaces.created_at         timestamptz         default,not null  contacts.ts:336
 ```
 
-## workspace_members · `workspaceMembers` · contacts.ts:378 · rls
+## workspace_members · `workspaceMembers` · contacts.ts:378
 
 ```text
 workspace_members.id            pUuid            pk,not null       contacts.ts:381
@@ -195,7 +195,7 @@ scheduler_job_runs.duration_ms  integer      null              contacts.ts:744
 scheduler_job_runs.error        text         null              contacts.ts:745
 ```
 
-## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:765 · rls
+## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:765
 
 -- InfoSoud Tracking --
 
