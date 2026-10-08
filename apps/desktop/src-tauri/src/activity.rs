@@ -830,7 +830,11 @@ impl ActivityManager {
           },
         );
         let details = if include_details {
-          crate::activity_details::sanitized_details(window_title, document)
+          crate::activity_details::sanitized_details(
+            window_title,
+            document,
+            crate::activity_details::WindowDetailsSource::for_app(&identifier, &name),
+          )
         } else {
           WindowDetails::default()
         };

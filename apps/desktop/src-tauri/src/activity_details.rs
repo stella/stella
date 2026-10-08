@@ -65,13 +65,32 @@ fn is_private_window(title: &str) -> bool {
     .any(|marker| title.contains(marker))
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WindowDetailsSource {
+  Application,
+  Browser,
+}
+
+impl WindowDetailsSource {
+  pub(crate) fn for_app(identifier: &str, name: &str) -> Self {
+    if is_browser(identifier, name) {
+      Self::Browser
+    } else {
+      Self::Application
+    }
+  }
+}
+
 pub(crate) fn sanitized_details(
   title: Option<String>,
   document: Option<String>,
+  source: WindowDetailsSource,
 ) -> WindowDetails {
   // Check the complete caption before truncating it: a privacy marker can be
   // beyond the storage limit. No URL is accepted as a document by the wrapper.
-  if title.as_deref().is_some_and(is_private_window) {
+  if source == WindowDetailsSource::Browser
+    && title.as_deref().is_some_and(is_private_window)
+  {
     return WindowDetails {
       privacy: CapturedWindowPrivacy::Private,
       ..WindowDetails::default()
@@ -92,6 +111,10 @@ pub fn capture(
   foreground: &ForegroundApp,
   browser_titles_enabled: bool,
 ) -> WindowDetails {
+  let source = WindowDetailsSource::for_app(
+    foreground.identifier.as_deref().unwrap_or(""),
+    &foreground.name,
+  );
   if !browser_titles_enabled
     && is_browser(
       foreground.identifier.as_deref().unwrap_or(""),
@@ -107,13 +130,14 @@ pub fn capture(
     else {
       return WindowDetails::default();
     };
-    sanitized_details(details.window_title, details.document)
+    sanitized_details(details.window_title, details.document, source)
   }
   #[cfg(target_os = "windows")]
   {
     sanitized_details(
       stella_desktop_macos::focused_window_title(foreground.process_id),
       None,
+      source,
     )
   }
   #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -183,11 +207,14 @@ mod tests {
       assert!(is_browser(browser, name));
       assert!(is_private_window(title));
       assert!(
-        sanitized_details(Some(title.into()), Some("/private.docx".into()))
-          == WindowDetails {
-            privacy: CapturedWindowPrivacy::Private,
-            ..WindowDetails::default()
-          }
+        sanitized_details(
+          Some(title.into()),
+          Some("/private.docx".into()),
+          WindowDetailsSource::Browser
+        ) == WindowDetails {
+          privacy: CapturedWindowPrivacy::Private,
+          ..WindowDetails::default()
+        }
       );
     }
     assert!(is_browser("com.google.Chrome", "Chrome"));
@@ -222,10 +249,32 @@ mod tests {
   }
 
   #[test]
+  fn ordinary_document_titles_with_private_browser_terms_are_retained() {
+    let title = "Private Browsing memorandum — Word";
+    let details = sanitized_details(
+      Some(title.into()),
+      Some("/docs/memorandum.docx".into()),
+      WindowDetailsSource::Application,
+    );
+    assert_eq!(details.privacy, CapturedWindowPrivacy::Ordinary);
+    assert_eq!(details.window_title.as_deref(), Some(title));
+    assert_eq!(details.document.as_deref(), Some("/docs/memorandum.docx"));
+    let browser = sanitized_details(
+      Some(title.into()),
+      Some("/docs/memorandum.docx".into()),
+      WindowDetailsSource::Browser,
+    );
+    assert_eq!(browser.privacy, CapturedWindowPrivacy::Private);
+    assert!(browser.window_title.is_none());
+    assert!(browser.document.is_none());
+  }
+
+  #[test]
   fn details_strip_controls_and_are_bounded_on_utf8_boundaries() {
     let details = sanitized_details(
       Some(format!("\n{}\u{0} ", "ž".repeat(400))),
       Some(" /docs/contract\u{7}.docx ".into()),
+      WindowDetailsSource::Application,
     );
     assert_eq!(
       details.window_title.as_ref().unwrap().len(),
