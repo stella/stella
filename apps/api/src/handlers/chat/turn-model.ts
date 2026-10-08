@@ -1,5 +1,3 @@
-import { TaggedError } from "better-result";
-
 import type { ReasoningEffort } from "@stll/ai-catalog";
 
 import type {
@@ -7,44 +5,47 @@ import type {
   ChatMessageMetadata,
 } from "@/api/handlers/chat/types";
 
-export class ChatTurnModelMissingError extends TaggedError(
-  "ChatTurnModelMissingError",
-)<{
-  message: string;
-}> {}
-
 type ResolveChatTurnModelOptions = {
   messages: readonly ChatMessage[];
   owningAssistantMessageId: string | undefined;
   requestedModelId: string | undefined;
   requestedReasoningEffort: ReasoningEffort | undefined;
+  /** Whether the organization can still serve a pinned model. */
+  canServe: (modelId: string) => boolean;
 };
 
-/** A continuation belongs to the assistant turn, even after its tools close. */
+/**
+ * A continuation belongs to the assistant turn, even after its tools close, so
+ * it keeps the model that started the turn. A turn stored before turns
+ * recorded their model, or one whose provider the organization has since
+ * removed, continues on the requested model: its reasoning then has no
+ * compatible provenance and the closed transcript leaves it out.
+ */
 export const resolveChatTurnModel = ({
   messages,
   owningAssistantMessageId,
   requestedModelId,
   requestedReasoningEffort,
+  canServe,
 }: ResolveChatTurnModelOptions) => {
+  const requested = {
+    modelId: requestedModelId,
+    reasoningEffort: requestedReasoningEffort,
+  };
   if (owningAssistantMessageId === undefined) {
-    return {
-      modelId: requestedModelId,
-      reasoningEffort: requestedReasoningEffort,
-    };
+    return requested;
   }
   const owner = messages.find(({ id }) => id === owningAssistantMessageId);
-  const turnModel = owner?.metadata?.turnModel;
-  if (owner?.role !== "assistant" || turnModel === undefined) {
-    throw new ChatTurnModelMissingError({
-      message:
-        "Cannot resume an assistant turn without its original model identity",
-    });
+  const turnModel =
+    owner?.role === "assistant" ? owner.metadata?.turnModel : undefined;
+  if (turnModel === undefined) {
+    return requested;
   }
-  return {
-    modelId: `${turnModel.provider}::${turnModel.model}`,
-    reasoningEffort: turnModel.reasoningEffort,
-  };
+  const modelId = `${turnModel.provider}::${turnModel.model}`;
+  if (!canServe(modelId)) {
+    return requested;
+  }
+  return { modelId, reasoningEffort: turnModel.reasoningEffort };
 };
 
 export type ChatTurnModel = NonNullable<ChatMessageMetadata["turnModel"]>;

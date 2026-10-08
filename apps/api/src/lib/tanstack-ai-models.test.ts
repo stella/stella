@@ -429,7 +429,7 @@ describe("TanStack text model resolution", () => {
     });
     expect(model.adapter.name).toBe("openai");
     expect(model.adapter.model).toBe("gpt-5.4");
-    expect(looseOptions(model.modelOptions)).toEqual({
+    expect<unknown>(looseOptions(model.modelOptions)).toEqual({
       reasoning: { effort: "medium" },
       include: ["reasoning.encrypted_content"],
       store: false,
@@ -1134,7 +1134,7 @@ describe("tanStackModelOptionsForRole", () => {
           organizationId: null,
         }),
       );
-      expect(options, provider).toEqual(
+      expect<unknown>(options, provider).toEqual(
         provider === "openai" ? { include: [] } : {},
       );
     }

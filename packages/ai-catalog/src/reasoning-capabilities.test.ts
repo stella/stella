@@ -31,7 +31,7 @@ test("every offered model declares reasoning support and replay requirements", (
         expect(capability.emittedFormats).toEqual(["openai-encrypted-content"]);
       }
       for (const provenance of capability.replayCompatibility) {
-        expect(provenance.provider).toBe(provider);
+        expect<string>(provenance.provider).toBe(provider);
         expect(provenance.model).toBe(model);
         expect(provenance.format).not.toBe("none");
         expect(capability.emittedFormats).toContain(provenance.format);

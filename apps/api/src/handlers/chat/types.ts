@@ -191,7 +191,10 @@ export type ChatMessageMetadata = {
   usage?: ChatMessageUsage | undefined;
 };
 
-export type ChatMessage = Omit<UIMessage<ChatClientTools>, "parts"> & {
+// UIMessage's other fields do not depend on its tool map. Omitting from the
+// tool-typed message would evaluate ChatTools eagerly, and ChatTools reaches
+// ChatMessage again through the chat history tools: a circular alias.
+export type ChatMessage = Omit<UIMessage, "parts"> & {
   parts: ChatPart[];
   metadata?: ChatMessageMetadata;
 };

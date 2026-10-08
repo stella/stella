@@ -90,6 +90,7 @@ import {
 } from "@/api/handlers/chat/loop-detector";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
+import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenance-stamp";
 import {
   assistantMessageStartChunk,
   createTurnMessageIdMapper,
@@ -176,7 +177,6 @@ import {
   withProviderStreamContract,
   withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
-import { stampReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import {
@@ -211,7 +211,10 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
-import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
+import {
+  modelAcceptsStreamingToolUse,
+  validateTanStackDevModelOverride,
+} from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import {
@@ -538,6 +541,8 @@ export const streamChat = async ({
     owningAssistantMessageId,
     requestedModelId: devModelId,
     requestedReasoningEffort: reasoningEffort,
+    canServe: (modelId) =>
+      Result.isOk(validateTanStackDevModelOverride(modelId, orgAIConfig)),
   });
   const primaryModel = await resolveTanStackTextModel({
     dataClass: "customer",

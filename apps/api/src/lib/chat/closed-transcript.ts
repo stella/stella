@@ -56,13 +56,14 @@ export const buildClosedTranscript = ({
   target,
   onReasoningDropped = emitReasoningReplayDroppedMetric,
 }: BuildClosedTranscriptOptions): ClosedTranscript => {
-  const compatibility =
-    getModelReasoningCapabilities(target.modelId)?.replayCompatibility ?? [];
+  // A model the catalog does not describe accepts no replayed reasoning.
+  const capabilities = getModelReasoningCapabilities(target.modelId);
   const accepts = (raw: unknown): boolean => {
     const provenance = provenanceOf(raw);
     const compatible =
       provenance !== undefined &&
-      compatibility.some(
+      capabilities !== null &&
+      capabilities.replayCompatibility.some(
         (entry) =>
           entry.provider === target.provider &&
           entry.provider === provenance.provider &&
@@ -162,7 +163,10 @@ const closeToolCalls = (
       }
       results.set(message.toolCallId, message);
     }
-    for (const call of message.toolCalls ?? []) {
+    if (message.toolCalls === undefined) {
+      continue;
+    }
+    for (const call of message.toolCalls) {
       if (calls.has(call.id)) {
         panic("Transcript has repeated tool call ids");
       }
@@ -224,7 +228,10 @@ const closeToolCalls = (
           }
         : message,
     );
-    for (const call of message.toolCalls ?? []) {
+    if (message.toolCalls === undefined) {
+      continue;
+    }
+    for (const call of message.toolCalls) {
       // Anthropic emits both native blocks from the embedded metadata. A
       // separate tool message would add a second, ordinary tool result.
       if (nativeCalls.has(call.id) && provider === "anthropic") {

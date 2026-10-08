@@ -2407,6 +2407,10 @@
     "seconds": 0.455154,
     "source": "estimated"
   },
+  "src/handlers/chat/turn-model.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/chat/turn-outcome.integration.test.ts": {
     "seconds": 235.4,
     "source": "measured"
@@ -4631,6 +4635,10 @@
     "seconds": 0.190125,
     "source": "estimated"
   },
+  "src/lib/chat/closed-transcript.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/chat/created-draft.test.ts": {
     "seconds": 0.164409,
     "source": "estimated"
@@ -4681,6 +4689,10 @@
   },
   "src/lib/chat/provider-stream-incomplete.test.ts": {
     "seconds": 0.502754,
+    "source": "estimated"
+  },
+  "src/lib/chat/reasoning-provenance.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/chat/ref-registry.test.ts": {

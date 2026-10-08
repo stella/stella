@@ -409,16 +409,20 @@ async function* withProducedReasoning({
       chunk.type === EventType.TOOL_CALL_START ||
       chunk.type === "TOOL_CALL_END"
     ) {
-      signatures.push(chunk.metadata?.thoughtSignature);
+      signatures.push(chunk.metadata?.["thoughtSignature"]);
     }
     for (const signature of signatures) {
       if (typeof signature !== "string" || signature === "") {
         continue;
       }
-      reasoning.set(
+      const provenance = reasoningProvenanceForSignature({
+        provider,
+        modelId,
         signature,
-        reasoningProvenanceForSignature({ provider, modelId, signature }),
-      );
+      });
+      if (provenance !== undefined) {
+        reasoning.set(signature, provenance);
+      }
     }
     yield chunk;
   }

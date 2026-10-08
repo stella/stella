@@ -169,7 +169,7 @@ describe("OpenAI reasoning replay after a declined call", () => {
       USER,
       assistant({ reasoning: ["rs_1", "rs_2"], text: "Done." }),
     ];
-    expect(
+    expect<unknown>(
       buildClosedTranscript({
         messages,
         target: { provider: "openai", modelId: "gpt-5.2" },

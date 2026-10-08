@@ -3,6 +3,7 @@ import {
   modelMessagesToUIMessages,
   uiMessagesToWire,
 } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -14,13 +15,11 @@ import {
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenance-stamp";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
-import {
-  reasoningProvenanceForSignature,
-  stampReasoningProvenance,
-} from "@/api/lib/chat/reasoning-provenance";
+import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
 
 const message = (parts: ChatPart[]): ChatMessage => ({
   id: "019eb9fa-c91f-7000-9b9c-9365977dda78",
@@ -47,6 +46,12 @@ const signature = JSON.stringify({
   encrypted_content: "encrypted",
 });
 const thinking = { type: "thinking", content: "Summary", signature } as const;
+/** Provenance of a catalogued model; these fixtures never use an unlisted one. */
+const knownProvenance = (
+  options: Parameters<typeof reasoningProvenanceForSignature>[0],
+) =>
+  reasoningProvenanceForSignature(options) ??
+  panic(`No reasoning capabilities for ${options.modelId}`);
 
 describe("reasoning provenance survives transcript boundaries", () => {
   test("new reasoning keeps its producing model through persistence, reload, model conversion and wire snapshots", () => {
@@ -71,15 +76,18 @@ describe("reasoning provenance survives transcript boundaries", () => {
       content: toPersistedChatMessageContentV3({ data: persistable.parts }),
     });
     const converted = convertMessagesToModelMessages([reloaded]);
-    expect(converted.at(0)?.thinking?.at(0)).toEqual({
+    expect<unknown>(converted.at(0)?.thinking?.at(0)).toEqual({
       content: thinking.content,
       signature,
       provenance,
     });
     const hydrated = modelMessagesToUIMessages(converted);
-    expect(hydrated.at(0)?.parts.at(0)).toEqual({ ...thinking, provenance });
+    expect<unknown>(hydrated.at(0)?.parts.at(0)).toEqual({
+      ...thinking,
+      provenance,
+    });
     const wire = uiMessagesToWire(hydrated);
-    expect(
+    expect<unknown>(
       modelMessagesToUIMessages(convertMessagesToModelMessages(wire))
         .at(0)
         ?.parts.at(0),
@@ -112,7 +120,7 @@ describe("reasoning provenance survives transcript boundaries", () => {
   });
 
   test("rehydrated reasoning keeps its earlier identity when the SDK reconstructs the part", () => {
-    const provenance = reasoningProvenanceForSignature({ ...model, signature });
+    const provenance = knownProvenance({ ...model, signature });
     const initial = message([{ ...thinking, provenance }]);
     const stamped = stampReasoningProvenance({
       message: message([thinking]),
@@ -200,7 +208,7 @@ describe("reasoning provenance survives transcript boundaries", () => {
   });
 
   test("client reasoning is replaced with the server-owned sequence without a rich-output budget", () => {
-    const provenance = reasoningProvenanceForSignature({ ...model, signature });
+    const provenance = knownProvenance({ ...model, signature });
     const trusted = { ...thinking, provenance };
     const text = { type: "text", content: "Visible answer" } as const;
     expect(isIncomingChatPart(trusted)).toBe(false);
@@ -220,7 +228,7 @@ describe("reasoning provenance survives transcript boundaries", () => {
 
 describe("historical reasoning identity never crosses messages without a signature", () => {
   test("a new turn reusing a historical step id under another model keeps its own provenance and is replayed", () => {
-    const historicalProvenance = reasoningProvenanceForSignature({
+    const historicalProvenance = knownProvenance({
       ...model,
       signature,
     });
@@ -276,7 +284,7 @@ describe("historical reasoning identity never crosses messages without a signatu
         type: "thinking",
         content: "Historical",
         stepId: "step-1",
-        provenance: reasoningProvenanceForSignature(model),
+        provenance: knownProvenance(model),
       },
     ]);
     const stamped = stampReasoningProvenance({
@@ -290,18 +298,18 @@ describe("historical reasoning identity never crosses messages without a signatu
       type: "thinking",
       content: "Current",
       stepId: "step-1",
-      provenance: reasoningProvenanceForSignature(anthropicModel),
+      provenance: knownProvenance(anthropicModel),
     });
   });
 
   test("unsigned reasoning keeps provenance by step id within its owning message", () => {
-    const stepProvenance = reasoningProvenanceForSignature(anthropicModel);
+    const stepProvenance = knownProvenance(anthropicModel);
     const owning = message([
       {
         type: "thinking",
         content: "First",
         stepId: "step-1",
-        provenance: reasoningProvenanceForSignature(model),
+        provenance: knownProvenance(model),
       },
       {
         type: "thinking",
@@ -326,12 +334,35 @@ describe("historical reasoning identity never crosses messages without a signatu
   });
 
   test("signed reasoning keeps its provenance from an equal signature in another message", () => {
-    const provenance = reasoningProvenanceForSignature({ ...model, signature });
+    const provenance = knownProvenance({ ...model, signature });
     const stamped = stampReasoningProvenance({
       message: laterMessage([thinking]),
       model: anthropicModel,
       initialMessages: [message([{ ...thinking, provenance }])],
     });
     expect(stamped.parts.at(0)).toEqual({ ...thinking, provenance });
+  });
+});
+
+describe("reasoning from models outside the catalog", () => {
+  test("reasoning from a model the catalog does not describe stays unreplayable instead of failing the turn", () => {
+    const unlisted = { provider: "openai", modelId: "unlisted-model" } as const;
+    expect(reasoningProvenanceForSignature({ ...unlisted, signature })).toBe(
+      undefined,
+    );
+    const call = {
+      type: "tool-call",
+      id: "call_1",
+      name: "search",
+      arguments: "{}",
+      state: "complete",
+      metadata: { thoughtSignature: "signed" },
+    } as const;
+    const stamped = stampReasoningProvenance({
+      message: laterMessage([thinking, call]),
+      model: unlisted,
+      initialMessages: [],
+    });
+    expect(stamped.parts).toEqual([thinking, call]);
   });
 });

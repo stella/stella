@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  ChatTurnModelMissingError,
-  resolveChatTurnModel,
-} from "@/api/handlers/chat/turn-model";
+import { resolveChatTurnModel } from "@/api/handlers/chat/turn-model";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 
 const originalModel = {
@@ -50,6 +47,7 @@ describe("assistant turn model ownership", () => {
             owningAssistantMessageId: message.id,
             requestedModelId,
             requestedReasoningEffort: "high",
+            canServe: () => true,
           }),
         ).toEqual({
           modelId: "anthropic::claude-sonnet-4-6",
@@ -74,20 +72,39 @@ describe("assistant turn model ownership", () => {
         owningAssistantMessageId: undefined,
         requestedModelId: "openai::gpt-6",
         requestedReasoningEffort: "high",
+        canServe: () => true,
       }),
     ).toEqual({ modelId: "openai::gpt-6", reasoningEffort: "high" });
   });
 
-  test("does not infer a missing original model from the requested switch or reasoning", () => {
+  test("continues a turn stored without its model on the requested model", () => {
     const message = toolTurn(false);
     delete message.metadata;
-    expect(() =>
+    expect(
       resolveChatTurnModel({
         messages: [message],
         owningAssistantMessageId: message.id,
         requestedModelId: "openai::gpt-6",
         requestedReasoningEffort: undefined,
+        canServe: () => true,
       }),
-    ).toThrow(ChatTurnModelMissingError);
+    ).toEqual({ modelId: "openai::gpt-6", reasoningEffort: undefined });
+  });
+
+  test("continues on the requested model once the organization can no longer serve the original", () => {
+    const served: string[] = [];
+    expect(
+      resolveChatTurnModel({
+        messages: [toolTurn(true)],
+        owningAssistantMessageId: "assistant-turn",
+        requestedModelId: "openai::gpt-6",
+        requestedReasoningEffort: "high",
+        canServe: (modelId) => {
+          served.push(modelId);
+          return false;
+        },
+      }),
+    ).toEqual({ modelId: "openai::gpt-6", reasoningEffort: "high" });
+    expect(served).toEqual(["anthropic::claude-sonnet-4-6"]);
   });
 });
