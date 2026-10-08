@@ -3628,7 +3628,7 @@ for (const grants of [
       const hidden = entries
         .filter((candidate) => !listed.includes(candidate.id))
         .map((candidate) => candidate.id);
-      const expectUnknownId = (result: unknown) => {
+      const expectUnknownId = (result: ToolCallResult) => {
         const envelope = errorEnvelope(result);
         expect(envelope).toMatchObject({
           code: "not_found",
