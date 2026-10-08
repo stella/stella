@@ -53,6 +53,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "Incoming title",
       userId,
@@ -144,6 +145,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "New thread",
       userId,
@@ -187,6 +189,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "New thread",
       userId,
@@ -223,6 +226,7 @@ const expectCreatedThreadDataScope = async (
     organizationId,
     recordAuditEvent,
     safeDb,
+    subjectDecisionId: null,
     threadId,
     title: "New thread",
     userId,
@@ -253,3 +257,39 @@ const expectCreatedThreadDataScope = async (
   ]);
   expect(recordAuditEvent).toHaveBeenCalledTimes(1);
 };
+
+describe("the decision a thread is about", () => {
+  const decisionId = toSafeId<"caseLawDecision">(
+    "00000000-0000-0000-0000-000000000006",
+  );
+
+  test("a send that creates the thread records its decision", async () => {
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      insert: () => ({
+        values: async (values: unknown) => {
+          insertedRows.push(values);
+        },
+      }),
+      query: { chatThreads: { findFirst: async () => null } },
+    });
+
+    const result = await loadThread({
+      initialDataWorkspaceIds: [],
+      initialContextMatterIds: [],
+      organizationId,
+      recordAuditEvent: async () => undefined,
+      safeDb,
+      subjectDecisionId: decisionId,
+      threadId,
+      title: "New thread",
+      userId,
+      workspaceId: null,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(insertedRows).toEqual([
+      expect.objectContaining({ subjectDecisionId: decisionId }),
+    ]);
+  });
+});

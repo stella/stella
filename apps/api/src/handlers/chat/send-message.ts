@@ -1774,6 +1774,7 @@ const prepareValidatedIncomingMessage = async ({
         organizationId,
         recordAuditEvent,
         safeDb,
+        subjectDecisionId: body.activeDecision?.decisionId ?? null,
         threadId: body.threadId,
         title: initialThreadTitle,
         userId,

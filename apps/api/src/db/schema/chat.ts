@@ -207,6 +207,16 @@ export const chatThreads = p.pgTable(
     ),
     forkedFromMessageId: safeUuid<"chatMessage">("forked_from_message_id"),
     /**
+     * The case-law decision this chat is about: the reader's decision chat
+     * sends it with its first message, and the thread keeps it so history can
+     * show the decision beside the chat. Written once, when the thread is
+     * created, because a decision's chat is one conversation per decision.
+     * No foreign key: decisions live in the public corpus, which is gated and
+     * re-ingested on its own schedule, and the history read already drops a
+     * decision the public gate no longer serves.
+     */
+    subjectDecisionId: safeUuid<"caseLawDecision">("subject_decision_id"),
+    /**
      * Durable queue address for incremental thread compaction. Null means no
      * compaction work is pending. A send whose history window crosses the
      * compaction trigger stamps `now()`; the compactor claims a due thread by

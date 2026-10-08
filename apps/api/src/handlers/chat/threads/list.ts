@@ -27,10 +27,15 @@ import {
 import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
+import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
+import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 /** The matters a thread's pinned or embedded matter ids name, for search. */
@@ -39,8 +44,18 @@ const contextMatterWorkspaces = alias(
   "context_matter_workspaces",
 );
 
+/**
+ * The case-law decision a chat is about. Null for a chat about none, or about
+ * one the public corpus no longer serves; `unavailable` when the corpus could
+ * not be read this time, so the row knows it has a decision it cannot draw.
+ */
+type ChatThreadDecision =
+  | { type: "present"; badge: PublicDecisionBadge }
+  | { type: "unavailable" };
+
 type ChatThreadListItem = {
   context: ChatThreadContext;
+  decision: ChatThreadDecision | null;
   id: string;
   origin: ChatThreadOrigin;
   title: string;
@@ -49,13 +64,45 @@ type ChatThreadListItem = {
   usedAnonymization: boolean;
 };
 
+/**
+ * The decisions a page of threads is about, as a lookup by subject id. A badge
+ * is not worth failing someone's history over, so a failed read marks the
+ * rows that have a decision instead of failing the page.
+ */
+const readThreadDecisions = async (
+  subjectDecisionIds: readonly (SafeId<"caseLawDecision"> | null)[],
+) => {
+  const badges = await readPublicDecisionBadges({
+    decisionIds: subjectDecisionIds.filter((id) => id !== null),
+  });
+  if (Result.isError(badges)) {
+    logger.warn("chat.thread_list.decision_badges_unavailable", {
+      "error.type": errorTag(badges.error),
+      effect: "decision_unavailable",
+    });
+  }
+  return (
+    subjectDecisionId: SafeId<"caseLawDecision"> | null,
+  ): ChatThreadDecision | null => {
+    if (subjectDecisionId === null) {
+      return null;
+    }
+    if (Result.isError(badges)) {
+      return { type: "unavailable" };
+    }
+    const badge = badges.value.get(subjectDecisionId);
+    return badge === undefined ? null : { type: "present", badge };
+  };
+};
+
 const config = {
   description:
     "List your own chat threads, most recently active first, split into " +
     "global threads and groups per matter. Threads with no messages, and " +
     "threads belonging to a matter that is being deleted, are left out. " +
     "Each thread carries a bounded preview of its context: the matters and " +
-    "files it drew on, with their total counts. search matches the thread " +
+    "files it drew on, with their total counts, and the case-law decision " +
+    "the chat is about, if any. search matches the thread " +
     "title, the matter it lives in, or a matter pinned to it; paginate with " +
     "limit and cursor.",
   permissions: { chat: ["create"] },
@@ -167,6 +214,7 @@ const getThreads = createSafeRootHandler(
             createdAt: chatThreads.createdAt,
             forkedFromMessageId: chatThreads.forkedFromMessageId,
             id: chatThreads.id,
+            subjectDecisionId: chatThreads.subjectDecisionId,
             title: chatThreads.title,
             updatedAt: chatThreads.updatedAt,
             usedAnonymization: chatThreads.usedAnonymization,
@@ -210,6 +258,12 @@ const getThreads = createSafeRootHandler(
           })
         : null;
 
+    // After the tenant transaction, not inside it: decisions live in the
+    // public corpus, read through its own gated connection.
+    const decisionOf = await readThreadDecisions(
+      page.map((row) => row.subjectDecisionId),
+    );
+
     const global: ChatThreadListItem[] = [];
 
     const groupedWorkspaceThreads = new Map<
@@ -227,9 +281,11 @@ const getThreads = createSafeRootHandler(
           ? CHAT_THREAD_ORIGIN.original
           : CHAT_THREAD_ORIGIN.fork;
       const context = contexts.get(thread.id) ?? EMPTY_CHAT_THREAD_CONTEXT;
+      const decision = decisionOf(thread.subjectDecisionId);
       if (thread.workspaceId === null) {
         global.push({
           context,
+          decision,
           id: thread.id,
           origin,
           title: thread.title,
@@ -246,6 +302,7 @@ const getThreads = createSafeRootHandler(
 
       const slice = {
         context,
+        decision,
         id: thread.id,
         origin,
         title: thread.title,
