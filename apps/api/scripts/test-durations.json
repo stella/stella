@@ -95,6 +95,10 @@
     "seconds": 0.725639,
     "source": "estimated"
   },
+  "scripts/generate-schema-index.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/generate-status-tables.test.ts": {
     "seconds": 0.260595,
     "source": "estimated"

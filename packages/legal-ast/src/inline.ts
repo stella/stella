@@ -1,3 +1,4 @@
+// parser-output-unchanged: Citation tuples state their existing one-item minimum for schema publication; accepted values are identical.
 import * as v from "valibot";
 
 import {

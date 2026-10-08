@@ -12,7 +12,9 @@ const visibilitySchema = v.pipe(
  * tuples from `as const` registries included) is accepted.
  */
 export const isMcpToolVisibleTo = (
-  definition: { readonly _meta?: Readonly<Record<string, unknown>> },
+  definition: {
+    readonly _meta?: Readonly<Record<string, unknown>> | undefined;
+  },
   audience: "model" | "app",
 ): boolean => {
   const ui = definition._meta?.["ui"];

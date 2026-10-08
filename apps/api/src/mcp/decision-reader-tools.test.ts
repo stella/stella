@@ -17,12 +17,8 @@ import {
   openDecisionOutput,
   provisionPreviewOutput,
   READER_PAGE_MAX_CHARS,
-  READER_WITHHELD_TEXT_POLICY,
 } from "./decision-reader-contract";
-import {
-  createReaderBlocksTool,
-  DECISION_READER_TOOL_SET,
-} from "./decision-reader-tools";
+import { DECISION_READER_TOOL_SET } from "./decision-reader-tools";
 import { decodeReaderCursor } from "./decision-reader.logic";
 import type { ReaderSource } from "./decision-reader.logic";
 import type { McpToolHandler, McpToolResponse } from "./tool-types";
@@ -60,7 +56,10 @@ const astOf = (count = 8): DocumentAst => ({
     plainText: `Paragraph ${index + 48} ${"text ".repeat(600)}`,
   })),
 });
-const sourceOf = (ast = astOf(), allowsDerivedAi = true) =>
+const sourceOf = (
+  ast = astOf(),
+  textAccess: "readable" | "withheld" = "readable",
+) =>
   ({
     status: "read",
     decision: {
@@ -73,9 +72,9 @@ const sourceOf = (ast = astOf(), allowsDerivedAi = true) =>
       language: "cs",
       languageAlternates: [],
       slug: null,
-      source: { allowsDerivedAi },
     },
-    ast,
+    textAccess,
+    ast: textAccess === "readable" ? ast : null,
     citationAnchors: [
       {
         pieceId: "block-0",
@@ -479,63 +478,45 @@ describe("decision reader tool contracts", () => {
       error: { type: "structured", code: "conflict" },
     });
   });
-  test("both withheld policies are explicit and opening never includes withheld text", async () => {
-    expect(READER_WITHHELD_TEXT_POLICY).toBe("metadata-only");
-    const source = sourceOf(astOf(), false);
-    const policies: string[] = [];
+  test("each tool reads for its audience and renders only readable text", async () => {
+    const audiences: string[] = [];
+    let appText: "readable" | "withheld" = "readable";
     const context = contextWith({
-      readDecisionReaderSource: async ({ withheldTextPolicy }) => {
-        policies.push(withheldTextPolicy);
-        return source;
+      readDecisionReaderSource: async ({ audience }) => {
+        audiences.push(audience);
+        return sourceOf(astOf(), audience === "app" ? appText : "withheld");
       },
     });
-    const withheld = await typedCall(
-      createReaderBlocksTool("metadata-only"),
-      blocksDecisionOutput,
-    )({
-      args: { decision_id: id },
-      context,
-    });
-    expect(withheld.status).toBe("success");
-    if (withheld.status !== "success") {
-      throw new Error("Expected withheld metadata");
-    }
-    expect(withheld.data.content.status).toBe("withheld");
-    expect(JSON.stringify(withheld.data)).not.toContain("Paragraph 48");
-    expect(withheld.data.content).not.toHaveProperty("items");
-    expect(withheld.data.content).not.toHaveProperty("citationAnchors");
-    expect(v.safeParse(blocksDecisionOutput, withheld.data).success).toBe(true);
-    const shown = await typedCall(
-      createReaderBlocksTool("show-to-user"),
-      blocksDecisionOutput,
-    )({
-      args: { decision_id: id },
-      context,
-    });
-    expect(shown.status).toBe("success");
-    if (
-      shown.status !== "success" ||
-      shown.data.content.status !== "available"
-    ) {
-      throw new Error("Expected human-only blocks");
-    }
-    expect(shown.data.content.items.length).toBeGreaterThan(0);
     const model = await open({
       args: { decision_id: id, paragraphs: "48-49" },
       context,
     });
-    expect(model.status).toBe("success");
-    if (model.status !== "success") {
-      throw new Error("Expected opening metadata");
+    if (model.status !== "success" || model.data.status !== "withheld") {
+      throw new Error("Expected a withheld opening");
     }
-    expect(model.data.status).toBe("withheld");
-    expect(model.data.metadata.appUrl).toEndWith("#par=48-49");
     expect(JSON.stringify(model.data)).not.toContain("Paragraph 48");
-    expect(policies).toEqual([
-      "metadata-only",
-      "show-to-user",
-      "metadata-only",
-    ]);
+    expect(model.data.metadata.appUrl).toEndWith("#par=48-49");
+
+    const shown = await blocks({ args: { decision_id: id }, context });
+    if (
+      shown.status !== "success" ||
+      shown.data.content.status !== "available"
+    ) {
+      throw new Error("Expected the app reader to show readable text");
+    }
+    expect(JSON.stringify(shown.data.content.items)).toContain("Paragraph 48");
+
+    appText = "withheld";
+    const withheld = await blocks({ args: { decision_id: id }, context });
+    if (withheld.status !== "success") {
+      throw new Error("Expected withheld metadata");
+    }
+    expect(withheld.data.content).toEqual({
+      status: "withheld",
+      withheldReason: expect.objectContaining({ code: "source_licence" }),
+    });
+    expect(JSON.stringify(withheld.data)).not.toContain("Paragraph 48");
+    expect(audiences).toEqual(["model", "app", "app"]);
   });
   test("an opening without decision text still links to the requested range", async () => {
     const result = await open({

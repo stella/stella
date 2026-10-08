@@ -339,6 +339,10 @@ export const LIMITS = {
   decisionReaderCursorOffsetMin: 0,
   decisionReaderProvisionAnchorMinChars: 1,
   decisionReaderProvisionAnchorMaxChars: 256,
+  // A reader cursor nests a provision page cursor (generation, span start and
+  // an anchor up to the limit above) beside two digests; its maximal encoding
+  // is under 900 characters.
+  decisionReaderCursorMaxChars: 1024,
   exportPdfRowLimit: 5000,
   /** Hard cap on rows (contracts) a single view-to-report export may span.
    *  A DD report drafts per-contract AI narrative, so the row count bounds

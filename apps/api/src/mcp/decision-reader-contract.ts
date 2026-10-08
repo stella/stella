@@ -13,9 +13,6 @@ export const READER_FRAGMENT_CHARS =
   Math.floor(READER_PAGE_CONTENT_CHARS / 2) - 1024;
 export const READER_OPEN_TEXT_CHARS = LIMITS.decisionReaderOpenTextChars;
 export const READER_OUTLINE_ENTRIES = LIMITS.decisionReaderOutlineEntries;
-export type ReaderWithheldTextPolicy = "metadata-only" | "show-to-user";
-export const READER_WITHHELD_TEXT_POLICY: ReaderWithheldTextPolicy =
-  "metadata-only";
 
 export const openDecisionArgs = nullAsAbsent(
   v.strictObject({
@@ -37,6 +34,7 @@ export const readDecisionBlocksArgs = nullAsAbsent(
     cursor: cursorInput({
       description:
         "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages.",
+      maxLength: LIMITS.decisionReaderCursorMaxChars,
     }),
   }),
 );

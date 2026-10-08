@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Neišsaugota",
-      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas",
-      "saved": "Išsaugota",
-      "saving": "Išsaugoma…"
+      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
     "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
@@ -1883,6 +1881,8 @@
     "saveAndLeave": "Išsaugoti ir išeiti",
     "saveAsPdf": "Išsaugoti kaip PDF",
     "saveChanges": "Išsaugoti pakeitimus",
+    "saved": "Išsaugota",
+    "saving": "Išsaugoma…",
     "scopeThisPage": "(šis puslapis)",
     "scrollToBottom": "Slinkti į apačią",
     "scrollToTop": "Slinkti į viršų",
@@ -3575,6 +3575,11 @@
       "askContentLabel": "Atsakymo tipas",
       "askQuestionLabel": "Klausimas",
       "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
+      "autosave": {
+        "failed": "Nepavyko išsaugoti",
+        "nameMissing": "Neišsaugota: pridėkite pavadinimą",
+        "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja}} dėmesio"
+      },
       "check": "Naudoti tikslią taisyklę vietoje DI",
       "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
       "checkKind": {
@@ -3604,6 +3609,7 @@
       "deletePlaybook": "Ištrinti peržiūros vadovą",
       "deletePosition": "Ištrinti poziciją",
       "deleted": "Peržiūros vadovas ištrintas",
+      "deletedElsewhere": "Šis peržiūros vadovas ištrintas.",
       "derivedAutomatically": "Išgavimo klausimas ir atsakymo formatas sukuriami pagal šią poziciją. Nieko nustatyti nereikia.",
       "derivedQuestion": "Išgavimo klausimas",
       "derivedType": "Atsakymo formatas",
@@ -3656,10 +3662,12 @@
       },
       "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
       "noSettledPosition": "Nusistovėjusios pozicijos nėra",
+      "openInPane": "Atidaryti peržiūros vadovą",
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
       "positionOfTotal": "Pozicija {index} iš {total}",
+      "positionRemoved": "Pozicija pašalinta",
       "positions": "Pozicijos",
       "recent": "Neseniai naudoti",
       "recommended": "Rekomenduojami ruošiniai",
