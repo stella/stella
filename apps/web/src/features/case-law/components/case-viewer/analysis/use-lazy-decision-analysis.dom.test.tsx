@@ -26,6 +26,7 @@ const { decisionAnalysisOptions } =
   await import("@/features/case-law/queries/decision-analysis");
 const { useLazyDecisionAnalysis } =
   await import("./use-lazy-decision-analysis");
+const { useDecisionAnalysis } = await import("./use-decision-analysis");
 
 /** What the shared analysis cache holds for these options. */
 const cachedAnalysis = (
@@ -657,3 +658,75 @@ test("another view's completed retry wins over this view's failed retry, which c
     ANALYSIS_REQUEST_MODE.retry,
   ]);
 });
+
+type AnalysisIdentity = typeof key & { organizationId: string };
+
+/** How the view moves to another identity while a retry is pending. */
+const IDENTITY_CHANGES = {
+  organization: (origin: AnalysisIdentity) => ({
+    ...origin,
+    organizationId: "synthetic-other-org",
+  }),
+  decision: (origin: AnalysisIdentity) => ({
+    ...origin,
+    decisionId: "00000000-0000-4000-8000-000000000002",
+  }),
+} satisfies Record<string, (origin: AnalysisIdentity) => AnalysisIdentity>;
+
+for (const [change, move] of Object.entries(IDENTITY_CHANGES)) {
+  test(`a retry answer is cached only under the identity it was asked for when the ${change} changes while it is pending`, async () => {
+    const pendingRetry = Promise.withResolvers<Response>();
+    let served = 0;
+    const requests = respondToAnalysis(async () => {
+      served += 1;
+      if (served === 1) {
+        return Response.json({ status: "error" });
+      }
+      return await pendingRetry.promise;
+    });
+    const client = clientWithAvailability();
+    const origin = { ...key, organizationId: user.activeOrganizationId };
+    const moved = move(origin);
+    const refusal = {
+      provider: "anthropic",
+      code: PROVIDER_SETUP_ERROR_CODE.anthropicNoCredits,
+      message: "Synthetic refusal for the original identity",
+    };
+    const mounted = renderHook(
+      (props: typeof origin & { enabled: boolean }) =>
+        useDecisionAnalysis(props),
+      {
+        initialProps: { ...origin, enabled: true },
+        wrapper: wrapperFor({ client }),
+      },
+    );
+    await waitFor(() => {
+      expect(mounted.result.current.state.status).toBe("error");
+    });
+    await act(async () => {
+      mounted.result.current.generate();
+    });
+    await waitFor(() => {
+      expect(requests).toHaveLength(2);
+    });
+
+    // The view moves on before the retry answers. It stays disabled there, so
+    // the moved identity is read from the cache only.
+    mounted.rerender({ ...moved, enabled: false });
+    await act(async () => {
+      pendingRetry.resolve(
+        Response.json({ status: "error", providerDiagnostic: refusal }),
+      );
+    });
+    await waitFor(() => {
+      expect(cachedAnalysis(client, decisionAnalysisOptions(origin))).toEqual({
+        kind: "error",
+        providerDiagnostic: refusal,
+      });
+    });
+    expect(
+      cachedAnalysis(client, decisionAnalysisOptions(moved)),
+    ).toBeUndefined();
+    expect(mounted.result.current.state).toEqual({ status: "idle" });
+  });
+}

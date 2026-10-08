@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
 import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
@@ -121,6 +122,16 @@ export type DecisionAnalysisRequestKey = DecisionAnalysisKey & {
   organizationId: string;
 };
 
+/** Whether two requests are for the same organization, decision and version. */
+export const isSameAnalysisRequest = (
+  left: DecisionAnalysisRequestKey | undefined,
+  right: DecisionAnalysisRequestKey,
+): boolean =>
+  left !== undefined &&
+  left.organizationId === right.organizationId &&
+  left.decisionId === right.decisionId &&
+  left.decisionUpdatedAt === right.decisionUpdatedAt;
+
 type DecisionAnalysisRequestOptions = {
   decisionId: DecisionAnalysisKey["decisionId"];
   mode: AnalysisRequestMode;
@@ -207,3 +218,22 @@ export const decisionAnalysisOptions = ({
     // the analysis without asking again.
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
   });
+
+type WriteDecisionAnalysisOptions = {
+  queryClient: QueryClient;
+  /** The identity the answered request was made for, never the current render's. */
+  requestKey: DecisionAnalysisRequestKey;
+  result: AnalysisQueryResult;
+};
+
+/** The one cache write for an analysis answer, filed under its request's own key. */
+export const writeDecisionAnalysis = ({
+  queryClient,
+  requestKey,
+  result,
+}: WriteDecisionAnalysisOptions): void => {
+  queryClient.setQueryData(
+    decisionAnalysisOptions(requestKey).queryKey,
+    () => result,
+  );
+};

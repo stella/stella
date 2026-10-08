@@ -22,7 +22,9 @@ import {
   type DecisionAnalysisRequestKey,
   analysisRefetchInterval,
   decisionAnalysisOptions,
+  isSameAnalysisRequest,
   requestDecisionAnalysis,
+  writeDecisionAnalysis,
 } from "@/features/case-law/queries/decision-analysis";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { readQueryResult } from "@/lib/errors/query-result";
@@ -136,24 +138,29 @@ export const useDecisionAnalysis = ({
   const options = decisionAnalysisOptions(key);
   const mutationKey = [...options.queryKey, "retry"];
   const retrying = useIsMutating({ mutationKey, exact: true }) > 0;
+  // The retry carries the identity it was asked for as its variables, and
+  // only those name the request and the cache entry it settles: TanStack
+  // hands a pending mutation the newest render's callbacks, so a key read
+  // from the render would file one organization's or decision's answer
+  // under another's.
   const retry = useMutation({
     mutationKey,
     retry: false,
-    mutationFn: async () => {
+    mutationFn: async (requestKey: DecisionAnalysisRequestKey) => {
       await queryClient.cancelQueries({
-        queryKey: options.queryKey,
+        queryKey: decisionAnalysisOptions(requestKey).queryKey,
         exact: true,
       });
       return readQueryResult(
         await requestDecisionAnalysis({
-          decisionId: key.decisionId,
+          decisionId: requestKey.decisionId,
           mode: ANALYSIS_REQUEST_MODE.retry,
           signal: AbortSignal.timeout(15_000),
         }),
       );
     },
-    onSuccess: (result) => {
-      queryClient.setQueryData(options.queryKey, result);
+    onSuccess: (result, requestKey) => {
+      writeDecisionAnalysis({ queryClient, requestKey, result });
     },
   });
   // Disabled, the observer still reads the cache, so an analysis finished
@@ -165,13 +172,15 @@ export const useDecisionAnalysis = ({
     refetchInterval: (current) =>
       retrying ? false : analysisRefetchInterval(current),
   });
-  const retryFailure = retry.isError
-    ? {
-        error: retry.error,
-        submittedAt: retry.submittedAt,
-        resultUpdatedAt: query.dataUpdatedAt,
-      }
-    : undefined;
+  // A failed retry is this view's state only for the identity it was for.
+  const retryFailure =
+    retry.isError && isSameAnalysisRequest(retry.variables, key)
+      ? {
+          error: retry.error,
+          submittedAt: retry.submittedAt,
+          resultUpdatedAt: query.dataUpdatedAt,
+        }
+      : undefined;
   const state: AnalysisState =
     !enabled && query.data?.kind !== "done"
       ? { status: "idle" }
@@ -198,7 +207,11 @@ export const useDecisionAnalysis = ({
     ) {
       return;
     }
-    retry.mutate();
+    retry.mutate({
+      decisionId: key.decisionId,
+      decisionUpdatedAt: key.decisionUpdatedAt,
+      organizationId: key.organizationId,
+    });
   };
 
   return { state, generate };
