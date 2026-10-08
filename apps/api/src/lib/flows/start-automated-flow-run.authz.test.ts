@@ -179,7 +179,13 @@ describe("startAutomatedFlowRun authorization gate", () => {
               id: { eq: args.definitionId },
               organizationId: { eq: args.organizationId },
             },
-            columns: { id: true, name: true, steps: true, enabled: true },
+            columns: {
+              id: true,
+              name: true,
+              steps: true,
+              enabled: true,
+              trigger: true,
+            },
           }),
         featureEnabled: async (principal) =>
           await isBackgroundFeatureEnabled({

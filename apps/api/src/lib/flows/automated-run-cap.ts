@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { deepEquals } from "bun";
 import { and, eq, getTableColumns, gte, sql } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
@@ -31,6 +32,7 @@ import {
   isAutomatedRunCapReached,
 } from "@/api/lib/flows/flow-trigger-logic";
 import type {
+  FlowTrigger,
   FlowTriggerSource,
   FlowUploadTriggerSkipReason,
 } from "@/api/lib/flows/flow-types";
@@ -92,6 +94,9 @@ export type InsertAutomatedFlowRunWithinCapInput = {
   definitionId: SafeId<"flowDefinition">;
   /** Pre-built run + step rows (see `buildFlowRunRows`). */
   rows: FlowRunRows;
+  expectedScheduleTrigger?:
+    | Extract<FlowTrigger, { type: "schedule" }>
+    | undefined;
   now?: Date;
   reservePeriod?: () => Promise<void>;
   uploadTriggerClaimToken?: TimestampCasToken | undefined;
@@ -261,6 +266,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
   userId,
   definitionId,
   rows,
+  expectedScheduleTrigger,
   uploadTriggerClaimToken,
   schedulerClaim,
   now = new Date(),
@@ -312,8 +318,11 @@ export const insertAutomatedFlowRunWithinCap = async ({
 
     // Keep the cap's advisory lock before the definition lock already
     // required by run insertion. NO KEY UPDATE also permits receipt FK checks.
-    let uploadDefinition: typeof flowDefinitions.$inferSelect | undefined;
-    if (rows.run.triggerSource.type === "file-upload") {
+    let currentDefinition: typeof flowDefinitions.$inferSelect | undefined;
+    if (
+      rows.run.triggerSource.type === "file-upload" ||
+      rows.run.triggerSource.type === "schedule"
+    ) {
       const definition = await withAggregateRowQuery({
         aggregate: "definition",
         id: { id: definitionId, organizationId },
@@ -324,7 +333,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
       if (definition.status === "busy") {
         panic("Blocking aggregate acquisition returned busy");
       }
-      uploadDefinition = definition.rows.at(0);
+      currentDefinition = definition.rows.at(0);
     }
 
     if (rows.run.triggerSource.type === "file-upload") {
@@ -387,11 +396,30 @@ export const insertAutomatedFlowRunWithinCap = async ({
     }
 
     let currentRows = rows;
+    if (rows.run.triggerSource.type === "schedule") {
+      if (
+        !currentDefinition?.enabled ||
+        currentDefinition.trigger.type !== "schedule" ||
+        currentDefinition.trigger.workspaceId !== rows.run.workspaceId ||
+        expectedScheduleTrigger === undefined ||
+        !deepEquals(currentDefinition.trigger, expectedScheduleTrigger)
+      ) {
+        return { outcome: "stale" };
+      }
+      currentRows = buildFlowRunRows({
+        runId: rows.run.id,
+        workspaceId: rows.run.workspaceId,
+        definitionId,
+        definition: currentDefinition,
+        triggerSource: rows.run.triggerSource,
+        inputEntityIds: rows.run.inputEntityIds,
+      });
+    }
     if (rows.run.triggerSource.type === "file-upload") {
       const validation = await revalidateUploadIntent({
         tx,
         definitionId,
-        definition: uploadDefinition,
+        definition: currentDefinition,
         entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
         rows,
       });

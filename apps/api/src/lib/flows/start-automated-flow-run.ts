@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -17,6 +18,7 @@ import type {
 } from "@/api/lib/flows/automated-run-cap";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type {
+  FlowTrigger,
   FlowTriggerSource,
   FlowUploadTriggerSkipReason,
 } from "@/api/lib/flows/flow-types";
@@ -61,6 +63,7 @@ export type StartAutomatedFlowRunArgs = {
   inputEntityIds: SafeId<"entity">[];
   uploadTriggerClaimToken?: TimestampCasToken | undefined;
   schedulerClaim?: InsertAutomatedFlowRunWithinCapInput["schedulerClaim"];
+  expectedScheduleTrigger?: InsertAutomatedFlowRunWithinCapInput["expectedScheduleTrigger"];
   /** Optional BullMQ delay for step 0 (file-upload defers past extraction). */
   enqueueDelayMs?: number;
   /** String-only structured-log context (definitionId, workspaceId, ...). */
@@ -76,6 +79,7 @@ type StartAutomatedFlowRunDependencies = {
   findDefinition: (args: FindFlowDefinitionArgs) => Promise<
     | {
         enabled: boolean;
+        trigger: FlowTrigger;
         id: SafeId<"flowDefinition">;
         name: string;
         steps: Parameters<typeof buildFlowRunRows>[0]["definition"]["steps"];
@@ -111,7 +115,13 @@ export const automatedFlowRunDependencies = (
         id: { eq: definitionId },
         organizationId: { eq: organizationId },
       },
-      columns: { id: true, name: true, steps: true, enabled: true },
+      columns: {
+        id: true,
+        name: true,
+        steps: true,
+        enabled: true,
+        trigger: true,
+      },
     }),
   featureEnabled: async (principal) =>
     await isBackgroundFeatureEnabled({
@@ -187,6 +197,7 @@ export const startAutomatedFlowRun = async (
     inputEntityIds,
     uploadTriggerClaimToken,
     schedulerClaim,
+    expectedScheduleTrigger,
     enqueueDelayMs,
     logContext,
   }: StartAutomatedFlowRunArgs,
@@ -255,6 +266,14 @@ export const startAutomatedFlowRun = async (
     return { status: "settled" };
   }
 
+  if (
+    triggerSource.type === "schedule" &&
+    (expectedScheduleTrigger === undefined ||
+      !deepEquals(definition.trigger, expectedScheduleTrigger))
+  ) {
+    return { status: "stale" };
+  }
+
   // Automated runs use the definition author, including uploads covering all
   // matters. Resolve live matter access before kickoff; the run transaction
   // rechecks feature admission under the grant lock before insertion or spend.
@@ -304,6 +323,7 @@ export const startAutomatedFlowRun = async (
           userId: brandPersistedUserId(createdByUserId),
           definitionId,
           rows,
+          expectedScheduleTrigger,
           uploadTriggerClaimToken,
           schedulerClaim,
           ...(reservePeriod && { reservePeriod }),

@@ -293,6 +293,7 @@ export const createScheduledFlowTask =
         organizationId,
         workspaceId,
         createdByUserId: definition.createdByUserId,
+        expectedScheduleTrigger: trigger,
         triggerSource: {
           type: "schedule",
           dueSlot: originalSlot.toDate().toISOString(),

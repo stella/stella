@@ -1,4 +1,5 @@
 import { Result, TaggedError } from "better-result";
+import { deepEquals } from "bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
@@ -233,6 +234,17 @@ export const startFlowRun = async ({
               if (!currentDefinition?.enabled) {
                 abortTransaction(
                   new HandlerError({ status: 404, message: "Not found" }),
+                );
+              }
+              if (
+                admit !== undefined &&
+                !deepEquals(currentDefinition.steps, definition.steps)
+              ) {
+                abortTransaction(
+                  new HandlerError({
+                    status: 409,
+                    message: "Flow definition changed. Retry the start.",
+                  }),
                 );
               }
               const admittedRows = buildFlowRunRows({

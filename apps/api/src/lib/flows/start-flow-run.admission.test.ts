@@ -20,6 +20,11 @@ const definition = {
   id: definitionId,
   name: "Review document",
   enabled: true,
+  trigger: {
+    type: "schedule" as const,
+    workspaceId,
+    schedule: { frequency: "daily" as const, hourUtc: 23 },
+  },
   createdByUserId: userId,
   steps: [
     {
@@ -30,7 +35,7 @@ const definition = {
   ],
 } satisfies Pick<
   typeof flowDefinitions.$inferSelect,
-  "id" | "name" | "enabled" | "createdByUserId" | "steps"
+  "id" | "name" | "enabled" | "createdByUserId" | "steps" | "trigger"
 >;
 
 const withAdmission = async (run: () => Promise<void>) => {
@@ -209,6 +214,7 @@ describe("flow kickoff acceptance", () => {
             definitionId,
             createdByUserId: userId,
             triggerSource: { type: "schedule" },
+            expectedScheduleTrigger: definition.trigger,
             inputEntityIds: [],
             logContext: {},
           },

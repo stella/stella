@@ -5,6 +5,7 @@
  * a definition, then assert the gated insert either lands or is refused.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -31,7 +32,11 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
-import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
+import type {
+  FlowStep,
+  FlowTrigger,
+  FlowTriggerSource,
+} from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
@@ -97,14 +102,16 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     }
   };
 
-  const createDefinition = async (): Promise<SafeId<"flowDefinition">> => {
+  const createDefinition = async (
+    trigger?: FlowTrigger,
+  ): Promise<SafeId<"flowDefinition">> => {
     const definitionId = createSafeId<"flowDefinition">();
     await testDb.insert(flowDefinitions).values({
       id: definitionId,
       organizationId,
       name: "Automated cap flow",
       steps: [AI_STEP],
-      trigger: {
+      trigger: trigger ?? {
         type: "file-upload",
         workspaceIds: null,
         fileExtensions: null,
@@ -121,6 +128,22 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     runId: SafeId<"flowRun"> = createSafeId<"flowRun">(),
     triggerSource: FlowTriggerSource = FILE_UPLOAD_SOURCE,
   ) => {
+    let expectedScheduleTrigger:
+      | Extract<FlowTrigger, { type: "schedule" }>
+      | undefined;
+    if (triggerSource.type === "schedule") {
+      const definition = (
+        await testDb
+          .select({ trigger: flowDefinitions.trigger })
+          .from(flowDefinitions)
+          .where(eq(flowDefinitions.id, definitionId))
+          .limit(1)
+      ).at(0);
+      if (definition?.trigger.type !== "schedule") {
+        panic("Schedule fixture requires a persisted schedule definition");
+      }
+      expectedScheduleTrigger = definition.trigger;
+    }
     let uploadTriggerClaimToken: TimestampCasToken | undefined;
     if (triggerSource.type === "file-upload") {
       const entityId = brandPersistedEntityId(triggerSource.entityId);
@@ -171,6 +194,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       organizationId,
       userId,
       rows,
+      expectedScheduleTrigger,
       uploadTriggerClaimToken,
       database: capDatabase,
       ...(reservePeriod && { reservePeriod }),
@@ -303,7 +327,11 @@ describe("insertAutomatedFlowRunWithinCap", () => {
   });
 
   test("scheduled due-slot replay is a fixed point before the daily cap", async () => {
-    const definitionId = await createDefinition();
+    const definitionId = await createDefinition({
+      type: "schedule",
+      workspaceId,
+      schedule: { frequency: "daily", hourUtc: 23 },
+    });
     await seedRuns(definitionId, CAP - 1, new Date());
     const triggerSource = {
       type: "schedule",
@@ -335,7 +363,11 @@ describe("insertAutomatedFlowRunWithinCap", () => {
   });
 
   test("distinct scheduled slots remain independent of legacy unidentified runs", async () => {
-    const definitionId = await createDefinition();
+    const definitionId = await createDefinition({
+      type: "schedule",
+      workspaceId,
+      schedule: { frequency: "daily", hourUtc: 23 },
+    });
     await seedRun(definitionId, { type: "schedule" }, new Date(0));
     for (const dueSlot of [
       "2030-01-01T23:00:00.000Z",

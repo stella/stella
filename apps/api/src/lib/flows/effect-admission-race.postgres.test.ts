@@ -10,7 +10,9 @@ import {
   flowRunSteps,
   flowRuns,
   notifications,
+  schedulerJobs,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import createDefinition from "@/api/handlers/flows/create";
 import deleteDefinition from "@/api/handlers/flows/delete";
@@ -18,6 +20,7 @@ import cancelRun from "@/api/handlers/flows/runs/cancel";
 import reviewRun from "@/api/handlers/flows/runs/review";
 import updateDefinition from "@/api/handlers/flows/update";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   timestampCasToken,
   type TimestampCasToken,
@@ -34,7 +37,18 @@ import {
 } from "@/api/lib/flows/flow-run-queue";
 import { resumeFlowStepsAfterGrant } from "@/api/lib/flows/flow-run-worker";
 import { FLOW_STEP_LEASE_MS } from "@/api/lib/flows/flow-types";
-import { startFlowRun } from "@/api/lib/flows/start-flow-run";
+import {
+  automatedFlowRunDependencies,
+  startAutomatedFlowRun,
+} from "@/api/lib/flows/start-automated-flow-run";
+import {
+  FlowRunStartError,
+  startFlowRun,
+} from "@/api/lib/flows/start-flow-run";
+import {
+  FLOW_RUN_TASK,
+  flowScheduleJobId,
+} from "@/api/lib/scheduler/tasks/flow-run";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -286,6 +300,331 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("flow effect admission races (postgres)", () => {
+    test.each(
+      (
+        [
+          "disabled",
+          "time",
+          "frequency",
+          "manual",
+          "workspace",
+          "unchanged",
+        ] as const
+      ).flatMap((change) => [
+        [change, "before preflight"] as const,
+        [change, "after preflight"] as const,
+      ]),
+    )(
+      "scheduled start revalidates the definition: %s (%s)",
+      async (change, phase) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const worker = openClient();
+          const writer = openClient();
+          const f = await flowReviewGateFixture(worker.db, {
+            intermediate: false,
+          });
+          const definitionId = createSafeId<"flowDefinition">();
+          const otherWorkspaceId = createSafeId<"workspace">();
+          const jobId = flowScheduleJobId(definitionId);
+          const lockedBy = createSafeId<"flowRun">();
+          const dueSlot = "2040-01-01T07:00:00.000Z";
+          const originalTrigger = {
+            type: "schedule" as const,
+            workspaceId: f.workspaceId,
+            schedule: { frequency: "daily" as const, hourUtc: 7 },
+          };
+          const currentSteps = [
+            {
+              kind: "review-gate" as const,
+              name: "Current review",
+              instructions: "Current instructions",
+            },
+          ];
+          const patchForChange = () => {
+            switch (change) {
+              case "disabled":
+                return { enabled: false };
+              case "time":
+                return {
+                  trigger: {
+                    ...originalTrigger,
+                    schedule: { frequency: "daily" as const, hourUtc: 8 },
+                  },
+                };
+              case "frequency":
+                return {
+                  trigger: {
+                    ...originalTrigger,
+                    schedule: {
+                      frequency: "weekly" as const,
+                      hourUtc: 7,
+                      dayOfWeek: 1,
+                    },
+                  },
+                };
+              case "manual":
+                return { trigger: { type: "manual" as const } };
+              case "workspace":
+                return {
+                  trigger: {
+                    ...originalTrigger,
+                    workspaceId: otherWorkspaceId,
+                  },
+                };
+              case "unchanged":
+                return { name: "Current definition", steps: currentSteps };
+              default:
+                change satisfies never;
+                return panic("Unknown scheduled definition change");
+            }
+          };
+          let inserts = 0;
+          let reservations = 0;
+          let enqueues = 0;
+          const production = automatedFlowRunDependencies(worker.db);
+          const dependencies = {
+            ...production,
+            insertWithinCap: async (
+              input: Parameters<typeof production.insertWithinCap>[0],
+            ) => {
+              inserts += 1;
+              if (inserts === 1 && phase === "after preflight") {
+                // The separate session commits after the actual preflight snapshot, before locked insertion.
+                await writer.db
+                  .update(flowDefinitions)
+                  .set(patchForChange())
+                  .where(eq(flowDefinitions.id, definitionId));
+              }
+              return await production.insertWithinCap(input);
+            },
+            enqueueStep: async () => {
+              enqueues += 1;
+            },
+            kickoff: async ({
+              run,
+            }: Parameters<NonNullable<typeof production.kickoff>>[0]) =>
+              await run(new AbortController().signal, async () => {
+                reservations += 1;
+              }),
+          } satisfies Parameters<typeof startAutomatedFlowRun>[1];
+          const start = async () =>
+            await startAutomatedFlowRun(
+              {
+                definitionId,
+                organizationId: f.organizationId,
+                workspaceId: f.workspaceId,
+                createdByUserId: f.userId,
+                triggerSource: { type: "schedule", dueSlot },
+                expectedScheduleTrigger: originalTrigger,
+                inputEntityIds: [],
+                schedulerClaim: { jobId, lockedBy },
+                logContext: { definitionId },
+              },
+              dependencies,
+            );
+          try {
+            await worker.db.insert(workspaces).values({
+              id: otherWorkspaceId,
+              organizationId: f.organizationId,
+              name: "Alternate matter",
+            });
+            await worker.db.insert(flowDefinitions).values({
+              id: definitionId,
+              organizationId: f.organizationId,
+              createdByUserId: f.userId,
+              name: "Preflight definition",
+              enabled: true,
+              trigger: originalTrigger,
+              steps: [
+                {
+                  kind: "review-gate",
+                  name: "Preflight review",
+                  instructions: "Preflight instructions",
+                },
+              ],
+            });
+            await worker.db.insert(schedulerJobs).values({
+              id: jobId,
+              task: FLOW_RUN_TASK,
+              schedule: { type: "daily", hour: 7, minute: 0, timeZone: "UTC" },
+              payload: { definitionId },
+              enabled: true,
+              lockedBy,
+              nextRunAt: new Date(dueSlot),
+            });
+            if (phase === "before preflight") {
+              // The original scheduler snapshot precedes this committed edit and the starter's read.
+              await writer.db
+                .update(flowDefinitions)
+                .set(patchForChange())
+                .where(eq(flowDefinitions.id, definitionId));
+            }
+            const outcome = await start();
+            const runs = await worker.db
+              .select()
+              .from(flowRuns)
+              .where(eq(flowRuns.definitionId, definitionId));
+            if (change !== "unchanged") {
+              const status =
+                phase === "before preflight" && change === "disabled"
+                  ? "settled"
+                  : "stale";
+              expect(outcome).toEqual({ status });
+              expect(inserts).toBe(phase === "before preflight" ? 0 : 1);
+              expect(runs).toHaveLength(0);
+              expect(reservations).toBe(0);
+              expect(enqueues).toBe(0);
+              return;
+            }
+            expect(outcome).toEqual({ status: "settled" });
+            expect(runs).toHaveLength(1);
+            const run = runs.at(0) ?? panic("Expected admitted scheduled run");
+            expect(run.definitionSnapshot).toEqual({
+              name: "Current definition",
+              steps: currentSteps,
+            });
+            const steps = await worker.db
+              .select()
+              .from(flowRunSteps)
+              .where(eq(flowRunSteps.runId, run.id));
+            expect(steps).toHaveLength(1);
+            expect(steps.at(0)?.kind).toBe("review-gate");
+            expect(reservations).toBe(1);
+            expect(enqueues).toBe(1);
+            expect(await start()).toEqual({ status: "settled" });
+            expect(
+              await worker.db
+                .select()
+                .from(flowRuns)
+                .where(eq(flowRuns.definitionId, definitionId)),
+            ).toHaveLength(1);
+            expect(reservations).toBe(1);
+            expect(enqueues).toBe(1);
+          } finally {
+            await worker.db
+              .delete(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId));
+            await f.cleanup();
+          }
+        });
+      },
+    );
+
+    test.each(["steps changed", "steps unchanged"] as const)(
+      "manual confirmation covers the current definition steps: %s",
+      async (change) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const worker = openClient();
+          const writer = openClient();
+          const f = await flowReviewGateFixture(worker.db, {
+            intermediate: false,
+          });
+          const definitionId = createSafeId<"flowDefinition">();
+          const originalSteps = [
+            {
+              kind: "review-gate" as const,
+              name: "Original review",
+              instructions: "Original instructions",
+            },
+          ];
+          const changedSteps = [
+            {
+              kind: "review-gate" as const,
+              name: "Different review",
+              instructions: "Different instructions",
+            },
+          ];
+          let confirmations = 0;
+          let reservations = 0;
+          let enqueues = 0;
+          try {
+            await worker.db.insert(flowDefinitions).values({
+              id: definitionId,
+              organizationId: f.organizationId,
+              createdByUserId: f.userId,
+              name: "Original definition",
+              enabled: true,
+              trigger: { type: "manual" },
+              steps: originalSteps,
+            });
+            const started = await startFlowRun({
+              safeDb: f.safeDb(worker.db),
+              organizationId: f.organizationId,
+              workspaceId: f.workspaceId,
+              definitionId,
+              triggerSource: { type: "manual", userId: f.userId },
+              inputEntityIds: [],
+              admit: async ({ steps }) => {
+                confirmations += 1;
+                expect(steps).toEqual(originalSteps);
+                // The confirmed snapshot precedes this separate committed definition write.
+                await withAggregateTransaction(writer.db, async (tx) => {
+                  await lockFeatureRecoveryAdmission({
+                    tx,
+                    organizationId: f.organizationId,
+                    featureId: "flows",
+                  });
+                  await tx
+                    .update(flowDefinitions)
+                    .set({
+                      name: "Current definition",
+                      steps:
+                        change === "steps changed"
+                          ? changedSteps
+                          : originalSteps,
+                    })
+                    .where(eq(flowDefinitions.id, definitionId));
+                });
+                return null;
+              },
+              kickoff: async ({ run }) =>
+                await run(new AbortController().signal, async () => {
+                  reservations += 1;
+                }),
+              enqueueStep: async () => {
+                enqueues += 1;
+              },
+            });
+            expect(confirmations).toBe(1);
+            const runs = await worker.db
+              .select()
+              .from(flowRuns)
+              .where(eq(flowRuns.definitionId, definitionId));
+            if (change === "steps changed") {
+              if (started.isOk()) {
+                panic("Changed confirmation unexpectedly started a run");
+              }
+              expect(FlowRunStartError.is(started.error)).toBe(true);
+              if (
+                !FlowRunStartError.is(started.error) ||
+                !HandlerError.is(started.error.cause)
+              ) {
+                panic("Expected a typed stale confirmation refusal");
+              }
+              expect(started.error.reason).toBe("admission-refused");
+              expect(started.error.cause.status).toBe(409);
+              expect(runs).toHaveLength(0);
+              expect(reservations).toBe(0);
+              expect(enqueues).toBe(0);
+              return;
+            }
+            if (started.isErr()) {
+              throw started.error;
+            }
+            expect(runs).toHaveLength(1);
+            expect(runs.at(0)?.definitionSnapshot).toEqual({
+              name: "Current definition",
+              steps: originalSteps,
+            });
+            expect(reservations).toBe(1);
+            expect(enqueues).toBe(1);
+          } finally {
+            await f.cleanup();
+          }
+        });
+      },
+    );
+
     for (const action of ACTIONS) {
       test(`${action}: revoke committed after preflight refuses the authoritative effect`, async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
