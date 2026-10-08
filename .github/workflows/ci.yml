@@ -3292,6 +3292,14 @@ jobs:
           bun test scripts/merge-bar-freshness.test.ts \
             scripts/merge-bar-arm-guard.test.ts scripts/merge-bar-disarm.test.ts
 
+      - name: Test merge queue jump-reset recovery
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/merge-bar-jump-reset.test.ts \
+            scripts/merge-bar-jump-reset-cli.test.ts \
+            scripts/merge-bar-jump-reset-handoff.test.ts \
+            scripts/merge-bar-jump-reset-requeue.test.ts
+
       # Check migration identity against the branch this run merges into. In a
       # merge group that is main as it stands at merge time.
       - name: Check migration identity against the base branch
