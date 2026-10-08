@@ -1112,19 +1112,29 @@ test("a request while the warmup indexes still answers within the request deadli
   try {
     await publicScreen(publicProps("A Completely Distant Name"));
     await indexing.promise;
-    const stalled = publicScreen({
-      ...publicProps("A Completely Distant Name"),
-      // The request's own freshness read never answers.
-      db: async () => await new Promise<never>(() => {}),
-    });
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-    expect(clock.pending()).toContain(SANCTIONS_MATCHER_CONFIG.deadlineMs);
-    clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
-    const answer = (await stalled).unwrap();
-    expect(answer.status).toBe("unavailable");
-    expect(answer.lists.every(({ reason }) => reason === "warming")).toBe(true);
+    // Each request's own freshness read never answers.
+    let stalledReads = 0;
+    const stalledDb = async () => {
+      stalledReads += 1;
+      return await new Promise<never>(() => {});
+    };
+    for (const _attempt of Array.from({ length: 4 })) {
+      const pending = publicScreen({
+        ...publicProps("A Completely Distant Name"),
+        db: stalledDb,
+      });
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+      const answer = (await pending).unwrap();
+      expect(answer.status).toBe("unavailable");
+      expect(answer.lists.every(({ reason }) => reason === "warming")).toBe(
+        true,
+      );
+    }
+    // Reads the deadline gave up on stay bounded while the build runs.
+    expect(stalledReads).toBe(SANCTIONS_MATCHER_CONFIG.poolSizeMax);
   } finally {
     release.resolve(undefined);
     await pool.close();

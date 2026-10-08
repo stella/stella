@@ -388,40 +388,50 @@ export const createPublicSanctionsScreening = ({
       reason: null,
     } as const);
 
+  // Freshness reads in flight on the path that bypasses the busy matcher.
+  const bypassReads = { count: 0 };
   const screenPublic: typeof screenSanctionsSubject = async (props) => {
     // The warmup holds the only matcher while it indexes one edition: every
     // list answers "warming" (ask again shortly) rather than queueing behind
     // the build, including lists already loaded. Freshness still comes from
     // what is on file.
     if (warmer.holdsMatcher()) {
+      const warming = () =>
+        Result.ok(
+          unavailableSanctionsScreening({
+            reason: "warming",
+            practiceJurisdictions: props.practiceJurisdictions,
+            now: props.now,
+          }),
+        );
+      // A read the deadline gave up on still runs until it settles; at most
+      // this many may, beyond that the answer comes without reading.
+      if (bypassReads.count >= SANCTIONS_MATCHER_CONFIG.poolSizeMax) {
+        return warming();
+      }
+      bypassReads.count += 1;
+      const read = screenSanctionsSubject({
+        ...props,
+        reportFailure,
+        matcher: ({ source, edition }) =>
+          Result.err({
+            code: warmer.status(source, edition),
+            stage: "public-warmup",
+            reason: null,
+          } as const),
+      }).finally(() => {
+        bypassReads.count -= 1;
+      });
       // Bounded like a matcher lease: the freshness read alone must not hold
       // the request past its deadline.
       const expired = Promise.withResolvers<"expired">();
       const cancelDeadline = clock.schedule(() => {
         expired.resolve("expired");
       }, SANCTIONS_MATCHER_CONFIG.deadlineMs);
-      const answered = await Promise.race([
-        screenSanctionsSubject({
-          ...props,
-          reportFailure,
-          matcher: ({ source, edition }) =>
-            Result.err({
-              code: warmer.status(source, edition),
-              stage: "public-warmup",
-              reason: null,
-            } as const),
-        }),
-        expired.promise,
-      ]).finally(cancelDeadline);
-      return answered === "expired"
-        ? Result.ok(
-            unavailableSanctionsScreening({
-              reason: "warming",
-              practiceJurisdictions: props.practiceJurisdictions,
-              now: props.now,
-            }),
-          )
-        : answered;
+      const answered = await Promise.race([read, expired.promise]).finally(
+        cancelDeadline,
+      );
+      return answered === "expired" ? warming() : answered;
     }
     const result = await pool.run(
       async (session) =>
