@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import type {
@@ -208,7 +209,7 @@ for (const transport of [
           result = modelViewOf(
             await handleMcpToolCall({
               context,
-              toolName: "invoke_capability",
+              toolName: MCP_CAPABILITY_EXECUTORS.read,
               args: { capability, input },
             }),
           )["result"];
@@ -346,20 +347,18 @@ const requiredCapabilities = parseCatalog(readCapabilityCatalog()).filter(
     "featureAccess" in entry &&
     entry.featureAccess === "required",
 );
-for (const { id } of requiredCapabilities) {
+for (const { id, access } of requiredCapabilities) {
   test(`${id} uses the unknown-id contract for hidden capability meta calls`, async () => {
     const { context, database } = contextFor(false, id);
     const results = [];
-    for (const toolName of [
-      "describe_capability",
-      "invoke_capability",
-    ] as const) {
+    const executor = MCP_CAPABILITY_EXECUTORS[access];
+    for (const toolName of ["describe_capability", executor] as const) {
       const result = await handleMcpToolCall({
         context,
         toolName,
         args: {
           capability: id,
-          ...(toolName === "invoke_capability" ? { input: {} } : {}),
+          ...(toolName === executor ? { input: {} } : {}),
         },
       });
       expect(result.isError).toBe(true);

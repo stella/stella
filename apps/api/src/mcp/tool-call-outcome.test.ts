@@ -180,14 +180,14 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
 
   test("the documents surface capability refusal emits a tool error", async () => {
     const result = await handleMcpToolCall({
-      toolName: "invoke_capability",
+      toolName: "write_capability",
       args: { capability: "private.unsupported" },
       context: contextFor(),
       mode: "documents",
     });
     expect(JSON.stringify(result)).toContain("feature_disabled");
     expectOutcome({
-      tool: "invoke_capability",
+      tool: "write_capability",
       outcome: "tool_error",
       mode: "documents",
     });

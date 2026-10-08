@@ -179,8 +179,7 @@ export type McpToolAccessBranch =
     }
   | {
       access: "write";
-      /** Generic dispatch may invoke a read target despite its own write access. */
-      readClass?: McpReadClassResolver;
+      readClass?: never;
       annotations: McpToolAnnotations & { readOnlyHint: false };
       /**
        * The member authority every call needs; discovery and dispatch enforce
@@ -374,9 +373,8 @@ export type McpCliToolAnnotation = {
    */
   localFileBase64Prop?: string;
   /**
-   * The tool is not destructive itself but gates SOME calls behind its `confirm`
-   * arg (per-target destructiveness, e.g. `invoke_capability` where the invoked
-   * capability's catalog flag decides). The CLI leaf then accepts `--yes`
+   * Some calls require the `confirm` arg in addition to host approval
+   * (e.g. write_capability checks the invoked capability's catalog flag). The CLI leaf then accepts `--yes`
    * (injecting `confirm: true` upfront) and, on a `confirmation_required`
    * envelope at a TTY, prompts and retries once with `confirm: true`.
    */

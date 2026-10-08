@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
@@ -97,10 +99,11 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   save_filled_template: TEMPLATE_TOOL_HANDLERS.save_filled_template,
   create_template: TEMPLATE_TOOL_HANDLERS.create_template,
   configure_template_fields: TEMPLATE_TOOL_HANDLERS.configure_template_fields,
-  // Non-projectable (`chatProjectable: false`): invoke_capability runs an
+  // Non-projectable (`chatProjectable: false`): write_capability runs an
   // arbitrary catalog capability over MCP/CLI, never from chat; the orchestrator
   // refuses it before dispatch. Wired only to keep this map exhaustive.
-  invoke_capability: CAPABILITY_TOOL_HANDLERS.invoke_capability,
+  [MCP_CAPABILITY_EXECUTORS.write]:
+    CAPABILITY_TOOL_HANDLERS[MCP_CAPABILITY_EXECUTORS.write],
   // Non-projectable (`chatProjectable: false`): chat files feedback through
   // its own UI. Wired only to keep this map exhaustive.
   submit_feedback: FEEDBACK_TOOL_HANDLERS.submit_feedback,

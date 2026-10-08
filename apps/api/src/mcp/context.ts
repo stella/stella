@@ -219,7 +219,7 @@ export type McpRequestContext = {
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   /**
    * Every accessible (non-deleting) workspace with its status. The generic
-   * capability path (`invoke_capability`) needs this to build the
+   * capability path (capability executors) needs this to build the
    * `getAccessibleWorkspaces` resolver the safe-handler context carries; existing
    * tools resolve access through `accessibleWorkspaceIdSet` /
    * `accessibleWorkspaceStatusById` and do not read it.
@@ -241,7 +241,7 @@ export type McpRequestContext = {
   toolConfirmation?: ToolConfirmation | undefined;
   /**
    * OAuth scopes granted to this session (the access token's `scope` claim).
-   * `invoke_capability` gates each capability on its catalog scope against this
+   * capability executors gate each capability on its catalog scope against this
    * list; the session-authed chat projection has no OAuth scopes and passes an
    * empty list (it never dispatches the generic path).
    */
@@ -280,7 +280,7 @@ export type McpRequestContext = {
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
    * projection, which never dispatches the generic capability path. Only
-   * `invoke_capability` reads it (to synthesize a safe-handler context).
+   * capability executors read it (to synthesize a safe-handler context).
    */
   request?: Request;
   recordAuditEvent: AuditRecorder;

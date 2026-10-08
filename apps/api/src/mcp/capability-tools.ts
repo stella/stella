@@ -9,6 +9,10 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import {
+  MCP_CAPABILITY_EXECUTORS,
+  type McpCapabilityExecutor,
+} from "@stll/api-contract/mcp-capability-executors";
 import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -349,7 +353,7 @@ const requiredScopesOf = (entry: CatalogEntry): readonly string[] => [
 
 type RenderedTransport = {
   type: CapabilityTransport["type"];
-  /** Whether invoke_capability can run this at all. */
+  /** Whether capability executors can run this at all. */
   invocable: boolean;
   /** Body field carrying bytes, and whether it is required. */
   fileField: string | null;
@@ -1117,11 +1121,11 @@ type GuardedEndpoint =
  * Load a capability's endpoint with failures contained: a rejecting dynamic
  * import (or a module without the `{ config, handler }` shape) is captured and
  * mapped to a structured `internal_error` envelope instead of escaping as an
- * unhandled rejection. Shared by `describe_capability` and `invoke_capability`.
+ * unhandled rejection. Shared by `describe_capability` and the capability executors.
  */
 const loadEndpointGuarded = async (
   id: string,
-  toolName: "describe_capability" | "invoke_capability",
+  toolName: "describe_capability" | McpCapabilityExecutor,
 ): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
@@ -1184,7 +1188,7 @@ const describeCapabilityHandler: McpToolHandler<
   // JSON serialization (toolDataResult in the egress pipeline) drops the symbols, so
   // they can go on the payload as-is. Uses the live config, never the snapshot,
   // so a snapshot-truncated capability still describes fully, and the same
-  // `advertisedSchemas` projection invoke_capability validates against, so an
+  // `advertisedSchemas` projection the capability executors validate against, so an
   // advertised bound is always an enforced bound.
   const { DEFAULT_MCP_TOOL_DEFINITIONS } =
     await import("@/api/mcp/static-tool-definitions");
@@ -1236,7 +1240,7 @@ const describeCapabilityHandler: McpToolHandler<
   });
 };
 
-// --- invoke_capability -------------------------------------------------------
+// --- capability executors -------------------------------------------------------
 
 type InvokeInput = { body: unknown; params: unknown; query: unknown };
 
@@ -1248,7 +1252,7 @@ const transportBlockReason = (transport: CapabilityTransport): string => {
     case "file-input":
       return `requires a file in \`${transport.input.field}\`, which JSON cannot carry`;
     case "file-response":
-      return "returns a file or stream, which invoke_capability cannot serialize";
+      return "returns a file or stream, which capability executors cannot serialize";
     case "file-both":
       return `requires a file in \`${transport.input.field}\` and returns a file or stream`;
     default: {
@@ -1273,7 +1277,7 @@ const transportRefusal = (
   const alternative = transportAlternative(transport);
   return structuredErrorResult({
     code: "feature_disabled",
-    message: `Capability "${id}" ${transportBlockReason(transport)}, so it is not available through invoke_capability`,
+    message: `Capability "${id}" ${transportBlockReason(transport)}, so it is not available through capability executors`,
     hint:
       alternative === undefined
         ? "Use its REST route or the stella app."
@@ -1298,7 +1302,7 @@ const filelessFieldRefusal = (
   }
   return structuredErrorResult({
     code: "validation_error",
-    message: `Capability "${id}" cannot take \`${field}\` through invoke_capability: that field carries file bytes, which JSON cannot express`,
+    message: `Capability "${id}" cannot take \`${field}\` through capability executors: that field carries file bytes, which JSON cannot express`,
     hint: `Omit \`${field}\` and call again using this capability's other input modes; the file mode is only available through its REST route or the stella app.`,
   });
 };
@@ -1329,7 +1333,7 @@ const invokeFlagSchema = (description: string) =>
   );
 
 /**
- * invoke_capability's OWN arguments, read strictly. A mistyped flag or a
+ * The executors' own arguments, read strictly. A mistyped flag or a
  * misplaced input, read leniently, fails open: `validate_only: "true"`
  * silently read as `false` would EXECUTE a capability the caller intended as
  * a dry run, and a misspelt input part neither rejected nor read would run the
@@ -1337,36 +1341,48 @@ const invokeFlagSchema = (description: string) =>
  * booleans, and `input` and its body/params/query parts must be objects.
  * Never coerce, never ignore.
  */
-const invokeCapabilityArgsSchema = nullAsAbsent(
-  v.strictObject({
-    capability: v.pipe(
-      v.string(),
-      v.minLength(1),
+const CAPABILITY_ARGUMENTS = {
+  capability: v.pipe(
+    v.string(),
+    v.nonEmpty(),
+    v.description(
+      "Capability id to invoke. Use an id list_capabilities returned.",
+    ),
+  ),
+  input: v.optional(
+    v.pipe(
+      v.strictObject(INVOKE_INPUT_PARTS, (issue) =>
+        // valibot reports a key outside the entries as expecting `never`.
+        issue.expected === "never"
+          ? `Unknown input part. Expected one of: ${Object.keys(INVOKE_INPUT_PARTS).join(", ")}`
+          : "Expected an object",
+      ),
       v.description(
-        "Capability id to invoke. Use an id list_capabilities returned.",
+        "The capability's input, split into the parts its schema declares.",
       ),
     ),
-    input: v.optional(
-      v.pipe(
-        v.strictObject(INVOKE_INPUT_PARTS, (issue) =>
-          // valibot reports a key outside the entries as expecting `never`.
-          issue.expected === "never"
-            ? `Unknown input part. Expected one of: ${Object.keys(INVOKE_INPUT_PARTS).join(", ")}`
-            : "Expected an object",
-        ),
-        v.description(
-          "The capability's input, split into the parts its schema declares.",
-        ),
-      ),
-    ),
-    validate_only: invokeFlagSchema(
-      "When true, validate the input against the capability schema and return without executing.",
-    ),
+  ),
+  validate_only: invokeFlagSchema(
+    "When true, validate the input against the capability schema and return without executing.",
+  ),
+};
+
+const readCapabilityArgsSchema = nullAsAbsent(
+  v.strictObject(CAPABILITY_ARGUMENTS),
+);
+const writeCapabilityArgsSchema = nullAsAbsent(
+  v.strictObject({
+    ...CAPABILITY_ARGUMENTS,
     confirm: invokeFlagSchema(
       "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
     ),
   }),
 );
+
+const CAPABILITY_ARGUMENT_SCHEMAS = {
+  read: readCapabilityArgsSchema,
+  write: writeCapabilityArgsSchema,
+} as const satisfies Record<keyof typeof MCP_CAPABILITY_EXECUTORS, unknown>;
 
 /**
  * Rename the public input field names back to the internal ones a handler
@@ -1583,23 +1599,37 @@ const resolveCapabilityWorkspace = ({
   return { ok: true, workspaceId: branded };
 };
 
-export const invokedCapabilityConsumesServices = async (
-  args: unknown,
-  context: McpRequestContext,
-) => {
-  const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
+type CapabilityServiceClassificationOptions = {
+  args: unknown;
+  context: McpRequestContext;
+  access: keyof typeof MCP_CAPABILITY_EXECUTORS;
+};
+
+export const invokedCapabilityConsumesServices = async ({
+  args,
+  context,
+  access,
+}: CapabilityServiceClassificationOptions) => {
+  const parsed = v.safeParse(CAPABILITY_ARGUMENT_SCHEMAS[access], args);
   if (!parsed.success || parsed.output.validate_only === true) {
     // Invalid calls reach canonical validation without executing work.
     return Result.ok(false);
   }
   const entry = (await getCatalogById()).get(parsed.output.capability);
-  if (entry === undefined || !capabilityFeatureEnabled(entry, context)) {
+  if (
+    entry === undefined ||
+    entry.access !== access ||
+    !capabilityFeatureEnabled(entry, context)
+  ) {
     return Result.ok(false);
   }
   if (typeof entry.consumesServices === "boolean") {
     return Result.ok(entry.consumesServices);
   }
-  const loaded = await loadEndpointGuarded(entry.id, "invoke_capability");
+  const loaded = await loadEndpointGuarded(
+    entry.id,
+    MCP_CAPABILITY_EXECUTORS[entry.access],
+  );
   if (!loaded.ok) {
     return Result.err(loaded.result);
   }
@@ -1614,19 +1644,23 @@ export const invokedCapabilityConsumesServices = async (
   });
 };
 
+type InvokeCapabilityOptions = {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+  access: keyof typeof MCP_CAPABILITY_EXECUTORS;
+};
+
 const invokeCapabilityHandler = async ({
   args,
   context,
-}: {
-  args: Record<string, unknown>;
-  context: McpRequestContext;
-}): Promise<McpToolResponse> => {
+  access,
+}: InvokeCapabilityOptions): Promise<McpToolResponse> => {
   // 0. The meta-tool's own argument shapes, before ANY gate: neither a
   // mistyped flag nor a misplaced input may be read leniently
   // (`validate_only: "true"` would fail open into executing a request that
   // intended a dry run; a top-level `query` would run the capability with no
   // input at all).
-  const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
+  const parsed = v.safeParse(CAPABILITY_ARGUMENT_SCHEMAS[access], args);
   if (!parsed.success) {
     return validationErrorResult(
       parsed.issues,
@@ -1637,8 +1671,8 @@ const invokeCapabilityHandler = async ({
     capability: id,
     input: rawInput,
     validate_only: validateOnlyFlag,
-    confirm,
   } = parsed.output;
+  const confirm = "confirm" in parsed.output && parsed.output.confirm === true;
 
   const entry = (await getCatalogById()).get(id);
 
@@ -1655,12 +1689,20 @@ const invokeCapabilityHandler = async ({
     return featureDisabledResult(entry.feature);
   }
 
+  if (entry.access !== access) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: `Capability "${id}" requires the ${entry.access} executor`,
+      hint: `Call ${MCP_CAPABILITY_EXECUTORS[entry.access]} with the same capability and input.`,
+    });
+  }
+
   // 3. Disposition / fidelity. token/public capabilities self-authorize from a
   // body/param token and are not reachable through the generic path; a waived
   // capability's handler needs response plumbing the synthesized context drops.
   if (entry.handlerKind === "token" || entry.handlerKind === "public") {
     return notFoundResult(
-      `Capability "${id}" is not invokable through invoke_capability`,
+      `Capability "${id}" is not invokable through capability executors`,
       "This operation authorizes itself differently; use its dedicated surface.",
     );
   }
@@ -1670,7 +1712,7 @@ const invokeCapabilityHandler = async ({
   if (waiver !== undefined) {
     return structuredErrorResult({
       code: "feature_disabled",
-      message: `Capability "${id}" cannot run through invoke_capability: ${waiver}`,
+      message: `Capability "${id}" cannot run through capability executors: ${waiver}`,
       hint: "Perform this operation in the stella app, which has the required request context.",
     });
   }
@@ -1742,7 +1784,10 @@ const invokeCapabilityHandler = async ({
       confirm,
     });
   } catch (error) {
-    captureError(error, { source: "mcp", toolName: "invoke_capability" });
+    captureError(error, {
+      source: "mcp",
+      toolName: MCP_CAPABILITY_EXECUTORS[access],
+    });
     return structuredErrorResult({
       code: "internal_error",
       message: "Capability execution failed",
@@ -1769,7 +1814,7 @@ const invokeCapabilityHandler = async ({
  * - Feature gate (tools.ts dispatch guard): gate 2, same feature_disabled
  *   envelope, also applied to describe and the list filter.
  * - Scope recheck (server-core missing_scope): the transport already gates the
- *   invoke_capability tool itself; gate 4 rechecks the per-capability catalog
+ *   executor tool itself; gate 4 rechecks the per-capability catalog
  *   scope against the session's grants.
  * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
  *   per-capability `destructive` flag.
@@ -1979,7 +2024,10 @@ const executeInvoke = async ({
   validateOnly: boolean;
   confirm: boolean | undefined;
 }): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded(id, "invoke_capability");
+  const loaded = await loadEndpointGuarded(
+    id,
+    MCP_CAPABILITY_EXECUTORS[entry.access],
+  );
   if (!loaded.ok) {
     return loaded.result;
   }
@@ -2224,8 +2272,8 @@ export const mapHandlerResult = ({
   if (isBinaryPayload(result)) {
     return structuredErrorResult({
       code: "feature_disabled",
-      message: `Capability "${id}" returned a file or stream, which invoke_capability cannot deliver`,
-      hint: "Fetch the file through its REST route or the stella app; invoke_capability only returns structured JSON.",
+      message: `Capability "${id}" returned a file or stream, which capability executors cannot deliver`,
+      hint: "Fetch the file through its REST route or the stella app; capability executors only return structured JSON.",
     });
   }
   return successEgress(result, access);
@@ -2264,7 +2312,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     description:
       "List the automatable capabilities beyond the curated tools: every safe " +
       "backend operation (CRUD, exports, processing triggers) reachable through " +
-      "invoke_capability. Paginated; filter by domain (the id prefix, e.g. " +
+      "read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. " +
       '"time-entries") or access (read/write). Each item gives the capability ' +
       "id, description, access/destructive, its transport (whether this path " +
       "can run it, which field takes a file, and what to use instead), " +
@@ -2290,27 +2338,42 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "(body/params/query), required OAuth scopes, member permissions, whether it " +
       "is destructive, its handler kind (workspace/root), its disposition, and " +
       "its transport (whether this path can run it, which field takes a file, " +
-      "and what to use instead). Call this before invoke_capability to learn " +
+      "and what to use instead). Call this before read_capability or write_capability to learn " +
       "exactly what input to pass.",
     inputSchema: describeCapabilityArgsSchema,
   }),
   defineValibotMcpTool({
     consumesServices: false,
-    // openWorldHint: true because the target capability is selected at
-    // runtime by id, and the catalog includes contacts.business-registries-
-    // lookup, which reaches the shared business-registry dispatch (ARES,
-    // KRS, ORSR, ...) the same external interaction matter-tools.ts's company
-    // lookup and template-tools.ts's fill_template declare open-world for;
-    // the hint is static per tool, so it must cover that reachable case even
-    // though most capabilities never leave the closed Stella domain.
     annotations: {
-      title: "Invoke capability",
+      title: "Read capability",
+      destructiveHint: false,
+      openWorldHint: true,
+      readOnlyHint: true,
+    },
+    name: MCP_CAPABILITY_EXECUTORS.read,
+    access: "read",
+    readClass: resolveCapabilityReadClass,
+    anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
+    scope: "stella:read",
+    description:
+      "Read one capability by id. Take a read id from list_capabilities or " +
+      "describe_capability. Pass input under input: { body, params, query }; " +
+      "matter-scoped capabilities take input.params.matterId. " +
+      "Required scopes and member permissions are checked per capability. " +
+      "Set validate_only: true to check input without running it. " +
+      "Write capabilities must use write_capability.",
+    inputSchema: readCapabilityArgsSchema,
+  }),
+  defineValibotMcpTool({
+    consumesServices: false,
+    annotations: {
+      title: "Write capability",
       destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
       readOnlyHint: false,
     },
-    name: "invoke_capability",
+    name: MCP_CAPABILITY_EXECUTORS.write,
     access: "write",
     accountAccess: "sandbox",
     permissions: {
@@ -2318,32 +2381,30 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       reason:
         "The selected capability's endpoint permissions and purpose requirements are checked before its dispatch.",
     },
-    readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "capability-catalog" },
     scope: "stella:read",
-    // Confirmation is per capability (from the catalog), so the handler applies
-    // the gate from the target capability's `destructive` flag.
     description:
-      "Invoke one capability by id. " +
-      "Take the id from list_capabilities or describe_capability. " +
-      "Pass its input under input: { body, params, query } (no other top-level " +
-      "argument is accepted); matter-scoped capabilities take the target " +
-      "matter as input.params.matterId. Real authority is enforced per " +
-      "capability: the session must hold the capability's scope and your member " +
-      "role its permissions. Set validate_only: true to check input without " +
-      "running it; destructive capabilities require confirm: true after human " +
-      "approval.",
-    inputSchema: invokeCapabilityArgsSchema,
+      "Write one capability by id. Take a write id from list_capabilities or " +
+      "describe_capability. Pass input under input: { body, params, query }; " +
+      "matter-scoped capabilities take input.params.matterId. " +
+      "Required scopes and member permissions are checked per capability. " +
+      "Set validate_only: true to check input without running it; " +
+      "destructive capabilities require confirm: true after human approval. " +
+      "Read capabilities must use read_capability.",
+    inputSchema: writeCapabilityArgsSchema,
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
 export const CAPABILITY_TOOL_HANDLERS = {
   list_capabilities: listCapabilitiesHandler,
   describe_capability: describeCapabilityHandler,
-  invoke_capability: invokeCapabilityHandler,
+  [MCP_CAPABILITY_EXECUTORS.read]: async ({ args, context }) =>
+    await invokeCapabilityHandler({ args, context, access: "read" }),
+  [MCP_CAPABILITY_EXECUTORS.write]: async ({ args, context }) =>
+    await invokeCapabilityHandler({ args, context, access: "write" }),
 } satisfies Record<
-  "list_capabilities" | "describe_capability" | "invoke_capability",
+  "list_capabilities" | "describe_capability" | McpCapabilityExecutor,
   McpToolHandler
 >;
 
@@ -2352,7 +2413,11 @@ export const CAPABILITY_TOOL_SET = defineMcpToolSet(
   CAPABILITY_TOOL_HANDLERS,
   {
     describe_capability: defineMcpToolOutput(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA),
-    invoke_capability: defineProjectedMcpToolOutput(
+    [MCP_CAPABILITY_EXECUTORS.read]: defineProjectedMcpToolOutput(
+      INVOKE_CAPABILITY_OUTPUT_SCHEMA,
+      (result) => ({ result }),
+    ),
+    [MCP_CAPABILITY_EXECUTORS.write]: defineProjectedMcpToolOutput(
       INVOKE_CAPABILITY_OUTPUT_SCHEMA,
       (result) => ({ result }),
     ),
