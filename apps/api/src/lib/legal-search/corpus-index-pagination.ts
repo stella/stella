@@ -151,6 +151,12 @@ type CorpusIndexSearchPageInput<TContext> = {
   query: string;
   limit: number;
   parsedCursor: SearchCursor | null;
+  /**
+   * Ranked results a page addressed by number passes over before its first
+   * row. Only a page without a cursor has one: a cursor already says where
+   * the page begins. Absent for every other page.
+   */
+  skip?: number | undefined;
   /** Defaults to `native`. */
   scanTransport?: CorpusIndexScanTransport | undefined;
   /** A coverage fallback spends one scan round; only emitted hits are highlighted. */
@@ -301,6 +307,35 @@ export const emptyCorpusIndexScan = (): CorpusIndexScanReport => ({
  * factor lets the budget grow.
  */
 const PASSAGE_OVER_FETCH = 4;
+
+type ScanRoundCapInput = {
+  /** Ranked results the page passes over (its offset). */
+  skip: number;
+  limit: number;
+};
+
+/**
+ * Engine round trips a scan may spend on one page.
+ *
+ * Every page without an offset keeps the fixed cap. A page addressed by
+ * offset has to rank every result in front of it as well, and one result can
+ * cost up to `PASSAGE_OVER_FETCH` passages of scan, so its cap grows with the
+ * depth it reaches. That depth is bounded at the API boundary
+ * (`LIMITS.caseLawResultDepthMax`), which bounds the rounds with it.
+ */
+export const corpusIndexScanRoundCap = ({
+  limit,
+  skip,
+}: ScanRoundCapInput): number =>
+  skip === 0
+    ? LIMITS.corpusIndexSearchMaxRounds
+    : Math.max(
+        LIMITS.corpusIndexSearchMaxRounds,
+        Math.ceil(
+          ((skip + limit) * PASSAGE_OVER_FETCH) /
+            LIMITS.corpusIndexSearchCandidateLimit,
+        ),
+      );
 
 const readAnchorId = (hit: CorpusIndexHit): string | null => {
   const anchorId = hit["anchor_id"];
@@ -774,8 +809,9 @@ const readPositionSearchPage = async <TContext>({
   limit,
   order,
   parsedCursor,
+  skip = 0,
   scanTransport = NATIVE_SCAN_TRANSPORT,
-  maxRounds = LIMITS.corpusIndexSearchMaxRounds,
+  maxRounds = corpusIndexScanRoundCap({ limit, skip }),
   snippetFields,
   extractId,
   extractSnippet,
@@ -784,6 +820,12 @@ const readPositionSearchPage = async <TContext>({
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   CorpusIndexSearchPageResult<TContext>
 > => {
+  if (skip > 0 && parsedCursor !== null) {
+    panic("A search page is placed by its cursor or by its offset, not both");
+  }
+  // How deep into the ranking this page ends: the scan proves its order up to
+  // here, and the page is the last `limit` of it.
+  const reach = skip + limit;
   const candidates: ScoredCandidate[] = [];
   const scores = scanScoreRecorder();
   /** Best passage per document, as the clause a snippet round addresses it by. */
@@ -924,8 +966,8 @@ const readPositionSearchPage = async <TContext>({
     scanned += hits.length;
     ranking = await rankCandidates(candidates);
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
-    if (windowed.length > limit) {
-      const cursorScore = windowed.at(limit - 1)?.score ?? 0;
+    if (windowed.length > reach) {
+      const cursorScore = windowed.at(reach - 1)?.score ?? 0;
       const nextUnseen = unseenScoreUpperBound(
         corpusIndexLexicalScore(startOffset),
       );
@@ -940,8 +982,8 @@ const readPositionSearchPage = async <TContext>({
     ranking = await rankCandidates(candidates);
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   }
-  const hasMoreInWindow = windowed.length > limit;
-  const pageRanked = hasMoreInWindow ? windowed.slice(0, limit) : windowed;
+  const hasMoreInWindow = windowed.length > reach;
+  const pageRanked = windowed.slice(skip, reach);
   // A follow-up request replays this window and can only reach deeper
   // candidates while the window's own budget is not exhausted; past it a
   // cursor could never be satisfied and must not be advertised.
@@ -1053,6 +1095,7 @@ const readBm25SearchPage = async <TContext>(
     limit,
     order,
     parsedCursor,
+    skip = 0,
     scanTransport,
     snippetFields,
     extractId,
@@ -1154,12 +1197,12 @@ const readBm25SearchPage = async <TContext>(
   hitDispositions.record({ malformed });
   const ranking = await rankCandidates(candidates);
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
-  const pageRanked = windowed.slice(0, limit);
+  const pageRanked = windowed.slice(skip, skip + limit);
   const last = pageRanked.at(-1);
   // The universe replays whole from window zero, so the cursor's position
   // alone keeps this page's groups behind it; exclusions it carried in stay.
   const nextCursor =
-    windowed.length > limit && last !== undefined
+    windowed.length > skip + limit && last !== undefined
       ? withGroups(
           {
             score: last.score,

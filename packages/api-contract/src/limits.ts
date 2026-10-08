@@ -107,5 +107,15 @@ export const CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX = 20;
  */
 export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
 
+/**
+ * Deepest result a page of case-law decisions may reach (`offset + limit`),
+ * on the search and on the browse listing alike. A page addressed by offset
+ * costs one request whatever its depth, but the search still ranks every
+ * result in front of it: past this depth the reader is better served by a
+ * narrower search than by a slower page. The web pager derives its last page
+ * button from it, and the API refuses a request past it before any read.
+ */
+export const CASE_LAW_RESULT_DEPTH_MAX = 500;
+
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;

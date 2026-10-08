@@ -20,6 +20,7 @@ import {
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import { tDecisionPageOffset } from "@/api/lib/case-law/decision-page-offset";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
@@ -62,6 +63,10 @@ export const searchDecisionsBodySchema = t.Object({
       maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     }),
   ),
+  // A page addressed by number: how many ranked results come before it.
+  // Exclusive with `cursor`, and `offset + limit` stays within
+  // `LIMITS.caseLawResultDepthMax`, so a jump costs one bounded request.
+  offset: t.Optional(tDecisionPageOffset()),
   court: t.Optional(t.String({ maxLength: 512 })),
   courts: t.Optional(
     t.Array(t.String({ minLength: 1, maxLength: 512 }), {

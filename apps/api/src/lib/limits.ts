@@ -15,7 +15,10 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
-import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import {
+  CASE_LAW_RESULT_DEPTH_MAX,
+  SEARCH_QUERY_MAX_LENGTH,
+} from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
@@ -541,6 +544,7 @@ export const LIMITS = {
   caseLawDecisionBatchHydrationsMax: 3,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  caseLawResultDepthMax: CASE_LAW_RESULT_DEPTH_MAX,
   /** Max language variants for one decision's languageGroupKey. Bounds the
    *  alternate-language reads (decision detail + sitemap hreflang) so a
    *  malformed/over-merged group key cannot load an unbounded set. */

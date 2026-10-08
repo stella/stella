@@ -79,6 +79,10 @@ import {
   decisionHeadlineConfig,
 } from "@/api/lib/case-law/decision-excerpt";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import {
+  decisionPagePlacement,
+  decisionPageRequestRefusal,
+} from "@/api/lib/case-law/decision-page-offset";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import {
   decodeDecisionSearchCursor,
@@ -320,6 +324,18 @@ export const searchDecisionsHandler = async ({
   if (country === null) {
     return status(404, { message: "Not Found" });
   }
+  // Refused before either provider reads anything: a page past the depth
+  // bound would be a slow scan rather than a page.
+  const pageRefusal = decisionPageRequestRefusal({
+    cursor: body.cursor,
+    limit: normalizeTenantPageLimit(
+      body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+    ),
+    offset: body.offset,
+  });
+  if (pageRefusal !== null) {
+    return status(400, { message: pageRefusal });
+  }
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
     return await searchCorpusIndexDecisions({
@@ -361,6 +377,11 @@ type CaseLawSearchPlanOptions = {
   courtWeights: CourtWeightMap;
   excerpt: Parameters<typeof decisionHeadlineConfig>[0];
   limit: number;
+  /**
+   * Ranked results ahead of a page addressed by number. Absent for a first
+   * page and for a cursor page, whose keyset predicate already places it.
+   */
+  offset?: number | undefined;
   parsedCursor: DecisionSearchCursor | null;
   queryUsed: string;
   sort: SearchSort;
@@ -383,6 +404,7 @@ export const caseLawSearchPlan = ({
   courtWeights,
   excerpt,
   limit,
+  offset = 0,
   parsedCursor,
   queryUsed,
   sort,
@@ -581,6 +603,7 @@ export const caseLawSearchPlan = ({
       ${cursorFilter}
     ORDER BY m.sort_key DESC, m.decision_id DESC
     LIMIT ${limit + 1}
+    OFFSET ${offset}
   `;
 
   const countQuery = sql`
@@ -773,6 +796,8 @@ const searchPostgresDecisions = async (
     ? "long"
     : (body.excerpt ?? DEFAULT_SEARCH_EXCERPT);
 
+  const { isFirstPage, offset } = decisionPagePlacement(body);
+
   // Validate cursor early so a tampered value fails visibly, and refuse one
   // that bounds a different order: its key is a position in that order.
   let parsedCursor: DecisionSearchCursor | null = null;
@@ -806,6 +831,7 @@ const searchPostgresDecisions = async (
     courtWeights,
     excerpt,
     limit,
+    offset,
     parsedCursor,
     // The words the search requires, not the sentence they were typed in.
     // `plainto_tsquery` AND-s what it is given, so this is the same
@@ -814,9 +840,11 @@ const searchPostgresDecisions = async (
     sort,
   });
 
+  // The total and the facets describe the result set, so only its first page
+  // reads them; a page reached by cursor or by offset goes without.
   const onFirstPage = async (
     read: (tx: CaseLawPublicReadTransaction) => Promise<RawRows>,
-  ): Promise<RawRows> => (parsedCursor ? [] : await caseLawDb(read));
+  ): Promise<RawRows> => (isFirstPage ? await caseLawDb(read) : []);
 
   // Skip the expensive COUNT(*) and the facet queries on paginated requests;
   // these values describe the result set, not the page.
@@ -924,15 +952,15 @@ const searchPostgresDecisions = async (
     };
   });
 
-  const total = parsedCursor
-    ? SEARCH_TOTAL_NOT_COUNTED
-    : countedSearchTotal(
+  const total = isFirstPage
+    ? countedSearchTotal(
         SEARCH_TOTAL_TYPE.EXACT,
         Number(countResult.at(0)?.["total"]) || 0,
-      );
+      )
+    : SEARCH_TOTAL_NOT_COUNTED;
 
   const sourceBuckets = cappedSourceFacetBuckets(facetBuckets(sourceResultRaw));
-  const facets: DecisionSearchFacets | null = parsedCursor
+  const facets: DecisionSearchFacets | null = !isFirstPage
     ? null
     : {
         courtYear: null,
@@ -968,7 +996,7 @@ const searchPostgresDecisions = async (
       body,
       interpretation,
       hitCount: hits.length,
-      countsResultSet: parsedCursor === null,
+      countsResultSet: isFirstPage,
     }),
   });
 };
@@ -2093,6 +2121,10 @@ export const searchCorpusIndexDecisions = async ({
       dependencies,
     });
   const startedAt = performance.now();
+  // Only the first page of a result set describes it (its total, its facets,
+  // the decisions a reference pins above it); a page reached by cursor or by
+  // offset is a slice of a set the first page already described.
+  const { isFirstPage, offset } = decisionPagePlacement(body);
   let parsedCursor: CorpusSearchCursor | null = null;
   if (body.cursor) {
     parsedCursor = decodeCorpusSearchCursor(body.cursor);
@@ -2225,10 +2257,7 @@ export const searchCorpusIndexDecisions = async ({
       // never shows twice.
       pinnedIds = new Set(ids.map(String));
     }
-    if (
-      ids.length > 0 &&
-      (identityRole === "answer" || parsedCursor === null)
-    ) {
+    if (ids.length > 0 && (identityRole === "answer" || isFirstPage)) {
       const identityRanking = await rehydrateCaseLawCandidates({
         hitDispositions,
         // Always the blended order here, whatever the request asked for: the
@@ -2245,8 +2274,8 @@ export const searchCorpusIndexDecisions = async ({
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       });
       // A docket can name decisions at several courts; the page still honours
-      // the requested size, and identity never pages past it.
-      const identityPage = identityRanking.ranked.slice(0, limit);
+      // the requested size and offset, and identity never pages past it.
+      const identityPage = identityRanking.ranked.slice(offset, offset + limit);
       if (identityRole === "pin") {
         pinned = identityPage;
       } else if (identityPage.length > 0) {
@@ -2327,7 +2356,7 @@ export const searchCorpusIndexDecisions = async ({
         body,
         interpretation,
         hitCount: 0,
-        countsResultSet: parsedCursor === null,
+        countsResultSet: isFirstPage,
       }),
     });
   }
@@ -2376,6 +2405,7 @@ export const searchCorpusIndexDecisions = async ({
     limit,
     order: corpusSearchOrder(sort),
     parsedCursor,
+    skip: offset,
     scanTransport: caseLawScanTransport(sort),
     rankingMode,
     snippetFields: ["text"],
@@ -2409,24 +2439,23 @@ export const searchCorpusIndexDecisions = async ({
   });
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
-  const facetRead =
-    parsedCursor === null
-      ? readCaseLawSearchFacets({
-          observer,
-          body,
-          cluster: serving.cluster,
-          courtWeights,
-          decisionCountField,
-          indexId,
-          queryFor: facetQueries(),
-          timeDbRead: async (run) =>
-            await dbTimer.time(CASE_LAW_SEARCH_DB_READ.sourceRegistry, run),
-          totalQuery: scopedQuery,
-        }).then((read) => {
-          facetMs = performance.now() - concurrentStartedAt;
-          return read;
-        })
-      : null;
+  const facetRead = isFirstPage
+    ? readCaseLawSearchFacets({
+        observer,
+        body,
+        cluster: serving.cluster,
+        courtWeights,
+        decisionCountField,
+        indexId,
+        queryFor: facetQueries(),
+        timeDbRead: async (run) =>
+          await dbTimer.time(CASE_LAW_SEARCH_DB_READ.sourceRegistry, run),
+        totalQuery: scopedQuery,
+      }).then((read) => {
+        facetMs = performance.now() - concurrentStartedAt;
+        return read;
+      })
+    : null;
   const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
   scanAndFacetsMs = performance.now() - concurrentStartedAt;
 
@@ -2494,7 +2523,7 @@ export const searchCorpusIndexDecisions = async ({
       interpretation,
       hitCount: page.hits.length,
       countsResultSet:
-        parsedCursor === null &&
+        isFirstPage &&
         nextCursor === null &&
         searchPage.paginationOutcome.type === "complete",
     }),
