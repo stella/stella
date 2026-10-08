@@ -390,7 +390,6 @@ export const insertAutomatedFlowRunWithinCap = async ({
           .update(flowUploadTriggerIntents)
           .set({
             retryAt: new Date(startOfUtcDay(now).getTime() + DAY_IN_MS),
-            updatedAt: now,
           })
           .where(
             and(
