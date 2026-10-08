@@ -1131,7 +1131,7 @@ test("a request while the warmup indexes still answers within the request deadli
   }
 });
 
-test("an edition asked for during a pass's last load, or after the pass ends, loads without another request", async () => {
+test("editions asked for while a pass loads, and after it ends, reload end to end", async () => {
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });
   const evicted = new Set<SanctionsSource>();
@@ -1201,6 +1201,85 @@ test("an edition asked for during a pass's last load, or after the pass ends, lo
     );
   } finally {
     release.resolve(undefined);
+    await pool.close();
+  }
+});
+
+test("an edition asked for in the instant a pass ends still loads without another request", async () => {
+  const base = createMatcherTestClock();
+  // Fires once, from inside the pass's last look: its microtask runs after
+  // the pass returns and before the pass's own settlement callbacks.
+  const trap = { looks: 0, action: null as (() => void) | null };
+  const clock = {
+    ...base,
+    now: () => {
+      if (trap.action !== null) {
+        trap.looks += 1;
+        // The 1st call after the read is the load timing; the 2nd is the look.
+        if (trap.looks === 2) {
+          const action = trap.action;
+          trap.action = null;
+          queueMicrotask(action);
+        }
+      }
+      return base.now();
+    },
+  };
+  const pool = createSanctionsMatcherPool({ clock: base });
+  const evicted = new Set<SanctionsSource>();
+  const reads = new Map<SanctionsSource, number>();
+  const editions = new Map(
+    (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).flatMap(
+      ({ source, edition }) => (edition === null ? [] : [[source, edition]]),
+    ),
+  );
+  let armed = false;
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      ...pool,
+      run: async (work, options) =>
+        await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              hasEdition: (source, editionId) =>
+                !evicted.has(source) && session.hasEdition(source, editionId),
+            }),
+          options,
+        ),
+    },
+    clock,
+    loadEntries: async (options) => {
+      const entries = await loadEditionEntries(options);
+      const source = entries.at(0)?.source ?? panic("Missing fixture entry");
+      reads.set(source, (reads.get(source) ?? 0) + 1);
+      // Evicted lists stay evicted, so each read is followed by a real index.
+      if (armed && source === "uk") {
+        armed = false;
+        trap.action = () => {
+          evicted.add("ch");
+          publicScreen.warmupWant(
+            requestDb,
+            "ch",
+            editions.get("ch") ?? panic("Missing ch edition"),
+          );
+        };
+      }
+      return entries;
+    },
+  });
+  try {
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await publicScreen.warmupSettled();
+    armed = true;
+    evicted.add("uk");
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await publicScreen.warmupSettled();
+    expect(trap.action).toBeNull();
+    expect(reads.get("uk")).toBe(2);
+    // Before the fix, this pass had ended without loading ch.
+    expect(reads.get("ch")).toBe(2);
+  } finally {
     await pool.close();
   }
 });

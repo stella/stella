@@ -489,7 +489,11 @@ export const createPublicSanctionsScreening = ({
       }),
     );
   };
-  return Object.assign(screenPublic, { warmupSettled: warmer.settled });
+  return Object.assign(screenPublic, {
+    warmupSettled: warmer.settled,
+    /** Test seam: ask for an edition the way a request does, synchronously. */
+    warmupWant: warmer.want,
+  });
 };
 
 export const screenPublicSanctionsSubject = createPublicSanctionsScreening();
