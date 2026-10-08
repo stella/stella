@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { isQueryErrorOutputKey } from "./query-field-policy";
+
 // Query failures are output through several runtimes, including SDK loggers.
 // Project them before serialization; inspecting an Error exposes non-enumerable
 // fields and its cause, so removing only `params` is insufficient.
@@ -65,6 +67,9 @@ const containsQueryError = (value: unknown): boolean => {
       return true;
     }
     for (const key of Object.getOwnPropertyNames(item)) {
+      if (isQueryErrorOutputKey(key)) {
+        return true;
+      }
       pending.push(item[key]);
     }
     pending.push(item["cause"]);
@@ -170,7 +175,6 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
         Reflect.set(output, key, field);
       }
       if (typeof input["query"] === "string") {
-        Reflect.set(output, "query", queryShape(input["query"]));
         output.message += `: ${queryShape(input["query"])}`;
       }
       // Input stacks include untrusted message continuation lines. Query
@@ -182,10 +186,9 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       return input.map((item) => visit({ input: item, depth: depth + 1 }));
     }
     return Object.fromEntries(
-      Object.entries(input).map(([key, item]) => [
-        key,
-        visit({ input: item, depth: depth + 1 }),
-      ]),
+      Object.entries(input)
+        .filter(([key]) => !isQueryErrorOutputKey(key))
+        .map(([key, item]) => [key, visit({ input: item, depth: depth + 1 })]),
     );
   };
   return Result.try(() => visit({ input: value })).unwrapOr(

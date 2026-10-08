@@ -1,4 +1,5 @@
 import { sanitizeErrorForOutput } from "./query-error";
+import { isQueryErrorOutputKey } from "./query-field-policy";
 
 // Dev-only error logging, shared by the API and web apps. Both surface
 // errors to `console.error` in dev and no-op in prod; the API additionally
@@ -38,10 +39,9 @@ export const createDevErrorLogger =
         context === undefined
           ? undefined
           : Object.fromEntries(
-              Object.entries(context).map(([key, value]) => [
-                key,
-                sanitizeErrorForOutput(value),
-              ]),
+              Object.entries(context)
+                .filter(([key]) => !isQueryErrorOutputKey(key))
+                .map(([key, value]) => [key, sanitizeErrorForOutput(value)]),
             ),
     });
   };

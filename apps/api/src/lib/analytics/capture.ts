@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
-import { createDetached, sanitizeQueryErrorText } from "@stll/errors";
+import {
+  createDetached,
+  isQueryErrorOutputKey,
+  sanitizeQueryErrorText,
+} from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -63,7 +67,6 @@ type CaptureRequestErrorOptions = {
 // Keys the capture owns: the analytics envelope, the error identity and the
 // failure grade. A caller's context carrying one is dropped and counted, so a
 // context value can neither regroup an issue nor dodge suppression.
-const QUERY_CONTEXT_KEY = /(?:params|query|sqltext)/iu;
 const RESERVED_CONTEXT_KEY = /^(?:\$|error\.|failure\.)/u;
 const RESERVED_CONTEXT_NAMES: ReadonlySet<string> = new Set([
   "message",
@@ -85,7 +88,7 @@ const acceptCaptureContext = (
     if (
       RESERVED_CONTEXT_KEY.test(key) ||
       RESERVED_CONTEXT_NAMES.has(key) ||
-      QUERY_CONTEXT_KEY.test(key)
+      isQueryErrorOutputKey(key)
     ) {
       rejected += 1;
       continue;

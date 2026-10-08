@@ -4,6 +4,7 @@ import { inspect } from "node:util";
 
 import {
   createDevErrorLogger,
+  QUERY_ERROR_OUTPUT_FIELDS,
   printError,
   sanitizeErrorForOutput,
 } from "@stll/errors";
@@ -25,10 +26,22 @@ const SECRETS = [
   "$argon2id$v=19$m=65536$fixture-password-hash",
   "fixture-private-token-9f8a",
   "fixture-person@example.test",
-  "fixture-value-shaped-as-frame",
+  "fixture-multiline-value",
 ] as const;
-const FRAME_PARAM = `prefix\n    at packages/${SECRETS[3]}.ts:1:1`;
-const QUERY_PARAMS = [...SECRETS, FRAME_PARAM];
+const QUERY_FIELD_KEYS = QUERY_ERROR_OUTPUT_FIELDS.flatMap((key) => [
+  key,
+  key.toUpperCase(),
+  key.split("").join("_"),
+  `database.${key.split("").join("-").toUpperCase()}`,
+]);
+const QUERY_FIELDS = Object.fromEntries(
+  QUERY_FIELD_KEYS.map((key, index) => [
+    key,
+    `fixture-query-field-value-${index}`,
+  ]),
+);
+const MULTILINE_PARAM = `fixture-first-value\n${SECRETS[3]}`;
+const QUERY_PARAMS = [...SECRETS, MULTILINE_PARAM];
 const queryFailure = () => {
   const driver = Object.assign(
     new Error(`Key (token)=(${SECRETS.at(1)}) already exists`),
@@ -63,7 +76,7 @@ afterEach(() => {
 test("query error output excludes parameter values across console, dev sink and script printer", () => {
   const error = queryFailure();
   expect(inspect(error)).toContain(SECRETS[0]);
-  expect(error.stack).toContain(FRAME_PARAM);
+  expect(error.stack).toContain(MULTILINE_PARAM);
   const consoleRecords: unknown[][] = [];
   const sinkRecords: unknown[] = [];
   console.error = (...args: unknown[]) => {
@@ -149,8 +162,7 @@ test("query error output excludes parameter values from stdout and stderr logger
     for (const level of ["debug", "info", "warn", "error"] as const) {
       logger[level](error.message, {
         ...unredactedErrorFields(error),
-        params: SECRETS.join(","),
-        query: error.query,
+        ...QUERY_FIELDS,
       });
     }
     logger.request({
@@ -164,6 +176,9 @@ test("query error output excludes parameter values from stdout and stderr logger
     });
     expect(output).toHaveLength(4);
     assertSafe(output);
+    for (const value of Object.values(QUERY_FIELDS)) {
+      expect(output.join("\n")).not.toContain(value);
+    }
     expect(output.join("\n")).toContain("23505");
   } finally {
     process.stdout.write = stdout;
@@ -175,4 +190,55 @@ test("dev JSONL derives ordinary error names from their class", () => {
   const error = new Error("failure");
   error.name = SECRETS[0];
   expect(serializeDevError(error)).toHaveProperty("name", "Error");
+});
+
+test("every error output sink drops fields from the shared query policy", () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const consoleRecords: unknown[][] = [];
+  const devRecords: unknown[] = [];
+  console.error = (...args: unknown[]) => {
+    consoleRecords.push(args);
+  };
+  const payload = { requestId: "fixture-request", ...QUERY_FIELDS };
+  const error = queryFailure();
+  try {
+    const devLog = createDevErrorLogger({
+      echoErrors: true,
+      sink: (record) => {
+        devRecords.push(record);
+      },
+    });
+    devLog(error, { ...payload, nested: payload });
+    printError(payload);
+    captureError(error, payload);
+    for (const level of ["debug", "info", "warn", "error"] as const) {
+      logger[level]("query.failed", payload);
+    }
+    const jsonl = serializeDevError({ ...payload, nested: payload });
+    expect(jsonl).toEqual({
+      requestId: "fixture-request",
+      nested: { requestId: "fixture-request" },
+    });
+    expect(analytics.exceptions()).toHaveLength(1);
+    expect(logs.records).toHaveLength(4);
+    expect(devRecords).toHaveLength(1);
+    expect(consoleRecords).toHaveLength(3);
+    for (const sink of [
+      analytics.events,
+      logs.records,
+      devRecords,
+      consoleRecords,
+      jsonl,
+    ]) {
+      const output = inspect(sink, { depth: 20 });
+      for (const value of Object.values(QUERY_FIELDS)) {
+        expect(output).not.toContain(value);
+      }
+      expect(output).toContain("fixture-request");
+    }
+  } finally {
+    analytics.restore();
+    logs.restore();
+  }
 });

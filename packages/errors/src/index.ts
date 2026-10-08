@@ -41,3 +41,8 @@ export {
   errorOutputLogger,
   runScriptWithErrorOutput,
 } from "./query-error";
+
+export {
+  isQueryErrorOutputKey,
+  QUERY_ERROR_OUTPUT_FIELDS,
+} from "./query-field-policy";

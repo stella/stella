@@ -5,6 +5,7 @@ import type { FailureGrade, FailureReason } from "@stll/errors";
 import {
   FAILURE_GRADES,
   isFailureReason,
+  isQueryErrorOutputKey,
   sanitizeQueryErrorText,
 } from "@stll/errors";
 
@@ -93,6 +94,7 @@ export const sanitizeLogAttributes = (
   for (const [key, value] of Object.entries(attributes)) {
     if (
       SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key) ||
+      isQueryErrorOutputKey(key) ||
       !isOwnedValueValid(key, value)
     ) {
       dropped += 1;

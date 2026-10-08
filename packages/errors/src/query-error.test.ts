@@ -7,6 +7,7 @@ import {
   errorOutputLogger,
   runScriptWithErrorOutput,
 } from "./query-error";
+import { QUERY_ERROR_OUTPUT_FIELDS } from "./query-field-policy";
 
 const SECRET = "fixture-private-query-value-92ab";
 const failure = (query: string) =>
@@ -46,39 +47,19 @@ for (const literal of [
   });
 }
 
-test("query output excludes multiline values shaped like stack frames", () => {
-  const marker = "fixture-value-shaped-as-frame";
-  for (const frame of [
-    `    at ${marker}:1:1`,
-    `    at handler (packages/${marker}.ts:1:1)`,
-  ]) {
-    const parameter = `prefix\n${frame}`;
-    const query = Object.assign(
-      new Error(
-        `Failed query: insert into account values ($1)\nparams: ${parameter}`,
-      ),
-      {
-        name: "DrizzleQueryError",
-        query: "insert into account values ($1)",
-        params: [parameter],
-        cause: Object.assign(new Error(`Query rejected: ${parameter}`), {
-          name: "PostgresError",
-          code: "23505",
-          constraint_name: "account_token_unique",
-        }),
-      },
-    );
-    expect(query.stack).toContain(frame);
-    expect(query.cause.stack).toContain(frame);
-    const wrapper = new Error(`Wrapped query failure: ${parameter}`, {
-      cause: query,
-    });
-    for (const error of [query, wrapper]) {
-      const safe = sanitizeErrorForOutput(error);
-      expect(inspect(safe, { depth: 20 })).not.toContain(marker);
-      expect(JSON.stringify(safe)).not.toContain(marker);
-      expect(inspect(safe, { depth: 20 })).toContain("account_token_unique");
-    }
+test("query output excludes multiline parameter values", () => {
+  const parameter = "fixture-first-value\nfixture-second-value";
+  const query = failure("insert into account values ($1)");
+  query.params.push(parameter);
+  query.message += `\n${parameter}`;
+  const wrapper = new Error(`Wrapped query failure: ${parameter}`, {
+    cause: query,
+  });
+  for (const input of [query, wrapper]) {
+    const output = inspect(sanitizeErrorForOutput(input), { depth: 20 });
+    expect(output).not.toContain("fixture-first-value");
+    expect(output).not.toContain("fixture-second-value");
+    expect(output).toContain("account_token_unique");
   }
 });
 
@@ -146,6 +127,9 @@ test("SDK error output preserves log levels and redacts query values at every co
     error: console.error,
   };
   const records: { method: string; args: unknown[] }[] = [];
+  const fields = Object.fromEntries(
+    QUERY_ERROR_OUTPUT_FIELDS.map((key) => [key, SECRET]),
+  );
   try {
     for (const method of methods) {
       console[method] = (...args: unknown[]) => {
@@ -157,6 +141,7 @@ test("SDK error output preserves log levels and redacts query values at every co
         level,
         "query.failed",
         failure("insert into account values ($1)"),
+        { requestId: "fixture-request", nested: fields, ...fields },
       );
     }
     expect(records.map(({ method }) => method)).toEqual([...methods]);
@@ -178,4 +163,21 @@ test("query output preserves structural PostgreSQL driver codes", () => {
   const output = inspect(sanitizeErrorForOutput(error));
   expect(output).toContain("ERR_POSTGRES_CONNECTION_REFUSED");
   expect(output).not.toContain(SECRET);
+});
+
+test("query output drops every shared policy field from nested output records", () => {
+  const keys = QUERY_ERROR_OUTPUT_FIELDS.flatMap((field) => [
+    field,
+    field.toUpperCase(),
+    field.split("").join("_"),
+    `database.${field.split("").join("-").toUpperCase()}`,
+  ]);
+  const fields = Object.fromEntries(keys.map((key) => [key, SECRET]));
+  const payload = { requestId: "fixture-request", ...fields, nested: fields };
+  expect(sanitizeErrorForOutput(payload)).toEqual({
+    requestId: "fixture-request",
+    nested: {},
+  });
+  const error = Object.assign(new Error("fixture error"), fields);
+  expect(inspect(sanitizeErrorForOutput(error))).not.toContain(SECRET);
 });

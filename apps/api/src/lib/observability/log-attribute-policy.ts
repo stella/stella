@@ -5,4 +5,4 @@
 // The rule cannot import this module, so its copy is held equal by
 // apps/api/src/tests/security/oxlint-guardrails.test.ts.
 export const SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt(?!_?token)|snippet|subject|phone|(?:params|parameters|(?:query|sql)(?:[._-]?text)?)$)/iu;
+  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
