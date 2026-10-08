@@ -98,7 +98,12 @@ test("API shards consume and verify the plan artifact before testing", () => {
   expect(
     workflowStepByName(planSteps, "Upload planned API test durations"),
   ).toMatchObject({
-    with: { name: "api-test-durations-plan", "retention-days": 1 },
+    // A re-run attempt keeps the earlier attempt's artifacts; the plan replaces its own.
+    with: {
+      name: "api-test-durations-plan",
+      overwrite: true,
+      "retention-days": 1,
+    },
   });
 
   const shardSteps = workflowJobSteps(workflow, "ci-tests");

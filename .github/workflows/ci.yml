@@ -1207,6 +1207,8 @@ jobs:
         with:
           name: api-test-durations-plan
           path: ${{ runner.temp }}/api-test-durations.json
+          # Re-run attempts keep earlier artifacts; shards verify the new hash.
+          overwrite: true
           retention-days: 1
 
       - name: Plan API test files and shards
