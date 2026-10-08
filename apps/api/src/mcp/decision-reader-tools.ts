@@ -106,10 +106,56 @@ const missing = () =>
     "Pass a decisionId returned by search_case_law or lookup_case_law.",
   );
 
+const common = {
+  consumesServices: true,
+  access: "read",
+  readClass: "public",
+  anonymized: { exposure: "passthrough" },
+  feature: "FEATURE_PUBLIC_LAW",
+  scope: "stella:read",
+} as const;
+const readOnlyAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+} as const;
+const OPEN_DECISION_TOOL_DEFINITION = defineValibotMcpTool({
+  ...common,
+  name: "open_case_law_decision",
+  annotations: { ...readOnlyAnnotations, title: "Open case-law decision" },
+  description:
+    "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+  inputSchema: openDecisionArgs,
+  _meta: { ui: { visibility: ["model", "app"] } },
+});
+const READ_DECISION_BLOCKS_TOOL_DEFINITION = defineValibotMcpTool({
+  ...common,
+  name: "read_case_law_decision_blocks",
+  annotations: {
+    ...readOnlyAnnotations,
+    title: "Read case-law decision blocks",
+  },
+  description: `Widget-only decision AST and precomputed anchor streams, at most ${READER_PAGE_MAX_CHARS} JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.`,
+  inputSchema: readDecisionBlocksArgs,
+  _meta: { ui: { visibility: ["app"] } },
+});
+const PREVIEW_CITED_PROVISION_TOOL_DEFINITION = defineValibotMcpTool({
+  ...common,
+  name: "preview_cited_provision",
+  annotations: { ...readOnlyAnnotations, title: "Preview cited provision" },
+  description:
+    "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
+  inputSchema: previewProvisionArgs,
+  _meta: { ui: { visibility: ["app"] } },
+});
+
 const openTool: TypedMcpToolHandler<
   v.InferInput<typeof openDecisionOutput>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(openDecisionArgs, args);
+  const parsed = v.safeParse(
+    OPEN_DECISION_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
@@ -173,7 +219,10 @@ export const createReaderBlocksTool =
     withheldTextPolicy: ReaderWithheldTextPolicy,
   ): TypedMcpToolHandler<v.InferInput<typeof blocksDecisionOutput>> =>
   async ({ args, context }) => {
-    const parsed = v.safeParse(readDecisionBlocksArgs, args);
+    const parsed = v.safeParse(
+      READ_DECISION_BLOCKS_TOOL_DEFINITION.inputSchemaSource,
+      args,
+    );
     if (!parsed.success) {
       return validationErrorResult(parsed.issues);
     }
@@ -260,7 +309,10 @@ const blocksTool = createReaderBlocksTool(READER_WITHHELD_TEXT_POLICY);
 const previewTool: TypedMcpToolHandler<
   v.InferInput<typeof provisionPreviewOutput>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(previewProvisionArgs, args);
+  const parsed = v.safeParse(
+    PREVIEW_CITED_PROVISION_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
@@ -292,52 +344,12 @@ const previewTool: TypedMcpToolHandler<
   return toolDataResult(preview.value);
 };
 
-const common = {
-  consumesServices: true,
-  access: "read",
-  readClass: "public",
-  anonymized: { exposure: "passthrough" },
-  feature: "FEATURE_PUBLIC_LAW",
-  scope: "stella:read",
-} as const;
-const readOnlyAnnotations = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  openWorldHint: false,
-} as const;
-const DECISION_READER_TOOL_DEFINITIONS = [
-  defineValibotMcpTool({
-    ...common,
-    name: "open_case_law_decision",
-    annotations: { ...readOnlyAnnotations, title: "Open case-law decision" },
-    description:
-      "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
-    inputSchema: openDecisionArgs,
-    _meta: { ui: { visibility: ["model", "app"] } },
-  }),
-  defineValibotMcpTool({
-    ...common,
-    name: "read_case_law_decision_blocks",
-    annotations: {
-      ...readOnlyAnnotations,
-      title: "Read case-law decision blocks",
-    },
-    description: `Widget-only decision AST and precomputed anchor streams, at most ${READER_PAGE_MAX_CHARS} JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.`,
-    inputSchema: readDecisionBlocksArgs,
-    _meta: { ui: { visibility: ["app"] } },
-  }),
-  defineValibotMcpTool({
-    ...common,
-    name: "preview_cited_provision",
-    annotations: { ...readOnlyAnnotations, title: "Preview cited provision" },
-    description:
-      "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
-    inputSchema: previewProvisionArgs,
-    _meta: { ui: { visibility: ["app"] } },
-  }),
-] as const satisfies readonly McpToolDefinition[];
 export const DECISION_READER_TOOL_SET = defineMcpToolSet(
-  DECISION_READER_TOOL_DEFINITIONS,
+  [
+    OPEN_DECISION_TOOL_DEFINITION,
+    READ_DECISION_BLOCKS_TOOL_DEFINITION,
+    PREVIEW_CITED_PROVISION_TOOL_DEFINITION,
+  ] as const satisfies readonly McpToolDefinition[],
   {
     open_case_law_decision: openTool,
     read_case_law_decision_blocks: blocksTool,

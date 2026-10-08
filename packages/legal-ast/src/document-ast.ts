@@ -1,3 +1,4 @@
+// parser-output-unchanged: Validation actions are named for schema publication; accepted AST values are identical.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -586,6 +587,8 @@ export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
 
 const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
 
+const HTTPS_PROTOCOL = "https:";
+
 /**
  * An image address, and never image bytes.
  *
@@ -596,11 +599,15 @@ const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
  * The same check rejects every other scheme, so an address is always one
  * a reader can fetch over TLS.
  */
-const imageSrcSchema = v.pipe(
-  v.string(),
-  v.url(),
-  v.regex(/^[Hh][Tt][Tt][Pp][Ss]:/u, "Image src must be an https URL"),
+const isHttpsUrl = (src: string): boolean =>
+  URL.canParse(src) && new URL(src).protocol === HTTPS_PROTOCOL;
+
+const imageSrcHttpsCheck = v.check(
+  isHttpsUrl,
+  "Image src must be an https URL",
 );
+
+const imageSrcSchema = v.pipe(v.string(), v.url(), imageSrcHttpsCheck);
 
 /** A span of more than one cell. A span of one is the default, so it is
  * absent rather than written as 1. */
@@ -642,11 +649,13 @@ const paragraphNoteSchema = v.variant("type", [
 const paragraphNumberFinite = v.finite();
 
 /**
- * Actions JSON Schema cannot express. A JSON number is always finite, so a
- * converter publishes the plain number and the action still runs at runtime.
+ * Actions JSON Schema cannot express. A JSON number is always finite, and the
+ * https rule reads the parsed URL; a converter publishes the remaining number
+ * and URL string while both actions still run at runtime.
  */
 export const DOCUMENT_AST_RUNTIME_ONLY_ACTIONS = [
   paragraphNumberFinite,
+  imageSrcHttpsCheck,
 ] as const;
 
 const paragraphEntries = {

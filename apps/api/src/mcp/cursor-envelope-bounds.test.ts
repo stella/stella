@@ -30,6 +30,10 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
+import {
+  encodeReaderCursor,
+  readerVersion,
+} from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
@@ -118,6 +122,20 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   ),
   "default.read_content_across_matters.nextCursor": offsetCursor,
   "default.read_case_law_citations.nextCursor": idCursor,
+  "default.read_case_law_decision_blocks.content.nextCursor":
+    encodeReaderCursor({
+      decisionId: UUID,
+      version: readerVersion([]),
+      phase: "provisions",
+      offset: Number.MAX_SAFE_INTEGER,
+      blockOffset: Number.MAX_SAFE_INTEGER,
+      referenceCursor: encodePaginationCursor([
+        "9223372036854775807",
+        2_147_483_647,
+        "a".repeat(LIMITS.decisionReaderProvisionAnchorMaxChars),
+      ]),
+      batchDigest: readerVersion([]),
+    }),
   "default.search_legislation.nextCursor": statuteCursor,
   "default.read_statute.nextCursor": offsetCursor,
   "default.read_provision_history.nextCursor": encodePaginationCursor([
