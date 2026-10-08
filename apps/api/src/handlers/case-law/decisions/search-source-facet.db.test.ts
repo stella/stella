@@ -202,7 +202,7 @@ test.each([undefined, "cs", "en"])(
       capped.map(({ value, count }) => ({ value, count, label: null })),
     );
     const payload = {
-      headnotes: "included",
+      headnotes: "included" as const,
       facets: {
         courtYear: null,
         court: [],

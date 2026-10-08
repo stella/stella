@@ -39,12 +39,15 @@ describe("expanded case-law headnotes", () => {
   ])(
     "twenty rows fit the structured-content budget with explicit cuts",
     (text) => {
+      const snippet = "The court examines the right to compensation. ".repeat(
+        9,
+      );
       const page = {
         ...APP_SEARCH_FIXTURE,
         results: Array.from({ length: 20 }, (_, index) => ({
           ...first,
           decisionId: `decision-${index}`,
-          snippet: "The court examines the right to compensation. ".repeat(9),
+          snippet,
           headnote: { type: "present" as const, text, truncated: false },
         })),
       };
@@ -62,7 +65,7 @@ describe("expanded case-law headnotes", () => {
         );
         expect(row.headnote?.text.isWellFormed()).toBe(true);
         expect(row.appUrl).toBe(first.appUrl);
-        expect(row.snippet).toBe(page.results.at(0)?.snippet);
+        expect(row.snippet).toBe(snippet);
       }
     },
   );
@@ -129,6 +132,11 @@ describe("expanded case-law headnotes", () => {
   });
 
   test("short headnotes stay whole while longer rows share the remaining budget", () => {
+    const longHeadnote = {
+      type: "present" as const,
+      text: "A longer holding. ".repeat(200),
+      truncated: true,
+    };
     const page = {
       ...APP_SEARCH_FIXTURE,
       results: [
@@ -141,17 +149,9 @@ describe("expanded case-law headnotes", () => {
             truncated: false,
           },
         },
-        {
-          ...first,
-          headnote: {
-            type: "present" as const,
-            text: "A longer holding. ".repeat(200),
-            truncated: true,
-          },
-        },
+        { ...first, headnote: longHeadnote },
       ],
     };
-    const longHeadnote = { ...page.results.at(2)?.headnote };
     const result = boundCaseLawSearchHeadnotes(page);
     expect(result.results.at(0)?.headnote).toBeNull();
     expect(result.results.at(1)?.headnote).toEqual({
