@@ -661,6 +661,57 @@ describe("aggregate mutation route coverage", () => {
       expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
     });
 
+    test("only the final try property of Result.tryPromise is joined", () => {
+      const sources = setup();
+      sources.set(
+        module,
+        handlerModule({
+          imports:
+            'import { renewExample } from "@/api/services/example-lock";',
+          body: "await renewExample(options);",
+        }),
+      );
+      const callee = (members: string) =>
+        `import { Result } from "better-result"; ${lockImport} export const renewExample = async (options) => { await Result.tryPromise({ ${members} }); };`;
+      const locking = `try: async () => { ${acquisition} }`;
+      sources.set(service, callee(`...options, ${locking}`));
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+      for (const members of [
+        `${locking}, ...options`,
+        `${locking}, try: async () => {}`,
+        `${locking}, [key]: async () => {}`,
+      ]) {
+        sources.set(service, callee(members));
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+    });
+
+    test("methods and class members inside a callee are not joined", () => {
+      const sources = setup();
+      sources.set(
+        module,
+        handlerModule({
+          imports:
+            'import { renewExample } from "@/api/services/example-lock";',
+          body: "await renewExample(tx);",
+        }),
+      );
+      for (const detached of [
+        `const handlers = { async run() { ${acquisition} } };`,
+        `class Later { async run() { ${acquisition} } }`,
+      ]) {
+        sources.set(
+          service,
+          `${lockImport} export const renewExample = async (tx) => { ${detached} };`,
+        );
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+    });
+
     test("the helper two levels deep does not cover the route", () => {
       const sources = setup();
       sources.set(

@@ -1467,10 +1467,40 @@ const transactionMethodCredit = ({
     : undefined;
 };
 
+/** Static key of an object literal member; undefined for computed keys. */
+const staticPropertyKey = (member: ts.ObjectLiteralElementLike) => {
+  const name = member.name;
+  return name !== undefined &&
+    (ts.isIdentifier(name) ||
+      ts.isStringLiteral(name) ||
+      ts.isNumericLiteral(name))
+    ? name.text
+    : undefined;
+};
+
+/**
+ * Whether `property` is the final value of its key: it has a static key, and
+ * no later member is a spread, a computed key or the same key.
+ */
+const isFinalProperty = (property: ts.PropertyAssignment) => {
+  const key = staticPropertyKey(property);
+  const members = property.parent.properties;
+  return (
+    key !== undefined &&
+    members
+      .slice(members.indexOf(property) + 1)
+      .every(
+        (member) =>
+          !ts.isSpreadAssignment(member) &&
+          staticPropertyKey(member) !== undefined &&
+          staticPropertyKey(member) !== key,
+      )
+  );
+};
+
 /** A callback in a property of `Result.<method>({ ... })`, e.g. `try`. */
 const resultPropertyCredit = ({
   callback,
-  implementation,
   access,
 }: TransactionCallbackOptions): CalleeCallbackCredit => {
   const property = callback.parent;
@@ -1484,6 +1514,7 @@ const resultPropertyCredit = ({
   const options = property.parent;
   const call = options.parent;
   if (
+    !isFinalProperty(property) ||
     !ts.isCallExpression(call) ||
     call.arguments.at(0) !== options ||
     !ts.isPropertyAccessExpression(call.expression) ||
@@ -1493,7 +1524,7 @@ const resultPropertyCredit = ({
     return undefined;
   }
   const method = call.expression.name.text;
-  const name = property.name.getText(implementation.source);
+  const name = staticPropertyKey(property);
   const runner = JOINING_RUNNERS.calleeResultProperties.find(
     (item) => item.method === method && item.property === name,
   );
@@ -1540,7 +1571,13 @@ const awaitedAggregateNames = ({
     ) {
       calls.push(node);
     }
-    if (ts.isFunctionDeclaration(node)) {
+    if (
+      ts.isClassLike(node) ||
+      (ts.isFunctionLike(node) &&
+        !ts.isArrowFunction(node) &&
+        !ts.isFunctionExpression(node))
+    ) {
+      // Declarations, methods, accessors and classes are never joined here.
       return;
     }
     if (
