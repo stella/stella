@@ -302,15 +302,30 @@ export const aggregateLockBaseline = (
     `${a.file}:${a.fingerprint}`.localeCompare(`${b.file}:${b.fingerprint}`),
   );
 };
+/**
+ * A reviewed replacement of one existing baseline row by a changed acquisition
+ * (same lock, edited SQL or moved file). It never admits an additional
+ * acquisition: the replaced row must exist in the merge base and be gone now,
+ * and the new count may not exceed the replaced one.
+ */
+export type AggregateLockRekey = {
+  file: string;
+  from: string;
+  to: string;
+  fromFile?: string;
+  reason: string;
+};
 type AggregateLockBaselineOptions = {
   actual: readonly AggregateLockBaselineRow[];
   baseline: readonly AggregateLockBaselineRow[];
   previous?: readonly AggregateLockBaselineRow[];
+  rekeys?: readonly AggregateLockRekey[];
 };
 export const aggregateLockBaselineProblems = ({
   actual,
   baseline,
   previous,
+  rekeys = [],
 }: AggregateLockBaselineOptions) => {
   const problems: string[] = [];
   const keyed = (rows: readonly AggregateLockBaselineRow[]) =>
@@ -335,8 +350,27 @@ export const aggregateLockBaselineProblems = ({
   }
   if (previous) {
     const old = keyed(previous);
+    const usedSources = new Set<string>();
+    const replaces = (key: string, row: AggregateLockBaselineRow) =>
+      rekeys.some((rekey) => {
+        const source = `${rekey.fromFile ?? rekey.file}:${rekey.from}`;
+        const replaced = old.get(source);
+        if (
+          `${rekey.file}:${rekey.to}` !== key ||
+          !rekey.reason.trim() ||
+          replaced === undefined ||
+          accepted.has(source) ||
+          usedSources.has(source) ||
+          row.count > replaced.count
+        ) {
+          return false;
+        }
+        usedSources.add(source);
+        return true;
+      });
     for (const [key, row] of accepted) {
-      if (!old.has(key) || row.count > (old.get(key)?.count ?? 0)) {
+      const grew = !old.has(key) || row.count > (old.get(key)?.count ?? 0);
+      if (grew && !replaces(key, row)) {
         problems.push(`Aggregate lock baseline may only shrink: ${key}`);
       }
     }
