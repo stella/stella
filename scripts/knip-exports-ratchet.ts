@@ -394,7 +394,12 @@ const runCheck = (): number => {
   const diffs = diffSummaries(current, baseline);
   const symbols = collectIssueSymbols(report);
 
-  for (const diff of diffs.filter(({ status }) => status === "dropped")) {
+  // A workspace whose total dropped while one of its files rose is a
+  // regression, not an improvement: `--write` would record that file's rise.
+  for (const diff of diffs.filter(
+    ({ status, regressedFiles }) =>
+      status === "dropped" && regressedFiles.length === 0,
+  )) {
     console.log(
       `knip dead exports: ${diff.workspace} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to lock it in.`,
     );
