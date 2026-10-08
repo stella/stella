@@ -53,6 +53,10 @@ export const SANCTIONS_PUBLIC_UNAVAILABLE_REASONS = [
 export type SanctionsUnavailableReason =
   (typeof SANCTIONS_PUBLIC_UNAVAILABLE_REASONS)[number];
 
+/** The reasons a signed-in screening can give: never "warming". */
+export type SanctionsSignedInUnavailableReason =
+  (typeof SANCTIONS_UNAVAILABLE_REASONS)[number];
+
 // Value lists of the matcher's closed vocabularies, for output schemas.
 export const SANCTIONS_SOURCE_IDS = [
   "eu",

@@ -35,6 +35,7 @@ import type {
   SanctionsClassification,
   SanctionsPendingUpdateCode,
   SanctionsScreeningStatus,
+  SanctionsSignedInUnavailableReason,
   SanctionsUnavailableReason,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
@@ -167,6 +168,39 @@ export type SanctionsScreening = {
   cutoff: number;
   lists: SanctionsListOutcome[];
 };
+
+type SignedInListOutcome =
+  | Exclude<SanctionsListOutcome, { status: "unavailable" }>
+  | (Omit<
+      Extract<SanctionsListOutcome, { status: "unavailable" }>,
+      "reason"
+    > & {
+      reason: SanctionsSignedInUnavailableReason;
+    });
+
+/** A screening as signed-in surfaces receive it: no list is ever "warming". */
+export type SignedInSanctionsScreening = Omit<SanctionsScreening, "lists"> & {
+  lists: SignedInListOutcome[];
+};
+
+const isSignedInOutcome = (
+  list: SanctionsListOutcome,
+): list is SignedInListOutcome => list.reason !== "warming";
+
+/**
+ * Only the public matcher loads editions in the background; a signed-in
+ * screening reads its index directly, so a warming list here is a defect.
+ */
+export const signedInScreening = (
+  screening: SanctionsScreening,
+): SignedInSanctionsScreening => ({
+  ...screening,
+  lists: screening.lists.map((list) =>
+    isSignedInOutcome(list)
+      ? list
+      : panic("A signed-in sanctions screening reported a warming list"),
+  ),
+});
 
 const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
