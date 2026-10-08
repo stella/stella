@@ -7,6 +7,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, test } from "bun:test";
 
 import {
+  createMicrosoftProfileMapper,
   createSocialIdentityValidation,
   isVerifiedMicrosoftIdentity,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
@@ -340,6 +341,96 @@ describe("social identity policy", () => {
         });
         expect(Boolean(account)).toBe(allowed);
       }
+    },
+  );
+
+  test("maps Microsoft email proof through the identity predicate", () => {
+    const map = createMicrosoftProfileMapper(tenantId);
+    const mapped = (claims: Record<string, unknown>) =>
+      map(asTestRaw<MicrosoftEntraIDProfile>({ ...profile, ...claims }))
+        .emailVerified;
+    expect(mapped({ xms_edov: true })).toBe(true);
+    expect(mapped({ email_verified: true })).toBe(true);
+    expect(mapped({ verified_primary_email: [email.toUpperCase()] })).toBe(
+      true,
+    );
+    expect(mapped({})).toBe(false);
+    expect(mapped({ xms_edov: true, email_verified: false })).toBe(false);
+    expect(mapped({ xms_edov: true, email: undefined })).toBe(false);
+    expect(
+      createMicrosoftProfileMapper("00000000-0000-4000-8000-000000000002")(
+        asTestRaw<MicrosoftEntraIDProfile>({ ...profile, xms_edov: true }),
+      ).emailVerified,
+    ).toBe(false);
+  });
+
+  test.each([false, true])(
+    "a linked Microsoft sign-in verifies the local email only on proof: %s",
+    async (proven) => {
+      const claims = {
+        ...profile,
+        oid: "provider-account",
+        ...(proven ? { xms_edov: true } : {}),
+      };
+      const auth = betterAuth({
+        baseURL: "http://localhost:3001",
+        secret: "test-secret-that-is-long-enough-for-better-auth",
+        database: memoryAdapter({
+          user: [],
+          session: [],
+          account: [],
+          verification: [],
+        }),
+        user: {
+          validateUserInfo: createSocialIdentityValidation({
+            tenantId,
+            requireMicrosoftVerifiedEmailClaim: false,
+            warn: () => {},
+          }),
+        },
+        account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
+        socialProviders: {
+          microsoft: {
+            clientId: "test-client",
+            clientSecret: "test-secret",
+            tenantId,
+            verifyIdToken: async () => true,
+            // An ID-token sign-in skips `mapProfileToUser`, so apply the
+            // production mapper here the way the code flow does.
+            getUserInfo: async () => {
+              const data = asTestRaw<MicrosoftEntraIDProfile>(claims);
+              return {
+                user: {
+                  name: "Account",
+                  email,
+                  ...createMicrosoftProfileMapper(tenantId)(data),
+                },
+                data,
+              };
+            },
+          },
+        },
+      });
+      const context = await auth.$context;
+      const local = await context.internalAdapter.createUser({
+        email,
+        name: "Account",
+        emailVerified: false,
+      });
+      await context.internalAdapter.linkAccount({
+        userId: local.id,
+        providerId: "microsoft",
+        accountId: "provider-account",
+      });
+
+      const response = await auth.api.signInSocial({
+        body: { provider: "microsoft", idToken: { token: "test-credential" } },
+        asResponse: true,
+      });
+
+      expect(response.ok).toBe(true);
+      const user = await context.internalAdapter.findUserById(local.id);
+      expect(user?.emailVerified).toBe(proven);
     },
   );
 });

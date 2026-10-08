@@ -133,10 +133,11 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
+  createMicrosoftProfileMapper,
   createSocialIdentityValidation,
-  isVerifiedMicrosoftIdentity,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
 } from "@/api/lib/auth/social-identity-policy";
+import { socialSignInOutcomePlugin } from "@/api/lib/auth/social-sign-in-outcome";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -1728,15 +1729,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
               tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-              mapProfileToUser: env.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM
-                ? (profile) => ({
-                    emailVerified: isVerifiedMicrosoftIdentity({
-                      profile,
-                      email: profile.email,
-                      tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-                    }),
-                  })
-                : undefined,
+              mapProfileToUser: createMicrosoftProfileMapper(
+                env.MICROSOFT_AUTH_TENANT_ID,
+              ),
             },
           }
         : {}),
@@ -1856,6 +1851,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
+      // After the two-factor redirect, so it counts the response the browser
+      // actually receives.
+      socialSignInOutcomePlugin,
       organizationPlugin,
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(

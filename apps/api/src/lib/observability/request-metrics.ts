@@ -613,3 +613,39 @@ export const emitActionResponseOversizeMetric = (
     [ACTION_RESPONSE_OVERSIZE_METRIC]: 1,
   });
 };
+
+export const SOCIAL_SIGN_IN_OUTCOMES = [
+  "completed",
+  "account_not_linked",
+  "identity_not_allowed",
+  "failed",
+] as const;
+
+export type SocialSignInOutcome = (typeof SOCIAL_SIGN_IN_OUTCOMES)[number];
+
+/**
+ * One social sign-in callback, counted by outcome. The provider rides along as
+ * a property, not a dimension, so the metric count stays at one per outcome.
+ * An alarm can watch `account_not_linked` directly and the failure share
+ * against `completed`. No email, user or account id is written.
+ */
+export const emitSocialSignInOutcome = (
+  outcome: SocialSignInOutcome,
+  provider: string,
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["outcome"]],
+          Metrics: [{ Name: "SocialSignInOutcome", Unit: "Count" }],
+        },
+      ],
+    },
+    outcome,
+    provider,
+    SocialSignInOutcome: 1,
+  });
+};

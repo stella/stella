@@ -1,3 +1,4 @@
+import type { MicrosoftEntraIDProfile } from "@better-auth/core/social-providers";
 import type { BetterAuthOptions } from "better-auth";
 
 const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
@@ -76,6 +77,22 @@ export const isVerifiedMicrosoftIdentity = ({
       ),
   );
 };
+
+/**
+ * Microsoft profile mapping: the email counts as proven only when the same
+ * predicate the identity validation applies accepts it. Better Auth's own
+ * mapping ignores `xms_edov`, the claim work accounts usually carry, so
+ * without this a proven work account is stored unverified, and an already
+ * linked account never upgrades the local flag on later sign-ins.
+ */
+export const createMicrosoftProfileMapper =
+  (tenantId: string | undefined) => (profile: MicrosoftEntraIDProfile) => ({
+    emailVerified: isVerifiedMicrosoftIdentity({
+      profile,
+      email: profile.email,
+      tenantId,
+    }),
+  });
 
 type IdentityValidation = NonNullable<
   NonNullable<BetterAuthOptions["user"]>["validateUserInfo"]
