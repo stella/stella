@@ -2761,7 +2761,7 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "216c562d37fb2bbdd5017636c8841cbff039348d75c2a61817a15afe12b75252",
+    "fingerprint": "3791f1529268b0a386f1464af6145b76b67d2ef1f99d9a38030759979a24376a",
     "count": 1,
     "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
@@ -2770,12 +2770,6 @@
     "fingerprint": "4095af46fc431287eb82618839a58fcf8c1ee2eb7e8ddb0d703a30f0884f3dd0",
     "count": 1,
     "reason": "Existing row lock in native extraction repair; the edited batch query around it changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "4f95336f56a397d0b25c2de48bbd4c31d8817549643074bd2e9f7a2c12cd33eb",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
@@ -2818,6 +2812,12 @@
     "fingerprint": "ec268b47b791a0749ef19cd6f7a119bbdec04ac7a5733476cd5c05cd01f03e72",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "fingerprint": "fd6ca2f1397f3abcc259279092d267e04c0ed5e6b98bef8567452efc8a588e91",
+    "count": 1,
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-request.ts",

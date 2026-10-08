@@ -20,13 +20,13 @@
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "from": "219f49f9c4e988d1d414facd62afa2e6ffa6fd507ea6df52631bbf66a7c723fa",
-    "to": "216c562d37fb2bbdd5017636c8841cbff039348d75c2a61817a15afe12b75252",
+    "to": "fd6ca2f1397f3abcc259279092d267e04c0ed5e6b98bef8567452efc8a588e91",
     "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "from": "0f9bc85e5e3d9815f0ea749858c3996d508ef170fdafab04396de022c300b947",
-    "to": "4f95336f56a397d0b25c2de48bbd4c31d8817549643074bd2e9f7a2c12cd33eb",
+    "to": "3791f1529268b0a386f1464af6145b76b67d2ef1f99d9a38030759979a24376a",
     "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {

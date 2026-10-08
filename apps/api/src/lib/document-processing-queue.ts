@@ -215,6 +215,29 @@ export const storeOcrSearchablePdfDerivative = async ({
   });
 };
 
+type RootTransaction = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
+
+/** Locks a run's organization and matter first; false when either is gone. */
+const lockRunParents = async (
+  tx: RootTransaction,
+  {
+    organizationId,
+    workspaceId,
+  }: {
+    organizationId: SafeId<"organization">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<boolean> => {
+  const parents = await lockForWrite(tx, {
+    organizationIds: [organizationId],
+    workspaceIds: [workspaceId],
+  });
+  return (
+    parents.organizationIds.has(organizationId) &&
+    parents.workspaceIds.has(workspaceId)
+  );
+};
+
 /**
  * Builds and stores the run's cached searchable PDF.
  *
@@ -498,14 +521,7 @@ export const persistOcrProjection = async ({
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
   await database.transaction(async (tx) => {
-    const parents = await lockForWrite(tx, {
-      organizationIds: [run.organizationId],
-      workspaceIds: [run.workspaceId],
-    });
-    if (
-      !parents.organizationIds.has(run.organizationId) ||
-      !parents.workspaceIds.has(run.workspaceId)
-    ) {
+    if (!(await lockRunParents(tx, run))) {
       return "source_cancelled";
     }
     const lockedRows = await tx
@@ -866,14 +882,7 @@ export const processDocumentProcessingRun = async (
       return null;
     }
 
-    const parents = await lockForWrite(tx, {
-      organizationIds: [runContext.organizationId],
-      workspaceIds: [runContext.workspaceId],
-    });
-    if (
-      !parents.organizationIds.has(runContext.organizationId) ||
-      !parents.workspaceIds.has(runContext.workspaceId)
-    ) {
+    if (!(await lockRunParents(tx, runContext))) {
       return null;
     }
 
@@ -1480,8 +1489,6 @@ const isSameNativeExtractionSource = (
   field.entityVersionId === candidate.entityVersionId &&
   field.content.id === candidate.content.id &&
   field.content.sha256Hex === candidate.content.sha256Hex;
-
-type RootTransaction = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
 
 /** Parents first: candidates whose organization or matter is gone drop out. */
 const lockLiveNativeCandidates = async (
