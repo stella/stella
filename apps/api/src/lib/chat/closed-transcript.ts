@@ -45,9 +45,8 @@ type BuildClosedTranscriptOptions = {
   onReasoningDropped?: (drop: ReplayDrop) => void;
 };
 
-const provenanceOf = (value: unknown): ReasoningProvenance | undefined => {
-  return isReasoningProvenance(value) ? value : undefined;
-};
+const provenanceOf = (value: unknown): ReasoningProvenance | undefined =>
+  isReasoningProvenance(value) ? value : undefined;
 
 /** Reorders each step's results before the next model turn, fills interrupted
  * calls with a failed result, and retains only explicitly compatible reasoning.
@@ -101,9 +100,15 @@ export const buildClosedTranscript = ({
         ...result,
         toolCalls: result.toolCalls.map((call) => {
           const metadata = call.metadata;
-          if (!isRecord(metadata) || metadata["thoughtSignature"] === undefined)
+          if (
+            !isRecord(metadata) ||
+            metadata["thoughtSignature"] === undefined
+          ) {
             return call;
-          if (accepts(metadata["reasoningProvenance"])) return call;
+          }
+          if (accepts(metadata["reasoningProvenance"])) {
+            return call;
+          }
           const {
             thoughtSignature: _signature,
             reasoningProvenance: _provenance,
@@ -133,23 +138,39 @@ export const buildClosedTranscript = ({
       }
     }
   }
+  return v.parse(
+    closedTranscriptSchema,
+    closeToolCalls(paired, target.provider),
+  );
+};
+
+const closeToolCalls = (
+  messages: readonly ModelMessage[],
+  provider: TanStackAIProvider,
+) => {
   const results = new Map<string, ModelMessage>();
   const calls = new Set<string>();
   const nativeCalls = new Set<string>();
   const embeddedResults = new Map<string, ModelMessage>();
-  for (const message of paired) {
+  for (const message of messages) {
     if (message.role === "tool") {
-      if (message.toolCallId === undefined)
+      if (message.toolCallId === undefined) {
         panic("Tool result lacks a call id");
-      if (results.has(message.toolCallId))
+      }
+      if (results.has(message.toolCallId)) {
         panic("Tool call has multiple results");
+      }
       results.set(message.toolCallId, message);
     }
     for (const call of message.toolCalls ?? []) {
-      if (calls.has(call.id)) panic("Transcript has repeated tool call ids");
+      if (calls.has(call.id)) {
+        panic("Transcript has repeated tool call ids");
+      }
       calls.add(call.id);
       const nativeMetadata = getProviderExecutedMetadata(call);
-      if (nativeMetadata === null) continue;
+      if (nativeMetadata === null) {
+        continue;
+      }
       const anthropic = nativeMetadata["anthropic"];
       if (
         !isRecord(anthropic) ||
@@ -162,7 +183,9 @@ export const buildClosedTranscript = ({
       }
       nativeCalls.add(call.id);
       const content = JSON.stringify(anthropic["result"]);
-      if (content === undefined) panic("Native tool result is not JSON data");
+      if (content === undefined) {
+        panic("Native tool result is not JSON data");
+      }
       embeddedResults.set(call.id, {
         role: "tool",
         toolCallId: call.id,
@@ -171,18 +194,23 @@ export const buildClosedTranscript = ({
     }
   }
   for (const id of results.keys()) {
-    if (!calls.has(id)) panic("Tool result has no matching call");
+    if (!calls.has(id)) {
+      panic("Tool result has no matching call");
+    }
   }
   const closed: ModelMessage[] = [];
-  for (const message of paired) {
-    if (message.role === "tool") continue;
+  for (const message of messages) {
+    if (message.role === "tool") {
+      continue;
+    }
     closed.push(
-      target.provider !== "anthropic" && message.toolCalls !== undefined
+      provider !== "anthropic" && message.toolCalls !== undefined
         ? {
             ...message,
             toolCalls: message.toolCalls.map((call) => {
-              if (!nativeCalls.has(call.id) || !isRecord(call.metadata))
+              if (!nativeCalls.has(call.id) || !isRecord(call.metadata)) {
                 return call;
+              }
               const {
                 providerExecuted: _providerExecuted,
                 anthropic: _anthropic,
@@ -199,7 +227,9 @@ export const buildClosedTranscript = ({
     for (const call of message.toolCalls ?? []) {
       // Anthropic emits both native blocks from the embedded metadata. A
       // separate tool message would add a second, ordinary tool result.
-      if (nativeCalls.has(call.id) && target.provider === "anthropic") continue;
+      if (nativeCalls.has(call.id) && provider === "anthropic") {
+        continue;
+      }
       closed.push(
         embeddedResults.get(call.id) ??
           results.get(call.id) ?? {
@@ -213,5 +243,5 @@ export const buildClosedTranscript = ({
       );
     }
   }
-  return v.parse(closedTranscriptSchema, closed);
+  return closed;
 };

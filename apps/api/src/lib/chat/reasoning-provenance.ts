@@ -122,13 +122,13 @@ export const stampReasoningProvenance = <
     }
     const previous =
       previousThinking.find(
-        (previous) =>
+        (candidate) =>
           (part.signature !== undefined &&
-            previous.signature === part.signature) ||
-          (part.stepId !== undefined && previous.stepId === part.stepId) ||
+            candidate.signature === part.signature) ||
+          (part.stepId !== undefined && candidate.stepId === part.stepId) ||
           (part.signature === undefined &&
-            previous.signature === undefined &&
-            previous.content === part.content),
+            candidate.signature === undefined &&
+            candidate.content === part.content),
       ) ??
       (part.signature === undefined && ownedPrevious?.signature === undefined
         ? ownedPrevious

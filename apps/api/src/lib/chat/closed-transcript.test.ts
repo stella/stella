@@ -176,8 +176,9 @@ describe("closed provider transcript", () => {
         const capabilities = getModelReasoningCapabilities(fromModel);
         const provenance = capabilities?.replayCompatibility.at(0);
         expect(provenance).toBeDefined();
-        if (provenance === undefined)
+        if (provenance === undefined) {
           throw new TypeError("Fixture needs a replayable model");
+        }
         const thinking = {
           content: "reasoning",
           signature:
