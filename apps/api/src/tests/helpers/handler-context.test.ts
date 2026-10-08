@@ -79,9 +79,9 @@ describe("handler contexts require explicit collaborators", () => {
         scopedDb: NO_DB,
       });
       // The sentinel panics synchronously, before the callback can run.
-      expect(async () => context[type](async () => undefined)).toThrow(
-        "NO_DB path accessed the database",
-      );
+      expect(() => {
+        void context[type](async () => undefined);
+      }).toThrow("NO_DB path accessed the database");
     },
   );
 
