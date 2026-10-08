@@ -256,6 +256,6 @@ describe("prepared showcase page", () => {
     const page = prepareGeneratedVisual(
       v.parse(generatedVisualInputSchema, { ...fixture, html }),
     ).unwrap();
-    expect<unknown>(page).toEqual(prepared);
+    expect(page).toEqual(prepared);
   });
 });
