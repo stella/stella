@@ -135,6 +135,10 @@
     "seconds": 0.262185,
     "source": "estimated"
   },
+  "scripts/migration-roles.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/record-provider-cassettes.test.ts": {
     "seconds": 1.686619,
     "source": "estimated"
@@ -1815,6 +1819,10 @@
     "seconds": 8.92675,
     "source": "estimated"
   },
+  "src/handlers/case-law/research/columns-suggest-prompt.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/research/organization-columns.db.test.ts": {
     "seconds": 6.2,
     "source": "measured"
@@ -1877,6 +1885,10 @@
   },
   "src/handlers/chat/attempt-answer.test.ts": {
     "seconds": 0.460327,
+    "source": "estimated"
+  },
+  "src/handlers/chat/case-law-prompt-invariants.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/chat/chat-message-parts.test.ts": {
@@ -2309,6 +2321,10 @@
   },
   "src/handlers/chat/tools/provider-null-normalization.property.test.ts": {
     "seconds": 0.390357,
+    "source": "estimated"
+  },
+  "src/handlers/chat/tools/registry-adapter/case-law-text-invariants.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/chat/tools/registry-adapter/follow-ups.test.ts": {
@@ -4255,6 +4271,14 @@
     "seconds": 1.429507,
     "source": "estimated"
   },
+  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-response-parity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/feature-access/admission.test.ts": {
     "seconds": 0.304566,
     "source": "estimated"
@@ -4313,6 +4337,10 @@
   },
   "src/lib/auth/social-identity-policy.test.ts": {
     "seconds": 0.541877,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-link-hint.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/auth/social-sign-in-outcome.test.ts": {
@@ -6123,6 +6151,10 @@
     "seconds": 4.45203,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/corpus-ast-cache.test.ts": {
     "seconds": 0.114596,
     "source": "estimated"
@@ -6679,6 +6711,10 @@
     "seconds": 1.679275,
     "source": "estimated"
   },
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/lists/sanctions/refresh.db.test.ts": {
     "seconds": 3.55749,
     "source": "estimated"
@@ -6953,6 +6989,10 @@
   },
   "src/lib/oauth-organization-picker.db.test.ts": {
     "seconds": 3.88013,
+    "source": "estimated"
+  },
+  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/oauth-ui-fragment.test.ts": {
@@ -8927,6 +8967,10 @@
     "seconds": 0.895416,
     "source": "estimated"
   },
+  "src/tests/helpers/event-loop-lag-probe.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/tests/helpers/fake-s3.test.ts": {
     "seconds": 0.899616,
     "source": "estimated"
@@ -8945,6 +8989,10 @@
   },
   "src/tests/helpers/test-pki.test.ts": {
     "seconds": 0.364202,
+    "source": "estimated"
+  },
+  "src/tests/helpers/test-state.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/helpers/transaction-interleaving.postgres.test.ts": {
@@ -9257,38 +9305,6 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
-    "source": "estimated"
-  },
-  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/auth/email-otp-response-parity.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/auth/social-link-hint.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/handlers/case-law/research/columns-suggest-prompt.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/handlers/chat/case-law-prompt-invariants.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/handlers/chat/tools/registry-adapter/case-law-text-invariants.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   }
 }

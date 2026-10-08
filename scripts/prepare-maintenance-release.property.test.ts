@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import {
   existsSync,
@@ -22,6 +14,7 @@ import nodePath from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
 import { parseChangesetEntry } from "./changeset-entry";
 import {
@@ -94,17 +87,8 @@ const readReleaseDates = (root: string): unknown =>
 // The reads resolve their token once, falling back to spawning `gh auth token`
 // when no variable holds one. Fetch is stubbed here, so a fixed token keeps the
 // first read from waiting on the CLI.
-const previousGhToken = process.env["GH_TOKEN"];
-beforeAll(() => {
-  process.env["GH_TOKEN"] = "test-token";
-});
-afterAll(() => {
-  if (previousGhToken === undefined) {
-    delete process.env["GH_TOKEN"];
-  } else {
-    process.env["GH_TOKEN"] = previousGhToken;
-  }
-});
+const testState = createTestState({ file: import.meta.path, config: {} });
+testState.setEnv("GH_TOKEN", "test-token");
 
 afterEach(() => {
   for (const root of roots.splice(0)) {
