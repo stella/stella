@@ -25,7 +25,12 @@ type VerifiedClientLocation =
 
 type VerifiedClientUrl = VerifiedClientLocation & {
   readonly source: HttpsUrl;
-  readonly brand: Exclude<VerifiedOAuthClientBrand, "stella">;
+  /**
+   * The product, when the location identifies the client itself. A shared
+   * platform redirect that serves connectors anyone can publish proves the
+   * platform, not the publisher, so it verifies without naming a product.
+   */
+  readonly brand: Exclude<VerifiedOAuthClientBrand, "stella"> | null;
 };
 
 const CLAUDE_DOCS =
@@ -62,24 +67,24 @@ const VERIFIED_THIRD_PARTY_REDIRECTS: readonly VerifiedClientUrl[] = [
   {
     exact: "https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect",
     source: COPILOT_DOCS,
-    brand: "microsoft_copilot",
+    brand: null,
   },
   // Copilot Studio and Power Platform connectors (Microsoft-assigned suffix).
   {
     exact: "https://global.consent.azure-apim.net/redirect",
     source: POWER_PLATFORM_DOCS,
-    brand: "copilot_studio",
+    brand: null,
   },
   {
     oneSegmentUnder: "https://global.consent.azure-apim.net/redirect/",
     source: POWER_PLATFORM_DOCS,
-    brand: "copilot_studio",
+    brand: null,
   },
   // Gemini Enterprise.
   {
     exact: "https://vertexaisearch.cloud.google.com/oauth-redirect",
     source: GEMINI_ENTERPRISE_DOCS,
-    brand: "gemini_enterprise",
+    brand: null,
   },
 ];
 
@@ -174,7 +179,7 @@ const brandOfLocation = (
   url: URL | null,
   entries: readonly VerifiedClientUrl[],
   verifiedOrigins: readonly string[],
-): VerifiedOAuthClientBrand | null => {
+): VerifiedOAuthClientBrand | "unbranded" | null => {
   if (!url) {
     return null;
   }
@@ -185,7 +190,11 @@ const brandOfLocation = (
   ) {
     return "stella";
   }
-  return findVerifiedUrl(url, entries)?.brand ?? null;
+  const entry = findVerifiedUrl(url, entries);
+  if (!entry) {
+    return null;
+  }
+  return entry.brand ?? "unbranded";
 };
 
 type OAuthConsentClient = Pick<
@@ -233,7 +242,11 @@ export const getOAuthConsentInfo = (
     clientIdHost: clientUrl?.host ?? null,
     unverified,
     verifiedBrand:
-      !unverified && brands.size === 1 && onlyBrand !== undefined
+      !unverified &&
+      brands.size === 1 &&
+      onlyBrand !== undefined &&
+      onlyBrand !== null &&
+      onlyBrand !== "unbranded"
         ? onlyBrand
         : null,
   };

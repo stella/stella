@@ -197,15 +197,6 @@ describe("OAuth consent app details", () => {
       ["https://claude.ai/api/mcp/auth_callback", "claude"],
       ["https://chatgpt.com/connector_platform_oauth_redirect", "chatgpt"],
       ["https://chatgpt.com/connector/oauth/abc123", "chatgpt"],
-      [
-        "https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect",
-        "microsoft_copilot",
-      ],
-      ["https://global.consent.azure-apim.net/redirect/abc", "copilot_studio"],
-      [
-        "https://vertexaisearch.cloud.google.com/oauth-redirect",
-        "gemini_enterprise",
-      ],
       ["https://stella.example/callback", "stella"],
     ] as const) {
       expect(brandOf({ redirectUris: [redirectUri] })).toBe(brand);
@@ -258,6 +249,27 @@ describe("OAuth consent app details", () => {
           verifiedBrand: null,
         });
       }
+    }
+  });
+
+  test("a shared platform redirect verifies without naming a product", () => {
+    for (const redirectUri of [
+      "https://global.consent.azure-apim.net/redirect",
+      "https://global.consent.azure-apim.net/redirect/independent-connector-1",
+      "https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect",
+      "https://vertexaisearch.cloud.google.com/oauth-redirect",
+    ]) {
+      expect(
+        getOAuthConsentInfo(
+          {
+            clientId: "example-client",
+            name: "Copilot Studio",
+            redirectUris: [redirectUri],
+            clientDiscoveryId: null,
+          },
+          origins,
+        ),
+      ).toMatchObject({ unverified: false, verifiedBrand: null });
     }
   });
 

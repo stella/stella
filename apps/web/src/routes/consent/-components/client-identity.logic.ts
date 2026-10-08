@@ -9,9 +9,6 @@ const VERIFIED_CLIENT_IDENTITY = {
   claude_code: { name: "Claude Code", publisher: "Anthropic" },
   chatgpt: { name: "ChatGPT", publisher: "OpenAI" },
   codex: { name: "Codex", publisher: "OpenAI" },
-  microsoft_copilot: { name: "Microsoft 365 Copilot", publisher: "Microsoft" },
-  copilot_studio: { name: "Copilot Studio", publisher: "Microsoft" },
-  gemini_enterprise: { name: "Gemini Enterprise", publisher: "Google" },
 } as const satisfies Record<
   VerifiedOAuthClientBrand,
   { name: string; publisher: string }

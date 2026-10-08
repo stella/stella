@@ -41,22 +41,7 @@ const OpenAiMark = ({ className }: MarkProps) => (
   </svg>
 );
 
-const BRANDS_WITH_MARK = new Set<VerifiedOAuthClientBrand>([
-  "stella",
-  "claude",
-  "claude_code",
-  "chatgpt",
-  "codex",
-]);
-
-/** Whether a mark ships for this brand; callers show an initial otherwise. */
-export const hasVerifiedClientMark = (brand: VerifiedOAuthClientBrand) =>
-  BRANDS_WITH_MARK.has(brand);
-
-/**
- * The mark shown for a verified client. Check `hasVerifiedClientMark` first:
- * brands without a shipped mark render nothing.
- */
+/** The publisher's mark for a verified client. */
 export const VerifiedClientMark = ({
   brand,
   className,
@@ -73,10 +58,6 @@ export const VerifiedClientMark = ({
       return <OpenAiMark className={cn("text-foreground", className)} />;
     case "stella":
       return <StellaMark className={className} />;
-    case "microsoft_copilot":
-    case "copilot_studio":
-    case "gemini_enterprise":
-      return null;
     default:
       brand satisfies never;
       return panic("Unhandled verified client brand");

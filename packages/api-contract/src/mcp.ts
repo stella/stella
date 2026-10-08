@@ -116,9 +116,6 @@ export const VERIFIED_OAUTH_CLIENT_BRANDS = [
   "claude_code",
   "chatgpt",
   "codex",
-  "microsoft_copilot",
-  "copilot_studio",
-  "gemini_enterprise",
 ] as const;
 
 export type VerifiedOAuthClientBrand =
