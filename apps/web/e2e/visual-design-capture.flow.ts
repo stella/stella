@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import * as v from "valibot";
 
@@ -87,8 +87,8 @@ const captureVisualDesign = async ({
   const guest = page.frameLocator(selector).frameLocator("iframe");
   const caption = outer.locator("xpath=ancestor::section[1]").locator("header");
   const chart = guest.locator("#chart");
-  const chartViewportRatio = async () => {
-    const bounds = await chart.boundingBox();
+  const viewportRatio = async (locator: Locator) => {
+    const bounds = await locator.boundingBox();
     const viewport = page.viewportSize();
     if (!bounds || !viewport) {
       return 0;
@@ -104,6 +104,24 @@ const captureVisualDesign = async ({
         Math.max(bounds.y, 0),
     );
     return (width * height) / (bounds.width * bounds.height);
+  };
+  const alignGuestSection = async (sectionSelector: string) => {
+    const offset = await guest
+      .locator(sectionSelector)
+      .evaluate((element) => element.getBoundingClientRect().top);
+    const positioned = await outer.evaluate((element, sectionOffset) => {
+      const viewport = element.closest('[data-slot="scroll-area-viewport"]');
+      if (viewport === null) {
+        return false;
+      }
+      viewport.scrollTop +=
+        element.getBoundingClientRect().top +
+        sectionOffset -
+        viewport.getBoundingClientRect().top -
+        16;
+      return true;
+    }, offset);
+    expect(positioned, "generated view has a host scroll viewport").toBe(true);
   };
   const prepareCapture = async () => {
     await guest.locator("html").evaluate(async () => {
@@ -149,7 +167,7 @@ const captureVisualDesign = async ({
   );
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "light");
   await prepareCapture();
-  await expect.poll(chartViewportRatio).toBeGreaterThanOrEqual(0.25);
+  await expect.poll(() => viewportRatio(chart)).toBeGreaterThanOrEqual(0.25);
   await snap("visual-design-light-desktop", { waitFor: selector });
 
   // Change the preference in place: the existing chart must repaint without
@@ -162,7 +180,7 @@ const captureVisualDesign = async ({
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "dark");
   await expect(outer).toHaveAttribute("src", initialSrc ?? "");
   await prepareCapture();
-  await expect.poll(chartViewportRatio).toBeGreaterThanOrEqual(0.25);
+  await expect.poll(() => viewportRatio(chart)).toBeGreaterThanOrEqual(0.25);
   await snap("visual-design-dark-desktop", { waitFor: selector });
 
   await page.evaluate((key) => {
@@ -178,24 +196,15 @@ const captureVisualDesign = async ({
   await snap("visual-design-light-mobile", { waitFor: selector });
   // The wrapping statistics can put the chart below the mobile overview.
   // Capture its own viewport as well so the palette and labels are reviewable.
-  const chartOffset = await chart.evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
-  const positionedChart = await outer.evaluate((element, offset) => {
-    const viewport = element.closest('[data-slot="scroll-area-viewport"]');
-    if (viewport === null) {
-      return false;
-    }
-    viewport.scrollTop +=
-      element.getBoundingClientRect().top +
-      offset -
-      viewport.getBoundingClientRect().top -
-      16;
-    return true;
-  }, chartOffset);
-  expect(positionedChart).toBe(true);
-  await expect.poll(chartViewportRatio).toBeGreaterThanOrEqual(0.6);
+  await alignGuestSection("#chart");
+  await expect.poll(() => viewportRatio(chart)).toBeGreaterThanOrEqual(0.6);
   await snap("visual-design-light-mobile-chart", { waitFor: selector });
+  await alignGuestSection("#ranking");
+  const firstRankingButton = guest.locator("#ranking .stella-button").first();
+  await expect
+    .poll(() => viewportRatio(firstRankingButton))
+    .toBeGreaterThanOrEqual(0.6);
+  await snap("visual-design-light-mobile-ranking", { waitFor: selector });
 };
 
 export default captureVisualDesign;
