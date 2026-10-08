@@ -550,7 +550,7 @@ const rowStatement = (
   return sql`SELECT ${sql.join(
     resource.columns.map((column) => sql.identifier(column)),
     sql`, `,
-  )} FROM ${sql.identifier("public", resource.table)} WHERE ${sql.join(keys, sql` AND `)} ${sql.raw(`FOR ${mode.toUpperCase()}`)} ${wait === "nowait" ? sql`NOWAIT` : sql``}`;
+  )} FROM ${sql.identifier("public")}.${sql.identifier(resource.table)} WHERE ${sql.join(keys, sql` AND `)} ${sql.raw(`FOR ${mode.toUpperCase()}`)} ${wait === "nowait" ? sql`NOWAIT` : sql``}`;
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
@@ -1148,7 +1148,7 @@ export const withAggregateRowQuery = async <Row>(
       and(
         ...columns.map(
           (column, index) =>
-            sql`${sql.identifier(table, column)} = ${values.at(index) ?? panic("Missing aggregate row key")}`,
+            sql`${sql.identifier(table)}.${sql.identifier(column)} = ${values.at(index) ?? panic("Missing aggregate row key")}`,
         ),
         options.where,
       ) ?? panic("Missing registered aggregate predicate");
