@@ -22,7 +22,9 @@ test("unknown live tests use the median cached weight with a notice", () => {
       loadTestDurationWeights({
         files: ["a", "b", "new"],
         path: filename,
-        notice: (message) => notices.push(message),
+        notice: (message) => {
+          notices.push(message);
+        },
       }),
     ).toEqual({ a: 2, b: 8, new: 8 });
     expect(notices).toEqual([
