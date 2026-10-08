@@ -4,9 +4,22 @@ import { isMcpToolVisibleTo } from "./tool-visibility";
 
 describe("MCP tool audiences", () => {
   test("omitted visibility admits both audiences", () => {
-    for (const definition of [{}, { _meta: { ui: {} } }]) {
+    for (const definition of [
+      {},
+      { name: "tool-without-metadata" },
+      { _meta: undefined },
+      { _meta: { ui: {} } },
+    ]) {
       expect(isMcpToolVisibleTo(definition, "model")).toBe(true);
       expect(isMcpToolVisibleTo(definition, "app")).toBe(true);
+    }
+  });
+
+  test("invalid metadata fails instead of silently exposing tools", () => {
+    for (const _meta of [null, "app", ["app"]]) {
+      expect(() => isMcpToolVisibleTo({ _meta }, "model")).toThrow(
+        "MCP tool metadata must be an object",
+      );
     }
   });
 

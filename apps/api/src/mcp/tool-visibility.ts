@@ -12,12 +12,17 @@ const visibilitySchema = v.pipe(
  * tuples from `as const` registries included) is accepted.
  */
 export const isMcpToolVisibleTo = (
-  definition: {
-    readonly _meta?: Readonly<Record<string, unknown>> | undefined;
-  },
+  definition: object,
   audience: "model" | "app",
 ): boolean => {
-  const ui = definition._meta?.["ui"];
+  if (!("_meta" in definition) || definition._meta === undefined) {
+    return true;
+  }
+  const meta = definition._meta;
+  if (typeof meta !== "object" || meta === null || Array.isArray(meta)) {
+    return panic("MCP tool metadata must be an object");
+  }
+  const ui = "ui" in meta ? meta.ui : undefined;
   if (ui === undefined) {
     return true;
   }
