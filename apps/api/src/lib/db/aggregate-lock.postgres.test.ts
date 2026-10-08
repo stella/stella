@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -8,7 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { withResultSavepoint } from "@/api/db/safe-db";
-import { workspaces } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -18,8 +18,13 @@ import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
-import { withAggregateLock, withAggregateSavepoint } from "./aggregate-lock";
+import {
+  withAggregateLock,
+  withAggregateRowQuery,
+  withAggregateSavepoint,
+} from "./aggregate-lock";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -148,6 +153,162 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("aggregate locks (postgres)", () => {
+    test("empty selected rows retain ordering without claiming physical coverage", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withPublicRowFixture({
+          db,
+          workspace: "present",
+          run: async ({ organizationId, workspaceId }) => {
+            const entityId = createSafeId<"entity">();
+            await db.insert(entities).values({
+              id: entityId,
+              workspaceId,
+              kind: "document",
+              name: "Aggregate lock fixture",
+            });
+            await withInterleaving({
+              databaseUrl,
+              schedules: [
+                [
+                  "a.selectWorkspace",
+                  "a.lockEntity",
+                  "b.lockWorkspace",
+                  "b.waitEntity",
+                  "a.refuseWorkspace",
+                  "a.commit",
+                  "b.commit",
+                ],
+              ],
+              a: {
+                steps: [
+                  {
+                    name: "selectWorkspace",
+                    run: async (tx) => {
+                      expect(
+                        await withAggregateRowQuery({
+                          aggregate: "workspace",
+                          id: { id: workspaceId, organizationId },
+                          mode: "update",
+                          tx,
+                          select: (queryTx) =>
+                            queryTx
+                              .select({
+                                id: workspaces.id,
+                                organizationId: workspaces.organizationId,
+                              })
+                              .from(workspaces),
+                          where: sql`FALSE`,
+                        }),
+                      ).toEqual({ status: "missing", rows: [] });
+                      expect(
+                        await rejectionOf(
+                          withAggregateLock({
+                            aggregate: "organization",
+                            id: organizationId,
+                            mode: "update",
+                            tx,
+                          }),
+                        ),
+                      ).toMatchObject({
+                        message: "Aggregate lock rank inversion",
+                      });
+                    },
+                  },
+                  {
+                    name: "lockEntity",
+                    run: async (tx) => {
+                      expect(
+                        await withAggregateLock({
+                          aggregate: "entity",
+                          id: { id: entityId, workspaceId },
+                          mode: "update",
+                          tx,
+                        }),
+                      ).toEqual({ status: "locked" });
+                    },
+                  },
+                  {
+                    name: "refuseWorkspace",
+                    run: async (tx) => {
+                      expect(
+                        await rejectionOf(
+                          withAggregateLock({
+                            aggregate: "workspace",
+                            id: { id: workspaceId, organizationId },
+                            mode: "update",
+                            tx,
+                          }),
+                        ),
+                      ).toMatchObject({
+                        message: "Aggregate lock rank inversion",
+                      });
+                      expect(
+                        executedRows(
+                          await tx.execute(sql`SELECT 1 AS healthy`),
+                        ).at(0),
+                      ).toEqual({ healthy: 1 });
+                    },
+                  },
+                ],
+              },
+              b: {
+                steps: [
+                  {
+                    name: "lockWorkspace",
+                    run: async (tx) => {
+                      expect(
+                        await withAggregateLock({
+                          aggregate: "workspace",
+                          id: { id: workspaceId, organizationId },
+                          mode: "update",
+                          tx,
+                        }),
+                      ).toEqual({ status: "locked" });
+                    },
+                  },
+                  {
+                    name: "waitEntity",
+                    run: async (tx) => {
+                      expect(
+                        await withAggregateLock({
+                          aggregate: "entity",
+                          id: { id: entityId, workspaceId },
+                          mode: "update",
+                          tx,
+                        }),
+                      ).toEqual({ status: "locked" });
+                    },
+                  },
+                ],
+              },
+              reset: async () => {
+                const source = await db
+                  .select({ id: entities.id })
+                  .from(entities)
+                  .where(eq(entities.id, entityId));
+                expect(source).toEqual([{ id: entityId }]);
+              },
+              readState: async () =>
+                await db
+                  .select({
+                    id: entities.id,
+                    workspaceId: entities.workspaceId,
+                  })
+                  .from(entities)
+                  .where(eq(entities.id, entityId)),
+              invariant: ({ blocked, outcomes, state }) => {
+                expect(blocked).toContain("b.waitEntity");
+                expect(outcomes.a).toEqual({ status: "committed" });
+                expect(outcomes.b).toEqual({ status: "committed" });
+                expect(state).toEqual([{ id: entityId, workspaceId }]);
+              },
+            });
+          },
+        });
+      });
+    });
+
     test("missing rows consume no rank and workspace locks preserve tenant scope on reacquisition", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();

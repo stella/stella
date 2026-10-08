@@ -143,7 +143,7 @@ describe("aggregate queries preserve their decisive read", () => {
   });
 
   test.each(["block", "nowait"] as const)(
-    "a missing %s query conservatively records the declared identity and mode",
+    "a missing %s query reserves ordering without confirming a held mode",
     async (wait) => {
       await withAggregateTransaction(db, async (rawTx) => {
         const tx = asTestRaw<Transaction>(rawTx);
@@ -173,17 +173,12 @@ describe("aggregate queries preserve their decisive read", () => {
           ),
         ).toMatchObject({ message: "Aggregate lock rank inversion" });
         expect(
-          await rejectionOf(
-            withAggregateLock({
-              ...workspaceIdentity,
-              tx,
-              mode: "update",
-            }),
-          ),
-        ).toMatchObject({
-          message:
-            "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
-        });
+          await withAggregateLock({
+            ...workspaceIdentity,
+            tx,
+            mode: "update",
+          }),
+        ).toEqual({ status: "locked" });
         await withAggregateSavepoint(tx, async (child) => {
           expect(
             await withAggregateLock({
@@ -193,6 +188,70 @@ describe("aggregate queries preserve their decisive read", () => {
             }),
           ).toEqual({ status: "locked" });
         });
+      });
+    },
+  );
+
+  test.each(["block", "nowait"] as const)(
+    "a missing %s query cannot cover a same-key request below the high-water",
+    async (wait) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        const select = (queryTx: Transaction) =>
+          queryTx
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+            })
+            .from(workspaces);
+        expect(
+          await withAggregateSavepoint(
+            tx,
+            async (child) =>
+              await withAggregateRowQuery({
+                ...workspaceIdentity,
+                tx: child,
+                mode: "update",
+                wait,
+                where: sql`FALSE`,
+                select,
+              }),
+          ),
+        ).toEqual({ status: "missing", rows: [] });
+        expect(
+          await withAggregateLock({
+            aggregate: "contactCapacity",
+            id: { organizationId },
+            tx,
+          }),
+        ).toEqual({ status: "locked" });
+        expect(
+          await rejectionOf(
+            withAggregateLock({ ...workspaceIdentity, tx, mode: "update" }),
+          ),
+        ).toMatchObject({ message: "Aggregate lock rank inversion" });
+        expect(
+          await rejectionOf(
+            withAggregateRowQuery({
+              ...workspaceIdentity,
+              tx,
+              mode: "update",
+              select,
+            }),
+          ),
+        ).toMatchObject({ message: "Aggregate lock rank inversion" });
+        expect(
+          await withAggregateRowQuery({
+            ...workspaceIdentity,
+            tx,
+            mode: "update",
+            wait: "nowait",
+            select,
+          }),
+        ).toMatchObject({ status: "locked" });
+        expect(
+          await withAggregateLock({ ...workspaceIdentity, tx, mode: "update" }),
+        ).toEqual({ status: "locked" });
       });
     },
   );
@@ -1147,6 +1206,52 @@ describe("top-level aggregate transaction entry", () => {
 });
 
 describe("aggregate transaction lifetime", () => {
+  test.each(["commit", "rollback"] as const)(
+    "%s: empty-query reservations follow savepoint lifetime",
+    async (disposition) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        const child = withAggregateSavepoint(tx, async (savepoint) => {
+          expect(
+            await withAggregateRowQuery({
+              ...workspaceIdentity,
+              tx: savepoint,
+              mode: "update",
+              where: sql`FALSE`,
+              select: (queryTx) =>
+                queryTx
+                  .select({
+                    id: workspaces.id,
+                    organizationId: workspaces.organizationId,
+                  })
+                  .from(workspaces),
+            }),
+          ).toEqual({ status: "missing", rows: [] });
+          if (disposition === "rollback") {
+            savepoint.rollback();
+          }
+        });
+        const lower = {
+          aggregate: "organization",
+          id: organizationId,
+          mode: "update",
+          tx,
+        } as const;
+        if (disposition === "rollback") {
+          expect(await rejectionOf(child)).toBeInstanceOf(
+            TransactionRollbackError,
+          );
+          expect(await withAggregateLock(lower)).toEqual({ status: "locked" });
+          return;
+        }
+        await child;
+        expect(await rejectionOf(withAggregateLock(lower))).toMatchObject({
+          message: "Aggregate lock rank inversion",
+        });
+      });
+    },
+  );
+
   test.each(["commit", "rollback"] as const)(
     "%s: child locks are retained only after savepoint commit",
     async (disposition) => {

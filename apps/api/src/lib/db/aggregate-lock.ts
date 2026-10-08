@@ -196,16 +196,18 @@ type HeldLock = {
   orderKey: string;
   mode: RowLockMode | "advisory";
 };
+type OrderingReservation = Pick<HeldLock, "rank" | "key" | "orderKey">;
 type LockHistory = {
   status: "idle" | "acquiring" | "closed";
+  reservations: Map<string, OrderingReservation>;
   held: Map<string, HeldLock>;
   aliases: Map<string, string>;
   parent: LockHistory | undefined;
   children: Set<LockHistory>;
 };
 
-// Each level records only locks acquired there; ancestors retain their locks
-// until the physical transaction ends, including across savepoint rollback.
+// Each level records its reservations and confirmed locks; ancestor history
+// survives child rollback until the physical transaction ends.
 const histories = new WeakMap<object, LockHistory>();
 const lockHistory = (tx: object): LockHistory => {
   const existing = histories.get(tx);
@@ -214,6 +216,7 @@ const lockHistory = (tx: object): LockHistory => {
   }
   const history: LockHistory = {
     status: "idle",
+    reservations: new Map(),
     held: new Map(),
     aliases: new Map(),
     parent: undefined,
@@ -266,7 +269,7 @@ const transactionHasAggregateLocks = (history: LockHistory): boolean => {
   }
   const levels = [root];
   for (const level of levels) {
-    if (level.held.size > 0 || level.status === "acquiring") {
+    if (level.reservations.size > 0 || level.status === "acquiring") {
       return true;
     }
     levels.push(...level.children);
@@ -289,6 +292,19 @@ const allHeldLocks = (history: LockHistory): HeldLock[] => {
     held.push(...level.held.values());
   }
   return held;
+};
+const allOrderingReservations = (
+  history: LockHistory,
+): OrderingReservation[] => {
+  const reservations: OrderingReservation[] = [];
+  for (
+    let level: LockHistory | undefined = history;
+    level !== undefined;
+    level = level.parent
+  ) {
+    reservations.push(...level.reservations.values());
+  }
+  return reservations;
 };
 const assertLockOrder = (
   history: LockHistory,
@@ -313,7 +329,7 @@ const assertLockOrder = (
     );
   }
   if (
-    held.some(
+    allOrderingReservations(history).some(
       (previous) =>
         lock.rank < previous.rank ||
         (lock.rank === previous.rank && lock.orderKey < previous.orderKey),
@@ -322,7 +338,22 @@ const assertLockOrder = (
     panic("Aggregate lock rank inversion");
   }
 };
+const retainReservation = (
+  history: LockHistory,
+  reservation: OrderingReservation,
+): void => {
+  const previous = history.reservations.get(reservation.key);
+  history.reservations.set(reservation.key, {
+    key: reservation.key,
+    rank: Math.max(previous?.rank ?? reservation.rank, reservation.rank),
+    orderKey:
+      previous !== undefined && previous.orderKey > reservation.orderKey
+        ? previous.orderKey
+        : reservation.orderKey,
+  });
+};
 const retainLock = (history: LockHistory, lock: HeldLock): void => {
+  retainReservation(history, lock);
   const previous = history.held.get(lock.key);
   history.held.set(
     lock.key,
@@ -377,6 +408,7 @@ export const withAggregateSavepoint = async <T>(
   }
   const history: LockHistory = {
     status: "idle",
+    reservations: new Map(),
     held: new Map(),
     aliases: new Map(),
     parent,
@@ -391,11 +423,19 @@ export const withAggregateSavepoint = async <T>(
         if (transactionHasAggregateLocks(history)) {
           assertAggregateLevelAvailable(history);
         }
-        return { value, held: history.held, aliases: history.aliases };
+        return {
+          value,
+          reservations: history.reservations,
+          held: history.held,
+          aliases: history.aliases,
+        };
       } finally {
         history.status = "closed";
       }
     });
+    for (const reservation of committed.reservations.values()) {
+      retainReservation(parent, reservation);
+    }
     for (const lock of committed.held.values()) {
       retainLock(parent, lock);
     }
@@ -1163,9 +1203,10 @@ export const withAggregateRowQuery = async <Row>(
         : options.lockConfig,
     );
     // PostgreSQL may lock a snapshot-matching row and omit it after rechecking
-    // an updated predicate. The owner-scoped key bounds the locks to this identity.
+    // an updated predicate. Reserve its order, but only returned rows confirm
+    // held coverage for later acquisitions of the same identity.
     // https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE
-    retainLock(queryHistory, requested);
+    retainReservation(queryHistory, requested);
     const projected = rows.map((row) => projectedRowValues(row, projection));
     // The query already holds these locks, even when its returned rows fail validation.
     for (const row of projected) {
