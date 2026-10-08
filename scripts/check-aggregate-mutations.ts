@@ -1008,23 +1008,69 @@ const isJoinedTransactionCallback = ({
   );
 };
 
+/**
+ * An inline function literal passed (directly or as an object property) to a
+ * call the enclosing body awaits or yields, e.g. a transaction runner.
+ */
+const isJoinedInlineArgument = ({
+  callback,
+  source,
+}: {
+  callback: ts.ArrowFunction | ts.FunctionExpression;
+  source: ts.SourceFile;
+}) => {
+  let argument: ts.Node = callback;
+  if (
+    ts.isPropertyAssignment(callback.parent) &&
+    callback.parent.initializer === callback &&
+    ts.isObjectLiteralExpression(callback.parent.parent)
+  ) {
+    argument = callback.parent.parent;
+  }
+  const call = argument.parent;
+  return (
+    ts.isCallExpression(call) &&
+    call.arguments.some((item) => item === argument) &&
+    isJoinedRunner({ call, source })
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
+  /** Receives joined direct calls by identifier, for one-level following. */
+  calls?: ts.CallExpression[];
+  /** Callee bodies also count locks inside joined inline callbacks. */
+  inlineCallbacks?: boolean;
 };
 const awaitedAggregateNames = ({
   implementation,
   access,
+  calls,
+  inlineCallbacks = false,
 }: AwaitedAggregateOptions) => {
   const { body, source, file } = implementation;
   const names = new Set<string>();
   const visit = (node: ts.Node) => {
+    if (
+      calls !== undefined &&
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      isJoinedRunner({ call: node, source })
+    ) {
+      calls.push(node);
+    }
     if (ts.isFunctionDeclaration(node)) {
       return;
     }
     if (
       (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
-      !isJoinedTransactionCallback({ callback: node, implementation, access })
+      !isJoinedTransactionCallback({
+        callback: node,
+        implementation,
+        access,
+      }) &&
+      !(inlineCallbacks && isJoinedInlineArgument({ callback: node, source }))
     ) {
       return;
     }
@@ -1066,6 +1112,138 @@ const awaitedAggregateNames = ({
   return names;
 };
 
+/** `apps/<name>/` or `packages/<name>/`; callees never cross this boundary. */
+const packageRoot = (file: string) => {
+  const [scope, name] = file.split("/");
+  return (scope === "apps" || scope === "packages") && name !== undefined
+    ? `${scope}/${name}/`
+    : undefined;
+};
+
+type CalleeImplementationOptions = {
+  call: ts.CallExpression;
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+};
+/**
+ * Resolves a direct call to a function defined in the caller's file or in a
+ * module of the same package. Aliases, re-exports and further calls are not
+ * followed, so lock helpers count only one level below the route handler.
+ */
+const calleeImplementation = ({
+  call,
+  implementation: { source, file },
+  access,
+}: CalleeImplementationOptions): HandlerImplementation => {
+  if (!ts.isIdentifier(call.expression)) {
+    return undefined;
+  }
+  const root = packageRoot(file);
+  if (root === undefined) {
+    return undefined;
+  }
+  const definition = (
+    target: ts.SourceFile,
+    targetFile: string,
+    name: string,
+  ): HandlerImplementation => {
+    for (const statement of target.statements) {
+      if (
+        ts.isFunctionDeclaration(statement) &&
+        statement.name?.text === name &&
+        statement.body !== undefined
+      ) {
+        return { body: statement.body, source: target, file: targetFile };
+      }
+      if (!ts.isVariableStatement(statement)) {
+        continue;
+      }
+      const variable = statement.declarationList.declarations.find(
+        (item) => ts.isIdentifier(item.name) && item.name.text === name,
+      );
+      let initializer = variable?.initializer;
+      while (
+        initializer !== undefined &&
+        (ts.isParenthesizedExpression(initializer) ||
+          ts.isAsExpression(initializer) ||
+          ts.isSatisfiesExpression(initializer))
+      ) {
+        initializer = initializer.expression;
+      }
+      if (
+        initializer !== undefined &&
+        (ts.isArrowFunction(initializer) ||
+          ts.isFunctionExpression(initializer))
+      ) {
+        return { body: initializer.body, source: target, file: targetFile };
+      }
+    }
+    return undefined;
+  };
+  const name = call.expression.text;
+  const local = definition(source, file, name);
+  if (local !== undefined) {
+    return local;
+  }
+  const imported = importedReference({ source, file, name, access });
+  if (
+    imported?.module === undefined ||
+    imported.module === REGISTRY ||
+    !imported.module.startsWith(root)
+  ) {
+    return undefined;
+  }
+  const content = access.load(imported.module);
+  if (content === undefined) {
+    return undefined;
+  }
+  const importedSource = parse({ file: imported.module, source: content });
+  let exported = imported.exported;
+  if (exported === "default") {
+    const assignment = importedSource.statements.find(ts.isExportAssignment);
+    if (assignment === undefined || !ts.isIdentifier(assignment.expression)) {
+      return undefined;
+    }
+    exported = assignment.expression.text;
+  }
+  return definition(importedSource, imported.module, exported);
+};
+
+type HeldAggregateOptions = {
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+};
+/**
+ * Aggregates the handler locks itself; when it takes none, also those its
+ * joined direct calls lock through withAggregateLock in their own bodies,
+ * including inline callbacks those bodies pass to awaited calls. Named
+ * functions a callee calls in turn are never followed.
+ */
+const heldAggregateNames = ({
+  implementation,
+  access,
+}: HeldAggregateOptions) => {
+  const calls: ts.CallExpression[] = [];
+  const held = awaitedAggregateNames({ implementation, access, calls });
+  if (held.size !== 0) {
+    return held;
+  }
+  for (const call of calls) {
+    const callee = calleeImplementation({ call, implementation, access });
+    if (callee === undefined) {
+      continue;
+    }
+    for (const name of awaitedAggregateNames({
+      implementation: callee,
+      access,
+      inlineCallbacks: true,
+    })) {
+      held.add(name);
+    }
+  }
+  return held;
+};
+
 type DeclaredHandlerLocksOptions = ValidateDeclarationOptions & {
   handler: ts.Expression;
   access: SourceAccess;
@@ -1101,7 +1279,7 @@ const assertDeclaredHandlerLocks = ({
       `Cannot resolve declared aggregate handler implementation in ${file}`,
     );
   }
-  const held = awaitedAggregateNames({ implementation, access });
+  const held = heldAggregateNames({ implementation, access });
   const aggregates = fields.get("aggregates");
   if (aggregates === undefined || !ts.isArrayLiteralExpression(aggregates)) {
     panic(`Missing declared aggregate list in ${file}`);

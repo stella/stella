@@ -417,4 +417,172 @@ describe("aggregate mutation route coverage", () => {
     );
     expect(() => enumerate(sources)).toThrow("Unknown aggregate registry name");
   });
+
+  describe("one-level calls into same-package lock helpers", () => {
+    const module = "apps/api/src/handlers/example/create.ts";
+    const service = "apps/api/src/services/example-lock.ts";
+    const lockImport =
+      'import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+    const acquisition =
+      'await withAggregateLock({aggregate: "workspace", id, tx});';
+    const handlerModule = ({
+      imports = "",
+      body,
+      declaration = '{type: "aggregate", aggregates: ["workspace"]}',
+    }: {
+      imports?: string;
+      body: string;
+      declaration?: string;
+    }) =>
+      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; ${imports} const existing = createSafeHandler({}, async ({safeDb}) => { ${body} }); declareAggregateMutation(existing.handler, ${declaration}); export default existing;`;
+    const setup = () => {
+      const sources = fixture('post("/existing", existing.handler)');
+      sources.set(
+        routes,
+        `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
+      );
+      return sources;
+    };
+
+    test("a same-package callee that awaits the helper covers the route", () => {
+      const sources = setup();
+      sources.set(
+        service,
+        `${lockImport} export const lockExample = async (tx) => { ${acquisition} };`,
+      );
+      sources.set(
+        module,
+        handlerModule({
+          imports: 'import { lockExample } from "@/api/services/example-lock";',
+          body: "await safeDb(async (tx) => { await lockExample(tx); });",
+        }),
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+      sources.set(
+        module,
+        handlerModule({
+          imports: `${lockImport} async function lockLocal(tx) { ${acquisition} }`,
+          body: "await safeDb(async (tx) => { await lockLocal(tx); });",
+        }),
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+      sources.set(
+        module,
+        handlerModule({
+          imports: 'import { lockExample } from "@/api/services/example-lock";',
+          body: "setTimeout(() => lockExample(tx), 0);",
+        }),
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    });
+
+    test("generator handlers reach callees that lock in inline callbacks", () => {
+      const sources = setup();
+      const generator = (yielded: string) =>
+        `import { Result } from "better-result"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { renewExample } from "@/api/services/example-lock"; const existing = createSafeHandler({}, async function* () { const renewed = yield* Result.await(${yielded}); return Result.ok(renewed); }); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+      sources.set(
+        service,
+        `${lockImport} export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await runInTransaction(db, async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
+      );
+      for (const yielded of [
+        "await renewExample({ db })",
+        "renewExample({ db })",
+      ]) {
+        sources.set(module, generator(yielded));
+        expect(enumerate(sources).at(0)?.declared).toBe(true);
+      }
+      sources.set(
+        service,
+        `${lockImport} export const renewExample = async (tx) => { await runInTransaction(db, async function (tx) { ${acquisition} }); };`,
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+      for (const detached of [
+        `setTimeout(async () => { ${acquisition} }, 0);`,
+        `runInTransaction(db, async (tx) => { ${acquisition} });`,
+        `const later = async (tx) => { ${acquisition} };`,
+      ]) {
+        sources.set(
+          service,
+          `${lockImport} export const renewExample = async (tx) => { ${detached} };`,
+        );
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+    });
+
+    test("the helper two levels deep does not cover the route", () => {
+      const sources = setup();
+      sources.set(
+        "apps/api/src/services/example-inner.ts",
+        `${lockImport} export const lockInner = async (tx) => { ${acquisition} };`,
+      );
+      sources.set(
+        service,
+        'import { lockInner } from "@/api/services/example-inner"; export const lockExample = async (tx) => { await lockInner(tx); };',
+      );
+      sources.set(
+        module,
+        handlerModule({
+          imports: 'import { lockExample } from "@/api/services/example-lock";',
+          body: "await safeDb(async (tx) => { await lockExample(tx); });",
+        }),
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    });
+
+    test("a callee in another package does not count", () => {
+      const sources = setup();
+      sources.set(
+        "packages/locks/package.json",
+        JSON.stringify({ exports: { ".": "./src/index.ts" } }),
+      );
+      sources.set(
+        "packages/locks/src/index.ts",
+        `${lockImport} export const lockExample = async (tx) => { ${acquisition} };`,
+      );
+      sources.set(
+        module,
+        handlerModule({
+          imports: 'import { lockExample } from "@stll/locks";',
+          body: "await safeDb(async (tx) => { await lockExample(tx); });",
+        }),
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    });
+
+    test("raw SQL locks and bare mentions of the helper do not count", () => {
+      const sources = setup();
+      sources.set(
+        module,
+        handlerModule({
+          imports: 'import { lockExample } from "@/api/services/example-lock";',
+          body: "await safeDb(async (tx) => { await lockExample(tx); });",
+        }),
+      );
+      for (const callee of [
+        'import { sql } from "drizzle-orm"; export const lockExample = async (tx) => { await tx.execute(sql`SELECT id FROM workspaces WHERE id = $1 FOR UPDATE`); };',
+        `${lockImport} export const lockExample = async (tx) => { const lock = withAggregateLock; await lock({aggregate: "workspace", id, tx}); };`,
+        'export const lockExample = async (tx) => { await withAggregateLock({aggregate: "workspace", id, tx}); };',
+      ]) {
+        sources.set(service, callee);
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+    });
+
+    test("independent declarations keep working", () => {
+      const sources = setup();
+      sources.set(
+        module,
+        handlerModule({
+          body: "await safeDb(async (tx) => {});",
+          declaration:
+            '{type: "independent", reason: "Fixture writes no aggregate."}',
+        }),
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+    });
+  });
 });
