@@ -23,6 +23,7 @@ import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+import { OUTBOUND_PERMIT_GRANT_OWNERS } from "./outbound-transport-census.ts";
 import { SHA256_OWNERS } from "./sha256-owners.ts";
 
 // Computed filesystem reads retain these repository Markdown inputs.
@@ -641,6 +642,28 @@ const UNMIGRATED_PUBLISHER_READERS = [
 ] as const;
 
 const OWNERSHIP_DECLARATIONS = [
+  {
+    id: "third-party-outbound-permit",
+    capability: "Issuing third-party request authority",
+    owner: ["apps/api/src/lib/auth/third-party-outbound-permit.ts"],
+    summary:
+      "Direct request, job and operator boundaries issue the identities checked by the shared outbound request owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/auth/third-party-outbound-permit"],
+      names: ["grantThirdPartyOutboundPermit"],
+      allowed: OUTBOUND_PERMIT_GRANT_OWNERS,
+    },
+  },
+  {
+    id: "outbound-request-transport",
+    capability: "Sending bounded outbound requests",
+    owner: ["apps/api/src/lib/safe-outbound-fetch.ts"],
+    summary:
+      "Byte and stream requests carry an issued permit. scripts/outbound-transport-ownership.ts enumerates API transport acquisition against the classified owner census in scripts/outbound-transport-census.ts.",
+    enforcement: { kind: "none" },
+  },
+
   STATUS_TRANSITION_OWNERSHIP,
   {
     id: "deferred-document-source-ownership",
