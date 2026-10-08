@@ -921,10 +921,9 @@ const renderBlocksWithHoldingZone = ({
               dissent !== null && dissent.blockId === block.id
                 ? dissent.byline
                 : null;
-            // One shape whether or not anything follows the block: notes and
-            // provision cards come and go with a toggle, and a block that
-            // changed shape would remount, losing the reader's place and
-            // focus with its DOM.
+            if (notes.length === 0 && byline === null) {
+              return body;
+            }
             return (
               <>
                 {byline}

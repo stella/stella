@@ -301,6 +301,16 @@ const anchors = [
   }),
 ];
 
+/** A comment drawn in the text under the passage, as the inspector does. */
+const MID_NOTE = new Map([
+  [
+    "anchor-mid",
+    <span data-testid="inline-note" key="anchor-mid">
+      {HEADNOTE}
+    </span>,
+  ],
+]);
+
 /**
  * One reader as the page and the inspector compose it: a toolbar outside the
  * scroller, the find bar opened with a query (as from a search result), and
@@ -340,6 +350,7 @@ const Reader = ({ name }: { name: string }) => {
             decisionId={decision.id}
             expandProvisions={provisions.expandProvisions}
             isHydrated
+            notesByAnchorId={MID_NOTE}
             provisionAnchors={anchors}
           />
         </div>
@@ -466,6 +477,7 @@ const POSITION_TOLERANCE_PX = 2;
 
 type Watched = {
   citation: HTMLElement;
+  note: Element;
   element: Element;
   offset: number;
   scroller: HTMLElement;
@@ -481,13 +493,17 @@ const watch = (toggle: HTMLElement): Watched[] =>
   READERS.map((name) => {
     const { citation, scroller } = readerParts(name);
     const element = scroller.contains(toggle) ? toggle : citation;
-    return { citation, element, offset: offsetOf(element), scroller };
+    const note =
+      scroller.querySelector('[data-testid="inline-note"]') ??
+      panic(`Reader ${name} did not draw its note`);
+    return { citation, element, note, offset: offsetOf(element), scroller };
   });
 
 const expectStill = (watched: Watched[], toggle: HTMLElement, step: string) => {
-  for (const { citation, element, offset, scroller } of watched) {
+  for (const { citation, element, note, offset, scroller } of watched) {
     // The same nodes: nothing the reader was looking at was remounted.
     expect(citation.isConnected, `${step}: citation remounted`).toBe(true);
+    expect(note.isConnected, `${step}: note remounted`).toBe(true);
     expect(element.isConnected, `${step}: watched element remounted`).toBe(
       true,
     );
