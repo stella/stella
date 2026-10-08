@@ -312,9 +312,7 @@
     },
     "save": {
       "failed": "Salvestamata",
-      "failedTitle": "Teie muudatust ei salvestatud",
-      "saved": "Salvestatud",
-      "saving": "Salvestamine…"
+      "failedTitle": "Teie muudatust ei salvestatud"
     },
     "sourceMediumTooltip": "Allika kandja on neutraalne kirjeldus ega vähenda iseenesest kindlust.",
     "states": {
@@ -1890,6 +1888,8 @@
     "saveAndLeave": "Salvesta ja lahku",
     "saveAsPdf": "Salvesta PDF-na",
     "saveChanges": "Salvesta muudatused",
+    "saved": "Salvestatud",
+    "saving": "Salvestamine…",
     "scopeThisPage": "(see leht)",
     "scrollToBottom": "Keri alla",
     "scrollToTop": "Keri üles",
@@ -3582,6 +3582,11 @@
       "askContentLabel": "Vastuse tüüp",
       "askQuestionLabel": "Küsimus",
       "askQuestionPlaceholder": "Mida peaksime igast dokumendist välja lugema? Käsitsi sisestamiseks jätke tühjaks.",
+      "autosave": {
+        "failed": "Salvestamine ebaõnnestus",
+        "nameMissing": "Salvestamata: lisage nimi",
+        "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
+      },
       "check": "Kasuta tehisintellekti asemel täpset reeglit",
       "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
       "checkKind": {
@@ -3611,6 +3616,7 @@
       "deletePlaybook": "Kustuta playbook",
       "deletePosition": "Kustuta seisukoht",
       "deleted": "Playbook kustutatud",
+      "deletedElsewhere": "See playbook on kustutatud.",
       "derivedAutomatically": "Eraldusküsimus ja vastuse vorming luuakse selle positsiooni põhjal. Midagi pole vaja seadistada.",
       "derivedQuestion": "Eraldusküsimus",
       "derivedType": "Vastuse vorming",
@@ -3663,10 +3669,12 @@
       },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
       "noSettledPosition": "Kindlaks määratud seisukoht puudub",
+      "openInPane": "Ava playbook",
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
       "positionOfTotal": "Seisukoht {index}/{total}",
+      "positionRemoved": "Seisukoht eemaldatud",
       "positions": "Seisukohad",
       "recent": "Hiljuti kasutatud",
       "recommended": "Soovitatud lähtekohad",

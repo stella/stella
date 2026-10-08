@@ -50,10 +50,11 @@ type UseVersionOrNewFileDropResult = {
 };
 
 /**
- * Wires external file drops on a file row to the version-or-new resolution
- * flow. Returns the drop session state; the caller renders
- * `<VersionOrNewFileDialog>` from it. Disabled for folders, tasks, and
- * documents without a file.
+ * Wires external file drops on a row. A folder row uploads what was dropped
+ * into that folder. A file row runs the version-or-new resolution flow;
+ * the caller renders `<VersionOrNewFileDialog>` from the returned state.
+ * Disabled for tasks, read-only rows, and documents without a file, so those
+ * drops fall through to the surrounding view's drop zone.
  *
  * A dropped DOCX that left stella carries its own reference, so the dialog
  * asks the file which document it belongs to before falling back to comparing
@@ -78,11 +79,9 @@ export const useVersionOrNewFileDrop = ({
   const [, createFileEntities] = useCreateFileEntities(workspaceId);
 
   const file = getFirstFile(entity);
+  const isFolder = entity.kind === "folder";
   const canAcceptDrop =
-    entity.kind !== "folder" &&
-    entity.kind !== "task" &&
-    !entity.readOnly &&
-    file !== null;
+    !entity.readOnly && entity.kind !== "task" && (isFolder || file !== null);
 
   const resolveReference = async (dropped: File): Promise<void> => {
     const result = await Result.tryPromise(
@@ -128,9 +127,16 @@ export const useVersionOrNewFileDrop = ({
     enabled: canAcceptDrop,
     externalRef: rowRef,
     onDrop: (files) => {
-      createFileEntities({ files, parentId: entity.parentId ?? null });
+      createFileEntities({
+        files,
+        parentId: isFolder ? entity.entityId : (entity.parentId ?? null),
+      });
     },
     onDropTree: (tree) => {
+      if (isFolder) {
+        createFileEntities({ tree, parentId: entity.entityId });
+        return;
+      }
       if (tree.directoryPaths.length === 0 && tree.files.length === 1) {
         const next = tree.files.at(0)?.file;
         if (next) {
