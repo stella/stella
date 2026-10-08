@@ -70,6 +70,10 @@ pub fn not_connected() -> String {
   "Desktop account is not connected".into()
 }
 
+pub fn rate_limited() -> String {
+  "Registry requests are rate limited".into()
+}
+
 // No caller-supplied URL, method, headers, or generic HTTP command is exposed.
 pub(crate) struct RegistryRequestAuth<'a> {
   pub api_base_url: &'a str,
@@ -105,6 +109,9 @@ async fn request_path(
     .map_err(|_| "Registry search is unavailable")?;
   if response.status() == reqwest::StatusCode::UNAUTHORIZED {
     return Err(not_connected());
+  }
+  if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+    return Err(rate_limited());
   }
   if !response.status().is_success() {
     return Err("Registry request failed".into());

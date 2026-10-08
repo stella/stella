@@ -14,6 +14,7 @@ import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_KEY_SECONDS,
+  DESKTOP_REGISTRY_ROTATION_INTERVAL_SECONDS,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
@@ -33,6 +34,12 @@ const rejected = () =>
   new HandlerError({
     status: 401,
     message: "Reconnect desktop to your account",
+  });
+
+const tooSoon = () =>
+  new HandlerError({
+    status: 429,
+    message: "Desktop credential was renewed moments ago",
   });
 
 type RenewDesktopCredentialOptions = {
@@ -129,6 +136,19 @@ export const renewDesktopCredential = async ({
             .epochMilliseconds <= usedAt.getTime()
         ) {
           return Result.err(rejected());
+        }
+        // Linking and rotation both stamp the deadline from their own clock, so
+        // it dates the current generation without trusting provider updatedAt,
+        // which every authenticated request bumps.
+        const issuedAt =
+          Temporal.Instant.from(metadata.output.inactivityExpiresAt)
+            .epochMilliseconds -
+          DESKTOP_REGISTRY_KEY_SECONDS * 1000;
+        if (
+          usedAt.getTime() - issuedAt <
+          DESKTOP_REGISTRY_ROTATION_INTERVAL_SECONDS * 1000
+        ) {
+          return Result.err(tooSoon());
         }
         const expiresAt = new Date(
           usedAt.getTime() + DESKTOP_REGISTRY_KEY_SECONDS * 1000,

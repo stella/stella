@@ -456,8 +456,65 @@ describe.skipIf(!enabled || !databaseUrl)(
         }
         expect(await readKey(db, fixture.keyId)).toEqual(before);
         expect(await readAudit(db, fixture.keyId)).toEqual([]);
-        requireSuccess(await renewDesktopCredential(input(db, fixture)));
+        requireSuccess(
+          await renewDesktopCredential({
+            ...input(db, fixture),
+            now: new Date(NOW.getTime() + DAY_MS),
+          }),
+        );
         expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
+      });
+    });
+
+    test("a generation younger than the rotation interval answers 429 without rotating or auditing", async () => {
+      await withRollbackFixture(async (db, fixture) => {
+        const expectTooSoon = async (operation: Promise<RenewalResult>) => {
+          const outcome = await operation;
+          expect(outcome.isErr()).toBe(true);
+          if (outcome.isErr()) {
+            expect(outcome.error.status).toBe(429);
+          }
+        };
+        const linked = await readKey(db, fixture.keyId);
+        await expectTooSoon(
+          renewDesktopCredential({
+            ...input(db, fixture),
+            now: new Date(NOW.getTime() + 29_999),
+          }),
+        );
+        expect(await readKey(db, fixture.keyId)).toEqual(linked);
+        expect(await readAudit(db, fixture.keyId)).toEqual([]);
+        const firstUse = new Date(NOW.getTime() + DAY_MS);
+        requireSuccess(
+          await renewDesktopCredential({
+            ...input(db, fixture),
+            now: firstUse,
+          }),
+        );
+        const rotated = await readKey(db, fixture.keyId);
+        const successor = {
+          ...input(db, fixture),
+          currentKey: SUCCESSOR_KEY,
+          successorKey: THIRD_KEY,
+        };
+        await expectTooSoon(
+          renewDesktopCredential({
+            ...successor,
+            now: new Date(firstUse.getTime() + 29_999),
+          }),
+        );
+        expect(await readKey(db, fixture.keyId)).toEqual(rotated);
+        expect(await readAudit(db, fixture.keyId)).toHaveLength(1);
+        requireSuccess(
+          await renewDesktopCredential({
+            ...successor,
+            now: new Date(firstUse.getTime() + 30_000),
+          }),
+        );
+        expect((await readKey(db, fixture.keyId)).key).toBe(
+          await defaultKeyHasher(THIRD_KEY),
+        );
+        expect(await readAudit(db, fixture.keyId)).toHaveLength(2);
       });
     });
 

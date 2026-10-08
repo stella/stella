@@ -64,6 +64,7 @@ pub struct LinkedAccount {
 struct AccountPolicy {
   key_prefix: String,
   credential_lifetime_seconds: i64,
+  rotation_interval_seconds: u64,
   link_protocol: u32,
 }
 
@@ -353,6 +354,7 @@ struct RenewalReply {
 
 enum RenewalFailure {
   Rejected,
+  Throttled,
   Unavailable(String),
 }
 
@@ -396,6 +398,9 @@ impl RenewalTransport for HttpRenewal {
       }),
       Err(message) if message == crate::registry::not_connected() => {
         Err(RenewalFailure::Rejected)
+      }
+      Err(message) if message == crate::registry::rate_limited() => {
+        Err(RenewalFailure::Throttled)
       }
       Err(message) => Err(RenewalFailure::Unavailable(message)),
     }
@@ -457,6 +462,7 @@ async fn recover_rotation(
   match transport.send(&candidate, None).await {
     Ok(reply) => commit_rotation(store, account, pending, reply).await,
     Err(RenewalFailure::Unavailable(message)) => Err(message),
+    Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
     Err(RenewalFailure::Rejected) => {
       if matches!(mode, RecoveryMode::ProbeOnly) {
         return Err("Account renewal needs foreground recovery".into());
@@ -469,6 +475,7 @@ async fn recover_rotation(
             Ok(account)
           }
           Err(RenewalFailure::Unavailable(message)) => Err(message),
+          Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
           Err(RenewalFailure::Rejected) => {
             store.clear().await?;
             Err(crate::registry::not_connected())
@@ -478,11 +485,13 @@ async fn recover_rotation(
       match transport.send(&account, Some(&pending.successor_key)).await {
         Ok(reply) => commit_rotation(store, account, pending, reply).await,
         Err(RenewalFailure::Unavailable(message)) => Err(message),
+        Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
         // A timed-out rotation can commit between the first probe and this
         // retry; only both generations being rejected ends the link.
         Err(RenewalFailure::Rejected) => match transport.send(&candidate, None).await {
           Ok(reply) => commit_rotation(store, account, pending, reply).await,
           Err(RenewalFailure::Unavailable(message)) => Err(message),
+          Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
           Err(RenewalFailure::Rejected) => {
             if is_live_expiry(&account.credential.expires_at) {
               store.clear().await?;
@@ -508,6 +517,11 @@ async fn rotate_account(
   match transport.send(&account, Some(&pending.successor_key)).await {
     Ok(reply) => commit_rotation(store, account, pending, reply).await,
     Err(RenewalFailure::Unavailable(message)) => Err(message),
+    // The API refused before rotating, so the current key stays live.
+    Err(RenewalFailure::Throttled) => {
+      store.stage(None).await?;
+      Ok(account)
+    }
     Err(RenewalFailure::Rejected) => {
       store.clear().await?;
       Err(crate::registry::not_connected())
@@ -589,7 +603,8 @@ pub async fn foreground_account(
   // Presence never calls this owner. Pace interactive bursts without an idle timer.
   static LAST_USE: OnceLock<Mutex<Option<std::time::Instant>>> = OnceLock::new();
   let mut last_use = LAST_USE.get_or_init(|| Mutex::new(None)).lock().await;
-  if last_use.is_some_and(|last| last.elapsed() < std::time::Duration::from_secs(30)) {
+  let interval = std::time::Duration::from_secs(policy().rotation_interval_seconds);
+  if last_use.is_some_and(|last| last.elapsed() < interval) {
     return Ok(Some(request));
   }
   let mut store = state.lock().await;
@@ -1843,6 +1858,61 @@ mod tests {
     );
     assert_eq!(recovered.credential.key, "stella_dr_successor");
     assert!(store.pending().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn throttled_rotation_keeps_the_current_key_and_drops_the_successor() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = AccountStore::Fixture(AccountFixture {
+      saved: Some(original.clone()),
+      ..AccountFixture::default()
+    });
+    let transport = QueuedRenewal::new(vec![Err(RenewalFailure::Throttled)]);
+    let kept = rotate_account(
+      &mut store,
+      original.clone(),
+      "stella_dr_successor".into(),
+      &transport,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+      transport.requests(),
+      vec![(
+        "stella_dr_original".into(),
+        Some("stella_dr_successor".into())
+      )]
+    );
+    assert_eq!(kept.credential.key, original.credential.key);
+    assert_eq!(
+      store.load().await.unwrap().unwrap().credential.key,
+      original.credential.key
+    );
+    assert!(store.pending().await.unwrap().is_none());
+    assert!(!store.expired().await.unwrap());
+    assert!(policy().rotation_interval_seconds > 0);
+  }
+
+  #[tokio::test]
+  async fn throttled_recovery_keeps_the_pending_successor() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Throttled),
+    ]);
+    assert_eq!(
+      recover_rotation(
+        &mut store,
+        original.clone(),
+        &transport,
+        RecoveryMode::Foreground
+      )
+      .await
+      .err(),
+      Some(crate::registry::rate_limited())
+    );
+    assert_rotation_pending(&store, &original).await;
   }
 
   #[tokio::test]

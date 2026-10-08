@@ -10,6 +10,9 @@ export const DESKTOP_REGISTRY_KEY_PREFIX = DESKTOP_ACCOUNT_POLICY.keyPrefix;
 // Foreground use rotates the credential and renews its inactivity deadline.
 export const DESKTOP_REGISTRY_KEY_SECONDS =
   DESKTOP_ACCOUNT_POLICY.credentialLifetimeSeconds;
+// A generation younger than this answers 429 instead of rotating again.
+export const DESKTOP_REGISTRY_ROTATION_INTERVAL_SECONDS =
+  DESKTOP_ACCOUNT_POLICY.rotationIntervalSeconds;
 export const DESKTOP_ACCOUNT_PERMISSION = {
   workspace: ["read"],
 } satisfies PermissionInput;
