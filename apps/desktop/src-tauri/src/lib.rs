@@ -286,6 +286,15 @@ pub fn run() {
               tray::MenuAction::OpenActivity => {
                 activity_window::show(&handle);
               }
+              tray::MenuAction::SetActivityRecording(status) => {
+                if activity::set_recording_from_tray(&handle, status).is_err() {
+                  let _ = handle.notification().builder()
+                    .title(i18n::t("tray.activity"))
+                    .body(i18n::t("activity.errorUpdate"))
+                    .show();
+                  activity_window::show(&handle);
+                }
+              }
               tray::MenuAction::CheckForUpdates => {
                 let active_edit_sessions = {
                   let mgr = manager.lock().await;
