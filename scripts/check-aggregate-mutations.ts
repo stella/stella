@@ -1195,23 +1195,73 @@ const isJoinedTransactionCallback = ({
   );
 };
 
-/** Whether `name` is assigned (or updated) anywhere inside `node`. */
-const isReassigned = (node: ts.Node, name: string): boolean => {
-  const target = (expression: ts.Expression) =>
-    ts.isIdentifier(expression) && expression.text === name;
-  if (
-    (ts.isBinaryExpression(node) &&
-      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-      target(node.left)) ||
-    ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
-      (node.operator === ts.SyntaxKind.PlusPlusToken ||
-        node.operator === ts.SyntaxKind.MinusMinusToken) &&
-      target(node.operand))
-  ) {
-    return true;
+/** Plain or compound assignment (`ts.isAssignmentExpression` is internal). */
+const isAssignment = (node: ts.Node): node is ts.BinaryExpression =>
+  ts.isBinaryExpression(node) &&
+  node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+  node.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
+
+/**
+ * Whether `identifier` sits in a write position: an assignment target (also
+ * nested inside array/object destructuring targets), `++`/`--`, a for-in or
+ * for-of head, or a `delete` operand.
+ */
+const isWriteTarget = (identifier: ts.Identifier) => {
+  let node: ts.Node = identifier;
+  for (;;) {
+    const parent = node.parent;
+    if (
+      ts.isParenthesizedExpression(parent) ||
+      ts.isArrayLiteralExpression(parent) ||
+      ts.isObjectLiteralExpression(parent) ||
+      ts.isSpreadElement(parent) ||
+      ts.isSpreadAssignment(parent) ||
+      (ts.isShorthandPropertyAssignment(parent) && parent.name === node) ||
+      (ts.isPropertyAssignment(parent) && parent.initializer === node)
+    ) {
+      node = parent;
+      continue;
+    }
+    if (isAssignment(parent)) {
+      return parent.left === node;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(parent) ||
+        ts.isPostfixUnaryExpression(parent)) &&
+      (parent.operator === ts.SyntaxKind.PlusPlusToken ||
+        parent.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      return parent.operand === node;
+    }
+    if (ts.isForInStatement(parent) || ts.isForOfStatement(parent)) {
+      return parent.initializer === node;
+    }
+    return ts.isDeleteExpression(parent) && parent.expression === node;
   }
-  return ts.forEachChild(node, (child) => isReassigned(child, name)) ?? false;
+};
+
+/**
+ * Whether any reference to the binding `name` owned by `scope` (resolved by
+ * binding scope, so shadowing names in nested functions are other bindings)
+ * is written anywhere inside `scope`, nested functions included.
+ */
+const isReassigned = (scope: ts.Node, name: string) => {
+  const visit = (node: ts.Node): boolean => {
+    if (
+      ts.isIdentifier(node) &&
+      node.text === name &&
+      !(
+        ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+      ) &&
+      !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
+      bindingScope(node, name) === scope &&
+      isWriteTarget(node)
+    ) {
+      return true;
+    }
+    return ts.forEachChild(node, visit) ?? false;
+  };
+  return visit(scope);
 };
 
 type CalleeCallbackCredit = { suppliesTransaction: boolean } | undefined;
@@ -1275,7 +1325,7 @@ const isSuppliedTransaction = ({
     first.initializer === undefined &&
     first.dotDotDotToken === undefined &&
     scopeNames(scope).parameters.has(receiver) &&
-    !isReassigned(scope.body, receiver) &&
+    !isReassigned(scope, receiver) &&
     calleeCallbackCredit({ callback: scope, implementation, access })
       ?.suppliesTransaction === true
   );
