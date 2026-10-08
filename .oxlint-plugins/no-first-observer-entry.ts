@@ -7,6 +7,7 @@ import {
 import {
   isAstNode,
   isIdentifierReference,
+  isSingleAssignment,
   memberPropertyName,
   resolveVariable,
   stableInitializer,
@@ -48,8 +49,11 @@ const resolveCallback = ({
   }
   seen.add(variable);
   const declaration = variable.defs.at(0)?.node;
+  // A reassigned binding may hold another function when the observer is built.
   if (declaration?.type === "FunctionDeclaration") {
-    return declaration;
+    return variable.defs.length === 1 && isSingleAssignment(variable)
+      ? declaration
+      : null;
   }
   return resolveCallback({ context, node: stableInitializer(variable), seen });
 };

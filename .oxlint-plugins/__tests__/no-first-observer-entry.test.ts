@@ -36,6 +36,38 @@ describe("observer callbacks decide from the latest record", () => {
     ).toEqual([1, 4]);
   });
 
+  test("follows a function declaration only while its binding is never reassigned", async () => {
+    // Reassigned before construction: the observer receives the latest callback.
+    expect(
+      await lint(
+        [
+          "function onResize(records) { consume(records[0]); }",
+          "onResize = (records) => consume(records.at(-1));",
+          "new ResizeObserver(onResize);",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+    // Reassigned after construction in source order: loops and closures can
+    // still run the write first, so the declaration is not followed either.
+    expect(
+      await lint(
+        [
+          "new IntersectionObserver(onIntersection);",
+          "onIntersection = (records) => consume(records.at(-1));",
+          "function onIntersection(records) { consume(records[0]); }",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+    expect(
+      await lint(
+        [
+          "new IntersectionObserver(onIntersection);",
+          "function onIntersection(records) { consume(records[0]); }",
+        ].join("\n"),
+      ),
+    ).toEqual([2]);
+  });
+
   test("rejects first-record destructuring in either observer callback", async () => {
     expect(
       await lint(
