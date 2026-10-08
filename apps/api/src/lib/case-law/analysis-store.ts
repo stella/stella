@@ -20,7 +20,10 @@ import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-import type { AnalysisFailureRecord } from "./analysis-failure";
+import {
+  failureMatchesGuard,
+  type AnalysisFailureRecord,
+} from "./analysis-failure";
 import {
   createDbAnalysisStore,
   type AnalysisStore,
@@ -43,13 +46,25 @@ const memoryFailureKey = (
 ): string => `${decisionId}:${keyTag}`;
 
 const memoryAnalysisStore: AnalysisStore = {
-  claim: async ({ decisionId, fingerprint, observed }) => {
+  claim: async ({ decisionId, fingerprint, observed, unlessFailed }) => {
     // The same compare-and-swap as the row, over what this process holds:
     // an entry must still be the one this request read (entries are the
     // exact objects stored, so identity is equality). No entry means the
     // request read the read-only row, which this store never writes.
     const held = memoryAnalyses.get(decisionId);
     if (held !== undefined && held !== observed) {
+      return await Promise.resolve(null);
+    }
+    // The same failure guard as the row store's claim statement.
+    const failure =
+      unlessFailed === undefined
+        ? undefined
+        : memoryFailures.get(memoryFailureKey(decisionId, unlessFailed.keyTag));
+    if (
+      failure !== undefined &&
+      unlessFailed !== undefined &&
+      failureMatchesGuard({ failure, fingerprint, guard: unlessFailed })
+    ) {
       return await Promise.resolve(null);
     }
     const sentinel: AnalysisGenerating = analysisSentinel(

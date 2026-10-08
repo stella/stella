@@ -319,6 +319,7 @@ describe("a failed analysis run", () => {
     orgAIConfig = googleKey,
     retry = false,
     deadlineMs,
+    beforeClaim,
   }: {
     decisionId: SafeId<"caseLawDecision">;
     model: ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
@@ -326,6 +327,7 @@ describe("a failed analysis run", () => {
     orgAIConfig?: OrgAIConfig | null;
     retry?: boolean;
     deadlineMs?: number;
+    beforeClaim?: () => Promise<void>;
   }) => {
     const starts = { count: 0 };
     const response = await generateAnalysis({
@@ -344,6 +346,7 @@ describe("a failed analysis run", () => {
       store: createDbAnalysisStore(db),
       resolveTextModel: () => model,
       ...(deadlineMs === undefined ? {} : { deadlineMs }),
+      ...(beforeClaim === undefined ? {} : { beforeClaim }),
     });
     return { response: response.unwrap(), starts: starts.count };
   };
@@ -411,6 +414,59 @@ describe("a failed analysis run", () => {
     expect(first.remaining()).toBe(0);
     expect(second.remaining()).toBe(0);
     expect(await failureRows(decisionId)).toHaveLength(2);
+  });
+
+  test("a read that found no failure does not run once a failure is filed before its claim", async () => {
+    const decisionId = await insertDecision();
+    const paused = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    const late = fakeGoogle([]);
+
+    // The plain read finds neither an analysis nor a failure, then pauses
+    // between that read and its claim.
+    const lateRead = read({
+      decisionId,
+      model: late.model,
+      beforeClaim: async () => {
+        paused.resolve(undefined);
+        await resume.promise;
+      },
+    });
+    await paused.promise;
+
+    // Meanwhile another request of the same reader claims, runs and fails.
+    const other = fakeGoogle(["cut-off"]);
+    expect((await read({ decisionId, model: other.model })).starts).toBe(1);
+    expect(other.remaining()).toBe(0);
+
+    resume.resolve(undefined);
+    const answered = await lateRead;
+
+    // Its claim refused, it answers the filed failure and asked no provider.
+    expect(answered.response).toMatchObject({
+      status: "error",
+      code: "answer_incomplete",
+    });
+    expect(late.requests).toHaveLength(0);
+    expect(await storedValue(decisionId)).toBeNull();
+  });
+
+  test("a retry paused the same way still runs: only a plain read is held back", async () => {
+    const decisionId = await insertDecision();
+    await read({ decisionId, model: fakeGoogle(["cut-off"]).model });
+    const google = fakeGoogle(["valid"]);
+
+    const retried = await read({
+      decisionId,
+      model: google.model,
+      retry: true,
+      beforeClaim: async () => {
+        await Promise.resolve();
+      },
+    });
+
+    expect(retried.response).toEqual({ status: "generating" });
+    expect(google.requests).toHaveLength(1);
   });
 
   test("a superseded run's failure never replaces the failure of the run that replaced it", async () => {

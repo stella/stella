@@ -24,6 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_FAILURE_HOLD_MS,
   type AnalysisFailureRecord,
+  type FailureClaimGuard,
 } from "./analysis-failure";
 import {
   analysisSentinel,
@@ -45,6 +46,12 @@ export type AnalysisRowWriter = Pick<
 type AnalysisClaim = AnalysisStoreKey & {
   /** The stored value this caller read and found wanting; see `claimableAnalysisRow`. */
   observed: unknown;
+  /**
+   * A plain read's claim: refused while this reader's key has an applicable
+   * failure, checked in the claim statement itself. Absent for an explicit
+   * retry and for writers that submit a finished analysis.
+   */
+  unlessFailed?: FailureClaimGuard | undefined;
 };
 
 type AnalysisSave = {
@@ -211,13 +218,22 @@ const releaseRun = async (
 export const createDbAnalysisStore = (
   db: AnalysisRowWriter,
 ): AnalysisStore => ({
-  claim: async ({ decisionId, fingerprint, observed }) => {
+  claim: async ({ decisionId, fingerprint, observed, unlessFailed }) => {
     // audit: skip — analysis sentinel; the caller audits the analysis it saves
     const sentinel = analysisSentinel(fingerprint, new Date());
     const [updated] = await db
       .update(caseLawDecisions)
       .set({ analysis: sentinel })
-      .where(claimableAnalysisRow({ decisionId, observed }))
+      .where(
+        and(
+          claimableAnalysisRow({ decisionId, observed }),
+          ...(unlessFailed === undefined
+            ? []
+            : [
+                sql`NOT EXISTS (SELECT 1 FROM "case_law_analysis_failures" AS failure WHERE failure."decision_id" = ${caseLawDecisions.id} AND failure."key_tag" = ${unlessFailed.keyTag} AND failure."input_fingerprint" = ${fingerprint} AND failure."key_source" = ${unlessFailed.keySource} AND failure."provider" IS NOT DISTINCT FROM ${unlessFailed.provider} AND failure."recorded_at" > ${unlessFailed.heldSince.toISOString()}::timestamptz)`,
+              ]),
+        ),
+      )
       .returning({ id: caseLawDecisions.id });
     return updated === undefined ? null : sentinel;
   },

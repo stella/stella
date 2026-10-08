@@ -86,6 +86,50 @@ export const analysisFailureRecord = ({
 });
 
 /**
+ * What a plain (non-retry) claim must not take the row over: a failure filed
+ * under this reader's key, over the input being claimed, with the key the
+ * reader runs with today, recorded after `heldSince`. The row store checks it
+ * in the claim statement itself, so a failure filed between a request's read
+ * and its claim still stops the claim.
+ */
+export type FailureClaimGuard = {
+  keyTag: string;
+  keySource: CaseLawAnalysisKeySource;
+  provider: string | null;
+  heldSince: Date;
+};
+
+export const failureClaimGuard = ({
+  decisionId,
+  now,
+  reader,
+}: {
+  decisionId: SafeId<"caseLawDecision">;
+  now: Date;
+  reader: AnalysisReaderKey;
+}): FailureClaimGuard => ({
+  keyTag: analysisFailureKeyTag(reader, decisionId),
+  keySource: reader.source,
+  provider: reader.source === "organization" ? reader.provider : null,
+  heldSince: new Date(now.getTime() - ANALYSIS_FAILURE_HOLD_MS),
+});
+
+/** The guard's verdict over one stored record, for a store held in memory. */
+export const failureMatchesGuard = ({
+  failure,
+  fingerprint,
+  guard,
+}: {
+  failure: AnalysisFailureRecord;
+  fingerprint: AnalysisInputFingerprint;
+  guard: FailureClaimGuard;
+}): boolean =>
+  failure.inputFingerprint === fingerprint &&
+  failure.keySource === guard.keySource &&
+  failure.provider === guard.provider &&
+  failure.recordedAt.getTime() > guard.heldSince.getTime();
+
+/**
  * Whether a stored failure still answers its reader for the document as it
  * reads now: over the same input, within its hold, and with the key the
  * reader would run with today. An organization that switched its provider

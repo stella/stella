@@ -34,6 +34,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   analysisFailureKeyTag,
+  failureClaimGuard,
   analysisFailureRecord,
   failureStillHolds,
   type AnalysisFailureRecord,
@@ -373,6 +374,11 @@ type GenerateAnalysisOptions = {
   resolveTextModel?: AnalysisModelResolver | undefined;
   /** The run's deadline; `ANALYSIS_GENERATION_DEADLINE_MS` unless a test says. */
   deadlineMs?: number | undefined;
+  /**
+   * Test seam: runs between the read and the claim, so a test can settle
+   * another request's run in that window. Never set outside tests.
+   */
+  beforeClaim?: (() => Promise<void>) | undefined;
 };
 
 export const generateAnalysis = async ({
@@ -388,6 +394,7 @@ export const generateAnalysis = async ({
   store = analysisStore(),
   resolveTextModel,
   deadlineMs = ANALYSIS_GENERATION_DEADLINE_MS,
+  beforeClaim,
 }: GenerateAnalysisOptions): Promise<
   Result<GenerateAnalysisResponse, ActionAdmissionError | HandlerError>
 > => {
@@ -459,20 +466,24 @@ export const generateAnalysis = async ({
   // say so until the reader asks again. The record is filed under this
   // reader's key alone, so another reader's run on the shared row neither
   // replaces nor clears it, and this reader never re-runs unasked.
-  if (!retry) {
+  const applicableFailure = async (): Promise<AnalysisFailureRecord | null> => {
     const failure = await store.readFailure({
       decisionId,
       keyTag: analysisFailureKeyTag(reader, decisionId),
     });
-    if (
-      failure !== null &&
+    return failure !== null &&
       failureStillHolds({
         failure,
         fingerprint: input.fingerprint,
         now: new Date(),
         reader,
       })
-    ) {
+      ? failure
+      : null;
+  };
+  if (!retry) {
+    const failure = await applicableFailure();
+    if (failure !== null) {
       return Result.ok(failureResponse(failure));
     }
   }
@@ -513,16 +524,30 @@ export const generateAnalysis = async ({
     return Result.err(available.error);
   }
 
+  await beforeClaim?.();
+
   // The generation draws one action when it starts and holds it until the
   // background run settles, after this request has answered.
   const started = await startModelAction({
     label: "analysis-generate.run-generation",
-    // Another request won the race when the claim returns null.
+    // Another request won the race when the claim returns null. A plain
+    // read's claim also refuses, in the same statement, while this reader's
+    // key has an applicable failure: one filed after the read above, by a
+    // run that started and failed meanwhile, still stops it.
     start: async () =>
       await store.claim({
         decisionId,
         fingerprint: input.fingerprint,
         observed,
+        ...(retry
+          ? {}
+          : {
+              unlessFailed: failureClaimGuard({
+                decisionId,
+                now: new Date(),
+                reader,
+              }),
+            }),
       }),
     // The proof aborts the generation's model call if the lease is lost.
     background: async ({ admission }, sentinel) => {
@@ -559,6 +584,14 @@ export const generateAnalysis = async ({
     );
   }
 
+  // A claim lost to a failure filed since the read answers that failure;
+  // one lost to another run answers that run in flight.
+  if (started.value === null && !retry) {
+    const failure = await applicableFailure();
+    if (failure !== null) {
+      return Result.ok(failureResponse(failure));
+    }
+  }
   return Result.ok({ status: "generating" });
 };
 
