@@ -98,6 +98,66 @@ describe("outbound transport ownership", () => {
     }
   });
 
+  test("enumerates parenthesized and type-asserted receivers", () => {
+    const receivers = [
+      "(Reflect)",
+      "(Reflect as typeof Reflect)",
+      "(Reflect satisfies typeof Reflect)",
+      "(<typeof Reflect>Reflect)",
+      "Reflect!",
+    ];
+    for (const receiver of receivers) {
+      expectIndirectEnumeration(
+        `void ${receiver}.get(globalThis, memberName);`,
+      );
+      expect(
+        references(
+          `function read(Reflect: Reader) { return ${receiver}.get(globalThis, memberName); }`,
+        ),
+      ).toEqual([]);
+      expect(
+        references(
+          `const browser = ${receiver}.get(globalThis, "window"); void browser.fetch;`,
+        ),
+      ).toEqual(["global:fetch", "indirect:transport"]);
+    }
+  });
+
+  test("enumerates wrapped global roots", () => {
+    for (const root of ["globalThis", "window", "self", "global"]) {
+      for (const receiver of [
+        `(${root})`,
+        `(${root} as typeof ${root})`,
+        `(${root} satisfies typeof ${root})`,
+        `(<typeof ${root}>${root})`,
+        `${root}!`,
+      ]) {
+        expect(references(`void ${receiver}.fetch;`)).toEqual(["global:fetch"]);
+        expectIndirectEnumeration(`void Reflect.get(${receiver}, memberName);`);
+      }
+    }
+  });
+
+  test("enumerates wrapped module callees", () => {
+    for (const callee of [
+      "(require)",
+      "(require as typeof require)",
+      "(require satisfies typeof require)",
+      "(<typeof require>require)",
+      "require!",
+    ]) {
+      expectIndirectEnumeration(`${callee}(modulePath);`);
+      expect(references(`${callee}("node:http");`)).toEqual([
+        "module:node:http",
+      ]);
+      expect(
+        references(
+          `function load(require: Loader) { return ${callee}(modulePath); }`,
+        ),
+      ).toEqual([]);
+    }
+  });
+
   test("tracks the global root returned by reflection", () => {
     for (const member of ['"window"', "memberName"]) {
       expect(

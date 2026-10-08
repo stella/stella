@@ -99,6 +99,7 @@ const unwrap = (expression: ts.Expression): ts.Expression => {
   if (
     ts.isParenthesizedExpression(expression) ||
     ts.isAsExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
     ts.isSatisfiesExpression(expression) ||
     ts.isNonNullExpression(expression)
   ) {
@@ -295,11 +296,15 @@ const reflectedGlobalMember = ({
       ts.isPropertyAccessExpression(callee) ||
       ts.isElementAccessExpression(callee)
     ) ||
-    memberName(callee) !== "get" ||
-    !ts.isIdentifier(callee.expression) ||
-    callee.expression.text !== "Reflect" ||
-    lookupBinding({ scopes, node: callee.expression, name: "Reflect" }) !==
-      undefined
+    memberName(callee) !== "get"
+  ) {
+    return undefined;
+  }
+  const receiver = unwrap(callee.expression);
+  if (
+    !ts.isIdentifier(receiver) ||
+    receiver.text !== "Reflect" ||
+    lookupBinding({ scopes, node: receiver, name: receiver.text }) !== undefined
   ) {
     return undefined;
   }
@@ -539,34 +544,42 @@ const visitModuleLoad = ({
   if (
     ts.isImportEqualsDeclaration(node) &&
     !node.isTypeOnly &&
-    ts.isExternalModuleReference(node.moduleReference) &&
-    ts.isStringLiteralLike(node.moduleReference.expression)
+    ts.isExternalModuleReference(node.moduleReference)
   ) {
-    register(node.moduleReference.expression.text, null);
+    const specifier = unwrap(node.moduleReference.expression);
+    if (ts.isStringLiteralLike(specifier)) {
+      register(specifier.text, null);
+    }
+    return;
+  }
+  if (!ts.isCallExpression(node)) {
+    return;
+  }
+  const callee = unwrap(node.expression);
+  if (
+    callee.kind !== ts.SyntaxKind.ImportKeyword &&
+    !(
+      ts.isIdentifier(callee) &&
+      callee.text === "require" &&
+      lookupBinding({ scopes, node: callee, name: callee.text }) === undefined
+    )
+  ) {
+    return;
+  }
+  const specifier = node.arguments.at(0);
+  const value = specifier && unwrap(specifier);
+  if (value && ts.isStringLiteralLike(value)) {
+    register(value.text, dynamicLoadNames(node));
     return;
   }
   if (
-    ts.isCallExpression(node) &&
-    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-      (ts.isIdentifier(node.expression) &&
-        node.expression.text === "require" &&
-        lookupBinding({ scopes, node, name: "require" }) === undefined))
+    callee.kind === ts.SyntaxKind.ImportKeyword &&
+    file === LOCAL_MODULE_LOADER_OWNER
   ) {
-    const specifier = node.arguments.at(0);
-    const value = specifier && unwrap(specifier);
-    if (value && ts.isStringLiteralLike(value)) {
-      register(value.text, dynamicLoadNames(node));
-      return;
-    }
-    if (
-      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      file === LOCAL_MODULE_LOADER_OWNER
-    ) {
-      capabilities.add("local:module-import");
-      return;
-    }
-    capabilities.add(INDIRECT_TRANSPORT);
+    capabilities.add("local:module-import");
+    return;
   }
+  capabilities.add(INDIRECT_TRANSPORT);
 };
 
 const isGlobalNamePosition = (node: ts.Identifier): boolean => {
