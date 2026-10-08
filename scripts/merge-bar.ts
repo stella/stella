@@ -3226,8 +3226,12 @@ const createGhGateway = ({
         console.error(`jump-reset evidence unavailable: ${reason}`);
         return undefined;
       };
-      const readPages = (endpoint: string, field: string) => {
-        const rows: (Record<string, unknown> & { id: number })[] = [];
+      type EvidenceRow = Record<string, unknown> & { id: number };
+      const readPages = (
+        endpoint: string,
+        field: string,
+      ): EvidenceRow[] | undefined => {
+        const rows: EvidenceRow[] = [];
         const ids = new Set<number>();
         let count: number | undefined;
         for (let page = 1; page <= PAGE_LIMIT; page += 1) {
