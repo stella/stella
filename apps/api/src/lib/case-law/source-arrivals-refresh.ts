@@ -25,7 +25,7 @@ type RefreshDb = {
  * count runs on the scheduler and never on a public request. The upper bound
  * is the stored `counted_at`, so the week a row states is the week it counted.
  */
-export const sourceArrivalsCountSql = ({
+const sourceArrivalsCountSql = ({
   since,
   until,
 }: {
