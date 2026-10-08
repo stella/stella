@@ -36,8 +36,14 @@ export const provisionPreviewKeys = {
   ],
 };
 
+const PROVISION_PREVIEW_ACTION = "readPublicProvisionPreview";
+
 /**
- * The wording one citation points at, without the statute around it.
+ * The wording one citation points at, without the statute around it, or null
+ * when that consolidation does not carry the provision: a provision added
+ * later, repealed and dropped, or numbered differently in that version. The
+ * miss is an answer about the version, so it is a value here rather than a
+ * failure to retry.
  *
  * A decision's own provision list already carries the wording of every
  * reference it states, so this reads the few a page could not carry: a
@@ -57,14 +63,19 @@ const readProvisionPreview = async (
       fetch: { signal },
     });
 
-  const data = unwrapPublicLawEden(response, "readPublicProvisionPreview");
+  if (
+    response.error &&
+    isPublicLawMiss(response.error, PROVISION_PREVIEW_ACTION)
+  ) {
+    return null;
+  }
 
-  return data;
+  return unwrapPublicLawEden(response, PROVISION_PREVIEW_ACTION);
 };
 
 /** The wording a preview card renders, however it was read. */
-export type ProvisionPreviewData = Awaited<
-  ReturnType<typeof readProvisionPreview>
+export type ProvisionPreviewData = NonNullable<
+  Awaited<ReturnType<typeof readProvisionPreview>>
 >;
 
 export const provisionPreviewOptions = (key: ProvisionPreviewKey) =>
@@ -74,33 +85,22 @@ export const provisionPreviewOptions = (key: ProvisionPreviewKey) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-const PROVISION_IN_VERSION_ACTION = "readPublicProvisionInVersion";
-
 /**
  * A provision's wording in one consolidation, or null when that
- * consolidation does not carry it: a provision added later, or repealed and
- * dropped. A comparison shows that as a one-sided answer, so the miss is a
- * value here rather than the failure `provisionPreviewOptions` raises.
+ * consolidation does not carry it. A comparison shows that as a one-sided
+ * answer.
  */
 export const provisionInVersionOptions = (key: ProvisionInVersionKey) =>
   queryOptions({
     queryKey: provisionPreviewKeys.inVersion(key),
-    queryFn: async ({ signal }) => {
-      const response = await api.law
-        .statutes({
-          documentId: toSafeId<"legislationDocument">(key.documentId),
-        })
-        .provisions({ anchor: key.anchor })
-        .preview.get({ query: {}, fetch: { signal } });
-
-      if (
-        response.error &&
-        isPublicLawMiss(response.error, PROVISION_IN_VERSION_ACTION)
-      ) {
-        return null;
-      }
-
-      return unwrapPublicLawEden(response, PROVISION_IN_VERSION_ACTION);
-    },
+    queryFn: async ({ signal }) =>
+      await readProvisionPreview(
+        {
+          anchor: key.anchor,
+          citedAnchor: undefined,
+          documentId: key.documentId,
+        },
+        signal,
+      ),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

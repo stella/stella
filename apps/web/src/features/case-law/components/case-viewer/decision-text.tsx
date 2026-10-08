@@ -737,10 +737,6 @@ const buildAnchorsByPieceId = ({
           key={`${span.source.id}:${String(span.start)}`}
           label={inlinesToPlainText(block.inlines).slice(span.start, span.end)}
           provision={span.source.target}
-          version={{
-            type: "consolidation",
-            validFrom: span.source.target.document.versionValidFrom,
-          }}
         />
       )),
     );
@@ -925,9 +921,10 @@ const renderBlocksWithHoldingZone = ({
               dissent !== null && dissent.blockId === block.id
                 ? dissent.byline
                 : null;
-            if (notes.length === 0 && byline === null) {
-              return body;
-            }
+            // One shape whether or not anything follows the block: notes and
+            // provision cards come and go with a toggle, and a block that
+            // changed shape would remount, losing the reader's place and
+            // focus with its DOM.
             return (
               <>
                 {byline}
@@ -1071,17 +1068,20 @@ export const DecisionText = ({
     surface,
   });
 
-  const supplementsByAnchorId = new Map(notesByAnchorId);
-  if (expandProvisions) {
-    for (const [anchorId, cards] of provisionsByAnchorId) {
-      supplementsByAnchorId.set(
-        anchorId,
-        <>
-          {cards}
-          {notesByAnchorId?.get(anchorId)}
-        </>,
-      );
-    }
+  // A block's note keeps its place in the tree whether the provision cards
+  // above it are shown or not, so toggling them never remounts the note.
+  const supplementsByAnchorId = new Map<string, ReactNode>();
+  for (const anchorId of new Set([
+    ...(notesByAnchorId?.keys() ?? []),
+    ...(expandProvisions ? provisionsByAnchorId.keys() : []),
+  ])) {
+    supplementsByAnchorId.set(
+      anchorId,
+      <>
+        {expandProvisions ? provisionsByAnchorId.get(anchorId) : null}
+        {notesByAnchorId?.get(anchorId)}
+      </>,
+    );
   }
 
   // One return, so the attribution line cannot be forgotten on the branch

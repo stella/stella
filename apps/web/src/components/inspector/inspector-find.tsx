@@ -184,6 +184,13 @@ export const useInspectorFind = ({
     };
   }, [closeFind, enabled, findOpen, panelRef]);
 
+  // The match the reader was last taken to. The text changes under an open
+  // bar for many reasons (a provision card unfolds, a disclosure opens, a
+  // note arrives) and each change repaints the marks, but only a new query
+  // or a step to another match moves the reader; otherwise every toggle in
+  // the text would scroll back to the active match.
+  const scrolledToRef = useRef<string | null>(null);
+
   // One collection for both things that change what matches: the bar's own
   // values, and the reader's text arriving later. Called with the values
   // rather than closing over them, so the effect below lists what it reads.
@@ -201,6 +208,7 @@ export const useInspectorFind = ({
       const root = contentRef.current;
       const query = queryInput.trim();
       if (!isEnabled || !root || query.length === 0) {
+        scrolledToRef.current = null;
         setFindState((prev) =>
           prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
             ? { ...prev, matchCount: 0, activeIndex: 0 }
@@ -239,7 +247,11 @@ export const useInspectorFind = ({
       if (activeRange) {
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
         CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
-        scrollRangeIntoView(activeRange);
+        const target = `${String(safeActiveIndex)}:${query}`;
+        if (scrolledToRef.current !== target) {
+          scrolledToRef.current = target;
+          scrollRangeIntoView(activeRange);
+        }
       }
 
       return () => {

@@ -1,7 +1,9 @@
 import { useState } from "react";
+import type { RefObject } from "react";
 
 import { Result } from "better-result";
 
+import { keepReadingPosition } from "@/components/legal-reader/reader-position";
 import {
   parseReaderProvisionMode,
   READER_PROVISION_MODE,
@@ -38,8 +40,17 @@ const readMode = (storage: Storage, key: string) =>
       }),
   });
 
-/** A browser-local reading preference, shared by the page and inspector. */
-export const useReaderProvisionMode = () => {
+/**
+ * A browser-local reading preference, shared by the page and inspector.
+ *
+ * Every reader showing the preference keeps its place when it changes, the
+ * one whose toggle was pressed and any other reader open beside it: the
+ * cards appear under every paragraph at once, above the view as much as in
+ * it.
+ */
+export const useReaderProvisionMode = (
+  scrollContainerRef: RefObject<HTMLElement | null>,
+) => {
   const storage = useLocalStorage();
   const analytics = useAnalytics();
   const owner = useStorageOwner();
@@ -75,14 +86,16 @@ export const useReaderProvisionMode = () => {
         analytics.captureError(read.error);
         return;
       }
-      setStored((previous) =>
-        previous?.key === key &&
-        previous.mode === read.value &&
-        previous.readError === null &&
-        previous.storage === storage
-          ? previous
-          : { key, mode: read.value, readError: null, storage },
-      );
+      keepReadingPosition(scrollContainerRef.current, () => {
+        setStored((previous) =>
+          previous?.key === key &&
+          previous.mode === read.value &&
+          previous.readError === null &&
+          previous.storage === storage
+            ? previous
+            : { key, mode: read.value, readError: null, storage },
+        );
+      });
     };
     const onStorage = (event: StorageEvent) => {
       if (
@@ -98,7 +111,7 @@ export const useReaderProvisionMode = () => {
       window.removeEventListener(MODE_CHANGED_EVENT, refresh);
       window.removeEventListener("storage", onStorage);
     };
-  }, [analytics, key, readError, storage]);
+  }, [analytics, key, readError, scrollContainerRef, storage]);
 
   const mode = stored?.mode ?? READER_PROVISION_MODE.collapsed;
   return {
@@ -111,7 +124,9 @@ export const useReaderProvisionMode = () => {
         mode === READER_PROVISION_MODE.expanded
           ? READER_PROVISION_MODE.collapsed
           : READER_PROVISION_MODE.expanded;
-      setStored({ key, mode: next, readError: null, storage });
+      keepReadingPosition(scrollContainerRef.current, () => {
+        setStored({ key, mode: next, readError: null, storage });
+      });
       if (storage === null) {
         return;
       }

@@ -8,6 +8,7 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { PanelRightIcon } from "@stll/ui/icons";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -21,6 +22,7 @@ import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citati
 import {
   citedProvisionClick,
   CITED_PROVISION_CLICK,
+  informativeProvisionTrail,
 } from "@/components/legal-reader/cited-provision-link.logic";
 import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
@@ -90,92 +92,11 @@ const useProvisionWording = ({
 };
 
 const ProvisionWordingSkeleton = () => (
-  <>
+  <span className="flex flex-col gap-1.5" data-slot="provision-card-pending">
     <Skeleton className="h-3 w-full" />
     <Skeleton className="h-3 w-5/6" />
-  </>
+  </span>
 );
-
-/** The heading trail the provision sits under, then the provision itself. */
-const ProvisionWording = ({ wording }: { wording: ProvisionPreviewData }) => (
-  <>
-    {wording.headings.length > 0 && (
-      <BidiText
-        as="span"
-        className="text-muted-foreground truncate text-xs"
-        lang={wording.language}
-      >
-        {wording.headings.map(({ text }) => text).join(" › ")}
-      </BidiText>
-    )}
-    <span
-      className="reader-body text-foreground flex max-h-64 flex-col gap-2 overflow-y-auto text-sm leading-relaxed text-pretty"
-      lang={wording.language}
-    >
-      {wording.blocks.map((block) => (
-        <span key={block.id}>{block.text}</span>
-      ))}
-    </span>
-  </>
-);
-
-const CitedProvisionPreview = (args: ProvisionWordingArgs) => {
-  const { isPending, wording } = useProvisionWording(args);
-
-  if (wording === undefined) {
-    if (!isPending) {
-      return null;
-    }
-    return (
-      <span className="mt-2 flex flex-col gap-1.5 border-t pt-2">
-        <ProvisionWordingSkeleton />
-      </span>
-    );
-  }
-  if (wording.blocks.length === 0) {
-    return null;
-  }
-
-  return (
-    <span className="mt-2 flex flex-col gap-1 border-t pt-2">
-      <ProvisionWording wording={wording} />
-    </span>
-  );
-};
-
-type ProvisionWordingVersion =
-  | { type: "current" }
-  | { type: "consolidation"; validFrom: string | null };
-
-const ProvisionVersionLabel = ({
-  version,
-}: {
-  version: ProvisionWordingVersion;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  switch (version.type) {
-    case "current":
-      return (
-        <span className="reader-chrome text-muted-foreground text-xs">
-          {t("statutes.currentWording")}
-        </span>
-      );
-    case "consolidation": {
-      const date = formatValidityDate(version.validFrom, format);
-      return (
-        <span className="reader-chrome text-muted-foreground text-xs">
-          {date === null
-            ? t("statutes.wordingVersionUnknown")
-            : t("statutes.wordingValidFrom", { date })}
-        </span>
-      );
-    }
-    default:
-      version satisfies never;
-      return panic("Unhandled provision wording version");
-  }
-};
 
 const OpenCitedProvisionButton = ({
   provision,
@@ -185,16 +106,143 @@ const OpenCitedProvisionButton = ({
   const t = useTranslations();
   const inspector = useInspectorView();
   return (
-    <span className="reader-chrome">
-      <Button
-        className="w-fit"
-        onClick={() => inspector.open(createProvisionViewTab(provision))}
-        size="xs"
-        variant="outline"
+    <Button
+      aria-label={t("statutes.openProvision")}
+      className="ms-auto shrink-0"
+      onClick={() => inspector.open(createProvisionViewTab(provision))}
+      size="icon-xs"
+      variant="ghost"
+    >
+      <PanelRightIcon aria-hidden="true" className="size-3.5" />
+    </Button>
+  );
+};
+
+type ProvisionCardBody =
+  | { type: "pending" }
+  | { type: "unavailable" }
+  | { type: "wording"; wording: ProvisionPreviewData };
+
+/**
+ * What a card shows under its row. A failed read, a version that does not
+ * carry the provision, and a provision with no text in it all say that the
+ * text is not available rather than leaving the card empty.
+ */
+const provisionCardBody = ({
+  isPending,
+  wording,
+}: {
+  isPending: boolean;
+  wording: ProvisionPreviewData | null | undefined;
+}): ProvisionCardBody => {
+  if (wording === undefined) {
+    return isPending ? { type: "pending" } : { type: "unavailable" };
+  }
+  if (wording === null || wording.blocks.length === 0) {
+    return { type: "unavailable" };
+  }
+  return { type: "wording", wording };
+};
+
+const ProvisionCardWording = ({ body }: { body: ProvisionCardBody }) => {
+  const t = useTranslations();
+  switch (body.type) {
+    case "pending":
+      return <ProvisionWordingSkeleton />;
+    case "unavailable":
+      return (
+        <span
+          className="reader-chrome text-muted-foreground text-xs"
+          data-slot="provision-card-unavailable"
+        >
+          {t("statutes.provisionTextUnavailable")}
+        </span>
+      );
+    case "wording":
+      return (
+        <span
+          className="reader-body text-foreground flex max-h-64 flex-col gap-2 overflow-y-auto text-sm leading-relaxed text-pretty"
+          lang={body.wording.language}
+        >
+          {body.wording.blocks.map((block) => (
+            <span key={block.id}>{block.text}</span>
+          ))}
+        </span>
+      );
+    default:
+      body satisfies never;
+      return panic("Unhandled provision card body");
+  }
+};
+
+type CitedProvisionCardProps = {
+  /** False while nothing shows the card, so nothing is read for it. */
+  enabled: boolean;
+  /** What the reader calls the provision: the citation as written. */
+  label: string;
+  provision: CitedProvisionTarget;
+};
+
+/**
+ * One cited provision, compact: a single row naming it, dating the wording
+ * and opening it, then where it sits when the label does not already say so,
+ * then its wording. A version that does not carry the provision says so
+ * rather than drawing an empty card. Every surface that shows a cited
+ * provision's wording, inline or peeked, draws this.
+ */
+const CitedProvisionCard = ({
+  enabled,
+  label,
+  provision,
+}: CitedProvisionCardProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const { isPending, wording } = useProvisionWording({
+    documentId: provision.document.id,
+    enabled,
+    preview: provision.preview,
+    provision: provision.payload,
+  });
+  const date = formatValidityDate(provision.document.versionValidFrom, format);
+  const trail = informativeProvisionTrail({
+    label,
+    places: [
+      provision.payload.statuteTitle,
+      ...(wording?.headings.map(({ text }) => text) ?? []),
+    ],
+  });
+  const body = provisionCardBody({ isPending, wording });
+
+  return (
+    <>
+      <span
+        className="reader-chrome flex min-w-0 items-center gap-1.5"
+        data-slot="provision-card-header"
       >
-        {t("statutes.openProvision")}
-      </Button>
-    </span>
+        <BidiText as="span" className="min-w-0 truncate text-sm font-medium">
+          {label}
+        </BidiText>
+        <span aria-hidden="true" className="text-muted-foreground text-xs">
+          ·
+        </span>
+        <span className="text-muted-foreground shrink-0 text-xs">
+          {date === null
+            ? t("statutes.wordingVersionUnknown")
+            : t("statutes.inForceSince", { date })}
+        </span>
+        <OpenCitedProvisionButton provision={provision.payload} />
+      </span>
+      {trail.length > 0 && (
+        <BidiText
+          as="span"
+          className="reader-chrome text-muted-foreground truncate text-xs"
+          lang={wording?.language}
+        >
+          {trail.join(" › ")}
+        </BidiText>
+      )}
+      <ProvisionCardWording body={body} />
+    </>
   );
 };
 
@@ -202,39 +250,18 @@ const OpenCitedProvisionButton = ({
 export const CitedProvisionExpansion = ({
   label,
   provision,
-  version,
 }: {
   label: string;
   provision: CitedProvisionTarget;
-  version: ProvisionWordingVersion;
-}) => {
-  const { isPending, wording } = useProvisionWording({
-    documentId: provision.document.id,
-    enabled: true,
-    preview: provision.preview,
-    provision: provision.payload,
-  });
-
-  return (
-    <ReaderInsetBox
-      className="my-3 flex flex-col gap-2"
-      data-reader-chrome=""
-      data-slot="provision-card"
-    >
-      <span className="reader-chrome">
-        <BidiText as="span" className="text-sm font-medium">
-          {label}
-        </BidiText>
-      </span>
-      <ProvisionVersionLabel version={version} />
-      {wording !== undefined && wording.blocks.length > 0 && (
-        <ProvisionWording wording={wording} />
-      )}
-      {wording === undefined && isPending && <ProvisionWordingSkeleton />}
-      <OpenCitedProvisionButton provision={provision.payload} />
-    </ReaderInsetBox>
-  );
-};
+}) => (
+  <ReaderInsetBox
+    className="my-2 flex flex-col gap-1.5 px-3 py-2"
+    data-reader-chrome=""
+    data-slot="provision-card"
+  >
+    <CitedProvisionCard enabled label={label} provision={provision} />
+  </ReaderInsetBox>
+);
 
 /** Hover or a plain click peeks at wording without interrupting the sentence. */
 export const CitedProvisionLink = ({
@@ -282,28 +309,12 @@ export const CitedProvisionLink = ({
       >
         {children}
       </PreviewCardTrigger>
-      <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-0.5 p-3">
-        <BidiText as="span" className="text-foreground text-sm font-medium">
-          {provision.payload.provisionLabel}
-        </BidiText>
-        {provision.payload.statuteTitle !== "" && (
-          <span className="text-muted-foreground text-xs">
-            {provision.payload.statuteTitle}
-          </span>
-        )}
-        <ProvisionVersionLabel
-          version={{
-            type: "consolidation",
-            validFrom: provision.document.versionValidFrom,
-          }}
-        />
-        <CitedProvisionPreview
-          documentId={provision.document.id}
+      <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-1.5 p-3">
+        <CitedProvisionCard
           enabled={previewOpen}
-          preview={provision.preview}
-          provision={provision.payload}
+          label={provision.payload.provisionLabel}
+          provision={provision}
         />
-        <OpenCitedProvisionButton provision={provision.payload} />
       </PreviewCardPopup>
     </PreviewCard>
   );

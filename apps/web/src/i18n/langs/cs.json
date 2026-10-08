@@ -4744,6 +4744,7 @@
     "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
     "provisionPromptSubject": "{provision} předpisu {statute} ({eli}) ve znění účinném od {date}",
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
+    "provisionTextUnavailable": "Text není pro toto znění k dispozici",
     "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
     "searchAskPrompt": "{query} (právní předpisy: {country})",
@@ -4764,7 +4765,6 @@
     "title": "Právní předpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znění použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Znění účinné od {date}",
     "wordingVersionUnknown": "Datum verze znění není k dispozici"
   },
   "styleSets": {

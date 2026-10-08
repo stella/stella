@@ -15,6 +15,20 @@ import type { DecisionProvisionAnchor } from "./use-decision-provision-anchors";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
+// Cards whose wording the decision's list did not carry read it themselves;
+// each test states what that read answers.
+const originalFetch = globalThis.fetch;
+const previewRequests: string[] = [];
+let previewResponse = (): Response =>
+  Response.json({ message: "Unexpected read" }, { status: 500 });
+globalThis.fetch = Object.assign(
+  async (input: RequestInfo | URL) => {
+    previewRequests.push(input instanceof Request ? input.url : String(input));
+    return previewResponse();
+  },
+  { preconnect: () => undefined },
+);
+
 const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -36,9 +50,11 @@ afterEach(async () => {
     client.clear();
   }
   clients.length = 0;
+  previewRequests.length = 0;
 });
 
 afterAll(async () => {
+  globalThis.fetch = originalFetch;
   await sleep(0);
   await GlobalRegistrator.unregister();
 });
@@ -49,7 +65,7 @@ const THIRD_CITATION = "§ 90 odst. 5";
 const FIRST_PARAGRAPH = `Ustanovení ${FIRST_CITATION} věty třetí zákona a ${SECOND_CITATION} se použijí společně.`;
 const SECOND_PARAGRAPH = `Dále soud použil ${THIRD_CITATION} k rozhodnutí věci.`;
 const HEADNOTE = "The court applies the cited provisions together.";
-const WORDING_VERSION_LABEL = "Wording in force since Jan 1, 2026";
+const WORDING_VERSION_LABEL = "In force since Jan 1, 2026";
 
 const paragraph = (id: string, text: string) => ({
   anchorId: `anchor-${id}`,
@@ -199,6 +215,10 @@ const anchors = [
   }),
 ];
 
+const cardLabel = (card: Element) =>
+  card.querySelector('[data-slot="provision-card-header"]')?.firstElementChild
+    ?.textContent;
+
 const renderDecision = async (
   expandProvisions?: boolean,
   provisionAnchors = anchors,
@@ -249,7 +269,7 @@ describe("provision wording below decision paragraphs", () => {
       ...view.container.querySelectorAll('[data-slot="provision-card"]'),
     ];
     expect(cards).toHaveLength(3);
-    expect(cards.map((card) => card.firstElementChild?.textContent)).toEqual([
+    expect(cards.map(cardLabel)).toEqual([
       FIRST_CITATION,
       SECOND_CITATION,
       THIRD_CITATION,
@@ -282,8 +302,6 @@ describe("provision wording below decision paragraphs", () => {
       "border-border/50",
       "rounded-lg",
       "border",
-      "px-5",
-      "py-4",
     ]) {
       expect(headnoteBox?.classList.contains(token)).toBe(true);
       for (const card of cards) {
@@ -340,6 +358,127 @@ describe("provision wording below decision paragraphs", () => {
     ).toBe(`¶${FIRST_PARAGRAPH}`);
     expect(
       view.container.querySelector('[data-slot="provision-card"]'),
+    ).toBeNull();
+  });
+});
+
+describe("compact provision cards", () => {
+  const firstCard = (view: Awaited<ReturnType<typeof renderDecision>>) =>
+    view.container.querySelector('[data-slot="provision-card"]');
+
+  const withTarget = (
+    patch: (
+      target: DecisionProvisionAnchor["target"],
+    ) => DecisionProvisionAnchor["target"],
+  ) => anchors.map((anchor) => ({ ...anchor, target: patch(anchor.target) }));
+
+  test("names, dates and opens each provision in one header row", async () => {
+    const view = await renderDecision(true);
+    const cards = [
+      ...view.container.querySelectorAll('[data-slot="provision-card"]'),
+    ];
+    expect(cards).toHaveLength(3);
+    for (const card of cards) {
+      const headers = card.querySelectorAll(
+        '[data-slot="provision-card-header"]',
+      );
+      expect(headers).toHaveLength(1);
+      const header = headers[0];
+      expect(header?.textContent).toContain(WORDING_VERSION_LABEL);
+      const open = within(card as HTMLElement).getByRole("button", {
+        name: messages.statutes.openProvision,
+      });
+      expect(header?.contains(open)).toBe(true);
+      // Icon-only: the name comes from the label, not from visible text.
+      expect(open.textContent).toBe("");
+    }
+  });
+
+  test("shows where a provision sits only where its label does not say so", async () => {
+    const placed = withTarget((target) => ({
+      ...target,
+      payload: { ...target.payload, statuteTitle: "odst." },
+      preview:
+        target.preview === null
+          ? null
+          : {
+              ...target.preview,
+              headings: [{ anchorId: "cast-1", level: 1, text: "Část první" }],
+            },
+    }));
+    const view = await renderDecision(true, placed);
+    const cards = [
+      ...view.container.querySelectorAll('[data-slot="provision-card"]'),
+    ];
+    expect(cards.map(cardLabel)).toEqual([
+      FIRST_CITATION,
+      SECOND_CITATION,
+      THIRD_CITATION,
+    ]);
+    // "§ 31 odst. 4" and "§ 90 odst. 5" already spell "odst." out; "§ 7"
+    // does not, so only its card carries that place.
+    expect(cards.map((card) => card.textContent?.includes("odst. ›"))).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    for (const card of cards) {
+      expect(card.textContent).toContain("Část první");
+    }
+  });
+
+  test("says the text is not available when the applied version does not carry it", async () => {
+    const empty = withTarget((target) => ({
+      ...target,
+      preview:
+        target.preview === null ? null : { ...target.preview, blocks: [] },
+    }));
+    const view = await renderDecision(true, empty);
+    const cards = view.container.querySelectorAll(
+      '[data-slot="provision-card"]',
+    );
+    expect(cards).toHaveLength(3);
+    for (const card of cards) {
+      expect(card.textContent).toContain(
+        messages.statutes.provisionTextUnavailable,
+      );
+      expect(card.textContent).not.toContain("Wording for");
+    }
+  });
+
+  test("says the text is not available when its own read finds no provision", async () => {
+    previewResponse = () =>
+      Response.json({ message: "Provision not found" }, { status: 404 });
+    const unread = withTarget((target) => ({ ...target, preview: null }));
+    const view = await renderDecision(true, unread);
+    expect(
+      firstCard(view)?.querySelector('[data-slot="provision-card-pending"]'),
+    ).not.toBeNull();
+    await waitFor(() => {
+      for (const card of view.container.querySelectorAll(
+        '[data-slot="provision-card"]',
+      )) {
+        expect(card.textContent).toContain(
+          messages.statutes.provisionTextUnavailable,
+        );
+      }
+    });
+    expect(previewRequests.length).toBeGreaterThan(0);
+    expect(previewRequests.every((url) => url.includes("/preview"))).toBe(true);
+  });
+
+  test("says the text is not available when its own read fails", async () => {
+    previewResponse = () =>
+      Response.json({ message: "Server error" }, { status: 500 });
+    const unread = withTarget((target) => ({ ...target, preview: null }));
+    const view = await renderDecision(true, unread);
+    await waitFor(() => {
+      expect(firstCard(view)?.textContent).toContain(
+        messages.statutes.provisionTextUnavailable,
+      );
+    });
+    expect(
+      firstCard(view)?.querySelector('[data-slot="provision-card-pending"]'),
     ).toBeNull();
   });
 });
