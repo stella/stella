@@ -410,6 +410,8 @@ describe("Anthropic workspace settings", () => {
     }
     for (const anthropicWorkspaceId of [
       "wrk\r\nInjected",
+      "wrk_fixture\n",
+      "wrk_fixture\r\n",
       "wrk with space",
       "wrk/path",
     ]) {

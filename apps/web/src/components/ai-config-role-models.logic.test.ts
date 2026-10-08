@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createDecisionModelState,
+  haveSameRoleModelSelections,
+  ROLE_KEYS,
   createDefaultRoleModels,
   createProviderCredentialDraft,
   decisionModelDraft,
@@ -718,4 +720,58 @@ test("only explicit role overrides are serialized, even when equal to a default"
       overrides: { chat: null },
     }),
   ).toEqual({ kind: "invalid" });
+});
+
+test("role comparison ignores insertion order while preserving default and explicit selection states", () => {
+  const baseline = createDefaultRoleModels(["google"]);
+  for (const [offset, role] of ROLE_KEYS.entries()) {
+    const order = [
+      ...ROLE_KEYS.slice(offset),
+      ...ROLE_KEYS.slice(0, offset),
+    ].toReversed();
+    const current = Object.fromEntries(
+      order.map((key) => [key, baseline[key]]),
+    );
+    expect(haveSameRoleModelSelections({ current, baseline })).toBe(true);
+    expect(
+      haveSameRoleModelSelections({
+        current: { ...current, [role]: null },
+        baseline,
+      }),
+    ).toBe(false);
+    const selection = baseline[role];
+    if (selection === null) {
+      panic("Google supports every role");
+    }
+    expect(
+      haveSameRoleModelSelections({
+        current: {
+          ...current,
+          [role]: { ...selection, modelId: `${selection.modelId}-different` },
+        },
+        baseline,
+      }),
+    ).toBe(false);
+    expect(
+      haveSameRoleModelSelections({
+        current: {
+          ...current,
+          [role]: { ...selection, provider: "anthropic" },
+        },
+        baseline,
+      }),
+    ).toBe(false);
+    expect(
+      haveSameRoleModelSelections({
+        current: { [role]: selection },
+        baseline: {},
+      }),
+    ).toBe(false);
+  }
+  expect(
+    haveSameRoleModelSelections({ current: {}, baseline: { chat: undefined } }),
+  ).toBe(true);
+  expect(
+    haveSameRoleModelSelections({ current: {}, baseline: { chat: null } }),
+  ).toBe(false);
 });

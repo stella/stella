@@ -776,3 +776,60 @@ test("replacing the first saved key preserves provider order and every default r
   expect(write?.body).not.toContain("overrideModels");
   expect(hasUnsavedWork()).toBe(false);
 });
+
+test("resetting and reselecting the saved override clears dirty state and the leave prompt", async () => {
+  const modelId = getModelOptionsForRole({
+    provider: "google",
+    role: "chat",
+  }).find((candidate) => candidate !== BYOK_DEFAULT_MODELS.google.chat.modelId);
+  if (modelId === undefined) {
+    panic("Google chat must offer an alternate model");
+  }
+  const appRouter = await mount({
+    ...savedConfig,
+    overrideModels: {
+      chat: { provider: "google", modelId },
+      fast: {
+        provider: "google",
+        modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
+      },
+    },
+  });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(messages.common.advanced, "u"),
+    }),
+  );
+  const resetChat = screen
+    .getAllByRole("button", { name: messages.common.resetToDefault })
+    .at(0);
+  if (resetChat === undefined) {
+    panic("Chat override must offer reset");
+  }
+  fireEvent.click(resetChat);
+  expect(hasUnsavedWork()).toBe(true);
+  const label = messages.organization.aiConfig.modelForRole.replace(
+    "{role}",
+    () => messages.organization.aiConfig.roles.chat,
+  );
+  const model = screen.getByLabelText(label);
+  expect(model).toHaveProperty(
+    "value",
+    BYOK_DEFAULT_MODELS.google.chat.modelId,
+  );
+  act(() => model.focus());
+  fireEvent.change(model, { target: { value: modelId } });
+  fireEvent.keyDown(model, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: modelId }));
+  expect(model).toHaveProperty("value", modelId);
+  expect(hasUnsavedWork()).toBe(false);
+  expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
+  expect(
+    requests.filter(({ method }) => method === "POST" || method === "DELETE"),
+  ).toEqual([]);
+  await act(async () => {
+    await appRouter.navigate({ to: "/settings" });
+  });
+  expect(await screen.findByText(messages.common.done)).toBeDefined();
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+});

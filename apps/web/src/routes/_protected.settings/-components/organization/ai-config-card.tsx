@@ -20,6 +20,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import {
   createProviderCredentialDraft,
+  haveSameRoleModelSelections,
   getProviderValues,
   hasProviderCredentialChanges,
   hasUsableDecisionModel,
@@ -201,7 +202,7 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       }),
     ) ||
     decisionState.kind !== "untouched" ||
-    JSON.stringify(roleModels) !== JSON.stringify(savedRoles);
+    !haveSameRoleModelSelections({ current: roleModels, baseline: savedRoles });
   const blocker = useUnsavedWork({
     surface: "ai-provider-settings",
     guard: "confirm-navigation",
