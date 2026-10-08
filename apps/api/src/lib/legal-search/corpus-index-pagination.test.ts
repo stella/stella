@@ -1,7 +1,9 @@
 import { panic, Panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { SEARCH_PAGE_REACH } from "@stll/api-contract/search";
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { withPinnedDecisions } from "@/api/handlers/case-law/decisions/search-identity-role";
@@ -10,7 +12,7 @@ import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client"
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusIndexLexicalScore,
-  corpusIndexScanRoundCap,
+  CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
   HIGHLIGHT_COPIES_PER_PASSAGE,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -1620,9 +1622,12 @@ describe("a page addressed by offset", () => {
     limit: number;
     parsedCursor?: SearchCursor | null;
     skip: number;
+    /** Citation authority per decision; none by default. */
+    authorityById?: ReadonlyMap<string, number>;
   };
 
   const readOffsetPage = async ({
+    authorityById = new Map(),
     limit,
     parsedCursor = null,
     skip,
@@ -1642,16 +1647,115 @@ describe("a page addressed by offset", () => {
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) =>
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
-      rankCandidates: async (candidates) => ({
-        context: null,
-        groups: [],
-        ranked: blendStableCitationAuthority({
-          candidates,
-          authorityById: new Map(),
-          weight: DEFAULT_AUTHORITY_WEIGHT,
-        }),
-      }),
+      // The production contract: leave out the groups the scope names. No
+      // decision here is folded with another, so none is reported to carry.
+      rankCandidates: async (candidates, { excludedGroups }) => {
+        const shown = candidates.filter(
+          ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
+        );
+        return {
+          context: null,
+          groups: [],
+          ranked: blendStableCitationAuthority({
+            candidates: shown,
+            authorityById: new Map(authorityById),
+            weight: DEFAULT_AUTHORITY_WEIGHT,
+          }),
+        };
+      },
     });
+
+  type ChainInput = Pick<ReadOffsetPageOptions, "authorityById" | "limit"> & {
+    /** Stop once the chain has read this many results. */
+    until: number;
+  };
+
+  /** The cursor chain's results in order, read page by page from the first. */
+  const readCursorChain = async ({
+    authorityById,
+    limit,
+    until,
+  }: ChainInput) => {
+    const chain: string[] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 200 && chain.length < until; page += 1) {
+      // Each cursor page needs the previous page's cursor.
+      const read = await readOffsetPage({
+        ...(authorityById === undefined ? {} : { authorityById }),
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      chain.push(...read.pageRanked.map((hit) => hit.id));
+      if (read.nextCursor === null) {
+        break;
+      }
+      cursor = read.nextCursor;
+    }
+    return chain;
+  };
+
+  test("any page by offset is that page of the cursor chain, whatever the ranking found deeper", async () => {
+    // Decisions match a varying number of passages, so the chain's first
+    // windows end before every decision is scanned, and some decisions the
+    // first scan never reached carry enough citation authority to rank
+    // above ones it already showed. A deeper scan that re-ranked everything
+    // would reorder what earlier pages showed; the chain does not.
+    await assertProperty(
+      "any page by offset is that page of the cursor chain, whatever the ranking found deeper",
+      fc.asyncProperty(
+        fc.array(fc.integer({ min: 1, max: 8 }), {
+          minLength: 150,
+          maxLength: 260,
+        }),
+        fc.array(fc.double({ min: 0, max: 50, noNaN: true }), {
+          minLength: 260,
+          maxLength: 260,
+        }),
+        fc.integer({ min: 5, max: 40 }),
+        async (passagesPerDocument, authorities, limit) => {
+          engineHits = passagesPerDocument.flatMap((count, index) =>
+            Array.from({ length: count }, (_, passage) => ({
+              document_id: documentId(index),
+              anchor_id: `d${String(index)}p${String(passage)}`,
+            })),
+          );
+          const authorityById = new Map(
+            passagesPerDocument.map((_, index) => [
+              documentId(index),
+              // Deep decisions weigh most: the first scan cannot see them.
+              (authorities.at(index) ?? 0) *
+                (index / passagesPerDocument.length),
+            ]),
+          );
+          const pages = 4;
+          const chain = await readCursorChain({
+            authorityById,
+            limit,
+            until: pages * limit,
+          });
+
+          const byOffset: string[][] = [];
+          for (let page = 1; page < pages; page += 1) {
+            // Sequential only to keep the fake engine's request log readable.
+            const read = await readOffsetPage({
+              authorityById,
+              limit,
+              skip: page * limit,
+            });
+            byOffset.push(read.pageRanked.map((hit) => hit.id));
+          }
+
+          // Page 1 then the offset pages are the chain's prefix: no repeat,
+          // no gap, in the chain's order.
+          expect([...chain.slice(0, limit), ...byOffset.flat()]).toEqual(
+            chain.slice(0, pages * limit),
+          );
+        },
+      ),
+      { numRuns: 20 },
+    );
+  });
 
   test("every offset page holds the decisions the cursor chain reaches", async () => {
     engineHits = Array.from({ length: 30_000 }, (_, index) => ({
@@ -1698,16 +1802,17 @@ describe("a page addressed by offset", () => {
 
     const page = await readOffsetPage({ limit, skip });
 
-    // The fixed cap alone would have stopped this scan short of the page.
+    // One window of the chain holds fewer decisions than the page is deep.
     expect(
       LIMITS.corpusIndexSearchMaxRounds *
         LIMITS.corpusIndexSearchCandidateLimit,
     ).toBeLessThan(LIMITS.caseLawResultDepthMax * passagesPerDocument);
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
     expect(page.pageRanked.map((hit) => hit.id)).toEqual(
       Array.from({ length: limit }, (_, index) => documentId(skip + index)),
     );
     expect(page.scan.rounds).toBeLessThanOrEqual(
-      corpusIndexScanRoundCap({ ahead: skip, limit }),
+      CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
     );
   });
 
@@ -1750,7 +1855,6 @@ describe("a page addressed by offset", () => {
 
     // The offset page, then its own cursor followed.
     const offsetPage = await readOffsetPage({ limit, skip });
-    expect(offsetPage.nextCursor?.replayDepth).toBe(skip + limit);
     const followed: string[][] = [];
     let cursor = offsetPage.nextCursor;
     for (let page = 0; page < continuations; page += 1) {
@@ -1859,20 +1963,6 @@ describe("a page addressed by offset", () => {
         documentId(index),
       ).filter((id) => !pinnedIds.has(id)),
     ]);
-  });
-
-  test("a continuation of an offset page replays as deep as its cursor says", () => {
-    expect(corpusIndexScanRoundCap({ ahead: 500, limit: 20 })).toBeGreaterThan(
-      LIMITS.corpusIndexSearchMaxRounds,
-    );
-  });
-
-  test("a page without an offset keeps the fixed round cap", () => {
-    for (const limit of [1, 20, LIMITS.caseLawSearchPageSizeMax]) {
-      expect(corpusIndexScanRoundCap({ ahead: 0, limit })).toBe(
-        LIMITS.corpusIndexSearchMaxRounds,
-      );
-    }
   });
 
   test("a page placed by both a cursor and an offset is a programming error", async () => {

@@ -2433,7 +2433,9 @@ export const searchCorpusIndexDecisions = async ({
         tokens: excerptTokens,
       }),
     unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
-    rankCandidates: async (candidates) =>
+    // The scan names the groups to leave out: a page addressed by offset
+    // walks windows the request's own cursor never named.
+    rankCandidates: async (candidates, { excludedGroups }) =>
       await rehydrateCaseLawCandidates({
         hitDispositions,
         body,
@@ -2442,7 +2444,7 @@ export const searchCorpusIndexDecisions = async ({
         courtWeights,
         generation,
         hydrated,
-        excludedGroups: new Set(parsedCursor?.excludedGroups),
+        excludedGroups,
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       }),
