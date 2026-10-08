@@ -139,6 +139,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
+
 // ── Publisher boundary ───────────────────────────────────
 
 const ORIGIN = "https://apiorzeczenia.wroclaw.sa.gov.pl";
@@ -982,10 +984,10 @@ const parseDocument = ({
     catch: errorTag,
   });
   if (Result.isError(parsed)) {
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
       caseNumber: keyed.caseNumber,
-      "error.type": parsed.error,
+      error: parsed.error,
     });
     return null;
   }

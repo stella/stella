@@ -65,6 +65,7 @@ const callName = (expression: ts.Expression): string => {
 const SIGNAL_CALLS = new Set([
   "panic",
   "observeFailure",
+  "logDocumentParseFailure",
   "captureException",
   "captureMessage",
   "captureError",

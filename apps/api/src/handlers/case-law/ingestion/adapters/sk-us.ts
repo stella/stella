@@ -135,6 +135,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
+
 // ── Constants ─────────────────────────────────────────────
 
 const BASE_URL = "https://www.ustavnysud.sk";
@@ -1636,10 +1638,10 @@ const assembleSkUsDecision = ({
       // Reported rather than swallowed: a parser that starts failing across
       // a whole page is otherwise indistinguishable from decisions that
       // genuinely carry no text.
-      logger.warn("case_law.ingestion.document_parse_failed", {
+      logDocumentParseFailure({
         adapterKey: ADAPTER_KEYS.SK_US,
         caseNumber,
-        "error.type": errorTag(error),
+        error: errorTag(error),
       });
     }
   }

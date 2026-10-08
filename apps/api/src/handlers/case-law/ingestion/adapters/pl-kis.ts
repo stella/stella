@@ -119,6 +119,7 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -1171,10 +1172,10 @@ const readDocument = async (
   if (Result.isOk(read)) {
     return { output: read.value, from: "pdf" };
   }
-  logger.warn("case_law.ingestion.document_parse_failed", {
+  logDocumentParseFailure({
     adapterKey: ADAPTER_KEYS.PL_KIS,
     caseNumber: input.caseNumber,
-    "error.type": read.error,
+    error: read.error,
   });
   return undefined;
 };

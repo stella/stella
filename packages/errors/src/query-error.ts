@@ -30,12 +30,15 @@ const SQL_KEYWORDS = new Set(
   ),
 );
 
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const isQueryError = (value: Record<string, unknown>): boolean =>
   (typeof value["name"] === "string" && QUERY_ERROR_NAME.test(value["name"])) ||
-  (typeof value["query"] === "string" && Array.isArray(value["params"])) ||
+  (typeof value["query"] === "string" && isUnknownArray(value["params"])) ||
   value["name"] === "PostgresError" ||
   (typeof value["code"] === "string" && SQLSTATE.test(value["code"])) ||
   (typeof value["errno"] === "string" && SQLSTATE.test(value["errno"]));
@@ -142,7 +145,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       return "[circular]";
     }
     seen.add(input);
-    if (Array.isArray(input)) {
+    if (isUnknownArray(input)) {
       return input.map((item) =>
         visit({ input: item, databaseCause, depth: depth + 1 }),
       );
@@ -259,7 +262,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       visited.add(input);
       queryGraph ||= isQueryError(input);
       for (const key of Object.getOwnPropertyNames(input)) {
-        if (Array.isArray(input) && key === "length") {
+        if (isUnknownArray(input) && key === "length") {
           continue;
         }
         const queryField = isQueryErrorOutputKey(key);
@@ -286,7 +289,7 @@ type ErrorOutputOptions = {
 export const logErrorOutput = ({ level, values }: ErrorOutputOptions): void => {
   const method = level === "info" ? "log" : level;
   const safeValues = sanitizeErrorForOutput(values);
-  console[method](...(Array.isArray(safeValues) ? safeValues : [safeValues]));
+  console[method](...(isUnknownArray(safeValues) ? safeValues : [safeValues]));
 };
 
 /** Logger contract used by SDKs that own their exception printing. */

@@ -373,6 +373,7 @@ describe("unsignalled skip shapes", () => {
   }
 
   for (const helper of [
+    "logDocumentParseFailure",
     "captureException",
     "captureError",
     "captureRequestError",

@@ -109,6 +109,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
+
 // ── Publisher boundary ───────────────────────────────────
 
 const PL_UODO_ORIGIN = "https://orzeczenia.uodo.gov.pl";
@@ -1357,10 +1359,10 @@ const assembleAuthorityDecision = ({
           sourceUrl,
         });
   if (parsed !== null && Result.isError(parsed)) {
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_UODO,
       caseNumber,
-      "error.type": errorTag(parsed.error),
+      error: errorTag(parsed.error),
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;

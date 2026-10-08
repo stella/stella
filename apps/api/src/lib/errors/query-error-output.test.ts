@@ -10,6 +10,8 @@ import {
   sanitizeErrorForOutput,
 } from "@stll/errors";
 
+import { logDocumentParseFailure } from "@/api/handlers/case-law/ingestion/adapters/document-parse-failure";
+import { formatHealthReport } from "@/api/handlers/case-law/ingestion/adapters/health-check";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   connectionErrorFields,
@@ -373,6 +375,46 @@ test("output sinks redact query markers across sibling and nested payloads", () 
     );
   } finally {
     analytics.restore();
+    logs.restore();
+  }
+});
+
+test("adapter failure output keeps warning diagnostics without query values", () => {
+  const logs = installRecordingLogger();
+  try {
+    logDocumentParseFailure({
+      adapterKey: "fixture-adapter",
+      caseNumber: SECRETS[1],
+      error: queryFailure(),
+    });
+    logDocumentParseFailure({
+      adapterKey: "fixture-adapter",
+      caseNumber: "fixture-case",
+      error: "FixtureParseError",
+    });
+    expect(logs.records).toHaveLength(2);
+    expect(logs.at("WARN")).toHaveLength(2);
+    assertSafe(logs.records);
+    const output = inspect(logs.records, { depth: 20 });
+    expect(output).toContain("case_law.ingestion.document_parse_failed");
+    expect(output).toContain("23505");
+    expect(output).toContain("account_token_unique");
+    expect(output).toContain("FixtureParseError");
+    const report = formatHealthReport([
+      {
+        key: "fixture-adapter",
+        name: "Fixture adapter",
+        status: "down",
+        decisionCount: 0,
+        hasNextCursor: false,
+        fields: [],
+        durationMs: 0,
+        error: queryFailure(),
+      },
+    ]);
+    assertSafe(report);
+    expect(report).toContain("account_token_unique");
+  } finally {
     logs.restore();
   }
 });
