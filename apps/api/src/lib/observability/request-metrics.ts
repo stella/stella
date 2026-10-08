@@ -96,9 +96,7 @@ const EVENT_LOOP_DELAY_METRIC = {
 
 /**
  * One reporting window of the process's event-loop delay. Undimensioned: the
- * process is the unit, and a task or route id would only multiply series. An
- * alarm reads the per-environment copy its log metric filter derives, since
- * this namespace has no environment dimension.
+ * process is the unit, and a task or route id would only multiply series.
  */
 export const emitEventLoopDelayMetric = ({
   maxMs,
