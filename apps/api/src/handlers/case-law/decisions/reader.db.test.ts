@@ -25,6 +25,10 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import {
+  APP_READER_TEXT,
+  type AppReaderText,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   PARTIAL_OBSERVATION_FIELD,
@@ -38,6 +42,8 @@ import {
   PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
+import type { McpRequestContext } from "@/api/mcp/context";
+import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -46,6 +52,7 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 import { readDecisionReaderSource } from "./reader";
+import type { ReaderSourceOptions } from "./reader";
 
 const DB_SETUP_TIMEOUT_MS = 120_000;
 // Warm embedded-Postgres point reads must finish well inside the request budget.
@@ -410,7 +417,7 @@ const read = async (
     legislationDb,
     decisionId,
     phase,
-    withheldTextPolicy: "metadata-only",
+    audience: "model",
   });
 const measuredRead = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -454,14 +461,15 @@ describe("public decision reader database boundary", () => {
     }
   });
 
-  test("licence metadata-only skips citation reads while show-to-user locates real anchors", async () => {
+  test("text kept from AI skips citation reads for the model while the app reader locates real anchors", async () => {
     const metadataOnly = await measuredRead(withheldId, "citations");
     const visible = await runWithQueryCounter(async (counter) => {
       const result = await readDecisionReaderSource({
         caseLawDb,
         decisionId: withheldId,
         phase: "citations",
-        withheldTextPolicy: "show-to-user",
+        audience: "app",
+        appReaderTextOf: () => APP_READER_TEXT.FULL,
       });
       return { result, statements: counter.count };
     });
@@ -473,11 +481,50 @@ describe("public decision reader database boundary", () => {
     ) {
       throw new Error("Expected reader sources for withheld decision");
     }
-    expect(metadataOnly.result.decision.source.allowsDerivedAi).toBe(false);
+    expect(metadataOnly.result.textAccess).toBe("withheld");
+    expect(metadataOnly.result.ast).toBeNull();
+    expect(visible.result.textAccess).toBe("readable");
     expect(metadataOnly.result.citationAnchors).toEqual([]);
     expect(visible.result.citationAnchors).toHaveLength(1);
     expect(visible.result.citationAnchors.at(0)?.decisionId).toBe(largeId);
     expect(metadataOnly.statements).toBeLessThan(visible.statements);
+  });
+
+  test("the app reader follows the source's setting for text kept from AI", async () => {
+    const body =
+      documentAst({
+        blockCount: SMALL_BLOCK_COUNT,
+        citationCount: 1,
+      }).blocks.at(-1)?.plainText ?? "";
+    expect(body).not.toBe("");
+    const blocksFor = async (appReaderText: AppReaderText) =>
+      await DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks({
+        args: { decision_id: withheldId },
+        context: asTestRaw<McpRequestContext>({
+          testDependencies: {
+            readDecisionReaderSource: async (options: ReaderSourceOptions) =>
+              await readDecisionReaderSource({
+                ...options,
+                caseLawDb,
+                legislationDb,
+                appReaderTextOf: () => appReaderText,
+              }),
+          },
+        }),
+      });
+    const full = await blocksFor(APP_READER_TEXT.FULL);
+    expect(full).toMatchObject({
+      status: "success",
+      data: { content: { status: "available" } },
+    });
+    expect(JSON.stringify(full)).toContain(body);
+
+    const metadataOnly = await blocksFor(APP_READER_TEXT.METADATA_ONLY);
+    expect(metadataOnly).toMatchObject({
+      status: "success",
+      data: { content: { status: "withheld" } },
+    });
+    expect(JSON.stringify(metadataOnly)).not.toContain(body);
   });
 
   test("query counts stay constant as blocks and citations grow; warm reads stay bounded", async () => {
@@ -548,7 +595,7 @@ describe("public decision reader database boundary", () => {
         legislationDb,
         decisionId: provisionLargeId,
         phase: "provisions",
-        withheldTextPolicy: "metadata-only",
+        audience: "model",
         ...(referenceCursor === undefined ? {} : { referenceCursor }),
       });
       expect(result?.status).toBe("read");
@@ -601,7 +648,7 @@ describe("public decision reader database boundary", () => {
         legislationDb,
         decisionId: provisionLargeId,
         phase: "provisions",
-        withheldTextPolicy: "metadata-only",
+        audience: "model",
         referenceCursor: first.referenceNextCursor,
       }),
     ).toEqual({ status: "conflict" });

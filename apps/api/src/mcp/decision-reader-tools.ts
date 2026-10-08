@@ -1,7 +1,10 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { decisionParagraphFragment } from "@stll/api-contract/decision-paragraph-range";
+import {
+  type DecisionParagraphRange,
+  decisionParagraphFragment,
+} from "@stll/api-contract/decision-paragraph-range";
 
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
@@ -19,10 +22,8 @@ import {
   previewProvisionArgs,
   provisionPreviewOutput,
   READER_PAGE_MAX_CHARS,
-  READER_WITHHELD_TEXT_POLICY,
   readDecisionBlocksArgs,
 } from "./decision-reader-contract";
-import type { ReaderWithheldTextPolicy } from "./decision-reader-contract";
 import {
   decodeReaderCursor,
   packReaderSourcePage,
@@ -77,6 +78,16 @@ const metadataOf = ({ decision }: ReaderSource) => ({
     languageAlternates: decision.languageAlternates,
     slug: decision.slug,
   }),
+});
+const metadataWithFragment = (
+  metadata: ReturnType<typeof metadataOf>,
+  paragraphs: DecisionParagraphRange | undefined,
+) => ({
+  ...metadata,
+  appUrl:
+    metadata.appUrl === null || paragraphs === undefined
+      ? metadata.appUrl
+      : `${metadata.appUrl}#${decisionParagraphFragment(paragraphs)}`,
 });
 const readSource = async (
   context: McpRequestContext,
@@ -162,7 +173,7 @@ const openTool: TypedMcpToolHandler<
   const read = await readSource(context, {
     decisionId: brandPersistedCaseLawDecisionId(parsed.output.decision_id),
     phase: "blocks",
-    withheldTextPolicy: "metadata-only",
+    audience: "model",
   });
   if (Result.isError(read)) {
     return internalFailureResult(read.error);
@@ -175,9 +186,14 @@ const openTool: TypedMcpToolHandler<
   }
   const source = read.value;
   const metadata = metadataOf(source);
-  // Model-visible open never carries licence-withheld body text, whichever widget policy is selected.
-  if (!source.decision.source.allowsDerivedAi) {
-    return toolDataResult({ status: "withheld", metadata, withheldReason });
+  // The opening is model-visible: the read withholds text the source keeps
+  // from AI. The link still targets the requested paragraphs.
+  if (source.textAccess === "withheld") {
+    return toolDataResult({
+      status: "withheld",
+      metadata: metadataWithFragment(metadata, parsed.output.paragraphs),
+      withheldReason,
+    });
   }
   if (source.ast === null) {
     return toolDataResult({ status: "unavailable", metadata });
@@ -197,13 +213,7 @@ const openTool: TypedMcpToolHandler<
     case "selected":
       return toolDataResult({
         status: "available",
-        metadata: {
-          ...metadata,
-          appUrl:
-            metadata.appUrl === null || parsed.output.paragraphs === undefined
-              ? metadata.appUrl
-              : `${metadata.appUrl}#${decisionParagraphFragment(parsed.output.paragraphs)}`,
-        },
+        metadata: metadataWithFragment(metadata, parsed.output.paragraphs),
         outline: readerOutline(source.ast.blocks),
         window: selected.window,
         truncated: selected.truncated,
@@ -214,97 +224,90 @@ const openTool: TypedMcpToolHandler<
   }
 };
 
-export const createReaderBlocksTool =
-  (
-    withheldTextPolicy: ReaderWithheldTextPolicy,
-  ): TypedMcpToolHandler<v.InferInput<typeof blocksDecisionOutput>> =>
-  async ({ args, context }) => {
-    const parsed = v.safeParse(
-      READ_DECISION_BLOCKS_TOOL_DEFINITION.inputSchemaSource,
-      args,
-    );
-    if (!parsed.success) {
-      return validationErrorResult(parsed.issues);
-    }
-    const { decision_id, cursor } = parsed.output;
-    const position = cursor === undefined ? null : decodeReaderCursor(cursor);
-    if (
-      cursor !== undefined &&
-      (position === null || position.decisionId !== decision_id)
-    ) {
+const blocksTool: TypedMcpToolHandler<
+  v.InferInput<typeof blocksDecisionOutput>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(
+    READ_DECISION_BLOCKS_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { decision_id, cursor } = parsed.output;
+  const position = cursor === undefined ? null : decodeReaderCursor(cursor);
+  if (
+    cursor !== undefined &&
+    (position === null || position.decisionId !== decision_id)
+  ) {
+    return invalidCursorResult({
+      cursor,
+      tool: "read_case_law_decision_blocks",
+    });
+  }
+  const phase = position?.phase ?? "blocks";
+  const referenceCursor = position?.referenceCursor ?? undefined;
+  const read = await readSource(context, {
+    decisionId: brandPersistedCaseLawDecisionId(decision_id),
+    phase,
+    ...(referenceCursor === undefined ? {} : { referenceCursor }),
+    audience: "app",
+  });
+  if (Result.isError(read)) {
+    return internalFailureResult(read.error);
+  }
+  if (read.value === null) {
+    return missing();
+  }
+  if (read.value.status === "conflict") {
+    return conflict();
+  }
+  const source = read.value;
+  const metadata = metadataOf(source);
+  if (source.textAccess === "withheld") {
+    return toolDataResult({
+      metadata,
+      content: { status: "withheld", withheldReason },
+    });
+  }
+  if (source.ast === null) {
+    return toolDataResult({ metadata, content: { status: "unavailable" } });
+  }
+  const page = packReaderSourcePage({ ast: source.ast, source, position });
+  switch (page.status) {
+    case "conflict":
+      return conflict();
+    case "invalid_offset":
       return invalidCursorResult({
-        cursor,
+        cursor: cursor ?? "",
         tool: "read_case_law_decision_blocks",
       });
-    }
-    const phase = position?.phase ?? "blocks";
-    const referenceCursor = position?.referenceCursor ?? undefined;
-    const read = await readSource(context, {
-      decisionId: brandPersistedCaseLawDecisionId(decision_id),
-      phase,
-      ...(referenceCursor === undefined ? {} : { referenceCursor }),
-      withheldTextPolicy,
-    });
-    if (Result.isError(read)) {
-      return internalFailureResult(read.error);
-    }
-    if (read.value === null) {
-      return missing();
-    }
-    if (read.value.status === "conflict") {
-      return conflict();
-    }
-    const source = read.value;
-    const metadata = metadataOf(source);
-    if (
-      !source.decision.source.allowsDerivedAi &&
-      withheldTextPolicy === "metadata-only"
-    ) {
-      return toolDataResult({
-        metadata,
-        content: { status: "withheld", withheldReason },
-      });
-    }
-    if (source.ast === null) {
-      return toolDataResult({ metadata, content: { status: "unavailable" } });
-    }
-    const page = packReaderSourcePage({ ast: source.ast, source, position });
-    switch (page.status) {
-      case "conflict":
-        return conflict();
-      case "invalid_offset":
-        return invalidCursorResult({
-          cursor: cursor ?? "",
-          tool: "read_case_law_decision_blocks",
-        });
-      case "too_large":
-        return tooLarge();
-      case "packed":
-        break;
-      default:
-        page satisfies never;
-        return panic("Unknown reader page status");
-    }
-    const payload = {
-      metadata,
-      content: {
-        status: "available",
-        phase: page.phase,
-        items: page.items,
-        blockFragments: page.blockFragments,
-        citationAnchors: page.citationAnchors,
-        provisionAnchors: page.provisionAnchors,
-        nextCursor: page.nextCursor,
-        limit: READER_PAGE_MAX_CHARS,
-      },
-    } as const;
-    if (JSON.stringify(payload).length > READER_PAGE_MAX_CHARS) {
+    case "too_large":
       return tooLarge();
-    }
-    return toolDataResult(payload);
-  };
-
-const blocksTool = createReaderBlocksTool(READER_WITHHELD_TEXT_POLICY);
+    case "packed":
+      break;
+    default:
+      page satisfies never;
+      return panic("Unknown reader page status");
+  }
+  const payload = {
+    metadata,
+    content: {
+      status: "available",
+      phase: page.phase,
+      items: page.items,
+      blockFragments: page.blockFragments,
+      citationAnchors: page.citationAnchors,
+      provisionAnchors: page.provisionAnchors,
+      nextCursor: page.nextCursor,
+      limit: READER_PAGE_MAX_CHARS,
+    },
+  } as const;
+  if (JSON.stringify(payload).length > READER_PAGE_MAX_CHARS) {
+    return tooLarge();
+  }
+  return toolDataResult(payload);
+};
 
 const previewTool: TypedMcpToolHandler<
   v.InferInput<typeof provisionPreviewOutput>
