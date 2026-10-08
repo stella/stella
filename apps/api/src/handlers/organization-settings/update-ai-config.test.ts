@@ -11,7 +11,11 @@ import {
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
-import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
+import type {
+  DataRegion,
+  OrgAIConfig,
+  OrgAIModelSelection,
+} from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import { toSafeId } from "@/api/lib/branded-types";
 import * as outbound from "@/api/lib/safe-outbound-fetch";
@@ -485,7 +489,7 @@ describe("sparse custom model settings", () => {
         const selection = {
           provider: "google",
           modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
-        };
+        } satisfies OrgAIModelSelection;
         expect(resolveOrgAIModelForRole(existing, role)).toEqual(selection);
         expect(resolveOrgAIModelForRole(saved, role)).toEqual(selection);
       }

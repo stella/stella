@@ -768,9 +768,7 @@ test("role comparison ignores insertion order while preserving default and expli
       }),
     ).toBe(false);
   }
-  expect(
-    haveSameRoleModelSelections({ current: {}, baseline: { chat: undefined } }),
-  ).toBe(true);
+  expect(haveSameRoleModelSelections({ current: {}, baseline: {} })).toBe(true);
   expect(
     haveSameRoleModelSelections({ current: {}, baseline: { chat: null } }),
   ).toBe(false);

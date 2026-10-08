@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -314,7 +315,9 @@ describe("AI provider PDF canary contract", () => {
       const selection = pdfCanarySelection(provider);
       if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
         expect(selection).toEqual({
-          modelId: DEFAULT_MODELS[provider].pdf,
+          modelId:
+            DEFAULT_MODELS[provider].pdf ??
+            panic(`${provider} supports PDF without a default PDF model`),
           role: "pdf",
         });
         continue;
