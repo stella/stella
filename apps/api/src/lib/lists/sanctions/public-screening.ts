@@ -25,10 +25,11 @@ import {
 export const SANCTIONS_WARMING_RETRY_AFTER_SECONDS = 5;
 
 /**
- * How long one edition's load may run before it counts as stalled. Far above
- * a real load, so it never cuts one short; it only frees a hung worker.
+ * How long indexing one edition may hold the matcher before it counts as
+ * stalled. Far above a real index build, so it never cuts one short; it only
+ * frees a hung worker. The database read runs outside it.
  */
-export const SANCTIONS_WARM_STALL_MS = 10 * 60 * 1000;
+export const SANCTIONS_WARM_STALL_MS = 2 * 60 * 1000;
 
 /** Backoff between attempts to load an edition that failed to load. */
 export const SANCTIONS_WARM_RETRY_MS = {
@@ -64,9 +65,9 @@ const warmFailure = (
 };
 
 /**
- * Loads editions into the matcher in one background lease per edition, apart
- * from request deadlines: a slow edition finishes, and each loaded one stays
- * loaded while another fails.
+ * Loads editions into the matcher one at a time in the background, apart from
+ * request deadlines: a slow edition finishes, and each loaded one stays loaded
+ * and keeps screening while another loads or fails.
  */
 const createEditionWarmer = ({
   pool,
@@ -75,59 +76,73 @@ const createEditionWarmer = ({
   now,
 }: Required<PublicScreeningOptions>) => {
   const targets = new Map<SanctionsSource, WarmTarget>();
-  const state: { db: SanctionsReadDb | null; running: Promise<void> | null } = {
-    db: null,
-    running: null,
-  };
+  const state: {
+    db: SanctionsReadDb | null;
+    running: Promise<void> | null;
+    holdsMatcher: boolean;
+  } = { db: null, running: null, holdsMatcher: false };
   const detached = createDetached((error) => {
     reportFailure({ stage: "public-warmup", reason: "operation", error });
   });
 
+  // The read runs outside any lease: loaded lists keep screening meanwhile.
+  // Only the transfer and index hold the matcher.
   const warm = async (
     db: SanctionsReadDb,
     source: SanctionsSource,
     { edition }: WarmTarget,
-  ): Promise<MatcherWorkOutcome<Result<void, WarmFailure>>> =>
-    await pool.run(
-      async (session): Promise<Result<void, WarmFailure>> => {
-        if (session.hasEdition(source, edition.id)) {
-          return Result.ok(undefined);
-        }
-        const startedAt = now();
-        const loaded = await Result.tryPromise(
-          async () =>
-            await loadEntries({ db, edition, signal: session.signal }),
-        );
-        if (loaded.isErr()) {
-          return Result.err({ reason: "entries-read", cause: loaded.error });
-        }
-        if (loaded.value.length !== edition.entryCount) {
-          return Result.err({ reason: "short-read" });
-        }
-        const indexed = await session.load({
-          source,
-          editionId: edition.id,
-          list: {
-            version: {
-              source,
-              publishedAt: edition.publishedAt,
-              fileId: edition.fileId,
-            },
-            entries: loaded.value,
-          },
-        });
-        if (indexed !== "indexed") {
-          return Result.err({ reason: "matcher-unavailable" });
-        }
-        logger.info("sanctions.edition_warmed", {
-          source,
-          entries: edition.entryCount,
-          durationMs: Math.round(now() - startedAt),
-        });
-        return Result.ok(undefined);
-      },
-      { deadlineMs: SANCTIONS_WARM_STALL_MS },
+  ): Promise<MatcherWorkOutcome<Result<void, WarmFailure>>> => {
+    const startedAt = now();
+    const loaded = await Result.tryPromise(
+      async () => await loadEntries({ db, edition }),
     );
+    if (loaded.isErr()) {
+      return {
+        status: "completed",
+        value: Result.err({ reason: "entries-read", cause: loaded.error }),
+      };
+    }
+    if (loaded.value.length !== edition.entryCount) {
+      return {
+        status: "completed",
+        value: Result.err({ reason: "short-read" }),
+      };
+    }
+    state.holdsMatcher = true;
+    try {
+      return await pool.run(
+        async (session): Promise<Result<void, WarmFailure>> => {
+          if (session.hasEdition(source, edition.id)) {
+            return Result.ok(undefined);
+          }
+          const indexed = await session.load({
+            source,
+            editionId: edition.id,
+            list: {
+              version: {
+                source,
+                publishedAt: edition.publishedAt,
+                fileId: edition.fileId,
+              },
+              entries: loaded.value,
+            },
+          });
+          if (indexed !== "indexed") {
+            return Result.err({ reason: "matcher-unavailable" });
+          }
+          logger.info("sanctions.edition_warmed", {
+            source,
+            entries: edition.entryCount,
+            durationMs: Math.round(now() - startedAt),
+          });
+          return Result.ok(undefined);
+        },
+        { deadlineMs: SANCTIONS_WARM_STALL_MS },
+      );
+    } finally {
+      state.holdsMatcher = false;
+    }
+  };
 
   const settle = (
     source: SanctionsSource,
@@ -182,7 +197,18 @@ const createEditionWarmer = ({
   };
 
   return {
-    isRunning: () => state.running !== null,
+    /** The warmup is indexing an edition; the matcher answers nothing else. */
+    holdsMatcher: () => state.holdsMatcher,
+    /** Like `want`, without asking for the edition: a request that cannot check it. */
+    status: (
+      source: SanctionsSource,
+      edition: SanctionsActiveEdition,
+    ): "warming" | "load-failed" => {
+      const target = targets.get(source);
+      return target?.edition.id === edition.id && target.retryAt > now()
+        ? "load-failed"
+        : "warming";
+    },
     /** Every pass started so far, including any that start as one ends. */
     settled: async () => {
       while (state.running !== null) {
@@ -245,13 +271,18 @@ export const createPublicSanctionsScreening = ({
     } as const);
 
   const screenPublic: typeof screenSanctionsSubject = async (props) => {
-    // The warmup holds the matcher: answer from what is on file meanwhile
-    // instead of queueing behind it.
-    if (warmer.isRunning()) {
+    // The warmup is indexing for a moment: answer from what is on file
+    // instead of queueing behind it, and ask again shortly.
+    if (warmer.holdsMatcher()) {
       return await screenSanctionsSubject({
         ...props,
         reportFailure,
-        matcher: async (list) => notLoaded(list),
+        matcher: async ({ source, edition }) =>
+          Result.err({
+            code: warmer.status(source, edition),
+            stage: "public-warmup",
+            reason: null,
+          } as const),
       });
     }
     const result = await pool.run(

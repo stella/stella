@@ -837,7 +837,7 @@ test("a cold start converges when editions load for longer than any request dead
   }
 });
 
-test("concurrent cold requests share one warmup and never queue behind it", async () => {
+test("concurrent cold requests share one warmup and its read never holds the matcher", async () => {
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });
   const gate = Promise.withResolvers<undefined>();
@@ -868,20 +868,26 @@ test("concurrent cold requests share one warmup and never queue behind it", asyn
     // The first request meets a cold matcher and starts the only warmup.
     const opening = [await publicScreen(publicProps("First Distant Name"))];
     await firstRead.promise;
-    const during = await Promise.all(
-      Array.from(
-        { length: 5 },
-        async (_, index) =>
-          await publicScreen(publicProps(`Distant Name ${index}`)),
-      ),
-    );
+    // Public admission lets two requests in at once; three such rounds.
+    const during: Awaited<ReturnType<typeof publicScreen>>[] = [];
+    for (const round of [0, 1, 2]) {
+      during.push(
+        ...(await Promise.all(
+          [0, 1].map(
+            async (index) =>
+              await publicScreen(publicProps(`Distant Name ${round}${index}`)),
+          ),
+        )),
+      );
+    }
     for (const answer of [...opening, ...during]) {
       expect(
         answer.unwrap().lists.every(({ reason }) => reason === "warming"),
       ).toBe(true);
     }
     expect(reads).toBe(1);
-    expect(leases).toEqual({ requests: 1, warmups: 1 });
+    // Requests kept the matcher while the read ran; none started a warmup.
+    expect(leases).toEqual({ requests: 7, warmups: 0 });
     gate.resolve(undefined);
     await publicScreen.warmupSettled();
     expect(reads).toBe(sanctionsSourceIds().length);
@@ -891,6 +897,79 @@ test("concurrent cold requests share one warmup and never queue behind it", asyn
     ).unwrap();
     expect(warm.status).toBe("clear");
     expect(reads).toBe(sanctionsSourceIds().length);
+  } finally {
+    gate.resolve(undefined);
+    await pool.close();
+  }
+});
+
+test("loaded lists keep screening while another edition reloads behind a held read", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const reloading: SanctionsSource = "uk";
+  const gate = Promise.withResolvers<undefined>();
+  const held = Promise.withResolvers<undefined>();
+  const evicted = { current: false };
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      ...pool,
+      run: async (work, options) =>
+        await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              // As if a newer edition replaced the loaded one.
+              hasEdition: (source, editionId) =>
+                !(evicted.current && source === reloading) &&
+                session.hasEdition(source, editionId),
+            }),
+          options,
+        ),
+    },
+    now: clock.now,
+    loadEntries: async (options) => {
+      const entries = await loadEditionEntries(options);
+      if (evicted.current && entries.at(0)?.source === reloading) {
+        held.resolve(undefined);
+        await gate.promise;
+      }
+      return entries;
+    },
+  });
+  const person = {
+    ...publicProps("Ivan Petrovich Sidorov"),
+    subject: {
+      type: "person",
+      name: "Ivan Petrovich Sidorov",
+      birthDate: null,
+      nationalityCodes: [],
+    },
+  } as const;
+  try {
+    await publicScreen(person);
+    await publicScreen.warmupSettled();
+    evicted.current = true;
+    expect(
+      reasonsBySource((await publicScreen(person)).unwrap().lists)[reloading],
+    ).toBe("warming");
+    await held.promise;
+    for (const _attempt of Array.from({ length: 3 })) {
+      const during = (await publicScreen(person)).unwrap();
+      expect(listOf(during.lists, "eu").status).toBe("possible-match");
+      expect(reasonsBySource(during.lists)).toEqual({
+        ...Object.fromEntries(
+          sanctionsSourceIds().map((source) => [source, null]),
+        ),
+        [reloading]: "warming",
+      });
+    }
+    evicted.current = false;
+    gate.resolve(undefined);
+    await publicScreen.warmupSettled();
+    const after = (await publicScreen(person)).unwrap();
+    expect(after.lists.every(({ status }) => status !== "unavailable")).toBe(
+      true,
+    );
   } finally {
     gate.resolve(undefined);
     await pool.close();
