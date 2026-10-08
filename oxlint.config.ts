@@ -4410,7 +4410,10 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/components/chat/request-secret-card.tsx", "apps/web/src/features/chat/hooks/use-chat-session.ts"],
+      files: [
+        "apps/web/src/components/chat/request-secret-card.tsx",
+        "apps/web/src/features/chat/hooks/use-chat-session.ts",
+      ],
       rules: { "no-secret-in-log-sink/no-secret-in-log-sink": "error" },
     },
     {

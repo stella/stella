@@ -276,7 +276,7 @@ describe("request secret card", () => {
         submissions.push(decision);
         return providedOutput;
       },
-      continueRequestSecret: (_toolCallId, receipt) => {
+      continueRequestSecret: async (_toolCallId, receipt) => {
         continuations.push(receipt);
         if (continuations.length > 1) {
           return Promise.resolve();
