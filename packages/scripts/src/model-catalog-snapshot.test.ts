@@ -158,7 +158,7 @@ test("capability refresh rejects before any fetch or write", async () => {
       ),
     ];
     const before = await Promise.all(
-      watched.map((file) => Bun.file(file).text()),
+      watched.map(async (file) => Bun.file(file).text()),
     );
     const child = Bun.spawn(
       [
@@ -181,7 +181,7 @@ test("capability refresh rejects before any fetch or write", async () => {
     expect(stderr).toContain("gen:capabilities --from-snapshot");
     expect(stdout.trim()).toBe(JSON.stringify({ fetches: 0, writes: 0 }));
     expect(
-      await Promise.all(watched.map((file) => Bun.file(file).text())),
+      await Promise.all(watched.map(async (file) => Bun.file(file).text())),
     ).toEqual(before);
   } finally {
     await rm(directory, { recursive: true, force: true });
