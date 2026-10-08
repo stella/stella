@@ -17,8 +17,6 @@ minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
   "@gdp-ts/core", # quarantine-expires: 2026-10-10T13:31:08.275Z
-  # TanStack Charts is needed before its quarantine ends.
-  "@tanstack/charts", # quarantine-expires: 2026-10-08T15:09:37.619Z
   # TanStack AI and its adapters share runtime contracts; keep the release family together.
   "@tanstack/ai", # quarantine-expires: 2026-10-12T12:53:35.784Z
   "@tanstack/ai-anthropic", # quarantine-expires: 2026-10-11T13:33:06.679Z
