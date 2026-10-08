@@ -173,10 +173,16 @@ export const applyDocRechecks = (
     if (!sourceMap) {
       panic("Documentation source registry missing");
     }
+    const separator =
+      sourceMap.properties.length > 0 && !sourceMap.properties.hasTrailingComma
+        ? ","
+        : "";
+    // NodeArray.end follows the existing separator, before closing-brace trivia.
+    // One insertion retains comments and works even with adjacent braces.
     edits.push({
-      start: sourceMap.end - 1,
-      end: sourceMap.end - 1,
-      text: additions.join(""),
+      start: sourceMap.properties.end,
+      end: sourceMap.properties.end,
+      text: `${separator}\n${additions.join("")}`,
     });
   }
   let updated = source;

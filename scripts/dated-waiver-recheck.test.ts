@@ -62,10 +62,12 @@ const declarations = (
     const file = path.join(directory, "fixture.mjs");
     const emitted = ts.transpileModule(content, {
       compilerOptions: { target: ts.ScriptTarget.ESNext },
-    }).outputText;
+      reportDiagnostics: true,
+    });
+    expect(emitted.diagnostics ?? []).toEqual([]);
     writeFileSync(
       file,
-      `${emitted}\nconsole.log(JSON.stringify({ sources: DOC_SOURCES, exclusions: DOC_SOURCE_EXCLUSIONS }));`,
+      `${emitted.outputText}\nconsole.log(JSON.stringify({ sources: DOC_SOURCES, exclusions: DOC_SOURCE_EXCLUSIONS }));`,
     );
     const result = Bun.spawnSync(["bun", "--no-env-file", file]);
     expect(result.stderr.toString()).toBe("");
@@ -124,6 +126,57 @@ describe("documentation rechecks", () => {
       expect(
         renderRecheckBody([{ ...waiver, id: dependency }], [decision]),
       ).toContain("proposed source registration");
+    }
+  });
+
+  test("registration preserves registry entries and comments with either separator style", () => {
+    const existing =
+      'existing: { dependencies: ["existing"], url: "https://existing.example/llms.txt" }';
+    const registries = [
+      "{}",
+      "{ /* trailing comment */ }",
+      "{ // trailing comment\n}",
+      `{ ${existing} }`,
+      `{${existing}}`,
+      `{ ${existing}, }`,
+      `{ ${existing} /* trailing comment with comma, */ }`,
+      `{ ${existing} // trailing comment with comma,\n}`,
+      `{ ${existing}, // trailing comment\n}`,
+    ];
+    for (const registry of registries) {
+      const nonemptySource = source.replace(
+        "DOC_SOURCES = {}",
+        () => `DOC_SOURCES = ${registry}`,
+      );
+      const before = declarations(nonemptySource);
+      const updated = applyDocRechecks(nonemptySource, [
+        {
+          status: "available",
+          dependency: "example",
+          url: "https://example.com/llms.txt",
+        },
+        {
+          status: "available",
+          dependency: "other",
+          url: "https://other.example/llms.txt",
+        },
+      ]);
+      const after = declarations(updated);
+      expect(after.sources).toEqual({
+        ...before.sources,
+        example: {
+          dependencies: ["example"],
+          url: "https://example.com/llms.txt",
+        },
+        other: {
+          dependencies: ["other"],
+          url: "https://other.example/llms.txt",
+        },
+      });
+      expect(after.exclusions).toEqual([]);
+      if (registry.includes("trailing comment")) {
+        expect(updated).toContain("trailing comment");
+      }
     }
   });
 
