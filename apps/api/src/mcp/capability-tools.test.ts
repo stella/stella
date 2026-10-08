@@ -3623,20 +3623,30 @@ for (const grants of [
         expect(parseToolPayload<{ id: string }>(schema).id).toBe(entry.id);
         continue;
       }
-      expect(errorEnvelope(schema)).toMatchObject({
-        code: "not_found",
-        message: "Not found",
-      });
-      for (const validate_only of [false, true]) {
-        const denied = await handleMcpToolCall({
-          toolName: "invoke_capability",
-          args: { capability: entry.id, validate_only },
-          context,
-        });
-        expect(errorEnvelope(denied)).toMatchObject({
+      // A hidden capability answers exactly like an unknown id, and its hint
+      // never names another hidden capability.
+      const hidden = entries
+        .filter((candidate) => !listed.includes(candidate.id))
+        .map((candidate) => candidate.id);
+      const expectUnknownId = (result: unknown) => {
+        const envelope = errorEnvelope(result);
+        expect(envelope).toMatchObject({
           code: "not_found",
-          message: "Not found",
+          message: `No capability with id "${entry.id}"`,
         });
+        for (const id of hidden) {
+          expect(JSON.stringify(envelope)).not.toContain(`\`${id}\``);
+        }
+      };
+      expectUnknownId(schema);
+      for (const validate_only of [false, true]) {
+        expectUnknownId(
+          await handleMcpToolCall({
+            toolName: "invoke_capability",
+            args: { capability: entry.id, validate_only },
+            context,
+          }),
+        );
       }
     }
   });

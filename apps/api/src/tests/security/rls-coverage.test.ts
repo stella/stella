@@ -139,7 +139,8 @@ const isListItemGate = (conjunct: string): boolean => {
 
 /** Every conjunct must be a recognised fence; one admitting all rows fails. */
 const isEntityFeatureFence = (expr: string): boolean =>
-  splitTopLevel(unwrap(expr), "AND").every(
+  // Postgres pretty-prints CASE over several lines; compare one-line text.
+  splitTopLevel(unwrap(expr.replaceAll(/\s+/gu, " ")), "AND").every(
     (conjunct) =>
       OWNER_VISIBLE_CONJUNCT.test(conjunct) || isListItemGate(conjunct),
   );
@@ -200,6 +201,16 @@ describe("policy coverage", () => {
       check_expr: null,
     };
     const fenced = { ...fence, check_expr: fence.using_expr };
+    const deparsed =
+      "CASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = cell_metadata.entity_version_id)))\nEND";
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "cell_metadata",
+        using_expr: deparsed,
+        check_expr: deparsed,
+      }),
+    ).toBeUndefined();
     expect(restrictivePolicyViolation(fenced)).toBeUndefined();
     expect(restrictivePolicyViolation(fence)).toBeDefined();
     const parentFence =
