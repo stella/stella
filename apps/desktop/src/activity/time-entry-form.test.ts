@@ -11,6 +11,8 @@ const blockAt = (durationMinutes: number) => {
       {
         appIdentifier: "private.app.identifier",
         appName: "Private application name",
+        windowTitle: "private window title",
+        document: "/private/documents/confidential.docx",
         start: "2026-03-10T08:00:00Z",
         end: Temporal.Instant.from("2026-03-10T08:00:00Z")
           .add({ milliseconds: durationMinutes * 60_000 })
@@ -27,7 +29,7 @@ const blockAt = (durationMinutes: number) => {
 
 describe("confirmed activity entry defaults", () => {
   test("every block starts with empty narrative and only six billing fields", () => {
-    for (const duration of [0.1, 1, 6, 6.1, 59, 60, 61, 120.5]) {
+    for (const duration of [3, 3.1, 6, 6.1, 59, 60, 61, 120.5]) {
       const block = blockAt(duration);
       const entry = initialTimeEntry("2026-03-10", block);
       expect(Object.keys(entry).toSorted()).toEqual([

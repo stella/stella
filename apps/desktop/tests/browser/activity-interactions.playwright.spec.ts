@@ -758,4 +758,7 @@ test("short activity stays in the timeline and total without a proposed block", 
   await expect(
     page.getByRole("button", { name: enMessages.activity.copySummary }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.createDraftEntry }),
+  ).toHaveCount(0);
 });
