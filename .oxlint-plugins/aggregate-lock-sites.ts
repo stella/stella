@@ -55,14 +55,16 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
     // Outside a known SQL context, lower-case row-lock wording with no SQL
     // keyword (any case) or SQL token before it is prose ("metadata for
     // update notifications"). Upper-case clauses and clauses after SQL
-    // ("select id from items for update", "WHERE id = $1 FOR UPDATE", a
-    // leading " FOR UPDATE" fragment) still count; prose that happens to use
-    // "from" or "where" first errs toward counting.
+    // ("select id from items for update", "WHERE id = $1 FOR UPDATE") and
+    // clauses that open the literal (" for update" fragments, any case) still
+    // count; prose that happens to use "from" or "where" first errs toward
+    // counting.
     const before = masked.slice(start, match.index);
     if (
       /^FOR\s/iu.test(match[0]) &&
       context === "unknown" &&
       match[0] !== match[0].toUpperCase() &&
+      before.trim().length > 0 &&
       !/\b(?:SELECT|FROM|WHERE|JOIN|ORDER\s+BY|GROUP\s+BY|LIMIT|OFFSET|RETURNING)\b|[=()$]|::/iu.test(
         before,
       )
