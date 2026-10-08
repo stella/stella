@@ -1,12 +1,9 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { describe, expect, test } from "bun:test";
 
-import {
-  createAuthRefusalLogPlugin,
-  describeAuthRefusal,
-} from "@/api/lib/auth/auth-refusal-log";
+import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 
 describe("auth refusal log", () => {
   test("describes a refused token refresh by its protocol error", () => {
@@ -87,10 +84,29 @@ describe("auth refusal log", () => {
         verification: [],
       }),
       emailAndPassword: { enabled: true },
+      // The same after-hook `auth.ts` registers, logging to an array.
       plugins: [
-        createAuthRefusalLogPlugin((attributes) => {
-          refusals.push(attributes);
-        }),
+        {
+          id: "test-auth-refusal-log",
+          hooks: {
+            after: [
+              {
+                matcher: () => true,
+                handler: createAuthMiddleware(async (ctx) => {
+                  const refusal = describeAuthRefusal({
+                    path: ctx.path,
+                    returned: ctx.context.returned,
+                    body: ctx.body,
+                  });
+                  if (refusal.type === "refused") {
+                    refusals.push(refusal.attributes);
+                  }
+                  await Promise.resolve();
+                }),
+              },
+            ],
+          },
+        },
       ],
     });
 

@@ -520,12 +520,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:better-auth/plugins"],
   },
   {
-    path: "apps/api/src/lib/auth/auth-refusal-log.ts",
-    class: "vendor-sdk",
-    reason: "Uses Better Auth middleware to log refused auth requests.",
-    transports: ["module:better-auth/api"],
-  },
-  {
     path: "apps/api/src/lib/auth/oauth-consent-info.ts",
     class: "vendor-sdk",
     reason: "Uses Better Auth middleware for OAuth consent information.",

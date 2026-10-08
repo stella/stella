@@ -1,6 +1,3 @@
-import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware, isAPIError } from "better-auth/api";
-
 import { isRecord } from "@/api/lib/type-guards";
 
 const ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/u;
@@ -11,7 +8,7 @@ const GRANT_TYPES = new Set([
   "urn:ietf:params:oauth:grant-type:jwt-bearer",
 ]);
 
-type AuthRefusal = {
+export type AuthRefusal = {
   "auth.path": string;
   "http.status_code": number;
   "auth.error_code": string;
@@ -47,46 +44,22 @@ export const describeAuthRefusal = ({
   returned: unknown;
   body: unknown;
 }): { type: "refused"; attributes: AuthRefusal } | { type: "answered" } => {
-  if (
-    !isAPIError(returned) ||
-    returned.statusCode < 400 ||
-    returned.statusCode >= 500
-  ) {
+  // Better Auth answers a refused request with its APIError: an object
+  // carrying a numeric `statusCode` and the protocol `body`.
+  const statusCode = isRecord(returned) ? returned["statusCode"] : undefined;
+  if (typeof statusCode !== "number" || statusCode < 400 || statusCode >= 500) {
     return { type: "answered" };
   }
   const grantType = isRecord(body) ? body["grant_type"] : undefined;
   const attributes: AuthRefusal = {
     "auth.path": path,
-    "http.status_code": returned.statusCode,
-    "auth.error_code": errorCodeOf(returned.body),
+    "http.status_code": statusCode,
+    "auth.error_code": errorCodeOf(
+      isRecord(returned) ? returned["body"] : undefined,
+    ),
     ...(typeof grantType === "string" && GRANT_TYPES.has(grantType)
       ? { "oauth.grant_type": grantType }
       : {}),
   };
   return { type: "refused", attributes };
 };
-
-export const createAuthRefusalLogPlugin = (
-  warn: (attributes: AuthRefusal) => void,
-) =>
-  ({
-    id: "stella-auth-refusal-log",
-    hooks: {
-      after: [
-        {
-          matcher: () => true,
-          handler: createAuthMiddleware(async (ctx) => {
-            const refusal = describeAuthRefusal({
-              path: ctx.path,
-              returned: ctx.context.returned,
-              body: ctx.body,
-            });
-            if (refusal.type === "refused") {
-              warn(refusal.attributes);
-            }
-            await Promise.resolve();
-          }),
-        },
-      ],
-    },
-  }) satisfies BetterAuthPlugin;
