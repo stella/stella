@@ -197,7 +197,7 @@ const isDocumentRenderer = ({
       (rowProjectsIdentity ||
         typedDocumentInput ||
         /\bDecisionRowData\b/u.test(node.getText(file)))) ||
-    (hasIdentityValue && /Cell$/u.test(name)) ||
+    (hasIdentityValue && name.endsWith("Cell")) ||
     (typedDocumentInput && /Item$|References$/u.test(name)) ||
     (DOCUMENT_ROW_DATA.test(node.getText(file)) &&
       /RailIcon$|HitIcon$|Recent.*Icon$/u.test(name))
