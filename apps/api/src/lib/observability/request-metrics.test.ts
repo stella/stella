@@ -17,12 +17,44 @@ import {
   emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
+  emitReasoningReplayDroppedMetric,
   emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
+
+test("reasoning replay drops emit only bounded provider and reason dimensions", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => lines.push(line));
+  try {
+    emitReasoningReplayDroppedMetric({
+      fromProvider: "anthropic",
+      toProvider: "openai",
+      reason: "incompatible-provenance",
+    });
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines.at(0) ?? "{}")).toEqual({
+      fromProvider: "anthropic",
+      toProvider: "openai",
+      reason: "incompatible-provenance",
+      "chat.reasoning_replay_dropped": 1,
+      _aws: {
+        Timestamp: expect.any(Number),
+        CloudWatchMetrics: [
+          {
+            Namespace: "Stella/Api",
+            Dimensions: [["fromProvider", "toProvider", "reason"]],
+            Metrics: [{ Name: "chat.reasoning_replay_dropped", Unit: "Count" }],
+          },
+        ],
+      },
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
 
 test("verification failures emit bounded class metrics and structured events", () => {
   const lines: string[] = [];

@@ -2,6 +2,11 @@ import type { TokenUsage } from "@tanstack/ai";
 import type { MessagePart, UIMessage } from "@tanstack/ai-client";
 import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
+import type {
+  TanStackAIProvider,
+  ReasoningEffort,
+  ReasoningProvenance,
+} from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
@@ -92,7 +97,14 @@ export type ChatAttachmentPart =
   | ImagePart<ChatAttachmentMetadata>
   | DocumentPart<ChatAttachmentMetadata>;
 
-export type ChatTanStackPart = MessagePart<ChatClientTools>;
+type SdkChatPart = MessagePart<ChatClientTools>;
+export type ChatTanStackPart =
+  | Exclude<SdkChatPart, { type: "thinking" }>
+  | (Extract<SdkChatPart, { type: "thinking" }> & {
+      /** Server-issued replay identity; historical parts may have none. */
+      provenance?: ReasoningProvenance;
+    });
+
 export type ChatPart = ChatTanStackPart;
 export type PersistableChatPartType = ChatTanStackPart["type"];
 
@@ -168,10 +180,19 @@ export type ChatMessageMetadata = {
   /** Server-owned terminal state. Incoming client metadata validation
    * deliberately does not accept this field. */
   turnOutcome?: ChatTurnOutcome | undefined;
+  /** Model that owns an assistant turn, including its approval resumes. */
+  turnModel?:
+    | {
+        provider: TanStackAIProvider;
+        model: string;
+        reasoningEffort?: ReasoningEffort;
+      }
+    | undefined;
   usage?: ChatMessageUsage | undefined;
 };
 
-export type ChatMessage = UIMessage<ChatClientTools> & {
+export type ChatMessage = Omit<UIMessage<ChatClientTools>, "parts"> & {
+  parts: ChatPart[];
   metadata?: ChatMessageMetadata;
 };
 

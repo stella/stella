@@ -32,6 +32,31 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
+export const emitReasoningReplayDroppedMetric = (dimensions: {
+  fromProvider: TanStackAIProvider | "unknown";
+  toProvider: TanStackAIProvider;
+  reason:
+    | "missing-provenance"
+    | "incompatible-provenance"
+    | "unpaired-reasoning";
+}): void => {
+  const name = "chat.reasoning_replay_dropped";
+  writeMetricLine({
+    ...dimensions,
+    [name]: 1,
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["fromProvider", "toProvider", "reason"]],
+          Metrics: [{ Name: name, Unit: "Count" }],
+        },
+      ],
+    },
+  });
+};
+
 /** Counts observed failure transitions; a later transaction rollback does not
  * retract telemetry. Only the failure class is a metric dimension. */
 export const emitVerificationRunFailureMetric = (

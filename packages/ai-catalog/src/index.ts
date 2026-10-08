@@ -32,6 +32,8 @@ import {
 import type { ModelRate } from "./model-rate";
 import type { RETAINED_MODELS_DEV_RATE_ENTRIES } from "./model-rate-policy";
 import { MODEL_RATES } from "./model-rates.gen";
+import { MODEL_REASONING_CAPABILITIES } from "./reasoning-capabilities";
+import type { ModelReasoningCapabilities } from "./reasoning-capabilities";
 
 export {
   MODEL_RATE_UNITS_PER_USD,
@@ -848,24 +850,12 @@ export const resolveWorkingBYOKModelForRole = ({
     : null;
 };
 
-/**
- * Anthropic models that use the adaptive-thinking request shape
- * (`thinking: { type: "adaptive" }`). Newer Claude models reject the
- * legacy budget-based form, so every Opus 4.6+/Sonnet 4.6/Fable entry
- * offered above must appear here or it will 400 on the reasoning role.
- */
-export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
-  "claude-sonnet-5-5",
-  "claude-sonnet-5",
-  "claude-opus-5",
-  "claude-sonnet-4-6",
-  "claude-opus-4-6",
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-fable-5",
-  "claude-fable-5-1",
-  "claude-opus-5-5",
-] as const;
+/** Native Anthropic adaptive-thinking models, derived from replay capabilities. */
+export const ANTHROPIC_ADAPTIVE_THINKING_MODELS =
+  BYOK_MODEL_OPTIONS.anthropic.filter(
+    (model) =>
+      MODEL_REASONING_CAPABILITIES[model].anthropicThinking === "adaptive",
+  );
 
 /**
  * Canonical reasoning-effort ladder, ordered weakest to strongest.
@@ -1376,3 +1366,20 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 export const getContextWindowTokens = (modelId: string): number =>
   CONTEXT_WINDOW_TOKENS_BY_ID[normalizeModelCatalogId(modelId)] ??
   DEFAULT_CONTEXT_WINDOW_TOKENS;
+
+export {
+  MODEL_REASONING_CAPABILITIES,
+  REASONING_REPLAY_FORMATS,
+} from "./reasoning-capabilities";
+export type {
+  ModelReasoningCapabilities,
+  ReasoningProvenance,
+  ReasoningReplayFormat,
+} from "./reasoning-capabilities";
+
+const MODEL_REASONING_CAPABILITIES_BY_ID: Readonly<
+  Record<string, ModelReasoningCapabilities>
+> = MODEL_REASONING_CAPABILITIES;
+
+export const getModelReasoningCapabilities = (modelId: string) =>
+  MODEL_REASONING_CAPABILITIES_BY_ID[normalizeModelCatalogId(modelId)] ?? null;

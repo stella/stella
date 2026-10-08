@@ -1,24 +1,27 @@
 import { EventType } from "@tanstack/ai";
-import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import {
   toRunErrorPayload,
   toRunErrorRawEvent,
 } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
 
-import type { TanStackAIProvider } from "@stll/ai-catalog";
+import type { ReasoningProvenance, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
+import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
+import type { ClosedTranscript } from "@/api/lib/chat/closed-transcript";
 import {
   refuseTurnPausingRequest,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
+import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
 import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import type { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
+import { isRecord } from "@/api/lib/type-guards";
 
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
@@ -340,14 +343,85 @@ type StreamContract = {
   /** The run's tool call ids; absent outside a chat run. */
   ledger: ToolCallIdLedger | undefined;
   provider: TanStackAIProvider | undefined;
+  reasoning: Map<string, ReasoningProvenance> | undefined;
 };
 
 /** What each contracted adapter wraps, so a run can bind its ledger to the
  *  same contract instead of stacking a second one. */
 const streamContracts = new WeakMap<AnyTextAdapter, StreamContract>();
 
+type ClosedProviderRequest = Omit<ChatStreamOptions, "messages"> & {
+  messages: ClosedTranscript;
+};
+
+const dispatchClosedRequest = (
+  adapter: AnyTextAdapter,
+  options: ClosedProviderRequest,
+) => adapter.chatStream(options);
+
+type ClosedStructuredRequest = Omit<
+  Parameters<AnyTextAdapter["structuredOutput"]>[0],
+  "chatOptions"
+> & {
+  chatOptions: ClosedProviderRequest;
+};
+
+const dispatchClosedStructuredRequest = (
+  adapter: AnyTextAdapter,
+  options: ClosedStructuredRequest,
+) => adapter.structuredOutput(options);
+
+type ClosedStructuredStreamOptions = {
+  adapter: AnyTextAdapter;
+  stream: NonNullable<AnyTextAdapter["structuredOutputStream"]>;
+  options: ClosedStructuredRequest;
+};
+const dispatchClosedStructuredStream = ({
+  adapter,
+  stream,
+  options,
+}: ClosedStructuredStreamOptions) => stream.call(adapter, options);
+
+type ProducedReasoningOptions = {
+  chunks: AsyncIterable<StreamChunk>;
+  provider: TanStackAIProvider;
+  modelId: string;
+  reasoning: Map<string, ReasoningProvenance>;
+};
+
+// Only provider output may establish the origin of reasoning created inside
+// the SDK's tool loop. Historical signatures never populate this run ledger.
+async function* withProducedReasoning({
+  chunks,
+  provider,
+  modelId,
+  reasoning,
+}: ProducedReasoningOptions): AsyncIterable<StreamChunk> {
+  for await (const chunk of chunks) {
+    const signatures: unknown[] = [];
+    if (chunk.type === EventType.STEP_FINISHED)
+      signatures.push(Reflect.get(chunk, "signature"));
+    if (chunk.type === EventType.REASONING_ENCRYPTED_VALUE)
+      signatures.push(chunk.encryptedValue);
+    if (
+      chunk.type === EventType.TOOL_CALL_START ||
+      chunk.type === "TOOL_CALL_END"
+    ) {
+      signatures.push(chunk.metadata?.thoughtSignature);
+    }
+    for (const signature of signatures) {
+      if (typeof signature !== "string" || signature === "") continue;
+      reasoning.set(
+        signature,
+        reasoningProvenanceForSignature({ provider, modelId, signature }),
+      );
+    }
+    yield chunk;
+  }
+}
+
 const contracted = (contract: StreamContract): AnyTextAdapter => {
-  const { adapter, ledger, provider } = contract;
+  const { adapter, ledger, provider, reasoning } = contract;
   const decided = (chunks: AsyncIterable<StreamChunk>) =>
     provider === undefined
       ? chunks
@@ -355,25 +429,79 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
           provider,
           unfinishedCode: INCOMPLETE_STREAM_CODE,
         });
+  const closeMessages = (
+    requested: Pick<ChatStreamOptions, "messages" | "model">,
+    activeReasoning: Map<string, ReasoningProvenance>,
+  ): ClosedTranscript | undefined => {
+    return provider === undefined
+      ? undefined
+      : buildClosedTranscript({
+          messages: requested.messages.map((message): ModelMessage => ({
+            ...message,
+            ...(message.thinking === undefined
+              ? {}
+              : {
+                  thinking: message.thinking.map((item) => {
+                    const provenance =
+                      item.signature === undefined
+                        ? undefined
+                        : activeReasoning.get(item.signature);
+                    return provenance === undefined
+                      ? item
+                      : { ...item, provenance };
+                  }),
+                }),
+            ...(message.toolCalls === undefined
+              ? {}
+              : {
+                  toolCalls: message.toolCalls.map((call) => {
+                    const signature: unknown = isRecord(call.metadata)
+                      ? call.metadata["thoughtSignature"]
+                      : undefined;
+                    const provenance =
+                      typeof signature === "string"
+                        ? activeReasoning.get(signature)
+                        : undefined;
+                    return provenance === undefined || !isRecord(call.metadata)
+                      ? call
+                      : {
+                          ...call,
+                          metadata: {
+                            ...call.metadata,
+                            reasoningProvenance: provenance,
+                          },
+                        };
+                  }),
+                }),
+          })),
+          target: { provider, modelId: requested.model },
+        });
+  };
   const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
-    // Signed reasoning reaches only the provider that signed it.
+    const activeReasoning = reasoning ?? new Map<string, ReasoningProvenance>();
+    const closed = closeMessages(requested, activeReasoning);
     const options =
-      provider === undefined
-        ? requested
-        : {
-            ...requested,
-            messages: withReasoningBoundToProvider(
-              requested.messages,
-              provider,
-            ),
-          };
+      closed === undefined ? requested : { ...requested, messages: closed };
     refuseTurnPausingRequest(provider, options);
+    const dispatched =
+      closed === undefined
+        ? adapter.chatStream(requested)
+        : dispatchClosedRequest(adapter, { ...requested, messages: closed });
+    const produced =
+      provider === undefined
+        ? dispatched
+        : withProducedReasoning({
+            chunks: dispatched,
+            provider,
+            modelId: requested.model,
+            reasoning: activeReasoning,
+          });
     return withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
           decided(
             withToolCallSteps(
-              withUniqueToolCallIds(adapter.chatStream(options), {
+              withUniqueToolCallIds(produced, {
                 ledger,
                 messages: options.messages,
               }),
@@ -385,11 +513,40 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
       options,
     );
   };
+  const structuredOutput: AnyTextAdapter["structuredOutput"] = (requested) => {
+    const closed = closeMessages(requested.chatOptions, reasoning ?? new Map());
+    return closed === undefined
+      ? adapter.structuredOutput(requested)
+      : dispatchClosedStructuredRequest(adapter, {
+          ...requested,
+          chatOptions: { ...requested.chatOptions, messages: closed },
+        });
+  };
+  const rawStructuredStream = adapter.structuredOutputStream;
+  const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
+    rawStructuredStream === undefined
+      ? undefined
+      : (requested) => {
+          const closed = closeMessages(
+            requested.chatOptions,
+            reasoning ?? new Map(),
+          );
+          return closed === undefined
+            ? rawStructuredStream.call(adapter, requested)
+            : dispatchClosedStructuredStream({
+                adapter,
+                stream: rawStructuredStream,
+                options: {
+                  ...requested,
+                  chatOptions: { ...requested.chatOptions, messages: closed },
+                },
+              });
+        };
   const proxy = new Proxy(adapter, {
     get: (target, key) => {
-      if (key === "chatStream") {
-        return chatStream;
-      }
+      if (key === "chatStream") return chatStream;
+      if (key === "structuredOutput") return structuredOutput;
+      if (key === "structuredOutputStream") return structuredOutputStream;
       const value: unknown = Reflect.get(target, key, target);
       if (typeof value !== "function") {
         return value;
@@ -422,7 +579,12 @@ export const withProviderStreamContract = (
   if (streamContracts.has(adapter)) {
     panic("The adapter is already held to the provider stream contract");
   }
-  return contracted({ adapter, ledger: undefined, provider });
+  return contracted({
+    adapter,
+    ledger: undefined,
+    provider,
+    reasoning: undefined,
+  });
 };
 
 /**
@@ -443,5 +605,6 @@ export const withRunToolCallIds = (
     adapter: contract.adapter,
     ledger,
     provider: contract.provider,
+    reasoning: new Map(),
   });
 };

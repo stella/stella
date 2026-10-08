@@ -431,6 +431,8 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.model).toBe("gpt-5.4");
     expect(looseOptions(model.modelOptions)).toEqual({
       reasoning: { effort: "medium" },
+      include: ["reasoning.encrypted_content"],
+      store: false,
     });
   });
 
@@ -1132,7 +1134,9 @@ describe("tanStackModelOptionsForRole", () => {
           organizationId: null,
         }),
       );
-      expect(options, provider).toEqual({});
+      expect(options, provider).toEqual(
+        provider === "openai" ? { include: [] } : {},
+      );
     }
     const google = tanStackModelOptionsForRole({
       role: "fast",
@@ -1142,6 +1146,23 @@ describe("tanStackModelOptionsForRole", () => {
     });
     expect(looseOptions(google).temperature).toBeUndefined();
     expect(looseOptions(google).thinkingConfig).toBeUndefined();
+  });
+
+  test("every OpenAI reasoning model requests stateless replay data in every role", () => {
+    for (const modelId of BYOK_MODEL_OPTIONS.openai) {
+      for (const role of MODEL_ROLES) {
+        const options = tanStackModelOptionsForRole({
+          provider: "openai",
+          modelId,
+          role,
+          organizationId: null,
+        });
+        expect(options, `${modelId}/${role}`).toMatchObject({
+          include: ["reasoning.encrypted_content"],
+          store: false,
+        });
+      }
+    }
   });
 
   test("uses TanStack Anthropic snake_case thinking options", () => {
@@ -1222,7 +1243,7 @@ describe("tanStackModelOptionsForRole", () => {
       organizationId: null,
     });
 
-    expect(options).toEqual({});
+    expect(options).toEqual({ include: [] });
   });
 });
 

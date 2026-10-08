@@ -3,7 +3,7 @@ import { createOpenaiChat } from "@tanstack/ai-openai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
+import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
 
 type InputItem = { id?: string; role?: string; type: string };
 
@@ -16,6 +16,11 @@ const thinkingFor = (ids: readonly string[]) =>
   ids.map((id) => ({
     content: `summary ${id}`,
     signature: responsesSignature(id),
+    provenance: {
+      provider: "openai",
+      model: "gpt-5.2",
+      format: "openai-encrypted-content",
+    },
   }));
 
 // A call the model made while reasoning carries the item id that pairs it
@@ -106,7 +111,13 @@ const unpairedReasoning = (input: readonly InputItem[]): string[] =>
   });
 
 const sentToOpenAI = (messages: readonly ModelMessage[]) =>
-  responsesInput(withReasoningBoundToProvider(messages, "openai"));
+  responsesInput(
+    buildClosedTranscript({
+      messages,
+      target: { provider: "openai", modelId: "gpt-5.2" },
+      onReasoningDropped: () => undefined,
+    }),
+  );
 
 describe("OpenAI reasoning replay after a declined call", () => {
   test("one reasoning item stays paired with its call", () => {
@@ -158,7 +169,13 @@ describe("OpenAI reasoning replay after a declined call", () => {
       USER,
       assistant({ reasoning: ["rs_1", "rs_2"], text: "Done." }),
     ];
-    expect(withReasoningBoundToProvider(messages, "openai")).toEqual(messages);
+    expect(
+      buildClosedTranscript({
+        messages,
+        target: { provider: "openai", modelId: "gpt-5.2" },
+        onReasoningDropped: () => undefined,
+      }),
+    ).toEqual(messages);
   });
 
   test("other providers' messages are not reshaped", () => {
@@ -167,7 +184,11 @@ describe("OpenAI reasoning replay after a declined call", () => {
       assistant({ calls: 1, reasoning: ["rs_1", "rs_2"] }),
       declined(0),
     ];
-    const anthropic = withReasoningBoundToProvider(messages, "anthropic");
+    const anthropic = buildClosedTranscript({
+      messages,
+      target: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+      onReasoningDropped: () => undefined,
+    });
     expect(anthropic.some((message) => message.thinking !== undefined)).toBe(
       false,
     );

@@ -12,7 +12,7 @@ import * as v from "valibot";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
-import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
+import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
 import { findTranscriptProblems } from "@/api/tests/helpers/provider-request-transcript";
 
 const captureAdapter = (sink: ModelMessage[][]): AnyTextAdapter => ({
@@ -53,6 +53,11 @@ const captureAdapter = (sink: ModelMessage[][]): AnyTextAdapter => ({
 const thinking = (id: string): ChatPart => ({
   type: "thinking",
   content: `think ${id}`,
+  provenance: {
+    provider: "openai",
+    model: "gpt-6-sol",
+    format: "openai-encrypted-content",
+  },
   signature: JSON.stringify({ id, encrypted_content: `enc ${id}` }),
 });
 
@@ -127,13 +132,17 @@ describe("the request continuing a declined approval", () => {
       })) {
         // drain
       }
-      const adapter = createOpenaiChat("gpt-5.2", "test-key");
+      const adapter = createOpenaiChat("gpt-6-sol", "test-key");
       const convert: unknown = Reflect.get(adapter, "convertMessagesToInput");
       if (typeof convert !== "function") {
         return panic("The OpenAI adapter no longer converts messages to input");
       }
       const input: unknown = Reflect.apply(convert, adapter, [
-        withReasoningBoundToProvider(sink[0] ?? [], "openai"),
+        buildClosedTranscript({
+          messages: sink.at(0) ?? [],
+          target: { provider: "openai", modelId: "gpt-6-sol" },
+          onReasoningDropped: () => undefined,
+        }),
       ]);
       const problems = findTranscriptProblems({
         format: "openai-responses",
