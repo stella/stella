@@ -29,11 +29,20 @@ export const DESKTOP_REGISTRY_PERMISSION = {
 export const desktopRegistryMetadata = v.strictObject({
   purpose: v.literal(DESKTOP_REGISTRY_KEY_CONFIG),
   organizationId: v.pipe(v.string(), v.nonEmpty()),
-  inactivityExpiresAt: v.pipe(
-    v.string(),
-    v.isoTimestamp(),
-    v.check((value) => Result.try(() => Temporal.Instant.from(value)).isOk()),
-  ),
+  inactivityExpiresAt: v.union([
+    v.pipe(
+      v.string(),
+      v.isoTimestamp(),
+      v.check((value) => Result.try(() => Temporal.Instant.from(value)).isOk()),
+    ),
+    // verifyApiKey decodes metadata with better-auth's JSON reviver, which
+    // turns the stored ISO timestamp into a Date. Normalize it to the stored
+    // string form; v.date() rejects an invalid Date.
+    v.pipe(
+      v.date(),
+      v.transform((value) => value.toISOString()),
+    ),
+  ]),
 });
 
 export const parseDesktopRegistryMetadata = (metadata: unknown) => {

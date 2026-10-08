@@ -452,6 +452,13 @@ describe("desktop registry API-key configuration", () => {
     expect(parseDesktopRegistryMetadata(JSON.stringify(metadata)).success).toBe(
       true,
     );
+    // verifyApiKey revives the stored timestamp as a Date.
+    const revived = parseDesktopRegistryMetadata({
+      ...metadata,
+      inactivityExpiresAt: new Date(metadata.inactivityExpiresAt),
+    });
+    expect(revived.success).toBe(true);
+    expect(revived.output).toEqual(metadata);
     for (const invalid of [
       null,
       "not-json",
@@ -459,6 +466,7 @@ describe("desktop registry API-key configuration", () => {
       { purpose: metadata.purpose, organizationId: metadata.organizationId },
       { ...metadata, inactivityExpiresAt: "not-a-date" },
       { ...metadata, inactivityExpiresAt: 123 },
+      { ...metadata, inactivityExpiresAt: new Date(Number.NaN) },
       { ...metadata, purpose: "machine" },
       { ...metadata, providerExpiresAt: metadata.inactivityExpiresAt },
     ]) {
