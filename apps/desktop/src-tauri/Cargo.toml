@@ -156,6 +156,7 @@ stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1
 
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5.4.1"
+stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-windows-signing = { path = "crates/windows-signing", version = "0.0.1" }
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"

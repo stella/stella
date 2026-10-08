@@ -21,9 +21,19 @@ const ACTIVITY_PERSISTENCE_STATUSES = [
 export type ActivityPersistenceStatus =
   (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
 
+export const ACTIVITY_DETAILS_ACCESS = [
+  "disabled",
+  "ready",
+  "accessibilityRequired",
+  "unavailable",
+] as const;
+export type ActivityDetailsAccess = (typeof ACTIVITY_DETAILS_ACCESS)[number];
+
 export type ActivitySegment = {
   appIdentifier: string;
   appName: string;
+  windowTitle?: string | null;
+  document?: string | null;
   /** RFC 3339 instants. */
   end: string;
   start: string;
@@ -39,6 +49,11 @@ export type ActivityDaySnapshot = {
   date: string;
   earliestDate: string;
   excludedApps: ActivityAppExclusion[];
+  captureDetails: boolean;
+  appNameOnlyApps: ActivityAppExclusion[];
+  detailsAccess: ActivityDetailsAccess;
+  browserApps: ActivityAppExclusion[];
+  browserTitleApps: ActivityAppExclusion[];
   otherAccountHistoryDays: number;
   persistence: ActivityPersistenceStatus;
   recordingStatus: ActivityRecordingStatus;
@@ -56,12 +71,23 @@ const isOneOf = <T extends string>(
   value: unknown,
 ): value is T => values.some((candidate) => candidate === value);
 
+export const MAX_ACTIVITY_METADATA_BYTES = 512;
+
+const isOptionalMetadata = (value: unknown) =>
+  value === undefined ||
+  value === null ||
+  (typeof value === "string" &&
+    new TextEncoder().encode(value).byteLength <= MAX_ACTIVITY_METADATA_BYTES &&
+    !/\p{Cc}/u.test(value));
+
 const isSegment = (value: unknown): value is ActivitySegment =>
   isRecord(value) &&
   typeof value["appIdentifier"] === "string" &&
   typeof value["appName"] === "string" &&
   typeof value["start"] === "string" &&
-  typeof value["end"] === "string";
+  typeof value["end"] === "string" &&
+  isOptionalMetadata(value["windowTitle"]) &&
+  isOptionalMetadata(value["document"]);
 
 const isExclusion = (value: unknown): value is ActivityAppExclusion =>
   isRecord(value) &&
@@ -76,6 +102,14 @@ export const isActivityDaySnapshot = (
   typeof value["today"] === "string" &&
   typeof value["earliestDate"] === "string" &&
   typeof value["unreadable"] === "boolean" &&
+  typeof value["captureDetails"] === "boolean" &&
+  isOneOf(ACTIVITY_DETAILS_ACCESS, value["detailsAccess"]) &&
+  Array.isArray(value["appNameOnlyApps"]) &&
+  value["appNameOnlyApps"].every(isExclusion) &&
+  Array.isArray(value["browserApps"]) &&
+  value["browserApps"].every(isExclusion) &&
+  Array.isArray(value["browserTitleApps"]) &&
+  value["browserTitleApps"].every(isExclusion) &&
   typeof value["otherAccountHistoryDays"] === "number" &&
   Number.isSafeInteger(value["otherAccountHistoryDays"]) &&
   value["otherAccountHistoryDays"] >= 0 &&

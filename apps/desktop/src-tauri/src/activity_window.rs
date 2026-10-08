@@ -18,8 +18,8 @@ pub fn show(app: &AppHandle) {
   #[cfg(target_os = "macos")]
   let _ = app.show();
   if let Some(window) = app.get_webview_window(ACTIVITY_WINDOW_LABEL) {
-    if let Err(error) = window.show().and_then(|()| window.set_focus()) {
-      tracing::warn!(error = %error, "activity window could not be focused");
+    if window.show().and_then(|()| window.set_focus()).is_err() {
+      tracing::warn!("activity window could not be focused");
     }
     return;
   }
@@ -38,24 +38,24 @@ pub fn show(app: &AppHandle) {
     if payload.event() != PageLoadEvent::Finished {
       return;
     }
-    if let Err(error) = window.show().and_then(|()| window.set_focus()) {
-      tracing::warn!(error = %error, "activity window could not be shown");
+    if window.show().and_then(|()| window.set_focus()).is_err() {
+      tracing::warn!("activity window could not be shown");
     }
   });
   #[cfg(target_os = "macos")]
   let builder = builder
     .title_bar_style(tauri::TitleBarStyle::Overlay)
     .hidden_title(true);
-  if let Err(error) = builder.build() {
-    tracing::error!(error = %error, "activity window could not be created");
+  if builder.build().is_err() {
+    tracing::error!("activity window could not be created");
   }
 }
 
 /// Closes the window when the feature is switched off.
 pub fn close(app: &AppHandle) {
   if let Some(window) = app.get_webview_window(ACTIVITY_WINDOW_LABEL)
-    && let Err(error) = window.destroy()
+    && window.destroy().is_err()
   {
-    tracing::warn!(error = %error, "activity window could not be closed");
+    tracing::warn!("activity window could not be closed");
   }
 }

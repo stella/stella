@@ -9,9 +9,11 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::{
   activity::{
-    self, ActivityAppState, ActivityDaySnapshot, ActivityHistoryDisposition,
-    ActivityManager, ActivityRecordingStatus, ActivityRetention,
+    self, ActivityAppDetailCapture, ActivityAppState, ActivityDaySnapshot,
+    ActivityHistoryDisposition, ActivityManager, ActivityRecordingStatus,
+    ActivityRetention,
   },
+  activity_details,
   local_window::ActivityCaller,
 };
 
@@ -48,11 +50,24 @@ pub fn activity_get_day(
     Some(date) => activity::parse_date(&date)?,
     None => now.with_timezone(&chrono::Local).date_naive(),
   };
+  let capture_details = {
+    let manager = state.lock().map_err(|_| lock_error())?;
+    caller.require_current(&app)?;
+    manager.require_caller(&caller)?;
+    manager.capture_details()
+  };
+  let details_access = activity_details::access_status(capture_details);
   let manager = state.lock().map_err(|_| lock_error())?;
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   let other_account_history_days = manager.other_account_history_days()?;
-  Ok(manager.day_snapshot(date, now, &caller, other_account_history_days))
+  Ok(manager.day_snapshot(
+    date,
+    now,
+    &caller,
+    other_account_history_days,
+    details_access,
+  ))
 }
 
 #[tauri::command]
@@ -158,4 +173,66 @@ pub fn activity_copy_text(
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   crate::clipboard::write_plain_text(text)
+}
+
+#[tauri::command]
+pub fn activity_set_capture_details(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  enabled: bool,
+) -> Result<(), String> {
+  let should_prompt = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    caller.require_current(&app)?;
+    manager.require_caller(&caller)?;
+    manager.set_capture_details(enabled, Utc::now())?
+  };
+  if should_prompt {
+    caller.require_current(&app)?;
+    activity_details::request_permission();
+  }
+  let _ = app.emit(activity::CHANGED_EVENT, ());
+  Ok(())
+}
+
+#[tauri::command]
+pub fn activity_set_app_detail_capture(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  identifier: String,
+  name: String,
+  mode: ActivityAppDetailCapture,
+) -> Result<(), String> {
+  update(&app, &state, &caller, |manager| {
+    manager.set_app_detail_capture(&identifier, &name, mode, Utc::now())
+  })
+}
+
+#[tauri::command]
+pub fn activity_open_accessibility_settings(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+) -> Result<(), String> {
+  let manager = state.lock().map_err(|_| lock_error())?;
+  caller.require_current(&app)?;
+  manager.require_caller(&caller)?;
+  drop(manager);
+  activity_details::open_accessibility_settings()
+}
+
+#[tauri::command]
+pub fn activity_set_browser_title_capture(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  identifier: String,
+  name: String,
+  enabled: bool,
+) -> Result<(), String> {
+  update(&app, &state, &caller, |manager| {
+    manager.set_browser_title_capture(&identifier, &name, enabled, Utc::now())
+  })
 }

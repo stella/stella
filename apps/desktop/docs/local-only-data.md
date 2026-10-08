@@ -33,7 +33,7 @@ local-only feature follows every rule below and adds one entry to
 - **Nothing recorded rides along in telemetry.** The native side drops error
   details from local-only windows. A feature marked `fixedCodes` (the activity
   timeline) reports fixed error codes only: no app identifiers or names, no
-  timestamps, durations or summaries, and its native modules never import
+  timestamps, durations, window titles, documents, paths or summaries, and its native modules never import
   telemetry. Local log lines carry error kinds, not recorded data.
 - **Bundled pages only.** Windows are built through `app_window::builder`,
   which refuses navigation off the app origin; the CSP allows no remote
@@ -82,3 +82,45 @@ opens; a time-zone change closes that partition before opening another. Idle
 prefixes are trimmed to the last input before stopping or persisting. Sampling
 gaps and flush cadence use a monotonic clock; backward wall-clock corrections
 suspend new intervals until they no longer overlap prior observations.
+
+## Opt-in activity details
+
+Recording starts with application names only. A separate, unchecked choice
+allows window titles and open documents; switching it off immediately stops
+new detail capture while existing details follow the account's retention and
+explicit deletion. Per-app “Record app name only” keeps time attribution
+without capturing that application's details. Excluding an app with deletion
+also removes every stored title and document for that app.
+
+On macOS, enabling details explicitly requests Accessibility permission.
+Without permission the sampler records app names and the activity window
+provides a quiet link to the Accessibility settings. Focused-window reads use
+bounded AX messaging timeouts outside the manager lock. Documents must be
+local file URLs, converted to paths. Windows reads bounded foreground captions
+from other processes; it records no document paths. Window identity is checked
+again after capture. Details strip controls and stop at 512 UTF-8 bytes on a
+character boundary; old day files without details remain readable.
+
+Browser captions cannot reliably prove a window is public: Chromium may omit
+incognito markers. Safari, Chrome, Edge, Firefox, Brave and Arc therefore default to
+application-only attribution. Each browser has a separate title opt-in with
+this warning: private windows may be recorded too, so pause recording or exclude
+the browser while browsing privately. Known private markers suppress details
+before truncation even after browser consent. Browser URLs are never captured.
+
+Titles and document filenames appear only in the activity window; the full
+local path appears on hover. Proposed blocks group by document when present
+and require at least three minutes of actual span. Shorter spans still appear
+in the raw list and contribute to the day's active total. Explicit Copy summary
+may include document filenames; draft time-entry narratives remain empty.
+Titles, paths and documents never enter telemetry, logs or error reports.
+Platform wrappers are listed with the feature's native modules so the same
+network and fixed-code guards cover them.
+
+The gated tray shows recording status and today's active hours. While recording,
+its optional Now label uses a document filename or app name, never a window
+title or full path. App-name-only preferences, browsers without title consent
+and detected private windows suppress that label. Pause and Resume update the
+same account-owned recording state. A local icon dot appears only while
+recording; activity events and a thirty-second refresh keep the menu current.
+Tray source is covered by the local-only network and fixed-code guards.

@@ -1,8 +1,8 @@
 //! A private day timeline of which app was in the foreground.
 //!
 //! Every five seconds, while the user has opted in and the feature is
-//! enabled, the sampler reads the foreground app's identifier and name (no
-//! icons, window titles or document names) and the system idle time.
+//! enabled, the sampler reads the foreground app identifier/name and idle
+//! time. Window titles and documents require a separate, default-off opt-in.
 //! Consecutive samples of one app merge into a segment; five idle minutes end
 //! it, and idle time is never recorded. Excluded apps are recorded as nothing.
 //! Segments are written to encrypted per-day files at most once a minute and
@@ -20,6 +20,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::{
+  activity_details::{CapturedWindowPrivacy, WindowDetails},
   activity_store::ActivityStore,
   config::APP_DATA_DIR_NAME,
   feature_gate::{DesktopFeature, FeatureGates},
@@ -40,8 +41,10 @@ const INPUT_TIMESTAMP_TOLERANCE: chrono::Duration = chrono::Duration::millisecon
 // introduce synthetic activity into the current segment.
 const WALL_CLOCK_TOLERANCE: Duration = Duration::from_millis(100);
 const FLUSH_INTERVAL: Duration = Duration::from_secs(60);
+const TRAY_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 const RETENTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const MAX_EXCLUSIONS: usize = 128;
+pub(crate) const MAX_DETAIL_BYTES: usize = 512;
 const DEBUG_PERSISTENCE_ENV: &str = "STELLA_ENABLE_DEBUG_ACTIVITY_PERSISTENCE";
 const STORE_DIR_NAME: &str = "activity-timeline";
 const DATE_FORMAT: &str = "%Y-%m-%d";
@@ -93,6 +96,12 @@ pub struct ActivitySettings {
   pub retention: ActivityRetention,
   #[serde(default)]
   pub excluded_apps: Vec<AppExclusion>,
+  #[serde(default)]
+  pub capture_details: bool,
+  #[serde(default)]
+  pub app_name_only_apps: Vec<AppExclusion>,
+  #[serde(default)]
+  pub browser_title_apps: Vec<AppExclusion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,6 +109,10 @@ pub struct ActivitySettings {
 pub struct ActivitySegment {
   pub app_identifier: String,
   pub app_name: String,
+  #[serde(default)]
+  pub window_title: Option<String>,
+  #[serde(default)]
+  pub document: Option<String>,
   pub start: DateTime<Utc>,
   pub end: DateTime<Utc>,
 }
@@ -126,11 +139,12 @@ pub enum Observation {
   Active {
     identifier: String,
     name: String,
+    window_title: Option<String>,
+    document: Option<String>,
+    privacy: CapturedWindowPrivacy,
   },
   /// No input for at least the idle threshold, for `idle` in total.
-  Idle {
-    idle: Duration,
-  },
+  Idle { idle: Duration },
   /// No attributable app, or one the user excluded.
   Unattributed,
 }
@@ -140,6 +154,28 @@ pub enum Observation {
 pub enum ActivityHistoryDisposition {
   Keep,
   Delete,
+}
+
+macro_rules! define_activity_details_access {
+  ($($variant:ident),+ $(,)?) => {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum ActivityDetailsAccess { $($variant),+ }
+
+    impl ActivityDetailsAccess {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[$(Self::$variant),+];
+    }
+  };
+}
+
+define_activity_details_access! { Disabled, Ready, AccessibilityRequired, Unavailable }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActivityAppDetailCapture {
+  AppNameOnly,
+  IncludeDetails,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +193,7 @@ struct OpenSegment {
   /// reconstructed from the OS's latest-input timestamp.
   idle_since: Option<DateTime<Utc>>,
   partition: DayPartition,
+  privacy: CapturedWindowPrivacy,
 }
 
 /// The day a view asks for, with what the window needs to render it.
@@ -171,9 +208,34 @@ pub struct ActivityDaySnapshot {
   retention: ActivityRetention,
   excluded_apps: Vec<AppExclusion>,
   other_account_history_days: usize,
+  capture_details: bool,
+  app_name_only_apps: Vec<AppExclusion>,
+  details_access: ActivityDetailsAccess,
+  browser_title_apps: Vec<AppExclusion>,
+  browser_apps: Vec<AppExclusion>,
   segments: Vec<ActivitySegment>,
   /// A day whose file exists but cannot be read.
   unreadable: bool,
+}
+
+/// The tray receives only status, a day total and an approved short label.
+/// Raw segments, window captions and document paths never cross this boundary.
+pub struct TrayActivitySnapshot {
+  pub status: ActivityRecordingStatus,
+  pub total_ms: u64,
+  pub now: Option<String>,
+}
+
+struct DetailCaptureApp<'a> {
+  identifier: &'a str,
+  name: &'a str,
+}
+
+fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bool {
+  settings.capture_details
+    && !is_excluded(&settings.app_name_only_apps, app.identifier)
+    && (!crate::activity_details::is_browser(app.identifier, app.name)
+      || is_excluded(&settings.browser_title_apps, app.identifier))
 }
 
 struct ObservationCommit {
@@ -300,6 +362,8 @@ fn split_by_day_in<T: TimeZone>(
       ActivitySegment {
         app_identifier: segment.app_identifier.clone(),
         app_name: segment.app_name.clone(),
+        window_title: segment.window_title.clone(),
+        document: segment.document.clone(),
         start,
         end,
       },
@@ -330,6 +394,8 @@ fn push_merged(segments: &mut Vec<ActivitySegment>, mut segment: ActivitySegment
   }
   if let Some(last) = segments.last_mut()
     && last.app_identifier == segment.app_identifier
+    && last.window_title == segment.window_title
+    && last.document == segment.document
     && last.end == segment.start
   {
     last.end = segment.end;
@@ -372,8 +438,8 @@ impl ActivityManager {
     let (persistence, settings, wall_floor) = match persistence {
       ActivityPersistence::Encrypted(store) => match store.recorded_until() {
         Ok(floor) => (ActivityPersistence::Encrypted(store), settings, floor),
-        Err(error) => {
-          tracing::warn!(error = %error, "activity recording boundary could not be loaded");
+        Err(_) => {
+          tracing::warn!("activity recording boundary could not be loaded");
           (
             ActivityPersistence::DeletionOnly(store.root().to_path_buf()),
             ActivitySettings::default(),
@@ -481,6 +547,99 @@ impl ActivityManager {
       self.stop(now)?;
     }
     self.update_settings(|settings| settings.recording_status = status)
+  }
+
+  pub fn capture_details(&self) -> bool {
+    self.settings.capture_details
+  }
+
+  /// The caller prompts for permission only after a persisted false→true
+  /// transition, outside this manager's lock.
+  pub fn set_capture_details(
+    &mut self,
+    enabled: bool,
+    now: DateTime<Utc>,
+  ) -> Result<bool, String> {
+    self.require_writable()?;
+    if self.settings.capture_details == enabled {
+      return Ok(false);
+    }
+    self.stop(now)?;
+    self.update_settings(|settings| settings.capture_details = enabled)?;
+    Ok(enabled)
+  }
+
+  pub fn set_app_detail_capture(
+    &mut self,
+    identifier: &str,
+    name: &str,
+    mode: ActivityAppDetailCapture,
+    now: DateTime<Utc>,
+  ) -> Result<(), String> {
+    let preference = AppExclusion::new(identifier, name)
+      .ok_or_else(|| "activity application is invalid".to_string())?;
+    self.require_writable()?;
+    let app_name_only =
+      is_excluded(&self.settings.app_name_only_apps, &preference.identifier);
+    if app_name_only == (mode == ActivityAppDetailCapture::AppNameOnly) {
+      return Ok(());
+    }
+    if mode == ActivityAppDetailCapture::AppNameOnly
+      && self.settings.app_name_only_apps.len() >= MAX_EXCLUSIONS
+    {
+      return Err("activity detail preference limit reached".to_string());
+    }
+    self.stop(now)?;
+    self.update_settings(|settings| {
+      match mode {
+        ActivityAppDetailCapture::AppNameOnly => {
+          settings.app_name_only_apps.push(preference)
+        }
+        ActivityAppDetailCapture::IncludeDetails => settings
+          .app_name_only_apps
+          .retain(|app| !app.matches_identifier(&preference.identifier)),
+      }
+      foreground_app::normalize_exclusions(
+        &mut settings.app_name_only_apps,
+        MAX_EXCLUSIONS,
+      );
+    })
+  }
+
+  pub fn set_browser_title_capture(
+    &mut self,
+    identifier: &str,
+    name: &str,
+    enabled: bool,
+    now: DateTime<Utc>,
+  ) -> Result<(), String> {
+    let preference = AppExclusion::new(identifier, name)
+      .ok_or_else(|| "activity application is invalid".to_string())?;
+    self.require_writable()?;
+    if !crate::activity_details::is_browser(&preference.identifier, &preference.name) {
+      return Err("activity application is not a browser".to_string());
+    }
+    if is_excluded(&self.settings.browser_title_apps, &preference.identifier) == enabled
+    {
+      return Ok(());
+    }
+    if enabled && self.settings.browser_title_apps.len() >= MAX_EXCLUSIONS {
+      return Err("activity browser preference limit reached".to_string());
+    }
+    self.stop(now)?;
+    self.update_settings(|settings| {
+      if enabled {
+        settings.browser_title_apps.push(preference);
+      } else {
+        settings
+          .browser_title_apps
+          .retain(|app| !app.matches_identifier(&preference.identifier));
+      }
+      foreground_app::normalize_exclusions(
+        &mut settings.browser_title_apps,
+        MAX_EXCLUSIONS,
+      );
+    })
   }
 
   pub fn set_retention(
@@ -656,12 +815,45 @@ impl ActivityManager {
         closed |= self.close_open(idle_since);
       }
       Observation::Unattributed => closed |= self.close_open(now),
-      Observation::Active { identifier, name } => {
+      Observation::Active {
+        identifier,
+        name,
+        window_title,
+        document,
+        privacy,
+      } => {
+        let include_details = details_enabled(
+          &self.settings,
+          DetailCaptureApp {
+            identifier: &identifier,
+            name: &name,
+          },
+        );
+        let details = if include_details {
+          crate::activity_details::sanitized_details(window_title, document)
+        } else {
+          WindowDetails::default()
+        };
+        let privacy = if privacy == CapturedWindowPrivacy::Private
+          || details.privacy == CapturedWindowPrivacy::Private
+        {
+          CapturedWindowPrivacy::Private
+        } else {
+          CapturedWindowPrivacy::Ordinary
+        };
+        let (window_title, document) = if privacy == CapturedWindowPrivacy::Ordinary {
+          (details.window_title, details.document)
+        } else {
+          (None, None)
+        };
         if self.is_excluded(&identifier) {
           return closed | self.close_open(now);
         }
         if let Some(open) = self.open.as_mut()
           && open.segment.app_identifier == identifier
+          && open.segment.window_title == window_title
+          && open.segment.document == document
+          && open.privacy == privacy
         {
           open.segment.end = now.min(open.last_input);
           open.last_seen = now;
@@ -672,6 +864,8 @@ impl ActivityManager {
           segment: ActivitySegment {
             app_identifier: identifier,
             app_name: name,
+            window_title,
+            document,
             start: segment_start,
             end: now.min(last_input),
           },
@@ -680,6 +874,7 @@ impl ActivityManager {
           idle_since: (resumed_input.is_none() && last_input < segment_start)
             .then_some(last_input),
           partition,
+          privacy,
         });
       }
     }
@@ -731,8 +926,10 @@ impl ActivityManager {
       let loaded = match &self.persistence {
         ActivityPersistence::Encrypted(store) => match store.load_day(date) {
           Ok(segments) => segments,
-          Err(error) => {
-            tracing::warn!(error = %error, "activity day is unreadable; new activity is not added to it");
+          Err(_) => {
+            tracing::warn!(
+              "activity day is unreadable; new activity is not added to it"
+            );
             return None;
           }
         },
@@ -934,14 +1131,7 @@ impl ActivityManager {
     .map_err(|_| "activity history could not be deleted".to_string())
   }
 
-  pub fn day_snapshot(
-    &self,
-    date: NaiveDate,
-    now: DateTime<Utc>,
-    _caller: &ActivityCaller,
-    other_account_history_days: usize,
-  ) -> ActivityDaySnapshot {
-    let today = local_date(now);
+  fn day_segments(&self, date: NaiveDate) -> (Vec<ActivitySegment>, bool) {
     let (mut segments, unreadable) = match self.days.get(&date) {
       Some(segments) => (segments.clone(), false),
       None => match &self.persistence {
@@ -960,6 +1150,105 @@ impl ActivityManager {
     {
       push_merged(&mut segments, piece);
     }
+    (segments, unreadable)
+  }
+
+  pub fn tray_snapshot(&self, now: DateTime<Utc>) -> Option<TrayActivitySnapshot> {
+    let (segments, unreadable) = self.day_segments(local_date(now));
+    if unreadable {
+      return None;
+    }
+    let total_ms = segments
+      .iter()
+      .map(|segment| {
+        u64::try_from((segment.end - segment.start).num_milliseconds().max(0))
+          .expect("nonnegative activity duration fits")
+      })
+      .sum();
+    let current = self.open.as_ref().filter(|open| {
+      self.is_recording()
+        && !is_excluded(
+          &self.settings.app_name_only_apps,
+          &open.segment.app_identifier,
+        )
+        && (!crate::activity_details::is_browser(
+          &open.segment.app_identifier,
+          &open.segment.app_name,
+        ) || (self.settings.capture_details
+          && is_excluded(
+            &self.settings.browser_title_apps,
+            &open.segment.app_identifier,
+          )))
+        && open.privacy == CapturedWindowPrivacy::Ordinary
+    });
+    let now = current.map(|open| {
+      open
+        .segment
+        .document
+        .as_deref()
+        .and_then(|path| path.rsplit(['/', '\\']).next())
+        .and_then(|name| foreground_app::bounded_metadata(name, MAX_DETAIL_BYTES))
+        .unwrap_or_else(|| open.segment.app_name.clone())
+    });
+    Some(TrayActivitySnapshot {
+      status: self.settings.recording_status,
+      total_ms,
+      now,
+    })
+  }
+
+  pub(crate) fn require_account_binding(
+    &self,
+    binding: &(u64, String),
+  ) -> Result<(), String> {
+    if self.account_generation == Some(binding.0)
+      && self.namespace.as_ref() == Some(&binding.1)
+    {
+      return Ok(());
+    }
+    Err("activity account is unavailable".to_string())
+  }
+
+  fn set_recording_from_tray(
+    &mut self,
+    status: ActivityRecordingStatus,
+    now: DateTime<Utc>,
+  ) -> Result<(), String> {
+    match (self.settings.recording_status, status) {
+      (ActivityRecordingStatus::Recording, ActivityRecordingStatus::Paused)
+      | (ActivityRecordingStatus::Paused, ActivityRecordingStatus::Recording) => {
+        self.set_recording_status(status, now)
+      }
+      (ActivityRecordingStatus::Recording, ActivityRecordingStatus::Recording)
+      | (ActivityRecordingStatus::Paused, ActivityRecordingStatus::Paused) => Ok(()),
+      (ActivityRecordingStatus::Off, _) => {
+        Err("activity recording has not started".to_string())
+      }
+      (_, ActivityRecordingStatus::Off) => {
+        Err("activity tray action is invalid".to_string())
+      }
+    }
+  }
+
+  pub fn day_snapshot(
+    &self,
+    date: NaiveDate,
+    now: DateTime<Utc>,
+    _caller: &ActivityCaller,
+    other_account_history_days: usize,
+    details_access: ActivityDetailsAccess,
+  ) -> ActivityDaySnapshot {
+    let today = local_date(now);
+    let (segments, unreadable) = self.day_segments(date);
+    let mut browser_apps = Vec::new();
+    for segment in &segments {
+      if crate::activity_details::is_browser(&segment.app_identifier, &segment.app_name)
+        && let Some(app) = AppExclusion::new(&segment.app_identifier, &segment.app_name)
+      {
+        browser_apps.push(app);
+      }
+    }
+    foreground_app::normalize_exclusions(&mut browser_apps, MAX_EXCLUSIONS);
     ActivityDaySnapshot {
       date: format_date(date),
       today: format_date(today),
@@ -969,6 +1258,11 @@ impl ActivityManager {
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
+      capture_details: self.settings.capture_details,
+      app_name_only_apps: self.settings.app_name_only_apps.clone(),
+      details_access,
+      browser_title_apps: self.settings.browser_title_apps.clone(),
+      browser_apps,
       segments,
       unreadable,
     }
@@ -1006,10 +1300,18 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
     Ok(settings) => {
       let mut settings = settings.unwrap_or_default();
       foreground_app::normalize_exclusions(&mut settings.excluded_apps, MAX_EXCLUSIONS);
+      foreground_app::normalize_exclusions(
+        &mut settings.app_name_only_apps,
+        MAX_EXCLUSIONS,
+      );
+      foreground_app::normalize_exclusions(
+        &mut settings.browser_title_apps,
+        MAX_EXCLUSIONS,
+      );
       (ActivityPersistence::Encrypted(store), settings)
     }
-    Err(error) => {
-      tracing::warn!(error = %error, "activity timeline settings are unreadable");
+    Err(_) => {
+      tracing::warn!("activity timeline settings are unreadable");
       (
         ActivityPersistence::DeletionOnly(root),
         ActivitySettings::default(),
@@ -1020,6 +1322,75 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
 
 fn emit_changed(app: &AppHandle) {
   let _ = app.emit(CHANGED_EVENT, ());
+  refresh_tray(app);
+}
+
+fn refresh_tray(app: &AppHandle) {
+  let Some(state) = app.try_state::<crate::commands::AppState>() else {
+    return;
+  };
+  let state = Arc::clone(&state);
+  let app = app.clone();
+  tauri::async_runtime::spawn(async move {
+    let snapshot = state.lock().await.get_snapshot();
+    crate::tray::refresh(&app, &snapshot);
+  });
+}
+
+pub fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
+  if !is_enabled(app) {
+    return None;
+  }
+  let gates = app.try_state::<FeatureGates>()?;
+  let binding = gates.account_binding(DesktopFeature::ActivityTimeline)?;
+  let state = app.try_state::<ActivityAppState>()?;
+  let manager = state.lock().ok()?;
+  manager.require_account_binding(&binding).ok()?;
+  let snapshot = manager.tray_snapshot(Utc::now())?;
+  if gates
+    .account_binding(DesktopFeature::ActivityTimeline)
+    .as_ref()
+    != Some(&binding)
+  {
+    return None;
+  }
+  Some(snapshot)
+}
+
+pub fn set_recording_from_tray(
+  app: &AppHandle,
+  status: ActivityRecordingStatus,
+) -> Result<(), String> {
+  if !is_enabled(app) {
+    return Err("activity timeline is unavailable".to_string());
+  }
+  if status == ActivityRecordingStatus::Off {
+    return Err("activity tray action is invalid".to_string());
+  }
+  let gates = app
+    .try_state::<FeatureGates>()
+    .ok_or_else(|| "activity account is unavailable".to_string())?;
+  let binding = gates
+    .account_binding(DesktopFeature::ActivityTimeline)
+    .ok_or_else(|| "activity account is unavailable".to_string())?;
+  let state = app
+    .try_state::<ActivityAppState>()
+    .ok_or_else(|| "activity timeline is unavailable".to_string())?;
+  let mut manager = state
+    .lock()
+    .map_err(|_| "activity timeline is unavailable".to_string())?;
+  manager.require_account_binding(&binding)?;
+  if gates
+    .account_binding(DesktopFeature::ActivityTimeline)
+    .as_ref()
+    != Some(&binding)
+  {
+    return Err("activity account is unavailable".to_string());
+  }
+  manager.set_recording_from_tray(status, Utc::now())?;
+  drop(manager);
+  emit_changed(app);
+  Ok(())
 }
 
 /// Installs only the current account's namespace. A slow keychain lookup
@@ -1060,25 +1431,25 @@ pub fn initialize(app: &AppHandle) {
         return;
       }
       manager.install_account(binding, persistence, settings);
-      if let Err(error) = manager.prune_expired(Utc::now()) {
-        tracing::warn!(error = %error, "expired activity days could not be removed");
+      if manager.prune_expired(Utc::now()).is_err() {
+        tracing::warn!("expired activity days could not be removed");
       }
       drop(manager);
       emit_changed(&app);
     });
-  if let Err(error) = spawned {
-    tracing::error!(error = %error, "activity timeline could not initialize");
+  if spawned.is_err() {
+    tracing::error!("activity timeline could not initialize");
   }
 }
 
 /// Unlink removes all readable state immediately; encrypted account stores
-/// remain on disk for that account and the keyless retention sweep.
+/// remain on disk until that account returns or the user explicitly deletes them.
 pub fn unload_account(app: &AppHandle) {
   if let Some(state) = app.try_state::<ActivityAppState>()
     && let Ok(mut manager) = state.lock()
   {
-    if let Err(error) = manager.unload_account(Utc::now()) {
-      tracing::warn!(error = %error, "activity timeline could not be written on unlink");
+    if manager.unload_account(Utc::now()).is_err() {
+      tracing::warn!("activity timeline could not be written on unlink");
     }
   }
   crate::activity_window::close(app);
@@ -1099,13 +1470,17 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
 pub fn flush_on_exit(app: &AppHandle) {
   if let Some(state) = app.try_state::<ActivityAppState>()
     && let Ok(mut manager) = state.lock()
-    && let Err(error) = manager.stop(Utc::now())
+    && manager.stop(Utc::now()).is_err()
   {
-    tracing::warn!(error = %error, "activity timeline could not be written on exit");
+    tracing::warn!("activity timeline could not be written on exit");
   }
 }
 
-fn observe_now(app: &AppHandle, idle: Duration) -> Observation {
+fn observe_now(
+  app: &AppHandle,
+  idle: Duration,
+  settings: &ActivitySettings,
+) -> Observation {
   if idle >= IDLE_THRESHOLD {
     return Observation::Idle { idle };
   }
@@ -1114,36 +1489,69 @@ fn observe_now(app: &AppHandle, idle: Duration) -> Observation {
   };
   let identifier = foreground
     .identifier
+    .clone()
     .unwrap_or_else(|| foreground.name.clone());
+  let include_details = !is_excluded(&settings.excluded_apps, &identifier)
+    && details_enabled(
+      settings,
+      DetailCaptureApp {
+        identifier: &identifier,
+        name: &foreground.name,
+      },
+    );
+  let details = if include_details {
+    let details = crate::activity_details::capture(
+      &foreground,
+      is_excluded(&settings.browser_title_apps, &identifier),
+    );
+    // The capture module verifies focused-window identity internally. Recheck
+    // the owning app/process after the bounded OS call before attributing it.
+    let Some(current) = foreground_app::current(app) else {
+      return Observation::Unattributed;
+    };
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    if current.process_id != foreground.process_id {
+      return Observation::Unattributed;
+    }
+    if current.identifier != foreground.identifier || current.name != foreground.name {
+      return Observation::Unattributed;
+    }
+    Some(details)
+  } else {
+    None
+  };
+  let details = details.unwrap_or_default();
   Observation::Active {
     identifier,
     name: foreground.name,
+    window_title: details.window_title,
+    document: details.document,
+    privacy: details.privacy,
   }
 }
 
 fn sample(app: &AppHandle, state: &ActivityAppState) {
   let enabled = is_enabled(app);
-  let generation = {
+  let (generation, settings) = {
     let Ok(mut manager) = state.lock() else {
       return;
     };
     if !enabled || !manager.is_recording() {
-      if manager.open.is_some()
-        && let Err(error) = manager.stop(Utc::now())
-      {
-        tracing::warn!(error = %error, "activity timeline could not be written");
+      if manager.open.is_some() && manager.stop(Utc::now()).is_err() {
+        tracing::warn!("activity timeline could not be written");
       }
       return;
     }
-    manager.observation_generation
+    (manager.observation_generation, manager.settings.clone())
   };
   // The foreground lookup hops to the main thread, so it runs without the
   // lock and commands never wait on it.
   let now = Utc::now();
   let monotonic = Instant::now();
   let idle = crate::idle_time::since_last_input();
-  let observation =
-    idle.map_or(Observation::Unattributed, |idle| observe_now(app, idle));
+  let observation = idle.map_or(Observation::Unattributed, |idle| {
+    observe_now(app, idle, &settings)
+  });
   let Ok(mut manager) = state.lock() else {
     return;
   };
@@ -1151,8 +1559,8 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
     return;
   }
   let Some(idle) = idle else {
-    if let Err(error) = manager.stop(now) {
-      tracing::warn!(error = %error, "activity timeline could not be written");
+    if manager.stop(now).is_err() {
+      tracing::warn!("activity timeline could not be written");
     }
     drop(manager);
     emit_changed(app);
@@ -1170,8 +1578,8 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
     return;
   };
   let flushed = manager.flush_due(monotonic);
-  if flushed && let Err(error) = manager.flush(now) {
-    tracing::warn!(error = %error, "activity timeline could not be written");
+  if flushed && manager.flush(now).is_err() {
+    tracing::warn!("activity timeline could not be written");
   }
   drop(manager);
   if closed || flushed {
@@ -1194,8 +1602,8 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
       interval.tick().await;
       let changed = match sweep_state.lock() {
         Ok(mut manager) if manager.is_initialized() => {
-          manager.prune_expired(Utc::now()).unwrap_or_else(|error| {
-            tracing::warn!(error = %error, "expired activity days could not be removed");
+          manager.prune_expired(Utc::now()).unwrap_or_else(|_| {
+            tracing::warn!("expired activity days could not be removed");
             false
           })
         }
@@ -1209,13 +1617,18 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
   let spawned = std::thread::Builder::new()
     .name("stella-activity-sampler".to_string())
     .spawn(move || {
+      let mut last_tray_refresh = Instant::now();
       loop {
         std::thread::sleep(SAMPLE_INTERVAL);
         sample(&app, &state);
+        if last_tray_refresh.elapsed() >= TRAY_REFRESH_INTERVAL {
+          refresh_tray(&app);
+          last_tray_refresh = Instant::now();
+        }
       }
     });
-  if let Err(error) = spawned {
-    tracing::error!(error = %error, "activity sampler could not start");
+  if spawned.is_err() {
+    tracing::error!("activity sampler could not start");
   }
 }
 
@@ -1234,6 +1647,19 @@ mod tests {
     Observation::Active {
       identifier: identifier.to_string(),
       name: identifier.to_uppercase(),
+      window_title: None,
+      document: None,
+      privacy: CapturedWindowPrivacy::Ordinary,
+    }
+  }
+
+  fn active_details(identifier: &str) -> Observation {
+    Observation::Active {
+      identifier: identifier.to_string(),
+      name: identifier.to_uppercase(),
+      window_title: Some("Draft title".to_string()),
+      document: Some("/private/draft.docx".to_string()),
+      privacy: CapturedWindowPrivacy::Ordinary,
     }
   }
 
@@ -1262,6 +1688,433 @@ mod tests {
         )
       })
       .collect()
+  }
+
+  #[test]
+  fn details_are_filtered_at_ingestion_without_opt_in_or_for_name_only_apps() {
+    for capture in [false, true] {
+      for app_name_only in [false, true] {
+        let mut manager = recording_manager();
+        manager.set_capture_details(capture, at(0)).unwrap();
+        if app_name_only {
+          manager
+            .set_app_detail_capture(
+              "word",
+              "Word",
+              ActivityAppDetailCapture::AppNameOnly,
+              at(0),
+            )
+            .unwrap();
+        }
+        manager.observe(at(0), active_details("word"));
+        manager.observe(at(5), active_details("word"));
+        manager.stop(at(5)).unwrap();
+        let recorded = manager.days.values().flatten().collect::<Vec<_>>();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(
+          recorded[0].window_title.is_some(),
+          capture && !app_name_only
+        );
+        assert_eq!(recorded[0].document.is_some(), capture && !app_name_only);
+      }
+    }
+  }
+
+  #[test]
+  fn titles_and_documents_split_same_app_segments_in_memory_and_encrypted_files() {
+    let root = std::env::temp_dir()
+      .join(format!("stella-detail-splits-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let mut manager = recording_manager();
+    manager.persistence = ActivityPersistence::Encrypted(store.clone());
+    manager.set_capture_details(true, at(0)).unwrap();
+    for (index, (title, document)) in [
+      ("Draft", "/private/a.docx"),
+      ("Updated", "/private/a.docx"),
+      ("Updated", "/private/b.docx"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+      for offset in [0, 5] {
+        let second = i64::try_from(index).unwrap() * 10 + offset;
+        manager.observe(
+          at(second),
+          Observation::Active {
+            identifier: "word".into(),
+            name: "Word".into(),
+            window_title: Some(title.into()),
+            document: Some(document.into()),
+            privacy: CapturedWindowPrivacy::Ordinary,
+          },
+        );
+        manager.flush(at(second)).unwrap();
+      }
+    }
+    manager.stop(at(25)).unwrap();
+    let recorded = store.load_day(local_date(at(0))).unwrap();
+    assert_eq!(recorded.len(), 3);
+    assert_eq!(recorded[0].window_title.as_deref(), Some("Draft"));
+    assert_eq!(recorded[1].window_title.as_deref(), Some("Updated"));
+    assert_eq!(recorded[1].document.as_deref(), Some("/private/a.docx"));
+    assert_eq!(recorded[2].document.as_deref(), Some("/private/b.docx"));
+    for pair in recorded.windows(2) {
+      assert_eq!(pair[0].end, pair[1].start);
+    }
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn detail_preferences_close_segments_invalidate_pending_captures_and_keep_past_details()
+   {
+    let mut manager = recording_manager();
+    assert!(manager.set_capture_details(true, at(0)).unwrap());
+    assert!(!manager.set_capture_details(true, at(0)).unwrap());
+    manager.observe(at(0), active_details("word"));
+    manager.observe(at(5), active_details("word"));
+    let generation = manager.observation_generation;
+    assert!(!manager.set_capture_details(false, at(5)).unwrap());
+    assert!(!manager.accepts_observation(generation, true));
+    assert!(manager.open.is_none());
+    manager.observe(at(10), active_details("word"));
+    manager.observe(at(15), active_details("word"));
+    manager.stop(at(15)).unwrap();
+    let recorded = manager.days.values().flatten().collect::<Vec<_>>();
+    assert_eq!(recorded.len(), 2);
+    assert!(recorded[0].window_title.is_some());
+    assert!(recorded[1].window_title.is_none());
+    assert!(manager.set_capture_details(true, at(20)).unwrap());
+    let generation = manager.observation_generation;
+    manager
+      .set_app_detail_capture(
+        "WORD",
+        "Word",
+        ActivityAppDetailCapture::AppNameOnly,
+        at(20),
+      )
+      .unwrap();
+    assert!(!manager.accepts_observation(generation, true));
+    assert_eq!(manager.settings.app_name_only_apps.len(), 1);
+    manager
+      .set_app_detail_capture(
+        "word",
+        "Word",
+        ActivityAppDetailCapture::IncludeDetails,
+        at(20),
+      )
+      .unwrap();
+    assert!(manager.settings.app_name_only_apps.is_empty());
+  }
+
+  #[test]
+  fn browser_details_default_to_app_only_and_recognized_apps_are_disclosed() {
+    let mut manager = recording_manager();
+    manager.set_capture_details(true, at(0)).unwrap();
+    let identifier = "com.google.chrome";
+    assert!(crate::activity_details::is_browser(
+      identifier,
+      "Google Chrome"
+    ));
+    manager.observe(at(0), active_details(identifier));
+    manager.observe(at(5), active_details(identifier));
+    manager.stop(at(5)).unwrap();
+    let recorded = manager.days.values().flatten().collect::<Vec<_>>();
+    assert_eq!(recorded.len(), 1);
+    assert!(recorded[0].window_title.is_none());
+    assert!(recorded[0].document.is_none());
+    let caller = ActivityCaller::for_account_test(1, "fixture");
+    let snapshot = manager.day_snapshot(
+      local_date(at(0)),
+      at(5),
+      &caller,
+      0,
+      ActivityDetailsAccess::Ready,
+    );
+    assert_eq!(snapshot.browser_apps.len(), 1);
+    assert_eq!(snapshot.browser_apps[0].identifier, identifier);
+    assert!(snapshot.browser_title_apps.is_empty());
+  }
+
+  #[test]
+  fn browser_details_and_tray_labels_require_separate_consent_and_never_include_private_windows()
+   {
+    let identifier = "com.google.chrome";
+    for capture in [false, true] {
+      for browser_consent in [false, true] {
+        for app_name_only in [false, true] {
+          for private in [false, true] {
+            let mut manager = recording_manager();
+            manager.set_capture_details(capture, at(0)).unwrap();
+            manager
+              .set_browser_title_capture(
+                identifier,
+                "Google Chrome",
+                browser_consent,
+                at(0),
+              )
+              .unwrap();
+            if app_name_only {
+              manager
+                .set_app_detail_capture(
+                  identifier,
+                  "Google Chrome",
+                  ActivityAppDetailCapture::AppNameOnly,
+                  at(0),
+                )
+                .unwrap();
+            }
+            for second in [0, 5] {
+              manager.observe(
+                at(second),
+                Observation::Active {
+                  identifier: identifier.into(),
+                  name: "Google Chrome".into(),
+                  window_title: Some(
+                    if private {
+                      "Example — Incognito"
+                    } else {
+                      "Public title"
+                    }
+                    .into(),
+                  ),
+                  document: Some("/private/draft.docx".into()),
+                  // Ingestion must independently reject a recognized marker,
+                  // even when a producer incorrectly reports ordinary privacy.
+                  privacy: CapturedWindowPrivacy::Ordinary,
+                },
+              );
+            }
+            let details = capture && browser_consent && !app_name_only && !private;
+            let open = manager.open.as_ref().unwrap();
+            assert_eq!(open.segment.window_title.is_some(), details);
+            assert_eq!(open.segment.document.is_some(), details);
+            let tray = manager.tray_snapshot(at(5)).unwrap();
+            assert_eq!(tray.now.as_deref(), details.then_some("draft.docx"));
+            assert_eq!(tray.total_ms, 5000);
+          }
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn browser_preferences_stop_pending_captures_and_reject_non_browser_accounts() {
+    let mut manager = recording_manager();
+    assert_eq!(
+      manager
+        .set_browser_title_capture("word", "Word", true, at(0))
+        .unwrap_err(),
+      "activity application is not a browser"
+    );
+    manager.set_capture_details(true, at(0)).unwrap();
+    let generation = manager.observation_generation;
+    manager
+      .set_browser_title_capture("com.google.Chrome", "Chrome", true, at(0))
+      .unwrap();
+    assert!(!manager.accepts_observation(generation, true));
+    assert_eq!(
+      manager.settings.browser_title_apps[0].identifier,
+      "com.google.chrome"
+    );
+    manager.observe(at(0), active_details("com.google.chrome"));
+    manager.observe(at(5), active_details("com.google.chrome"));
+    let generation = manager.observation_generation;
+    manager
+      .set_browser_title_capture("com.google.chrome", "Chrome", false, at(5))
+      .unwrap();
+    assert!(!manager.accepts_observation(generation, true));
+    assert!(manager.open.is_none());
+    assert!(manager.settings.browser_title_apps.is_empty());
+    assert!(
+      manager
+        .days
+        .values()
+        .flatten()
+        .next()
+        .unwrap()
+        .window_title
+        .is_some()
+    );
+  }
+
+  #[test]
+  fn tray_projection_uses_only_a_document_basename_or_approved_app_name() {
+    let mut manager = recording_manager();
+    manager.observe(at(0), active("word"));
+    manager.observe(at(5), active("word"));
+    let tray = manager.tray_snapshot(at(5)).unwrap();
+    assert_eq!(tray.now.as_deref(), Some("WORD"));
+    assert_eq!(tray.total_ms, 5000);
+    manager.set_capture_details(true, at(5)).unwrap();
+    for path in [
+      "/private/folder/draft.docx",
+      "C:\\private\\folder\\draft.docx",
+    ] {
+      let mut path_manager = recording_manager();
+      path_manager.set_capture_details(true, at(0)).unwrap();
+      for second in [0, 5] {
+        path_manager.observe(
+          at(second),
+          Observation::Active {
+            identifier: "word".into(),
+            name: "Word".into(),
+            window_title: Some("A full sensitive caption".into()),
+            document: Some(path.into()),
+            privacy: CapturedWindowPrivacy::Ordinary,
+          },
+        );
+      }
+      let tray = path_manager.tray_snapshot(at(5)).unwrap();
+      assert_eq!(tray.now.as_deref(), Some("draft.docx"));
+    }
+    manager
+      .set_app_detail_capture(
+        "word",
+        "Word",
+        ActivityAppDetailCapture::AppNameOnly,
+        at(20),
+      )
+      .unwrap();
+    manager.observe(at(20), active_details("word"));
+    assert!(manager.tray_snapshot(at(20)).unwrap().now.is_none());
+    manager
+      .set_recording_status(ActivityRecordingStatus::Paused, at(20))
+      .unwrap();
+    let tray = manager.tray_snapshot(at(20)).unwrap();
+    assert_eq!(tray.status, ActivityRecordingStatus::Paused);
+    assert!(tray.now.is_none());
+  }
+
+  #[test]
+  fn private_marker_transitions_split_live_state_and_hide_tray_now() {
+    let mut manager = recording_manager();
+    manager.set_capture_details(true, at(0)).unwrap();
+    manager
+      .set_browser_title_capture("com.google.chrome", "Chrome", true, at(0))
+      .unwrap();
+    for second in [0, 5] {
+      manager.observe(at(second), active("com.google.chrome"));
+    }
+    assert!(manager.tray_snapshot(at(5)).unwrap().now.is_some());
+    manager.observe(
+      at(10),
+      Observation::Active {
+        identifier: "com.google.chrome".into(),
+        name: "Chrome".into(),
+        window_title: None,
+        document: None,
+        privacy: CapturedWindowPrivacy::Private,
+      },
+    );
+    assert_eq!(manager.open.as_ref().unwrap().segment.start, at(10));
+    assert_eq!(
+      manager.open.as_ref().unwrap().privacy,
+      CapturedWindowPrivacy::Private
+    );
+    assert!(manager.tray_snapshot(at(10)).unwrap().now.is_none());
+    manager.observe(at(15), active("com.google.chrome"));
+    assert_eq!(manager.open.as_ref().unwrap().segment.start, at(15));
+    assert!(manager.tray_snapshot(at(15)).unwrap().now.is_some());
+  }
+
+  #[test]
+  fn tray_actions_preserve_off_consent_and_require_current_account_binding() {
+    let mut manager = ActivityManager::new();
+    let namespace = "a".repeat(64);
+    manager.install_account(
+      (1, namespace.clone()),
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings::default(),
+    );
+    assert!(
+      manager
+        .require_account_binding(&(1, namespace.clone()))
+        .is_ok()
+    );
+    assert!(
+      manager
+        .require_account_binding(&(2, namespace.clone()))
+        .is_err()
+    );
+    assert!(
+      manager
+        .require_account_binding(&(1, "b".repeat(64)))
+        .is_err()
+    );
+    for target in [
+      ActivityRecordingStatus::Recording,
+      ActivityRecordingStatus::Paused,
+    ] {
+      assert_eq!(
+        manager.set_recording_from_tray(target, at(0)).unwrap_err(),
+        "activity recording has not started"
+      );
+      assert_eq!(
+        manager.settings.recording_status,
+        ActivityRecordingStatus::Off
+      );
+    }
+    manager
+      .set_recording_status(ActivityRecordingStatus::Recording, at(0))
+      .unwrap();
+    manager
+      .set_recording_from_tray(ActivityRecordingStatus::Paused, at(0))
+      .unwrap();
+    assert_eq!(
+      manager.settings.recording_status,
+      ActivityRecordingStatus::Paused
+    );
+    manager
+      .set_recording_from_tray(ActivityRecordingStatus::Recording, at(0))
+      .unwrap();
+    assert_eq!(
+      manager.settings.recording_status,
+      ActivityRecordingStatus::Recording
+    );
+    let generation = manager.observation_generation;
+    manager
+      .set_recording_from_tray(ActivityRecordingStatus::Recording, at(0))
+      .unwrap();
+    assert_eq!(manager.observation_generation, generation);
+  }
+
+  #[test]
+  fn unreadable_day_has_no_tray_projection() {
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::DeletionOnly(
+        std::env::temp_dir().join(uuid::Uuid::new_v4().to_string()),
+      ),
+      ActivitySettings::default(),
+    );
+    assert!(manager.tray_snapshot(at(0)).is_none());
+  }
+
+  #[test]
+  fn detail_metadata_is_bounded_and_sanitized_before_storage() {
+    let mut manager = recording_manager();
+    manager.set_capture_details(true, at(0)).unwrap();
+    let raw = format!("\n{}\u{0000}\r", "é".repeat(400));
+    for second in [0, 5] {
+      manager.observe(
+        at(second),
+        Observation::Active {
+          identifier: "word".into(),
+          name: "Word".into(),
+          window_title: Some(raw.clone()),
+          document: Some(raw.clone()),
+          privacy: CapturedWindowPrivacy::Ordinary,
+        },
+      );
+    }
+    manager.stop(at(5)).unwrap();
+    let recorded = manager.days.values().flatten().next().unwrap();
+    for value in [&recorded.window_title, &recorded.document] {
+      let value = value.as_deref().unwrap();
+      assert_eq!(value.len(), MAX_DETAIL_BYTES);
+      assert!(value.chars().all(|character| !character.is_control()));
+      assert_eq!(value, "é".repeat(MAX_DETAIL_BYTES / 2));
+    }
   }
 
   #[test]
@@ -1310,7 +2163,13 @@ mod tests {
           );
           assert!(
             manager
-              .day_snapshot(local_date(at(0)), at(5), &caller_b, 0)
+              .day_snapshot(
+                local_date(at(0)),
+                at(5),
+                &caller_b,
+                0,
+                ActivityDetailsAccess::Disabled
+              )
               .segments
               .is_empty()
           );
@@ -1336,7 +2195,13 @@ mod tests {
         let new_caller_a = ActivityCaller::for_account_test(3, "a");
         assert_eq!(
           manager
-            .day_snapshot(local_date(at(0)), at(5), &new_caller_a, 0)
+            .day_snapshot(
+              local_date(at(0)),
+              at(5),
+              &new_caller_a,
+              0,
+              ActivityDetailsAccess::Disabled
+            )
             .segments
             .len(),
           1
@@ -1415,6 +2280,8 @@ mod tests {
     let pieces = split_by_local_day(ActivitySegment {
       app_identifier: "word".into(),
       app_name: "Word".into(),
+      window_title: None,
+      document: None,
       start: midnight - chrono::Duration::minutes(10),
       end: midnight + chrono::Duration::minutes(5),
     });
@@ -1518,8 +2385,22 @@ mod tests {
       atomic::{AtomicBool, Ordering},
       mpsc,
     };
-    for transition in ["disable", "exclude", "pause-resume", "delete", "unlink"] {
-      let manager = Arc::new(Mutex::new(recording_manager()));
+    for transition in [
+      "disable",
+      "exclude",
+      "pause-resume",
+      "delete",
+      "unlink",
+      "details-off",
+      "app-name-only",
+      "browser-titles-off",
+    ] {
+      let mut initial = recording_manager();
+      initial.set_capture_details(true, at(0)).unwrap();
+      initial
+        .set_browser_title_capture("com.google.chrome", "Chrome", true, at(0))
+        .unwrap();
+      let manager = Arc::new(Mutex::new(initial));
       let enabled = Arc::new(AtomicBool::new(true));
       let (started, lookup_started) = mpsc::channel();
       let (resume, lookup_resumed) = mpsc::channel();
@@ -1539,7 +2420,11 @@ mod tests {
             now: at(5),
             monotonic: Instant::now(),
             idle: Duration::ZERO,
-            observation: active("word"),
+            observation: active_details(if transition == "browser-titles-off" {
+              "com.google.chrome"
+            } else {
+              "word"
+            }),
             partition: partition_in(&Local, at(5)),
           })
       });
@@ -1561,6 +2446,20 @@ mod tests {
           }
           "delete" => manager.delete_all().unwrap(),
           "unlink" => manager.unload_account(at(0)).unwrap(),
+          "details-off" => {
+            manager.set_capture_details(false, at(0)).unwrap();
+          }
+          "app-name-only" => manager
+            .set_app_detail_capture(
+              "word",
+              "Word",
+              ActivityAppDetailCapture::AppNameOnly,
+              at(0),
+            )
+            .unwrap(),
+          "browser-titles-off" => manager
+            .set_browser_title_capture("com.google.chrome", "Chrome", false, at(0))
+            .unwrap(),
           _ => unreachable!(),
         }
       }
@@ -1843,6 +2742,8 @@ mod tests {
         &[ActivitySegment {
           app_identifier: "word".into(),
           app_name: "Word".into(),
+          window_title: None,
+          document: None,
           start: at(0),
           end: at(10),
         }],
@@ -1871,6 +2772,8 @@ mod tests {
     let segment = |app: &str, start, end| ActivitySegment {
       app_identifier: app.into(),
       app_name: app.into(),
+      window_title: Some(format!("{app} title")),
+      document: Some(format!("/private/{app}.docx")),
       start: at(start),
       end: at(end),
     };
@@ -2032,6 +2935,8 @@ mod tests {
       let original = ActivitySegment {
         app_identifier: "word".into(),
         app_name: "Word".into(),
+        window_title: None,
+        document: None,
         start: transition - chrono::Duration::seconds(5),
         end: transition + chrono::Duration::seconds(5),
       };
@@ -2240,6 +3145,8 @@ mod tests {
         &[ActivitySegment {
           app_identifier: "word".into(),
           app_name: "Word".into(),
+          window_title: None,
+          document: None,
           start: at(0),
           end: at(5),
         }],
@@ -2269,6 +3176,15 @@ mod tests {
       .map(|retention| serde_json::to_value(retention).unwrap())
       .collect::<Vec<_>>();
     assert_eq!(contract["retentions"], serde_json::Value::Array(native));
+    assert_eq!(contract["maxMetadataBytes"], MAX_DETAIL_BYTES);
+    let details_access = ActivityDetailsAccess::ALL
+      .iter()
+      .map(|access| serde_json::to_value(access).unwrap())
+      .collect::<Vec<_>>();
+    assert_eq!(
+      contract["detailsAccess"],
+      serde_json::Value::Array(details_access)
+    );
     let days = ActivityRetention::ALL
       .iter()
       .map(|retention| serde_json::json!(retention.days()))

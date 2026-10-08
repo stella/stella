@@ -26,13 +26,49 @@ const expectNoNetwork = (file: string, source: string) => {
   expect(source, file).not.toMatch(NETWORK_PATTERN);
 };
 
+const expectFixedMessageLogs = (file: string, source: string) => {
+  expect(source, file).not.toMatch(
+    /\buse\s+(?:tracing|log)\b|#\[[^\]]*\binstrument\b/u,
+  );
+  expect(source, file).not.toMatch(
+    /(?<!::)\b(?:trace|debug|info|warn|error|println|eprintln|dbg)!/u,
+  );
+  for (const log of source.matchAll(
+    /(?:tracing|log)::(?:trace|debug|info|warn|error)!\([\s\S]*?\);/gu,
+  )) {
+    expect(log[0], file).toMatch(
+      /^(?:tracing|log)::(?:trace|debug|info|warn|error)!\(\s*"(?:\\.|[^"\\])*"\s*,?\s*\);$/u,
+    );
+  }
+};
+
 describe("local-only network boundary", () => {
+  test("fixed-message logging rejects aliases and captured error payloads", () => {
+    expectFixedMessageLogs(
+      "fixed",
+      'tracing::warn!("activity day is unreadable");',
+    );
+    for (const source of [
+      'let payload = &segment.window_title; tracing::warn!(?payload, "debug");',
+      'tracing::warn!(error = %error, "activity day is unreadable");',
+      'use tracing::warn; warn!("{}", document);',
+      'println!("{}", document);',
+      "#[tracing::instrument] fn capture(document: String) {}",
+    ]) {
+      expect(() => expectFixedMessageLogs("captured", source)).toThrow(
+        /Expected|expect|Received/u,
+      );
+    }
+  });
   test.each(LOCAL_ONLY_FEATURES.map((feature) => [feature.id, feature]))(
     "%s modules do not construct network clients or reach the gate fetch",
     async (_id, feature) => {
-      const files = (await nativeFiles()).filter((file) =>
-        isFeatureModule(feature, file),
-      );
+      const files = [
+        ...(await nativeFiles()).filter((file) =>
+          isFeatureModule(feature, file),
+        ),
+        ...feature.nativeModules,
+      ];
       expect(files.length).toBeGreaterThan(0);
       for (const file of files) {
         const source = await readNative(file);
@@ -71,14 +107,27 @@ describe("local-only network boundary", () => {
   )(
     "%s reports fixed error codes only, never what it recorded",
     async (_id, feature) => {
-      const featureFiles = (await nativeFiles()).filter((name) =>
-        isFeatureModule(feature, name),
-      );
+      const featureFiles = [
+        ...(await nativeFiles()).filter((name) =>
+          isFeatureModule(feature, name),
+        ),
+        ...feature.nativeModules,
+      ];
       expect(featureFiles.length).toBeGreaterThan(0);
       for (const file of featureFiles) {
-        expect(await readNative(file), file).not.toMatch(
+        const source = await readNative(file);
+        expect(source, file).not.toMatch(
           /\b(?:desktop_telemetry|DesktopTelemetry)\b/u,
         );
+      }
+      for (const file of featureFiles) {
+        const source = await readNative(file);
+        expectFixedMessageLogs(file, source);
+        if (feature.nativeModules.some((module) => module === file)) {
+          expect(source, file).not.toMatch(
+            /\b(?:println|eprintln|dbg)!|\b(?:tracing|log)::/u,
+          );
+        }
       }
       const frontendModules = Object.values(feature.windowModules).flat();
       expect(frontendModules.length).toBeGreaterThan(0);

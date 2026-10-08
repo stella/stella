@@ -1,6 +1,7 @@
 mod account;
 mod activity;
 mod activity_commands;
+mod activity_details;
 mod activity_store;
 mod activity_window;
 mod app_lifecycle;

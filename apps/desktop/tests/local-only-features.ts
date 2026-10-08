@@ -18,6 +18,7 @@ export const LOCAL_ONLY_FEATURES = [
      * never touch telemetry.
      */
     telemetry: "classifications",
+    nativeModules: [],
     /** Capability file → the modules `main.tsx` renders in that window. */
     windowModules: {
       "src-tauri/capabilities/clipboard-editor.json": [
@@ -40,6 +41,11 @@ export const LOCAL_ONLY_FEATURES = [
     commandPrefix: "activity_",
     id: "activity",
     telemetry: "fixedCodes",
+    nativeModules: [
+      "tray.rs",
+      "../crates/macos-park/src/focused_window.rs",
+      "../crates/macos-park/src/windows_window.rs",
+    ],
     windowModules: {
       "src-tauri/capabilities/activity.json": ["src/activity/ActivityApp.tsx"],
     },

@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -23,9 +24,12 @@ import {
   PauseIcon,
   PlayIcon,
   ShieldAlertIcon,
+  TextIcon,
+  FileTextIcon,
   Trash2Icon,
   XIcon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -45,6 +49,7 @@ import {
   appTotals,
   calendarDate,
   durationParts,
+  documentName,
   proposeBlocks,
   shiftDate,
   timedSegments,
@@ -60,6 +65,7 @@ import {
 import type {
   ActivityAppExclusion,
   ActivityDaySnapshot,
+  ActivityDetailsAccess,
   ActivityRetention,
 } from "./activity-types";
 
@@ -80,6 +86,10 @@ type ActivityCommand =
   | "activity_delete_all"
   | "activity_delete_day"
   | "activity_delete_other_account_history"
+  | "activity_set_browser_title_capture"
+  | "activity_set_capture_details"
+  | "activity_set_app_detail_capture"
+  | "activity_open_accessibility_settings"
   | "activity_exclude_app"
   | "activity_remove_app_exclusion"
   | "activity_set_recording_status"
@@ -133,7 +143,17 @@ const ErrorLine = ({ message }: { message: string }) => (
   </p>
 );
 
-const ActivityWelcome = ({ onStart }: { onStart: () => void }) => {
+type ActivityWelcomeProps = {
+  onStart: () => void;
+  onCommand: RunCommand;
+  snapshot: ActivityDaySnapshot;
+};
+
+const ActivityWelcome = ({
+  onStart,
+  onCommand,
+  snapshot,
+}: ActivityWelcomeProps) => {
   const t = useTranslations("activity");
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
@@ -156,10 +176,128 @@ const ActivityWelcome = ({ onStart }: { onStart: () => void }) => {
       <p className="text-muted-foreground text-sm leading-relaxed">
         {t("welcomeControlDescription")}
       </p>
+      <CaptureDetailsControl onCommand={onCommand} snapshot={snapshot} />
       <div>
         <Button onClick={onStart}>{t("welcomeStart")}</Button>
       </div>
     </section>
+  );
+};
+
+type DetailsAccessNoticeProps = {
+  access: ActivityDetailsAccess;
+  onCommand: RunCommand;
+};
+
+const DetailsAccessNotice = ({
+  access,
+  onCommand,
+}: DetailsAccessNoticeProps) => {
+  const t = useTranslations("activity");
+  switch (access) {
+    case "disabled":
+    case "ready":
+      return null;
+    case "accessibilityRequired":
+      return (
+        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+          <p>{t("accessibilityRequired")}</p>
+          <Button
+            onClick={() => onCommand("activity_open_accessibility_settings")}
+            size="sm"
+            variant="ghost"
+          >
+            {t("openAccessibilitySettings")}
+          </Button>
+        </div>
+      );
+    case "unavailable":
+      return (
+        <p className="text-muted-foreground text-xs">
+          {t("detailsUnavailable")}
+        </p>
+      );
+    default:
+      access satisfies never;
+      return panic("Unhandled activity details access");
+  }
+};
+
+type CaptureDetailsControlProps = {
+  onCommand: RunCommand;
+  snapshot: ActivityDaySnapshot;
+};
+
+const CaptureDetailsControl = ({
+  onCommand,
+  snapshot,
+}: CaptureDetailsControlProps) => {
+  const t = useTranslations("activity");
+  return (
+    <div className="flex flex-col gap-2">
+      <Label className="items-start gap-2" htmlFor="activity-capture-details">
+        <Checkbox
+          checked={snapshot.captureDetails}
+          id="activity-capture-details"
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_capture_details", { enabled })
+          }
+        />
+        <span>{t("captureDetails")}</span>
+      </Label>
+      <p className="text-muted-foreground text-xs">
+        {t("captureDetailsDescription")}
+      </p>
+      <DetailsAccessNotice
+        access={snapshot.detailsAccess}
+        onCommand={onCommand}
+      />
+      {snapshot.browserApps.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {snapshot.browserApps.map((browser) => (
+            <div className="flex flex-col gap-1" key={browser.identifier}>
+              <Label
+                className="items-start gap-2"
+                htmlFor={`activity-browser-title-${browser.identifier}`}
+              >
+                <Checkbox
+                  id={`activity-browser-title-${browser.identifier}`}
+                  checked={snapshot.browserTitleApps.some(
+                    ({ identifier }) => identifier === browser.identifier,
+                  )}
+                  disabled={
+                    !snapshot.captureDetails ||
+                    snapshot.appNameOnlyApps.some(
+                      ({ identifier }) => identifier === browser.identifier,
+                    )
+                  }
+                  onCheckedChange={(enabled) =>
+                    onCommand("activity_set_browser_title_capture", {
+                      identifier: browser.identifier,
+                      name: browser.name,
+                      enabled,
+                    })
+                  }
+                />
+                <span>
+                  {t("captureBrowserTitles", { browser: browser.name })}
+                </span>
+              </Label>
+              {snapshot.appNameOnlyApps.some(
+                ({ identifier }) => identifier === browser.identifier,
+              ) ? (
+                <p className="text-muted-foreground text-xs">
+                  {t("browserAppNameOnly")}
+                </p>
+              ) : null}
+            </div>
+          ))}
+          <p className="text-muted-foreground text-xs">
+            {t("browserPrivacyNote")}
+          </p>
+        </div>
+      ) : null}
+    </div>
   );
 };
 
@@ -293,7 +431,12 @@ const DayContent = ({ onCommand, onExclude, snapshot }: DayContentProps) => {
         onCommand={onCommand}
         segments={segments}
       />
-      <AppTotals onExclude={onExclude} segments={segments} />
+      <AppTotals
+        onCommand={onCommand}
+        onExclude={onExclude}
+        segments={segments}
+        appNameOnlyApps={snapshot.appNameOnlyApps}
+      />
       <SegmentList segments={segments} />
     </>
   );
@@ -331,18 +474,23 @@ const ProposedBlocks = ({ date, onCommand, segments }: ProposedBlocksProps) => {
   const format = useFormatter();
   const timeRange = useTimeRange();
   const [copiedStartMs, setCopiedStartMs] = useState<number | null>(null);
+  const blocks = proposeBlocks(segments);
   const hours = (block: ActivityBlock) =>
     format.number(block.roundedTenths / 10, {
       maximumFractionDigits: 1,
       minimumFractionDigits: 1,
     });
   const summary = (block: ActivityBlock) =>
-    t("blockSummary", {
+    t(block.document ? "blockSummaryWithDocument" : "blockSummary", {
+      document: block.document ? documentName(block.document) : "",
       apps: format.list(topAppNames(block), { type: "conjunction" }),
       date: format.dateTime(calendarDate(date), { dateStyle: "medium" }),
       hours: hours(block),
       time: timeRange(block.startMs, block.endMs),
     });
+  if (blocks.length === 0) {
+    return null;
+  }
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-col gap-0.5">
@@ -352,7 +500,7 @@ const ProposedBlocks = ({ date, onCommand, segments }: ProposedBlocksProps) => {
         </p>
       </div>
       <ul className="flex flex-col divide-y rounded-xl border">
-        {proposeBlocks(segments).map((block) => (
+        {blocks.map((block) => (
           <li className="flex items-center gap-3 px-4 py-3" key={block.startMs}>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-sm font-medium tabular-nums">
@@ -362,6 +510,10 @@ const ProposedBlocks = ({ date, onCommand, segments }: ProposedBlocksProps) => {
               <span className="text-muted-foreground truncate text-xs">
                 {format.list(topAppNames(block), { type: "conjunction" })}
               </span>
+              <ActivityDetails
+                document={block.document}
+                windowTitles={block.windowTitles}
+              />
             </div>
             <Button
               onClick={() =>
@@ -383,11 +535,18 @@ const ProposedBlocks = ({ date, onCommand, segments }: ProposedBlocksProps) => {
 };
 
 type AppTotalsProps = {
+  onCommand: RunCommand;
+  appNameOnlyApps: readonly ActivityAppExclusion[];
   onExclude: (app: ActivityAppExclusion) => void;
   segments: readonly TimedSegment[];
 };
 
-const AppTotals = ({ onExclude, segments }: AppTotalsProps) => {
+const AppTotals = ({
+  onCommand,
+  appNameOnlyApps,
+  onExclude,
+  segments,
+}: AppTotalsProps) => {
   const t = useTranslations("activity");
   return (
     <section className="flex flex-col gap-2">
@@ -402,6 +561,14 @@ const AppTotals = ({ onExclude, segments }: AppTotalsProps) => {
             <span className="text-muted-foreground text-sm tabular-nums">
               <Duration durationMs={app.durationMs} />
             </span>
+            <AppDetailCaptureButton
+              app={app}
+              onCommand={onCommand}
+              mode={appDetailCaptureMode({
+                appIdentifier: app.identifier,
+                appNameOnlyApps,
+              })}
+            />
             <Button
               aria-label={t("excludeApp", { name: app.name })}
               onClick={() =>
@@ -423,6 +590,103 @@ const AppTotals = ({ onExclude, segments }: AppTotalsProps) => {
   );
 };
 
+type ActivityDetailsProps = {
+  document: string | null;
+  windowTitles: readonly string[];
+};
+
+const ActivityDetails = ({ document, windowTitles }: ActivityDetailsProps) => {
+  const format = useFormatter();
+  return (
+    <>
+      {document ? (
+        <span
+          className="text-muted-foreground truncate text-xs"
+          title={document}
+        >
+          {documentName(document)}
+        </span>
+      ) : null}
+      {windowTitles.length > 0 ? (
+        <span className="text-muted-foreground truncate text-xs">
+          {format.list(windowTitles, { type: "conjunction" })}
+        </span>
+      ) : null}
+    </>
+  );
+};
+
+type AppDetailCaptureMode = "appNameOnly" | "includeDetails";
+type AppDetailCaptureModeOptions = {
+  appIdentifier: string;
+  appNameOnlyApps: readonly ActivityAppExclusion[];
+};
+
+const appDetailCaptureMode = ({
+  appIdentifier,
+  appNameOnlyApps,
+}: AppDetailCaptureModeOptions): AppDetailCaptureMode => {
+  if (appNameOnlyApps.some(({ identifier }) => identifier === appIdentifier)) {
+    return "appNameOnly";
+  }
+  return "includeDetails";
+};
+
+type AppDetailCaptureButtonProps = {
+  app: ActivityAppExclusion;
+  mode: AppDetailCaptureMode;
+  onCommand: RunCommand;
+};
+
+const AppDetailCaptureButton = ({
+  app,
+  mode,
+  onCommand,
+}: AppDetailCaptureButtonProps) => {
+  const t = useTranslations("activity");
+  switch (mode) {
+    case "appNameOnly":
+      return (
+        <Button
+          size="icon"
+          aria-label={t("recordAppDetails", { name: app.name })}
+          title={t("recordAppDetails", { name: app.name })}
+          onClick={() =>
+            onCommand("activity_set_app_detail_capture", {
+              identifier: app.identifier,
+              name: app.name,
+              mode: "includeDetails",
+            })
+          }
+          variant="ghost"
+        >
+          <FileTextIcon aria-hidden="true" />
+        </Button>
+      );
+    case "includeDetails":
+      return (
+        <Button
+          size="icon"
+          aria-label={t("recordAppNameOnly", { name: app.name })}
+          title={t("recordAppNameOnly", { name: app.name })}
+          onClick={() =>
+            onCommand("activity_set_app_detail_capture", {
+              identifier: app.identifier,
+              name: app.name,
+              mode: "appNameOnly",
+            })
+          }
+          variant="ghost"
+        >
+          <TextIcon aria-hidden="true" />
+        </Button>
+      );
+    default:
+      mode satisfies never;
+      return panic("Unhandled activity app detail capture");
+  }
+};
+
 const SegmentList = ({ segments }: { segments: readonly TimedSegment[] }) => {
   const t = useTranslations("activity");
   const timeRange = useTimeRange();
@@ -438,7 +702,13 @@ const SegmentList = ({ segments }: { segments: readonly TimedSegment[] }) => {
             <span className="text-muted-foreground w-32 shrink-0 tabular-nums">
               {timeRange(segment.startMs, segment.endMs)}
             </span>
-            <span className="min-w-0 flex-1 truncate">{segment.appName}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="truncate">{segment.appName}</span>
+              <ActivityDetails
+                document={segment.document}
+                windowTitles={segment.windowTitle ? [segment.windowTitle] : []}
+              />
+            </div>
             <span className="text-muted-foreground tabular-nums">
               <Duration durationMs={segment.endMs - segment.startMs} />
             </span>
@@ -486,6 +756,30 @@ const ActivitySettings = ({
   return (
     <section className="flex flex-col gap-4 border-t pt-6">
       <h3 className="text-sm font-semibold">{t("settings")}</h3>
+      <CaptureDetailsControl onCommand={onCommand} snapshot={snapshot} />
+      {snapshot.appNameOnlyApps.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm">{t("appNameOnlyApps")}</span>
+          <ul className="flex flex-col gap-1">
+            {snapshot.appNameOnlyApps.map((app) => (
+              <li
+                className="flex items-center justify-between gap-2 text-sm"
+                key={app.identifier}
+              >
+                <span className="truncate">{app.name}</span>
+                <AppDetailCaptureButton
+                  app={app}
+                  onCommand={onCommand}
+                  mode={appDetailCaptureMode({
+                    appIdentifier: app.identifier,
+                    appNameOnlyApps: snapshot.appNameOnlyApps,
+                  })}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm" id="activity-retention-label">
           {t("retention")}
@@ -822,6 +1116,8 @@ const ActivityApp = () => {
     return (
       <ActivityShell>
         <ActivityWelcome
+          onCommand={runCommand}
+          snapshot={snapshot}
           onStart={() =>
             runCommand("activity_set_recording_status", {
               status: "recording",

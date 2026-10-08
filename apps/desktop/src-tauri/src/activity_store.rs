@@ -359,6 +359,8 @@ mod tests {
     ActivitySegment {
       app_identifier: identifier.to_string(),
       app_name: "Private App".to_string(),
+      window_title: Some("Confidential draft".to_string()),
+      document: Some("/private/draft.docx".to_string()),
       start: Utc.with_ymd_and_hms(2026, 3, 1, 9, 0, 0).unwrap(),
       end: Utc.with_ymd_and_hms(2026, 3, 1, 9, 30, 0).unwrap(),
     }
@@ -375,6 +377,8 @@ mod tests {
     let raw = fs::read_to_string(&path).unwrap();
     assert!(!raw.contains("com.example.private"));
     assert!(!raw.contains("Private App"));
+    assert!(!raw.contains("Confidential draft"));
+    assert!(!raw.contains("/private/draft.docx"));
     assert_eq!(
       store.load_day(date(1)).unwrap(),
       [segment("com.example.private")]
@@ -384,6 +388,41 @@ mod tests {
     fs::rename(&path, store.day_file(date(2)).path()).unwrap();
     assert!(store.load_day(date(2)).is_err());
     assert!(store.load_day(date(1)).unwrap().is_empty());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn encrypted_files_without_detail_fields_keep_default_off_consent_and_load_days() {
+    let (store, root) = store();
+    store.ensure_dirs().unwrap();
+    store
+      .settings_file()
+      .persist(&serde_json::json!({
+        "recordingStatus": "recording",
+        "retention": "month",
+        "excludedApps": [],
+      }))
+      .unwrap();
+    let original = segment("word");
+    store
+      .day_file(date(1))
+      .persist(&serde_json::json!({ "segments": [{
+        "appIdentifier": original.app_identifier,
+        "appName": original.app_name,
+        "start": original.start,
+        "end": original.end,
+      }]}))
+      .unwrap();
+    let settings = store.load_settings().unwrap().unwrap();
+    assert!(!settings.capture_details);
+    assert!(settings.app_name_only_apps.is_empty());
+    assert!(settings.browser_title_apps.is_empty());
+    let recorded = store.load_day(date(1)).unwrap();
+    assert_eq!(recorded.len(), 1);
+    assert!(recorded[0].window_title.is_none());
+    assert!(recorded[0].document.is_none());
+    assert_eq!(recorded[0].start, original.start);
+    assert_eq!(recorded[0].end, original.end);
     ActivityStore::remove(&root).unwrap();
   }
 
