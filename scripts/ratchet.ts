@@ -2432,25 +2432,22 @@ const countParserValidatorLedgerEntries: FileCounter = (content) => {
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
-  const files: Record<string, number> = {};
-  for (const file of scanRepoFiles(context, [
+  const flagged = scanRepoFiles(context, [
     "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
     "apps/{web,collab}/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
     "packages/*/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
-  ])) {
-    if (!isOutboundProductionModule(file)) {
-      continue;
-    }
-    if (
+  ]).filter(
+    (file) =>
+      isOutboundProductionModule(file) &&
       outboundTransportReferences({
         file,
         text: readSource(context, file),
-      }).includes("indirect:transport")
-    ) {
-      files[file] = 1;
-    }
-  }
-  return { count: Object.keys(files).length, files };
+      }).includes("indirect:transport"),
+  );
+  const files: Record<string, number> = Object.fromEntries(
+    flagged.map((file) => [file, 1]),
+  );
+  return { count: flagged.length, files };
 };
 
 // --- Repo-scope counters ----------------------------------------------------
