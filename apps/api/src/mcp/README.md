@@ -188,25 +188,17 @@ A connected client should almost never need a manual reconnect. Grants carry
 `offline_access`, so a client refreshes its access token (15 minutes) with the
 refresh token (30 days, rotated on use) without the user, and a refresh grant
 survives the browser session that created it. When the user must act, the
-server says so in the form each host acts on:
+server says so in two standard forms:
 
 - **Missing, expired or revoked token:** the transport answers HTTP 401 with
   `WWW-Authenticate: Bearer error="invalid_token", ..., resource_metadata="<protected-resource metadata URL>"`
-  (no `error` when no credential was sent). Hosts refresh or rerun OAuth from
-  this; it is the only signal Claude acts on.
+  (no `error` when no credential was sent). Clients refresh or rerun OAuth
+  from this; it is the signal every MCP client acts on.
 - **Valid token without a scope the call needs:** the tool returns the
   `missing_scope` envelope (`isError`), and `tool-auth-challenge.ts` adds
   `_meta["mcp/www_authenticate"]` with an `insufficient_scope` challenge naming
-  the same metadata. ChatGPT and Codex read it and offer to reconnect in place;
-  hosts that ignore `_meta` still show the envelope's `hint`.
-
-Per host (verify again when a host changes its client):
-
-| Host    | Expired access token               | Dead refresh token              | Missing scope on a call                                              |
-| ------- | ---------------------------------- | ------------------------------- | -------------------------------------------------------------------- |
-| ChatGPT | Refreshes                          | 401 challenge, reconnect prompt | `_meta` challenge, inline reconnect                                  |
-| Codex   | Refreshes                          | 401 challenge, reconnect prompt | `_meta` challenge, inline reconnect                                  |
-| Claude  | Refreshes on 401 and before expiry | 401 challenge, OAuth rerun      | Envelope `hint` only (Claude acts on transport 401/403, not `_meta`) |
+  the same metadata. Hosts that read tool-level challenges offer to reconnect
+  in place; hosts that ignore `_meta` still show the envelope's `hint`.
 
 ## Destructive-op confirm guardrail
 

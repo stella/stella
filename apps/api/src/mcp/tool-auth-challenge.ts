@@ -19,8 +19,8 @@ const isMissingScopeText = (text: string): boolean => {
 
 /**
  * Attaches an `insufficient_scope` challenge to a `missing_scope` tool error,
- * so a host that reads tool-level challenges (ChatGPT, Codex) can offer to
- * reconnect in place instead of leaving the user to find the app's settings.
+ * so a host that reads tool-level challenges can offer to reconnect in place
+ * instead of leaving the user to find the app's settings.
  * The challenge points at the serving surface's protected-resource metadata,
  * the same document the transport's 401 challenge names. Every other result
  * passes through unchanged.
