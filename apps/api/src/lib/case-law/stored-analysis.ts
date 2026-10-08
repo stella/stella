@@ -53,8 +53,8 @@ export const ANALYSIS_FAILURE_HOLD_MS = 15 * 60 * 1000;
 /**
  * The key a reader would run the analysis with, in the form a failure record
  * names it. An organization's key is named by a tag derived from the
- * organization and the decision, so the record says nothing about which
- * organization it was and two decisions' records cannot be linked to one.
+ * organization and the decision, so each decision's record carries its own
+ * tag.
  */
 export type AnalysisReaderKey =
   | {

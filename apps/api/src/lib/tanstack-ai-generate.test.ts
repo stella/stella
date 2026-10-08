@@ -2661,6 +2661,49 @@ describe("a generation bounded by its own deadline", () => {
     expect(performance.now() - started).toBeLessThan(5000);
   });
 
+  // The deadline bounds model resolution as well as the provider call: a
+  // resolver that never settles must not hold the run past it.
+  test("a run whose model resolution never settles fails as timed out", async () => {
+    const pending = Promise.withResolvers<ResolvedTanStackTextModel>();
+    const resolveModel = async () => await pending.promise;
+    const object = await generateTanStackObjectForRole({
+      ...OBJECT_OPTIONS,
+      deadlineMs: 40,
+      resolveTextModel: resolveModel,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    const text = await generateTanStackTextForRole({
+      caching: noCaching,
+      deadlineMs: 40,
+      finishPolicy: "require-complete",
+      organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+      resolveTextModel: resolveModel,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    for (const caught of [object, text]) {
+      expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+      expect(caught).toMatchObject({ deadlineMs: 40, status: 502 });
+      expect(classifyAIError(caught)).toBe("deadline_exceeded");
+      expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+        "model_deadline_exceeded",
+      );
+    }
+    expect(providerRequests).toHaveLength(0);
+  });
+
   test("a caller's own abort under a deadline that has not fired is a cancellation", async () => {
     const controller = new AbortController();
     const caught = await generateObjectWith(

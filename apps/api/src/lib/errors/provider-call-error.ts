@@ -165,20 +165,19 @@ export const MODEL_DEADLINE_EXCEEDED_MESSAGE =
 /**
  * A run that outlived the deadline its caller set. Distinct from a
  * cancellation (the caller or its client went away): the provider was slower
- * than the budget, so the caller says so instead of reporting an abort.
+ * than the budget, so the caller says so instead of reporting an abort. The
+ * deadline bounds model resolution too, so a run that never reached a model
+ * ends this way as well, and the error names no provider.
  */
-export class ModelDeadlineExceededError extends ModelRunError {
+export class ModelDeadlineExceededError extends HandlerError {
   readonly deadlineMs: number;
 
   static {
     declareFailureClass(this, "model_deadline_exceeded");
   }
 
-  constructor({
-    deadlineMs,
-    model,
-  }: ModelRunErrorOptions & { deadlineMs: number }) {
-    super({ model }, MODEL_DEADLINE_EXCEEDED_MESSAGE);
+  constructor({ deadlineMs }: { deadlineMs: number }) {
+    super({ message: MODEL_DEADLINE_EXCEEDED_MESSAGE, status: 502 });
     this.name = "ModelDeadlineExceededError";
     this.deadlineMs = deadlineMs;
   }

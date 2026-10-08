@@ -168,9 +168,9 @@ export type AnalysisFailureCode = (typeof ANALYSIS_FAILURE_CODES)[number];
 
 /**
  * Whose key the failed run called the provider with. An organization's own
- * key is named by an opaque tag, never by the organization's id: the row is
- * corpus state every deployment reading the corpus can see, and which
- * organization opened which decision is that organization's business.
+ * key is named by a tag derived per decision rather than by the
+ * organization's id, since the row is corpus state rather than
+ * organization state.
  */
 export type AnalysisFailureKey =
   | { source: "organization"; tag: string; provider: string }

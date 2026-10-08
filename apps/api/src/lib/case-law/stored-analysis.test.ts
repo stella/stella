@@ -180,10 +180,10 @@ describe("a failed run's record", () => {
     ).toEqual({ kind: "none" });
   });
 
-  test("an organization's key is named by an opaque tag, never its id", () => {
+  test("a failure record stores a per-decision key tag rather than the organization id", () => {
     const failure = failedAt(NOW);
     expect(JSON.stringify(failure)).not.toContain(ORG_A);
-    // Unlinkable across decisions: the same organization tags each one apart.
+    // The same organization's key gets its own tag on each decision.
     const elsewhere = analysisFailure({
       code: "answer_incomplete",
       decisionId: OTHER_DECISION,
@@ -217,7 +217,7 @@ describe("a failed run's record", () => {
     });
   }
 
-  test("an organization's failure on one decision does not answer for another", () => {
+  test("a failure recorded for one decision does not answer a reader of another decision", () => {
     expect(
       failureAnswersReader({
         decisionId: OTHER_DECISION,

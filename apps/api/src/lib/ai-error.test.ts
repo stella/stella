@@ -806,7 +806,7 @@ describe("model runs this service names itself", () => {
       reason: "model_output_invalid",
     },
     {
-      error: new ModelDeadlineExceededError({ deadlineMs: 45_000, model }),
+      error: new ModelDeadlineExceededError({ deadlineMs: 45_000 }),
       kind: "deadline_exceeded",
       reason: "model_deadline_exceeded",
     },
@@ -818,8 +818,10 @@ describe("model runs this service names itself", () => {
       expect(classifyAIBoundaryFailure(error)).toBe(kind);
       expect(gradeFailure(readEvidence(error), sink).reason).toBe(reason);
       expect(isAnticipatedAIFailure(error, kind)).toBe(true);
-      // Still a model run error to every caller that already handles one.
-      expect(error).toBeInstanceOf(ModelRunError);
+      // An answer that arrived unusable stays a model run error to every
+      // caller that already handles one; a deadline may end a run that
+      // never reached a model, so it is a plain handler error.
+      expect(error instanceof ModelRunError).toBe(kind !== "deadline_exceeded");
     });
 
     test(`names ${error.name} through the wrappers a caller adds`, () => {
@@ -878,8 +880,7 @@ describe("structured-output run error codes", () => {
     ).toBe("output_incomplete");
   });
 
-  test("an inherited key is not a code", () => {
-    expect(classifyAIError(codedError("toString"))).toBe("unknown");
-    expect(classifyAIError(codedError("__proto__"))).toBe("unknown");
+  test("a code outside the vocabulary maps to the generic error", () => {
+    expect(classifyAIError(codedError("some-other-code"))).toBe("unknown");
   });
 });

@@ -21,6 +21,7 @@ import type {
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { classifyFailure } from "@stll/errors";
 
 import type {
@@ -263,57 +264,53 @@ const cancelledGenerationError = (): HandlerError =>
     "generation_cancelled",
   );
 
-type GenerationDeadline = {
-  /** The caller's signal joined with the deadline's own. */
-  signal: AbortSignal | undefined;
-  /** Whether the deadline, rather than the caller, ended the run. */
-  expired: () => boolean;
-  clear: () => void;
-};
+const GENERATION_DEADLINE_LABEL = "model generation deadline";
 
-const startGenerationDeadline = ({
-  abortSignal,
-  deadlineMs,
-}: {
-  abortSignal: AbortSignal | undefined;
-  deadlineMs: number | undefined;
-}): GenerationDeadline => {
+/**
+ * Bounds a whole generation, model resolution included, by its caller's
+ * deadline. The run is raced rather than only signalled: a resolver or an
+ * adapter that ignores cancellation still cannot hold the caller past the
+ * deadline, which then settles as a `ModelDeadlineExceededError`. The run
+ * also receives the deadline as an abort signal, so work that does listen
+ * stops with it.
+ */
+const withGenerationDeadline = async <T>(
+  {
+    abortSignal,
+    deadlineMs,
+  }: GenerationDeadlineOption & { abortSignal?: AbortSignal | undefined },
+  run: (abortSignal: AbortSignal | undefined) => Promise<T>,
+): Promise<T> => {
   if (deadlineMs === undefined) {
-    return {
-      signal: abortSignal,
-      expired: () => false,
-      clear: () => undefined,
-    };
+    return await run(abortSignal);
   }
   if (!Number.isInteger(deadlineMs) || deadlineMs <= 0) {
     return panic("A generation deadline must be a positive integer of ms");
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, deadlineMs);
-  return {
-    signal:
-      abortSignal === undefined
-        ? controller.signal
-        : AbortSignal.any([abortSignal, controller.signal]),
-    expired: () => controller.signal.aborted,
-    clear: () => {
-      clearTimeout(timer);
-    },
-  };
+  const settled = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async (deadlineSignal) =>
+          await run(
+            abortSignal === undefined
+              ? deadlineSignal
+              : AbortSignal.any([abortSignal, deadlineSignal]),
+          ),
+        { label: GENERATION_DEADLINE_LABEL, timeoutMs: deadlineMs },
+      ),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isOk(settled)) {
+    return settled.value;
+  }
+  if (
+    TimeoutError.is(settled.error) &&
+    settled.error.label === GENERATION_DEADLINE_LABEL
+  ) {
+    throw new ModelDeadlineExceededError({ deadlineMs });
+  }
+  throw settled.error;
 };
-
-// The error a run its caller's signal ended is reported as: the deadline's own
-// when the deadline fired, a cancellation otherwise.
-const endedRunError = (
-  deadline: GenerationDeadline,
-  deadlineMs: number | undefined,
-  model: ResolvedTanStackTextModel,
-): HandlerError =>
-  deadline.expired() && deadlineMs !== undefined
-    ? new ModelDeadlineExceededError({ deadlineMs, model })
-    : cancelledGenerationError();
 
 const isAbortRejection = ({
   error,
@@ -356,24 +353,18 @@ const finishAccepted = (
 
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
-): Promise<string> => {
-  const deadline = startGenerationDeadline(options);
-  try {
-    return await generateTanStackTextWithin(options, deadline);
-  } finally {
-    deadline.clear();
-  }
-};
+): Promise<string> =>
+  await withGenerationDeadline(
+    options,
+    async (abortSignal) =>
+      await generateTanStackTextWithin({ ...options, abortSignal }),
+  );
 
 const generateTanStackTextWithin = async (
   options: GenerateTanStackTextForRoleOptions,
-  deadline: GenerationDeadline,
 ): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
-  const abortSignal = admittedDispatchSignal({
-    ...options,
-    abortSignal: deadline.signal,
-  });
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
@@ -405,7 +396,7 @@ const generateTanStackTextWithin = async (
     }
   } catch (error) {
     if (isAbortRejection({ error, signal: abortSignal })) {
-      throw endedRunError(deadline, options.deadlineMs, model);
+      throw cancelledGenerationError();
     }
 
     throw error;
@@ -418,7 +409,7 @@ const generateTanStackTextWithin = async (
   // answer the caller cannot tell from a whole one. A reported finish
   // separates the two: that run completed before the signal fired.
   if (run.finish.kind === "unfinished" && abortSignal?.aborted === true) {
-    throw endedRunError(deadline, options.deadlineMs, model);
+    throw cancelledGenerationError();
   }
 
   if (!finishAccepted(options.finishPolicy, run.finish)) {
@@ -1121,28 +1112,22 @@ export const generateTanStackObjectForRole = async <
 >(
   options: GenerateTanStackObjectForRoleOptions<TSchema> &
     GenerationDeadlineOption,
-): Promise<v.InferOutput<TSchema>> => {
-  const deadline = startGenerationDeadline(options);
-  try {
-    return await generateTanStackObjectWithin(options, deadline);
-  } finally {
-    deadline.clear();
-  }
-};
+): Promise<v.InferOutput<TSchema>> =>
+  await withGenerationDeadline(
+    options,
+    async (abortSignal) =>
+      await generateTanStackObjectWithin({ ...options, abortSignal }),
+  );
 
-const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
-  {
-    outputMode: _outputMode,
-    outputSchema,
-    ...options
-  }: GenerateTanStackObjectForRoleOptions<TSchema> & GenerationDeadlineOption,
-  deadline: GenerationDeadline,
-): Promise<v.InferOutput<TSchema>> => {
+const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
+  outputMode: _outputMode,
+  outputSchema,
+  ...options
+}: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
+  v.InferOutput<TSchema>
+> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
-  const abortSignal = admittedDispatchSignal({
-    ...options,
-    abortSignal: deadline.signal,
-  });
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
@@ -1196,7 +1181,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
     // that as a plain error rather than an abort. The caller's signal is what
     // tells the two apart, as for text generation.
     if (abortSignal?.aborted === true) {
-      throw endedRunError(deadline, options.deadlineMs, model);
+      throw cancelledGenerationError();
     }
     throw generated.error;
   }

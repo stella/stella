@@ -274,7 +274,7 @@ describe("a failed analysis run", () => {
     deadlineMs,
   }: {
     decisionId: SafeId<"caseLawDecision">;
-    model: ResolvedTanStackTextModel;
+    model: ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
     organizationId?: SafeId<"organization">;
     orgAIConfig?: OrgAIConfig | null;
     retry?: boolean;
@@ -315,7 +315,7 @@ describe("a failed analysis run", () => {
       code: "answer_incomplete",
       key: { source: "organization", provider: "google" },
     });
-    // The corpus row never names the organization.
+    // The record stores a key tag rather than the organization id.
     expect(JSON.stringify(stored)).not.toContain(ORG_A);
 
     // The next poll is told, with whose key, and starts nothing.
@@ -370,6 +370,22 @@ describe("a failed analysis run", () => {
     });
   });
 
+  test("a run whose model resolution never settles is recorded as timed out", async () => {
+    const decisionId = await insertDecision();
+    const pending = Promise.withResolvers<ResolvedTanStackTextModel>();
+
+    const first = await read({
+      decisionId,
+      model: pending.promise,
+      deadlineMs: 40,
+    });
+    expect(first).toEqual({ response: { status: "generating" }, starts: 1 });
+
+    const poll = await read({ decisionId, model: fakeGoogle([]).model });
+    expect(poll.response).toMatchObject({ status: "error", code: "timed_out" });
+    expect(poll.starts).toBe(0);
+  });
+
   test("a run that outlives its deadline is recorded as timed out", async () => {
     const decisionId = await insertDecision();
     const google = fakeGoogle(["never"]);
@@ -385,7 +401,7 @@ describe("a failed analysis run", () => {
     expect(poll.starts).toBe(0);
   });
 
-  test("another organization's failure says nothing about this one's key: it runs with its own", async () => {
+  test("a failure recorded under one key does not answer a reader with another key", async () => {
     const decisionId = await insertDecision();
     await read({ decisionId, model: fakeGoogle(["cut-off"]).model });
 
@@ -399,7 +415,7 @@ describe("a failed analysis run", () => {
     expect(await storedValue(decisionId)).toMatchObject({ version: 3 });
   });
 
-  test("a platform failure says nothing about an organization's own key", async () => {
+  test("a failure recorded under the platform key does not answer a reader with an organization key", async () => {
     const decisionId = await insertDecision();
     // A failing run records the input fingerprint the read derives; a
     // platform failure over that same input then takes its place.
