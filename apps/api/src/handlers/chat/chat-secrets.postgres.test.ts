@@ -50,6 +50,7 @@ const withFixture = async <T>(
     threadId: ReturnType<typeof createSafeId<"chatThread">>;
     targetUrl: string;
     targetSlug: string;
+    targetConnectionId: string;
     connectorId: ReturnType<typeof createSafeId<"mcpConnector">>;
   }) => Promise<T>,
 ) => {
@@ -95,6 +96,7 @@ const withFixture = async <T>(
       connectorId,
       targetUrl: "https://example.test/mcp",
       targetSlug: connectorId,
+      targetConnectionId: Bun.randomUUIDv7(),
     });
   } finally {
     await db.delete(organization).where(eq(organization.id, organizationId));
@@ -186,7 +188,23 @@ if (!databaseUrl || !runPostgres) {
                 recordAuditEvent: async () => {},
               }),
             );
-          const first = await submit({ decision: "use-saved" });
+          const connection = (
+            await db
+              .select({ id: mcpUserConnections.id })
+              .from(mcpUserConnections)
+              .where(eq(mcpUserConnections.connectorId, scope.connectorId))
+          ).at(0);
+          if (!connection) {
+            return panic("Expected saved connection");
+          }
+          const targetConnection = {
+            connectionId: connection.id,
+            host: new URL(scope.targetUrl).host,
+          };
+          const first = await submit({
+            decision: "use-saved",
+            targetConnection,
+          });
           const parsed = v.safeParse(requestSecretOutputSchema, first);
           if (!parsed.success) {
             return panic("Expected stored receipt");
@@ -201,12 +219,15 @@ if (!databaseUrl || !runPostgres) {
           expect(continuation.isErr()).toBe(true);
           const recovered = await submit({
             decision: "provide",
+            targetConnection,
             value: credential,
             saveForFuture: false,
             normalConnectionAction: "preserve",
           });
           expect(recovered).toEqual(first);
-          expect(await submit({ decision: "use-saved" })).toEqual(first);
+          expect(
+            await submit({ decision: "use-saved", targetConnection }),
+          ).toEqual(first);
           const resumed = await validatePrivateReceipts({
             parts: [{ ...part, state: "complete", output: parsed.output }],
             safeDb,
@@ -217,6 +238,7 @@ if (!databaseUrl || !runPostgres) {
           expect(
             await submit({
               decision: "provide",
+              targetConnection,
               value: Bun.randomUUIDv7(),
               saveForFuture: false,
               normalConnectionAction: "preserve",
@@ -291,7 +313,7 @@ if (!databaseUrl || !runPostgres) {
             purpose: "Connect a test source",
             kind: "token",
             target: { type: "mcp-connector", connectorSlug: scope.targetSlug },
-          };
+          } as const satisfies RequestSecretInput;
           const parts = [
             {
               type: "tool-call",
@@ -435,7 +457,7 @@ if (!databaseUrl || !runPostgres) {
           expect(saved).toEqual([
             {
               responseDisposition: "receipt-only",
-              responseTargetUrl: scope.targetUrl,
+              responseTargetUrl: new URL(scope.targetUrl).origin,
               instructions: null,
               serverVersion: null,
               cachedTools: null,

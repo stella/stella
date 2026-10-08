@@ -74,6 +74,7 @@ export const createSecretTools = ({
       tx
         .select({
           id: mcpConnectors.id,
+          connectionId: mcpUserConnections.id,
           url: mcpConnectors.url,
           allowedTools: mcpConnectors.allowedTools,
           authType: mcpConnectors.authType,
@@ -123,6 +124,7 @@ export const createSecretTools = ({
       userId,
       threadId,
       connectorId: connector.id,
+      targetConnectionId: connector.connectionId,
       targetUrl: connector.url,
       secretRef,
     });

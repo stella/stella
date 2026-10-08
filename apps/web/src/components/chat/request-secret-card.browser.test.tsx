@@ -59,6 +59,7 @@ const mountCard = ({
   resolveSecretTarget = async () => ({
     available: false,
     connector: {
+      connectionId: "sample-connection",
       displayName: "Sample connector",
       host: "sample.test",
       responseDisposition: "normal",
@@ -167,6 +168,10 @@ describe("request secret card", () => {
           value: "sample-value",
           saveForFuture: false,
           normalConnectionAction: "preserve",
+          targetConnection: {
+            connectionId: "sample-connection",
+            host: "sample.test",
+          },
         },
       },
     ]);
@@ -223,6 +228,10 @@ describe("request secret card", () => {
         value: "sample-value",
         saveForFuture: true,
         normalConnectionAction: "replace-with-receipt-only",
+        targetConnection: {
+          connectionId: "sample-connection",
+          host: "sample.test",
+        },
       },
     ]);
     queryClient.clear();
@@ -253,6 +262,7 @@ describe("request secret card", () => {
       resolveSecretTarget: async () => ({
         available: true,
         connector: {
+          connectionId: "sample-connection",
           displayName: "Sample connector",
           host: "sample.test",
           responseDisposition: "receipt-only",
@@ -274,7 +284,15 @@ describe("request secret card", () => {
     ).not.toBeNull();
     await act(async () => fireEvent.click(useSavedButton));
 
-    expect(submissions).toEqual([{ decision: "use-saved" }]);
+    expect(submissions).toEqual([
+      {
+        decision: "use-saved",
+        targetConnection: {
+          connectionId: "sample-connection",
+          host: "sample.test",
+        },
+      },
+    ]);
     queryClient.clear();
   });
 

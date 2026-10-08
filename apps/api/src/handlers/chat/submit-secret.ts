@@ -38,18 +38,27 @@ import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { secretSchema } from "@/api/lib/secret-brands";
 
+const targetConnectionSchema = v.strictObject({
+  connectionId: v.pipe(v.string(), v.uuid()),
+  host: v.pipe(v.string(), v.minLength(1), v.maxLength(300)),
+});
+
 const submissionSchema = v.variant("decision", [
   v.strictObject({
     decision: v.literal("provide"),
     value: v.pipe(v.string(), v.minLength(1), v.maxLength(4096), secretSchema),
     saveForFuture: v.boolean(),
+    targetConnection: targetConnectionSchema,
     normalConnectionAction: v.picklist([
       "preserve",
       "replace-with-receipt-only",
     ]),
   }),
   v.strictObject({ decision: v.literal("decline") }),
-  v.strictObject({ decision: v.literal("use-saved") }),
+  v.strictObject({
+    decision: v.literal("use-saved"),
+    targetConnection: targetConnectionSchema,
+  }),
 ]);
 const config = {
   permissions: { chat: ["create"] },
@@ -201,6 +210,7 @@ const readEnabledConnector = async ({
   const connectors = await tx
     .select({
       id: mcpConnectors.id,
+      connectionId: mcpUserConnections.id,
       authType: mcpConnectors.authType,
       url: mcpConnectors.url,
     })
@@ -327,6 +337,7 @@ const submitSecret = createSafeRootHandler(
           const receipt = await storeChatSecret({
             ...scope,
             connectorId: null,
+            targetConnectionId: null,
             targetUrl: "",
             targetSlug: input.value.target.connectorSlug,
             decision: { status: "declined" },
@@ -335,11 +346,10 @@ const submitSecret = createSafeRootHandler(
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
             resourceId: threadId,
-            changes: {
-              privateInput: {
-                old: null,
-                new: { status: "declined", savedForFuture: false },
-              },
+            metadata: {
+              field: "privateInput",
+              status: "declined",
+              savedForFuture: false,
             },
           });
           return Result.ok({ ...receipt, target: input.value.target });
@@ -355,6 +365,20 @@ const submitSecret = createSafeRootHandler(
             new HandlerError({
               status: 404,
               message: "Connector does not accept this credential",
+            }),
+          );
+        }
+        if (
+          connector.connectionId !==
+            secretDecision.targetConnection.connectionId ||
+          new URL(connector.url).host !== secretDecision.targetConnection.host
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              code: "CHAT_PRIVATE_INPUT_TARGET_CHANGED",
+              message:
+                "Connector changed; reload the input card before submitting",
             }),
           );
         }
@@ -389,6 +413,7 @@ const submitSecret = createSafeRootHandler(
           connectorId: connector.id,
           targetUrl: connector.url,
           targetSlug: input.value.target.connectorSlug,
+          targetConnectionId: connector.connectionId,
           decision: encrypted,
         });
         if (
@@ -406,16 +431,12 @@ const submitSecret = createSafeRootHandler(
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
           resourceId: threadId,
-          changes: {
-            privateInput: {
-              old: null,
-              new: {
-                status: saved.status,
-                savedForFuture:
-                  secretDecision.decision === "provide" &&
-                  secretDecision.saveForFuture,
-              },
-            },
+          metadata: {
+            field: "privateInput",
+            status: saved.status,
+            savedForFuture:
+              secretDecision.decision === "provide" &&
+              secretDecision.saveForFuture,
           },
         });
         return Result.ok({ ...saved, target: input.value.target });

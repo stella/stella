@@ -8,6 +8,7 @@ CREATE TABLE "chat_secrets" (
   "tool_call_id" text NOT NULL,
   "connector_id" uuid REFERENCES "mcp_connectors"("id") ON DELETE SET NULL,
   "target_slug" varchar(80) NOT NULL,
+  "target_connection_id" uuid,
   "target_url" text NOT NULL,
   "decision" text NOT NULL,
   "ciphertext" bytea,
@@ -21,6 +22,7 @@ CREATE TABLE "chat_secrets" (
     OR (decision = 'declined' AND remaining_uses = 0 AND ciphertext IS NULL AND iv IS NULL)
   ),
   CONSTRAINT "chat_secrets_remaining_uses_check" CHECK (remaining_uses BETWEEN 0 AND 8),
+  CONSTRAINT "chat_secrets_target_connection_check" CHECK (decision = 'declined' OR target_connection_id IS NOT NULL),
   CONSTRAINT "chat_secrets_expiry_check" CHECK (expires_at <= created_at::timestamptz + interval '24 hours')
 );--> statement-breakpoint
 CREATE UNIQUE INDEX "chat_secrets_request_uidx" ON "chat_secrets" (organization_id, user_id, thread_id, tool_call_id);--> statement-breakpoint

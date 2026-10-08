@@ -1184,7 +1184,7 @@ describe("loading a user's active MCP connections", () => {
       userId,
     });
     expect(loaded.map(({ userConnectionId }) => userConnectionId)).toEqual([
-      "conn_1",
+      toSafeId<"mcpUserConnection">("conn_1"),
     ]);
     expect(loaded.map(({ description }) => description)).toEqual([
       "Registry connector",

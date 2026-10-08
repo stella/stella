@@ -8,7 +8,7 @@ import {
   requestSecretOutputSchema,
 } from "@stll/api-contract/chat-secret";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatSecrets } from "@/api/db/schema";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -26,7 +26,9 @@ export const validatePrivateReceipts = async ({
   safeDb,
   threadId,
   userId,
-}: ValidatePrivateReceiptsOptions) => {
+}: ValidatePrivateReceiptsOptions): Promise<
+  Result<void, HandlerError<400> | SafeDbError>
+> => {
   const calls = parts.filter(
     (part) =>
       part.type === "tool-call" &&

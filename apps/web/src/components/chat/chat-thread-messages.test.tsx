@@ -46,6 +46,7 @@ const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
     queryClient.setQueryData(["chat-saved-secret", "test-thread", "sample"], {
       available: true,
       connector: {
+        connectionId: "sample-connection",
         displayName: "Sample connector",
         host: "sample.test",
         responseDisposition: "receipt-only",
@@ -78,6 +79,7 @@ const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
                 resolveSecretTarget: async () => ({
                   available: false,
                   connector: {
+                    connectionId: "sample-connection",
                     displayName: "Sample connector",
                     host: "sample.test",
                     responseDisposition: "normal",

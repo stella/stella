@@ -429,6 +429,7 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "search-all-past-chats": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  use_connector_secret: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   // Only the server-executed apply variant ever requests approval; it writes
   // a new document version, so each call is approved on its own.
   suggest_changes: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,

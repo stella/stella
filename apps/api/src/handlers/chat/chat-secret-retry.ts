@@ -21,8 +21,15 @@ type RecoverChatSecretOptions = {
   threadId: SafeId<"chatThread">;
   toolCallId: string;
   secretDecision:
-    | { decision: "provide"; value: Secret<"StaticBearerToken"> }
-    | { decision: "use-saved" }
+    | {
+        decision: "provide";
+        value: Secret<"StaticBearerToken">;
+        targetConnection: { connectionId: string; host: string };
+      }
+    | {
+        decision: "use-saved";
+        targetConnection: { connectionId: string; host: string };
+      }
     | { decision: "decline" };
 };
 
@@ -53,6 +60,7 @@ export const recoverChatSecretSubmission = async ({
         targetSlug: chatSecrets.targetSlug,
         targetUrl: chatSecrets.targetUrl,
         connectorId: chatSecrets.connectorId,
+        targetConnectionId: chatSecrets.targetConnectionId,
         ciphertext: chatSecrets.ciphertext,
         iv: chatSecrets.iv,
       })
@@ -93,6 +101,13 @@ export const recoverChatSecretSubmission = async ({
     !stored.connectorId ||
     !stored.ciphertext ||
     !stored.iv
+  ) {
+    return submissionConflict();
+  }
+  if (
+    stored.targetConnectionId !==
+      secretDecision.targetConnection.connectionId ||
+    new URL(stored.targetUrl).host !== secretDecision.targetConnection.host
   ) {
     return submissionConflict();
   }

@@ -36,6 +36,11 @@ const REQUEST_SECRET_KIND_KEYS = {
   key: "common.key",
 } as const satisfies Record<RequestSecretInput["kind"], TranslationKey>;
 
+const getTargetConnection = (secretTarget: SecretTargetResolution) => ({
+  connectionId: secretTarget.connector.connectionId,
+  host: secretTarget.connector.host,
+});
+
 type RequestSecretCredentialFieldsProps = {
   value: string;
   saveForFuture: boolean;
@@ -194,21 +199,60 @@ export const RequestSecretCard = ({
     if (input === null || input === undefined || !isPending || isSubmitting) {
       return;
     }
+    if (
+      (decision === "provide" || decision === "use-saved") &&
+      (secretTarget === undefined ||
+        (decision === "use-saved" && !secretTarget.available))
+    ) {
+      return;
+    }
+    if (
+      decision === "provide" &&
+      saveForFuture &&
+      secretTarget.connector.responseDisposition === "normal" &&
+      normalConnectionAction !== "replace-with-receipt-only"
+    ) {
+      return;
+    }
     const submittedValue = value;
     setValue("");
     setIsSubmitting(true);
     setHasError(false);
-    const submission: RequestSecretDecision =
-      decision === "provide"
-        ? {
-            decision,
-            value: submittedValue,
-            saveForFuture,
-            normalConnectionAction: saveForFuture
-              ? normalConnectionAction
-              : "preserve",
-          }
-        : { decision };
+    let submission: RequestSecretDecision;
+    switch (decision) {
+      case "provide": {
+        if (secretTarget === undefined) {
+          return;
+        }
+        submission = {
+          decision,
+          value: submittedValue,
+          saveForFuture,
+          normalConnectionAction: saveForFuture
+            ? normalConnectionAction
+            : "preserve",
+          targetConnection: getTargetConnection(secretTarget),
+        };
+        break;
+      }
+      case "use-saved": {
+        if (secretTarget === undefined || !secretTarget.available) {
+          return;
+        }
+        submission = {
+          decision,
+          targetConnection: getTargetConnection(secretTarget),
+        };
+        break;
+      }
+      case "decline":
+        submission = { decision };
+        break;
+      default: {
+        decision satisfies never;
+        return panic("Unhandled private input decision");
+      }
+    }
     const result = await Result.tryPromise(() =>
       handleRequestSecret(part.id, submission),
     );

@@ -344,7 +344,15 @@ export default eslintCompatPlugin({
           (/\/(?:submit-secret|request-secret-card|use-chat-session)\.tsx?$/u.test(
             filenameForContext(context),
           ) &&
-            ["body", "parsed", "decision", "issues", "value"].includes(name));
+            [
+              "body",
+              "parsed",
+              "decision",
+              "issues",
+              "value",
+              "submittedValue",
+              "submission",
+            ].includes(name));
         // A global binding: unresolved, or a built-in the scope manager
         // declares without a definition.
         const isGlobal = (node: unknown, name: string): boolean => {

@@ -35,6 +35,7 @@ export const chatSecrets = p.pgTable.withRLS(
       () => mcpConnectors.id,
       { onDelete: "set null" },
     ),
+    targetConnectionId: p.uuid("target_connection_id"),
     targetSlug: p.varchar("target_slug", { length: 80 }).notNull(),
     targetUrl: p.text("target_url").notNull(),
     decision: p.text({ enum: CHAT_SECRET_DECISIONS }).notNull(),
@@ -63,6 +64,10 @@ export const chatSecrets = p.pgTable.withRLS(
     p.check(
       "chat_secrets_expiry_check",
       sql`${table.expiresAt} <= ${table.createdAt}::timestamptz + interval '24 hours'`,
+    ),
+    p.check(
+      "chat_secrets_target_connection_check",
+      sql`${table.decision} = 'declined' OR ${table.targetConnectionId} IS NOT NULL`,
     ),
     ...chatSecretPolicies(),
   ],

@@ -55,6 +55,7 @@ const savedSecret = createSafeRootHandler(
         const connectors = await tx
           .select({
             id: mcpConnectors.id,
+            connectionId: mcpUserConnections.id,
             url: mcpConnectors.url,
             authType: mcpConnectors.authType,
             displayName: mcpConnectors.displayName,
@@ -119,6 +120,7 @@ const savedSecret = createSafeRootHandler(
           available: stored !== undefined,
           connector: {
             displayName: connector.displayName,
+            connectionId: connector.connectionId,
             host: new URL(connector.url).host,
             responseDisposition: connector.responseDisposition,
           },

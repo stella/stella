@@ -49,6 +49,7 @@ const renderCard = (
             resolveSecretTarget: async () => ({
               available: false,
               connector: {
+                connectionId: "sample-connection",
                 displayName: "Sample connector",
                 host: "sample.test",
                 responseDisposition: "normal",

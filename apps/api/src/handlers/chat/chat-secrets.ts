@@ -20,6 +20,9 @@ export const CHAT_SECRET_PURGE_BATCH_SIZE = 100;
 
 const CHAT_SECRET_LIFETIME_MS = DAY_IN_MS;
 
+const chatSecretTargetOrigin = (targetUrl: string) =>
+  targetUrl === "" ? "" : new URL(targetUrl).origin;
+
 type ChatSecretScope = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -80,6 +83,7 @@ type StoreChatSecretOptions = GetChatSecretReceiptOptions & {
   connectorId: SafeId<"mcpConnector"> | null;
   targetUrl: string;
   targetSlug: string;
+  targetConnectionId: string | null;
   decision: ({ status: "provided" } & EncryptedSecret) | { status: "declined" };
 };
 
@@ -92,6 +96,7 @@ export const storeChatSecret = async ({
   connectorId,
   targetUrl,
   targetSlug,
+  targetConnectionId,
   decision,
 }: StoreChatSecretOptions): Promise<ChatSecretReceipt> => {
   // audit: skip - Request receipts are ephemeral bookkeeping in the audited submission transaction.
@@ -109,8 +114,9 @@ export const storeChatSecret = async ({
         threadId,
         toolCallId,
         connectorId,
-        targetUrl,
+        targetUrl: chatSecretTargetOrigin(targetUrl),
         targetSlug,
+        targetConnectionId,
         createdAt,
         decision: decision.status,
         ...encrypted,
@@ -145,6 +151,7 @@ type ConsumeChatSecretOptions = ChatSecretScope & {
   connectorId: SafeId<"mcpConnector">;
   targetUrl: string;
   secretRef: string;
+  targetConnectionId: string;
 };
 
 export const consumeChatSecret = async ({
@@ -155,6 +162,7 @@ export const consumeChatSecret = async ({
   connectorId,
   targetUrl,
   secretRef,
+  targetConnectionId,
 }: ConsumeChatSecretOptions) => {
   const consumed = await safeDb(async (tx) => {
     // audit: skip - Consuming a private reference updates ephemeral use bookkeeping only.
@@ -163,7 +171,8 @@ export const consumeChatSecret = async ({
       eq(chatSecrets.userId, userId),
       eq(chatSecrets.threadId, threadId),
       eq(chatSecrets.connectorId, connectorId),
-      eq(chatSecrets.targetUrl, targetUrl),
+      eq(chatSecrets.targetConnectionId, targetConnectionId),
+      eq(chatSecrets.targetUrl, chatSecretTargetOrigin(targetUrl)),
       eq(chatSecrets.id, secretRef),
     );
     await withAggregateLock({
@@ -277,7 +286,7 @@ export const saveChatSecretForFuture = async ({
   // audit: skip - Explicit consent storage participates in the audited submission transaction.
   const saved = {
     responseDisposition: MCP_RESPONSE_DISPOSITION.receiptOnly,
-    responseTargetUrl: targetUrl,
+    responseTargetUrl: chatSecretTargetOrigin(targetUrl),
     staticTokenEncrypted: encrypted.ciphertext,
     staticTokenIv: encrypted.iv,
     accessTokenEncrypted: null,
@@ -317,7 +326,7 @@ export const saveChatSecretForFuture = async ({
       set: saved,
       setWhere:
         normalConnectionAction === "replace-with-receipt-only"
-          ? undefined
+          ? sql`true`
           : eq(
               mcpUserConnections.responseDisposition,
               MCP_RESPONSE_DISPOSITION.receiptOnly,
@@ -354,7 +363,10 @@ export const readSavedChatSecret = async ({
           eq(mcpUserConnections.organizationId, organizationId),
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.connectorId, connectorId),
-          eq(mcpUserConnections.responseTargetUrl, targetUrl),
+          eq(
+            mcpUserConnections.responseTargetUrl,
+            chatSecretTargetOrigin(targetUrl),
+          ),
           eq(
             mcpUserConnections.responseDisposition,
             MCP_RESPONSE_DISPOSITION.receiptOnly,

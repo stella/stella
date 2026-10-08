@@ -59,14 +59,14 @@ export const callWithChatSecret = async ({
       },
     });
     try {
-      const tools = await client.tools(undefined, {
+      const tools = await client.tools({
         callToolTimeoutMs: 30_000,
       });
       const available = tools.filter(
         (tool) => allowedTools === null || allowedTools.includes(tool.name),
       );
       const tool = available.find(({ name }) => name === operation.toolName);
-      if (!tool) {
+      if (!tool?.execute) {
         throw new HandlerError({
           status: 404,
           message: "Connector tool is unavailable",

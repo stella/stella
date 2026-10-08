@@ -18,8 +18,12 @@ export type RequestSecretDecision =
       value: string;
       saveForFuture: boolean;
       normalConnectionAction: NormalConnectionAction;
+      targetConnection: { connectionId: string; host: string };
     }
-  | { decision: "use-saved" }
+  | {
+      decision: "use-saved";
+      targetConnection: { connectionId: string; host: string };
+    }
   | { decision: "decline" };
 
 /**
@@ -83,6 +87,7 @@ type ChatApprovalContextValue = {
 export type SecretTargetResolution = {
   available: boolean;
   connector: {
+    connectionId: string;
     displayName: string;
     host: string;
     responseDisposition: "normal" | "receipt-only";
