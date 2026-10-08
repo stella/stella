@@ -18,7 +18,7 @@ import { deviceStorage } from "@/lib/account/browser-storage";
 export const INSPECTOR_PANE_WIDTH_STORAGE_KEY =
   "stella:inspector-pane-width:v2";
 
-export const INSPECTOR_PANE_SURFACES = ["matter", "public-law"] as const;
+const INSPECTOR_PANE_SURFACES = ["matter", "public-law"] as const;
 
 export type InspectorPaneSurface = (typeof INSPECTOR_PANE_SURFACES)[number];
 
