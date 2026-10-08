@@ -46,6 +46,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { optionColors } from "@stll/ui/option-color";
 import {
   Select,
   SelectItem,
@@ -116,18 +117,19 @@ import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".
-export const POSITION_DRAG_TYPE = "stella/playbook-position";
+const POSITION_DRAG_TYPE = "stella/playbook-position";
 
 // ── Option metadata (typed translation keys) ──────────
 
-type AskContentType = "text" | "date" | "int" | "single-select";
+type AskContentType = Extract<
+  PositionAskContent["type"],
+  "text" | "date" | "int" | "single-select"
+>;
 
 type SelectAskContent = Extract<
   PositionAskContent,
   { type: "single-select" | "multi-select" }
 >;
-
-const ASK_CONTENT_TYPES = ["text", "date", "int", "single-select"] as const;
 
 const ASK_CONTENT_LABEL_KEYS = {
   text: "knowledge.playbooks.contentType.text",
@@ -136,35 +138,21 @@ const ASK_CONTENT_LABEL_KEYS = {
   "single-select": "knowledge.playbooks.contentType.singleSelect",
 } as const satisfies Record<AskContentType, TranslationKey>;
 
-// Cycled named colors for single-select choices; every member is in the schema's
-// option-color enum, so the produced content always validates.
-const OPTION_COLORS = [
-  "blue",
-  "green",
-  "amber",
-  "violet",
-  "red",
-  "teal",
-  "fuchsia",
-  "sky",
-] as const;
-
-const CHECK_KINDS = ["presence", "constraint"] as const;
-
 const CHECK_KIND_LABEL_KEYS = {
   presence: "knowledge.playbooks.checkKind.presence",
   constraint: "knowledge.playbooks.checkKind.constraint",
-} as const satisfies Record<(typeof CHECK_KINDS)[number], TranslationKey>;
-
-const EXPECTATIONS = ["required", "restricted"] as const;
+} as const satisfies Record<DeterministicCheck["kind"], TranslationKey>;
 
 const EXPECTATION_LABEL_KEYS = {
   required: "knowledge.playbooks.expectation.required",
   restricted: "knowledge.playbooks.expectation.restricted",
-} as const satisfies Record<(typeof EXPECTATIONS)[number], TranslationKey>;
+} as const satisfies Record<
+  Extract<DeterministicCheck, { kind: "presence" }>["expectation"],
+  TranslationKey
+>;
 
 const isAskContentType = (value: string): value is AskContentType =>
-  ASK_CONTENT_TYPES.some((contentType) => contentType === value);
+  Object.hasOwn(ASK_CONTENT_LABEL_KEYS, value);
 
 // ── Discriminated-union builders (explicit construction) ──
 
@@ -261,28 +249,6 @@ export const PositionEditor = ({
     position.issue.trim() || t("knowledge.playbooks.untitledPosition");
   const bodyId = useId();
   const handleReorder = useLatestCallback(onReorder);
-  const handleFocusLeave = useLatestCallback(onFocusLeave);
-
-  useExternalSyncEffect(() => {
-    if (!cardRef) {
-      return undefined;
-    }
-    const controller = new AbortController();
-    cardRef.addEventListener(
-      "focusout",
-      (event) => {
-        if (
-          !(event.relatedTarget instanceof Node) ||
-          !cardRef.contains(event.relatedTarget)
-        ) {
-          handleFocusLeave();
-        }
-      },
-      { signal: controller.signal },
-    );
-    return () => controller.abort();
-  }, [cardRef, handleFocusLeave]);
-
   useExternalSyncEffect(() => {
     if (!cardRef || !gripRef) {
       return undefined;
@@ -360,6 +326,11 @@ export const PositionEditor = ({
         isDropTarget && "ring-primary ring-2",
       )}
       data-position-id={sourceId}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          onFocusLeave();
+        }
+      }}
       ref={setCardRef}
     >
       <PositionHeader
@@ -1073,6 +1044,9 @@ const RuleRow = ({
   const t = useTranslations();
   return (
     <div className="flex items-start gap-x-2">
+      <span className="text-muted-foreground text-3xs shrink-0 pt-2 tracking-wide uppercase tabular-nums">
+        {label}
+      </span>
       <Input
         aria-label={label}
         className="h-8 min-w-0 flex-1 text-sm"
@@ -1770,9 +1744,9 @@ const CheckEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            {CHECK_KINDS.map((kind) => (
+            {Object.entries(CHECK_KIND_LABEL_KEYS).map(([kind, labelKey]) => (
               <SelectItem key={kind} value={kind}>
-                {t(CHECK_KIND_LABEL_KEYS[kind])}
+                {t(labelKey)}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -1802,11 +1776,13 @@ const CheckEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            {EXPECTATIONS.map((expectation) => (
-              <SelectItem key={expectation} value={expectation}>
-                {t(EXPECTATION_LABEL_KEYS[expectation])}
-              </SelectItem>
-            ))}
+            {Object.entries(EXPECTATION_LABEL_KEYS).map(
+              ([expectation, labelKey]) => (
+                <SelectItem key={expectation} value={expectation}>
+                  {t(labelKey)}
+                </SelectItem>
+              ),
+            )}
           </SelectPopup>
         </Select>
       )}
@@ -2033,9 +2009,9 @@ const AskContentEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            {ASK_CONTENT_TYPES.map((type) => (
+            {Object.entries(ASK_CONTENT_LABEL_KEYS).map(([type, labelKey]) => (
               <SelectItem key={type} value={type}>
-                {t(ASK_CONTENT_LABEL_KEYS[type])}
+                {t(labelKey)}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -2111,7 +2087,7 @@ const SelectOptionsEditor = ({
             ...content.options,
             {
               color:
-                OPTION_COLORS[content.options.length % OPTION_COLORS.length] ??
+                optionColors[content.options.length % optionColors.length] ??
                 "gray",
               value: "",
             },

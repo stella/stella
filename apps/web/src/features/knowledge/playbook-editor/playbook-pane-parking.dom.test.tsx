@@ -22,6 +22,7 @@ const {
   discardParkedPlaybookPane,
   registerPlaybookPaneLeaveGuard,
   cancelPlaybookPaneLeave,
+  usePlaybookPaneLeave,
 } = await import("./playbook-pane-parking");
 const { createPlaybookBaseline } = await import("./playbook-editor.logic");
 const { PLAYBOOK_DRAFT_VIEW } =
@@ -212,4 +213,127 @@ test("parking drafts is isolated by both tab and playbook", () => {
   expect(readParkedPlaybookPane("tab-a", "second")).toEqual(tabASecond);
   expect(readParkedPlaybookPane("tab-b", "first")).toEqual(tabBFirst);
   expect(readParkedPlaybookPane("tab-b", "second")).toBeNull();
+});
+
+for (const action of ["closeOthers", "closeAll"] as const) {
+  test(`${action} waits for a dirty playbook, cancellation preserves all tabs, and confirmation clears only closed parking`, async () => {
+    const store = makeStore();
+    openPlaybook(store, "bulk-dirty", "dirty-playbook");
+    openPlaybook(store, "bulk-clean", "clean-playbook");
+    openPlaybook(store, "bulk-kept", "kept-playbook");
+    const dirty = parkedState("dirty-playbook", true);
+    const clean = parkedState("clean-playbook");
+    const kept = parkedState("kept-playbook");
+    park(store, "bulk-dirty", dirty);
+    park(store, "bulk-dirty", parkedState("other-parked-playbook"));
+    park(store, "bulk-clean", clean);
+    park(store, "bulk-kept", kept);
+    unregisterGuards.push(
+      registerPlaybookPaneLeaveGuard({
+        tabId: "bulk-dirty",
+        playbookId: "dirty-playbook",
+        shouldConfirm: () => true,
+      }),
+    );
+    const originalIds = store.getState().tabs.map((tab) => tab.id);
+    const close = () => {
+      if (action === "closeOthers") {
+        store.getState().closeOthers("bulk-kept");
+        return;
+      }
+      store.getState().closeAll();
+    };
+    const view = renderConfirmation();
+    await act(async () => {
+      close();
+    });
+    expect(store.getState().tabs.map((tab) => tab.id)).toEqual(originalIds);
+    await act(async () => {
+      fireEvent.click(
+        view.getByRole("button", { name: messages.common.goBackToEditing }),
+      );
+    });
+    expect(store.getState().tabs.map((tab) => tab.id)).toEqual(originalIds);
+    expect(readParkedPlaybookPane("bulk-dirty", "dirty-playbook")).toEqual(
+      dirty,
+    );
+    expect(readParkedPlaybookPane("bulk-clean", "clean-playbook")).toEqual(
+      clean,
+    );
+    expect(readParkedPlaybookPane("bulk-kept", "kept-playbook")).toEqual(kept);
+    await act(async () => {
+      close();
+    });
+    await act(async () => {
+      fireEvent.click(
+        view.getByRole("button", { name: messages.common.leaveAndDiscard }),
+      );
+    });
+    expect(store.getState().tabs.map((tab) => tab.id)).toEqual(
+      action === "closeOthers" ? ["bulk-kept"] : [],
+    );
+    expect(store.getState().activeId).toBe(
+      action === "closeOthers" ? "bulk-kept" : null,
+    );
+    expect(readParkedPlaybookPane("bulk-dirty", "dirty-playbook")).toBeNull();
+    expect(
+      readParkedPlaybookPane("bulk-dirty", "other-parked-playbook"),
+    ).toBeNull();
+    expect(readParkedPlaybookPane("bulk-clean", "clean-playbook")).toBeNull();
+    expect(readParkedPlaybookPane("bulk-kept", "kept-playbook")).toEqual(
+      action === "closeOthers" ? kept : null,
+    );
+  });
+}
+
+test("closeAll obtains fresh confirmation for a dirty tab opened while confirmation was pending", async () => {
+  const store = makeStore();
+  openPlaybook(store, "race-original", "original-playbook");
+  park(store, "race-original", parkedState("original-playbook", true));
+  unregisterGuards.push(
+    registerPlaybookPaneLeaveGuard({
+      tabId: "race-original",
+      playbookId: "original-playbook",
+      shouldConfirm: () => true,
+    }),
+  );
+  const view = renderConfirmation();
+  await act(async () => {
+    store.getState().closeAll();
+  });
+  openPlaybook(store, "race-late", "late-playbook");
+  park(store, "race-late", parkedState("late-playbook", true));
+  unregisterGuards.push(
+    registerPlaybookPaneLeaveGuard({
+      tabId: "race-late",
+      playbookId: "late-playbook",
+      shouldConfirm: () => true,
+    }),
+  );
+  const expectedPrompts = ["race-original", "race-original", "race-late"];
+  let confirmed = 0;
+  for (const tabId of expectedPrompts) {
+    expect(usePlaybookPaneLeave.getState()).toMatchObject({
+      type: "confirm",
+      tabId,
+    });
+    expect(store.getState().tabs.map((tab) => tab.id)).toEqual([
+      "race-original",
+      "race-late",
+    ]);
+    expect(readParkedPlaybookPane("race-late", "late-playbook")).not.toBeNull();
+    await act(async () => {
+      fireEvent.click(
+        view.getByRole("button", { name: messages.common.leaveAndDiscard }),
+      );
+    });
+    confirmed += 1;
+  }
+  expect(confirmed).toBe(3);
+  expect(store.getState().tabs).toHaveLength(0);
+  expect(usePlaybookPaneLeave.getState()).toEqual({ type: "idle" });
+  expect(
+    readParkedPlaybookPane("race-original", "original-playbook"),
+  ).toBeNull();
+  expect(readParkedPlaybookPane("race-late", "late-playbook")).toBeNull();
 });

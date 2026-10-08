@@ -79,7 +79,7 @@ type SavedPositionsArgs = {
 };
 
 /** The positions a save would persist. */
-export const savedPositions = ({
+const savedPositions = ({
   positions,
   persistedIds,
 }: SavedPositionsArgs): Position[] =>

@@ -1392,22 +1392,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx::ASK_CONTENT_TYPES::domain:[\"text\",\"date\",\"int\",\"single-select\"]::1",
-    "reason": "Existing ASK_CONTENT_TYPES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx::CHECK_KINDS::domain:[\"presence\",\"constraint\"]::1",
-    "reason": "Existing CHECK_KINDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx::EXPECTATIONS::domain:[\"required\",\"restricted\"]::1",
-    "reason": "Existing EXPECTATIONS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx::OPTION_COLORS::domain:[\"blue\",\"green\",\"amber\",\"violet\",\"red\",\"teal\",\"fuchsia\",\"sky\"]::1",
-    "reason": "Existing OPTION_COLORS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/features/knowledge/public/public-knowledge-keys.ts::publicKnowledgeKeys::domain:[\"knowledge\",\"public\"]::1",
     "reason": "Existing publicKnowledgeKeys domain; contract ownership pending migration."
   },

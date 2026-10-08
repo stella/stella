@@ -10,7 +10,12 @@ import {
   rebasePlaybookDraft,
   resolvePaneSaveStatus,
   resolveServerFollow,
+  resolveSavedPlaybookState,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
+import {
+  createPlaybookBaseline,
+  hasPlaybookDraftChanges,
+} from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import type { PlaybookDraft } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import { newExtractPosition } from "@/lib/knowledge/playbook-types";
 import type { Position } from "@/lib/knowledge/playbook-types";
@@ -248,5 +253,56 @@ describe("Autosave", () => {
     expect(
       resolvePaneSaveStatus({ isDirty: false, request: "in-flight", ...valid }),
     ).toEqual({ type: "saving" });
+  });
+});
+
+describe("Recording saved playbook baselines", () => {
+  test("creating a playbook adopts its first returned token and clears the saved draft", () => {
+    const initial = draftOf([], "New playbook");
+    const savedDraft = draftOf([], "Created playbook");
+    const savedAt = "2026-10-08T08:00:00.000Z";
+    const current = {
+      updatedAt: null,
+      baseline: createPlaybookBaseline(initial),
+    };
+    expect(
+      hasPlaybookDraftChanges({
+        baseline: current.baseline,
+        current: savedDraft,
+      }),
+    ).toBe(true);
+    const persisted = resolveSavedPlaybookState({
+      current,
+      savedAt,
+      savedDraft,
+    });
+    expect(persisted.updatedAt).toBe(savedAt);
+    expect(
+      hasPlaybookDraftChanges({
+        baseline: persisted.baseline,
+        current: savedDraft,
+      }),
+    ).toBe(false);
+  });
+
+  test("a late save response preserves the newer baseline already adopted", () => {
+    const draft = draftOf([], "Newer server content");
+    const current = {
+      updatedAt: "2026-10-08T08:02:00.000Z",
+      baseline: createPlaybookBaseline(draft),
+    };
+    for (const savedAt of [
+      null,
+      "2026-10-08T08:01:00.000Z",
+      current.updatedAt,
+    ]) {
+      expect(
+        resolveSavedPlaybookState({
+          current,
+          savedAt,
+          savedDraft: draftOf([], "Old save"),
+        }),
+      ).toBe(current);
+    }
   });
 });

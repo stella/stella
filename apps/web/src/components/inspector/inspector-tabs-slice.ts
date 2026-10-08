@@ -655,7 +655,10 @@ export const createInspectorTabsSlice = (
     ownerRouteId,
     pane = INSPECTOR_PANE_INTENT.expand,
   }) => {
-    const proceed = () =>
+    const proceed = () => {
+      if (get().tabs.find((tab) => tab.id === id) !== existing) {
+        return;
+      }
       set((state) => {
         const existing = state.tabs.find((tab) => tab.id === id);
         if (!existing) {
@@ -682,6 +685,7 @@ export const createInspectorTabsSlice = (
           state.reviveSuggestion = null;
         }
       });
+    };
     const existing = get().tabs.find((tab) => tab.id === id);
     const guard =
       existing?.type === "view"
@@ -700,7 +704,10 @@ export const createInspectorTabsSlice = (
   },
 
   updateView: ({ id, label, payload }) => {
-    const proceed = () =>
+    const proceed = () => {
+      if (get().tabs.find((tab) => tab.id === id) !== existing) {
+        return;
+      }
       set((state) => {
         const existing = state.tabs.find((tab) => tab.id === id);
         if (!existing || !isGenericInspectorTab(existing)) {
@@ -709,6 +716,7 @@ export const createInspectorTabsSlice = (
         existing.label = label;
         existing.payload = payload;
       });
+    };
     const existing = get().tabs.find((tab) => tab.id === id);
     const guard =
       existing?.type === "view"
@@ -771,6 +779,9 @@ export const createInspectorTabsSlice = (
         ? getInspectorView(existing.viewType)
         : undefined;
     const proceed = () => {
+      if (get().tabs.find((tab) => tab.id === id) !== existing) {
+        return;
+      }
       registration?.onClose?.(id);
       set((state) => {
         const index = state.tabs.findIndex((tab) => tab.id === id);
@@ -819,6 +830,17 @@ export const createInspectorTabsSlice = (
     requestInspectorLeaves({
       tabs: closingTabs,
       proceed: () => {
+        if (!get().tabs.some((tab) => tab.id === id)) {
+          return;
+        }
+        const currentClosingTabs = get().tabs.filter((tab) => tab.id !== id);
+        if (
+          currentClosingTabs.length !== closingTabs.length ||
+          currentClosingTabs.some((tab, index) => tab !== closingTabs[index])
+        ) {
+          get().closeOthers(id);
+          return;
+        }
         for (const tab of closingTabs) {
           if (tab.type === "view")
             getInspectorView(tab.viewType)?.onClose?.(tab.id);
@@ -878,6 +900,14 @@ export const createInspectorTabsSlice = (
     requestInspectorLeaves({
       tabs: closingTabs,
       proceed: () => {
+        const currentClosingTabs = get().tabs;
+        if (
+          currentClosingTabs.length !== closingTabs.length ||
+          currentClosingTabs.some((tab, index) => tab !== closingTabs[index])
+        ) {
+          get().closeAll();
+          return;
+        }
         for (const tab of closingTabs) {
           if (tab.type === "view")
             getInspectorView(tab.viewType)?.onClose?.(tab.id);

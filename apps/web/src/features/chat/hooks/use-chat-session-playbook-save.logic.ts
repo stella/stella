@@ -14,12 +14,14 @@ type ReconcilePlaybookSaveToolCallsOptions = {
     isDetail: (queryKey: readonly unknown[]) => boolean;
   };
   queryClient: QueryClient;
+  source: "history" | "live";
 };
 
 type PlaybookSaveReconciliation = {
   playbookId: string;
   /** Settles when the playbook queries have refetched. */
   refetched: Promise<void>;
+  source: "history" | "live";
 };
 
 /**
@@ -43,6 +45,7 @@ export const reconcilePlaybookSaveToolCalls = ({
   organizationId,
   playbookKeys,
   queryClient,
+  source,
 }: ReconcilePlaybookSaveToolCallsOptions): PlaybookSaveReconciliation | null => {
   const playbookId = consumePlaybookSaveToolCalls({
     handledToolCallIds,
@@ -58,6 +61,7 @@ export const reconcilePlaybookSaveToolCalls = ({
   });
   return {
     playbookId,
+    source,
     refetched: queryClient.invalidateQueries({
       queryKey: playbookKeys.all(organizationId),
     }),
@@ -87,8 +91,8 @@ type PlaybookPaneReactionArgs = {
  * What a newly saved playbook does to the thread's pane. An open pane on
  * another playbook moves to the saved one without taking focus; one already
  * showing it is left as it is. A closed pane opens once per thread while the
- * session is mounted, like a document draft: also on arrival at a thread that
- * already saved one, and never again after the user closed it.
+ * session is mounted, and never again after the user closed it. Historical
+ * saves reconcile caches without moving or opening the pane.
  */
 export const playbookPaneReaction = ({
   mode,
@@ -103,4 +107,23 @@ export const playbookPaneReaction = ({
   return mode === "auto-open" && !isMobile && !openedThisSession
     ? "open"
     : "none";
+};
+
+type FollowReconciledPlaybookSaveOptions = {
+  reconciliation: PlaybookSaveReconciliation;
+  isCurrent: () => boolean;
+  follow: (playbookId: string) => void;
+};
+
+/** Refetch completion cannot move a pane after its runtime or save changed. */
+export const followReconciledPlaybookSave = async ({
+  reconciliation,
+  isCurrent,
+  follow,
+}: FollowReconciledPlaybookSaveOptions): Promise<void> => {
+  await reconciliation.refetched;
+  if (reconciliation.source === "history" || !isCurrent()) {
+    return;
+  }
+  follow(reconciliation.playbookId);
 };

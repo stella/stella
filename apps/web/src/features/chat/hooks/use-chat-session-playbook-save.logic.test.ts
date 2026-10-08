@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { PlaybookSaveMessage } from "@/components/chat/chat-ui-tools";
 import {
+  followReconciledPlaybookSave,
   playbookPaneReaction,
   reconcilePlaybookSaveToolCalls,
 } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
@@ -81,6 +82,7 @@ const reconcile = async ({
     organizationId: ORGANIZATION_ID,
     playbookKeys: knowledgeKeys.playbooks,
     queryClient,
+    source: "live",
   });
   if (reconciliation === null) {
     return null;
@@ -250,4 +252,81 @@ describe("the playbook pane after a save", () => {
       playbookPaneReaction({ ...open, shownPlaybookId: "playbook-a" }),
     ).toBe("none");
   });
+});
+
+describe("following a reconciled playbook save", () => {
+  test("a historical save refreshes caches without opening the pane", async () => {
+    const queryClient = seededQueryClient();
+    const reconciliation = reconcilePlaybookSaveToolCalls({
+      handledToolCallIds: new Set(),
+      messages: saveMessages({ output: { playbookId: PLAYBOOK_ID } }),
+      organizationId: ORGANIZATION_ID,
+      playbookKeys: knowledgeKeys.playbooks,
+      queryClient,
+      source: "history",
+    });
+    expect(reconciliation).not.toBeNull();
+    if (reconciliation === null) {
+      throw new Error("Expected a completed save reconciliation");
+    }
+    const opened: string[] = [];
+    await followReconciledPlaybookSave({
+      reconciliation,
+      isCurrent: () => true,
+      follow: (playbookId) => opened.push(playbookId),
+    });
+    expect(opened).toEqual([]);
+    expect(
+      isInvalidated(
+        queryClient,
+        knowledgeKeys.playbooks.list(ORGANIZATION_ID, { limit: 50 }),
+      ),
+    ).toBe(true);
+  });
+
+  test.each(["thread switch", "newer save"])(
+    "a deferred save refetch cannot move the pane after a %s",
+    async (change) => {
+      const queryClient = seededQueryClient();
+      const refetch = Promise.withResolvers<{ refetched: boolean }>();
+      const unsubscribe = new QueryObserver(queryClient, {
+        queryKey: DETAIL_KEY,
+        queryFn: () => refetch.promise,
+        staleTime: Infinity,
+      }).subscribe(() => undefined);
+      const reconciliation = reconcilePlaybookSaveToolCalls({
+        handledToolCallIds: new Set(),
+        messages: saveMessages({ output: { playbookId: PLAYBOOK_ID } }),
+        organizationId: ORGANIZATION_ID,
+        playbookKeys: knowledgeKeys.playbooks,
+        queryClient,
+        source: "live",
+      });
+      expect(reconciliation).not.toBeNull();
+      if (reconciliation === null) {
+        throw new Error("Expected a completed save reconciliation");
+      }
+      const requestedRuntime = {};
+      let currentRuntime = requestedRuntime;
+      let currentSequence = 1;
+      const followed: string[] = [];
+      const finished = followReconciledPlaybookSave({
+        reconciliation,
+        isCurrent: () =>
+          currentRuntime === requestedRuntime && currentSequence === 1,
+        follow: (playbookId) => followed.push(playbookId),
+      });
+      expect(queryClient.isFetching({ queryKey: DETAIL_KEY })).toBe(1);
+      if (change === "thread switch") {
+        currentRuntime = {};
+      } else {
+        currentSequence = 2;
+      }
+      refetch.resolve({ refetched: true });
+      await finished;
+      unsubscribe();
+      expect(cachedData(queryClient, DETAIL_KEY)).toEqual({ refetched: true });
+      expect(followed).toEqual([]);
+    },
+  );
 });

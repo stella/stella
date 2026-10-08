@@ -97,6 +97,7 @@ import {
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
+  followReconciledPlaybookSave,
   playbookPaneReaction,
   reconcilePlaybookSaveToolCalls,
 } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
@@ -1173,13 +1174,19 @@ export const useChatSession = ({
   // pane follows only the newest save: a refetch that settles after a later
   // save's is dropped.
   const playbookSaveSequenceRef = useRef(0);
+  const observedPlaybookSaveRuntimesRef = useRef(new WeakSet<object>());
   useExternalSyncEffect(() => {
+    const source = observedPlaybookSaveRuntimesRef.current.has(chat)
+      ? "live"
+      : "history";
+    observedPlaybookSaveRuntimesRef.current.add(chat);
     const reconciliation = reconcilePlaybookSaveToolCalls({
       handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
       messages,
       organizationId,
       playbookKeys: knowledgeKeys.playbooks,
       queryClient,
+      source,
     });
     if (reconciliation === null) {
       return;
@@ -1187,18 +1194,19 @@ export const useChatSession = ({
     const paneTabId = playbookPaneTabId;
     playbookSaveSequenceRef.current += 1;
     const sequence = playbookSaveSequenceRef.current;
-    const followWhenRefetched = async () => {
-      await reconciliation.refetched;
-      if (playbookSaveSequenceRef.current !== sequence) {
-        return;
-      }
-      followPlaybookSave({ playbookId: reconciliation.playbookId, paneTabId });
-    };
+    const requestedChat = chat;
     detached(
-      followWhenRefetched(),
+      followReconciledPlaybookSave({
+        reconciliation,
+        isCurrent: () =>
+          seededChatRef.current === requestedChat &&
+          playbookSaveSequenceRef.current === sequence,
+        follow: (playbookId) => followPlaybookSave({ playbookId, paneTabId }),
+      }),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
   }, [
+    chat,
     followPlaybookSave,
     messages,
     organizationId,

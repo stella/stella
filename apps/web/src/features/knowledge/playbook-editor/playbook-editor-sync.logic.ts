@@ -3,6 +3,8 @@ import { panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import {
+  createPlaybookBaseline,
+  type PlaybookBaseline,
   type PlaybookDraft,
   positionFingerprint,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
@@ -27,7 +29,7 @@ export type PlaybookSnapshot = {
 };
 
 /** False when either token is missing: there is nothing to compare. */
-export const isNewerToken = (
+const isNewerToken = (
   candidate: string | null,
   current: string | null,
 ): boolean =>
@@ -37,6 +39,21 @@ export const isNewerToken = (
     Temporal.Instant.from(candidate),
     Temporal.Instant.from(current),
   ) > 0;
+
+type SavedPlaybookStateArgs = {
+  current: { updatedAt: string | null; baseline: PlaybookBaseline };
+  savedAt: string | null;
+  savedDraft: PlaybookDraft;
+};
+
+export const resolveSavedPlaybookState = ({
+  current,
+  savedAt,
+  savedDraft,
+}: SavedPlaybookStateArgs) =>
+  current.updatedAt === null || isNewerToken(savedAt, current.updatedAt)
+    ? { updatedAt: savedAt, baseline: createPlaybookBaseline(savedDraft) }
+    : current;
 
 /**
  * - `current`: the form already holds this version or a newer one.

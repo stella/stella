@@ -93,10 +93,16 @@ export type InspectorRailIconProps<P> = {
   active: boolean;
 };
 
+export type InspectorRailLabelProps<P> = {
+  tab: InspectorViewTab<P>;
+  children: (label: string) => ReactNode;
+};
+
 export type InspectorViewRegistration<P = unknown> = {
   type: InspectorViewKind;
   render: (props: InspectorViewRenderProps<P>) => ReactNode;
   railIcon: (props: InspectorRailIconProps<P>) => ReactNode;
+  railLabel?: ((props: InspectorRailLabelProps<P>) => ReactNode) | undefined;
   /**
    * How the rail cell draws `railIcon` on an inactive tab. The registration
    * is the only place that knows whether its icon is a picture or small type,
@@ -203,6 +209,7 @@ export const registerInspectorView = <P>(
 ): void => {
   const Render = registration.render;
   const RailIcon = registration.railIcon;
+  const RailLabel = registration.railLabel;
   const stored: StoredRegistration = {
     ...registration,
     render: ({ tab, onClose }) => {
@@ -223,6 +230,17 @@ export const registerInspectorView = <P>(
         active,
       });
     },
+    railLabel: RailLabel
+      ? ({ tab, children }) => {
+          if (!registration.validate(tab.payload)) {
+            return children(tab.label);
+          }
+          return createElement(RailLabel, {
+            tab: { ...tab, payload: tab.payload },
+            children,
+          });
+        }
+      : undefined,
     // Set unconditionally (function or undefined) so it replaces the
     // `InspectorViewTab<P>`-typed ariaLabel carried in by `...registration`;
     // a conditional spread would leave that narrower signature in the type and
@@ -235,14 +253,16 @@ export const registerInspectorView = <P>(
       : undefined,
     beforeLeave: registration.beforeLeave
       ? ({ tabId, payload, nextPayload, proceed }) => {
-          if (registration.validate(payload)) {
-            registration.beforeLeave?.({
-              tabId,
-              payload,
-              nextPayload,
-              proceed,
-            });
+          if (!registration.validate(payload)) {
+            proceed();
+            return;
           }
+          registration.beforeLeave?.({
+            tabId,
+            payload,
+            nextPayload,
+            proceed,
+          });
         }
       : undefined,
     validate: (payload): payload is unknown => registration.validate(payload),

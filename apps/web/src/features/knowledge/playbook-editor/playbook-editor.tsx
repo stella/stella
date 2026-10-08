@@ -46,7 +46,7 @@ import {
   draftToAdopt,
   resolvePaneSaveStatus,
   resolveServerFollow,
-  isNewerToken,
+  resolveSavedPlaybookState,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
 import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
@@ -80,6 +80,7 @@ import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-edito
 import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
 import {
   usePlaybookSaveQueue,
+  usePlaybookDetailSaveSubscription,
 } from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
 import type {
   SaveOutcome,
@@ -276,7 +277,9 @@ const PlaybookEditorLoader = ({
   const detailQuery = useQuery({
     ...detailOptions,
     refetchInterval: ({ state }) =>
-      isNotFound(state.error) ? false : OPEN_EDITOR_REFETCH_INTERVAL_MS,
+      host.type !== "pane" || isNotFound(state.error)
+        ? false
+        : OPEN_EDITOR_REFETCH_INTERVAL_MS,
   });
   const detailView = useQueryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
@@ -777,7 +780,7 @@ const PlaybookEditorForm = ({
   };
 
   const updatePosition = (sourceId: string, next: Position) => {
-
+    scheduleAutosave();
     editedIdsRef.current.add(sourceId);
     setPositions((prev) =>
       prev.map((p) => (p.sourceId === sourceId ? next : p)),
@@ -796,7 +799,7 @@ const PlaybookEditorForm = ({
   };
 
   const removePosition = (sourceId: string) => {
-
+    scheduleAutosave();
     const index = positions.findIndex((p) => p.sourceId === sourceId);
     const removed = positions[index];
     setPositions((prev) => prev.filter((p) => p.sourceId !== sourceId));
@@ -811,7 +814,7 @@ const PlaybookEditorForm = ({
         actionProps: {
           children: t("common.undo"),
           onClick: () => {
-
+            scheduleAutosave();
             setPositions((prev) =>
               prev.some((p) => p.sourceId === sourceId)
                 ? prev
@@ -824,7 +827,7 @@ const PlaybookEditorForm = ({
   };
 
   const addPosition = (mode: "graded" | "extract") => {
-
+    scheduleAutosave();
     const position =
       mode === "graded" ? newGradedPosition() : newExtractPosition();
     setPositions((prev) => [...prev, position]);
@@ -837,7 +840,7 @@ const PlaybookEditorForm = ({
     if (!original) {
       return;
     }
-
+    scheduleAutosave();
     const copy = duplicatePosition(original);
     setPositions((prev) => {
       const at = prev.findIndex((p) => p.sourceId === sourceId);
@@ -883,7 +886,7 @@ const PlaybookEditorForm = ({
   };
 
   const reorderPosition = (draggedSourceId: string, targetSourceId: string) => {
-
+    scheduleAutosave();
     setPositions((prev) => {
       const from = prev.findIndex((p) => p.sourceId === draggedSourceId);
       const to = prev.findIndex((p) => p.sourceId === targetSourceId);
@@ -899,7 +902,7 @@ const PlaybookEditorForm = ({
   };
 
   const movePosition = (sourceId: string, direction: "up" | "down") => {
-
+    scheduleAutosave();
     setPositions((prev) => {
       const index = prev.findIndex((p) => p.sourceId === sourceId);
       return moveAdjacent(prev, index, direction) ?? prev;
@@ -959,7 +962,7 @@ const PlaybookEditorForm = ({
           refetchSupersededDetail(
             queryClient,
             playbookDetailOptions(organizationId, playbookId).queryKey,
-          ),
+          ).then(() => scheduleAutosave()),
           "playbook-editor.refetch-for-rebase",
         );
       }
@@ -1035,9 +1038,7 @@ const PlaybookEditorForm = ({
     // on during the request, and comparing against this snapshot keeps those
     // later keystrokes dirty. A newer token a rebase already took stays.
     setPersisted((current) =>
-      savedAt === null || isNewerToken(savedAt, current.updatedAt)
-        ? { updatedAt: savedAt, baseline: createPlaybookBaseline(savedDraft) }
-        : current,
+      resolveSavedPlaybookState({ current, savedAt, savedDraft }),
     );
     // Every update returns the playbook to draft.
     setStatus("draft");
@@ -1171,20 +1172,14 @@ const PlaybookEditorForm = ({
     detached(runAutosave(), "playbook-editor.autosave");
   }, AUTOSAVE_DELAY_MS);
 
-  // Pushes the pane's draft to the server after a pause in editing.
-  useExternalSyncEffect(() => {
-    if (autosaves && isDirty) {
-      scheduleAutosave();
-    }
-  }, [
-    autosaves,
-    isDirty,
-    name,
-    description,
-    documentTypeKey,
-    positions,
-    scheduleAutosave,
-  ]);
+  usePlaybookDetailSaveSubscription({
+    queryClient,
+    queryKey:
+      host.type === "pane" && playbookId !== null
+        ? playbookDetailOptions(organizationId, playbookId).queryKey
+        : null,
+    onSaved: scheduleAutosave,
+  });
 
   /**
    * Saves the draft as the pane unmounts, after any save still in flight.
@@ -1210,12 +1205,7 @@ const PlaybookEditorForm = ({
   };
 
   const requiresLeaveConfirmation = useLatestCallback(
-    () =>
-      isDirty &&
-      (!autosaves ||
-        nameMissing ||
-        invalidIds.length > 0 ||
-        saveRequest === "failed"),
+    () => isDirty && (!autosaves || nameMissing || invalidIds.length > 0),
   );
 
   useMountEffect(() => {
@@ -1267,6 +1257,9 @@ const PlaybookEditorForm = ({
   useMountEffect(() => {
     if (scrollRef.current !== null && initial.scrollTop > 0) {
       scrollRef.current.scrollTop = initial.scrollTop;
+    }
+    if (host.type === "pane" && isDirty && autosaves) {
+      scheduleAutosave();
     }
     return () => leavePane();
   });
@@ -1476,7 +1469,7 @@ const PlaybookEditorForm = ({
                 id={nameId}
                 onChange={(e) => {
                   setName(e.target.value);
-
+                  scheduleAutosave();
                 }}
                 ref={nameInputRef}
                 placeholder={t("knowledge.playbooks.namePlaceholder")}
@@ -1491,7 +1484,7 @@ const PlaybookEditorForm = ({
                 id={descriptionId}
                 onChange={(e) => {
                   setDescription(e.target.value);
-
+                  scheduleAutosave();
                 }}
                 placeholder={t("knowledge.playbooks.descriptionPlaceholder")}
                 value={description}
@@ -1504,7 +1497,7 @@ const PlaybookEditorForm = ({
                 <Label htmlFor={documentTypeId}>{t("common.type")}</Label>
                 <Select
                   onValueChange={(next) => {
-
+                    scheduleAutosave();
                     setDocumentTypeKey(
                       next === null || next === SCOPE_ALL_VALUE ? null : next,
                     );

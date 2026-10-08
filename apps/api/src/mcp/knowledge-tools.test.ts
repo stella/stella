@@ -165,10 +165,12 @@ const STORED_PLAYBOOK = {
  */
 const createPlaybookWriteScopedDb = ({
   lockedUpdatedAt = STORED_UPDATED_AT,
+  rereadFailure,
   readableSources = [],
   storedPositions = STORED_PLAYBOOK.positions.items,
 }: {
   lockedUpdatedAt?: Date;
+  rereadFailure?: "not-found" | "rejected";
   /** Rows the scoped source lookup answers: the documents the caller can read. */
   readableSources?: readonly {
     entityId: string;
@@ -179,6 +181,7 @@ const createPlaybookWriteScopedDb = ({
   storedPositions?: readonly Record<string, unknown>[];
 } = {}) => {
   const writes: Record<string, unknown>[] = [];
+  let lockedReadCompleted = false;
   const savedAt = new Date("2026-09-20T10:05:00.000Z");
   const scopedDb = asTestRaw<
     McpRequestContext["scopedDb"] & ReturnType<typeof mock>
@@ -189,17 +192,28 @@ const createPlaybookWriteScopedDb = ({
         query: {
           documentTypes: { findFirst: async () => undefined },
           playbookDefinitions: {
-            findFirst: async () => ({
-              ...STORED_PLAYBOOK,
-              positions: { version: 3, items: storedPositions },
-              updatedAt: writes.length === 0 ? lockedUpdatedAt : savedAt,
-            }),
+            findFirst: async () => {
+              if (lockedReadCompleted && rereadFailure === "not-found") {
+                return undefined;
+              }
+              if (lockedReadCompleted && rereadFailure === "rejected") {
+                throw new Error("Conflict reread unavailable");
+              }
+              return {
+                ...STORED_PLAYBOOK,
+                positions: { version: 3, items: storedPositions },
+                updatedAt: writes.length === 0 ? lockedUpdatedAt : savedAt,
+              };
+            },
           },
         },
         select: () => ({
           from: () => ({
             where: () => ({
-              for: async () => [{ updatedAt: lockedUpdatedAt }],
+              for: async () => {
+                lockedReadCompleted = true;
+                return [{ updatedAt: lockedUpdatedAt }];
+              },
             }),
             innerJoin: () => ({
               where: () => ({ limit: async () => readableSources }),
@@ -226,7 +240,7 @@ const createPlaybookWriteScopedDb = ({
       return await run(tx);
     }),
   );
-  return { savedAt, scopedDb, writes };
+  return { savedAt, scopedDb, writes, wasLocked: () => lockedReadCompleted };
 };
 
 const createPlaybookWriteContext = (
@@ -993,6 +1007,35 @@ describe("MCP knowledge tools", () => {
       },
     });
   });
+
+  test.each([
+    ["not-found", "not_found"],
+    ["rejected", "internal_error"],
+  ] as const)(
+    "save_playbook reports a %s conflict reread without inventing a current token",
+    async (rereadFailure, code) => {
+      const { scopedDb, writes, wasLocked } = createPlaybookWriteScopedDb({
+        lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
+        rereadFailure,
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          playbook_id: PLAYBOOK_ID,
+          expected_updated_at: STORED_UPDATED_AT.toISOString(),
+          name: "Renamed",
+        },
+        context: createPlaybookWriteContext(scopedDb),
+        toolName: "save_playbook",
+      });
+      expect(result.isError).toBe(true);
+      expect(wasLocked()).toBe(true);
+      expect(writes).toEqual([]);
+      expect(parseToolPayload(result)).toMatchObject({ error: { code } });
+      expect(JSON.stringify(parseToolPayload(result))).not.toContain(
+        "expected_updated_at",
+      );
+    },
+  );
 
   test("save_playbook writes nothing when every entry is refused, and says how to fix each", async () => {
     const { scopedDb, writes } = createPlaybookWriteScopedDb();
