@@ -17,11 +17,14 @@ test.describe("workspace file drop", () => {
     workspace = await createTestWorkspace(request, "workspace-file-drop");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }) => {
     if (workspace === null) {
       return;
     }
 
+    // The upload starts follow-up work from the open page; close it first so
+    // nothing it sends can race the matter's deletion.
+    await page.close();
     await deleteTestWorkspace(request, workspace.id);
     workspace = null;
   });
