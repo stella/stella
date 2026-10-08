@@ -64,6 +64,32 @@ const isForeignSignature = (
   return format !== null && format !== accepted;
 };
 
+/**
+ * Whether an OpenAI Responses signature names a reasoning item without
+ * carrying its encrypted content. The adapter then replays the item by id
+ * alone, which the API can resolve only from its own stored copy: a request
+ * where that copy is not kept (`store` false, or an organization that keeps
+ * no data) is refused as naming an item it cannot find.
+ */
+const isResponsesReasoningByIdOnly = (
+  signature: string | undefined,
+): boolean => {
+  if (signature === undefined || signature === "") {
+    return false;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(signature));
+  if (!Result.isOk(parsed) || !isRecord(parsed.value)) {
+    return false;
+  }
+  const { id } = parsed.value;
+  const encrypted = parsed.value["encrypted_content"];
+  return (
+    typeof id === "string" &&
+    id !== "" &&
+    (typeof encrypted !== "string" || encrypted === "")
+  );
+};
+
 /** The reasoning item id an OpenAI Responses signature replays, if any. */
 const responsesReasoningIdOf = (
   signature: string | undefined,
@@ -122,6 +148,20 @@ const withResponsesReasoningPairedToCalls = (
     const { thinking } = message;
     if (message.role !== "assistant" || thinking === undefined) {
       return message;
+    }
+    // A reasoning item is sent only whole, and only before an item it led to:
+    // one replayed by id alone may name an item the API does not keep, and
+    // one with no call or text after it in its message has no following item.
+    const followed =
+      (message.toolCalls?.length ?? 0) > 0 ||
+      (message.content !== null &&
+        message.content !== "" &&
+        !(Array.isArray(message.content) && message.content.length === 0));
+    if (
+      !followed ||
+      thinking.some(({ signature }) => isResponsesReasoningByIdOnly(signature))
+    ) {
+      return withoutThinking(message);
     }
     const ids = thinking
       .map(({ signature }) => responsesReasoningIdOf(signature))
