@@ -38,6 +38,7 @@ for (const literal of [
     expect(inspect(error)).toContain(SECRET);
     const safe = sanitizeErrorForOutput(error);
     const output = inspect(safe, { depth: 20 });
+    expect(inspect(sanitizeErrorForOutput(safe), { depth: 20 })).toBe(output);
     expect(output).not.toContain(SECRET);
     expect(output).not.toContain("params:");
     expect(output).toContain("23505");

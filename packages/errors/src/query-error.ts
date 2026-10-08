@@ -8,6 +8,7 @@ import { isQueryErrorOutputKey } from "./query-field-policy";
 const QUERY_ERROR_NAME = /^DrizzleQueryError\d*$/u;
 const POSTGRES_DRIVER_CODE = /^ERR_POSTGRES_[A-Z0-9_]{1,64}$/u;
 const SQLSTATE = /^(?=.*[0-9])[0-9A-Z]{5}$/u;
+const SQL_REDACTED_SHAPE = "[query redacted]";
 const MAX_ERROR_DEPTH = 32;
 const MAX_ERROR_NODES = 1000;
 const IDENTIFIER = /^[a-zA-Z_][\w.$-]{0,127}$/u;
@@ -29,12 +30,15 @@ const isQueryError = (value: Record<string, unknown>): boolean =>
 
 /** Only vocabulary and placeholders survive; literals and identifiers do not. */
 const queryShape = (query: string): string => {
+  if (query === SQL_REDACTED_SHAPE) {
+    return SQL_REDACTED_SHAPE;
+  }
   const tokens =
     query.match(
       /--[^\n]*|\/\*[\s\S]*?\*\/|(?:[eE])?'(?:[^'\\]|\\[\s\S]|'')*'|"(?:[^"]|"")*"|\$(?:[a-zA-Z_]\w*)?\$[\s\S]*?\$(?:[a-zA-Z_]\w*)?\$|\$\d+|[a-zA-Z_]\w*|\d+(?:\.\d+)?|[(),=<>.*;+/-]|\S/gu,
     ) ?? [];
   if (tokens.some((token) => token === "'" || token === '"')) {
-    return "[query redacted]";
+    return SQL_REDACTED_SHAPE;
   }
   return tokens
     .map((token) => {
@@ -174,8 +178,11 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       )) {
         Reflect.set(output, key, field);
       }
-      if (typeof input["query"] === "string") {
-        output.message += `: ${queryShape(input["query"])}`;
+      const sql = input["query"] ?? input["sqlShape"];
+      if (typeof sql === "string") {
+        const shape = queryShape(sql);
+        Reflect.set(output, "sqlShape", shape);
+        output.message += `: ${shape}`;
       }
       // Input stacks include untrusted message continuation lines. Query
       // projections omit them; telemetry reads trusted frames separately.
