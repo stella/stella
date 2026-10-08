@@ -2183,6 +2183,7 @@ const createStreamSettlement = ({
 };
 
 type ProcessPersistenceChunkOptions = {
+  responseMessageId: SafeId<"chatMessage">;
   sourceChunk: PublicStreamChunk;
   deferredRunFinishedChunks: PublicStreamChunk[];
   processor: ChatStreamProcessor;
@@ -2200,6 +2201,7 @@ type PersistenceChunkResult =
     };
 
 const processPersistenceChunk = ({
+  responseMessageId,
   sourceChunk,
   deferredRunFinishedChunks,
   processor,
@@ -2268,18 +2270,22 @@ const processPersistenceChunk = ({
     deferredRunFinishedChunks.push(chunk);
     return { type: "deferred" };
   }
-  // Interrupt snapshots can be the only source of resumed tool results.
-  // Reconcile them through the SDK, then reactivate the turn's assistant:
-  // snapshots reset processor run state, while our deferred finish still
-  // needs an active message to capture the complete turn.
-  processor.processChunk(chunk);
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
-    const assistant = processor
-      .getMessages()
-      .findLast(({ role }) => role === "assistant");
-    if (assistant !== undefined) {
-      processor.processChunk(assistantMessageStartChunk(assistant.id));
+    // A snapshot can carry resumed results without corresponding deltas.
+    // Only reconcile one that includes this turn; a snapshot omitting it
+    // cannot erase already streamed content or reactivate an older turn.
+    if (
+      chunk.messages.some(
+        ({ id, role }) => id === responseMessageId && role === "assistant",
+      )
+    ) {
+      processor.processChunk(chunk);
+      // Snapshots reset run state; the deferred finish still needs the
+      // owning assistant active to capture the complete turn.
+      processor.processChunk(assistantMessageStartChunk(responseMessageId));
     }
+  } else {
+    processor.processChunk(chunk);
   }
   return { type: "chunk", chunk, lifecycle };
 };
@@ -2418,6 +2424,7 @@ export const processServerChatStream = async function* ({
         return;
       }
       const processed = processPersistenceChunk({
+        responseMessageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
         sourceChunk,
         deferredRunFinishedChunks,
         processor,
