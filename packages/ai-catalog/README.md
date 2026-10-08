@@ -24,9 +24,18 @@ The package contains data and validation only. It does not read environment
 variables, store credentials, or initialize provider SDKs.
 
 Model rates are committed in `src/model-rates.gen.ts` so application startup
-never depends on a pricing service. Regenerate the snapshot from
-[models.dev](https://models.dev) with `bun --filter @stll/ai-catalog gen:rates`;
-rate-related pull requests verify the committed output against that source.
+never depends on a pricing service. Rates and capabilities regenerate from
+reduced, committed models.dev and OpenRouter inputs in `upstream/`:
+
+```sh
+bun --filter @stll/ai-catalog gen:rates --from-snapshot
+bun --filter @stll/ai-catalog gen:capabilities --from-snapshot
+```
+
+`--check` verifies these outputs offline, with network fetches blocked.
+To refresh both inputs and outputs from upstream, run `gen:rates --refresh`,
+then `gen:capabilities --from-snapshot`. The scheduled catalog check maintains
+one refresh pull request for both snapshots.
 The snapshot covers text input/output, cache reads/writes, and context tiers.
 Audio pricing is deliberately excluded because Stella does not route audio
 model input; an unknown models.dev cost field fails generation.
