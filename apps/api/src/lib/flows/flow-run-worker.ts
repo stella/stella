@@ -8,6 +8,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   isBackgroundFeatureEnabled,
@@ -88,13 +89,18 @@ const executeAdmittedFlowStep = async ({
     await executeFlowStep(job.data, signal, { admission: null, database });
     return;
   }
-  if (!(await isBackgroundFeatureEnabled({
-    tx: database,
-    organizationId: workspace.organizationId,
-    userId: actor,
-    featureId: "flows",
-  }))) {
-    logger.info("flow.work_skipped", { reason: "actor_not_granted", runId: row.id });
+  if (
+    !(await isBackgroundFeatureEnabled({
+      tx: database,
+      organizationId: workspace.organizationId,
+      userId: actor,
+      featureId: "flows",
+    }))
+  ) {
+    logger.info("flow.work_skipped", {
+      reason: "actor_not_granted",
+      runId: row.id,
+    });
     return;
   }
   await runBackgroundJob({

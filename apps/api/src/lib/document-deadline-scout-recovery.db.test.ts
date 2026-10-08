@@ -9,7 +9,7 @@
 
 import { Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
@@ -22,6 +22,7 @@ import { enqueueDocumentDeadlineScoutJob } from "@/api/lib/document-processing-e
 import type { DocumentDeadlineScoutJobData } from "@/api/lib/document-processing-enqueue";
 import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/document-processing-queue";
 import { skipDeadlineScan } from "@/api/lib/scouts/document-deadlines";
+import { DEADLINE_SCOUT_MAX_ATTEMPTS } from "@/api/lib/scouts/document-deadlines.logic";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -234,6 +235,55 @@ test("does not reset a claim taken between the select and the update", async () 
   expect(added).toEqual([]);
 });
 
+test("repeated feature refusals preserve prior failures and refund each claim exactly once", async () => {
+  const runId = await insertPendingScoutRun();
+  const priorFailures = 2;
+  await testDb
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutAttemptCount: priorFailures })
+    .where(eq(documentProcessingRuns.id, runId));
+
+  for (let cycle = 0; cycle <= DEADLINE_SCOUT_MAX_ATTEMPTS; cycle += 1) {
+    // db-await-in-loop: exercise persisted claim/refusal cycles beyond the retry ceiling.
+    await testDb
+      .update(documentProcessingRuns)
+      .set({
+        deadlineScoutAttemptCount: sql`${documentProcessingRuns.deadlineScoutAttemptCount} + 1`,
+        deadlineScoutClaimedAt: new Date(),
+        deadlineScoutStatus: "running",
+      })
+      .where(eq(documentProcessingRuns.id, runId));
+    for (let delivery = 0; delivery < 2; delivery += 1) {
+      // db-await-in-loop: replay the same refusal to verify the running-state CAS prevents double refunds.
+      await skipDeadlineScan({
+        db: asTestRaw<typeof rootDb>(testDb),
+        runId,
+        reason: "feature_not_granted",
+      });
+    }
+    // db-await-in-loop: verify every refusal leaves the existing failure budget unchanged.
+    const paused = (
+      await testDb
+        .select({
+          attemptCount: documentProcessingRuns.deadlineScoutAttemptCount,
+          claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+          errorCode: documentProcessingRuns.deadlineScoutErrorCode,
+          skippedUntil: documentProcessingRuns.deadlineScoutSkippedUntil,
+          status: documentProcessingRuns.deadlineScoutStatus,
+        })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, runId))
+    ).at(0);
+    expect(paused).toEqual({
+      attemptCount: priorFailures,
+      claimedAt: null,
+      errorCode: "feature_not_granted",
+      skippedUntil: null,
+      status: "pending",
+    });
+  }
+});
+
 test("a scan skipped for an exhausted period is not dispatched before the period ends, then once", async () => {
   const runId = await insertPendingScoutRun();
   const claimedAt = new Date();
@@ -250,6 +300,7 @@ test("a scan skipped for an exhausted period is not dispatched before the period
   await skipDeadlineScan({
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
+    reason: "period_exhausted",
     skippedUntil: periodEnd,
   });
 
@@ -290,6 +341,7 @@ test("a skip applies only to a running scan, and only a pending scan may carry o
   await skipDeadlineScan({
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
+    reason: "period_exhausted",
     skippedUntil: new Date(Date.now() + 60_000),
   });
   const [untouched] = await testDb

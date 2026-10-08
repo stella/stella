@@ -219,10 +219,18 @@ type DeadlineScanSettlement =
       status: "pending" | "succeeded" | "failed" | "cancelled";
       errorCode: string | null;
     }
-  | { status: "skipped"; skippedUntil: Date };
+  | { status: "skipped"; skippedUntil: Date }
+  | { status: "paused" };
 
 const settledColumns = (settlement: DeadlineScanSettlement) => {
   switch (settlement.status) {
+    case "paused":
+      return {
+        attemptRefund: 1,
+        errorCode: DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
+        skippedUntil: null,
+        status: "pending",
+      } as const;
     case "skipped":
       return {
         attemptRefund: 1,
@@ -304,19 +312,35 @@ const rejectDeadlineObservation = async ({
 type SkipDeadlineScanOptions = {
   db: Pick<DeadlineScoutDb, "update">;
   runId: ClaimedRun["id"];
-  skippedUntil: Date;
-};
+} & (
+  | { reason: "period_exhausted"; skippedUntil: Date }
+  | { reason: "feature_not_granted" }
+);
 
-/** Settle a running scan that an exhausted action period refused. */
+/** A refused claim returns its attempt; only period exhaustion delays its retry. */
 export const skipDeadlineScan = async ({
   db,
   runId,
-  skippedUntil,
+  ...refusal
 }: SkipDeadlineScanOptions): Promise<void> => {
+  const settlement = (() => {
+    switch (refusal.reason) {
+      case "period_exhausted":
+        return {
+          status: "skipped",
+          skippedUntil: refusal.skippedUntil,
+        } as const;
+      case "feature_not_granted":
+        return { status: "paused" } as const;
+      default:
+        refusal satisfies never;
+        return panic("Unhandled deadline scan refusal");
+    }
+  })();
   await settleRun({
     db,
     run: { id: runId },
-    settlement: { status: "skipped", skippedUntil },
+    settlement,
   });
 };
 
@@ -404,14 +428,14 @@ type PauseDeadlineScoutOptions = {
   run: ClaimedRun;
 };
 
-const pauseDeadlineScout = async ({ db, run }: PauseDeadlineScoutOptions): Promise<void> => {
-  await settleRun({
+const pauseDeadlineScout = async ({
+  db,
+  run,
+}: PauseDeadlineScoutOptions): Promise<void> => {
+  await skipDeadlineScan({
     db,
-    run,
-    settlement: {
-      errorCode: DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
-      status: "pending",
-    },
+    runId: run.id,
+    reason: "feature_not_granted",
   });
   logger.info("scout.document_deadlines.skipped", {
     sourceRunId: run.id,
@@ -441,6 +465,7 @@ const settleFailedObservation = async ({
       await skipDeadlineScan({
         db,
         runId: run.id,
+        reason: "period_exhausted",
         skippedUntil: admission.skippedUntil,
       });
       return;
@@ -600,7 +625,11 @@ export const runDocumentDeadlineScout = async ({
             });
           },
           validate: async (tx) => {
-            const decision = await validateDeadlineSource({ tx, run, actorUserId });
+            const decision = await validateDeadlineSource({
+              tx,
+              run,
+              actorUserId,
+            });
             if (decision === "not-granted") {
               scan.admission = { type: "feature_not_granted" };
             }
