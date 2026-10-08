@@ -120,7 +120,7 @@ const mountApp = async ({
         switch (method) {
           case "ui/notifications/size-changed":
             sizes.push({ height: data.params.height });
-            iframe.style.height = `${data.params.height}px`;
+            iframe.style.height = `${String(data.params.height)}px`;
             break;
           case "ui/initialize":
             reply({
@@ -790,10 +790,10 @@ for (const theme of ["light", "dark"] as const) {
       await expect(trigger).toHaveAttribute("aria-expanded", "false");
       const panelId = await trigger.getAttribute("aria-controls");
       expect(panelId).toBeTruthy();
-      const panel = app.locator(`[id="${panelId}"]`);
+      const panel = app.locator(`[id="${String(panelId)}"]`);
       await expect(panel).toBeHidden();
       await expect
-        .poll(() =>
+        .poll(async () =>
           page.evaluate(() => globalThis.appFixtureHost.appSizes.length),
         )
         .toBeGreaterThan(0);
@@ -829,7 +829,7 @@ for (const theme of ["light", "dark"] as const) {
         await row.evaluate((element) => element.getBoundingClientRect().height),
       ).toBeGreaterThan(collapsedHeight);
       await expect
-        .poll(() =>
+        .poll(async () =>
           page.evaluate(
             () => globalThis.appFixtureHost.appSizes.at(-1)?.height ?? 0,
           ),
@@ -850,7 +850,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(trigger).toHaveAttribute("aria-expanded", "false");
       await expect(panel).toBeHidden();
       await expect
-        .poll(() =>
+        .poll(async () =>
           page.evaluate(
             () => globalThis.appFixtureHost.appSizes.at(-1)?.height ?? 0,
           ),
@@ -877,7 +877,7 @@ for (const theme of ["light", "dark"] as const) {
       await reference.click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect
-        .poll(() => hostHistory(page, "appLinks"))
+        .poll(async () => hostHistory(page, "appLinks"))
         .toEqual([first.appUrl]);
       await row.locator(".snippet").click();
       await expect(trigger).toHaveAttribute("aria-expanded", "false");

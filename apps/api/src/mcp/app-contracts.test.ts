@@ -317,9 +317,10 @@ describe("MCP app registry and contracts", () => {
     if (lookup.type !== "lookup") {
       throw new Error("Expected lookup view");
     }
-    expect(
-      lookup.rows.every((row) => row.type === "lookup" && row.snippet === null),
-    ).toBe(true);
+    expect(lookup.rows).not.toHaveLength(0);
+    for (const row of lookup.rows) {
+      expect(row).toMatchObject({ type: "lookup", snippet: null });
+    }
   });
   test.each([
     { availability: "included" as const, expected: "not_stated" },

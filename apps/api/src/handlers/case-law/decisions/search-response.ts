@@ -6,6 +6,7 @@ import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types"
 import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
+import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -19,7 +20,11 @@ import type { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
 type SearchResponse = Static<typeof searchDecisionsSuccessResponseSchema>;
 type SearchHit = SearchResponse["hits"][number];
-const projectKeywords = (keywords: NonNullable<SearchHit["keywords"]>) => ({
+// The headnote's keywords branch is the readonly contract type; the
+// standalone field reads the same shape mutably, so accept the wider one.
+const projectKeywords = (
+  keywords: Extract<SearchHit["headnote"], { type: "keywords" }>,
+) => ({
   type: keywords.type,
   items: keywords.items
     .slice(0, LIMITS.caseLawHeadnoteKeywords)
@@ -118,7 +123,7 @@ const projectBucket = (bucket: FacetBucket) => ({
 // Both backends pass their entire successful envelope through this boundary.
 export const projectCaseLawSearchResponse = (
   response: SearchResponse,
-  headnoteMaxChars = LIMITS.caseLawHeadnoteMaxChars,
+  headnoteMaxChars: DecisionHeadnoteMaxChars = LIMITS.caseLawHeadnoteMaxChars,
 ): SearchResponse => ({
   hits: response.hits
     .slice(0, LIMITS.caseLawSearchPageSizeMax)

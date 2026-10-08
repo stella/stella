@@ -315,6 +315,7 @@ export const readTextField = (value: unknown): TextField => {
   return presentTextField(value);
 };
 
+// parser-output-unchanged: keyword reading is extracted unchanged and the headnote budget defaults to the compact row.
 /** Publisher classifications stay distinct from publisher prose. */
 export const readDecisionKeywords = (value: unknown) => {
   const classification = normalizeDecisionKeywords(value);

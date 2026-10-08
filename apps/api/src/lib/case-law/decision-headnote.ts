@@ -2,6 +2,7 @@ import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-t
 
 import { LIMITS } from "@/api/lib/limits";
 
+// parser-output-unchanged: the expanded budget is read-time MCP presentation; parsers keep the compact default.
 /** The MCP reading expands the same source text used by compact HTTP rows. */
 export const decisionHeadnoteMaxChars = (
   presentation: "expanded" | undefined,
@@ -9,6 +10,10 @@ export const decisionHeadnoteMaxChars = (
   presentation === "expanded"
     ? LIMITS.mcpCaseLawHeadnoteMaxChars
     : LIMITS.caseLawHeadnoteMaxChars;
+
+export type DecisionHeadnoteMaxChars = ReturnType<
+  typeof decisionHeadnoteMaxChars
+>;
 
 const WORD_SEGMENTER = new Intl.Segmenter("und", { granularity: "word" });
 
@@ -19,7 +24,7 @@ const WORD_SEGMENTER = new Intl.Segmenter("und", { granularity: "word" });
  */
 export const truncateDecisionHeadnote = (
   text: string,
-  max = LIMITS.caseLawHeadnoteMaxChars,
+  max: number = LIMITS.caseLawHeadnoteMaxChars,
 ) => {
   if (text.length <= max) {
     return { text, truncated: false };
@@ -94,7 +99,7 @@ const collapseDecisionTerm = (raw: unknown): string | null => {
  */
 export const normalizeDecisionHeadnote = (
   raw: unknown,
-  maxChars = LIMITS.caseLawHeadnoteMaxChars,
+  maxChars: number = LIMITS.caseLawHeadnoteMaxChars,
 ) => {
   const collapsed = collapseDecisionHeadnote(raw);
   return collapsed === null
