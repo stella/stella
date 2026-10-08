@@ -216,7 +216,9 @@ test("a model save schedules work through the latest handler for the exact detai
     usePlaybookDetailSaveSubscription({
       queryClient: client,
       queryKey: detailKey,
-      onSaved: () => scheduled.push(phase),
+      onSaved: () => {
+        scheduled.push(phase);
+      },
     });
     return null;
   };

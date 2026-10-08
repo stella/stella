@@ -54,6 +54,8 @@ export type SendSaveArgs = {
 type SaveQueueOptions = {
   updatedAt: string | null;
   sendSave: (args: SendSaveArgs) => Promise<SaveOutcome>;
+  initialUnacknowledgedDrafts?: readonly PlaybookDraft[] | undefined;
+  onFailed?: (() => void) | undefined;
 };
 
 type FlushOnLeaveOptions = {
@@ -65,11 +67,18 @@ type FlushOnLeaveOptions = {
 export const usePlaybookSaveQueue = ({
   updatedAt,
   sendSave,
+  initialUnacknowledgedDrafts = [],
+  onFailed,
 }: SaveQueueOptions) => {
   const inFlightSaveRef = useRef<Promise<SaveOutcome> | null>(null);
   const [pendingSaveCount, setPendingSaveCount] = useState(0);
+  const [submissions, setSubmissions] = useState(() =>
+    initialUnacknowledgedDrafts.map((draft) => ({ draft })),
+  );
 
   const queueSave = async (savedDraft: PlaybookDraft) => {
+    const submission = { draft: savedDraft };
+    setSubmissions((current) => [...current, submission]);
     setPendingSaveCount((count) => count + 1);
     const previous = inFlightSaveRef.current;
     const tokenAtCall = updatedAt;
@@ -93,6 +102,16 @@ export const usePlaybookSaveQueue = ({
     inFlightSaveRef.current = request;
     try {
       const outcome = await request;
+      if (outcome.type === "saved") {
+        setSubmissions((current) => {
+          const acknowledged = current.indexOf(submission);
+          return acknowledged === -1
+            ? current
+            : current.slice(acknowledged + 1);
+        });
+      } else {
+        onFailed?.();
+      }
       return { outcome, isLatest: inFlightSaveRef.current === request };
     } finally {
       setPendingSaveCount((count) => count - 1);
@@ -119,6 +138,8 @@ export const usePlaybookSaveQueue = ({
     queueSave,
     flushOnLeave,
     pendingSaveCount,
+    unacknowledgedDrafts: submissions.map(({ draft }) => draft),
+    clearUnacknowledgedDrafts: () => setSubmissions([]),
     hasPendingSave: () => inFlightSaveRef.current !== null,
   };
 };

@@ -72,6 +72,7 @@ const parkedState = (playbookId: string, dirty = false): ParkedPlaybookPane => {
   };
   return {
     playbookId,
+    unacknowledgedDrafts: [],
     draft,
     baseline: createPlaybookBaseline(
       dirty ? { ...draft, description: "" } : draft,

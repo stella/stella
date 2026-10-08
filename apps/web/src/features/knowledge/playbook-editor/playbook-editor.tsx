@@ -1,9 +1,9 @@
 import { useId, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { QueryKey } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -48,6 +48,7 @@ import {
   resolvePaneSaveStatus,
   resolveServerFollow,
   resolveSavedPlaybookState,
+  resolveLocalPlaybookIntent,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
 import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
@@ -255,6 +256,71 @@ const leaveEditor = (host: PlaybookEditorHost) => {
   }
 };
 
+type PlaybookDetailData = Exclude<
+  NonNullable<
+    Extract<
+      Awaited<ReturnType<ReturnType<typeof api.playbooks>["get"]>>,
+      { data: unknown }
+    >["data"]
+  >,
+  Response
+>;
+
+const snapshotFromDetail = (
+  detail: PlaybookDetailData,
+): PlaybookSnapshot | null => {
+  if (!("positions" in detail)) {
+    return null;
+  }
+  return {
+    draft: {
+      name: detail.name,
+      description: detail.description ?? "",
+      documentTypeKey: detail.scope?.documentTypeKey ?? null,
+      perspective: detail.scope?.perspective ?? null,
+      trigger: detail.scope?.trigger ?? null,
+      positions: detail.positions.items,
+    },
+    updatedAt: detail.updatedAt,
+    status: detail.status,
+    approvedAt: detail.approvedAt,
+  };
+};
+
+type ReadEditorServerArgs = {
+  queryClient: QueryClient;
+  organizationId: string;
+  playbookId: string | null;
+  onReadError: (error: unknown) => void;
+};
+
+const readEditorServer = async ({
+  queryClient,
+  organizationId,
+  playbookId,
+  onReadError,
+}: ReadEditorServerArgs) => {
+  if (playbookId === null) {
+    return null;
+  }
+  const options = playbookDetailOptions(organizationId, playbookId);
+  const result = await Result.tryPromise({
+    try: async () => {
+      await queryClient.cancelQueries({
+        queryKey: options.queryKey,
+        exact: true,
+      });
+      return await queryClient.fetchQuery({ ...options, staleTime: 0 });
+    },
+    catch: (error) => error,
+  });
+  if (Result.isError(result)) {
+    onReadError(result.error);
+    return null;
+  }
+  return snapshotFromDetail(result.value);
+};
+
 const PlaybookEditorLoader = ({
   organizationId,
   playbookId,
@@ -402,7 +468,8 @@ const PlaybookEditorLoader = ({
   }
 
   const detail = detailView.items;
-  if (!("positions" in detail)) {
+  const snapshot = snapshotFromDetail(detail);
+  if (snapshot === null) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         {readFailure}
@@ -424,19 +491,7 @@ const PlaybookEditorLoader = ({
         onReload={reload}
         organizationId={organizationId}
         playbookId={playbookId}
-        server={{
-          draft: {
-            name: detail.name,
-            description: detail.description ?? "",
-            documentTypeKey: detail.scope?.documentTypeKey ?? null,
-            perspective: detail.scope?.perspective ?? null,
-            trigger: detail.scope?.trigger ?? null,
-            positions: detail.positions.items,
-          },
-          updatedAt: detail.updatedAt,
-          status: detail.status,
-          approvedAt: detail.approvedAt,
-        }}
+        server={snapshot}
         staleDetail={
           seed.type === "stale"
             ? { fresher: seed.fresher, onRetry: refetchDetail }
@@ -530,6 +585,11 @@ const StaleDetailNotice = ({
 // enough that the model's next read sees what the user just changed.
 const AUTOSAVE_DELAY_MS = 2000;
 
+const SERVER_FOLLOW_BY_HOST = {
+  page: "keep",
+  pane: "rebase",
+} as const satisfies Record<PlaybookEditorHost["type"], "keep" | "rebase">;
+
 type SaveRequestState = "idle" | "in-flight" | "failed";
 
 /** What the form starts from: a parked pane state, or a server version. */
@@ -554,6 +614,7 @@ const seedFromServer = ({ server, isNew }: SeedFromServerArgs): FormSeed => {
     openIds: new Set(positions.slice(0, 1).map((p) => p.sourceId)),
     revealedIds: new Set(),
     leaveState: "saved",
+    unacknowledgedDrafts: [],
     scrollTop: 0,
   };
 };
@@ -628,6 +689,11 @@ const PlaybookEditorForm = ({
   // server version. A token that moved alone would pair with a stale draft,
   // and the next save, a full replace, would silently drop the other writer's
   // change instead of meeting the version conflict.
+  const detailReadCount = () =>
+    autosaveQueryKey === null
+      ? 0
+      : (queryClient.getQueryState(autosaveQueryKey)?.dataUpdateCount ?? 0);
+  const [failedReadCount, setFailedReadCount] = useState(detailReadCount);
   const [persisted, setPersisted] = useState(() => ({
     updatedAt: initial.updatedAt,
     baseline: initial.baseline,
@@ -688,7 +754,35 @@ const PlaybookEditorForm = ({
     trigger,
     positions,
   };
-  const isDirty = hasPlaybookDraftChanges({ baseline, current: draft });
+  const {
+    queueSave,
+    flushOnLeave: queueFinalDraft,
+    hasPendingSave,
+    pendingSaveCount,
+    unacknowledgedDrafts,
+    clearUnacknowledgedDrafts,
+  } = usePlaybookSaveQueue({
+    updatedAt,
+    initialUnacknowledgedDrafts: initial.unacknowledgedDrafts,
+    sendSave: async (args) => await sendSave(args),
+    onFailed: () => setFailedReadCount(detailReadCount()),
+  });
+  const changedFromBaseline = hasPlaybookDraftChanges({
+    baseline,
+    current: draft,
+  });
+  const { isDirty, verifiedUnchanged } = resolveLocalPlaybookIntent({
+    unacknowledgedDrafts,
+    pendingSaveCount,
+    changedFromBaseline,
+    serverUpdatedAt: server.updatedAt,
+    updatedAt,
+    readCount: detailReadCount(),
+    failedReadCount,
+  });
+  if (verifiedUnchanged) {
+    clearUnacknowledgedDrafts();
+  }
 
   /** Takes a server version's token and baseline, with `next` as the draft. */
   const adoptServerVersion = (next: PlaybookDraft) => {
@@ -716,15 +810,20 @@ const PlaybookEditorForm = ({
     serverUpdatedAt: server.updatedAt,
     isDirty,
   });
+  // A refetch may see our committed write before its response arrives.
+  // Keep the last acknowledged baseline so a pending revert remains local intent.
   const adopted = draftToAdopt({
+    pendingSaveCount,
     follow: serverFollow,
-    whenBehind: host.type === "pane" ? "rebase" : "keep",
+    whenBehind: SERVER_FOLLOW_BY_HOST[host.type],
     baseline: baseline.draft,
     local: draft,
     server: server.draft,
+    unacknowledgedDrafts,
   });
   if (adopted !== null) {
     adoptServerVersion(adopted);
+    clearUnacknowledgedDrafts();
   }
 
   const navigationBlocker = useUnsavedWork({
@@ -1081,6 +1180,12 @@ const PlaybookEditorForm = ({
   });
 
   const notifySaveFailed = (error: ApiErrorInput) => {
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.playbooks.all(organizationId),
+      }),
+      "playbook-editor.verify-failed-save",
+    );
     const failure = saveFailure(error);
     notifyUserError(toAPIError(error), failure.title, {
       description: failure.description,
@@ -1142,9 +1247,11 @@ const PlaybookEditorForm = ({
         });
         return true;
       case "conflict":
+        detached(recordFailure(), "playbook-editor.verify-parked-save");
         reportVersionConflict(saveFailure(outcome.error), "save");
         return false;
       case "failed":
+        detached(recordFailure(), "playbook-editor.verify-parked-save");
         notifySaveFailed(outcome.error);
         return false;
       default:
@@ -1152,13 +1259,6 @@ const PlaybookEditorForm = ({
         return panic(`Unhandled save outcome: ${String(outcome)}`);
     }
   };
-
-  const {
-    queueSave,
-    flushOnLeave: queueFinalDraft,
-    hasPendingSave,
-    pendingSaveCount,
-  } = usePlaybookSaveQueue({ updatedAt, sendSave });
 
   const isAutosaveDue = () =>
     deletionRef.current === "idle" &&
@@ -1220,7 +1320,17 @@ const PlaybookEditorForm = ({
     return outcome;
   };
 
-  const { leavePane, recordSave } = usePlaybookPaneLifecycle({
+  const readServer = async () =>
+    await readEditorServer({
+      queryClient,
+      organizationId,
+      playbookId,
+      onReadError: (error) =>
+        notifyUserError(undefined, t("common.unexpectedError"), {
+          description: userErrorFromThrown(error, t("common.unexpectedError")),
+        }),
+    });
+  const { leavePane, recordSave, recordFailure } = usePlaybookPaneLifecycle({
     host,
     playbookId,
     state: {
@@ -1231,6 +1341,7 @@ const PlaybookEditorForm = ({
       approvedAt,
       openIds,
       revealedIds,
+      unacknowledgedDrafts,
     },
     isDirty,
     pendingSaveCount,
@@ -1243,6 +1354,7 @@ const PlaybookEditorForm = ({
     wasDeleted: () => deletionRef.current === "deleted",
     readScrollTop: () => scrollTopRef.current,
     flush: flushOnLeave,
+    readServer,
   });
 
   useMountEffect(() => {

@@ -4,6 +4,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
+import type { PlaybookSnapshot } from "./playbook-editor-sync.logic";
 import {
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
@@ -40,6 +41,13 @@ type PaneLifecycleOptions = {
   wasDeleted: () => boolean;
   flush: (canSaveDraft: boolean) => Promise<SaveOutcome | null>;
   readScrollTop: () => number;
+  readServer: () => Promise<PlaybookSnapshot | null>;
+};
+
+type FlushParkedOptions = {
+  snapshot: ParkedPlaybookPane;
+  tabId: string;
+  mode: "leave" | "retry";
 };
 
 export const usePlaybookPaneLifecycle = ({
@@ -57,6 +65,7 @@ export const usePlaybookPaneLifecycle = ({
   wasDeleted,
   flush,
   readScrollTop,
+  readServer,
 }: PaneLifecycleOptions) => {
   const parkedOwner = useRef<{
     tabId: string;
@@ -76,6 +85,19 @@ export const usePlaybookPaneLifecycle = ({
       });
     },
   );
+  const recordFailure = useLatestCallback(async () => {
+    const owner = parkedOwner.current;
+    if (owner === null) {
+      return;
+    }
+    const server = await readServer();
+    markParkedPlaybookPaneSaveFailed({
+      tabId: owner.tabId,
+      parkedState: owner.snapshot,
+      server,
+      mode: "ack",
+    });
+  });
   const pane =
     host.type === "pane" && playbookId !== null
       ? { tabId: host.tabId, playbookId, isTabOpen: host.isTabOpen }
@@ -100,11 +122,6 @@ export const usePlaybookPaneLifecycle = ({
       },
     };
   });
-  type FlushParkedOptions = {
-    snapshot: ParkedPlaybookPane;
-    tabId: string;
-    mode: "leave" | "retry";
-  };
   const flushParked = useLatestCallback(
     async ({ snapshot, tabId, mode }: FlushParkedOptions) => {
       const canSaveDraft =
@@ -124,7 +141,12 @@ export const usePlaybookPaneLifecycle = ({
         return false;
       }
       if (outcome.type !== "saved") {
-        markParkedPlaybookPaneSaveFailed({ tabId, parkedState: snapshot });
+        const server = await readServer();
+        markParkedPlaybookPaneSaveFailed({
+          tabId,
+          parkedState: snapshot,
+          server,
+        });
         return false;
       }
       completeParkedPlaybookPaneSave({
@@ -207,6 +229,14 @@ export const usePlaybookPaneLifecycle = ({
       state: current.snapshot,
       isTabOpen: current.pane.isTabOpen,
     });
+    if (pendingSaveCount > 0 && !autosaves) {
+      beginParkedPlaybookPaneSave({
+        tabId: current.pane.tabId,
+        parkedState: current.snapshot,
+        mode: "ack",
+      });
+      return;
+    }
     detached(
       flushParked({
         snapshot: current.snapshot,
@@ -216,5 +246,5 @@ export const usePlaybookPaneLifecycle = ({
       "playbook-editor.flush-on-leave",
     );
   });
-  return { leavePane, recordSave };
+  return { leavePane, recordSave, recordFailure };
 };

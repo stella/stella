@@ -1,6 +1,9 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { create } from "zustand";
 
+import { Temporal } from "@stll/time";
+
+import { createPlaybookBaseline } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import type {
   PlaybookBaseline,
   PlaybookDraft,
@@ -8,7 +11,11 @@ import type {
 import { detached } from "@/lib/detached";
 import type { PlaybookApprovalStatus } from "@/lib/knowledge/playbook-types";
 
-import { resolveSavedPlaybookState } from "./playbook-editor-sync.logic";
+import {
+  draftToAdopt,
+  resolveSavedPlaybookState,
+} from "./playbook-editor-sync.logic";
+import type { PlaybookSnapshot } from "./playbook-editor-sync.logic";
 import { hasPlaybookDraftChanges } from "./playbook-editor.logic";
 
 export type PaneDraftState =
@@ -50,6 +57,7 @@ export const resolvePaneDraftState = ({
 export type ParkedPlaybookPane = {
   playbookId: string;
   draft: PlaybookDraft;
+  unacknowledgedDrafts: readonly PlaybookDraft[];
   updatedAt: string | null;
   baseline: PlaybookBaseline;
   status: PlaybookApprovalStatus;
@@ -63,7 +71,7 @@ export type ParkedPlaybookPane = {
 type ParkedPaneEntry = {
   owner: ParkedPlaybookPane;
   state: ParkedPlaybookPane;
-  write: "waiting" | "settled";
+  write: "waiting" | "awaiting-ack" | "settled";
 };
 
 const useParkedPlaybookPanes = create<
@@ -108,17 +116,22 @@ export const useParkedPlaybookPaneSavePending = (
   playbookId: string,
 ) =>
   useParkedPlaybookPanes(
-    (tabs) => tabId !== null && tabs[tabId]?.[playbookId]?.write === "waiting",
+    (tabs) =>
+      tabId !== null &&
+      tabs[tabId]?.[playbookId] !== undefined &&
+      tabs[tabId]?.[playbookId]?.write !== "settled",
   );
 
 type BeginParkedPlaybookPaneSaveArgs = {
   tabId: string;
   parkedState: ParkedPlaybookPane;
+  mode?: "flush" | "ack" | undefined;
 };
 
 export const beginParkedPlaybookPaneSave = ({
   tabId,
   parkedState,
+  mode = "flush",
 }: BeginParkedPlaybookPaneSaveArgs) => {
   useParkedPlaybookPanes.setState((current) => {
     const tab = current[tabId];
@@ -133,7 +146,7 @@ export const beginParkedPlaybookPaneSave = ({
         [parkedState.playbookId]: {
           owner: entry.owner,
           state: entry.state,
-          write: "waiting",
+          write: mode === "ack" ? "awaiting-ack" : "waiting",
         },
       },
     };
@@ -164,6 +177,7 @@ export const completeParkedPlaybookPaneSave = ({
     });
     const savedState = {
       ...entry.state,
+      unacknowledgedDrafts: [],
       updatedAt: persisted.updatedAt,
       baseline: persisted.baseline,
       status: "draft",
@@ -209,15 +223,35 @@ export const recordParkedPlaybookPaneSave = ({
       savedAt: updatedAt,
       savedDraft,
     });
-    if (persisted === entry.state) {
+    const acknowledged = entry.state.unacknowledgedDrafts.indexOf(savedDraft);
+    const unacknowledgedDrafts =
+      acknowledged === -1
+        ? []
+        : entry.state.unacknowledgedDrafts.slice(acknowledged + 1);
+    if (
+      persisted === entry.state &&
+      unacknowledgedDrafts.length === entry.state.unacknowledgedDrafts.length &&
+      entry.write !== "awaiting-ack"
+    ) {
       return current;
     }
     const state = {
       ...entry.state,
+      unacknowledgedDrafts,
       updatedAt: persisted.updatedAt,
       baseline: persisted.baseline,
       status: "draft",
       approvedAt: null,
+      leaveState: resolvePaneDraftState({
+        isDirty:
+          entry.write === "waiting" ||
+          hasPlaybookDraftChanges({
+            baseline: persisted.baseline,
+            current: entry.state.draft,
+          }),
+        canAutosave: entry.state.leaveState === "dirty-autosaveable",
+        saveFailed: entry.state.leaveState === "save-failed",
+      }),
     } satisfies ParkedPlaybookPane;
     return {
       ...current,
@@ -226,7 +260,7 @@ export const recordParkedPlaybookPaneSave = ({
         [parkedState.playbookId]: {
           owner: entry.owner,
           state,
-          write: entry.write,
+          write: entry.write === "awaiting-ack" ? "settled" : entry.write,
         },
       },
     };
@@ -236,25 +270,68 @@ export const recordParkedPlaybookPaneSave = ({
 type MarkParkedPlaybookPaneSaveFailedArgs = {
   tabId: string;
   parkedState: ParkedPlaybookPane;
+  server: PlaybookSnapshot | null;
+  mode?: "flush" | "ack" | undefined;
 };
 
 export const markParkedPlaybookPaneSaveFailed = ({
   tabId,
   parkedState,
+  server,
+  mode = "flush",
 }: MarkParkedPlaybookPaneSaveFailedArgs) => {
   useParkedPlaybookPanes.setState((current) => {
     const tab = current[tabId];
     const entry = tab?.[parkedState.playbookId];
-    if (entry?.owner !== parkedState) {
+    if (
+      entry?.owner !== parkedState ||
+      (mode === "ack" && entry.write !== "awaiting-ack")
+    ) {
       return current;
     }
+    const freshServer =
+      server !== null &&
+      (entry.state.updatedAt === null ||
+        (server.updatedAt !== null &&
+          Temporal.Instant.compare(
+            Temporal.Instant.from(server.updatedAt),
+            Temporal.Instant.from(entry.state.updatedAt),
+          ) >= 0))
+        ? server
+        : null;
+    const draft =
+      freshServer === null
+        ? entry.state.draft
+        : draftToAdopt({
+            follow: "behind",
+            whenBehind: "rebase",
+            baseline: entry.state.baseline.draft,
+            local: entry.state.draft,
+            server: freshServer.draft,
+            unacknowledgedDrafts: entry.state.unacknowledgedDrafts,
+          });
+    if (draft === null) {
+      return panic("A parked rebase must produce a draft");
+    }
+    const baseline =
+      freshServer === null
+        ? entry.state.baseline
+        : createPlaybookBaseline(freshServer.draft);
     const failedState = {
       ...entry.state,
+      draft,
+      baseline,
+      updatedAt:
+        freshServer === null ? entry.state.updatedAt : freshServer.updatedAt,
+      unacknowledgedDrafts:
+        freshServer === null ? entry.state.unacknowledgedDrafts : [],
+      status: freshServer === null ? entry.state.status : freshServer.status,
+      approvedAt:
+        freshServer === null ? entry.state.approvedAt : freshServer.approvedAt,
       leaveState: resolvePaneDraftState({
-        isDirty: hasPlaybookDraftChanges({
-          baseline: entry.state.baseline,
-          current: entry.state.draft,
-        }),
+        isDirty:
+          freshServer === null ||
+          hasPlaybookDraftChanges({ baseline, current: draft }),
         canAutosave: false,
         saveFailed: true,
       }),

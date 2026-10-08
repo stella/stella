@@ -87,6 +87,33 @@ export const resolveServerFollow = ({
   return isDirty ? "behind" : "reseed";
 };
 
+type LocalPlaybookIntentArgs = {
+  unacknowledgedDrafts: readonly PlaybookDraft[];
+  pendingSaveCount: number;
+  changedFromBaseline: boolean;
+  serverUpdatedAt: string | null;
+  updatedAt: string | null;
+  readCount: number;
+  failedReadCount: number;
+};
+
+export const resolveLocalPlaybookIntent = ({
+  unacknowledgedDrafts,
+  pendingSaveCount,
+  changedFromBaseline,
+  serverUpdatedAt,
+  updatedAt,
+  readCount,
+  failedReadCount,
+}: LocalPlaybookIntentArgs) => ({
+  isDirty: changedFromBaseline || unacknowledgedDrafts.length > 0,
+  verifiedUnchanged:
+    unacknowledgedDrafts.length > 0 &&
+    pendingSaveCount === 0 &&
+    serverUpdatedAt === updatedAt &&
+    readCount > failedReadCount,
+});
+
 // ── Rebasing edits onto a newer version ───────────────
 
 /** Ids of `ids` in order, keeping only those `keep` contains. */
@@ -233,6 +260,7 @@ export const rebasePlaybookDraft = ({
 };
 
 type DraftToAdoptArgs = {
+  pendingSaveCount?: number | undefined;
   follow: ServerFollow;
   /** What a form with edits does with a newer version: keep its edits and
    *  meet the conflict on its next save, or rebase them onto the version. */
@@ -240,25 +268,43 @@ type DraftToAdoptArgs = {
   baseline: PlaybookDraft;
   local: PlaybookDraft;
   server: PlaybookDraft;
+  unacknowledgedDrafts?: readonly PlaybookDraft[] | undefined;
 };
 
 /** The draft the form takes along with the server's newer token, if any. */
 export const draftToAdopt = ({
+  pendingSaveCount = 0,
   follow,
   whenBehind,
   baseline,
   local,
   server,
+  unacknowledgedDrafts = [],
 }: DraftToAdoptArgs): PlaybookDraft | null => {
+  if (pendingSaveCount > 0) {
+    return null;
+  }
   switch (follow) {
     case "current":
       return null;
     case "reseed":
       return server;
-    case "behind":
-      return whenBehind === "rebase"
-        ? rebasePlaybookDraft({ baseline, local, server })
-        : null;
+    case "behind": {
+      if (whenBehind === "keep") {
+        return null;
+      }
+      let rebased = rebasePlaybookDraft({ baseline, local, server });
+      // A failed response does not prove that its submitted draft was not committed.
+      // Replaying each submitted baseline preserves edits that reverted that write.
+      for (const submitted of unacknowledgedDrafts) {
+        rebased = rebasePlaybookDraft({
+          baseline: submitted,
+          local,
+          server: rebased,
+        });
+      }
+      return rebased;
+    }
     default:
       follow satisfies never;
       return panic(`Unhandled server follow: ${String(follow)}`);

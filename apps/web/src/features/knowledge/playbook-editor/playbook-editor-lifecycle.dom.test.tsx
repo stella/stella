@@ -361,6 +361,7 @@ type LifecycleWrite = {
   fields: LifecycleFields;
   expectedVersion: number;
   purpose: "persist" | "park" | "close";
+  committedVersion: number | null;
 };
 type LifecycleModel = {
   mode: "open" | "opening" | "hidden" | "closed" | "deleted";
@@ -370,10 +371,13 @@ type LifecycleModel = {
   baselineVersion: number;
   server: LifecycleFields;
   serverVersion: number;
+  observedServer: LifecycleFields;
+  observedVersion: number;
   clock: number;
   saveFailed: boolean;
   confirmation: "none" | "waiting" | "discard" | "retry";
   pending: LifecycleWrite[];
+  unacknowledged: LifecycleFields[];
   steps: number;
 };
 type PropertyRequest = {
@@ -381,11 +385,13 @@ type PropertyRequest = {
   fields: LifecycleFields;
   expectedUpdatedAt: string;
   response: ReturnType<typeof Promise.withResolvers<Response>>;
+  committedVersion: number | null;
 };
 type PropertyBackend = {
   clock: number;
   rows: Map<string, PlaybookDetailData>;
   pending: PropertyRequest[];
+  reads: { playbookId: string; fields: LifecycleFields; updatedAt: string }[];
   writes: {
     fields: LifecycleFields;
     expectedUpdatedAt: string;
@@ -440,6 +446,11 @@ const handlePropertyRequest = async ({
   const playbookId = url.pathname.split("/").at(-1) ?? "";
   const row = backend.rows.get(playbookId);
   if (method === "GET" && row !== undefined) {
+    backend.reads.push({
+      playbookId,
+      fields: { name: row.name, description: row.description ?? "" },
+      updatedAt: row.updatedAt,
+    });
     return Response.json(row);
   }
   if (method === "DELETE" && row !== undefined) {
@@ -459,13 +470,21 @@ const handlePropertyRequest = async ({
     body = await input.clone().text();
   }
   const response = Promise.withResolvers<Response>();
-  backend.pending.push({ playbookId, ...readPropertyBody(body), response });
+  backend.pending.push({
+    playbookId,
+    ...readPropertyBody(body),
+    response,
+    committedVersion: null,
+  });
   return await response.promise;
 };
 
 const lifecycleDirty = (model: Readonly<LifecycleModel>) =>
   model.draft.name !== model.baseline.name ||
-  model.draft.description !== model.baseline.description;
+  model.draft.description !== model.baseline.description ||
+  (model.unacknowledged.length > 0 &&
+    (model.draft.name !== model.server.name ||
+      model.draft.description !== model.server.description));
 const settleLifecycle = async () => {
   await act(async () => {
     await Promise.resolve();
@@ -488,19 +507,27 @@ const editLifecycleField = async (
   });
 };
 const adoptLifecycleServer = (model: LifecycleModel) => {
-  if (model.serverVersion <= model.baselineVersion) {
+  if (model.observedVersion <= model.baselineVersion) {
     return;
   }
   const local = model.draft;
+  const keepName =
+    local.name !== model.baseline.name ||
+    model.unacknowledged.some((submitted) => submitted.name !== local.name);
+  const keepDescription =
+    local.description !== model.baseline.description ||
+    model.unacknowledged.some(
+      (submitted) => submitted.description !== local.description,
+    );
   model.draft = {
-    name: local.name === model.baseline.name ? model.server.name : local.name,
-    description:
-      local.description === model.baseline.description
-        ? model.server.description
-        : local.description,
+    name: keepName ? local.name : model.observedServer.name,
+    description: keepDescription
+      ? local.description
+      : model.observedServer.description,
   };
-  model.baseline = { ...model.server };
-  model.baselineVersion = model.serverVersion;
+  model.unacknowledged = [];
+  model.baseline = { ...model.observedServer };
+  model.baselineVersion = model.observedVersion;
   model.status = "draft";
 };
 
@@ -590,10 +617,12 @@ const startLifecycleSave = async (
   real: LifecycleReal,
   purpose: LifecycleWrite["purpose"] = "persist",
 ) => {
+  model.unacknowledged.push({ ...model.draft });
   model.pending.push({
     fields: { ...model.draft },
     expectedVersion: model.baselineVersion,
     purpose,
+    committedVersion: null,
   });
   if (model.saveFailed) {
     await act(async () => {
@@ -615,56 +644,125 @@ const startLifecycleSave = async (
   await settleLifecycle();
 };
 
-const completeLifecycleSave = async (
+const commitLifecycleSave = async (
   model: LifecycleModel,
   real: LifecycleReal,
-  result: "saved" | "failed",
 ) => {
-  const expected = model.pending.shift();
-  const request = real.backend.pending.shift();
+  const expected = model.pending.at(0);
+  const request = real.backend.pending.at(0);
   if (expected === undefined || request === undefined) {
     throw new TypeError(
-      "Completing a modeled save requires both a queued snapshot and a request",
+      "Committing a save requires a queued snapshot and a real request",
     );
   }
   expect(request.fields).toEqual(expected.fields);
   expect(request.expectedUpdatedAt).toBe(
     versionToken(expected.expectedVersion),
   );
-  const conflict = expected.expectedVersion !== model.serverVersion;
-  const saved = result === "saved" && !conflict;
+  if (
+    expected.committedVersion !== null ||
+    expected.expectedVersion !== model.serverVersion
+  ) {
+    throw new TypeError(
+      "Only an uncommitted request with the current server token can commit",
+    );
+  }
+  const row = real.backend.rows.get(request.playbookId);
+  if (row === undefined) {
+    throw new TypeError("Committing a save requires an existing playbook");
+  }
+  model.clock += 1;
+  real.backend.clock += 1;
+  expected.committedVersion = model.clock;
+  request.committedVersion = real.backend.clock;
+  model.server = { ...expected.fields };
+  model.serverVersion = model.clock;
+  const updatedAt = versionToken(real.backend.clock);
+  const updated = {
+    ...row,
+    ...request.fields,
+    status: "draft",
+    approvedAt: null,
+    updatedAt,
+  } as const satisfies PlaybookDetailData;
+  real.backend.rows.set(request.playbookId, updated);
+  real.backend.writes.push({
+    fields: { ...request.fields },
+    expectedUpdatedAt: request.expectedUpdatedAt,
+    updatedAt,
+  });
+};
+
+const refetchLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
+  const row = real.backend.rows.get(PLAYBOOK_ID);
+  if (row === undefined) {
+    throw new TypeError("Refetching requires an existing playbook");
+  }
+  model.observedServer = { ...model.server };
+  model.observedVersion = model.serverVersion;
+  await act(async () => {
+    real.client.setQueryData(
+      playbookDetailOptions(ORGANIZATION_ID, PLAYBOOK_ID).queryKey,
+      row,
+    );
+  });
+  if (model.mode === "open" && model.pending.length === 0) {
+    adoptLifecycleServer(model);
+  }
+  if (
+    model.pending.length === 0 &&
+    model.observedVersion === model.baselineVersion
+  ) {
+    model.unacknowledged = [];
+  }
+};
+
+const completeLifecycleSave = async (
+  model: LifecycleModel,
+  real: LifecycleReal,
+  result: "saved" | "failed",
+) => {
+  const queued = model.pending.at(0);
+  if (queued === undefined) {
+    throw new TypeError("Completing a save requires a queued snapshot");
+  }
+  if (
+    queued.committedVersion === null &&
+    result === "saved" &&
+    queued.expectedVersion === model.serverVersion
+  ) {
+    await commitLifecycleSave(model, real);
+  }
+  const expected = model.pending.shift();
+  const request = real.backend.pending.shift();
+  if (expected === undefined || request === undefined) {
+    throw new TypeError(
+      "Completing a save requires both a snapshot and a real request",
+    );
+  }
+  expect(request.fields).toEqual(expected.fields);
+  expect(request.expectedUpdatedAt).toBe(
+    versionToken(expected.expectedVersion),
+  );
+  const saved = result === "saved" && expected.committedVersion !== null;
+  const conflict =
+    expected.committedVersion === null &&
+    expected.expectedVersion !== model.serverVersion;
   let response: Response;
-  if (saved) {
-    real.backend.clock += 1;
-    const updatedAt = versionToken(real.backend.clock);
-    const row = real.backend.rows.get(request.playbookId);
-    if (row === undefined) {
-      throw new TypeError(
-        "A successful modeled save requires an existing playbook",
-      );
+  if (saved && expected.committedVersion !== null) {
+    const savedVersion = expected.committedVersion;
+    response = Response.json({ updatedAt: versionToken(savedVersion) });
+    if (savedVersion >= model.baselineVersion) {
+      model.baseline = { ...expected.fields };
+      model.baselineVersion = savedVersion;
     }
-    real.backend.rows.set(request.playbookId, {
-      ...row,
-      ...request.fields,
-      status: "draft",
-      approvedAt: null,
-      updatedAt,
-    });
-    real.backend.writes.push({
-      fields: { ...request.fields },
-      expectedUpdatedAt: request.expectedUpdatedAt,
-      updatedAt,
-    });
-    response = Response.json({ updatedAt });
-    model.clock += 1;
-    model.server = { ...expected.fields };
-    model.serverVersion = model.clock;
-    model.baseline = { ...expected.fields };
-    model.baselineVersion = model.clock;
     model.status = "draft";
+    model.unacknowledged = model.pending.map((pending) => ({
+      ...pending.fields,
+    }));
     const next = model.pending.at(0);
     if (next !== undefined) {
-      next.expectedVersion = model.clock;
+      next.expectedVersion = savedVersion;
     }
   } else {
     response = Response.json(
@@ -675,29 +773,59 @@ const completeLifecycleSave = async (
       { status: conflict ? 409 : 503 },
     );
   }
-  if (model.pending.length === 0) {
-    model.saveFailed = !saved;
-    if (expected.purpose === "close") {
-      if (saved || (model.mode === "hidden" && !lifecycleDirty(model))) {
-        model.mode = "closed";
-        model.confirmation = "none";
-      } else {
-        model.confirmation = "retry";
-      }
-    }
-  }
+  const readsBeforeResponse = real.backend.reads.length;
+  const modeBeforeResponse = model.mode;
   await act(async () => {
     request.response.resolve(response);
   });
   await settleLifecycle();
-  if (conflict && model.mode === "open") {
-    adoptLifecycleServer(model);
+  const observedRead = real.backend.reads
+    .slice(readsBeforeResponse)
+    .findLast((read) => read.playbookId === PLAYBOOK_ID);
+  if (observedRead !== undefined) {
+    expect(observedRead.fields).toEqual(model.server);
+    expect(observedRead.updatedAt).toBe(versionToken(model.serverVersion));
+    model.observedServer = { ...model.server };
+    model.observedVersion = model.serverVersion;
   }
-  if (model.mode === "opening" && model.pending.length === 0) {
-    model.mode = "open";
+  if (model.pending.length > 0) {
+    return;
+  }
+  model.saveFailed = !saved;
+  if (
+    !saved &&
+    (modeBeforeResponse === "open" ||
+      modeBeforeResponse === "hidden" ||
+      modeBeforeResponse === "opening")
+  ) {
+    // A failed reply cannot settle persistence uncertainty from an old cached read.
+    expect(observedRead).toBeDefined();
+  }
+  if (
+    model.mode === "open" ||
+    model.mode === "opening" ||
+    (!saved && model.mode === "hidden")
+  ) {
     adoptLifecycleServer(model);
+    if (
+      observedRead !== undefined &&
+      model.observedVersion === model.baselineVersion
+    ) {
+      model.unacknowledged = [];
+    }
+  }
+  if (model.mode === "opening") {
+    model.mode = "open";
     if (!lifecycleDirty(model)) {
       model.saveFailed = false;
+    }
+  }
+  if (expected.purpose === "close") {
+    if (saved || (model.mode === "hidden" && !lifecycleDirty(model))) {
+      model.mode = "closed";
+      model.confirmation = "none";
+    } else {
+      model.confirmation = "retry";
     }
   }
 };
@@ -706,6 +834,8 @@ type LifecycleAction =
   | { type: "edit"; field: keyof LifecycleFields; value: string }
   | { type: "save" }
   | { type: "complete"; result: "saved" | "failed" }
+  | { type: "commit" }
+  | { type: "refetch" }
   | { type: "revert" }
   | { type: "hide" }
   | { type: "open" }
@@ -721,10 +851,12 @@ const hideLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
     model.status === "draft" &&
     (lifecycleDirty(model) || model.pending.length > 0)
   ) {
+    model.unacknowledged.push({ ...model.draft });
     model.pending.push({
       fields: { ...model.draft },
       expectedVersion: model.baselineVersion,
       purpose: "park",
+      committedVersion: null,
     });
   }
   model.mode = "hidden";
@@ -733,6 +865,8 @@ const hideLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
   });
 };
 const openLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
+  model.observedServer = { ...model.server };
+  model.observedVersion = model.serverVersion;
   if (model.mode === "hidden" && model.pending.length > 0) {
     model.mode = "opening";
     await act(async () => {
@@ -745,6 +879,7 @@ const openLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
     model.baseline = { ...model.server };
     model.baselineVersion = model.serverVersion;
     model.saveFailed = false;
+    model.unacknowledged = [];
     real.client.setQueryData(
       playbookDetailOptions(ORGANIZATION_ID, PLAYBOOK_ID).queryKey,
       real.backend.rows.get(PLAYBOOK_ID),
@@ -759,6 +894,9 @@ const openLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
     });
   }
   adoptLifecycleServer(model);
+  if (model.observedVersion === model.baselineVersion) {
+    model.unacknowledged = [];
+  }
   if (!lifecycleDirty(model)) {
     model.saveFailed = false;
   }
@@ -794,7 +932,9 @@ const serverEditLifecycle = async (
       updated,
     );
   });
-  if (model.mode === "open") {
+  model.observedServer = { ...model.server };
+  model.observedVersion = model.serverVersion;
+  if (model.mode === "open" && model.pending.length === 0) {
     adoptLifecycleServer(model);
   }
 };
@@ -807,10 +947,12 @@ const closeLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
   } else if (model.status === "approved") {
     model.confirmation = "discard";
   } else if (model.mode === "open") {
+    model.unacknowledged.push({ ...model.draft });
     model.pending.push({
       fields: { ...model.draft },
       expectedVersion: model.baselineVersion,
       purpose: "close",
+      committedVersion: null,
     });
     model.confirmation = "waiting";
   } else {
@@ -858,10 +1000,12 @@ const answerLifecycle = async (
     return;
   }
   if (lifecycleDirty(model) || model.pending.length > 0) {
+    model.unacknowledged.push({ ...model.draft });
     model.pending.push({
       fields: { ...model.draft },
       expectedVersion: model.baselineVersion,
       purpose: "close",
+      committedVersion: null,
     });
     model.confirmation = "waiting";
   }
@@ -949,8 +1093,22 @@ class LifecycleCommand implements fc.AsyncCommand<
     switch (this.action.type) {
       case "unload":
         return true;
+      case "refetch":
+        return (
+          model.mode === "open" ||
+          model.mode === "hidden" ||
+          model.mode === "opening"
+        );
       case "complete":
         return model.pending.length > 0;
+      case "commit": {
+        const pending = model.pending.at(0);
+        return (
+          pending !== undefined &&
+          pending.committedVersion === null &&
+          pending.expectedVersion === model.serverVersion
+        );
+      }
       case "answer":
         return (
           model.confirmation === "discard" || model.confirmation === "retry"
@@ -972,11 +1130,7 @@ class LifecycleCommand implements fc.AsyncCommand<
           model.pending.length === 0
         );
       case "hide":
-        return (
-          idle &&
-          model.mode === "open" &&
-          (model.pending.length === 0 || model.status === "draft")
-        );
+        return idle && model.mode === "open";
       case "close":
         return idle && (model.mode === "open" || model.mode === "hidden");
       case "server-edit":
@@ -1022,6 +1176,12 @@ class LifecycleCommand implements fc.AsyncCommand<
         break;
       case "complete":
         await completeLifecycleSave(model, real, action.result);
+        break;
+      case "commit":
+        await commitLifecycleSave(model, real);
+        break;
+      case "refetch":
+        await refetchLifecycle(model, real);
         break;
       case "hide":
         await hideLifecycle(model, real);
@@ -1073,6 +1233,8 @@ const lifecycleCommandArbitraries = [
         new LifecycleCommand({ type: "edit", field, value }),
     ),
   fc.constant(new LifecycleCommand({ type: "save" })),
+  fc.constant(new LifecycleCommand({ type: "commit" })),
+  fc.constant(new LifecycleCommand({ type: "refetch" })),
   fc
     .constantFrom("saved", "failed")
     .map((result) => new LifecycleCommand({ type: "complete", result })),
@@ -1112,6 +1274,7 @@ test(
             rows: new Map([[PLAYBOOK_ID, detail("approved")]]),
             pending: [],
             writes: [],
+            reads: [],
           };
           propertyBackend = backend;
           const mounted = await mountEditor("approved");
@@ -1128,10 +1291,13 @@ test(
             baselineVersion: 0,
             server: { ...initial },
             serverVersion: 0,
+            observedServer: { ...initial },
+            observedVersion: 0,
             clock: 0,
             saveFailed: false,
             confirmation: "none",
             pending: [],
+            unacknowledged: [],
             steps: 0,
           };
           jest.useFakeTimers();
@@ -1147,10 +1313,15 @@ test(
               real,
             );
             await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({ type: "hide" }).run(model, real);
+            await new LifecycleCommand({ type: "commit" }).run(model, real);
+            await new LifecycleCommand({ type: "refetch" }).run(model, real);
             await new LifecycleCommand({
               type: "complete",
               result: "saved",
             }).run(model, real);
+            expect(hasUnsavedWork()).toBe(false);
+            await new LifecycleCommand({ type: "open" }).run(model, real);
             await new LifecycleCommand({
               type: "edit",
               field: "name",
@@ -1168,6 +1339,120 @@ test(
             await assertLifecycleOracle(model, real);
             await new LifecycleCommand({ type: "open" }).run(model, real);
             expect(backend.writes).toHaveLength(2);
+            // The read observes an accepted older edit before its response arrives.
+            const beforeCommittedRead = model.baseline.name;
+            await new LifecycleCommand({
+              type: "edit",
+              field: "name",
+              value: `committed ${localName}`,
+            }).run(model, real);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({ type: "revert" }).run(model, real);
+            await new LifecycleCommand({ type: "commit" }).run(model, real);
+            await new LifecycleCommand({ type: "refetch" }).run(model, real);
+            expect(
+              real.view.getByDisplayValue(beforeCommittedRead),
+            ).toBeDefined();
+            expect(hasUnsavedWork()).toBe(true);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "saved",
+            }).run(model, real);
+            expect(
+              real.view.getByDisplayValue(beforeCommittedRead),
+            ).toBeDefined();
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "saved",
+            }).run(model, real);
+            // A confirmed read preserves the revert even when the committed response fails.
+            const beforeFailedCommittedRead = model.baseline.name;
+            await new LifecycleCommand({
+              type: "edit",
+              field: "name",
+              value: `uncertain ${localName}`,
+            }).run(model, real);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({ type: "revert" }).run(model, real);
+            await new LifecycleCommand({ type: "commit" }).run(model, real);
+            await new LifecycleCommand({ type: "refetch" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "failed",
+            }).run(model, real);
+            expect(
+              real.view.getByDisplayValue(beforeFailedCommittedRead),
+            ).toBeDefined();
+            expect(hasUnsavedWork()).toBe(true);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "saved",
+            }).run(model, real);
+            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(
+              beforeFailedCommittedRead,
+            );
+            // An unchanged fresh read clears stale submission masks before a later clean follow.
+            await new LifecycleCommand({
+              type: "edit",
+              field: "name",
+              value: `verified unchanged ${localName}`,
+            }).run(model, real);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "failed",
+            }).run(model, real);
+            await new LifecycleCommand({ type: "revert" }).run(model, real);
+            const writesBeforeExternalFollow = backend.writes.length;
+            const externalFollowName = `remote after verified ${remoteName}`;
+            await new LifecycleCommand({
+              type: "server-edit",
+              field: "name",
+              value: externalFollowName,
+            }).run(model, real);
+            expect(
+              real.view.getByDisplayValue(externalFollowName),
+            ).toBeDefined();
+            await act(async () => {
+              jest.advanceTimersByTime(2100);
+            });
+            await assertLifecycleOracle(model, real);
+            expect(backend.pending).toHaveLength(0);
+            expect(backend.writes).toHaveLength(writesBeforeExternalFollow);
+            // Hidden history survives both a committed-but-failed reply and the queued conflict.
+            const hiddenFinalName = model.baseline.name;
+            await new LifecycleCommand({
+              type: "edit",
+              field: "name",
+              value: `hidden uncertain ${localName}`,
+            }).run(model, real);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({ type: "revert" }).run(model, real);
+            await new LifecycleCommand({ type: "hide" }).run(model, real);
+            await new LifecycleCommand({ type: "commit" }).run(model, real);
+            await new LifecycleCommand({ type: "refetch" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "failed",
+            }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "failed",
+            }).run(model, real);
+            expect(
+              readParkedPlaybookPane(real.tabId, PLAYBOOK_ID)?.draft.name,
+            ).toBe(hiddenFinalName);
+            expect(hasUnsavedWork()).toBe(true);
+            await new LifecycleCommand({ type: "open" }).run(model, real);
+            expect(real.view.getByDisplayValue(hiddenFinalName)).toBeDefined();
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "saved",
+            }).run(model, real);
+            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(hiddenFinalName);
             // Failure keeps the real pane recoverable even after a confirmed retry fails.
             await new LifecycleCommand({
               type: "edit",
