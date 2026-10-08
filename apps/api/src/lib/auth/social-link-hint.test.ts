@@ -284,7 +284,7 @@ describe("social callback method hints", () => {
       expect(JSON.parse(value)).toMatchObject({
         method: "microsoft",
         provider: "google",
-        attempt: hashSessionToken(attempt.state ?? ""),
+        attempt: hashSessionToken(attempt.state),
       });
       expect(
         response.headers

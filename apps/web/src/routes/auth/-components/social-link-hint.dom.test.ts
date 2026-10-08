@@ -31,7 +31,9 @@ const respond = (reply: () => Promise<Response>) => {
 };
 const load = async () => {
   const captured: unknown[] = [];
-  const hint = await loadSocialLinkHint((error) => captured.push(error));
+  const hint = await loadSocialLinkHint((error) => {
+    captured.push(error);
+  });
   return { captured, hint };
 };
 
