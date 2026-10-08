@@ -17,6 +17,7 @@ import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
   SEARCH_EXCERPTS,
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
   type SearchExcerpt,
@@ -87,6 +88,7 @@ const validResponse = {
   total: SEARCH_TOTAL_NOT_COUNTED,
   nextCursor: null,
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+  pageReach: SEARCH_PAGE_REACH.REACHED,
   queryUsed: "nájemné výpověď",
   warnings: [],
 };

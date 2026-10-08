@@ -1,8 +1,10 @@
 import { panic } from "better-result";
 
 import {
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  type SearchPageReach,
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
@@ -214,7 +216,17 @@ type ObservedCorpusIndexSearchPageInput<TContext> =
     hitDispositions: CorpusHitDispositionCounter;
   };
 
-type CorpusIndexSearchPageResult<TContext> = {
+type CorpusIndexSearchPageResult<TContext> = ScanPage<TContext> & {
+  /**
+   * Whether the scan placed the page: `scan_budget` when a page addressed by
+   * offset stopped on its round cap before ranking every result in front of
+   * it. Such a page carries no cursor and ends nothing.
+   */
+  reach: SearchPageReach;
+};
+
+/** What one reader's scan produced, before the page's reach is judged. */
+type ScanPage<TContext> = {
   pageRanked: RankedHit[];
   context: TContext;
   snippetById: Map<string, string>;
@@ -854,7 +866,7 @@ const readPositionSearchPage = async <TContext>({
   rankCandidates,
   unseenScoreUpperBound,
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
-  CorpusIndexSearchPageResult<TContext>
+  ScanPage<TContext>
 > => {
   const ahead = rankedAhead(skip, parsedCursor);
   const reach = skip + limit;
@@ -1118,7 +1130,7 @@ const bm25TopScore = (hits: readonly ScoredPassage[]): number | null => {
 /** A bounded candidate universe, replayed whole before grouping and paging. */
 const readBm25SearchPage = async <TContext>(
   options: ObservedCorpusIndexSearchPageInput<TContext>,
-): Promise<CorpusIndexSearchPageResult<TContext>> => {
+): Promise<ScanPage<TContext>> => {
   const {
     hitDispositions,
     observer,
@@ -1288,9 +1300,9 @@ const readBm25SearchPage = async <TContext>(
   };
 };
 
-const readObservedCorpusIndexSearchPage = async <TContext>(
+const readScanPage = async <TContext>(
   options: ObservedCorpusIndexSearchPageInput<TContext>,
-): Promise<CorpusIndexSearchPageResult<TContext>> => {
+): Promise<ScanPage<TContext>> => {
   const cursorMode = options.parsedCursor?.rankingMode;
   if (
     cursorMode === "bm25-ratio" &&
@@ -1325,6 +1337,32 @@ const readObservedCorpusIndexSearchPage = async <TContext>(
       return panic("Unknown corpus ranking mode");
   }
 };
+
+/**
+ * Judges whether the scan placed a page addressed by offset. Its round cap
+ * assumes a decision costs at most `PASSAGE_OVER_FETCH` passages, and nothing
+ * enforces that: a scan whose decisions matched more passages stops on the
+ * cap before ranking every result in front of the page. Such a page is
+ * short or empty without the results having ended, so it is reported as
+ * stopped on its budget and offers no cursor, rather than reading as the end
+ * of the list. (Within the depth bound the round cap is always met before
+ * the passage budget, so the cap is the one stop to judge.)
+ */
+const withPageReach = <TContext>(
+  page: ScanPage<TContext>,
+  {
+    limit,
+    skip = 0,
+  }: Pick<CorpusIndexSearchPageInput<TContext>, "limit" | "skip">,
+): CorpusIndexSearchPageResult<TContext> =>
+  skip > 0 && page.pageRanked.length < limit && page.scan.roundCapHit
+    ? { ...page, nextCursor: null, reach: SEARCH_PAGE_REACH.SCAN_BUDGET }
+    : { ...page, reach: SEARCH_PAGE_REACH.REACHED };
+
+const readObservedCorpusIndexSearchPage = async <TContext>(
+  options: ObservedCorpusIndexSearchPageInput<TContext>,
+): Promise<CorpusIndexSearchPageResult<TContext>> =>
+  withPageReach(await readScanPage(options), options);
 
 export const readCorpusIndexSearchPage = async <TContext>(
   options: CorpusIndexSearchPageInput<TContext>,

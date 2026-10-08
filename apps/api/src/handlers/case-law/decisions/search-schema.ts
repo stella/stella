@@ -10,6 +10,7 @@ import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types"
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
+  SEARCH_PAGE_REACH,
 } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -294,6 +295,15 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
       CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     ),
     paginationOutcome: searchPaginationOutcomeSchema,
+    /**
+     * Whether a page addressed by offset was placed. `scan_budget` means the
+     * scan stopped before ranking every result in front of the page: its
+     * rows, however few, do not mark the end of the results.
+     */
+    pageReach: t.Union([
+      t.Literal(SEARCH_PAGE_REACH.REACHED),
+      t.Literal(SEARCH_PAGE_REACH.SCAN_BUDGET),
+    ]),
     /**
      * The query the engine actually answered: the words it required, with a
      * phrase still quoted. Equal in meaning to the request's `query` when

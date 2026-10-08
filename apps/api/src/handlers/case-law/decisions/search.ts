@@ -15,6 +15,7 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import {
   FACET_COUNT_TYPE,
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   DEFAULT_SEARCH_EXCERPT,
@@ -45,6 +46,7 @@ import {
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
   searchIdentityRole,
+  identityAnswerPage,
   withPinnedDecisions,
 } from "@/api/handlers/case-law/decisions/search-identity-role";
 import {
@@ -992,6 +994,7 @@ const searchPostgresDecisions = async (
     total,
     nextCursor,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    pageReach: SEARCH_PAGE_REACH.REACHED,
     ...searchAnswer({
       body,
       interpretation,
@@ -1899,6 +1902,7 @@ const decisionHitsPage = ({
     total,
     nextCursor,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    pageReach: SEARCH_PAGE_REACH.REACHED,
   };
 };
 
@@ -2275,10 +2279,15 @@ export const searchCorpusIndexDecisions = async ({
       });
       // A docket can name decisions at several courts; the page still honours
       // the requested size and offset, and identity never pages past it.
-      const identityPage = identityRanking.ranked.slice(offset, offset + limit);
+      const identityAnswer = identityAnswerPage({
+        limit,
+        offset,
+        ranked: identityRanking.ranked,
+      });
       if (identityRole === "pin") {
-        pinned = identityPage;
-      } else if (identityPage.length > 0) {
+        pinned = identityRanking.ranked.slice(0, limit);
+      } else if (identityAnswer.type === "answer") {
+        const identityPage = identityAnswer.page;
         const byId = await readPageRows(identityPage);
         // Timed around the call rather than through the timer's thunk: the
         // alternates read must stay a direct call in this function, which a
@@ -2352,6 +2361,7 @@ export const searchCorpusIndexDecisions = async ({
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
       nextCursor: null,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      pageReach: SEARCH_PAGE_REACH.REACHED,
       ...searchAnswer({
         body,
         interpretation,
@@ -2518,6 +2528,7 @@ export const searchCorpusIndexDecisions = async ({
   return projectCaseLawSearchResponse({
     ...page,
     paginationOutcome: searchPage.paginationOutcome,
+    pageReach: searchPage.reach,
     ...searchAnswer({
       body,
       interpretation,

@@ -2,13 +2,16 @@ import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
 import {
+  SEARCH_PAGE_REACH,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
 } from "@stll/api-contract/search";
 
 import {
+  PUBLIC_LAW_PAGE_REST,
   PUBLIC_LAW_PAGE_SIZES,
+  publicLawNumberedPagerModel,
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-pagination.logic";
 
@@ -19,6 +22,7 @@ import {
   caseLawPageBeforeEnd,
   caseLawPageNumber,
   caseLawPageRest,
+  caseLawPageRows,
 } from "./case-law-pages.logic";
 
 const PAGE_SIZE: PublicLawPageSize = 50;
@@ -134,21 +138,92 @@ describe("an empty numbered jump", () => {
   });
 });
 
+const PLACED = SEARCH_PAGE_REACH.REACHED;
+const STOPPED_SHORT = SEARCH_PAGE_REACH.SCAN_BUDGET;
+
 describe("what follows the page on screen", () => {
   test("is read only from the page's own answer", () => {
-    expect(caseLawPageRest({ page: { hasMore: false }, rows: "rows" })).toBe(
-      "end",
-    );
-    expect(caseLawPageRest({ page: { hasMore: true }, rows: "rows" })).toBe(
-      "more",
-    );
+    expect(
+      caseLawPageRest({
+        page: { hasMore: false, reach: PLACED },
+        rows: "rows",
+      }),
+    ).toBe(PUBLIC_LAW_PAGE_REST.end);
+    expect(
+      caseLawPageRest({ page: { hasMore: true, reach: PLACED }, rows: "rows" }),
+    ).toBe(PUBLIC_LAW_PAGE_REST.more);
     // Rows kept from the previous page while this one loads say nothing.
-    expect(caseLawPageRest({ page: { hasMore: false }, rows: "stale" })).toBe(
-      "unknown",
-    );
+    expect(
+      caseLawPageRest({
+        page: { hasMore: false, reach: PLACED },
+        rows: "stale",
+      }),
+    ).toBe(PUBLIC_LAW_PAGE_REST.unknown);
     expect(caseLawPageRest({ page: undefined, rows: "skeleton" })).toBe(
-      "unknown",
+      PUBLIC_LAW_PAGE_REST.unknown,
     );
+  });
+
+  test("a page the search stopped short of placing ends nothing", () => {
+    expect(
+      caseLawPageRest({
+        page: { hasMore: false, reach: STOPPED_SHORT },
+        rows: "rows",
+      }),
+    ).toBe(PUBLIC_LAW_PAGE_REST.unknown);
+  });
+
+  test("a page the search stopped short of placing is not drawn as the last page", () => {
+    // The deepest page at 25 a page, short because its scan stopped early,
+    // while the estimate promises far more.
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 20,
+      page: 20,
+      pageSize: 25,
+      rest: caseLawPageRest({
+        page: { hasMore: false, reach: STOPPED_SHORT },
+        rows: "rows",
+      }),
+      total: { type: SEARCH_TOTAL_TYPE.ESTIMATE, count: 58_150 },
+    });
+
+    expect(model.pageCount).toEqual({
+      type: "counted",
+      precision: SEARCH_TOTAL_TYPE.ESTIMATE,
+      pages: 2326,
+    });
+    expect(model.beyondReach).toBe(true);
+  });
+});
+
+describe("a page as evidence of where the results end", () => {
+  test("its rows count, unless the search could not place it", () => {
+    expect(
+      caseLawPageRows({ decisions: [], hasMore: false, reach: PLACED }),
+    ).toBe(0);
+    expect(
+      caseLawPageRows({ decisions: [], hasMore: false, reach: STOPPED_SHORT }),
+    ).toBeNull();
+  });
+
+  test("a jump to a page the search stopped short of placing is not walked back", async () => {
+    const reads: number[] = [];
+    const landed = await caseLawLandingPage({
+      pageSize: PAGE_SIZE,
+      rowsOn: async (page) => {
+        reads.push(page);
+        return caseLawPageRows({
+          decisions: [],
+          hasMore: false,
+          reach: STOPPED_SHORT,
+        });
+      },
+      total: estimated(58_150),
+      wanted: 10,
+    });
+
+    expect(landed).toBe(10);
+    expect(reads).toEqual([10]);
   });
 });
 

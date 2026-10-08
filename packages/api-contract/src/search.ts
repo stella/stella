@@ -135,6 +135,20 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
 export type GlobalSearchResultType =
   (typeof GLOBAL_SEARCH_RESULT_TYPES)[number];
 
+/**
+ * Whether a page addressed by offset ranked every result in front of it. A
+ * scan that stopped on its budget first could not place the page: its rows,
+ * however few, say nothing about where the results end, so a client must not
+ * read a short or empty page as the end of the list.
+ */
+export const SEARCH_PAGE_REACH = {
+  REACHED: "reached",
+  SCAN_BUDGET: "scan_budget",
+} as const;
+
+export type SearchPageReach =
+  (typeof SEARCH_PAGE_REACH)[keyof typeof SEARCH_PAGE_REACH];
+
 /** A page can stop before exhaustion when its continuation exceeds a bound. */
 export const SEARCH_PAGINATION_COMPLETE = { type: "complete" } as const;
 export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {

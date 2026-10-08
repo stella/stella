@@ -1,6 +1,7 @@
 import { panic, Panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { SEARCH_PAGE_REACH } from "@stll/api-contract/search";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -1767,6 +1768,41 @@ describe("a page addressed by offset", () => {
         documentId(skip + limit + index),
       ),
     );
+  });
+
+  test("a deep offset page whose decisions matched more passages than the cap assumes reports that its scan stopped short", async () => {
+    // Eight passages a decision, twice what the offset round cap budgets for.
+    const passagesPerDocument = 8;
+    const documents = LIMITS.caseLawResultDepthMax + 100;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+
+    const page = await readOffsetPage({ limit, skip });
+
+    // The fixture reaches the fault: the cap ends the scan before the page.
+    expect(page.scan.roundCapHit).toBe(true);
+    expect(page.pageRanked.length).toBeLessThan(limit);
+    // A short page here is not the end of the results.
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.SCAN_BUDGET);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  test("an offset page the scan placed reports that it did", async () => {
+    engineHits = Array.from({ length: 2000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const page = await readOffsetPage({ limit: 20, skip: 100 });
+
+    expect(page.pageRanked).toHaveLength(20);
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
   });
 
   test("a continuation of an offset page replays as deep as its cursor says", () => {

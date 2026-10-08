@@ -6,7 +6,12 @@
  */
 
 import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
-import { SEARCH_TOTAL_TYPE, type SearchTotal } from "@stll/api-contract/search";
+import {
+  SEARCH_PAGE_REACH,
+  SEARCH_TOTAL_TYPE,
+  type SearchPageReach,
+  type SearchTotal,
+} from "@stll/api-contract/search";
 
 import {
   PUBLIC_LAW_PAGE_REST,
@@ -136,21 +141,42 @@ export const caseLawLandingPage = async ({
   return holding;
 };
 
+/** What a page's own answer says about the results around it. */
+type CaseLawPageAnswer = {
+  hasMore: boolean;
+  /** Whether the search placed the page at all (`SEARCH_PAGE_REACH`). */
+  reach: SearchPageReach;
+};
+
+/**
+ * How many rows a page holds, as evidence of where the results end: null for
+ * a page the search could not place, whose rows (however few) prove nothing.
+ */
+export const caseLawPageRows = (
+  page: CaseLawPageAnswer & { decisions: readonly unknown[] },
+): number | null =>
+  page.reach === SEARCH_PAGE_REACH.SCAN_BUDGET ? null : page.decisions.length;
+
 type CaseLawPageRestInput = {
   /** The page query's data; it may still be another page's while one loads. */
-  page: { hasMore: boolean } | undefined;
+  page: CaseLawPageAnswer | undefined;
   rows: PublicLawRowsPhase;
 };
 
 /**
  * What follows the page on screen, read only from that page's own answer:
- * rows kept from another page while this one loads say nothing about it.
+ * rows kept from another page while this one loads say nothing about it, and
+ * neither does a page the search could not place.
  */
 export const caseLawPageRest = ({
   page,
   rows,
 }: CaseLawPageRestInput): PublicLawPageRest => {
-  if (rows !== "rows" || page === undefined) {
+  if (
+    rows !== "rows" ||
+    page === undefined ||
+    page.reach === SEARCH_PAGE_REACH.SCAN_BUDGET
+  ) {
     return PUBLIC_LAW_PAGE_REST.unknown;
   }
   return page.hasMore ? PUBLIC_LAW_PAGE_REST.more : PUBLIC_LAW_PAGE_REST.end;

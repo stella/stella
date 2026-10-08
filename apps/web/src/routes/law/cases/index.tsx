@@ -95,6 +95,7 @@ import {
   caseLawLandingPage,
   caseLawPageNumber,
   caseLawPageRest,
+  caseLawPageRows,
 } from "@/features/case-law/case-law-pages.logic";
 import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
 import { useDecisionColumnGroups } from "@/features/case-law/components/decision-column-groups";
@@ -453,8 +454,11 @@ export const Route = createFileRoute("/law/cases/")({
       if (firstPage !== null) {
         reached = await caseLawLandingPage({
           pageSize,
-          rowsOn: async (page) =>
-            (await readPage(page))?.decisions.length ?? null,
+          // A page the search could not place proves nothing, like an outage.
+          rowsOn: async (page) => {
+            const read = await readPage(page);
+            return read === null ? null : caseLawPageRows(read);
+          },
           total: firstPage.total,
           wanted,
         });
