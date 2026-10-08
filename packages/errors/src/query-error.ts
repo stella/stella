@@ -11,6 +11,18 @@ const QUERY_TEXT_LABEL_CHARACTER = /[a-zA-Z0-9_. -]/u;
 const SQL_REDACTED_SHAPE = "[query redacted]";
 const MAX_ERROR_DEPTH = 32;
 const MAX_ERROR_NODES = 1000;
+const ERROR_OUTPUT_NAMES = [
+  "Error",
+  "AggregateError",
+  "EvalError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "TypeError",
+  "URIError",
+  "DrizzleQueryError",
+  "PostgresError",
+] as const;
 const IDENTIFIER = /^[a-zA-Z_][\w.$-]{0,127}$/u;
 const SQL_KEYWORDS = new Set(
   "select insert into update delete from where values set returning on conflict do nothing default and or not null join left right inner outer as limit offset order by group having asc desc create alter table index constraint unique primary key references drop if exists begin commit rollback with union all count distinct in is case when then else end true false".split(
@@ -178,9 +190,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
             )
           : new Error(message);
       output.name =
-        typeof input["name"] === "string" && IDENTIFIER.test(input["name"])
-          ? input["name"]
-          : "Error";
+        ERROR_OUTPUT_NAMES.find((name) => name === input["name"]) ?? "Error";
       if (cause !== undefined) {
         output.cause = cause;
       }

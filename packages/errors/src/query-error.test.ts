@@ -75,6 +75,25 @@ test("query output redacts nested aggregate and cyclic causes without invoking c
   }
 });
 
+test("query wrappers use a generic output name for parameter values", () => {
+  const query = failure("insert into account values ($1)");
+  const wrapper = new Error("Operation failed", { cause: query });
+  wrapper.name = SECRET;
+  const safe = sanitizeErrorForOutput(wrapper);
+  expect(safe).toBeInstanceOf(Error);
+  if (!(safe instanceof Error)) {
+    throw new TypeError("Expected an error output projection");
+  }
+  expect(safe.name).toBe("Error");
+  const output = inspect(safe, { depth: 20 });
+  expect(output).not.toContain(SECRET);
+  expect(JSON.stringify(safe)).not.toContain(SECRET);
+  expect(output).toContain("23505");
+  expect(output).toContain("account_token_unique");
+  expect(wrapper.name).toBe(SECRET);
+  expect(query.params).toEqual([SECRET]);
+});
+
 test("aggregate query output retains structured member diagnostics", () => {
   const query = `insert into account values ('${SECRET}')`;
   const first = failure(query);
