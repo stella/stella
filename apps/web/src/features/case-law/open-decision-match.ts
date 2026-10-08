@@ -11,7 +11,7 @@ import {
   resolveDecisionIdentity,
   searchTextOfDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
-import type { SearchExcerpt } from "@stll/api-contract/search";
+import { SEARCH_PAGE_END, type SearchExcerpt } from "@stll/api-contract/search";
 
 import {
   decisionDateRange,
@@ -184,9 +184,10 @@ export const openDecisionMatch = async ({
     }),
   );
   // Only a result set the page has seen whole can prove the match is the only
-  // one: with more pages unseen, another court's decision under the same
-  // docket may still be coming, so the list stays and the reader picks.
-  if (firstPage.hasMore) {
+  // one: with more pages unseen, or a scan that stopped on a budget, another
+  // court's decision under the same docket may still be coming, so the list
+  // stays and the reader picks.
+  if (firstPage.end !== SEARCH_PAGE_END.COMPLETE) {
     return false;
   }
 

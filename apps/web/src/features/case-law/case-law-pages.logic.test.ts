@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
 import {
-  SEARCH_PAGE_REACH,
+  SEARCH_PAGE_END,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
@@ -69,8 +69,10 @@ const searchOver = ({
         const rows = dropped?.page === page ? ranked - dropped.rows : ranked;
         return caseLawPageEvidence({
           decisions: Array.from({ length: Math.max(0, rows) }, () => null),
-          hasMore: realResults > page * PAGE_SIZE,
-          reach: SEARCH_PAGE_REACH.REACHED,
+          end:
+            realResults > page * PAGE_SIZE
+              ? SEARCH_PAGE_END.MORE
+              : SEARCH_PAGE_END.COMPLETE,
         });
       },
       pageSize: PAGE_SIZE,
@@ -191,24 +193,25 @@ describe("an empty numbered jump", () => {
   });
 });
 
-const PLACED = SEARCH_PAGE_REACH.REACHED;
-const STOPPED_SHORT = SEARCH_PAGE_REACH.SCAN_BUDGET;
+const MORE = SEARCH_PAGE_END.MORE;
+const COMPLETE = SEARCH_PAGE_END.COMPLETE;
+const STOPPED = SEARCH_PAGE_END.STOPPED;
 
 describe("what follows the page on screen", () => {
   test("is read only from the page's own answer", () => {
     expect(
       caseLawPageRest({
-        page: { hasMore: false, reach: PLACED },
+        page: { end: COMPLETE },
         rows: "rows",
       }),
     ).toBe(PUBLIC_LAW_PAGE_REST.end);
-    expect(
-      caseLawPageRest({ page: { hasMore: true, reach: PLACED }, rows: "rows" }),
-    ).toBe(PUBLIC_LAW_PAGE_REST.more);
+    expect(caseLawPageRest({ page: { end: MORE }, rows: "rows" })).toBe(
+      PUBLIC_LAW_PAGE_REST.more,
+    );
     // Rows kept from the previous page while this one loads say nothing.
     expect(
       caseLawPageRest({
-        page: { hasMore: false, reach: PLACED },
+        page: { end: COMPLETE },
         rows: "stale",
       }),
     ).toBe(PUBLIC_LAW_PAGE_REST.unknown);
@@ -220,7 +223,7 @@ describe("what follows the page on screen", () => {
   test("a page the search stopped short of placing ends nothing", () => {
     expect(
       caseLawPageRest({
-        page: { hasMore: false, reach: STOPPED_SHORT },
+        page: { end: STOPPED },
         rows: "rows",
       }),
     ).toBe(PUBLIC_LAW_PAGE_REST.unknown);
@@ -234,7 +237,7 @@ describe("what follows the page on screen", () => {
       page: 20,
       pageSize: 25,
       rest: caseLawPageRest({
-        page: { hasMore: false, reach: STOPPED_SHORT },
+        page: { end: STOPPED },
         rows: "rows",
       }),
       total: { type: SEARCH_TOTAL_TYPE.ESTIMATE, count: 58_150 },
@@ -252,25 +255,24 @@ describe("what follows the page on screen", () => {
 describe("a page as evidence of where the results end", () => {
   test("only the page's own end signal decides, never its row count", () => {
     // Short, yet the search reports more: not the last page.
-    expect(
-      caseLawPageEvidence({ decisions: [null], hasMore: true, reach: PLACED }),
-    ).toEqual({ type: "continues" });
+    expect(caseLawPageEvidence({ decisions: [null], end: MORE })).toEqual({
+      type: "continues",
+    });
     // Empty, yet the search reports more (every row was a pinned decision):
     // no bound on the results at all.
-    expect(
-      caseLawPageEvidence({ decisions: [], hasMore: true, reach: PLACED }),
-    ).toEqual({ type: "continues" });
-    expect(
-      caseLawPageEvidence({ decisions: [null], hasMore: false, reach: PLACED }),
-    ).toEqual({ type: "last" });
-    expect(
-      caseLawPageEvidence({ decisions: [], hasMore: false, reach: PLACED }),
-    ).toEqual({ type: "past_end" });
+    expect(caseLawPageEvidence({ decisions: [], end: MORE })).toEqual({
+      type: "continues",
+    });
+    expect(caseLawPageEvidence({ decisions: [null], end: COMPLETE })).toEqual({
+      type: "last",
+    });
+    expect(caseLawPageEvidence({ decisions: [], end: COMPLETE })).toEqual({
+      type: "past_end",
+    });
     expect(
       caseLawPageEvidence({
         decisions: [],
-        hasMore: false,
-        reach: STOPPED_SHORT,
+        end: STOPPED,
       }),
     ).toEqual({ type: "unknown" });
   });
@@ -283,8 +285,7 @@ describe("a page as evidence of where the results end", () => {
         reads.push(page);
         return caseLawPageEvidence({
           decisions: [],
-          hasMore: false,
-          reach: STOPPED_SHORT,
+          end: STOPPED,
         });
       },
       total: estimated(58_150),

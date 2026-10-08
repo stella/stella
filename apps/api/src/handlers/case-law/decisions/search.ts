@@ -15,8 +15,9 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import {
   FACET_COUNT_TYPE,
+  SEARCH_PAGE_END,
   SEARCH_PAGE_REACH,
-  type SearchPageReach,
+  searchPageEnd,
   SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   DEFAULT_SEARCH_EXCERPT,
@@ -2101,20 +2102,6 @@ const corpusIndexRequestConfiguration = ({
       )),
 });
 
-/**
- * Whether a corpus page holds the rest of its result set: no cursor after
- * it, and a scan that read to the end of its hits. No cursor after a budget
- * stop says nothing about what was left.
- */
-const readsWholeResultSet = (page: {
-  nextCursor: unknown;
-  reach: SearchPageReach;
-  paginationOutcome: { type: string };
-}): boolean =>
-  page.nextCursor === null &&
-  page.reach === SEARCH_PAGE_REACH.REACHED &&
-  page.paginationOutcome.type === "complete";
-
 const cursorMatchesCorpusReadTarget = (
   cursor: CorpusSearchCursor | null,
   target: string | null,
@@ -2550,7 +2537,8 @@ export const searchCorpusIndexDecisions = async ({
       body,
       interpretation,
       hitCount: page.hits.length,
-      countsResultSet: isFirstPage && readsWholeResultSet(searchPage),
+      countsResultSet:
+        isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
     }),
   });
 };

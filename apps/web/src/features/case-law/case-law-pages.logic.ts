@@ -9,9 +9,9 @@ import { panic } from "better-result";
 
 import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
 import {
-  SEARCH_PAGE_REACH,
+  SEARCH_PAGE_END,
   SEARCH_TOTAL_TYPE,
-  type SearchPageReach,
+  type SearchPageEnd,
   type SearchTotal,
 } from "@stll/api-contract/search";
 
@@ -161,30 +161,36 @@ export const caseLawLandingPage = async ({
   return before;
 };
 
-/** What a page's own answer says about the results around it. */
+/** What a page's own answer says about the results after it. */
 type CaseLawPageAnswer = {
-  hasMore: boolean;
-  /** Whether the search placed the page at all (`SEARCH_PAGE_REACH`). */
-  reach: SearchPageReach;
+  /** From everything the search answered (`searchPageEnd`). */
+  end: SearchPageEnd;
 };
 
 /**
  * What a page's answer proves about where the results end: nothing for a
- * page the search could not place, whose rows (however few) prove nothing;
- * otherwise the search's own word on whether more follow, with the page's
- * rows deciding only whether a page with nothing after it is the last page
- * or past the end.
+ * page whose scan stopped on a budget, whose rows (however few) prove
+ * nothing; otherwise the search's own word on whether more follow, with the
+ * page's rows deciding only whether a page with nothing after it is the last
+ * page or past the end.
  */
-export const caseLawPageEvidence = (
-  page: CaseLawPageAnswer & { decisions: readonly unknown[] },
-): CaseLawPageEvidence => {
-  if (page.reach === SEARCH_PAGE_REACH.SCAN_BUDGET) {
-    return { type: "unknown" };
+export const caseLawPageEvidence = ({
+  decisions,
+  end,
+}: CaseLawPageAnswer & {
+  decisions: readonly unknown[];
+}): CaseLawPageEvidence => {
+  switch (end) {
+    case SEARCH_PAGE_END.MORE:
+      return { type: "continues" };
+    case SEARCH_PAGE_END.STOPPED:
+      return { type: "unknown" };
+    case SEARCH_PAGE_END.COMPLETE:
+      return decisions.length === 0 ? { type: "past_end" } : { type: "last" };
+    default:
+      end satisfies never;
+      return panic("Unhandled page end");
   }
-  if (page.hasMore) {
-    return { type: "continues" };
-  }
-  return page.decisions.length === 0 ? { type: "past_end" } : { type: "last" };
 };
 
 type CaseLawPageRestInput = {
@@ -196,18 +202,24 @@ type CaseLawPageRestInput = {
 /**
  * What follows the page on screen, read only from that page's own answer:
  * rows kept from another page while this one loads say nothing about it, and
- * neither does a page the search could not place.
+ * neither does a page whose scan stopped on a budget.
  */
 export const caseLawPageRest = ({
   page,
   rows,
 }: CaseLawPageRestInput): PublicLawPageRest => {
-  if (
-    rows !== "rows" ||
-    page === undefined ||
-    page.reach === SEARCH_PAGE_REACH.SCAN_BUDGET
-  ) {
+  if (rows !== "rows" || page === undefined) {
     return PUBLIC_LAW_PAGE_REST.unknown;
   }
-  return page.hasMore ? PUBLIC_LAW_PAGE_REST.more : PUBLIC_LAW_PAGE_REST.end;
+  switch (page.end) {
+    case SEARCH_PAGE_END.MORE:
+      return PUBLIC_LAW_PAGE_REST.more;
+    case SEARCH_PAGE_END.COMPLETE:
+      return PUBLIC_LAW_PAGE_REST.end;
+    case SEARCH_PAGE_END.STOPPED:
+      return PUBLIC_LAW_PAGE_REST.unknown;
+    default:
+      page.end satisfies never;
+      return panic("Unhandled page end");
+  }
 };

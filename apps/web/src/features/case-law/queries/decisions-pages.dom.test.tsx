@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { SEARCH_PAGE_END } from "@stll/api-contract/search";
+
 import type { DecisionListFilters } from "./decisions";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
@@ -124,7 +126,7 @@ const ResultsPage = ({ page }: { page: number }) => {
   );
   usePrefetchedDecisionPage({
     filters: FILTERS,
-    page: data?.hasMore ? page + 1 : null,
+    page: data?.end === SEARCH_PAGE_END.MORE ? page + 1 : null,
     pageSize: PAGE_SIZE,
   });
   return (

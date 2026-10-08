@@ -159,3 +159,42 @@ export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
 export type SearchPaginationOutcome =
   | typeof SEARCH_PAGINATION_COMPLETE
   | typeof SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET;
+
+/**
+ * What follows a page of search results, read from everything the search
+ * answered about it. The one place a client decides whether it has seen the
+ * whole result set: `complete` only when no cursor follows, the search
+ * reached the page, and its outcome is complete. A missing cursor alone
+ * proves nothing, since a budget stop ends a scan without one.
+ */
+export const SEARCH_PAGE_END = {
+  /** A cursor follows: results remain. */
+  MORE: "more",
+  /** No cursor, the page was reached and nothing was truncated: the set ends here. */
+  COMPLETE: "complete",
+  /** No cursor, but a budget or truncation stopped the scan: results may remain. */
+  STOPPED: "stopped",
+} as const;
+
+export type SearchPageEnd =
+  (typeof SEARCH_PAGE_END)[keyof typeof SEARCH_PAGE_END];
+
+type SearchPageAnswer = {
+  nextCursor: unknown;
+  reach: SearchPageReach;
+  paginationOutcome: { readonly type: string };
+};
+
+export const searchPageEnd = ({
+  nextCursor,
+  paginationOutcome,
+  reach,
+}: SearchPageAnswer): SearchPageEnd => {
+  if (nextCursor !== null) {
+    return SEARCH_PAGE_END.MORE;
+  }
+  return reach === SEARCH_PAGE_REACH.REACHED &&
+    paginationOutcome.type === SEARCH_PAGINATION_COMPLETE.type
+    ? SEARCH_PAGE_END.COMPLETE
+    : SEARCH_PAGE_END.STOPPED;
+};

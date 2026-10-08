@@ -24,6 +24,7 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
@@ -32,7 +33,10 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
-import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+import type {
+  SearchPageReach,
+  SearchPaginationOutcome,
+} from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_SOURCE,
   CZ_VAT_RELIABILITY_SOURCE,
@@ -4873,15 +4877,18 @@ describe("OpenAI-compatible MCP tools", () => {
       hits,
       limit,
       nextCursor = null,
+      pageReach = SEARCH_PAGE_REACH.REACHED,
     }: {
       guidance: CaseLawSearchGuidanceMode;
       queryUsed: string;
       hits: number;
       limit: number;
       nextCursor?: string | null;
+      pageReach?: SearchPageReach;
     }) => {
       searchDecisionsHandlerMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        pageReach,
         facets: null,
         hits: Array.from({ length: hits }, (_, index) =>
           createCaseLawHit(`decision-${String(index)}`, "Holding"),
@@ -4932,6 +4939,20 @@ describe("OpenAI-compatible MCP tools", () => {
       );
       // Read from the page already returned: one engine call per phrasing.
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("a short page whose scan stopped on a budget is not called exhausted", async () => {
+      // No cursor after it, but the scan stopped before the end of the
+      // results, so nothing proves the phrasing found only these.
+      const warnings = await searchFor({
+        guidance: "v1",
+        queryUsed: SIX_TERMS,
+        hits: 2,
+        limit: 3,
+        pageReach: SEARCH_PAGE_REACH.SCAN_BUDGET,
+      });
+
+      expect(warnings).toEqual([]);
     });
 
     test("a quoted six-word phrase counts each of its words", async () => {

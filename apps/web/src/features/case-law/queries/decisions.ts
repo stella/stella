@@ -5,7 +5,9 @@ import { Result } from "better-result";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
   SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
+  searchPageEnd,
   type SearchExcerpt,
   type SearchSort,
 } from "@stll/api-contract/search";
@@ -305,10 +307,13 @@ export const decisionsPageOptions = ({
             createdAt: h.createdAt,
           })),
           facets: data.facets,
-          hasMore: data.nextCursor !== null,
-          // Whether the search placed this page; a page its scan could not
-          // place says nothing about where the results end.
-          reach: data.pageReach,
+          // What follows the page, from everything the search answered: a
+          // missing cursor alone never proves the results ended.
+          end: searchPageEnd({
+            nextCursor: data.nextCursor,
+            paginationOutcome: data.paginationOutcome,
+            reach: data.pageReach,
+          }),
           total: data.total,
           // What the search answered, beside what it found: the query it
           // required and what it did not require of the one it was given.
@@ -348,8 +353,12 @@ export const decisionsPageOptions = ({
       return {
         decisions: data.items,
         facets: null,
-        hasMore: data.nextCursor !== null,
-        reach: SEARCH_PAGE_REACH.REACHED,
+        // The listing reads a keyset in one statement: no budget can stop it.
+        end: searchPageEnd({
+          nextCursor: data.nextCursor,
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          reach: SEARCH_PAGE_REACH.REACHED,
+        }),
         total: SEARCH_TOTAL_NOT_COUNTED,
         // A listing answers no query, so there is nothing it could have
         // required less of and nothing to report about it.
