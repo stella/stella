@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
@@ -1955,11 +1956,8 @@ export const upsertWorkspaceSearchDocuments = async (
   // order) and two overlapping cascades wait on each other instead of
   // deadlocking.
   const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
-  for (let start = 0; start < pending.length; start += REINDEX_BATCH_SIZE) {
-    await writeWorkspaceProjections(
-      pending.slice(start, start + REINDEX_BATCH_SIZE),
-      database,
-    );
+  for (const itemBatch of chunkItems(pending, REINDEX_BATCH_SIZE)) {
+    await writeWorkspaceProjections(itemBatch, database);
   }
 };
 

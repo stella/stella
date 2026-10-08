@@ -6,6 +6,7 @@ import type {
 } from "quickjs-emscripten-core";
 import { Scope } from "quickjs-emscripten-core";
 
+import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
@@ -296,9 +297,7 @@ export const awaitSandboxAdmissionIdle = async ({
       continue;
     }
 
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await ownerSleep(0);
   }
 };
 

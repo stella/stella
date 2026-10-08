@@ -1,9 +1,10 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { rootDb } from "@/api/db/root";
 import { fields } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
@@ -33,7 +34,7 @@ export const selectWorkspacesWithPendingCells = async (
   const workspaceIdBatches =
     workspaceIds === undefined
       ? [null]
-      : chunked(workspaceIds, LIMITS.workflowEntityBatchSize);
+      : chunkItems(workspaceIds, LIMITS.workflowEntityBatchSize);
 
   for (const workspaceIdBatch of workspaceIdBatches) {
     const workspaceFilter =

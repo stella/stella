@@ -1,6 +1,8 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { array, looseObject, parse, string } from "valibot";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { getStorageKey } from "../../src/consts";
 import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
 import { apiGet, apiPut } from "../helpers/api";
@@ -259,9 +261,7 @@ test("Guide checklist stays stable until matter availability resolves", async ({
     await page.route(
       /\/v1\/(?:workspaces|entities|properties)\//u,
       async (route) => {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 750);
-        });
+        await sleep(750);
         await route.fallback();
       },
     );

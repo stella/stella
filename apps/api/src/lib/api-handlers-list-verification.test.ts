@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 

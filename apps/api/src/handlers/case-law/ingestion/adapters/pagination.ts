@@ -1,3 +1,5 @@
+// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
+import { panic, Result } from "better-result";
 // parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
  * Shared pagination helpers for case-law adapters.
@@ -7,9 +9,9 @@
  * pagination (CZ-constitutional enumeration, EU-ECJ
  * multi-language) should implement fetchPage directly.
  */
-
-import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -641,11 +643,12 @@ const parsePageItems = async ({
   // Complete chunks sequentially so an abort can rewind to the last durable
   // chunk boundary. Replaying that chunk is safe because inserts are
   // idempotent; advancing past an in-flight chunk would lose decisions.
-  for (let i = 0; i < items.length; i += chunkSize) {
+  for (const [batchIndex, chunk] of chunkItems(items, chunkSize).entries()) {
+    const i = batchIndex * chunkSize;
     if (signal?.aborted) {
       break;
     }
-    const chunk = items.slice(i, i + chunkSize);
+
     const results = await Promise.allSettled(
       chunk.map(async (item) => await parseItem(item, signal)),
     );

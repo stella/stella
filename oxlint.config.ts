@@ -7,6 +7,7 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
@@ -342,6 +343,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-user-id-schema.fixture.ts", [
     "no-raw-user-id-schema/no-raw-user-id-schema",
+  ]),
+  fixtureRuleOverride("confine-aggregate-lock.fixture.ts", [
+    "confine-aggregate-lock/confine-aggregate-lock",
   ]),
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
@@ -910,6 +914,7 @@ const config = defineConfig({
     },
   },
   rules: {
+    "confine-aggregate-lock/confine-aggregate-lock": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
       { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
@@ -1402,6 +1407,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
+    "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1606,6 +1612,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
@@ -1620,6 +1627,20 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/**/*.{ts,tsx,js,mjs}",
+        "packages/**/*.{ts,tsx,js,mjs}",
+        "scripts/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/no-hand-rolled-concurrency.fixture.ts",
+      ],
+      rules: {
+        "no-hand-rolled-concurrency/no-hand-rolled-concurrency": [
+          "error",
+          { exceptions: concurrencyExceptions },
+        ],
+      },
+    },
     {
       files: ["apps/api/src/**/*.ts"],
       rules: {

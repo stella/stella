@@ -26,6 +26,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   getInternalPropertyId,
   toTableEntities,
@@ -75,6 +76,7 @@ import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/wo
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
 import { visibleEntityFieldIds } from "@/lib/workspaces/queries/entities";
 import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -257,16 +259,19 @@ export const GroupedTableLayout = ({
     }),
     enabled: groupByPropertyId !== null && !isUnsupportedGrouping,
   });
+  const groupCountsView = useQueryView(groupCounts, { isEmpty: () => false });
+  const countsData =
+    groupCountsView.type === "items" ? groupCountsView.items : undefined;
   const countByValue = useMemo(() => {
     const map = new Map<string | null, number>();
-    if (groupCounts.data) {
-      for (const entry of groupCounts.data) {
+    if (countsData) {
+      for (const entry of countsData) {
         map.set(entry.value, entry.count);
       }
     }
     return map;
-  }, [groupCounts.data]);
-  const countsLoaded = groupCounts.data !== undefined;
+  }, [countsData]);
+  const countsLoaded = countsData !== undefined;
 
   // Each section loads its own rows; collect them by group so the row selection
   // resolves across every group the way the flat table does (the view toolbar
@@ -333,6 +338,10 @@ export const GroupedTableLayout = ({
     );
   }
 
+  if (groupCountsView.type === "error") {
+    return <QueryViewFeedback view={groupCountsView} />;
+  }
+
   const options = resolveKanbanGroupOptions(grouping);
   // Cells whose value is no longer a current option fold into the uncategorized
   // group server-side (the row/count queries treat "no current-option value" as
@@ -373,6 +382,9 @@ export const GroupedTableLayout = ({
     // full table width (their bands then run the whole scroll width).
     <MobileTableOrientationGate>
       <FindHighlightScope highlight={find.highlight}>
+        {groupCountsView.type !== "pending" && (
+          <QueryViewFeedback view={groupCountsView} />
+        )}
         <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
           {groups.map((group) => (
             <GroupSection
@@ -663,17 +675,19 @@ const GroupSection = ({
     }),
     enabled: hasRows && (eager || hasScrolledIntoView),
   });
+  const queryState = useQueryView(query);
+  const queryData = queryState.type === "items" ? queryState.items : undefined;
 
   // When a group empties (its last row moved/deleted), the count is 0 and the
   // query is disabled, but React Query can still hold cached pages for this key.
   // Drop them when the group has no rows so stale rows aren't published to the
   // selection union or rendered.
   const entities = useMemo(() => {
-    if (!hasRows || !query.data) {
+    if (!hasRows || !queryData) {
       return [];
     }
-    return query.data.pages.flatMap((page) => page.entities);
-  }, [hasRows, query.data]);
+    return queryData.pages.flatMap((page) => page.entities);
+  }, [hasRows, queryData]);
   const loadedCount = entities.length;
 
   const treeData = useMemo(() => toTableEntities(entities), [entities]);
@@ -689,13 +703,13 @@ const GroupSection = ({
   // AI cells read justifications from the workspace store; sync each loaded page
   // so the source hover card and citation highlights work in grouped views too.
   const justificationEntityIdChunks = useMemo(() => {
-    if (!query.data) {
+    if (!queryData) {
       return [];
     }
-    return query.data.pages.map((page) =>
+    return queryData.pages.map((page) =>
       page.entities.map((entity) => entity.entityId),
     );
-  }, [query.data]);
+  }, [queryData]);
   useSyncJustificationChunks({
     workspaceId,
     entityIdChunks: justificationEntityIdChunks,
@@ -737,6 +751,11 @@ const GroupSection = ({
     // Stretches to the container width (the full table width), so the
     // group-header band spans the whole scroll width even for empty groups.
     <section className={cn(isEmpty && "order-1")} ref={sectionRef}>
+      {hasRows &&
+        (eager || hasScrolledIntoView) &&
+        queryState.type !== "pending" && (
+          <QueryViewFeedback view={queryState} />
+        )}
       <TableGroupHeader
         collapsed={collapsed}
         empty={isEmpty}
@@ -756,7 +775,8 @@ const GroupSection = ({
       {!collapsed &&
         hasRows &&
         (eager || hasScrolledIntoView) &&
-        !isLoadingRows && (
+        !isLoadingRows &&
+        queryState.type !== "error" && (
           // The table flows inline in the shared outer scroll (no nested scroll
           // box), so its rows render directly and the sticky group header stacks
           // cleanly above the columns. The group scope lets each column header's

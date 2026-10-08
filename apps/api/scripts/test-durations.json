@@ -223,6 +223,10 @@
     "seconds": 0.261725,
     "source": "estimated"
   },
+  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/account-issuer-nullable-migration.db.test.ts": {
     "seconds": 4.993753,
     "source": "estimated"
@@ -336,6 +340,10 @@
     "source": "measured"
   },
   "src/db/feature-enrolments.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/db/feature-recovery-migrations.postgres.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -2815,6 +2823,10 @@
     "seconds": 2.886505,
     "source": "estimated"
   },
+  "src/handlers/entity-views/rows/inbox-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/entity-views/rows/list.integration.test.ts": {
     "seconds": 4.802825,
     "source": "estimated"
@@ -3489,6 +3501,10 @@
   },
   "src/handlers/sharepoint/oauth-callback.test.ts": {
     "seconds": 2.71772,
+    "source": "estimated"
+  },
+  "src/handlers/signals-flows-feature-access.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/signals/acceptances/create.integration.test.ts": {
@@ -4723,10 +4739,6 @@
     "seconds": 0.164799,
     "source": "estimated"
   },
-  "src/lib/chunked.test.ts": {
-    "seconds": 0.044816,
-    "source": "estimated"
-  },
   "src/lib/clauses/body-schema.test.ts": {
     "seconds": 0.182119,
     "source": "estimated"
@@ -4837,6 +4849,18 @@
   },
   "src/lib/db-query-counter.test.ts": {
     "seconds": 0.493191,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/db/arabic-normalize.test.ts": {
@@ -5061,6 +5085,10 @@
   },
   "src/lib/document-processing-reconciliation-feeds.db.test.ts": {
     "seconds": 3.84235,
+    "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/document-reference.test.ts": {
@@ -5547,6 +5575,10 @@
     "seconds": 0.121786,
     "source": "estimated"
   },
+  "src/lib/entities/signal-window-rows.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/entities/window-cursor.test.ts": {
     "seconds": 1.54216,
     "source": "estimated"
@@ -5649,6 +5681,10 @@
   },
   "src/lib/extraction-runs/store.test.ts": {
     "seconds": 2.049607,
+    "source": "estimated"
+  },
+  "src/lib/feature-access/background.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/feature-access/grants-schema.test.ts": {
@@ -5879,6 +5915,10 @@
     "seconds": 0.204242,
     "source": "estimated"
   },
+  "src/lib/flows/flow-run-events.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/flows/flow-run-transitions.test.ts": {
     "seconds": 0.063591,
     "source": "estimated"
@@ -5909,6 +5949,10 @@
   },
   "src/lib/flows/review-gate-state.postgres.test.ts": {
     "seconds": 2.87711,
+    "source": "estimated"
+  },
+  "src/lib/flows/review-gate-task-access.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/flows/review-gate-task-state.postgres.test.ts": {
@@ -7255,6 +7299,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/lib/review-organization/reset-cleanup.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/review-organization/reset-scope.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -7455,6 +7503,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/lib/scheduler/tasks/scout-emission-recovery.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/scheduler/tasks/search-semantic-timestamps.test.ts": {
     "seconds": 1.878095,
     "source": "estimated"
@@ -7463,8 +7515,24 @@
     "seconds": 0.068223,
     "source": "estimated"
   },
+  "src/lib/scheduler/tasks/upload-flow-trigger-recovery.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/scheduler/tasks/upload-flow-trigger-recovery.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/scouts/direct-emission-admission.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/scouts/document-deadline-queue.test.ts": {
     "seconds": 0.087252,
+    "source": "estimated"
+  },
+  "src/lib/scouts/document-deadline-recovery.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/scouts/document-deadlines.logic.test.ts": {
@@ -7569,6 +7637,10 @@
   },
   "src/lib/search/process-extraction.test.ts": {
     "seconds": 0.586685,
+    "source": "estimated"
+  },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/search/projection-repair-queue.db.test.ts": {
@@ -8787,6 +8859,10 @@
     "seconds": 0.4,
     "source": "measured"
   },
+  "src/scripts/review-account.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/scripts/review-account.logic.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -8845,6 +8921,10 @@
   },
   "src/tests/helpers/fake-s3.test.ts": {
     "seconds": 0.899616,
+    "source": "estimated"
+  },
+  "src/tests/helpers/handler-context.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/helpers/provider-request-transcript.test.ts": {
@@ -8917,6 +8997,10 @@
   },
   "src/tests/security/account-wide-auth-revocation.test.ts": {
     "seconds": 1.93918,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/security/ai-memories-rls.test.ts": {
@@ -9161,74 +9245,6 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
-    "source": "estimated"
-  },
-  "src/scripts/review-account.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/handlers/entity-views/rows/inbox-access.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/handlers/signals-flows-feature-access.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/entities/signal-window-rows.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/feature-access/background.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/flows/review-gate-task-access.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/review-organization/reset-cleanup.integration.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/scheduler/tasks/scout-emission-recovery.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/scheduler/tasks/upload-flow-trigger-recovery.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/scheduler/tasks/upload-flow-trigger-recovery.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/scouts/document-deadline-recovery.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/db/feature-recovery-migrations.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/scouts/direct-emission-admission.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/flows/flow-run-events.db.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   }
 }

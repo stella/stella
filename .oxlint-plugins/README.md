@@ -138,7 +138,7 @@ runtime validation, or integration tests.
 
 ### React, routing, query state, and performance
 
-- [`query-data-requires-state`](./query-data-requires-state.ts) (`query-data-requires-state`): requires query data consumers to inspect response state through the owned query view or an explicit state read; existing bindings are held to a shrinking baseline.
+- [`query-data-requires-state`](./query-data-requires-state.ts) (`query-data-requires-state`): requires query data consumers to inspect response state through the owned query view or an explicit state read, with no grandfathered bindings. Rendered state uses `useQueryView` and retry feedback; optional reads use `useQueryViewError` to report failures while retaining cached content.
 - [`no-beforeload-redirect`](./no-beforeload-redirect.ts) (`no-beforeload-redirect`): rejects unconditional redirects from `beforeLoad` or `loader`; redirect-only routes must mount a navigation component so abandoned pending trees cannot leak.
 - [`no-centered-scroll-column`](./no-centered-scroll-column.ts) (`no-centered-scroll-column`): keeps the scrollbar on the full content pane instead of a centered, width-capped inner column.
 - [`no-detached-void`](./no-detached-void.ts) (`no-detached-void`): prevents `void promise` from hiding rejection ownership; use `await`, return the promise, or the monitored `detached()` helper.
@@ -266,6 +266,8 @@ runtime validation, or integration tests.
 - [`require-function-replacer`](./require-function-replacer.ts) (`require-function-replacer`): requires function-valued state updates to use an explicit replacer wrapper so they are not invoked as updater callbacks.
 - [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`, `canonical-rule-id`): requires explained suppressions, autofixes rule IDs to their configured spelling, and rejects directives for another lint engine.
 
+- [`confine-aggregate-lock`](./confine-aggregate-lock.ts) (`confine-aggregate-lock`): confines raw aggregate acquisitions and API transaction/savepoint boundaries to the owner and migrations, with an enumerated shrinking legacy baseline.
+
 ## Native and shared rules
 
 Do not recreate a project plugin when an enabled native rule expresses the same
@@ -340,3 +342,7 @@ implies a hazard that is gone.
 - [`no-ad-hoc-inline-rename`](./no-ad-hoc-inline-rename.ts) (`no-ad-hoc-inline-rename`): enumerates native and UI input aliases in view/edit owners with blur/keyboard commit handlers and rename bindings or autofocus; requires `@stll/ui/inline-rename`. Permanent, creation, numeric and multiline fields stay outside this detection boundary.
 
 - [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.
+
+### Shared concurrency primitives
+
+- [`no-hand-rolled-concurrency`](./no-hand-rolled-concurrency.ts) rejects direct promise resolver timers and the named duplicate sleep, API `chunked`, web research `chunk`, and adapter `backoffMs` helpers. The owner is private `@stll/concurrency`, through `/sleep`, `/chunk`, and `/backoff-delay`. It deliberately does not infer retry policy from arithmetic or array partitioning from generic slice loops. Native `Bun.sleep`, retained deadline timers, string/byte slices, overlapping windows, dynamic budgets, and atomic SQL retry updates retain their contracts. Exact exceptions with reasons live in [`no-hand-rolled-concurrency-exceptions.json`](./no-hand-rolled-concurrency-exceptions.json); `bun scripts/check-concurrency-exceptions.ts` prevents additions, moves, widening, and duplicate allowances after the introducing PR.

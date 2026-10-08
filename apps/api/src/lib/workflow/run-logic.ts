@@ -1,5 +1,7 @@
 import { matchError, Result } from "better-result";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import type {
   WorkflowIntegrationError,
@@ -66,7 +68,9 @@ const computeWorkflowEntityJobBackoffMs = (): number => {
     retryIndex < WORKFLOW_ENTITY_JOB_ATTEMPTS - 1;
     retryIndex++
   ) {
-    backoffMs += WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS * 2 ** retryIndex;
+    backoffMs += backoffDelay(retryIndex, {
+      baseMs: WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
+    });
   }
   return backoffMs;
 };
