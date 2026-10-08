@@ -1,43 +1,162 @@
-import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { panic, Result, TaggedError } from "better-result";
+import { getTableName, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import type {
+  LockConfig,
+  LockStrength,
+} from "drizzle-orm/pg-core/query-builders/select.types";
 
-import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import {
-  workspaces,
-  entities,
-  flowRuns,
-  flowRunSteps,
-  workObligations,
-} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import { isRecord } from "@/api/lib/type-guards";
 
-/** Ranks order physical fences; catalog names sharing a key share one entry. */
+/** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
+  orgFeatureAdmission: { rank: 10, kind: "advisory" },
+  schedulerClaim: { rank: 20, kind: "row" },
+  definitionCap: { rank: 30, kind: "advisory" },
+  definition: { rank: 40, kind: "row" },
+  uploadReceipt: { rank: 50, kind: "row" },
+  scoutCensus: { rank: 60, kind: "row" },
   workspace: { rank: 100, kind: "row" },
+  memberCleanup: { rank: 110, kind: "row" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
   entity: { rank: 500, kind: "row" },
+  processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
 
+/** Derive rank proofs from the same registry used for acquisitions. */
+export const AGGREGATE_CHAINS = {
+  existing: [
+    "organization",
+    "workspace",
+    "run",
+    "currentStep",
+    "obligation",
+    "entity",
+  ],
+  automated: [
+    "orgFeatureAdmission",
+    "schedulerClaim",
+    "definitionCap",
+    "definition",
+    "uploadReceipt",
+  ],
+  flowEffect: [
+    "orgFeatureAdmission",
+    "workspace",
+    "run",
+    "currentStep",
+    "obligation",
+    "entity",
+  ],
+  deadlineClaim: ["orgFeatureAdmission", "processingClaim"],
+  deadlineAcceptance: ["orgFeatureAdmission", "entity", "processingClaim"],
+  deadlineEmission: [
+    "orgFeatureAdmission",
+    "scoutCensus",
+    "entity",
+    "processingClaim",
+  ],
+  scoutReceipt: ["orgFeatureAdmission", "scoutCensus"],
+  uploadReceipt: ["orgFeatureAdmission", "uploadReceipt"],
+  memberPrefix: [
+    "workspace",
+    "memberCleanup",
+    "run",
+    "currentStep",
+    "obligation",
+    "entity",
+  ],
+  contactCapacity: ["contactCapacity"],
+  personalCatalog: ["personalCatalog"],
+} as const satisfies Record<string, readonly AggregateName[]>;
+
+export const ROW_LOCK_MODES = [
+  "key share",
+  "share",
+  "no key update",
+  "update",
+] as const satisfies readonly LockStrength[];
+export type RowLockMode = (typeof ROW_LOCK_MODES)[number];
+// Coverage follows PostgreSQL row-lock conflict sets; requested SQL still executes.
+const MODE_COVERS = {
+  "key share": ["key share"],
+  share: ["key share", "share"],
+  "no key update": ["key share", "share", "no key update"],
+  update: ROW_LOCK_MODES,
+} as const satisfies Record<RowLockMode, readonly RowLockMode[]>;
+const modeCovers = (
+  held: HeldLock["mode"],
+  requested: HeldLock["mode"],
+): boolean =>
+  held === "advisory" || requested === "advisory"
+    ? held === requested
+    : MODE_COVERS[held].some((mode) => mode === requested);
+
 type AggregateIdentities = {
   organization: SafeId<"organization">;
+  orgFeatureAdmission: {
+    organizationId: SafeId<"organization">;
+    featureId: "flows" | "signals";
+  };
+  schedulerClaim: { id: string };
+  definitionCap: { definitionId: SafeId<"flowDefinition"> };
+  definition: {
+    id: SafeId<"flowDefinition">;
+    organizationId: SafeId<"organization">;
+  };
+  uploadReceipt: {
+    organizationId: SafeId<"organization">;
+    workspaceId: SafeId<"workspace">;
+    definitionId: SafeId<"flowDefinition">;
+    entityId: SafeId<"entity">;
+  };
+  scoutCensus:
+    | {
+        type: "run";
+        id: SafeId<"scoutRun">;
+        organizationId: SafeId<"organization">;
+      }
+    | {
+        type: "receipt";
+        organizationId: SafeId<"organization">;
+        sourceKind: "document-review" | "infosoud-hearing";
+        sourceId: string;
+      };
   workspace: {
     id: SafeId<"workspace">;
     organizationId: SafeId<"organization">;
   };
+  memberCleanup:
+    | {
+        type: "organization-member";
+        id: string;
+        organizationId: SafeId<"organization">;
+      }
+    | {
+        type: "workspace-member";
+        id: string;
+        workspaceId: SafeId<"workspace">;
+      };
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  processingClaim: {
+    id: SafeId<"documentProcessingRun">;
+    workspaceId: SafeId<"workspace">;
+  };
   contactCapacity: { organizationId: SafeId<"organization"> };
   personalCatalog: {
     organizationId: SafeId<"organization">;
@@ -45,20 +164,50 @@ type AggregateIdentities = {
   };
 };
 
-type AggregateLockOptions = {
-  [Name in AggregateName]: {
-    aggregate: Name;
-    id: AggregateIdentities[Name];
-    tx: { execute: (statement: SQL) => PromiseLike<unknown> };
-  };
+type ExecuteTransaction = { execute: (statement: SQL) => PromiseLike<unknown> };
+type SavepointTransaction = ExecuteTransaction &
+  Pick<Transaction, "transaction">;
+type AggregateIdentityOptions = {
+  [Name in AggregateName]: { aggregate: Name; id: AggregateIdentities[Name] };
 }[AggregateName];
+type RowIdentityOptions = {
+  [Name in AggregateName]: (typeof AGGREGATE_LOCKS)[Name]["kind"] extends "row"
+    ? { aggregate: Name; id: AggregateIdentities[Name] }
+    : never;
+}[AggregateName];
+type AdvisoryIdentityOptions = Exclude<
+  AggregateIdentityOptions,
+  RowIdentityOptions
+>;
+type WaitingOptions =
+  | { wait?: "block"; tx: ExecuteTransaction }
+  | { wait: "nowait"; tx: SavepointTransaction };
+type AggregateLockOptions =
+  | (RowIdentityOptions & { mode: RowLockMode } & WaitingOptions)
+  | (AdvisoryIdentityOptions & {
+      mode?: undefined;
+      wait?: "block" | "nowait";
+      tx: ExecuteTransaction;
+    });
 
-type AggregateLockResult = { status: "locked" } | { status: "missing" };
-
-type HeldLock = { rank: number; key: string };
+export class AggregateLockBusy extends TaggedError("AggregateLockBusy")<{
+  message: string;
+  aggregate: AggregateName;
+}> {}
+type AggregateLockResult =
+  | { status: "locked" }
+  | { status: "missing" }
+  | { status: "busy"; error: AggregateLockBusy };
+type HeldLock = {
+  rank: number;
+  key: string;
+  orderKey: string;
+  mode: RowLockMode | "advisory";
+};
 type LockHistory = {
   status: "idle" | "acquiring" | "closed";
   held: Map<string, HeldLock>;
+  aliases: Map<string, string>;
   parent: LockHistory | undefined;
   children: Set<LockHistory>;
 };
@@ -74,6 +223,7 @@ const lockHistory = (tx: object): LockHistory => {
   const history: LockHistory = {
     status: "idle",
     held: new Map(),
+    aliases: new Map(),
     parent: undefined,
     children: new Set(),
   };
@@ -137,7 +287,7 @@ const completeAcquisition = (history: LockHistory): void => {
   }
   history.status = "idle";
 };
-const assertLockOrder = (history: LockHistory, lock: HeldLock): void => {
+const allHeldLocks = (history: LockHistory): HeldLock[] => {
   const held: HeldLock[] = [];
   for (
     let level: LockHistory | undefined = history;
@@ -146,18 +296,76 @@ const assertLockOrder = (history: LockHistory, lock: HeldLock): void => {
   ) {
     held.push(...level.held.values());
   }
-  if (held.some((previous) => previous.key === lock.key)) {
+  return held;
+};
+const assertLockOrder = (
+  history: LockHistory,
+  lock: HeldLock,
+  wait: "block" | "nowait",
+): void => {
+  if (wait === "nowait") {
+    return;
+  }
+  const held = allHeldLocks(history);
+  if (
+    held.some(
+      (previous) =>
+        previous.key === lock.key && modeCovers(previous.mode, lock.mode),
+    )
+  ) {
     return;
   }
   if (
     held.some(
       (previous) =>
         lock.rank < previous.rank ||
-        (lock.rank === previous.rank && lock.key < previous.key),
+        (lock.rank === previous.rank && lock.orderKey < previous.orderKey),
     )
   ) {
     panic("Aggregate lock rank inversion");
   }
+};
+const retainLock = (history: LockHistory, lock: HeldLock): void => {
+  const previous = history.held.get(lock.key);
+  history.held.set(
+    lock.key,
+    previous === undefined
+      ? lock
+      : {
+          ...lock,
+          rank: Math.max(previous.rank, lock.rank),
+          orderKey:
+            previous.orderKey > lock.orderKey
+              ? previous.orderKey
+              : lock.orderKey,
+          mode: modeCovers(previous.mode, lock.mode)
+            ? previous.mode
+            : lock.mode,
+        },
+  );
+};
+
+/** A fresh physical transaction owns a fresh history, including failure/commit cleanup. */
+export const withAggregateTransaction = async <Tx extends object, T>(
+  database: {
+    transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+  },
+  run: (tx: Tx) => Promise<T>,
+): Promise<T> => {
+  if (histories.has(database) || "rollback" in database) {
+    panic("Use the aggregate savepoint owner for nested transactions");
+  }
+  return await database.transaction(async (tx) => {
+    const history = lockHistory(tx);
+    assertAggregateLevelAvailable(history);
+    try {
+      const value = await run(tx);
+      assertAggregateLevelAvailable(history);
+      return value;
+    } finally {
+      history.status = "closed";
+    }
+  });
 };
 
 /** Track the public savepoint callback without inspecting driver internals. */
@@ -166,6 +374,7 @@ export const withAggregateSavepoint = async <T>(
   run: (savepoint: Transaction) => Promise<T>,
 ): Promise<T> => {
   const parent = lockHistory(tx);
+  assertIdleHistory(parent);
   // Non-locking callers retain the driver's existing savepoint behavior.
   if (transactionHasAggregateLocks(parent)) {
     assertAggregateLevelAvailable(parent);
@@ -173,6 +382,7 @@ export const withAggregateSavepoint = async <T>(
   const history: LockHistory = {
     status: "idle",
     held: new Map(),
+    aliases: new Map(),
     parent,
     children: new Set(),
   };
@@ -185,13 +395,16 @@ export const withAggregateSavepoint = async <T>(
         if (transactionHasAggregateLocks(history)) {
           assertAggregateLevelAvailable(history);
         }
-        return { value, held: history.held };
+        return { value, held: history.held, aliases: history.aliases };
       } finally {
         history.status = "closed";
       }
     });
-    for (const [key, lock] of committed.held) {
-      parent.held.set(key, lock);
+    for (const lock of committed.held.values()) {
+      retainLock(parent, lock);
+    }
+    for (const [logical, physical] of committed.aliases) {
+      parent.aliases.set(logical, physical);
     }
     return committed.value;
   } finally {
@@ -200,72 +413,589 @@ export const withAggregateSavepoint = async <T>(
   }
 };
 
-const lockIdentity = (options: AggregateLockOptions): string => {
+type RowResource = {
+  table: string;
+  columns: readonly string[];
+  values: readonly (string | number)[];
+  scope: SQL;
+};
+const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "organization":
-      return JSON.stringify([options.aggregate, options.id]);
+      return {
+        table: "organization",
+        columns: ["id"],
+        values: [options.id],
+        scope: sql`TRUE`,
+      };
     case "workspace":
+      return {
+        table: "workspaces",
+        columns: ["id"],
+        values: [options.id.id],
+        scope: sql`organization_id = ${options.id.organizationId}`,
+      };
     case "run":
+      return {
+        table: "flow_runs",
+        columns: ["id"],
+        values: [options.id.id],
+        scope: sql`workspace_id = ${options.id.workspaceId}`,
+      };
     case "currentStep":
+      return {
+        table: "flow_run_steps",
+        columns: ["id"],
+        values: [options.id.id],
+        scope: sql`workspace_id = ${options.id.workspaceId}`,
+      };
     case "obligation":
+      return {
+        table: "work_obligations",
+        columns: ["entity_id"],
+        values: [options.id.id],
+        scope: sql`workspace_id = ${options.id.workspaceId}`,
+      };
     case "entity":
-      return JSON.stringify([options.aggregate, options.id.id]);
-    case "contactCapacity":
-      return JSON.stringify([options.aggregate, options.id.organizationId]);
-    case "personalCatalog":
-      return JSON.stringify([
-        options.aggregate,
-        options.id.organizationId,
-        options.id.userId,
-      ]);
+      return {
+        table: "entities",
+        columns: ["id"],
+        values: [options.id.id],
+        scope: sql`workspace_id = ${options.id.workspaceId}`,
+      };
+    case "schedulerClaim":
+      return {
+        table: "scheduler_jobs",
+        columns: ["id"],
+        values: [options.id.id],
+        scope: sql`TRUE`,
+      };
+    case "definition":
+      return {
+        table: "flow_definitions",
+        columns: ["id"],
+        values: [options.id.id],
+        scope: sql`organization_id = ${options.id.organizationId}`,
+      };
+    case "uploadReceipt":
+      return {
+        table: "flow_upload_trigger_intents",
+        columns: ["definition_id", "entity_id"],
+        values: [options.id.definitionId, options.id.entityId],
+        scope: sql`organization_id = ${options.id.organizationId} AND workspace_id = ${options.id.workspaceId}`,
+      };
+    case "processingClaim":
+      return {
+        table: "document_processing_runs",
+        columns: ["id"],
+        values: [options.id.id],
+        scope: sql`workspace_id = ${options.id.workspaceId}`,
+      };
+    case "scoutCensus":
+      switch (options.id.type) {
+        case "run":
+          return {
+            table: "scout_runs",
+            columns: ["id"],
+            values: [options.id.id],
+            scope: sql`organization_id = ${options.id.organizationId}`,
+          };
+        case "receipt":
+          return {
+            table: "pending_scout_emissions",
+            columns: ["organization_id", "source_kind", "source_id"],
+            values: [
+              options.id.organizationId,
+              options.id.sourceKind,
+              options.id.sourceId,
+            ],
+            scope: sql`TRUE`,
+          };
+        default:
+          options.id satisfies never;
+          return panic("Unknown scout census resource");
+      }
+    case "memberCleanup":
+      switch (options.id.type) {
+        case "organization-member":
+          return {
+            table: "member",
+            columns: ["id"],
+            values: [options.id.id],
+            scope: sql`organization_id = ${options.id.organizationId}`,
+          };
+        case "workspace-member":
+          return {
+            table: "workspace_members",
+            columns: ["id"],
+            values: [options.id.id],
+            scope: sql`workspace_id = ${options.id.workspaceId}`,
+          };
+        default:
+          options.id satisfies never;
+          return panic("Unknown member cleanup resource");
+      }
     default:
       options satisfies never;
-      return panic("Unknown aggregate lock identity");
+      return panic("Unknown row aggregate");
   }
 };
-
-const lockStatement = (options: AggregateLockOptions) => {
+const rowLock = (options: RowIdentityOptions, mode: RowLockMode): HeldLock => {
+  const { table, values } = rowResource(options);
+  const key = JSON.stringify(["row", table, ...values]);
+  return {
+    rank: AGGREGATE_LOCKS[options.aggregate].rank,
+    key,
+    orderKey: JSON.stringify([options.aggregate, table, ...values]),
+    mode,
+  };
+};
+const rowStatement = (
+  options: RowIdentityOptions,
+  mode: RowLockMode,
+  wait: "block" | "nowait",
+) => {
+  const resource = rowResource(options);
+  const keys = resource.columns.map(
+    (column, index) =>
+      sql`${sql.identifier(column)} = ${resource.values.at(index) ?? panic("Missing aggregate row key")}`,
+  );
+  return sql`SELECT ${sql.join(
+    resource.columns.map((column) => sql.identifier(column)),
+    sql`, `,
+  )} FROM ${sql.identifier(resource.table)} WHERE ${sql.join(keys, sql` AND `)} AND ${resource.scope} ${sql.raw(`FOR ${mode.toUpperCase()}`)} ${wait === "nowait" ? sql`NOWAIT` : sql``}`;
+};
+const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
-    case "organization":
-      return sql`SELECT ${organization.id} FROM ${organization} WHERE ${organization.id} = ${options.id} FOR UPDATE`;
-    case "workspace":
-      return sql`SELECT ${workspaces.id} FROM ${workspaces} WHERE ${workspaces.id} = ${options.id.id} AND ${workspaces.organizationId} = ${options.id.organizationId} FOR UPDATE`;
-    case "run":
-      return sql`SELECT ${flowRuns.id} FROM ${flowRuns} WHERE ${flowRuns.id} = ${options.id.id} AND ${flowRuns.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
-    case "currentStep":
-      return sql`SELECT ${flowRunSteps.id} FROM ${flowRunSteps} WHERE ${flowRunSteps.id} = ${options.id.id} AND ${flowRunSteps.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
-    case "obligation":
-      return sql`SELECT ${workObligations.entityId} FROM ${workObligations} WHERE ${workObligations.entityId} = ${options.id.id} AND ${workObligations.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
-    case "entity":
-      return sql`SELECT ${entities.id} FROM ${entities} WHERE ${entities.id} = ${options.id.id} AND ${entities.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
     case "contactCapacity":
-      return sql`SELECT pg_advisory_xact_lock(hashtext('contact_capacity'), hashtext(${options.id.organizationId}))`;
+      return {
+        first: sql`hashtext('contact_capacity')`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
+      };
     case "personalCatalog":
-      return sql`SELECT pg_advisory_xact_lock(hashtext(${options.id.organizationId}), hashtext(${options.id.userId}))`;
+      return {
+        first: sql`hashtext(${options.id.organizationId})`,
+        second: sql`hashtext(${options.id.userId})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+        ],
+      };
+    case "orgFeatureAdmission":
+      return {
+        first: sql`${0x0f_10_cc_aa}::integer`,
+        second: sql`hashtext(${`${options.id.featureId}:${options.id.organizationId}`})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.featureId,
+        ],
+      };
+    case "definitionCap":
+      return {
+        first: sql`${0x0f_10_cc_a9}::integer`,
+        second: sql`hashtext(${options.id.definitionId})`,
+        order: [options.aggregate, options.id.definitionId],
+      };
     default:
       options satisfies never;
-      return panic("Unknown aggregate lock statement");
+      return panic("Unknown advisory aggregate");
   }
 };
+const busy = (aggregate: AggregateName): AggregateLockResult => ({
+  status: "busy",
+  error: new AggregateLockBusy({
+    aggregate,
+    message: "The requested aggregate lock is busy",
+  }),
+});
+const knownAdvisoryKey = (history: LockHistory, logical: string): string => {
+  for (
+    let level: LockHistory | undefined = history;
+    level !== undefined;
+    level = level.parent
+  ) {
+    const key = level.aliases.get(logical);
+    if (key !== undefined) {
+      return key;
+    }
+  }
+  return logical;
+};
+const physicalAdvisoryKey = (row: unknown): string => {
+  if (
+    !isRecord(row) ||
+    typeof row["key1"] !== "number" ||
+    typeof row["key2"] !== "number"
+  ) {
+    return panic("Missing physical advisory lock identity");
+  }
+  return JSON.stringify(["advisory", row["key1"], row["key2"]]);
+};
 
-/** Joins the caller's transaction; reads and decisions follow the awaited fence. */
+/** Blocking acquisitions ascend; explicit nonblocking requests retain the high-water on success. */
 export const withAggregateLock = async (
   options: AggregateLockOptions,
 ): Promise<AggregateLockResult> => {
   const { tx, aggregate } = options;
-  const key = lockIdentity(options);
+  const wait = options.wait ?? "block";
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
-  const { rank, kind } = AGGREGATE_LOCKS[aggregate];
-  assertLockOrder(history, { rank, key });
+  if (options.mode === undefined) {
+    const resource = advisoryResource(options);
+    const logicalKey = JSON.stringify(resource.order);
+    const lock = {
+      rank: AGGREGATE_LOCKS[aggregate].rank,
+      key: knownAdvisoryKey(history, logicalKey),
+      orderKey: logicalKey,
+      mode: "advisory",
+    } as const;
+    assertLockOrder(history, lock, wait);
+    history.status = "acquiring";
+    const rows = executedRows(
+      await tx.execute(
+        sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${wait === "nowait" ? sql`pg_try_advisory_xact_lock(${resource.first}, ${resource.second})` : sql`pg_advisory_xact_lock(${resource.first}, ${resource.second})`} AS acquired`,
+      ),
+    );
+    const row = rows.at(0);
+    const key = physicalAdvisoryKey(row);
+    if (
+      wait === "nowait" &&
+      (!isRecord(row) || typeof row["acquired"] !== "boolean")
+    ) {
+      panic("Missing advisory acquisition outcome");
+    }
+    const acquired =
+      wait === "block" || (isRecord(row) && row["acquired"] === true);
+    if (acquired) {
+      history.aliases.set(logicalKey, key);
+      retainLock(history, { ...lock, key });
+    }
+    completeAcquisition(history);
+    return acquired ? { status: "locked" } : busy(aggregate);
+  }
+  const mode = options.mode;
+  const lock = rowLock(options, mode);
+  assertLockOrder(history, lock, wait);
+  if (options.wait === "nowait") {
+    const result = await Result.tryPromise(
+      async () =>
+        await withAggregateSavepoint(options.tx, async (child) => {
+          const childHistory = lockHistory(child);
+          assertAggregateLevelAvailable(childHistory);
+          childHistory.status = "acquiring";
+          const rows = executedRows(
+            await child.execute(rowStatement(options, mode, "nowait")),
+          );
+          if (rows.length > 0) {
+            retainLock(childHistory, lock);
+          }
+          completeAcquisition(childHistory);
+          return rows.length === 0
+            ? ({ status: "missing" } as const)
+            : ({ status: "locked" } as const);
+        }),
+    );
+    if (result.isOk()) {
+      return result.value;
+    }
+    if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+      return busy(aggregate);
+    }
+    return abortTransaction(result.error.cause);
+  }
   history.status = "acquiring";
-  // A failed SQL acquisition aborts the transaction. Retaining its reservation
-  // refuses accidental reuse; a retry owns a fresh transaction and history.
-  const result = await tx.execute(lockStatement(options));
-  const acquired = kind === "advisory" || executedRows(result).length > 0;
-  if (acquired) {
-    history.held.set(key, { rank, key });
+  const rows = executedRows(
+    await tx.execute(rowStatement(options, mode, "block")),
+  );
+  if (rows.length > 0) {
+    retainLock(history, lock);
   }
   completeAcquisition(history);
-  return acquired ? { status: "locked" } : { status: "missing" };
+  return rows.length > 0 ? { status: "locked" } : { status: "missing" };
+};
+
+type AggregateRowQueryOptions<Row> = RowIdentityOptions & {
+  mode: RowLockMode;
+  select: (tx: Transaction) => {
+    for: (mode: RowLockMode, config?: LockConfig) => PromiseLike<Row[]>;
+    toSQL: () => { sql: string };
+  };
+  identify: (row: Row) => RowIdentityOptions;
+  lockConfig?: Omit<LockConfig, "noWait" | "skipLocked">;
+} & ({ tx: Transaction; wait?: "block" } | { tx: Transaction; wait: "nowait" });
+type AggregateRowsResult<Row> =
+  | { status: "locked" | "missing"; rows: Row[] }
+  | { status: "busy"; error: AggregateLockBusy };
+
+type SelectToken = { kind: "word" | "identifier" | "symbol"; value: string };
+const dollarDelimiter = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/uy;
+
+const quotedToken = (source: string, start: number) => {
+  const quote = source[start];
+  const escaped =
+    quote === "'" &&
+    /(?:^|[^A-Za-z0-9_])(?:E|U&)$/iu.test(
+      source.slice(Math.max(0, start - 3), start),
+    );
+  let value = "";
+  for (let index = start + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (escaped && character === "\\") {
+      index += 1;
+      continue;
+    }
+    if (character !== quote) {
+      if (quote === '"') {
+        value += character;
+      }
+      continue;
+    }
+    if (source[index + 1] === quote) {
+      if (quote === '"') {
+        value += quote;
+      }
+      index += 1;
+      continue;
+    }
+    return { end: index + 1, value };
+  }
+  return panic("Unterminated aggregate query quote");
+};
+
+const blockCommentEnd = (source: string, start: number) => {
+  let depth = 1;
+  for (let index = start + 2; index < source.length; index += 1) {
+    if (source.startsWith("/*", index)) {
+      depth += 1;
+      index += 1;
+    } else if (source.startsWith("*/", index)) {
+      depth -= 1;
+      index += 1;
+      if (depth === 0) {
+        return index + 1;
+      }
+    }
+  }
+  return panic("Unterminated aggregate query comment");
+};
+
+/** Only outer SELECT tokens decide which rows FOR locks; projection/EXISTS SQL is opaque. */
+const outerSelectTokens = (source: string): SelectToken[] => {
+  const tokens: SelectToken[] = [];
+  let depth = 0;
+  let index = 0;
+  while (index < source.length) {
+    const character =
+      source[index] ?? panic("Missing aggregate query character");
+    if (/\s/u.test(character)) {
+      index += 1;
+      continue;
+    }
+    if (source.startsWith("--", index)) {
+      const end = source.indexOf("\n", index + 2);
+      index = end === -1 ? source.length : end + 1;
+      continue;
+    }
+    if (source.startsWith("/*", index)) {
+      index = blockCommentEnd(source, index);
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      const quoted = quotedToken(source, index);
+      if (depth === 0 && character === '"') {
+        tokens.push({ kind: "identifier", value: quoted.value });
+      }
+      index = quoted.end;
+      continue;
+    }
+    if (character === "$") {
+      dollarDelimiter.lastIndex = index;
+      const delimiter = dollarDelimiter.exec(source)?.at(0);
+      if (delimiter !== undefined) {
+        const end = source.indexOf(delimiter, index + delimiter.length);
+        if (end === -1) {
+          return panic("Unterminated aggregate query dollar quote");
+        }
+        index = end + delimiter.length;
+        continue;
+      }
+    }
+    if (character === "(") {
+      if (depth === 0) {
+        tokens.push({ kind: "symbol", value: character });
+      }
+      depth += 1;
+      index += 1;
+      continue;
+    }
+    if (character === ")") {
+      depth -= 1;
+      if (depth < 0) {
+        return panic("Unbalanced aggregate query parentheses");
+      }
+      if (depth === 0) {
+        tokens.push({ kind: "symbol", value: character });
+      }
+      index += 1;
+      continue;
+    }
+    if (/[A-Za-z_]/u.test(character)) {
+      const start = index;
+      do {
+        index += 1;
+      } while (
+        index < source.length &&
+        /[A-Za-z0-9_$]/u.test(source[index] ?? "")
+      );
+      if (depth === 0) {
+        tokens.push({
+          kind: "word",
+          value: source.slice(start, index).toLowerCase(),
+        });
+      }
+      continue;
+    }
+    if (depth === 0) {
+      tokens.push({ kind: "symbol", value: character });
+    }
+    index += 1;
+  }
+  if (depth !== 0) {
+    return panic("Unbalanced aggregate query parentheses");
+  }
+  return tokens;
+};
+
+const aggregateSelectTarget = (source: string) => {
+  const tokens = outerSelectTokens(source);
+  const first = tokens.at(0);
+  const fromIndexes = tokens.flatMap((token, index) =>
+    token.kind === "word" && token.value === "from" ? [index] : [],
+  );
+  const fromIndex = fromIndexes.at(0);
+  if (
+    first?.kind !== "word" ||
+    first.value !== "select" ||
+    fromIndexes.length !== 1 ||
+    fromIndex === undefined ||
+    tokens.some((token) => token.kind === "symbol" && token.value === ";") ||
+    tokens.some(
+      (token) =>
+        token.kind === "word" &&
+        ["union", "intersect", "except"].includes(token.value),
+    )
+  ) {
+    return panic("Unsupported aggregate SELECT target");
+  }
+  const table = tokens.at(fromIndex + 1);
+  const following = tokens.at(fromIndex + 2);
+  const supportedClause =
+    following === undefined ||
+    (following.kind === "word" &&
+      [
+        "where",
+        "join",
+        "inner",
+        "left",
+        "right",
+        "full",
+        "cross",
+        "natural",
+        "order",
+        "group",
+        "limit",
+        "offset",
+        "for",
+        "fetch",
+        "having",
+        "window",
+      ].includes(following.value));
+  if (table === undefined || table.kind === "symbol" || !supportedClause) {
+    return panic("Unsupported aggregate SELECT target");
+  }
+  return {
+    table: table.value,
+    joined: tokens.some(
+      (token) => token.kind === "word" && token.value === "join",
+    ),
+  };
+};
+
+/** Lock the caller's exact selected rows; preserve CAS/projection and record only returned physical identities. */
+export const withAggregateRowQuery = async <Row>(
+  options: AggregateRowQueryOptions<Row>,
+): Promise<AggregateRowsResult<Row>> => {
+  const history = lockHistory(options.tx);
+  assertAggregateLevelAvailable(history);
+  const wait = options.wait ?? "block";
+  const requested = rowLock(options, options.mode);
+  assertLockOrder(history, requested, wait);
+  const acquire = async (
+    tx: Transaction,
+  ): Promise<AggregateRowsResult<Row>> => {
+    const queryHistory = lockHistory(tx);
+    assertAggregateLevelAvailable(queryHistory);
+    queryHistory.status = "acquiring";
+    const query = options.select(tx);
+    const table = rowResource(options).table;
+    const target = aggregateSelectTarget(query.toSQL().sql);
+    if (target.table !== table) {
+      panic("Aggregate query target does not match its registered resource");
+    }
+    const of = options.lockConfig?.of;
+    if (of !== undefined) {
+      const targets = Array.isArray(of) ? of : [of];
+      if (
+        targets.length !== 1 ||
+        targets.some((lockTarget) => getTableName(lockTarget) !== table)
+      ) {
+        panic(
+          "Aggregate query lock target does not match its registered resource",
+        );
+      }
+    } else if (target.joined) {
+      panic("Joined aggregate query requires an explicit registered OF target");
+    }
+    const rows = await query.for(
+      options.mode,
+      wait === "nowait"
+        ? { ...options.lockConfig, noWait: true }
+        : options.lockConfig,
+    );
+    for (const row of rows) {
+      const identified = options.identify(row);
+      const actual = rowLock(identified, options.mode);
+      if (
+        identified.aggregate !== options.aggregate ||
+        actual.key !== requested.key
+      ) {
+        panic("Aggregate query returned an undeclared physical resource");
+      }
+      retainLock(queryHistory, actual);
+    }
+    completeAcquisition(queryHistory);
+    return { status: rows.length === 0 ? "missing" : "locked", rows };
+  };
+  if (wait === "nowait") {
+    const result = await Result.tryPromise(
+      async () => await withAggregateSavepoint(options.tx, acquire),
+    );
+    if (result.isOk()) {
+      return result.value;
+    }
+    if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+      return {
+        status: "busy",
+        error: new AggregateLockBusy({
+          aggregate: options.aggregate,
+          message: "The requested aggregate lock is busy",
+        }),
+      };
+    }
+    return abortTransaction(result.error.cause);
+  }
+  return await acquire(options.tx);
 };

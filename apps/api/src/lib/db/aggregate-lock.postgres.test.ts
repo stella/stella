@@ -99,6 +99,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await withAggregateLock({
               aggregate: "workspace",
+              mode: "update",
               id: { id: workspaceId, organizationId },
               tx,
             }),
@@ -106,6 +107,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await withAggregateLock({
               aggregate: "organization",
+              mode: "update",
               id: organizationId,
               tx,
             }),
@@ -116,6 +118,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await withAggregateLock({
               aggregate: "workspace",
+              mode: "update",
               id: { id: workspaceId, organizationId },
               tx,
             }),
@@ -127,6 +130,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await withAggregateLock({
               aggregate: "workspace",
+              mode: "update",
               id: { id: workspaceId, organizationId: otherOrganizationId },
               tx,
             }),
@@ -134,6 +138,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await withAggregateLock({
               aggregate: "workspace",
+              mode: "update",
               id: { id: workspaceId, organizationId },
               tx,
             }),
@@ -171,10 +176,12 @@ if (!databaseUrl || !enabled) {
             );
             const lower = {
               aggregate: "organization",
+              mode: "update",
               id: organizationId,
             } as const;
             const higher = {
               aggregate: "workspace",
+              mode: "update",
               id: { id: workspaceId, organizationId },
             } as const;
             switch (mode) {
@@ -338,6 +345,7 @@ if (!databaseUrl || !enabled) {
             await rejectionOf(
               withAggregateLock({
                 aggregate: "organization",
+                mode: "update",
                 id: organizationId,
                 tx,
               }),
