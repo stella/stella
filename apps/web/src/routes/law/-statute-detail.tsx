@@ -56,7 +56,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { recordLawOpen } from "@/lib/law-search-history";
+import { recordLawOpen } from "@/lib/law-search-history/law-search-history";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
 

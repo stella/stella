@@ -30,7 +30,7 @@ import {
   useLawRecent,
   type LawRecentEntry,
   type LawRecentFilter,
-} from "@/lib/law-search-history";
+} from "@/lib/law-search-history/law-search-history";
 
 const FILTER_OPTIONS = {
   all: { value: "all", labelKey: "common.all" },
