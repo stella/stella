@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useRef, useState } from "react";
 
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -13,7 +13,6 @@ import {
   memberKnowledgeActions,
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
-import { PlaybookEditor } from "@/features/knowledge/playbook-editor/playbook-editor";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -23,6 +22,12 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
+
+const LazyPlaybookEditor = lazy(async () => {
+  const module =
+    await import("@/features/knowledge/playbook-editor/playbook-editor");
+  return { default: module.PlaybookEditor };
+});
 
 // ── View discriminated union ─────────────────────────
 
@@ -174,16 +179,18 @@ export function MemberPlaybooksPage({
 
   if (view.kind === "editor") {
     return (
-      <PlaybookEditor
-        host={{
-          type: "page",
-          onBack: handleBackToList,
-          onSaved: handleBackToList,
-          tourAnchors: PLAYBOOK_EDITOR_TOUR_ANCHORS,
-        }}
-        organizationId={activeOrganizationId}
-        playbookId={view.playbookId}
-      />
+      <Suspense fallback={<div className="bg-background min-h-0 flex-1" />}>
+        <LazyPlaybookEditor
+          host={{
+            type: "page",
+            onBack: handleBackToList,
+            onSaved: handleBackToList,
+            tourAnchors: PLAYBOOK_EDITOR_TOUR_ANCHORS,
+          }}
+          organizationId={activeOrganizationId}
+          playbookId={view.playbookId}
+        />
+      </Suspense>
     );
   }
 

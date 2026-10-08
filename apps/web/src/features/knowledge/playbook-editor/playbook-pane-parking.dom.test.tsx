@@ -27,8 +27,9 @@ const {
   registerPlaybookPaneLeaveGuard,
   cancelPlaybookPaneLeave,
   usePlaybookPaneLeave,
-  completeParkedPlaybookPaneSave,
 } = await import("./playbook-pane-parking");
+const { completeParkedPlaybookPaneSave } =
+  await import("./playbook-pane-save-reconciliation");
 const { createPlaybookBaseline, hasPlaybookDraftChanges } =
   await import("./playbook-editor.logic");
 const { resolveServerFollow, draftToAdopt } =
