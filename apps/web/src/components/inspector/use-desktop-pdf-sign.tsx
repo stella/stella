@@ -234,14 +234,14 @@ export const useDesktopPdfSign = ({
     };
     // Set once the browser's own cancel closed the session, so the watcher's
     // later read does not describe it as cancelled in stella desktop.
-    let cancelledHere = false;
+    const browserCancel = { settled: false };
     const cancel = async () => {
       const snapshot = await cancelPdfSigningSession(session);
       if (snapshot.status !== "cancelled") {
         // The exchange settled first; the watcher reports how.
         return;
       }
-      cancelledHere = true;
+      browserCancel.settled = true;
       stellaToast.update(toastId, {
         ...NO_ACTION,
         description: undefined,
@@ -299,7 +299,7 @@ export const useDesktopPdfSign = ({
     const outcome = watched.value;
     switch (outcome.type) {
       case "cancelled": {
-        if (cancelledHere) {
+        if (browserCancel.settled) {
           return;
         }
         if (outcome.closeReason === DESKTOP_HANDOFF_FAILURE.updateRequired) {

@@ -72,12 +72,12 @@ export const cancelPdfSigningSession = async ({
   sessionId,
   workspaceId,
 }: PdfSigningSessionRef) => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["pdf-signing-sessions"]({
-      sessionId: toSafeId<"pdfSigningSession">(sessionId),
-    })
-    .cancel.post();
+  const sessions = api.entities({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  })["pdf-signing-sessions"];
+  const response = await sessions({
+    sessionId: toSafeId<"pdfSigningSession">(sessionId),
+  }).cancel.post();
 
   return unwrapEden(response) satisfies PdfSigningSessionSnapshot;
 };
