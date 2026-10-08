@@ -3522,10 +3522,22 @@ describe("personal search history capabilities", () => {
           "query.properties.kind.default",
         );
       }
-      expect(JSON.stringify(payload.inputSchema)).not.toContain(
-        "organizationId",
-      );
-      expect(JSON.stringify(payload.inputSchema)).not.toContain("userId");
+      for (const part of ["query", "params", "body"]) {
+        expect(payload.inputSchema).not.toHaveProperty(
+          `${part}.properties.organizationId`,
+        );
+        expect(payload.inputSchema).not.toHaveProperty(
+          `${part}.properties.userId`,
+        );
+      }
+      if (capability === "search-history.clear") {
+        expect(payload.inputSchema).toHaveProperty(
+          "query.properties.expectedOrganizationId",
+        );
+        expect(payload.inputSchema).toHaveProperty(
+          "query.properties.expectedUserId",
+        );
+      }
     }
   });
 
@@ -3591,7 +3603,7 @@ describe("personal search history capabilities", () => {
           input:
             capability === "search-history.delete"
               ? { params: { entryId } }
-              : {},
+              : { query: {} },
           confirm: true,
         },
         context,
@@ -3617,6 +3629,26 @@ describe("personal search history capabilities", () => {
         },
       ]);
     }
+  });
+
+  test("clear scope preconditions reject changed scope before accessing history", async () => {
+    const database = createScopedDbMock({});
+    const result = await handleMcpToolCall({
+      toolName: "invoke_capability",
+      args: {
+        capability: "search-history.clear",
+        input: {
+          query: {
+            expectedOrganizationId: "a1111111-1111-4111-8111-111111111111",
+            expectedUserId: "a2222222-2222-4222-8222-222222222222",
+          },
+        },
+        confirm: true,
+      },
+      context: createContext(database),
+    });
+    expect(errorEnvelope(result).code).toBe("conflict");
+    expect(database.getCallCount()).toBe(0);
   });
 
   test("deleting history requires write consent and explicit confirmation", async () => {

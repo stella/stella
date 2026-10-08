@@ -41,6 +41,17 @@ describe("personal search history CLI", () => {
             partPath === "organizationId" || partPath === "userId",
         ),
       ).toBe(false);
+      if (action === "clear") {
+        for (const partPath of ["expectedOrganizationId", "expectedUserId"]) {
+          expect(leaf.flags).toContainEqual(
+            expect.objectContaining({
+              part: "query",
+              partPath,
+              required: false,
+            }),
+          );
+        }
+      }
       if (action === "delete") {
         expect(leaf.flags).toContainEqual(
           expect.objectContaining({

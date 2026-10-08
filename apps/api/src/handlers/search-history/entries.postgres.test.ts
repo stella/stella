@@ -134,6 +134,7 @@ const historyAuditRecorder = (fixture: HistoryFixture) =>
   });
 
 const identity = (fixture: HistoryFixture) => ({
+  query: {},
   recordAuditEvent: historyAuditRecorder(fixture),
   safeDb: createSafeDb(
     fixture.rlsDb,
@@ -564,6 +565,66 @@ if (!databaseUrl || !enabled) {
             .from(searchHistoryEntries)
             .where(inArray(searchHistoryEntries.id, [other.id, elsewhere.id])),
         ).toEqual(expect.arrayContaining([other, elsewhere]));
+      });
+    });
+
+    test("clear scope preconditions retain the active organization's entries and write no audit on mismatch", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const active = {
+          ...fixture,
+          organizationId: fixture.otherOrganizationId,
+        };
+        const entry = await recordQuery(active, "Active organization history");
+        const auditRows = () =>
+          fixture.db
+            .select()
+            .from(auditLogs)
+            .where(
+              and(
+                eq(auditLogs.organizationId, active.organizationId),
+                eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.SEARCH_HISTORY),
+              ),
+            );
+        const before = await auditRows();
+        expect(before).toHaveLength(1);
+        for (const query of [
+          {
+            expectedOrganizationId: fixture.organizationId,
+            expectedUserId: fixture.userId,
+          },
+          {
+            expectedOrganizationId: active.organizationId,
+            expectedUserId: fixture.otherUserId,
+          },
+        ]) {
+          const response = await clear.handler(
+            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+              ...identity(active),
+              query,
+            }),
+          );
+          expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
+          if (response instanceof ElysiaCustomStatusResponse) {
+            expect(response.code).toBe(409);
+          }
+          expect((await readHistory(active)).items.map(({ id }) => id)).toEqual(
+            [entry.id],
+          );
+          expect(await auditRows()).toEqual(before);
+        }
+        expect(
+          await clear.handler(
+            createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+              ...identity(active),
+              query: {
+                expectedOrganizationId: active.organizationId,
+                expectedUserId: fixture.userId,
+              },
+            }),
+          ),
+        ).toEqual({ deleted: 1 });
+        expect((await readHistory(active)).items).toEqual([]);
+        expect(await auditRows()).toHaveLength(2);
       });
     });
 

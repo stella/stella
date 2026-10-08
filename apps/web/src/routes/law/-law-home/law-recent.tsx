@@ -26,10 +26,7 @@ import { cn } from "@stll/ui/utils";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import {
-  filterLawRecent,
-  type LawRecentFilter,
-} from "@/lib/law-search-history";
+import type { LawRecentFilter } from "@/lib/law-search-history";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 import { DocumentIdentityBadge } from "./document-identity-badge";
@@ -62,14 +59,24 @@ type LawRecentProps = {
 };
 
 export const LawRecent = ({ onSearch }: LawRecentProps) => {
-  const history = useLawHistory();
-  return <LawRecentList onSearch={onSearch} history={history} />;
+  const [filter, setFilter] = useState<LawRecentFilter>("all");
+  const history = useLawHistory(filter);
+  return (
+    <LawRecentList
+      onSearch={onSearch}
+      history={history}
+      filter={filter}
+      onFilterChange={setFilter}
+    />
+  );
 };
 
 type LawRecentListProps = LawRecentProps & {
+  filter: LawRecentFilter;
+  onFilterChange: (filter: LawRecentFilter) => void;
   history: Pick<
     ReturnType<typeof useLawHistory>,
-    "entries" | "isPending" | "error"
+    "entries" | "isPending" | "error" | "scope"
   > & {
     remove: {
       mutate: (
@@ -78,25 +85,44 @@ type LawRecentListProps = LawRecentProps & {
       isPending: boolean;
     };
     clear: {
-      mutate: (value: undefined, options: { onSuccess: () => void }) => void;
+      mutate: (
+        value: NonNullable<ReturnType<typeof useLawHistory>["scope"]>,
+        options: { onSuccess: () => void },
+      ) => void;
       isPending: boolean;
     };
   };
 };
 
-export const LawRecentList = ({ onSearch, history }: LawRecentListProps) => {
+export const LawRecentList = (props: LawRecentListProps) => {
+  const scopeKey =
+    props.history.scope === null
+      ? "visitor"
+      : JSON.stringify([
+          props.history.scope.userId,
+          props.history.scope.organizationId,
+        ]);
+  return <ScopedLawRecentList key={scopeKey} {...props} />;
+};
+
+const ScopedLawRecentList = ({
+  onSearch,
+  history,
+  filter,
+  onFilterChange,
+}: LawRecentListProps) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
   const { entries } = history;
-  const [clearOpen, setClearOpen] = useState(false);
-  const [filter, setFilter] = useState<LawRecentFilter>("all");
-  const visibleEntries = filterLawRecent(entries, filter);
+  const [clearScope, setClearScope] = useState<NonNullable<
+    ReturnType<typeof useLawHistory>["scope"]
+  > | null>(null);
   let emptyLabel: TranslationKey | undefined;
   if (history.error) {
     emptyLabel = "common.error";
   } else if (history.isPending) {
     emptyLabel = "common.loading";
-  } else if (visibleEntries.length === 0) {
+  } else if (entries.length === 0) {
     emptyLabel = "lawHome.noRecent";
   }
 
@@ -112,7 +138,7 @@ export const LawRecentList = ({ onSearch, history }: LawRecentListProps) => {
               </span>
               {entries.length > 0 && (
                 <Button
-                  onClick={() => setClearOpen(true)}
+                  onClick={() => setClearScope(history.scope)}
                   size="xs"
                   variant="ghost"
                 >
@@ -129,7 +155,7 @@ export const LawRecentList = ({ onSearch, history }: LawRecentListProps) => {
                 <Button
                   aria-pressed={filter === value}
                   key={value}
-                  onClick={() => setFilter(value)}
+                  onClick={() => onFilterChange(value)}
                   size="xs"
                   variant={filter === value ? "secondary" : "ghost"}
                 >
@@ -143,7 +169,7 @@ export const LawRecentList = ({ onSearch, history }: LawRecentListProps) => {
         {emptyLabel !== undefined ? (
           <LandingEmpty>{t(emptyLabel)}</LandingEmpty>
         ) : (
-          visibleEntries.map((entry) => {
+          entries.map((entry) => {
             const title = entry.kind === "search" ? entry.query : entry.title;
             const text = (
               <LandingItemText
@@ -187,7 +213,10 @@ export const LawRecentList = ({ onSearch, history }: LawRecentListProps) => {
           })
         )}
       </LandingSection>
-      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+      <AlertDialog
+        open={clearScope !== null}
+        onOpenChange={(open) => setClearScope(open ? history.scope : null)}
+      >
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("lawHome.clearRecent")}</AlertDialogTitle>
@@ -202,11 +231,14 @@ export const LawRecentList = ({ onSearch, history }: LawRecentListProps) => {
             <Button
               variant="destructive"
               loading={history.clear.isPending}
-              onClick={() =>
-                history.clear.mutate(undefined, {
-                  onSuccess: () => setClearOpen(false),
-                })
-              }
+              onClick={() => {
+                if (clearScope === null) {
+                  return;
+                }
+                history.clear.mutate(clearScope, {
+                  onSuccess: () => setClearScope(null),
+                });
+              }}
             >
               {t("common.delete")}
             </Button>

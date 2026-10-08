@@ -81,12 +81,6 @@ export type LawRecentEntry = v.InferOutput<typeof recentEntrySchema>;
 export type LawRecentFilter = "all" | LawRecentEntry["kind"];
 const EMPTY: readonly LawRecentEntry[] = [];
 
-export const filterLawRecent = <Entry extends { kind: LawRecentEntry["kind"] }>(
-  entries: readonly Entry[],
-  filter: LawRecentFilter,
-): readonly Entry[] =>
-  filter === "all" ? entries : entries.filter((entry) => entry.kind === filter);
-
 /** Bad rows are dropped individually; old searches become recent search rows. */
 export const readLawRecent = (
   raw: string | null,

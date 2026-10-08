@@ -6,6 +6,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { browserStateStorage } from "@/lib/account/browser-storage";
+import type { LawRecentFilter } from "@/lib/law-search-history";
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -81,6 +82,35 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
+const createSignedSession = ({
+  userId = "history-reader",
+  organizationId = "history-org",
+} = {}) => {
+  const signedAt = new Date("2026-01-01T00:00:00Z");
+  return {
+    session: {
+      activeOrganizationId: organizationId,
+      createdAt: signedAt,
+      expiresAt: new Date("2027-01-01T00:00:00Z"),
+      id: "session_1",
+      token: "token",
+      updatedAt: signedAt,
+      userId,
+    },
+    user: {
+      createdAt: signedAt,
+      email: "reader@example.test",
+      emailVerified: true,
+      id: userId,
+      name: "Reader",
+      timezoneId: "UTC",
+      twoFactorEnabled: false,
+      updatedAt: signedAt,
+      userShortcuts: null,
+    },
+  };
+};
+
 const mount = async (locale = "en") => {
   const calls = {
     searches: [] as string[],
@@ -89,11 +119,18 @@ const mount = async (locale = "en") => {
   };
   const Fixture = () => {
     const [entries, setEntries] = useState([...seed]);
+    const [filter, setFilter] = useState<LawRecentFilter>("all");
     return (
       <LawRecentList
         onSearch={(query) => calls.searches.push(query)}
+        filter={filter}
+        onFilterChange={setFilter}
         history={{
-          entries,
+          entries:
+            filter === "all"
+              ? entries
+              : entries.filter((entry) => entry.kind === filter),
+          scope: { userId: "history-reader", organizationId: "history-org" },
           isPending: false,
           error: null,
           remove: {
@@ -246,29 +283,7 @@ test("signed-in recents import local data once and always display server data", 
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const signedAt = new Date("2026-01-01T00:00:00Z");
-  const signedSession = {
-    session: {
-      activeOrganizationId: "history-org",
-      createdAt: signedAt,
-      expiresAt: new Date("2027-01-01T00:00:00Z"),
-      id: "session_1",
-      token: "token",
-      updatedAt: signedAt,
-      userId: "history-reader",
-    },
-    user: {
-      createdAt: signedAt,
-      email: "reader@example.test",
-      emailVerified: true,
-      id: "history-reader",
-      name: "Reader",
-      timezoneId: "UTC",
-      twoFactorEnabled: false,
-      updatedAt: signedAt,
-      userShortcuts: null,
-    },
-  };
+  const signedSession = createSignedSession();
   client.setQueryData(sessionOptions.queryKey, signedSession);
   const mountServer = async () => {
     await act(async () => {
@@ -319,7 +334,11 @@ test("signed-in recents import local data once and always display server data", 
         },
       });
     });
-    expect(screen.queryByRole("button", { name: /náhrada škody/u })).toBeNull();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /náhrada škody/u }) === null,
+      ).toBe(true),
+    );
     await act(async () => {
       organizationRead.resolve(undefined);
       nextRead = undefined;
@@ -339,9 +358,12 @@ test("signed-in recents import local data once and always display server data", 
         user: { ...signedSession.user, id: "history-other-reader" },
       });
     });
-    expect(
-      screen.queryByRole("button", { name: /other organization query/u }),
-    ).toBeNull();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /other organization query/u }) ===
+          null,
+      ).toBe(true),
+    );
     await act(async () => {
       accountRead.resolve(undefined);
       nextRead = undefined;
@@ -357,5 +379,219 @@ test("signed-in recents import local data once and always display server data", 
     transport.mockRestore();
     browserStateStorage("local").removeItem(scopedKey);
     browserStateStorage("local").removeItem("law_search_history");
+  }
+});
+
+type HistoryRequest = { url: URL; method: string };
+const mountServerHistory = async (
+  respond: (request: HistoryRequest) => Response,
+) => {
+  const { QueryClient, QueryClientProvider } =
+    await import("@tanstack/react-query");
+  const { sessionOptions } = await import("@/lib/auth-query-options");
+  const signedSession = createSignedSession({
+    userId: "scoped-history-reader",
+    organizationId: "scoped-history-org-a",
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  client.setQueryData(sessionOptions.queryKey, signedSession);
+  const requests: HistoryRequest[] = [];
+  const transport = spyOn(globalThis, "fetch").mockImplementation(
+    async (input, init) => {
+      const request = {
+        url: new URL(input instanceof Request ? input.url : String(input)),
+        method: init?.method ?? "GET",
+      };
+      requests.push(request);
+      return respond(request);
+    },
+  );
+  try {
+    await act(async () => {
+      render(
+        <QueryClientProvider client={client}>
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <LawRecent onSearch={() => undefined} />
+            </FormattingProvider>
+          </IntlProvider>
+        </QueryClientProvider>,
+      );
+    });
+  } catch (error) {
+    await act(async () => cleanup());
+    client.clear();
+    transport.mockRestore();
+    throw error;
+  }
+  return {
+    requests,
+    setOrganization: async (organizationId: string) => {
+      await act(async () => {
+        client.setQueryData(sessionOptions.queryKey, {
+          ...signedSession,
+          session: {
+            ...signedSession.session,
+            activeOrganizationId: organizationId,
+          },
+        });
+      });
+    },
+    dispose: async () => {
+      await act(async () => cleanup());
+      client.clear();
+      transport.mockRestore();
+    },
+  };
+};
+
+test("recents tabs fetch each kind beyond the newest twenty mixed entries", async () => {
+  const searches = Array.from({ length: 21 }, (_, index) => ({
+    ...seed[0],
+    id: toSafeId<"searchHistoryEntry">(`paged-search-${index}`),
+    query: `Recent query ${index}`,
+  }));
+  const oldDecision = { ...seed[1], lastUsedAt: "2025-12-01T00:00:00Z" };
+  const oldStatute = { ...seed[4], lastUsedAt: "2025-11-01T00:00:00Z" };
+  const stored = [...searches, oldDecision, oldStatute];
+  expect(stored.slice(0, 20).some(({ kind }) => kind === "decision")).toBe(
+    false,
+  );
+  const fixture = await mountServerHistory(({ url, method }) => {
+    if (method !== "GET" || !url.pathname.includes("search-history")) {
+      throw new TypeError("Expected a history list request");
+    }
+    const kind = url.searchParams.get("kind");
+    const filtered =
+      kind === null ? stored : stored.filter((entry) => entry.kind === kind);
+    return Response.json({
+      items: filtered.slice(0, 20),
+      nextCursor: filtered.length > 20 ? "older-entries" : null,
+      limit: 20,
+    });
+  });
+  try {
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Recent query 0(?:\s|$)/u }),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    await click(messages.lawHome.recentCasesFilter);
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /23 Cdo 1001/u })).toBeTruthy(),
+    );
+    expect(
+      fixture.requests.some(
+        ({ url }) =>
+          url.searchParams.get("kind") === "decision" &&
+          url.searchParams.get("limit") === "20",
+      ),
+    ).toBe(true);
+    await click(messages.statutes.title);
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /172\/26/u })).toBeTruthy(),
+    );
+    expect(screen.queryByRole("link", { name: /23 Cdo 1001/u })).toBeNull();
+    expect(
+      fixture.requests.some(
+        ({ url }) =>
+          url.searchParams.get("kind") === "statute" &&
+          url.searchParams.get("limit") === "20",
+      ),
+    ).toBe(true);
+    await click(messages.lawHome.recentSearchFilter);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Recent query 0(?:\s|$)/u }),
+      ).toBeTruthy(),
+    );
+    expect(
+      fixture.requests.some(
+        ({ url }) => url.searchParams.get("kind") === "search",
+      ),
+    ).toBe(true);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("clear confirmation belongs to its opening organization and cannot survive an organization round trip", async () => {
+  const organizationA = "scoped-history-org-a";
+  const organizationB = "scoped-history-org-b";
+  const userId = "scoped-history-reader";
+  let activeOrganization = organizationA;
+  const queries = new Map([
+    [organizationA, "Organization A query"],
+    [organizationB, "Organization B query"],
+  ]);
+  const fixture = await mountServerHistory(({ url, method }) => {
+    if (!url.pathname.includes("search-history")) {
+      throw new TypeError("Expected a history request");
+    }
+    if (method === "DELETE") {
+      const deleted = queries.delete(activeOrganization) ? 1 : 0;
+      return Response.json({ deleted });
+    }
+    const query = queries.get(activeOrganization);
+    return Response.json({
+      items: query === undefined ? [] : [{ ...seed[0], query }],
+      nextCursor: null,
+      limit: 20,
+    });
+  });
+  const switchOrganization = async (organizationId: string) => {
+    activeOrganization = organizationId;
+    await fixture.setOrganization(organizationId);
+    const query = queries.get(organizationId);
+    if (query === undefined) {
+      throw new TypeError("Expected an organization history query");
+    }
+    await waitFor(() => expect(screen.getByText(query)).toBeTruthy());
+  };
+  try {
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Organization A query/u }),
+      ).toBeTruthy(),
+    );
+    await click(messages.lawHome.clearRecent);
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    const staleConfirm = screen.getByRole("button", {
+      name: messages.common.delete,
+    });
+    await switchOrganization(organizationB);
+    expect(screen.queryByRole("alertdialog") === null).toBe(true);
+    await act(async () => fireEvent.click(staleConfirm));
+    expect(
+      fixture.requests.filter(({ method }) => method === "DELETE"),
+    ).toHaveLength(0);
+    expect(queries.get(organizationB)).toBe("Organization B query");
+    await switchOrganization(organizationA);
+    expect(screen.queryByRole("alertdialog") === null).toBe(true);
+    await switchOrganization(organizationB);
+    expect(screen.queryByRole("alertdialog") === null).toBe(true);
+    await click(messages.lawHome.clearRecent);
+    await click(messages.common.delete);
+    await waitFor(() =>
+      expect(
+        fixture.requests.filter(({ method }) => method === "DELETE"),
+      ).toHaveLength(1),
+    );
+    const deletion = fixture.requests.find(({ method }) => method === "DELETE");
+    expect(deletion?.url.searchParams.get("expectedOrganizationId")).toBe(
+      organizationB,
+    );
+    expect(deletion?.url.searchParams.get("expectedUserId")).toBe(userId);
+    await waitFor(() =>
+      expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy(),
+    );
+    expect(queries.has(organizationB)).toBe(false);
+    expect(queries.get(organizationA)).toBe("Organization A query");
+  } finally {
+    await fixture.dispose();
   }
 });

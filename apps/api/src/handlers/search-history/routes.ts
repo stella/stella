@@ -24,6 +24,7 @@ export const searchHistoryRoute = new Elysia({ prefix: "/search-history" })
     permissions: importSearchHistory.config.permissions,
   })
   .delete("/", clearSearchHistory.handler, {
+    query: clearSearchHistory.config.query,
     permissions: clearSearchHistory.config.permissions,
   })
   .delete("/:entryId", deleteSearchHistoryEntry.handler, {
