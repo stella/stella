@@ -9170,5 +9170,9 @@
   "src/db/account-issuer-leftover-check-migration.db.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
