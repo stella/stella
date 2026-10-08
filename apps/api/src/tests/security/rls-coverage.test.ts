@@ -90,8 +90,8 @@ const unwrap = (expr: string): string => {
   while (current.startsWith("(")) {
     let depth = 0;
     let closesAtEnd = false;
-    for (const [index, char] of [...current].entries()) {
-      depth += depthChange(char);
+    for (let index = 0; index < current.length; index += 1) {
+      depth += depthChange(current[index]);
       if (depth === 0) {
         closesAtEnd = index === current.length - 1;
         break;
@@ -157,14 +157,16 @@ const restrictivePolicyViolation = (
   const name = `${policy.table_name}.${policy.policy_name}`;
   const expr = policy.command === "a" ? policy.check_expr : policy.using_expr;
   if (policy.policy_name !== ENTITY_FEATURE_POLICY_NAME) {
-    return expr === "false" ? undefined : `${name} must deny: ${expr}`;
+    return expr === "false"
+      ? undefined
+      : `${name} must deny: ${expr ?? "no expression"}`;
   }
   if (policy.using_expr !== policy.check_expr) {
     return `${name} must fence reads and writes alike`;
   }
   return expr !== null && isEntityFeatureFence(expr)
     ? undefined
-    : `${name} must fence through the entity owner: ${expr}`;
+    : `${name} must fence through the entity owner: ${expr ?? "no expression"}`;
 };
 
 beforeAll(

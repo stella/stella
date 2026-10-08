@@ -171,8 +171,7 @@ export const entityFeatureCoverageViolations = (
       if (target !== undefined) {
         const classification = entityReferenceClassification(column);
         if (
-          classification === undefined ||
-          classification.kind !== "owned-content" ||
+          classification?.kind !== "owned-content" ||
           classification.target !== target
         ) {
           continue;
