@@ -306,7 +306,7 @@ test.each(TEST_LOCALES)(
     expect(
       view.getByRole("status", {
         name: catalog.tasks.statusValues.in_progress,
-      }).dataset.slot,
+      }).dataset["slot"],
     ).toBe("loader");
     expect(view.container.textContent).toBe(catalog.chat.tool.spawn_subagents);
     expect(view.queryAllByRole("button")).toHaveLength(0);
