@@ -2248,7 +2248,7 @@ describe("validateMessage", () => {
                     approval: {
                       id: "approval-1",
                       needsApproval: true,
-                      approved,
+                      ...(approved === undefined ? {} : { approved }),
                     },
                   },
                   {
