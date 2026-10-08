@@ -407,11 +407,31 @@ export const AI_ERROR_KIND_FAILURE_REASON = {
  * unbounded walk, is the one a sink records, so a bare provider error and the
  * same error wrapped by `aiHandlerError` grade alike.
  */
+/**
+ * Grade a provider 400 that no kind names as a request this service built
+ * and the provider refused (`provider_request_rejected`, a defect), rather
+ * than leaving it unclassified. A kind already decided keeps its own grade.
+ */
+export const classifyRejectedProviderRequest = (
+  error: unknown,
+  kind: AIErrorKind,
+): void => {
+  if (
+    kind === "unknown" &&
+    typeof error === "object" &&
+    error !== null &&
+    providerStatusCode(error) === 400
+  ) {
+    classifyFailure(error, "provider_request_rejected");
+  }
+};
+
 export const classifyAIBoundaryFailure = (error: unknown): AIErrorKind => {
   const kind = classifyAIError(error);
   if (kind !== "unknown" && typeof error === "object" && error !== null) {
     classifyFailure(error, AI_ERROR_KIND_FAILURE_REASON[kind]);
   }
+  classifyRejectedProviderRequest(error, kind);
   return kind;
 };
 

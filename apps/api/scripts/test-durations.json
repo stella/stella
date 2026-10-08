@@ -1939,6 +1939,10 @@
     "seconds": 0.479054,
     "source": "estimated"
   },
+  "src/handlers/chat/decline-continuation-request.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/chat/export/citation-footnotes.test.ts": {
     "seconds": 0.120031,
     "source": "estimated"

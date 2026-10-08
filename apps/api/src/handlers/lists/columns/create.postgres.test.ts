@@ -116,6 +116,7 @@ if (!databaseUrl || !runPostgres) {
           );
         });
         const baseContext = {
+          recordAuditEvent: auditRecorderDouble(),
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },

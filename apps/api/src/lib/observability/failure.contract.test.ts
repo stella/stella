@@ -513,6 +513,18 @@ const GRADING_ROWS: readonly GradingRow[] = [
     },
   ]),
   {
+    name: "a provider 400 no kind names, at the AI boundary",
+    error: () =>
+      Object.assign(new Error(SENTINEL), {
+        status: 400,
+        error: { type: "invalid_request_error", param: "input" },
+      }),
+    boundary: "ai",
+    reason: "provider_request_rejected",
+    grade: "defect",
+    rule: "brand",
+  },
+  {
     name: "a bare provider 429 that never met the AI boundary",
     error: () => Object.assign(new Error(SENTINEL), { statusCode: 429 }),
     reason: "unclassified",
