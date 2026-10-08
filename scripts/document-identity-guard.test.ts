@@ -47,6 +47,40 @@ describe("document identity ownership guard", () => {
     },
   );
 
+  test.each([
+    {
+      kind: "statute",
+      markup: "<span>{entry.statuteNumber}/{entry.statuteYear}</span>",
+    },
+    {
+      kind: "decision",
+      markup: "<CourtBadge abbreviation={entry.courtAbbreviation} />",
+    },
+  ])(
+    "law-home recents reject a hand-rolled $kind badge in a local adapter",
+    ({ kind, markup }) => {
+      const filename = "apps/web/src/routes/law/-law-home/law-recent.tsx";
+      const row = `export const LawRecent = ({ entries }) => <ul>{entries.map(entry => <li><LocalIdentity entry={entry} />{entry.title}</li>)}</ul>;`;
+      const shared = `const LocalIdentity = ({ entry }) => entry.kind === "${kind}" ? <DocumentIdentityBadge identity={entry.identity} /> : null;`;
+      const good = checkDocumentIdentitySources(
+        fixture(filename, IMPORT + row + shared),
+      );
+      expect(good.surfaces).toEqual([`${filename}#LawRecent`]);
+      expect(good.violations).toEqual([]);
+      // Mutation: retain the local per-kind adapter and import, replace its shared badge.
+      const handRolled = shared.replace(
+        /<DocumentIdentityBadge[^>]*\/>/u,
+        () => markup,
+      );
+      expect(handRolled).not.toBe(shared);
+      const bad = checkDocumentIdentitySources(
+        fixture(filename, IMPORT + row + handRolled),
+      );
+      expect(bad.surfaces).toEqual(good.surfaces);
+      expect(bad.violations).toEqual(good.surfaces);
+    },
+  );
+
   test("follows a rendered adapter, rather than accepting an imported but unused badge", () => {
     const sources = fixture(
       "apps/web/src/features/statutes/rows.tsx",

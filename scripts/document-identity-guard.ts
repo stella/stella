@@ -12,7 +12,13 @@ const DOCUMENT_INPUT =
 const ROW_IDENTITY =
   /\.(?:caseNumber|courtAbbreviation|statuteTitle|decisionId)\b|\bstatute\.title\b/u;
 
-type Renderer = { path: string; name: string; references: Set<string> };
+type Renderer = {
+  path: string;
+  name: string;
+  references: Set<string>;
+  hasRows: boolean;
+  carriesDocumentKind: boolean;
+};
 
 const resolveImport = (filename: string, specifier: string) => {
   if (specifier === "@stll/ui/document-identity-badge") {
@@ -90,18 +96,20 @@ const sourceReferences = ({
   };
 };
 
-type BadgeReachabilityOptions = {
+type RendererReachabilityOptions = {
   id: string;
   renderers: ReadonlyMap<string, Renderer>;
+  matches: (id: string, renderer: Renderer | undefined) => boolean;
   visited?: Set<string>;
 };
 
-const reachesBadge = ({
+const reachesRenderer = ({
   id,
   renderers,
+  matches,
   visited = new Set<string>(),
-}: BadgeReachabilityOptions): boolean => {
-  if (id === `${BADGE_OWNER}#DocumentIdentityBadge`) {
+}: RendererReachabilityOptions): boolean => {
+  if (matches(id, renderers.get(id))) {
     return true;
   }
   if (visited.has(id)) {
@@ -113,7 +121,7 @@ const reachesBadge = ({
     return false;
   }
   return [...renderer.references].some((dependency) =>
-    reachesBadge({ id: dependency, renderers, visited }),
+    reachesRenderer({ id: dependency, renderers, matches, visited }),
   );
 };
 
@@ -199,6 +207,37 @@ const gatherBindings = (
     ts.forEachChild(child, visit);
   };
   visit(body);
+};
+
+const documentIdentityResult = (
+  renderers: ReadonlyMap<string, Renderer>,
+  roots: Set<string>,
+) => {
+  for (const [id, renderer] of renderers) {
+    if (
+      renderer.hasRows &&
+      reachesRenderer({
+        id,
+        renderers,
+        matches: (_id, dependency) => dependency?.carriesDocumentKind === true,
+      })
+    ) {
+      roots.add(id);
+    }
+  }
+  const surfaces = [...roots].toSorted();
+  return {
+    surfaces,
+    violations: surfaces.filter(
+      (id) =>
+        !reachesRenderer({
+          id,
+          renderers,
+          matches: (dependencyId) =>
+            dependencyId === `${BADGE_OWNER}#DocumentIdentityBadge`,
+        }),
+    ),
+  };
 };
 
 /** Discover document rows and registered rails, then follow their rendered output. */
@@ -324,7 +363,15 @@ export const checkDocumentIdentitySources = (
       } else {
         visit(body);
       }
-      renderers.set(id, { path: filename, name, references });
+      renderers.set(id, {
+        path: filename,
+        name,
+        references,
+        hasRows,
+        carriesDocumentKind:
+          /\.(?:kind|type|documentKind)\b/u.test(node.getText(file)) &&
+          /["'](?:statute|decision|case-law)["']/u.test(node.getText(file)),
+      });
       if (
         isDocumentRenderer({
           name,
@@ -393,11 +440,7 @@ export const checkDocumentIdentitySources = (
       }
     }
   }
-  const surfaces = [...roots].toSorted();
-  return {
-    surfaces,
-    violations: surfaces.filter((id) => !reachesBadge({ id, renderers })),
-  };
+  return documentIdentityResult(renderers, roots);
 };
 
 export const readDocumentIdentitySources = (root: string) => {
