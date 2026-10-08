@@ -2153,7 +2153,7 @@ jobs:
       - name: GitHub API command ownership
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
-          bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
+          bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts scripts/sparse-checkout-dependencies.test.ts
           bun scripts/check-gh-retry.ts
 
       - name: SHA-256 migration ledger
