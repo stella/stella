@@ -286,15 +286,19 @@ export const createDurableChatTransport = <
             method: "GET",
             body: null,
           });
+          if (!response.ok) {
+            throw new ChatReconnectError({
+              code:
+                response.status === 403 || response.status === 404
+                  ? "refused"
+                  : undefined,
+              message: `Chat rejoin failed (${response.status}).`,
+            });
+          }
           if (
             response.headers.get("Content-Type")?.includes("application/json")
           ) {
             // A log can close or expire between the probe and join.
-            if (!response.ok) {
-              throw new ChatReconnectError({
-                message: `Chat rejoin failed (${response.status}).`,
-              });
-            }
             const body: unknown = await response.json();
             const parsed = v.safeParse(chatTurnResumeProbeSchema, body);
             if (!parsed.success || parsed.output.type !== "transcript") {
@@ -308,11 +312,6 @@ export const createDurableChatTransport = <
               resume: parsed.output.resumeSnapshot,
               onTranscript,
               onReconnectChange,
-            });
-          }
-          if (!response.ok) {
-            throw new ChatReconnectError({
-              message: `Chat rejoin failed (${response.status}).`,
             });
           }
           onReconnectChange(false);

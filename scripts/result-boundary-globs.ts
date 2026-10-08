@@ -243,6 +243,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack's fetch and connection adapters consume Response/rejection;
+  // this transport cannot return Result across the SDK callback boundary.
+  "packages/chat/src/durable-transport.ts",
   // TanStack AI reads a chat tool's failure only from the error its server
   // function throws; tools keep `Result`s and raise through this one module.
   "apps/api/src/handlers/chat/tools/tool-failure.ts",

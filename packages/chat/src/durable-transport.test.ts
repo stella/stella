@@ -5,7 +5,10 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createDurableChatTransport } from "./durable-transport";
+import {
+  ChatReconnectError,
+  createDurableChatTransport,
+} from "./durable-transport";
 
 const RUN_ID = "run-rejoin";
 const THREAD_ID = "thread-rejoin";
@@ -400,6 +403,61 @@ describe("durable chat transport", () => {
       client.detach();
     }
   });
+
+  for (const status of [403, 404]) {
+    for (const contentType of ["application/json", "text/plain"]) {
+      test(`a ${status} ${contentType} join refusal stops reconnection immediately`, async () => {
+        const errors: ChatReconnectError[] = [];
+        let joins = 0;
+        let waits = 0;
+        let elapsed = 0;
+        const transport = createDurableChatTransport({
+          initialTurn: { type: "settled" },
+          threadId: THREAD_ID,
+          initialMessages: [],
+          sendUrl: "https://chat.test/chat",
+          joinUrl: () => "https://chat.test/join",
+          fetchClient: Object.assign(
+            async () => {
+              joins += 1;
+              return new Response("refused", {
+                status,
+                headers: { "Content-Type": contentType },
+              });
+            },
+            { preconnect: () => undefined },
+          ),
+          probe: async () => ({
+            type: "running",
+            turnId: "turn-rejoin",
+            runId: RUN_ID,
+          }),
+          onReconnectChange: () => undefined,
+          onTranscript: () => undefined,
+          onError: (error) => {
+            errors.push(error);
+          },
+          now: () => elapsed,
+          wait: async () => {
+            waits += 1;
+            elapsed += 180_000;
+          },
+          random: () => 0,
+        });
+        expect(
+          await rejectionOf(collect(transport.connection.joinRun(RUN_ID))),
+        ).toMatchObject({ message: expect.stringContaining("502") });
+        expect(errors).toHaveLength(1);
+        expect(errors.at(0)).toBeInstanceOf(ChatReconnectError);
+        expect(errors.at(0)).toMatchObject({
+          code: "refused",
+          message: `Chat rejoin failed (${status}).`,
+        });
+        expect(joins).toBe(1);
+        expect(waits).toBe(0);
+      });
+    }
+  }
 
   test("a malformed JSON join response is surfaced instead of treated as a settled transcript", async () => {
     const errors: Error[] = [];

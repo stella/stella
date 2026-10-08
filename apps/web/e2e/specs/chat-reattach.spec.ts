@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
@@ -23,12 +25,14 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   const answer = transcript.getByText(ANSWER_START, { exact: false });
   await expect(answer).toBeVisible();
   const uninterrupted = await answer.textContent();
+  assert.ok(uninterrupted !== null, "The completed answer must contain text");
 
   await composer.fill(SLOW_STREAM_PROMPT);
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(stop).toBeVisible();
   await expect(answer).toHaveCount(2);
   const partial = await answer.last().textContent();
+  assert.ok(partial !== null, "The streaming answer must contain text");
   expect(partial.length).toBeLessThan(uninterrupted.length);
   await page.screenshot({ path: test.info().outputPath("before-reload.png") });
   const join = page.waitForResponse(
@@ -128,6 +132,7 @@ test("Stop in another tab cancels a detached turn and settles both viewers", asy
       .getByRole("log")
       .getByText(ANSWER_START, { exact: false })
       .textContent();
+    assert.ok(stoppedText !== null, "The stopped answer must contain text");
     await page.reload({ waitUntil: "commit" });
     await expect(
       page.getByRole("log").getByText(ANSWER_START, { exact: false }),
