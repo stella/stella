@@ -2160,22 +2160,6 @@
     "reason": "Existing FLOW_EXAMPLE_KEYS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::ASK_CONTENT_TYPES::domain:[\"text\",\"date\",\"int\",\"single-select\"]::1",
-    "reason": "Existing ASK_CONTENT_TYPES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::CHECK_KINDS::domain:[\"presence\",\"constraint\"]::1",
-    "reason": "Existing CHECK_KINDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::EXPECTATIONS::domain:[\"required\",\"restricted\"]::1",
-    "reason": "Existing EXPECTATIONS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::OPTION_COLORS::domain:[\"blue\",\"green\",\"amber\",\"violet\",\"red\",\"teal\",\"fuchsia\",\"sky\"]::1",
-    "reason": "Existing OPTION_COLORS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/knowledge/-components/skill-metadata-draft.logic.test.ts::FIELDS::domain:[\"command\",\"description\",\"enabled\",\"name\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },

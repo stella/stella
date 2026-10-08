@@ -50,6 +50,7 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
+import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { MatterIcon } from "@/components/matter-icon";
 import {
@@ -395,6 +396,7 @@ const SuggestChangesApplyResult = ({
 // -- Main card --
 
 type ToolApprovalCardProps = {
+  action?: ToolCallAction | undefined;
   /** Threaded through for the `suggest_changes` approval summary; see
    *  `ChatThreadMessagesProps.activeFileName`. */
   activeFileName?: string | undefined;
@@ -422,6 +424,7 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 };
 
 export const ToolApprovalCard = ({
+  action,
   activeFileName,
   isAwaitingUser,
   isTurnActive,
@@ -570,6 +573,17 @@ export const ToolApprovalCard = ({
             className="text-destructive ms-auto size-3.5 shrink-0"
             role="img"
           />
+        )}
+        {action !== undefined && (
+          <Button
+            className="-me-1 shrink-0"
+            onClick={action.onClick}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {action.label}
+          </Button>
         )}
       </div>
 
