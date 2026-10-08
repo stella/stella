@@ -18,7 +18,7 @@ import {
   renderRecheckBody,
   type RecheckPr,
 } from "./dated-waiver-recheck";
-import { collectWaivers, type DatedWaiver } from "./dated-waivers";
+import { collectWaivers, type DatedWaiver, dueWaivers } from "./dated-waivers";
 
 const entry = {
   dependency: "example",
