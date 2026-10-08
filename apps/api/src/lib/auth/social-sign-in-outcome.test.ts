@@ -18,7 +18,8 @@ describe("social sign-in outcome", () => {
     [`${errorUrl}?error=account_not_linked`, "account_not_linked"],
     [`${errorUrl}?error=identity_not_allowed`, "identity_not_allowed"],
     [`${errorUrl}?error=invalid_code`, "failed"],
-    [errorUrl, "failed"],
+    [errorUrl, "completed"],
+    [`${errorUrl}?error=`, "failed"],
     ["https://app.example.test/matters", "completed"],
     ["https://app.example.test/matters?error=account_not_linked", "completed"],
     ["https://other.example.test/api/auth/error?error=x", "completed"],
@@ -55,6 +56,24 @@ describe("social sign-in outcome", () => {
         effective,
       ),
     ).toBe("completed");
+  });
+
+  test("a sign-in sharing one URL for success and errors completes there", () => {
+    const sharedUrl = "https://app.example.test/connect";
+    const effective = socialCallbackErrorUrl(
+      { callbackURL: sharedUrl, errorURL: sharedUrl },
+      errorUrl,
+      authBaseUrl,
+    );
+    expect(classifySocialCallback(redirectTo(sharedUrl), effective)).toBe(
+      "completed",
+    );
+    expect(
+      classifySocialCallback(
+        redirectTo(`${sharedUrl}?error=account_not_linked`),
+        effective,
+      ),
+    ).toBe("account_not_linked");
   });
 
   test("resolves a relative per-sign-in error destination", () => {

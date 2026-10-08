@@ -70,7 +70,13 @@ export const classifySocialCallback = (
   ) {
     return "completed";
   }
-  switch (target.searchParams.get("error") ?? "") {
+  // Failures always carry an `error` code; a sign-in whose success and error
+  // destinations are the same URL lands here without one when it completes.
+  const error = target.searchParams.get("error");
+  if (error === null) {
+    return "completed";
+  }
+  switch (error) {
     case "account_not_linked":
       return "account_not_linked";
     case "identity_not_allowed":
