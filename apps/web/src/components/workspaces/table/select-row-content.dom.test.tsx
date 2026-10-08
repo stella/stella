@@ -378,7 +378,7 @@ describe("every shared selection-column host", () => {
         const row = number.closest('[role="row"]');
         const valueCell = [
           ...(row?.querySelectorAll('[role="gridcell"]') ?? []),
-        ].find((cell) => cell.textContent?.includes("Value"));
+        ].find((cell) => cell.textContent.includes("Value"));
         const content = valueCell?.querySelector(":scope > span");
         expect(content?.className.split(" ")).toContain(firstLine.content);
         for (const strut of valueCell?.querySelectorAll(
