@@ -1662,8 +1662,8 @@ type HeldAggregateOptions = {
   access: SourceAccess;
 };
 /**
- * Aggregates the handler locks itself; when it takes none, also those its
- * joined direct calls lock through withAggregateLock in their own bodies,
+ * The union of aggregates the handler locks itself and those its joined
+ * direct calls lock through withAggregateLock in their own bodies,
  * including inline callbacks those bodies pass to awaited calls. Named
  * functions a callee calls in turn are never followed.
  */
@@ -1673,9 +1673,6 @@ const heldAggregateNames = ({
 }: HeldAggregateOptions) => {
   const calls: ts.CallExpression[] = [];
   const held = awaitedAggregateNames({ implementation, access, calls });
-  if (held.size !== 0) {
-    return held;
-  }
   for (const call of calls) {
     const callee = calleeImplementation({ call, implementation, access });
     if (callee === undefined) {

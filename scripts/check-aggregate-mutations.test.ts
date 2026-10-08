@@ -637,6 +637,30 @@ describe("aggregate mutation route coverage", () => {
       );
     });
 
+    test("direct and followed locks combine to cover the declaration", () => {
+      const sources = setup();
+      sources.set(
+        "apps/api/src/lib/db/aggregate-lock.ts",
+        "export const AGGREGATE_LOCKS = {workspace: {rank: 1}, entity: {rank: 2}} as const;",
+      );
+      const declaration =
+        '{type: "aggregate", aggregates: ["workspace", "entity"]}';
+      const body =
+        'await safeDb(async (tx) => { await withAggregateLock({aggregate: "workspace", id, tx}); await lockEntity(tx); });';
+      const imports = `${lockImport} import { lockEntity } from "@/api/services/example-lock";`;
+      sources.set(
+        service,
+        `${lockImport} export const lockEntity = async (tx) => { await withAggregateLock({aggregate: "entity", id, tx}); };`,
+      );
+      sources.set(module, handlerModule({ imports, body, declaration }));
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+      sources.set(
+        service,
+        `${lockImport} export let lockEntity = async (tx) => { await withAggregateLock({aggregate: "entity", id, tx}); };`,
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    });
+
     test("the helper two levels deep does not cover the route", () => {
       const sources = setup();
       sources.set(
