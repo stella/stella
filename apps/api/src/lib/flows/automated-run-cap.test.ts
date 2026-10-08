@@ -17,7 +17,9 @@ import { eq } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
+  entities,
   flowDefinitions,
+  flowUploadTriggerIntents,
   flowRuns,
   flowRunSteps,
   workspaces,
@@ -29,6 +31,7 @@ import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-c
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -113,6 +116,27 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     runId: SafeId<"flowRun"> = createSafeId<"flowRun">(),
     triggerSource: FlowTriggerSource = FILE_UPLOAD_SOURCE,
   ) => {
+    if (triggerSource.type === "file-upload") {
+      const entityId = brandPersistedEntityId(triggerSource.entityId);
+      await testDb
+        .insert(entities)
+        .values({
+          id: entityId,
+          workspaceId,
+          name: "cap-upload.pdf",
+        })
+        .onConflictDoNothing();
+      await testDb
+        .insert(flowUploadTriggerIntents)
+        .values({
+          definitionId,
+          entityId,
+          workspaceId,
+          organizationId,
+          fileExtension: "pdf",
+        })
+        .onConflictDoNothing();
+    }
     const rows = buildFlowRunRows({
       runId,
       workspaceId,

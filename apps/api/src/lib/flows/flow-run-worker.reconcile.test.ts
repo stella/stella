@@ -15,13 +15,19 @@ import {
   expect,
   test,
 } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { featureEnrolments, flowRuns, workspaces } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  flowDefinitions,
+  flowRuns,
+  flowRunSteps,
+  workspaces,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -329,6 +335,85 @@ describe("reconcileOrphanedFlowRuns", () => {
     } finally {
       env.FEATURE_FLOWS = previous;
       restore();
+    }
+  });
+
+  test("deleted-definition orphans reach terminal refusal while ungranted actors remain paused", async () => {
+    const definitionId = createSafeId<"flowDefinition">();
+    const runId = createSafeId<"flowRun">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: SNAPSHOT.name,
+      steps: SNAPSHOT.steps,
+      trigger: {
+        type: "schedule",
+        workspaceId,
+        schedule: { frequency: "daily", hourUtc: 0 },
+      },
+      createdByUserId: userId,
+    });
+    await testDb.insert(flowRuns).values({
+      id: runId,
+      workspaceId,
+      definitionId,
+      definitionSnapshot: SNAPSHOT,
+      triggerSource: { type: "schedule" },
+      status: "running",
+      currentStepIndex: 0,
+      createdAt: STALLED_AT,
+    });
+    await testDb.insert(flowRunSteps).values({
+      id: createSafeId<"flowRunStep">(),
+      workspaceId,
+      runId,
+      index: 0,
+      kind: "ai",
+      status: "pending",
+    });
+    try {
+      await testDb
+        .delete(flowDefinitions)
+        .where(eq(flowDefinitions.id, definitionId));
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.organizationId, organizationId),
+            eq(featureEnrolments.featureId, "flows"),
+          ),
+        );
+      expect(
+        await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { definitionId: true, status: true },
+        }),
+      ).toEqual({ definitionId: null, status: "running" });
+
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+
+      expect(enqueuedRunIds).toEqual([runId]);
+      const retained = await testDb
+        .select({ id: flowRuns.id })
+        .from(flowRuns)
+        .where(
+          and(
+            eq(flowRuns.workspaceId, workspaceId),
+            inArray(flowRuns.status, ["pending", "running"]),
+          ),
+        );
+      expect(retained.map(({ id }) => id).toSorted()).toEqual(
+        [...nonTerminalRunIds, runId].toSorted(),
+      );
+    } finally {
+      await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+      await testDb
+        .delete(flowDefinitions)
+        .where(eq(flowDefinitions.id, definitionId));
+      await testDb
+        .insert(featureEnrolments)
+        .values({ featureId: "flows", organizationId, userId })
+        .onConflictDoNothing();
     }
   });
 });

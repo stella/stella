@@ -338,7 +338,7 @@ export const reconcileOrphanedFlowRuns = async (
     for (const row of batch) {
       const actor = actors.get(row.id);
       if (
-        actor === undefined ||
+        actor !== undefined &&
         admitted.get(row.organizationId)?.has(actor) !== true
       ) {
         logger.info("flow.work_skipped", {
@@ -347,6 +347,8 @@ export const reconcileOrphanedFlowRuns = async (
         });
         continue;
       }
+      // A deleted definition leaves no actor; the executor must terminalize
+      // that run before any step instead of retaining it as an admission pause.
       await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
       reconciled += 1;
     }

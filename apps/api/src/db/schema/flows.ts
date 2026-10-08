@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import {
   FLOW_RUN_STATUSES,
   FLOW_RUN_STEP_STATUSES,
+  FLOW_UPLOAD_TRIGGER_INTENT_STATUSES,
+  FLOW_UPLOAD_TRIGGER_SKIP_REASONS,
 } from "@/api/lib/flows/flow-types";
 import type {
   FlowDefinitionSnapshot,
@@ -75,11 +77,29 @@ export const flowUploadTriggerIntents = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     fileExtension: p.text("file_extension"),
+    status: p
+      .text({ enum: FLOW_UPLOAD_TRIGGER_INTENT_STATUSES })
+      .notNull()
+      .default("pending"),
+    skipReason: p.text("skip_reason", {
+      enum: FLOW_UPLOAD_TRIGGER_SKIP_REASONS,
+    }),
     retryAt: timestamptz("retry_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.primaryKey({ columns: [table.definitionId, table.entityId] }),
+    p.check(
+      "flow_upload_trigger_intents_settlement_check",
+      sql`(${table.status} = 'pending' AND ${table.skipReason} IS NULL) OR
+        (${table.status} = 'skipped' AND ${table.skipReason} IS NOT NULL AND
+          ${table.skipReason} IN (${sql.join(
+            FLOW_UPLOAD_TRIGGER_SKIP_REASONS.map((reason) =>
+              sql.raw(`'${reason}'`),
+            ),
+            sql`, `,
+          )}))`,
+    ),
     p
       .foreignKey({
         columns: [table.definitionId, table.organizationId],
@@ -104,7 +124,8 @@ export const flowUploadTriggerIntents = p.pgTable(
     p.index("flow_upload_trigger_intents_ws_idx").on(table.workspaceId),
     p
       .index("flow_upload_trigger_intents_retry_idx")
-      .on(table.retryAt, table.definitionId, table.entityId),
+      .on(table.retryAt, table.definitionId, table.entityId)
+      .where(sql`${table.status} = 'pending'`),
     ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
   ],
 );

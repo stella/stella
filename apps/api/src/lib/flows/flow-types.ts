@@ -35,6 +35,17 @@ export type {
 
 // -- Domain constants --
 
+export const FLOW_UPLOAD_TRIGGER_INTENT_STATUSES = [
+  "pending",
+  "skipped",
+] as const;
+export const FLOW_UPLOAD_TRIGGER_SKIP_REASONS = [
+  "definition_disabled",
+  "trigger_no_longer_matches",
+] as const;
+export type FlowUploadTriggerSkipReason =
+  (typeof FLOW_UPLOAD_TRIGGER_SKIP_REASONS)[number];
+
 /** Upper bound on steps per definition (also enforced in valibot). */
 export const MAX_FLOW_STEPS = 20;
 

@@ -110,6 +110,7 @@ describe("durable upload-trigger recovery", () => {
       });
       expect(skipped).toEqual({
         settled: 0,
+        skipped: 0,
         paused: status === "paused" ? 1 : 0,
         retry: status === "retry" ? 1 : 0,
       });
@@ -143,26 +144,6 @@ describe("durable upload-trigger recovery", () => {
       expect(await receiptsFor(entityId)).toHaveLength(0);
     });
   }
-
-  test("a changed trigger settles the receipt without starting stale work", async () => {
-    const { entityId, definitionId } = await createUpload();
-    await database
-      .update(flowDefinitions)
-      .set({ trigger: { type: "manual" } })
-      .where(eq(flowDefinitions.id, definitionId));
-    let starts = 0;
-    const result = await recover({
-      entityId,
-      now: NOW,
-      start: async () => {
-        starts += 1;
-        return { status: "settled" };
-      },
-    });
-    expect(result.settled).toBe(1);
-    expect(starts).toBe(0);
-    expect(await receiptsFor(entityId)).toHaveLength(0);
-  });
 
   test("recording upload intents twice converges and rolls back with document creation", async () => {
     const { entityId, definitionId } = await createUpload();

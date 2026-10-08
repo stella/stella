@@ -15,7 +15,10 @@ import type {
   InsertAutomatedFlowRunWithinCapResult,
 } from "@/api/lib/flows/automated-run-cap";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
-import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
+import type {
+  FlowTriggerSource,
+  FlowUploadTriggerSkipReason,
+} from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -124,6 +127,7 @@ export const automatedFlowRunDependencies = (
 export type StartAutomatedFlowRunOutcome =
   | { status: "paused" }
   | { status: "retry" }
+  | { status: "skipped"; reason: FlowUploadTriggerSkipReason }
   | { status: "settled" };
 
 export const startAutomatedFlowRun = async (
@@ -197,7 +201,7 @@ export const startAutomatedFlowRun = async (
     logger.info("flow.automated_run_definition_missing", logContext);
     return { status: "settled" };
   }
-  if (!definition.enabled) {
+  if (!definition.enabled && triggerSource.type !== "file-upload") {
     logger.info("flow.automated_run_definition_disabled", logContext);
     return { status: "settled" };
   }
@@ -266,7 +270,18 @@ export const startAutomatedFlowRun = async (
       });
       return;
     }
-    if (insertResult.value.outcome === "already-started") {
+    if (insertResult.value.outcome === "skipped") {
+      outcome = { status: "skipped", reason: insertResult.value.reason };
+      logger.info("flow.automated_run_skipped", {
+        ...logContext,
+        reason: insertResult.value.reason,
+      });
+      return;
+    }
+    if (
+      insertResult.value.outcome === "already-started" ||
+      insertResult.value.outcome === "source-removed"
+    ) {
       outcome = { status: "settled" };
       return;
     }

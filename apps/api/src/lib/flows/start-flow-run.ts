@@ -89,7 +89,10 @@ export type BuildFlowRunRowsInput = {
 
 /** The run row plus its pending step rows, ready to insert in one transaction. */
 export type FlowRunRows = {
-  run: typeof flowRuns.$inferInsert;
+  run: typeof flowRuns.$inferInsert & {
+    id: SafeId<"flowRun">;
+    inputEntityIds: SafeId<"entity">[];
+  };
   steps: (typeof flowRunSteps.$inferInsert)[];
 };
 

@@ -192,7 +192,7 @@ export const createScheduledFlowTask =
       },
       db,
     );
-    if (outcome.status !== "settled") {
+    if (outcome.status === "paused" || outcome.status === "retry") {
       await retrySlot();
       return;
     }

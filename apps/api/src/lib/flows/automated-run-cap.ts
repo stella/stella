@@ -3,11 +3,23 @@ import { and, eq, gte, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
-import { flowRuns, flowRunSteps } from "@/api/db/schema";
+import type { rootDb, Transaction } from "@/api/db/root";
+import {
+  flowDefinitions,
+  flowRuns,
+  flowRunSteps,
+  flowUploadTriggerIntents,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isAutomatedRunCapReached } from "@/api/lib/flows/flow-trigger-logic";
-import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
+import {
+  fileUploadTriggerMatches,
+  isAutomatedRunCapReached,
+} from "@/api/lib/flows/flow-trigger-logic";
+import type {
+  FlowTriggerSource,
+  FlowUploadTriggerSkipReason,
+} from "@/api/lib/flows/flow-types";
+import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
 
 /**
@@ -82,7 +94,103 @@ export type InsertAutomatedFlowRunWithinCapInput = {
 export type InsertAutomatedFlowRunWithinCapResult =
   | { outcome: "started" }
   | { outcome: "already-started" }
+  | { outcome: "source-removed" }
+  | { outcome: "skipped"; reason: FlowUploadTriggerSkipReason }
   | { outcome: "capped"; dailyRunCount: number };
+
+type RevalidateUploadIntentOptions = {
+  tx: Pick<Transaction, "select" | "update">;
+  definitionId: SafeId<"flowDefinition">;
+  definition: typeof flowDefinitions.$inferSelect | undefined;
+  entityId: SafeId<"entity">;
+  rows: FlowRunRows;
+};
+
+type RevalidatedUploadIntent =
+  | { type: "current"; rows: FlowRunRows }
+  | { type: "source-removed" }
+  | { type: "skipped"; reason: FlowUploadTriggerSkipReason };
+
+/** The caller holds the definition row until either the skip or run commits. */
+const revalidateUploadIntent = async ({
+  tx,
+  definitionId,
+  definition,
+  entityId,
+  rows,
+}: RevalidateUploadIntentOptions): Promise<RevalidatedUploadIntent> => {
+  if (definition === undefined) {
+    return { type: "source-removed" };
+  }
+  const receipt = (
+    await tx
+      .select()
+      .from(flowUploadTriggerIntents)
+      .where(
+        and(
+          eq(flowUploadTriggerIntents.definitionId, definitionId),
+          eq(flowUploadTriggerIntents.entityId, entityId),
+          eq(
+            flowUploadTriggerIntents.organizationId,
+            definition.organizationId,
+          ),
+          eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (receipt === undefined) {
+    return { type: "source-removed" };
+  }
+  if (receipt.status === "skipped") {
+    return {
+      type: "skipped",
+      reason:
+        receipt.skipReason ?? panic("Skipped upload receipt requires a reason"),
+    };
+  }
+  const reason = (() => {
+    if (!definition.enabled) {
+      return "definition_disabled" as const;
+    }
+    if (
+      definition.trigger.type !== "file-upload" ||
+      !fileUploadTriggerMatches({
+        trigger: definition.trigger,
+        workspaceId: receipt.workspaceId,
+        extension: receipt.fileExtension,
+      })
+    ) {
+      return "trigger_no_longer_matches" as const;
+    }
+    return undefined;
+  })();
+  if (reason !== undefined) {
+    // audit: skip — the durable receipt records the terminal decision and typed reason.
+    await tx
+      .update(flowUploadTriggerIntents)
+      .set({ status: "skipped", skipReason: reason })
+      .where(
+        and(
+          eq(flowUploadTriggerIntents.definitionId, definitionId),
+          eq(flowUploadTriggerIntents.entityId, entityId),
+          eq(flowUploadTriggerIntents.status, "pending"),
+        ),
+      );
+    return { type: "skipped", reason };
+  }
+  return {
+    type: "current",
+    rows: buildFlowRunRows({
+      runId: rows.run.id,
+      workspaceId: rows.run.workspaceId,
+      definitionId,
+      definition: { name: definition.name, steps: definition.steps },
+      triggerSource: rows.run.triggerSource,
+      inputEntityIds: rows.run.inputEntityIds,
+    }),
+  };
+};
 
 export const insertAutomatedFlowRunWithinCap = async ({
   definitionId,
@@ -98,6 +206,20 @@ export const insertAutomatedFlowRunWithinCap = async ({
     await tx.execute(
       sql`select pg_advisory_xact_lock(${FLOW_RUN_CAP_LOCK_NAMESPACE}, hashtext(${definitionId}))`,
     );
+
+    // Keep the cap's advisory lock first, then the definition lock already
+    // required by run insertion. NO KEY UPDATE also permits receipt FK checks.
+    const uploadDefinition =
+      rows.run.triggerSource.type === "file-upload"
+        ? (
+            await tx
+              .select()
+              .from(flowDefinitions)
+              .where(eq(flowDefinitions.id, definitionId))
+              .limit(1)
+              .for("no key update")
+          ).at(0)
+        : undefined;
 
     // Recovery may replay after the run committed but before its receipt settled.
     // The same definition lock makes this decision atomic with every insertion.
@@ -119,6 +241,29 @@ export const insertAutomatedFlowRunWithinCap = async ({
       }
     }
 
+    let currentRows = rows;
+    if (rows.run.triggerSource.type === "file-upload") {
+      const validation = await revalidateUploadIntent({
+        tx,
+        definitionId,
+        definition: uploadDefinition,
+        entityId: rows.run.triggerSource.entityId,
+        rows,
+      });
+      switch (validation.type) {
+        case "source-removed":
+          return { outcome: "source-removed" };
+        case "skipped":
+          return { outcome: "skipped", reason: validation.reason };
+        case "current":
+          currentRows = validation.rows;
+          break;
+        default:
+          validation satisfies never;
+          return panic("Unknown upload intent validation");
+      }
+    }
+
     const dailyRunCount = await tx.$count(
       flowRuns,
       and(
@@ -132,8 +277,8 @@ export const insertAutomatedFlowRunWithinCap = async ({
       return { outcome: "capped", dailyRunCount };
     }
 
-    await tx.insert(flowRuns).values(rows.run);
-    await tx.insert(flowRunSteps).values(rows.steps);
+    await tx.insert(flowRuns).values(currentRows.run);
+    await tx.insert(flowRunSteps).values(currentRows.steps);
     // A refusal rolls the inserted run back. A later commit failure may rarely
     // over-count the operational throttle; reservations are never refunded.
     await reservePeriod?.();

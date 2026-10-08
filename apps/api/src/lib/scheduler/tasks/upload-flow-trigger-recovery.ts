@@ -8,7 +8,6 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { fileUploadTriggerMatches } from "@/api/lib/flows/flow-trigger-logic";
 import {
   automatedFlowRunDependencies,
   startAutomatedFlowRun,
@@ -29,10 +28,7 @@ const FLOW_UPLOAD_TRIGGER_DELAY_MS = 30_000;
 type UploadTriggerIntent = typeof flowUploadTriggerIntents.$inferSelect;
 type UploadTriggerCandidate = {
   intent: UploadTriggerIntent;
-  definition: Pick<
-    typeof flowDefinitions.$inferSelect,
-    "trigger" | "enabled" | "createdByUserId"
-  >;
+  definition: Pick<typeof flowDefinitions.$inferSelect, "createdByUserId">;
   workspaceStatus: string;
 };
 
@@ -43,26 +39,13 @@ type DispatchUploadFlowTriggerOptions = {
   ) => Promise<StartAutomatedFlowRunOutcome>;
 };
 
-/** Every retried intent rechecks its current definition and matter before admission. */
+/** The run transaction rechecks the current trigger against the durable receipt. */
 export const dispatchUploadFlowTrigger = async ({
   candidate: { intent, definition, workspaceStatus },
   start,
 }: DispatchUploadFlowTriggerOptions): Promise<StartAutomatedFlowRunOutcome> => {
-  if (
-    workspaceStatus !== "active" ||
-    !definition.enabled ||
-    definition.trigger.type !== "file-upload"
-  ) {
-    return { status: "settled" };
-  }
-  if (
-    !fileUploadTriggerMatches({
-      trigger: definition.trigger,
-      workspaceId: intent.workspaceId,
-      extension: intent.fileExtension,
-    })
-  ) {
-    return { status: "settled" };
+  if (workspaceStatus !== "active") {
+    return { status: "paused" };
   }
   return await start({
     definitionId: intent.definitionId,
@@ -97,15 +80,13 @@ export const recoverUploadFlowTriggerIntents = async ({
   start,
 }: RecoverUploadFlowTriggerOptions) => {
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
-    return { settled: 0, paused: 0, retry: 0 };
+    return { settled: 0, paused: 0, retry: 0, skipped: 0 };
   }
   const candidates = await database.transaction(async (tx) => {
     const selected = await tx
       .select({
         intent: flowUploadTriggerIntents,
         definition: {
-          trigger: flowDefinitions.trigger,
-          enabled: flowDefinitions.enabled,
           createdByUserId: flowDefinitions.createdByUserId,
         },
         workspaceStatus: workspaces.status,
@@ -133,6 +114,7 @@ export const recoverUploadFlowTriggerIntents = async ({
       )
       .where(
         and(
+          eq(flowUploadTriggerIntents.status, "pending"),
           lte(flowUploadTriggerIntents.retryAt, sql`${now}::timestamptz`),
           entityId === undefined
             ? undefined
@@ -166,7 +148,7 @@ export const recoverUploadFlowTriggerIntents = async ({
     return selected;
   });
   const dependencies = automatedFlowRunDependencies(database);
-  const outcomes = { settled: 0, paused: 0, retry: 0 };
+  const outcomes = { settled: 0, paused: 0, retry: 0, skipped: 0 };
   for (const candidate of candidates) {
     if (signal?.aborted) {
       break;
@@ -178,6 +160,9 @@ export const recoverUploadFlowTriggerIntents = async ({
         (async (input) => await startAutomatedFlowRun(input, dependencies)),
     });
     switch (outcome.status) {
+      case "skipped":
+        outcomes.skipped += 1;
+        break;
       case "settled":
         outcomes.settled += 1;
         // audit: skip — settle a derived receipt after a durable run or terminal skip.
