@@ -26,7 +26,6 @@ export const decisionBlockDeepLink = ({
       return { url: `${appUrl}#${decisionParagraphFragment(range.value)}` };
     }
   }
-  return anchorId === null
-    ? {}
-    : { url: `${appUrl}#${encodeURIComponent(anchorId)}` };
+  // The web router decodes fragments with decodeURI, preserving escaped reserved characters.
+  return anchorId === null ? {} : { url: `${appUrl}#${encodeURI(anchorId)}` };
 };

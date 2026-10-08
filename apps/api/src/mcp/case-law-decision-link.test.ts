@@ -28,7 +28,7 @@ test("decision links prefer court numbers and preserve parser anchors otherwise"
     expect(
       decisionBlockDeepLink({ appUrl, anchorId: "p-1/část", number }),
     ).toEqual({
-      url: `${appUrl}#p-1%2F%C4%8D%C3%A1st`,
+      url: `${appUrl}#p-1/%C4%8D%C3%A1st`,
     });
     expect(decisionBlockDeepLink({ appUrl, anchorId: null, number })).toEqual(
       {},
@@ -36,5 +36,21 @@ test("decision links prefer court numbers and preserve parser anchors otherwise"
     expect(
       decisionBlockDeepLink({ appUrl: null, anchorId: "p-1", number }),
     ).toEqual({});
+  }
+});
+
+test("unnumbered anchor links round-trip through the reader's URI decoding", () => {
+  for (const anchorId of [
+    "p-1/část",
+    "p-1;,:@&=+$?/#",
+    "p-1%2F",
+    "p-1 space",
+    "p-1😀",
+  ]) {
+    const link = decisionBlockDeepLink({ appUrl, anchorId });
+    if (link.url === undefined) {
+      throw new Error("Expected an unnumbered anchor link");
+    }
+    expect(decodeURI(new URL(link.url).hash.slice(1))).toBe(anchorId);
   }
 });
