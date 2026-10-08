@@ -1051,23 +1051,48 @@ const isCanonicalResult = ({ node, name }: CanonicalResultOptions) =>
  * objects, shadowed names, arbitrary helpers) joins nothing.
  */
 const JOINING_RUNNERS = {
-  /** Imported runners, by resolved module, export and callback position. */
+  /**
+   * Imported runners, by resolved module, export and callback position.
+   * `suppliesTransaction`: the callback's first parameter is a transaction.
+   */
   imported: [
-    { module: `${API}db/safe-db.ts`, exported: "abortableTx", argument: 1 },
-    { module: REGISTRY, exported: "withAggregateSavepoint", argument: 1 },
+    {
+      module: `${API}db/safe-db.ts`,
+      exported: "abortableTx",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
+      module: REGISTRY,
+      exported: "withAggregateSavepoint",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
+      module: REGISTRY,
+      exported: "withAggregateTransaction",
+      argument: 1,
+      suppliesTransaction: true,
+    },
   ],
   /**
    * Followed callees only: `<receiver>.transaction(cb)` where the receiver
    * is one of these imported database handles, or the transaction parameter
-   * of an enclosing callback that itself earns credit here.
+   * of an enclosing callback whose runner supplies one.
    */
   transaction: {
     method: "transaction",
     argument: 0,
+    suppliesTransaction: true,
     handles: { module: `${API}db/root.ts`, exported: ["rootDb", "rlsDb"] },
   },
-  /** Followed callees only: better-result `Result.tryPromise({ try })`. */
-  calleeResultProperties: [{ method: "tryPromise", property: "try" }],
+  /**
+   * Followed callees only: better-result `Result.tryPromise({ try })`. It
+   * joins `try` but passes it no transaction.
+   */
+  calleeResultProperties: [
+    { method: "tryPromise", property: "try", suppliesTransaction: false },
+  ],
 } as const;
 
 type JoinedRunnerOptions = {
@@ -1170,70 +1195,152 @@ const isJoinedTransactionCallback = ({
   );
 };
 
-/**
- * In a followed callee, an inline callback counts only when a joined call to
- * an allow-listed runner (JOINING_RUNNERS) receives it at its callback
- * position, with the runner's binding resolved through enclosing scopes.
- */
-const isJoinedInlineArgument = ({
+/** Whether `name` is assigned (or updated) anywhere inside `node`. */
+const isReassigned = (node: ts.Node, name: string): boolean => {
+  const target = (expression: ts.Expression) =>
+    ts.isIdentifier(expression) && expression.text === name;
+  if (
+    (ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      target(node.left)) ||
+    ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      target(node.operand))
+  ) {
+    return true;
+  }
+  return ts.forEachChild(node, (child) => isReassigned(child, name)) ?? false;
+};
+
+type CalleeCallbackCredit = { suppliesTransaction: boolean } | undefined;
+
+/** An imported JOINING_RUNNERS entry that receives `callback`, unshadowed. */
+const importedRunnerCredit = ({
   callback,
   implementation,
   access,
-}: TransactionCallbackOptions): boolean => {
-  const { source, file } = implementation;
+}: TransactionCallbackOptions): CalleeCallbackCredit => {
+  const call = callback.parent;
   if (
-    isJoinedTransactionCallback({
+    !ts.isCallExpression(call) ||
+    !ts.isIdentifier(call.expression) ||
+    !isJoinedTransactionCallback({
       callback,
       implementation,
       access,
       handlerSafeDb: false,
     })
   ) {
-    return true;
+    return undefined;
   }
-  const parent = callback.parent;
-  if (ts.isCallExpression(parent)) {
-    const method = parent.expression;
-    const { transaction } = JOINING_RUNNERS;
-    if (
-      !ts.isPropertyAccessExpression(method) ||
-      method.name.text !== transaction.method ||
-      parent.arguments.at(transaction.argument) !== callback ||
-      !ts.isIdentifier(method.expression) ||
-      !isJoinedRunner({ call: parent })
-    ) {
-      return false;
-    }
-    const receiver = method.expression.text;
-    const scope = bindingScope(parent, receiver);
-    if (scope === undefined) {
-      const reference = importedReference({
-        source,
-        file,
-        name: receiver,
-        access,
-      });
-      return (
-        reference?.module === transaction.handles.module &&
-        transaction.handles.exported.some(
-          (exported) => exported === reference.exported,
-        )
-      );
-    }
-    return (
-      (ts.isArrowFunction(scope) || ts.isFunctionExpression(scope)) &&
-      scopeNames(scope).parameters.has(receiver) &&
-      isJoinedInlineArgument({ callback: scope, implementation, access })
-    );
-  }
-  if (
-    !ts.isPropertyAssignment(parent) ||
-    parent.initializer !== callback ||
-    !ts.isObjectLiteralExpression(parent.parent)
-  ) {
+  const reference = importedReference({
+    source: implementation.source,
+    file: implementation.file,
+    name: call.expression.text,
+    access,
+  });
+  const runner = JOINING_RUNNERS.imported.find(
+    (item) =>
+      reference?.module === item.module && reference.exported === item.exported,
+  );
+  return runner === undefined
+    ? undefined
+    : { suppliesTransaction: runner.suppliesTransaction };
+};
+
+/**
+ * Whether `receiver`, bound by `scope`, is a transaction: the plain first
+ * parameter of a callback whose runner supplies one, with no default
+ * initializer, never reassigned.
+ */
+const isSuppliedTransaction = ({
+  scope,
+  receiver,
+  implementation,
+  access,
+}: Omit<TransactionCallbackOptions, "callback"> & {
+  scope: ts.Node;
+  receiver: string;
+}) => {
+  if (!ts.isArrowFunction(scope) && !ts.isFunctionExpression(scope)) {
     return false;
   }
-  const options = parent.parent;
+  const first = scope.parameters.at(0);
+  return (
+    first !== undefined &&
+    ts.isIdentifier(first.name) &&
+    first.name.text === receiver &&
+    first.initializer === undefined &&
+    first.dotDotDotToken === undefined &&
+    scopeNames(scope).parameters.has(receiver) &&
+    !isReassigned(scope.body, receiver) &&
+    calleeCallbackCredit({ callback: scope, implementation, access })
+      ?.suppliesTransaction === true
+  );
+};
+
+/** `<receiver>.transaction(callback)` on a verified handle or transaction. */
+const transactionMethodCredit = ({
+  callback,
+  implementation,
+  access,
+}: TransactionCallbackOptions): CalleeCallbackCredit => {
+  const call = callback.parent;
+  const { transaction } = JOINING_RUNNERS;
+  if (
+    !ts.isCallExpression(call) ||
+    !ts.isPropertyAccessExpression(call.expression) ||
+    call.expression.name.text !== transaction.method ||
+    call.arguments.at(transaction.argument) !== callback ||
+    !ts.isIdentifier(call.expression.expression) ||
+    !isJoinedRunner({ call })
+  ) {
+    return undefined;
+  }
+  const receiver = call.expression.expression.text;
+  const scope = bindingScope(call, receiver);
+  let verified: boolean;
+  if (scope === undefined) {
+    const reference = importedReference({
+      source: implementation.source,
+      file: implementation.file,
+      name: receiver,
+      access,
+    });
+    verified =
+      reference?.module === transaction.handles.module &&
+      transaction.handles.exported.some(
+        (exported) => exported === reference.exported,
+      );
+  } else {
+    verified = isSuppliedTransaction({
+      scope,
+      receiver,
+      implementation,
+      access,
+    });
+  }
+  return verified
+    ? { suppliesTransaction: transaction.suppliesTransaction }
+    : undefined;
+};
+
+/** A callback in a property of `Result.<method>({ ... })`, e.g. `try`. */
+const resultPropertyCredit = ({
+  callback,
+  implementation,
+}: Omit<TransactionCallbackOptions, "access">): CalleeCallbackCredit => {
+  const property = callback.parent;
+  if (
+    !ts.isPropertyAssignment(property) ||
+    property.initializer !== callback ||
+    !ts.isObjectLiteralExpression(property.parent)
+  ) {
+    return undefined;
+  }
+  const options = property.parent;
   const call = options.parent;
   if (
     !ts.isCallExpression(call) ||
@@ -1242,16 +1349,30 @@ const isJoinedInlineArgument = ({
     !ts.isIdentifier(call.expression.expression) ||
     !isCanonicalResult({ node: call, name: call.expression.expression.text })
   ) {
-    return false;
+    return undefined;
   }
   const method = call.expression.name.text;
-  const property = parent.name.getText(source);
-  return (
-    JOINING_RUNNERS.calleeResultProperties.some(
-      (runner) => runner.method === method && runner.property === property,
-    ) && isJoinedRunner({ call })
+  const name = property.name.getText(implementation.source);
+  const runner = JOINING_RUNNERS.calleeResultProperties.find(
+    (item) => item.method === method && item.property === name,
   );
+  return runner !== undefined && isJoinedRunner({ call })
+    ? { suppliesTransaction: runner.suppliesTransaction }
+    : undefined;
 };
+
+/**
+ * In a followed callee, an inline callback earns credit only when a joined
+ * call to an allow-listed runner (JOINING_RUNNERS) receives it at its
+ * callback position, with the runner's binding resolved through enclosing
+ * scopes. The result says whether that runner passes it a transaction.
+ */
+const calleeCallbackCredit = (
+  options: TransactionCallbackOptions,
+): CalleeCallbackCredit =>
+  importedRunnerCredit(options) ??
+  transactionMethodCredit(options) ??
+  resultPropertyCredit(options);
 
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
@@ -1284,7 +1405,8 @@ const awaitedAggregateNames = ({
     if (
       (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
       !(inlineCallbacks
-        ? isJoinedInlineArgument({ callback: node, implementation, access })
+        ? calleeCallbackCredit({ callback: node, implementation, access }) !==
+          undefined
         : isJoinedTransactionCallback({
             callback: node,
             implementation,
