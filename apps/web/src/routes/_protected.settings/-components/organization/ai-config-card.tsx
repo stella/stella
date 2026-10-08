@@ -20,6 +20,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import {
   createProviderCredentialDraft,
+  haveSameRoleModelSelections,
   getProviderValues,
   hasProviderCredentialChanges,
   hasUsableDecisionModel,
@@ -201,7 +202,7 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       }),
     ) ||
     decisionState.kind !== "untouched" ||
-    JSON.stringify(roleModels) !== JSON.stringify(savedRoles);
+    !haveSameRoleModelSelections({ current: roleModels, baseline: savedRoles });
   const blocker = useUnsavedWork({
     surface: "ai-provider-settings",
     guard: "confirm-navigation",
@@ -275,12 +276,14 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     setSaveState("saving");
     const result = await Result.tryPromise({
       try: async () => {
-        const next = [
-          ...storedProviders.filter(
-            (provider) => provider.provider !== draft.provider,
-          ),
-          draft,
-        ];
+        // Provider order determines the effective model for default roles.
+        const next = storedProviders.some(
+          (provider) => provider.provider === draft.provider,
+        )
+          ? storedProviders.map((provider) =>
+              provider.provider === draft.provider ? draft : provider,
+            )
+          : [...storedProviders, draft];
         const nextRoles = savedRoles;
         const saved = await persist({
           nextProviders: next,

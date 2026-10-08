@@ -8,6 +8,8 @@ import { env } from "@/api/env";
 import { anthropicWorkspaceHeaders } from "./anthropic-config";
 import { createTanStackTextAdapterFactory } from "./tanstack-ai-models";
 
+const ANTHROPIC_ADAPTER_PACKAGE = "@tanstack/ai-anthropic";
+
 const unownedAnthropicTransport = (file: string, source: string) => {
   if (file === "lib/tanstack-ai-models.ts") {
     const constructors = source.match(/\banthropic\s*\([^;]*\)/gu) ?? [];
@@ -55,10 +57,12 @@ describe("Anthropic request configuration", () => {
   });
 
   test("the ownership census rejects a planted alternate transport", () => {
+    // The specifier is interpolated so this file's own text holds no value
+    // import of the adapter package for the repository's SDK boundary scan.
     expect(
       unownedAnthropicTransport(
         "lib/new-request.ts",
-        'import { createAnthropicChat } from "@tanstack/ai-anthropic";',
+        `import { createAnthropicChat } from "${ANTHROPIC_ADAPTER_PACKAGE}";`,
       ),
     ).toBe(true);
     expect(

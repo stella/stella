@@ -15,6 +15,7 @@ GlobalRegistrator.register({
 const originalFetch = globalThis.fetch;
 const requests: { method: string; url: string; body: string }[] = [];
 let settingsFailure: { code: string; message: string } | undefined;
+let reflectProviderOrder = false;
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const config = {
   configured: false,
@@ -68,6 +69,41 @@ globalThis.fetch = Object.assign(
       ) {
         return Response.json(settingsFailure, { status: 400 });
       }
+      const configuredResponse = responseConfig;
+      if (
+        reflectProviderOrder &&
+        method === "POST" &&
+        configuredResponse.configured
+      ) {
+        const configurationRequest: unknown = JSON.parse(body);
+        if (
+          typeof configurationRequest !== "object" ||
+          configurationRequest === null ||
+          !("providers" in configurationRequest) ||
+          !Array.isArray(configurationRequest.providers)
+        ) {
+          panic("Expected provider configuration request");
+        }
+        return Response.json({
+          ...configuredResponse,
+          providers: configurationRequest.providers.map(
+            (candidate: unknown) => {
+              if (
+                typeof candidate !== "object" ||
+                candidate === null ||
+                !("provider" in candidate)
+              ) {
+                panic("Expected provider input");
+              }
+              return (
+                configuredResponse.providers.find(
+                  ({ provider }) => provider === candidate.provider,
+                ) ?? panic("Provider response fixture missing")
+              );
+            },
+          ),
+        });
+      }
       return Response.json(responseConfig);
     }
     return Response.json({ models: [] });
@@ -93,6 +129,7 @@ afterEach(() => {
   clients.length = 0;
   requests.length = 0;
   settingsFailure = undefined;
+  reflectProviderOrder = false;
   responseConfig = savedConfig;
 });
 afterAll(async () => {
@@ -685,3 +722,114 @@ test.each([false, true])(
     }
   },
 );
+
+test("replacing the first saved key preserves provider order and every default role provider", async () => {
+  const twoProviders = {
+    ...savedConfig,
+    providers: [
+      ...savedConfig.providers,
+      {
+        provider: "anthropic",
+        apiKeyMasked: "sk-ant-api03****5678",
+        region: "global",
+      },
+    ],
+    overrideModels: null,
+  } satisfies OrganizationAIConfig;
+  await mount(twoProviders);
+  responseConfig = twoProviders;
+  reflectProviderOrder = true;
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.advanced }),
+  );
+  const providerLabels = Object.values(
+    messages.organization.aiConfig.roles,
+  ).map((role) =>
+    messages.organization.aiConfig.providerForRole.replace(
+      "{role}",
+      () => role,
+    ),
+  );
+  for (const label of providerLabels) {
+    expect(screen.getByLabelText(label).textContent).toContain("Google");
+  }
+  const replace = screen
+    .getAllByRole("button", { name: messages.organization.aiConfig.replaceKey })
+    .at(0);
+  if (replace === undefined) {
+    panic("First saved provider must offer replacement");
+  }
+  fireEvent.click(replace);
+  dirtyKey();
+  fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
+  await screen.findByText(messages.organization.aiConfig.savedVerified);
+  for (const label of providerLabels) {
+    expect(screen.getByLabelText(label).textContent).toContain("Google");
+  }
+  const write = requests.find(({ method }) => method === "POST");
+  expect(JSON.parse(write?.body ?? "null")).toMatchObject({
+    providers: [
+      { provider: "google", apiKey: GOOGLE_KEY },
+      { provider: "anthropic" },
+    ],
+  });
+  expect(write?.body).not.toContain("overrideModels");
+  expect(hasUnsavedWork()).toBe(false);
+});
+
+test("resetting and reselecting the saved override clears dirty state and the leave prompt", async () => {
+  const modelId = getModelOptionsForRole({
+    provider: "google",
+    role: "chat",
+  }).find((candidate) => candidate !== BYOK_DEFAULT_MODELS.google.chat.modelId);
+  if (modelId === undefined) {
+    panic("Google chat must offer an alternate model");
+  }
+  const appRouter = await mount({
+    ...savedConfig,
+    overrideModels: {
+      chat: { provider: "google", modelId },
+      fast: {
+        provider: "google",
+        modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
+      },
+    },
+  });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(messages.common.advanced, "u"),
+    }),
+  );
+  const resetChat = screen
+    .getAllByRole("button", { name: messages.common.resetToDefault })
+    .at(0);
+  if (resetChat === undefined) {
+    panic("Chat override must offer reset");
+  }
+  fireEvent.click(resetChat);
+  expect(hasUnsavedWork()).toBe(true);
+  const label = messages.organization.aiConfig.modelForRole.replace(
+    "{role}",
+    () => messages.organization.aiConfig.roles.chat,
+  );
+  const model = screen.getByLabelText(label);
+  expect(model).toHaveProperty(
+    "value",
+    BYOK_DEFAULT_MODELS.google.chat.modelId,
+  );
+  act(() => model.focus());
+  fireEvent.change(model, { target: { value: modelId } });
+  fireEvent.keyDown(model, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: modelId }));
+  expect(model).toHaveProperty("value", modelId);
+  expect(hasUnsavedWork()).toBe(false);
+  expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
+  expect(
+    requests.filter(({ method }) => method === "POST" || method === "DELETE"),
+  ).toEqual([]);
+  await act(async () => {
+    await appRouter.navigate({ to: "/settings" });
+  });
+  expect(await screen.findByText(messages.common.done)).toBeDefined();
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+});

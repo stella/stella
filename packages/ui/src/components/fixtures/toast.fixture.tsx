@@ -44,13 +44,21 @@ const ToastFixture = () => (
   <ToastProvider>
     <main>
       {Object.entries(createErrorToasts).map(([entry, create]) => (
-        <button type="button" key={entry} onClick={create}>
+        <button
+          type="button"
+          key={entry}
+          onClick={() => {
+            create();
+          }}
+        >
           {entry}
         </button>
       ))}
       <button
         type="button"
-        onClick={() => stellaToast.success("Successful request")}
+        onClick={() => {
+          stellaToast.success("Successful request");
+        }}
       >
         success
       </button>

@@ -41,6 +41,8 @@ test("workspace probe schema requires a safe nonempty header value", () => {
   for (const anthropicWorkspaceId of [
     "",
     "wrk\r\nInjected",
+    "wrk_fixture\n",
+    "wrk_fixture\r\n",
     "wrk with space",
     "wrk/path",
   ]) {

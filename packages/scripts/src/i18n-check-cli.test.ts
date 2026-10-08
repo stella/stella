@@ -11,7 +11,9 @@ test("unused-key checks combine every repeated source directory", async () => {
   const catalog = path.join(directory, "catalog");
   try {
     await Promise.all(
-      [locales, app, catalog].map((sourceDirectory) => mkdir(sourceDirectory)),
+      [locales, app, catalog].map(async (sourceDirectory) => {
+        await mkdir(sourceDirectory);
+      }),
     );
     await Promise.all([
       writeFile(

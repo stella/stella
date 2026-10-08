@@ -81,6 +81,32 @@ export type RoleModelOverrides = Partial<
   Record<RoleValue, ModelSelection | null>
 >;
 
+type RoleModelsComparisonOptions = {
+  current: RoleModelOverrides;
+  baseline: RoleModelOverrides;
+};
+
+export const haveSameRoleModelSelections = ({
+  current,
+  baseline,
+}: RoleModelsComparisonOptions): boolean =>
+  ROLE_KEYS.every((role) => {
+    const selection = current[role];
+    const saved = baseline[role];
+    if (
+      selection === undefined ||
+      selection === null ||
+      saved === undefined ||
+      saved === null
+    ) {
+      return selection === saved;
+    }
+    return (
+      selection.provider === saved.provider &&
+      selection.modelId === saved.modelId
+    );
+  });
+
 export type ModelOption = ModelSelection & {
   value: string;
 };
