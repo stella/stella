@@ -67,8 +67,8 @@ type EngineState = {
   documents: Map<string, number>;
   /** Index ids a run asked about, in order. */
   searched: string[];
-  /** Projection revisions the engine holds, with their document counts. */
-  revisions: Map<string, number>;
+  /** Projection revisions per physical index, with their document counts. */
+  revisions: Map<string, Map<string, number>>;
   /** Runs when the census reads the engine. */
   onCensus: () => Promise<void>;
 };
@@ -83,11 +83,19 @@ const engineWith = (indexIds: readonly string[]): EngineState => ({
 /** The census asks for revisions by exact term; the fake answers the same way. */
 const PROJECTION_REVISION_TERM = /projection_revision:"(?<revision>[^"]+)"/gu;
 
-const censusBuckets = (engine: EngineState, query: string) =>
+type CensusBucketsOptions = {
+  engine: EngineState;
+  indexId: string;
+  query: string;
+};
+
+const censusBuckets = ({ engine, indexId, query }: CensusBucketsOptions) =>
   [...query.matchAll(PROJECTION_REVISION_TERM)].flatMap(({ groups }) => {
     const revision = groups?.["revision"];
     const count =
-      revision === undefined ? undefined : engine.revisions.get(revision);
+      revision === undefined
+        ? undefined
+        : engine.revisions.get(indexId)?.get(revision);
     return count === undefined ? [] : [{ key: revision, doc_count: count }];
   });
 
@@ -146,7 +154,7 @@ const seedConvergedProjection = async (
     appliedIndexId: indexId,
     appliedAt: NOW,
   });
-  engine?.revisions.set(revision, 1);
+  engine?.revisions.set(indexId, new Map([[revision, 1]]));
   return { revision };
 };
 
@@ -281,11 +289,11 @@ const run = async ({
     withDatabase: database,
     searchEndpoint: () => searchEndpoint,
     indexClient: () => ({
-      aggregate: async ({ query }) => {
+      aggregate: async ({ indexId, query }) => {
         await engine.onCensus();
         return Result.ok({
           projection_revisions: {
-            buckets: censusBuckets(engine, query),
+            buckets: censusBuckets({ engine, indexId, query }),
             doc_count_error_upper_bound: 0,
             sum_other_doc_count: 0,
           },
@@ -699,13 +707,21 @@ describe("corpus generation operator command", () => {
     },
   );
 
-  test("a census that finds an applied revision missing or miscounted refuses the flip", async () => {
+  test("a census that finds an applied revision missing, miscounted or in another index refuses the flip", async () => {
     await run({ args: caseLaw("register", "case_law_v7", "--apply") });
     const { revision } = await seedConvergedProjection("case_law_v7");
     const missing = engineWith(createdIndexes("case_law_v7"));
     const miscounted = engineWith(createdIndexes("case_law_v7"));
-    miscounted.revisions.set(revision, 2);
-    for (const engine of [missing, miscounted]) {
+    miscounted.revisions.set("case_law_v7_cs_sk", new Map([[revision, 2]]));
+    const misplaced = createdIndexes("case_law_v7")
+      .filter((indexId) => indexId !== "case_law_v7_cs_sk")
+      .map((indexId) => {
+        const engine = engineWith(createdIndexes("case_law_v7"));
+        engine.revisions.set(indexId, new Map([[revision, 1]]));
+        expect(engine.revisions.get(indexId)?.get(revision)).toBe(1);
+        return engine;
+      });
+    for (const engine of [missing, miscounted, ...misplaced]) {
       // db-await-in-loop: each engine is checked against the same registry
       const refused = await run({
         args: caseLaw("serve", "case_law_v7", "--apply"),
@@ -746,7 +762,7 @@ describe("corpus generation operator command", () => {
       deleteTaskCreatedAt: NOW,
       settledAt: NOW,
     });
-    engine.revisions.set(settled, 1);
+    engine.revisions.set("case_law_v7_eu", new Map([[settled, 1]]));
     const before = await registryRows();
     for (const flags of [[], ["--apply"]]) {
       // db-await-in-loop: the report and the write meet the same refusal
