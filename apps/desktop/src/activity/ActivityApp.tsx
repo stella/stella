@@ -57,7 +57,11 @@ import {
   ACTIVITY_RETENTIONS,
   isActivityDaySnapshot,
 } from "./activity-types";
-import type { ActivityDaySnapshot, ActivityRetention } from "./activity-types";
+import type {
+  ActivityAppExclusion,
+  ActivityDaySnapshot,
+  ActivityRetention,
+} from "./activity-types";
 
 type ActivityView =
   | { type: "loading" }
@@ -67,7 +71,8 @@ type ActivityView =
 type ActivityDialog =
   | { type: "closed" }
   | { date: string; type: "deleteDay" }
-  | { type: "deleteAll" };
+  | { type: "deleteAll" }
+  | { app: ActivityAppExclusion; type: "excludeApp" };
 
 type ActivityCommand =
   | "activity_copy_text"
@@ -256,10 +261,11 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 
 type DayContentProps = {
   onCommand: RunCommand;
+  onExclude: (app: ActivityAppExclusion) => void;
   snapshot: ActivityDaySnapshot;
 };
 
-const DayContent = ({ onCommand, snapshot }: DayContentProps) => {
+const DayContent = ({ onCommand, onExclude, snapshot }: DayContentProps) => {
   const t = useTranslations("activity");
   if (snapshot.unreadable) {
     return (
@@ -285,7 +291,7 @@ const DayContent = ({ onCommand, snapshot }: DayContentProps) => {
         onCommand={onCommand}
         segments={segments}
       />
-      <AppTotals onCommand={onCommand} segments={segments} />
+      <AppTotals onExclude={onExclude} segments={segments} />
       <SegmentList segments={segments} />
     </>
   );
@@ -375,11 +381,11 @@ const ProposedBlocks = ({ date, onCommand, segments }: ProposedBlocksProps) => {
 };
 
 type AppTotalsProps = {
-  onCommand: RunCommand;
+  onExclude: (app: ActivityAppExclusion) => void;
   segments: readonly TimedSegment[];
 };
 
-const AppTotals = ({ onCommand, segments }: AppTotalsProps) => {
+const AppTotals = ({ onExclude, segments }: AppTotalsProps) => {
   const t = useTranslations("activity");
   return (
     <section className="flex flex-col gap-2">
@@ -397,7 +403,7 @@ const AppTotals = ({ onCommand, segments }: AppTotalsProps) => {
             <Button
               aria-label={t("excludeApp", { name: app.name })}
               onClick={() =>
-                onCommand("activity_exclude_app", {
+                onExclude({
                   identifier: app.identifier,
                   name: app.name,
                 })
@@ -557,6 +563,29 @@ const ActivityDialogView = ({
           title={t("deleteDay")}
         />
       );
+    case "excludeApp":
+      return (
+        <ConfirmDialog
+          confirmLabel={t("deleteHistory")}
+          description={t("excludeAppConfirmation", { name: dialog.app.name })}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand(
+              "activity_exclude_app",
+              { ...dialog.app, history: "delete" },
+              onClose,
+            )
+          }
+          onKeep={() =>
+            onCommand(
+              "activity_exclude_app",
+              { ...dialog.app, history: "keep" },
+              onClose,
+            )
+          }
+          title={t("excludeApp", { name: dialog.app.name })}
+        />
+      );
     case "deleteAll":
       return (
         <ConfirmDialog
@@ -573,6 +602,8 @@ const ActivityDialogView = ({
 };
 
 type ConfirmDialogProps = {
+  confirmLabel?: string;
+  onKeep?: () => void;
   description: string;
   onClose: () => void;
   onConfirm: () => void;
@@ -580,6 +611,8 @@ type ConfirmDialogProps = {
 };
 
 const ConfirmDialog = ({
+  confirmLabel,
+  onKeep,
   description,
   onClose,
   onConfirm,
@@ -604,8 +637,13 @@ const ConfirmDialog = ({
           <DialogClose render={<Button type="button" variant="ghost" />}>
             {t("cancel")}
           </DialogClose>
+          {onKeep ? (
+            <Button onClick={onKeep} variant="outline">
+              {t("keepHistory")}
+            </Button>
+          ) : null}
           <Button onClick={onConfirm} variant="destructive">
-            {t("delete")}
+            {confirmLabel ?? t("delete")}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -757,7 +795,11 @@ const ActivityApp = () => {
         snapshot={snapshot}
       />
       {error ? <ErrorLine message={error} /> : null}
-      <DayContent onCommand={runCommand} snapshot={snapshot} />
+      <DayContent
+        onCommand={runCommand}
+        onExclude={(app) => setDialog({ app, type: "excludeApp" })}
+        snapshot={snapshot}
+      />
       <ActivitySettings
         onCommand={runCommand}
         onDeleteAll={() => setDialog({ type: "deleteAll" })}
