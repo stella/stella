@@ -8,6 +8,7 @@ import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -1912,7 +1913,8 @@ export const listPlCourtsDayPage = async ({
   // search is under load, and `response.json()` meets that with a raw
   // SyntaxError: no adapter, no cursor, nothing naming the publisher as the
   // cause. Refused here instead, as the tagged failure every other answer
-  // this function will not read is.
+  // this function will not read is, and as the publisher being unavailable
+  // rather than this adapter misreading it.
   const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
   if (mediaType !== JSON_MEDIA_TYPE) {
     throw new AdapterFetchError({
@@ -1920,6 +1922,7 @@ export const listPlCourtsDayPage = async ({
       adapterKey: ADAPTER_KEYS.PL_COURTS,
       cursor: date,
       httpStatus: response.status,
+      stopKind: INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
     });
   }
 
