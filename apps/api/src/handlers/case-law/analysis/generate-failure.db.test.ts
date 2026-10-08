@@ -213,7 +213,6 @@ const fakeGoogle = (answers: ProviderAnswer[]) => {
   };
   // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives; the rest
   // is the resolved model's bookkeeping.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
   const model = {
     adapter,
     keySource: "byok",
@@ -723,7 +722,6 @@ describe("the analysis run's bounds", () => {
       const limit = getOutputTokenLimit(modelId);
       expect(limit).toBeGreaterThan(0);
       // SAFETY: the helper reads only provider/modelOptions/modelId.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
       const model = {
         adapter: {},
         keySource: "byok",

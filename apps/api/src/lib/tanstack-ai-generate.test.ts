@@ -2822,9 +2822,7 @@ describe("an output token budget bounded by the model's catalog limit", () => {
     await generateTanStackObjectForRole({
       ...OBJECT_OPTIONS,
       outputTokenBudget: 16_384,
-      resolveTextModel: () =>
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
-        ({ ...model, adapter: providerAdapter }),
+      resolveTextModel: () => ({ ...model, adapter: providerAdapter }),
     });
 
     expect(providerRequests.at(-1)?.modelOptions).toMatchObject({
