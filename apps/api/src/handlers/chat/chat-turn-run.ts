@@ -7,7 +7,6 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import type { ChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import {
   persistFailedChatTurn,
@@ -34,6 +33,7 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitChatTurnSettlementMetric } from "@/api/lib/observability/request-metrics";
+import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { withSseHeartbeat } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -153,7 +153,7 @@ type ChatTurnRunControl = {
 };
 
 type ChatTurnRunOptions = {
-  admission?: ChatExecutionAdmission | undefined;
+  admission?: ExecutionAdmission | undefined;
   /** Pending interaction before accepting this continuation. */
   checkpoint?: PersistableChatMessage | undefined;
   /** Closed by the run when it never produces; a producing run's agent

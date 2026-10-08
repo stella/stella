@@ -7,6 +7,20 @@ export type CiCoverageEvidence =
   | { profile: "normal-v1" }
   | { profile: "pilot-fast-v1"; jobs: string[] };
 
+/**
+ * What one CI-result run proves. A queue-validation run (the pull_request
+ * `enqueued` event) only re-checks earlier coverage and runs no jobs itself.
+ */
+export type CiRunEvidence =
+  | CiCoverageEvidence
+  | { profile: "queue-validation" };
+
+const EVIDENCE_NAMES: ReadonlySet<string> = new Set([
+  "COVERAGE_PROFILE",
+  "PILOT_FAST_JOBS",
+  "QUEUE_VALIDATION",
+]);
+
 export class CiCoverageLogError extends TaggedError("CiCoverageLogError")<{
   message: string;
 }> {}
@@ -14,16 +28,27 @@ export class CiCoverageLogError extends TaggedError("CiCoverageLogError")<{
 const error = (message: string) =>
   Result.err(new CiCoverageLogError({ message }));
 
-const stripTimestamp = (line: string) =>
-  line.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z[ \t]/u, "");
+const logLine = (line: string) => {
+  const timestamp =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z[ \t]/u.exec(line)?.[0];
+  return {
+    text: timestamp === undefined ? line : line.slice(timestamp.length),
+    timestamped: timestamp !== undefined,
+  };
+};
+type LogLine = ReturnType<typeof logLine>;
 
 type LogGroup = { start: number; end: number };
 type EnvironmentSection = { index: number; values: Map<string, string[]> };
 
-const logGroups = (lines: readonly string[]) => {
+const logGroups = (lines: readonly LogLine[]) => {
   const open: number[] = [];
   const groups: LogGroup[] = [];
-  for (const [index, line] of lines.entries()) {
+  for (const [index, entry] of lines.entries()) {
+    if (!entry.timestamped) {
+      continue;
+    }
+    const line = entry.text;
     if (line.trimStart().startsWith(GROUP_START)) {
       open.push(index);
       continue;
@@ -44,19 +69,32 @@ const logGroups = (lines: readonly string[]) => {
 };
 
 const environmentSections = (
-  lines: readonly string[],
+  lines: readonly LogLine[],
   group: LogGroup,
 ): EnvironmentSection[] => {
   const sections: EnvironmentSection[] = [];
   for (let index = group.start + 1; index < group.end; index += 1) {
-    const header = lines[index] ?? "";
-    if (header.trim() !== "env:") {
+    const headerLine = lines[index];
+    if (!headerLine?.timestamped || headerLine.text.trim() !== "env:") {
       continue;
     }
-    const envIndent = /^\s*/u.exec(header)?.[0].length ?? 0;
+    const envIndent = /^\s*/u.exec(headerLine.text)?.[0].length ?? 0;
     const values = new Map<string, string[]>();
+    let activeName: string | undefined;
     for (let child = index + 1; child < group.end; child += 1) {
-      const line = lines[child] ?? "";
+      const entryLine = lines[child];
+      // GitHub timestamps entry starts, but leaves multiline continuations raw.
+      // Raw values cannot terminate env, introduce keys, or forge group markers.
+      if (!entryLine?.timestamped) {
+        const entries =
+          activeName === undefined ? undefined : values.get(activeName);
+        const previous = entries?.pop();
+        if (previous !== undefined && entryLine) {
+          entries?.push(`${previous}\n${entryLine.text}`);
+        }
+        continue;
+      }
+      const line = entryLine.text;
       if (line.trim() === "") {
         continue;
       }
@@ -67,9 +105,11 @@ const environmentSections = (
       const entry = line.trim();
       const separator = entry.indexOf(":");
       const name = entry.slice(0, separator);
-      if (name !== "COVERAGE_PROFILE" && name !== "PILOT_FAST_JOBS") {
+      activeName = undefined;
+      if (!EVIDENCE_NAMES.has(name)) {
         continue;
       }
+      activeName = name;
       const entries = values.get(name) ?? [];
       entries.push(entry.slice(separator + 1).trim());
       values.set(name, entries);
@@ -81,7 +121,20 @@ const environmentSections = (
 
 const coverageEvidence = (
   values: ReadonlyMap<string, readonly string[]>,
-): Result<CiCoverageEvidence, CiCoverageLogError> => {
+): Result<CiRunEvidence, CiCoverageLogError> => {
+  const validations = values.get("QUEUE_VALIDATION") ?? [];
+  if (validations.length > 1) {
+    return error("CI coverage env must set QUEUE_VALIDATION at most once");
+  }
+  switch (validations.at(0)) {
+    case undefined:
+    case "":
+      break;
+    case "true":
+      return Result.ok({ profile: "queue-validation" });
+    default:
+      return error("QUEUE_VALIDATION must be empty or true");
+  }
   const profiles = values.get("COVERAGE_PROFILE") ?? [];
   const jobValues = values.get("PILOT_FAST_JOBS") ?? [];
   if (profiles.length !== 1 || jobValues.length !== 1) {
@@ -126,8 +179,8 @@ const coverageEvidence = (
 /** Reads the coverage env embedded in the CI-result job's command group. */
 export const parseCiCoverageLog = (
   raw: string,
-): Result<CiCoverageEvidence, CiCoverageLogError> => {
-  const lines = raw.split(/\r?\n/u).map(stripTimestamp);
+): Result<CiRunEvidence, CiCoverageLogError> => {
+  const lines = raw.split(/\r?\n/u).map(logLine);
   const groupsResult = logGroups(lines);
   if (groupsResult.isErr()) {
     return groupsResult;

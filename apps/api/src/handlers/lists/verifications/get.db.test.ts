@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { PassThrough } from "node:stream";
+import * as v from "valibot";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -27,6 +29,10 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
+import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
+import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generate-capability-tree";
+import { runCapabilityCommand } from "../../../../../../packages/cli/src/run-capability-command";
+import { respondToMcpLifecycle } from "../../../../../../packages/cli/tests/mcp-test-lifecycle";
 import get from "./get";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -200,7 +206,7 @@ const seed = async (db: GatedTestDb) => {
           .where(eq(legalListVerificationReadReceipts.workspaceId, workspaceId))
           .limit(10),
     );
-  const capabilityRead = async () => {
+  const capabilityContext = async () => {
     const scopedDb = scoped();
     const safeDb = createSafeDb(rlsDb, [workspaceId], organizationId, actor);
     const featureAccessSnapshot = await scopedDb(
@@ -244,17 +250,148 @@ const seed = async (db: GatedTestDb) => {
           }),
       },
     } satisfies McpRequestContext;
-    return await handleMcpToolCall({
-      context,
+    return context;
+  };
+  const capabilityRead = async () =>
+    await handleMcpToolCall({
+      context: await capabilityContext(),
       toolName: "invoke_capability",
       args: {
         capability: "lists.verifications.get",
         input: { params: { matterId: workspaceId, runId: runIds.completed } },
       },
     });
+  const cliRead = async () => {
+    const entry = loadBakedCapabilityCatalog()?.find(
+      (candidate) => candidate.id === "lists.verifications.get",
+    );
+    if (entry === undefined) {
+      throw new TypeError("Committed verification capability required");
+    }
+    const { spec } = deriveCapabilityLeaf(entry);
+    const context = await capabilityContext();
+    const calls: unknown[] = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        if (request.method !== "POST") {
+          return new Response(null, { status: 405 });
+        }
+        const raw: unknown = await request.json();
+        const envelope = v.parse(
+          v.object({
+            id: v.exactOptional(v.union([v.string(), v.number()])),
+            method: v.string(),
+          }),
+          raw,
+        );
+        const lifecycle = respondToMcpLifecycle(envelope);
+        if (lifecycle !== null) {
+          return lifecycle;
+        }
+        if (envelope.method !== "tools/call") {
+          return new Response(null, { status: 400 });
+        }
+        const { params } = v.parse(
+          v.object({
+            params: v.object({
+              name: v.string(),
+              arguments: v.exactOptional(v.record(v.string(), v.unknown())),
+            }),
+          }),
+          raw,
+        );
+        calls.push(params);
+        return Response.json({
+          jsonrpc: "2.0",
+          id: envelope.id,
+          result: await handleMcpToolCall({
+            context,
+            toolName: params.name,
+            args: params.arguments ?? {},
+          }),
+        });
+      },
+    });
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const output: string[] = [];
+    const errors: string[] = [];
+    stdout.on("data", (chunk: Buffer) => {
+      output.push(chunk.toString());
+    });
+    stderr.on("data", (chunk: Buffer) => {
+      errors.push(chunk.toString());
+    });
+    let exitCode: unknown;
+    const cliProcess = new Proxy(process, {
+      get(target, property, receiver) {
+        if (property === "stdout") {
+          return stdout;
+        }
+        if (property === "stderr") {
+          return stderr;
+        }
+        if (property === "exitCode") {
+          return exitCode;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+      set(target, property, value, receiver) {
+        if (property !== "exitCode") {
+          return Reflect.set(target, property, value, receiver);
+        }
+        exitCode = value;
+        return true;
+      },
+    });
+    const encode = (value: object) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const token = `${encode({ alg: "none", typ: "JWT" })}.${encode({
+      sub: actor,
+      scope: "stella:read",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })}.sig`;
+    try {
+      await runCapabilityCommand({
+        spec,
+        context: {
+          process: cliProcess,
+          configDir: "",
+          serverUrl: server.url.origin,
+          token,
+        },
+        flags: {
+          matterId: workspaceId,
+          runId: runIds.completed,
+          output: "json",
+        },
+      });
+      expect(errors.join("")).toBe("");
+      expect(exitCode).toBe(0);
+      expect(calls).toEqual([
+        {
+          name: "invoke_capability",
+          arguments: {
+            capability: "lists.verifications.get",
+            input: {
+              params: { matterId: workspaceId, runId: runIds.completed },
+            },
+          },
+        },
+      ]);
+      const result: unknown = JSON.parse(output.join(""));
+      return result;
+    } finally {
+      await server.stop(true);
+      stdout.destroy();
+      stderr.destroy();
+    }
   };
   return {
     capabilityRead,
+    cliRead,
     organizationId,
     actor,
     otherActor,
@@ -300,7 +437,7 @@ const withFixture = async (
 };
 
 describe.skipIf(!enabled)("verification point-read audit", () => {
-  test("terminal reads dedupe per actor and Prague day, including concurrent reads", async () =>
+  test("content reads dedupe per actor and Prague day, including concurrent reads", async () =>
     await withFixture(async (f) => {
       await Promise.all(Array.from({ length: 4 }, async () => await f.read()));
       expect(await f.events()).toHaveLength(1);
@@ -313,7 +450,7 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
       expect(await f.events()).toHaveLength(4);
       await f.read({ runId: f.runIds.queued });
       await f.read({ runId: f.runIds.running });
-      expect(await f.events()).toHaveLength(4);
+      expect(await f.events()).toHaveLength(6);
     }));
 
   test.each([
@@ -330,30 +467,33 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
       }),
   );
 
-  test("event identifies the entity and pin without document or fact content", async () =>
-    await withFixture(async (f) => {
-      const run = await f.read();
-      expect(run.blocks.at(0)?.text).toBe(CANARY);
-      expect(run.evidence.facts.at(0)?.text).toBe(CANARY);
-      const event = (await f.events()).at(0);
-      expect(event).toMatchObject({
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: run.entityId,
-        workspaceId: f.workspaceId,
-        userId: f.actor,
-        metadata: {
-          disposition: "inline",
-          format: "verification-run",
-          runId: run.id,
-          listId: run.evidence.listId,
-          fileFieldId: run.fileFieldId,
-          entityVersionId: run.entityVersionId,
-          status: run.status,
-        },
-      });
-      expect(JSON.stringify(event)).not.toContain(CANARY);
-      expect(JSON.stringify(event)).not.toContain("a".repeat(64));
-    }));
+  test.each(VERIFICATION_RUN_STATUSES)(
+    "%s read identifies the entity and pin without content",
+    async (status) =>
+      await withFixture(async (f) => {
+        const run = await f.read({ runId: f.runIds[status] });
+        expect(run.blocks.at(0)?.text).toBe(CANARY);
+        expect(run.evidence.facts.at(0)?.text).toBe(CANARY);
+        const event = (await f.events()).at(0);
+        expect(event).toMatchObject({
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: run.entityId,
+          workspaceId: f.workspaceId,
+          userId: f.actor,
+          metadata: {
+            disposition: "inline",
+            format: "verification-run",
+            runId: run.id,
+            listId: run.evidence.listId,
+            fileFieldId: run.fileFieldId,
+            entityVersionId: run.entityVersionId,
+            status: run.status,
+          },
+        });
+        expect(JSON.stringify(event)).not.toContain(CANARY);
+        expect(JSON.stringify(event)).not.toContain("a".repeat(64));
+      }),
+  );
 
   test("denied grants and another matter produce no access event", async () =>
     await withFixture(async (f) => {
@@ -376,13 +516,12 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
         await CAPABILITY_DISPATCH["lists.verifications.get"].load();
       expect(dispatch.default).toBe(get);
       const rest = await f.invoke();
-      // Generated CLI capability commands call the same invoke_capability tool.
-      for (const surface of ["MCP", "CLI"]) {
-        const response = await f.capabilityRead();
-        expect(response.isError, surface).not.toBe(true);
-        expect(response.structuredContent, surface).toEqual({ result: rest });
-        expect(await f.events(), surface).toHaveLength(1);
-      }
+      const mcp = await f.capabilityRead();
+      expect(mcp.isError).not.toBe(true);
+      expect(mcp.structuredContent).toEqual({ result: rest });
+      expect(await f.events()).toHaveLength(1);
+      expect(await f.cliRead()).toEqual(rest);
+      expect(await f.events()).toHaveLength(1);
     }));
 
   test.each(["MCP", "REST"])(

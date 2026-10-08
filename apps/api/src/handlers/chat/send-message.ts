@@ -30,8 +30,6 @@ import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
-import type { ChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import {
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
@@ -277,6 +275,9 @@ import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -484,7 +485,7 @@ type ClaimedChatTurnOwnership =
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
-  startAdmission?: typeof startChatExecutionAdmission;
+  startAdmission?: typeof startExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
@@ -591,7 +592,7 @@ const CHAT_SEND_ACTION_KIND = "chat.send";
  */
 export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
-  private admission: ChatExecutionAdmission | undefined;
+  private admission: ExecutionAdmission | undefined;
   private checkpoint: PersistableChatMessage | undefined;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
   /** Ends this process's record of the claim; a no-op once ended. */
@@ -667,9 +668,9 @@ export class ChatSendLifecycle {
   }: {
     organizationId: SafeId<"organization">;
     checkpoint: PersistableChatMessage | undefined;
-  }): Promise<Result<void, HandlerError>> {
+  }): Promise<Result<ModelDispatchAdmission, HandlerError>> {
     const acquired = await (
-      this.options.startAdmission ?? startChatExecutionAdmission
+      this.options.startAdmission ?? startExecutionAdmission
     )({
       organizationId,
       userId: this.options.userId,
@@ -681,7 +682,7 @@ export class ChatSendLifecycle {
     }
     this.admission = acquired.value;
     this.checkpoint = checkpoint;
-    return Result.ok(undefined);
+    return Result.ok(acquired.value.modelAdmission);
   }
 
   async reserveExecutionPeriod(
@@ -2031,7 +2032,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
-  startAdmission?: typeof startChatExecutionAdmission;
+  startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
@@ -2378,8 +2379,7 @@ export const createSendMessage = (
           }),
       );
       const lifecycle = new ChatSendLifecycle({
-        startAdmission:
-          dependencies.startAdmission ?? startChatExecutionAdmission,
+        startAdmission: dependencies.startAdmission ?? startExecutionAdmission,
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
@@ -2469,7 +2469,7 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessageResult.value;
 
-        yield* Result.await(
+        const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
             organizationId: session.activeOrganizationId,
             checkpoint:
@@ -2623,6 +2623,7 @@ export const createSendMessage = (
         const messagesForContextResult =
           await dependencies.compactMessagesForContext({
             abortSignal: createMeteredAIAbortSignal(),
+            admission: modelAdmission,
             boundary: thirdPartyBoundary,
             chatModelOverride,
             messages: messagesForContextInput,
@@ -2876,6 +2877,7 @@ export const createSendMessage = (
         // mounts no watcher to resolve them.
         const chatTools = getChatTools({
           ...chatToolContext,
+          modelAdmission,
           externalTools: externalMcpTools?.tools ?? {},
           skillMetadata: chatContext.skillMetadata,
           activeSkillContext: chatContext.activeSkillContext,
@@ -3161,6 +3163,7 @@ export const createSendMessage = (
                 };
 
                 const outcome = await dependencies.streamResponse({
+                  modelAdmission,
                   visualOrigin,
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),

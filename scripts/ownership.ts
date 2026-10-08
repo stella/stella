@@ -666,6 +666,18 @@ const OWNERSHIP_DECLARATIONS = [
 
   STATUS_TRANSITION_OWNERSHIP,
   {
+    id: "deferred-document-source-ownership",
+    capability: "Owning deferred document writes",
+    owner: ["apps/api/src/lib/legal-search/sk-document-backfill.ts"],
+    summary:
+      "Deferred document operations acquire source ownership before remote and database effects. Raw write functions stay within the writer module.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/legal-search/deferred-document-source-ownership"],
+      allowed: [],
+    },
+  },
+  {
     id: "sha256",
     capability: "Hashing content with SHA-256 across runtimes",
     owner: Object.keys(SHA256_OWNERS),
@@ -1115,6 +1127,124 @@ const OWNERSHIP_DECLARATIONS = [
       "types and constructors outside this owner, including aliases and Default paths. " +
       "Local HTTP tests exercise the outgoing headers across configuration choices.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "model-dispatch-admission",
+    capability: "Proving a model dispatch was admitted",
+    owner: ["apps/api/src/lib/rate-limit/model-dispatch-admission.ts"],
+    summary:
+      "Every model dispatch for an organization carries a `ModelDispatchAdmission`, " +
+      "which only the admission wrappers mint, inside the run they admitted. A step of " +
+      "a larger action (a subagent, an in-turn compaction, a workflow batch) dispatches " +
+      "on its parent's proof and is never admitted again. The proof lives only while " +
+      "its admitted run does; `model-dispatch-admission.test.ts` enumerates every dispatch site.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
+      names: ["admitModelDispatch"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/api-handlers.ts",
+          reason: "Finite handler admission, for the request it admitted.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/execution-admission.ts",
+          reason: "Chat and streamed executions, for the lease it holds.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/queued-action-admission.ts",
+          reason: "Background jobs and scheduled work, for the slot it holds.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/model-action-admission.ts",
+          reason:
+            "Model actions code starts on its own, for the run it admitted.",
+        },
+      ],
+    },
+  },
+  {
+    id: "fixture-model-dispatch-admission",
+    capability: "Proving a fixture dispatch no admission holds",
+    owner: ["apps/api/src/lib/rate-limit/model-dispatch-admission.ts"],
+    summary:
+      "Production proofs live only inside the run an admission wrapper admitted; " +
+      "only offline evaluations (and tests) mint a standalone proof for a fixture organization.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
+      names: ["admitFixtureModelDispatch"],
+      allowed: [
+        {
+          path: "apps/api/evals/",
+          reason: "Offline evaluations against a fixture organization.",
+        },
+      ],
+    },
+  },
+  {
+    id: "no-organization-model-dispatch",
+    capability: "Model work with no organization budget",
+    owner: ["apps/api/src/lib/rate-limit/model-dispatch-admission.ts"],
+    summary:
+      "A dispatch with no organization (corpus-wide work, provider canaries, " +
+      "evaluations) carries `NO_ORGANIZATION_MODEL_DISPATCH`; the dispatch type ties " +
+      "it to a null organization, so tenant work cannot use it.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
+      names: ["NO_ORGANIZATION_MODEL_DISPATCH"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
+          reason: "Corpus citation polarity, run by operator scripts.",
+        },
+        {
+          path: "apps/api/evals/",
+          reason: "Offline evaluations over fixture content.",
+        },
+        {
+          path: "apps/api/scripts/ai-native-image-canary.ts",
+          reason: "Provider canary with synthetic content.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary.ts",
+          reason: "Provider canary with synthetic content.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-cassette-probe.ts",
+          reason: "Records provider cassettes from synthetic prompts.",
+        },
+        {
+          path: "apps/api/scripts/benchmark-chat-read-surface.ts",
+          reason: "Benchmark with synthetic content.",
+        },
+      ],
+    },
+  },
+  {
+    id: "model-resolution",
+    capability: "Resolving a model adapter",
+    owner: ["apps/api/src/lib/tanstack-ai-models.ts"],
+    summary:
+      "Production code resolves a model through `resolveTanStackTextModel`, which " +
+      "requires the dispatch's admission proof; the adapter builders behind it are " +
+      "not reachable without one.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/tanstack-ai-models"],
+      names: [
+        "createTanStackTextAdapterFactory",
+        "getTanStackTextModelById",
+        "getTanStackTextModelForRole",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/lib/tanstack-ai-generate.ts",
+          reason: "The dispatch seam: resolves after checking the admission.",
+        },
+      ],
+    },
   },
   {
     id: "desktop-account",

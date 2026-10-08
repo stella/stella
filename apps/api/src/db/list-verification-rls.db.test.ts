@@ -2,6 +2,8 @@ import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, getColumns } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
@@ -20,9 +22,11 @@ import {
   reconcileQueuedListVerificationRuns,
   reconcileStuckListVerificationRuns,
 } from "@/api/lib/lists/verification/run-queue";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -292,7 +296,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
 
         // An unresolved pin stops execution before any document or model I/O.
         // It still exercises the queue's conditional claim and terminal write.
-        await processListVerificationRun({ actor, data: jobData, grants });
+        await processListVerificationRun({
+          actor,
+          admission: testModelAdmission(actor.organizationId),
+          data: jobData,
+          grants,
+        });
         const failed = await db
           .select()
           .from(legalListVerificationRuns)
@@ -303,7 +312,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
         });
         expect(failed.at(0)?.startedAt).toBeInstanceOf(Date);
         expect(failed.at(0)?.finishedAt).toBeInstanceOf(Date);
-        await processListVerificationRun({ actor, data: jobData, grants });
+        await processListVerificationRun({
+          actor,
+          admission: testModelAdmission(actor.organizationId),
+          data: jobData,
+          grants,
+        });
         expect(await db.select().from(legalListVerificationRuns)).toEqual(
           failed,
         );
@@ -372,6 +386,79 @@ describe.skipIf(!enabled)("list verification row security", () => {
         await client.unsafe("RESET search_path");
         await client.unsafe(`DROP SCHEMA ${schema} CASCADE`);
         await client.unsafe(`DROP ROLE ${ownerRole}`);
+      }
+    });
+  });
+});
+
+describe.skipIf(!enabled)("list evidence row security", () => {
+  test("forced evidence policies permit the owner and deny an unscoped application role", async () => {
+    if (databaseUrl === undefined) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { sql: client, db } = openClient();
+      const schema = `evidence_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const ownerRole = `evidence_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const tables = ["legal_list_fact_details", "legal_list_item_sources"];
+      try {
+        await client.unsafe(`CREATE SCHEMA ${schema}`);
+        await client.unsafe(
+          `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+        );
+        await client.unsafe(
+          `GRANT USAGE ON SCHEMA ${schema} TO stella, ${ownerRole}`,
+        );
+        await client.unsafe(`SET search_path TO ${schema}, public`);
+        for (const table of tables) {
+          await client.unsafe(
+            `CREATE TABLE ${table} (id integer PRIMARY KEY); ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY; INSERT INTO ${table} VALUES (1); GRANT SELECT, INSERT ON ${table} TO stella; ALTER TABLE ${table} OWNER TO ${ownerRole}`,
+          );
+        }
+        const migration = await Bun.file(
+          new URL(
+            "../../drizzle/20261005120800_list_evidence_table_policies/migration.sql",
+            import.meta.url,
+          ),
+        ).text();
+        await db.transaction(async (tx) => {
+          for (const statement of migration
+            .replaceAll("public.legal_list_", () => `${schema}.legal_list_`)
+            .split("--> statement-breakpoint")) {
+            await tx.execute(sql.raw(statement));
+          }
+        });
+        const posture = await client<{ name: string; forced: boolean }[]>`
+          SELECT relname AS name, relforcerowsecurity AS forced
+          FROM pg_class WHERE relnamespace = ${schema}::regnamespace AND relkind = 'r'
+          ORDER BY relname`;
+        expect(posture).toEqual(tables.map((name) => ({ name, forced: true })));
+        for (const table of tables) {
+          await client.unsafe(`SET ROLE ${ownerRole}`);
+          expect(
+            await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
+          ).toEqual([{ id: 1 }]);
+          await client.unsafe(`INSERT INTO ${table} VALUES (2)`);
+          await client.unsafe("RESET ROLE");
+          await client.unsafe("SET ROLE stella");
+          expect(
+            await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
+          ).toEqual([]);
+          // The driver's own `code` is not the SQLSTATE; read it where the
+          // shared failure snapshot finds it, and keep the denial exact.
+          expect(
+            getPgErrorCode(
+              await rejectionOf(
+                client.unsafe(`INSERT INTO ${table} VALUES (3)`),
+              ),
+            ),
+          ).toBe(PG_ERROR.INSUFFICIENT_PRIVILEGE);
+          await client.unsafe("RESET ROLE");
+        }
+      } finally {
+        await client.unsafe("RESET ROLE; RESET search_path");
+        await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+        await client.unsafe(`DROP ROLE IF EXISTS ${ownerRole}`);
       }
     });
   });

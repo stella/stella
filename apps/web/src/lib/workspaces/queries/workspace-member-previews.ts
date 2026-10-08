@@ -14,7 +14,7 @@ type WorkspaceMemberPreviewsKey = WorkspaceMemberPreviewsScope & {
   workspaceIds: readonly string[];
 };
 
-export const workspaceMemberPreviewsKeys = {
+const workspaceMemberPreviewsKeys = {
   root: () => ["workspace-member-previews"] as const,
   all: ({ organizationId, userId }: WorkspaceMemberPreviewsScope) =>
     [...workspaceMemberPreviewsKeys.root(), organizationId, userId] as const,

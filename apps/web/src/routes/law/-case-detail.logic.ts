@@ -99,10 +99,7 @@ type PublicDecisionHeadOptions = {
   params: PublicDecisionRouteParams;
 };
 
-export type {
-  PublicCaseLawDecision,
-  PublicDecisionLanguageAlternate,
-} from "@/features/case-law/public-decision";
+export type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 type PublicLawAlternateLink = {
   href: string;

@@ -22,7 +22,11 @@ import {
 import type { ReviewAccountStore } from "@/api/scripts/review-account.logic";
 
 const createStore = async (): Promise<ReviewAccountStore> => ({
-  ...createReviewAccountAuthStore(await getAuth().$context),
+  ...createReviewAccountAuthStore(
+    await getAuth().$context,
+    async (email) =>
+      (await getAuth().api.createReviewAccountUser({ body: { email } })).id,
+  ),
   ...bindReviewAccountOrganizationStore(
     bindOwnerReviewAccountOrganizationStore(
       createReviewAccountOrganizationStore,

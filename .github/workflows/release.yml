@@ -766,10 +766,35 @@ jobs:
           } > NOTES.with-manual.md
           mv NOTES.with-manual.md NOTES.md
 
+      # Stable store packages share this existing standard Linux job. Upload
+      # directly to the release; no intermediate Actions artifact is retained.
+      - name: Setup Bun for the Chrome extension
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Build and verify the production Chrome extension ZIP
+        id: extension-zip
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          WXT_STELLA_ORIGINS: ""
+          NPM_TOKEN: ""
+        run: |
+          if [[ ! -f apps/extension/scripts/release-zip.sh ]]; then
+            echo "::notice::Release source predates Chrome extension packaging; skipping the ZIP."
+            exit 0
+          fi
+          bash apps/extension/scripts/release-zip.sh
+          echo "packaged=true" >> "$GITHUB_OUTPUT"
+
       - name: Create draft GitHub release with the manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          EXTENSION_PACKAGED: ${{ steps.extension-zip.outputs.packaged }}
         run: |
           # A draft: absent from /releases, the public API and
           # /releases/latest until the promote job for its channel has
@@ -794,6 +819,9 @@ jobs:
               "${extra_args[@]}"
           fi
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
+          if [[ "$EXTENSION_PACKAGED" == "true" ]]; then
+            bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "apps/extension/.output/stella-extension-chrome-${RELEASE_REF#v}.zip" --clobber
+          fi
 
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag

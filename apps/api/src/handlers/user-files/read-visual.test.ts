@@ -36,6 +36,7 @@ const reader = createReadUserFileVisual(async () =>
 );
 const read = async (
   fileId: Parameters<typeof reader.handler>[0]["params"]["fileId"],
+  fileReader = reader,
 ) => {
   const request = new Request("https://example.test/visual");
   const record = createAuditRecorder({
@@ -45,7 +46,7 @@ const read = async (
     request,
     server: null,
   });
-  return await reader.handler(
+  return await fileReader.handler(
     createTestHandlerContext<Parameters<typeof reader.handler>[0]>({
       params: { fileId },
       session: { activeOrganizationId: ids.orgA },
@@ -76,3 +77,19 @@ test("returns not found for an unknown file id", async () => {
     response: { message: "User file not found" },
   });
 });
+
+test.each(["Ordinary text attachment", JSON.stringify({ title: "Example" })])(
+  "returns a typed 422 envelope for a stored attachment without a generated view (%s)",
+  async (content) => {
+    const fileReader = createReadUserFileVisual(async () =>
+      testScannedFile({
+        bytes: new TextEncoder().encode(content).buffer,
+        mimeType: "text/plain",
+      }),
+    );
+    expect(await read(ids.userFileWorkspaceA1, fileReader)).toMatchObject({
+      code: 422,
+      response: { message: "The attachment is not a generated view" },
+    });
+  },
+);

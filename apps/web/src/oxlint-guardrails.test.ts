@@ -158,7 +158,7 @@ describe("custom oxlint guardrails", () => {
     );
     const filesystemEntitiesOptionsSource = entityQuerySource.slice(
       entityQuerySource.indexOf("export const filesystemEntitiesOptions"),
-      entityQuerySource.indexOf("export const kanbanGroupOptions"),
+      entityQuerySource.indexOf("const kanbanGroupOptions"),
     );
 
     expect(routeSource).toContain("ensureRouteInfiniteQueryData");

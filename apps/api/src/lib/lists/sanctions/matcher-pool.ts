@@ -6,10 +6,7 @@ export {
   SANCTIONS_MATCHER_CONFIG,
   isSanctionsMatcherCancelled,
 } from "./matcher-pool-core";
-export type {
-  SanctionsMatcherSession,
-  MatcherWorkOutcome,
-} from "./matcher-pool-core";
+export type { MatcherWorkOutcome } from "./matcher-pool-core";
 
 type BoundMatcherPoolOptions = Omit<MatcherPoolOptions, "reportFailure"> & {
   reportFailure?: typeof reportSanctionsScreeningFailure;

@@ -218,7 +218,11 @@
     },
     "@stll/extension#build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/VERSION",
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+      ],
       "outputs": [".output/**"]
     },
     "dev": {

@@ -66,7 +66,6 @@ export const createSuggestThreadTitle = ({
       params: { threadId },
       promptCachingEnabled,
       query: { workspaceId },
-      request,
       safeDb,
       session,
       user,
@@ -191,14 +190,14 @@ export const createSuggestThreadTitle = ({
           actionKind: "chat.suggest-thread-title",
           ctx,
           ...(admit === undefined ? {} : { admit }),
-          async *handler({ actionSignal }) {
+          async *handler({ actionSignal, modelAdmission }) {
             const generated = yield* Result.await(
               Result.tryPromise({
                 try: async () =>
                   await generateTextForRole({
                     dataClass: "customer",
                     abortSignal: AbortSignal.any([
-                      actionSignal ?? request.signal,
+                      actionSignal,
                       AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
                     ]),
                     analytics: aiAnalytics,
@@ -210,6 +209,7 @@ export const createSuggestThreadTitle = ({
                     finishPolicy: TITLE_FINISH_POLICY,
                     maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
                     organizationId: session.activeOrganizationId,
+                    admission: modelAdmission,
                     orgAIConfig,
                     managedAIResidency,
                     prompt: buildThreadTitlePrompt(titleMessages),

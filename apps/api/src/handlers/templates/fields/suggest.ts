@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   suggestTemplateFields,
@@ -17,6 +21,7 @@ const suggestFieldsBodySchema = t.Object({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "templates.suggest-fields" },
   description:
     "Ask the model which literal values in a slice of template text (a whole " +
     "document or just a selection) should become fillable fields, with " +
@@ -49,6 +54,7 @@ const config = {
 const suggestFields = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     session,
     body,
     safeDb,
@@ -84,6 +90,7 @@ const suggestFields = createSafeRootHandler(
       Result.tryPromise({
         try: async () =>
           await suggestTemplateFields({
+            admission: configuredModelAdmission({ modelAdmission }),
             documentText: trimmed,
             instructions,
             orgAIConfig,
