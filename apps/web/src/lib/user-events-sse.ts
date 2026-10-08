@@ -1,5 +1,6 @@
 import { parseUserRealtimeEvent } from "@stll/api-contract";
 import type { UserRealtimeEvent } from "@stll/api-contract";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -18,10 +19,10 @@ const SSE_RECONNECT_BASE_DELAY_MS = 1000;
 const SSE_RECONNECT_MAX_DELAY_MS = 30_000;
 
 const reconnectDelayMs = (failures: number): number =>
-  Math.min(
-    SSE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(0, failures - 1),
-    SSE_RECONNECT_MAX_DELAY_MS,
-  );
+  backoffDelay(Math.max(0, failures - 1), {
+    baseMs: SSE_RECONNECT_BASE_DELAY_MS,
+    maxMs: SSE_RECONNECT_MAX_DELAY_MS,
+  });
 
 /**
  * Subscribe to the signed-in user's own event stream, for one organization.

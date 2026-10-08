@@ -1,7 +1,9 @@
+// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
@@ -2664,8 +2666,12 @@ const fetchListedDecisions = async (
 ): Promise<CzUsPageItems> => {
   const decisions: IngestionResult[] = [];
   let failed = 0;
-  for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
-    const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
+  for (const [batchIndex, batch] of chunkItems(
+    listed,
+    DOCUMENT_CONCURRENCY,
+  ).entries()) {
+    const start = batchIndex * DOCUMENT_CONCURRENCY;
+
     const built = await Promise.all(
       batch.map(
         async (item) =>

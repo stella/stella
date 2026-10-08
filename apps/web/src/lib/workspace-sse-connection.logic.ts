@@ -1,3 +1,4 @@
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 // The browser stops reconnecting (readyState CLOSED) on a non-2xx response,
 // a wrong content type, or a network change — states a fresh EventSource
 // usually recovers from. Re-establish with capped exponential backoff and
@@ -9,10 +10,10 @@ const SSE_RECONNECT_MAX_DELAY_MS = 30_000;
 export const SSE_ESCALATE_AFTER_FAILURES = 5;
 
 export const sseReconnectDelayMs = (failures: number): number =>
-  Math.min(
-    SSE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(0, failures - 1),
-    SSE_RECONNECT_MAX_DELAY_MS,
-  );
+  backoffDelay(Math.max(0, failures - 1), {
+    baseMs: SSE_RECONNECT_BASE_DELAY_MS,
+    maxMs: SSE_RECONNECT_MAX_DELAY_MS,
+  });
 
 /**
  * What a refused reconnect means. An EventSource never exposes the status

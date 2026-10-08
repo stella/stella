@@ -15,6 +15,7 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { sleep } from "@stll/concurrency/sleep";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -533,9 +534,7 @@ export const useChatSession = ({
               });
             },
             wait: async () => {
-              await new Promise<void>((resolve) => {
-                setTimeout(resolve, 250);
-              });
+              await sleep(250);
             },
           });
           if (settleResult.status === "failed") {

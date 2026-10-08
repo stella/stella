@@ -1,3 +1,4 @@
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 /**
  * The standing walk that keeps every reconcilable source honest.
  *
@@ -313,10 +314,10 @@ export const runCaseLawReconciliationLoop = async ({
         retryAtMs.set(
           sourceIndex,
           now() +
-            Math.min(
-              timing.unitDelayMs * 2 ** streak,
-              timing.failureBackoffMaxMs,
-            ),
+            backoffDelay(streak, {
+              baseMs: timing.unitDelayMs,
+              maxMs: timing.failureBackoffMaxMs,
+            }),
         );
       }
     }
@@ -334,7 +335,10 @@ export const runCaseLawReconciliationLoop = async ({
         // to make cheap, and freezing it would leave a settled corpus polling
         // the database at some held source's retry cadence forever.
         const idleWaitMs = idleMs;
-        idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+        idleMs = backoffDelay(1, {
+          baseMs: idleMs,
+          maxMs: timing.idleSleepMaxMs,
+        });
         // A held source only ever caps that wait. There is work to try the
         // moment its deadline expires, so the idle schedule must not sleep
         // past it, and the unit gap is the floor because a rotation of skips

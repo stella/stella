@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Download the ONNX models the local OCR provider runs, verifying each
  * against a pinned SHA-256 before it is written. Idempotent: a file that
@@ -7,9 +8,9 @@
  * Usage:  bun run src/scripts/fetch-ocr-models.ts [targetDir]
  *   targetDir defaults to ./ocr-models (relative to apps/api).
  */
-
-import { panic, Result } from "better-result";
 import path from "node:path";
+
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -90,7 +91,10 @@ const download = async ({
       `download of ${fileName} failed after ${attempt} attempt(s): ${failure}`,
     );
   }
-  const delayMs = RETRY_BASE_DELAY_MS * 3 ** (attempt - 1);
+  const delayMs = backoffDelay(attempt - 1, {
+    baseMs: RETRY_BASE_DELAY_MS,
+    factor: 3,
+  });
   console.warn(
     `retrying ${fileName} in ${delayMs} ms (attempt ${attempt}/${DOWNLOAD_ATTEMPTS}): ${failure}`,
   );

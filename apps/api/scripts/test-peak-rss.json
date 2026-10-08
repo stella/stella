@@ -8248,14 +8248,6 @@
         "job": "measure-2"
       }
     },
-    "src/lib/chunked.test.ts": {
-      "peakMb": 176,
-      "baselineMb": 176,
-      "source": {
-        "runId": "37173732493",
-        "job": "measure-1"
-      }
-    },
     "src/lib/clauses/body-schema.test.ts": {
       "peakMb": 175,
       "baselineMb": 175,

@@ -223,6 +223,7 @@
         "@atlaskit/pragmatic-drag-and-drop": "catalog:",
         "@stll/api-contract": "workspace:*",
         "@stll/business-registries": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
@@ -251,6 +252,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -301,6 +303,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
         "@stll/scripts": "workspace:*",
@@ -693,6 +696,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@stll/concurrency": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
@@ -776,8 +780,10 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/conditions": {
@@ -807,6 +813,7 @@
       "name": "@stll/db-load-gate",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/concurrency": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
       },
@@ -840,6 +847,7 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
+        "@stll/concurrency": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -945,6 +953,7 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
+        "@stll/concurrency": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

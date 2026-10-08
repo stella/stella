@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -123,9 +125,7 @@ describe("desktop edit session events", () => {
       return response;
     });
 
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
     expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith(
       scope.transactions.at(1),
       {
