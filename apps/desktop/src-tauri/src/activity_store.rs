@@ -7,7 +7,7 @@
 //! - `settings.json.enc`
 //! - `days/YYYY-MM-DD.json.enc`
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
   fs,
@@ -37,6 +37,23 @@ pub struct ActivityStore {
 impl ActivityStore {
   pub fn new(key: [u8; 32], root: PathBuf) -> Self {
     Self { key, root }
+  }
+
+  pub fn root(&self) -> &Path {
+    &self.root
+  }
+
+  /// Local dates can change between sessions; the recording boundary belongs
+  /// to the account's entire retained history, not its current local day.
+  pub fn recorded_until(&self) -> Result<Option<DateTime<Utc>>, String> {
+    let mut latest = None;
+    for date in self.day_dates()? {
+      for segment in self.load_day(date)? {
+        latest =
+          Some(latest.map_or(segment.end, |end: DateTime<Utc>| end.max(segment.end)));
+      }
+    }
+    Ok(latest)
   }
 
   /// Whether anything encrypted under the store key exists. Leftover

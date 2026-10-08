@@ -35,6 +35,7 @@ const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// or the sampler stalled; the open segment ends at the last sample.
 const MAX_SAMPLE_GAP: Duration = Duration::from_secs(15);
 const IDLE_THRESHOLD: Duration = Duration::from_secs(5 * 60);
+const INPUT_TIMESTAMP_TOLERANCE: chrono::Duration = chrono::Duration::milliseconds(10);
 // Allow clock-read jitter, but end the mapping before a wall correction can
 // introduce synthetic activity into the current segment.
 const WALL_CLOCK_TOLERANCE: Duration = Duration::from_millis(100);
@@ -152,6 +153,9 @@ struct OpenSegment {
   segment: ActivitySegment,
   last_seen: DateTime<Utc>,
   last_input: DateTime<Utc>,
+  /// A full sample interval confirmed no input; sub-sample pauses cannot be
+  /// reconstructed from the OS's latest-input timestamp.
+  idle_since: Option<DateTime<Utc>>,
   partition: DayPartition,
 }
 
@@ -231,13 +235,32 @@ fn local_date(instant: DateTime<Utc>) -> NaiveDate {
 
 /// The first valid local instant, including midnight gaps, folds and skipped
 /// whole dates. Never interpret a missing local midnight as UTC.
+/// The partition policy assumes a single initial gap followed by a continuous
+/// valid remainder (or a fully skipped date), as in supported Local zone data.
+/// Injected zones must preserve that rule; arbitrary sub-minute alternating
+/// transitions require a different resolver. The last-second probe covers
+/// exceptionally short days.
 fn day_start<T: TimeZone>(zone: &T, mut date: NaiveDate) -> DateTime<Utc> {
   loop {
     let midnight = date.and_hms_opt(0, 0, 0).expect("valid midnight");
-    for second in 0..86400 {
-      let naive = midnight + chrono::Duration::seconds(second);
-      if let Some(instant) = zone.from_local_datetime(&naive).earliest() {
-        return instant.with_timezone(&Utc);
+    // Resolve the initial midnight gap by minutes, then refine its last
+    // minute by seconds. Include the day's last second so a very short
+    // initial day is preserved; a skipped date costs 1,441 coarse lookups.
+    for minute in 0..=1440 {
+      let last_second = (minute * 60).min(86399);
+      let naive = midnight + chrono::Duration::seconds(last_second);
+      let Some(candidate) = zone.from_local_datetime(&naive).earliest() else {
+        continue;
+      };
+      if minute == 0 {
+        return candidate.with_timezone(&Utc);
+      }
+      let first_second = (minute - 1).max(0) * 60;
+      for second in first_second..=last_second {
+        let naive = midnight + chrono::Duration::seconds(second);
+        if let Some(instant) = zone.from_local_datetime(&naive).earliest() {
+          return instant.with_timezone(&Utc);
+        }
       }
     }
     date = date.succ_opt().expect("local day is representable");
@@ -345,6 +368,20 @@ impl ActivityManager {
   }
 
   fn install(&mut self, persistence: ActivityPersistence, settings: ActivitySettings) {
+    let (persistence, settings, wall_floor) = match persistence {
+      ActivityPersistence::Encrypted(store) => match store.recorded_until() {
+        Ok(floor) => (ActivityPersistence::Encrypted(store), settings, floor),
+        Err(error) => {
+          tracing::warn!(error = %error, "activity recording boundary could not be loaded");
+          (
+            ActivityPersistence::DeletionOnly(store.root().to_path_buf()),
+            ActivitySettings::default(),
+            None,
+          )
+        }
+      },
+      persistence => (persistence, settings, None),
+    };
     self.persistence = persistence;
     self.settings = settings;
     self.open = None;
@@ -352,7 +389,7 @@ impl ActivityManager {
     self.dirty.clear();
     self.last_flush = None;
     self.last_sample = None;
-    self.wall_floor = None;
+    self.wall_floor = wall_floor;
     self.observation_generation = self.observation_generation.wrapping_add(1);
   }
 
@@ -577,12 +614,29 @@ impl ActivityManager {
       .ok()
       .and_then(|idle| now.checked_sub_signed(idle))
       .unwrap_or(now);
+    let resumed_input = self.open.as_ref().and_then(|open| {
+      (open.idle_since.is_some()
+        && last_input - open.last_input > INPUT_TIMESTAMP_TOLERANCE)
+        .then_some(open.segment.end)
+    });
+    if let Some(confirmed_end) = resumed_input {
+      // Renewed input cannot turn an already observed idle interval into
+      // activity. Keep its confirmed prefix and begin at the new input.
+      closed |= self.close_open(confirmed_end);
+    }
     if let Some(open) = self.open.as_mut() {
+      if last_input <= open.last_seen + INPUT_TIMESTAMP_TOLERANCE {
+        open.idle_since.get_or_insert(open.last_input);
+      }
       open.last_input = open.last_input.max(last_input);
     }
     // Day boundaries are pinned when opening; a changed zone cannot move an
     // already flushed prefix into another file.
-    let mut segment_start = now;
+    let mut segment_start = if resumed_input.is_some() {
+      last_input
+    } else {
+      now
+    };
     if let Some(open) = self.open.as_ref()
       && open.partition != partition
     {
@@ -624,6 +678,7 @@ impl ActivityManager {
           },
           last_seen: now,
           last_input,
+          idle_since: (last_input < segment_start).then_some(last_input),
           partition,
         });
       }
@@ -1597,6 +1652,101 @@ mod tests {
   }
 
   #[test]
+  fn resumed_input_never_reintroduces_observed_idle_across_apps_or_days() {
+    let zone = FixedOffset::east_opt(0).unwrap();
+    let start = Utc.with_ymd_and_hms(2026, 3, 10, 23, 59, 40).unwrap();
+    for switch_app in [false, true] {
+      let root = std::env::temp_dir()
+        .join(format!("stella-idle-resume-{}", uuid::Uuid::new_v4()));
+      let store = ActivityStore::new([3; 32], root.clone());
+      let mut manager = recording_manager();
+      manager.persistence = ActivityPersistence::Encrypted(store.clone());
+      let clock = Instant::now();
+      for (second, idle) in [
+        (0, 0),
+        (5, 0),
+        (10, 5),
+        (15, 10),
+        (20, 0),
+        (25, 0),
+        (30, 5),
+        (35, 10),
+        (40, 0),
+        (45, 0),
+      ] {
+        let now = start + chrono::Duration::seconds(second);
+        let app = if switch_app && (15..35).contains(&second) {
+          "mail"
+        } else {
+          "word"
+        };
+        manager.observe_at(
+          now,
+          clock + Duration::from_secs(second as u64),
+          Duration::from_secs(idle),
+          active(app),
+          partition_in(&zone, now),
+        );
+        manager.flush(now).unwrap();
+      }
+      manager.stop(start + chrono::Duration::seconds(45)).unwrap();
+      let mut intervals = store
+        .day_dates()
+        .unwrap()
+        .into_iter()
+        .flat_map(|date| store.load_day(date).unwrap())
+        .collect::<Vec<_>>();
+      intervals.sort_by_key(|segment| segment.start);
+      assert_eq!(
+        intervals
+          .iter()
+          .map(|segment| (segment.end - segment.start).num_seconds())
+          .sum::<i64>(),
+        15
+      );
+      for segment in &intervals {
+        for (idle_start, idle_end) in [(5, 20), (25, 40)] {
+          let idle_start = start + chrono::Duration::seconds(idle_start);
+          let idle_end = start + chrono::Duration::seconds(idle_end);
+          assert!(segment.end <= idle_start || segment.start >= idle_end);
+        }
+      }
+      for pair in intervals.windows(2) {
+        assert!(pair[0].end <= pair[1].start);
+      }
+      ActivityStore::remove(&root).unwrap();
+    }
+  }
+
+  #[test]
+  fn continuously_advancing_input_evidence_keeps_sustained_activity() {
+    let mut manager = recording_manager();
+    let clock = Instant::now();
+    for second in [0, 5, 10, 15] {
+      let idle = if second == 0 {
+        Duration::ZERO
+      } else {
+        Duration::from_millis(200)
+      };
+      manager.observe_at(
+        at(second),
+        clock + Duration::from_secs(second as u64),
+        idle,
+        active("word"),
+        partition_in(&Local, at(second)),
+      );
+    }
+    manager.stop(at(15)).unwrap();
+    let recorded = manager.days.values().flatten().collect::<Vec<_>>();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].start, at(0));
+    assert_eq!(
+      recorded[0].end,
+      at(15) - chrono::Duration::milliseconds(200)
+    );
+  }
+
+  #[test]
   fn persisted_overlap_is_discarded_before_flush_or_close() {
     let root = std::env::temp_dir()
       .join(format!("stella-clock-restart-{}", uuid::Uuid::new_v4()));
@@ -1698,6 +1848,7 @@ mod tests {
     before: FixedOffset,
     after: FixedOffset,
     transition: chrono::NaiveDateTime,
+    local_lookups: std::cell::Cell<usize>,
   }
 
   impl TimeZone for TransitionZone {
@@ -1707,6 +1858,7 @@ mod tests {
         before: *offset,
         after: *offset,
         transition: chrono::NaiveDateTime::MIN,
+        local_lookups: std::cell::Cell::new(0),
       }
     }
     fn offset_from_local_date(
@@ -1719,6 +1871,7 @@ mod tests {
       &self,
       local: &chrono::NaiveDateTime,
     ) -> chrono::MappedLocalTime<FixedOffset> {
+      self.local_lookups.set(self.local_lookups.get() + 1);
       let valid = |offset: FixedOffset| {
         let utc =
           *local - chrono::Duration::seconds(i64::from(offset.local_minus_utc()));
@@ -1752,6 +1905,12 @@ mod tests {
   #[test]
   fn day_boundaries_resolve_midnight_gaps_folds_and_skipped_dates() {
     for (before, after, transition) in [
+      (0, 64, Utc.with_ymd_and_hms(2026, 3, 10, 0, 0, 0).unwrap()),
+      (
+        0,
+        86399,
+        Utc.with_ymd_and_hms(2026, 3, 10, 0, 0, 0).unwrap(),
+      ),
       (
         -3 * 3600,
         -2 * 3600,
@@ -1772,13 +1931,38 @@ mod tests {
         before: FixedOffset::east_opt(before).unwrap(),
         after: FixedOffset::east_opt(after).unwrap(),
         transition: transition.naive_utc(),
+        local_lookups: std::cell::Cell::new(0),
       };
+      if before > after {
+        let fold_date = NaiveDate::from_ymd_opt(2018, 2, 18).unwrap();
+        assert!(matches!(
+          zone.from_local_datetime(&fold_date.and_hms_opt(0, 0, 0).unwrap()),
+          chrono::MappedLocalTime::Ambiguous(_, _)
+        ));
+        assert_eq!(
+          day_start(&zone, fold_date),
+          Utc.with_ymd_and_hms(2018, 2, 18, 2, 0, 0).unwrap()
+        );
+      }
       let original = ActivitySegment {
         app_identifier: "word".into(),
         app_name: "Word".into(),
         start: transition - chrono::Duration::seconds(5),
         end: transition + chrono::Duration::seconds(5),
       };
+      let boundary_date = original
+        .start
+        .with_timezone(&zone)
+        .date_naive()
+        .succ_opt()
+        .unwrap();
+      zone.local_lookups.set(0);
+      let boundary = day_start(&zone, boundary_date);
+      assert!(zone.local_lookups.get() < 1600);
+      assert!(boundary > original.start);
+      if after > before {
+        assert_eq!(boundary, transition);
+      }
       let pieces = split_by_day_in(&zone, original.clone());
       assert_eq!(
         pieces
@@ -1799,6 +1983,111 @@ mod tests {
         );
       }
     }
+  }
+
+  #[test]
+  fn restart_in_a_different_zone_cannot_overlap_retained_account_history() {
+    let root = std::env::temp_dir().join(format!(
+      "stella-zone-clock-restart-{}",
+      uuid::Uuid::new_v4()
+    ));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let utc = FixedOffset::east_opt(0).unwrap();
+    let west = FixedOffset::west_opt(3600).unwrap();
+    let start = Utc.with_ymd_and_hms(2026, 3, 10, 0, 30, 0).unwrap();
+    let settings = ActivitySettings {
+      recording_status: ActivityRecordingStatus::Recording,
+      ..ActivitySettings::default()
+    };
+    let mut first = ActivityManager::new();
+    first.install_account(
+      (1, "same-account".into()),
+      ActivityPersistence::Encrypted(store.clone()),
+      settings.clone(),
+    );
+    let clock = Instant::now();
+    for second in [0, 5, 10, 15] {
+      let now = start + chrono::Duration::seconds(second);
+      first.observe_at(
+        now,
+        clock + Duration::from_secs(second as u64),
+        Duration::ZERO,
+        active("word"),
+        partition_in(&utc, now),
+      );
+    }
+    first.stop(start + chrono::Duration::seconds(15)).unwrap();
+    let mut restarted = ActivityManager::new();
+    restarted.install_account(
+      (2, "same-account".into()),
+      ActivityPersistence::Encrypted(store.clone()),
+      settings,
+    );
+    assert_eq!(restarted.namespace.as_deref(), Some("same-account"));
+    assert_eq!(
+      restarted.wall_floor,
+      Some(start + chrono::Duration::seconds(15))
+    );
+    for second in [5, 10, 15, 20] {
+      let now = start + chrono::Duration::seconds(second);
+      restarted.observe_at(
+        now,
+        clock + Duration::from_secs((second - 5) as u64),
+        Duration::ZERO,
+        active("mail"),
+        partition_in(&west, now),
+      );
+      restarted.flush(now).unwrap();
+    }
+    restarted
+      .stop(start + chrono::Duration::seconds(20))
+      .unwrap();
+    let mut intervals = store
+      .day_dates()
+      .unwrap()
+      .into_iter()
+      .flat_map(|date| store.load_day(date).unwrap())
+      .collect::<Vec<_>>();
+    intervals.sort_by_key(|segment| segment.start);
+    assert_eq!(intervals.len(), 2);
+    assert_eq!(intervals[0].start, start);
+    assert_eq!(intervals[0].end, intervals[1].start);
+    assert_eq!(intervals[1].end, start + chrono::Duration::seconds(20));
+    assert_eq!(store.day_dates().unwrap().len(), 2);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn an_unreadable_retained_day_prevents_recording_after_installation() {
+    let root = std::env::temp_dir().join(format!(
+      "stella-unreadable-boundary-{}",
+      uuid::Uuid::new_v4()
+    ));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let path = root.join("days/2026-03-10.json.enc");
+    local_store::create_private_dir(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, b"unreadable ciphertext").unwrap();
+    let mut manager = ActivityManager::new();
+    manager.install_account(
+      (1, "same-account".into()),
+      ActivityPersistence::Encrypted(store),
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+    );
+    assert_eq!(
+      manager.persistence_status(),
+      ActivityPersistenceStatus::DeletionOnly
+    );
+    assert!(!manager.is_recording());
+    assert!(!manager.accepts_observation(manager.observation_generation, true));
+    assert_eq!(
+      manager.settings.recording_status,
+      ActivityRecordingStatus::Off
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"unreadable ciphertext");
+    ActivityStore::remove(&root).unwrap();
   }
 
   #[test]
