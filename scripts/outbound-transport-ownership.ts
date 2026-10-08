@@ -19,7 +19,7 @@ export const LOCAL_MODULE_CAPABILITIES: ReadonlySet<string> = new Set([
   "local:module-loader",
 ]);
 
-const GLOBAL_ROOTS = new Set(["globalThis", "self", "window", "Bun"]);
+const GLOBAL_ROOTS = new Set(["globalThis", "self", "window", "global", "Bun"]);
 const GLOBAL_TRANSPORT_NAMES = new Set([
   "fetch",
   "WebSocket",
@@ -276,6 +276,45 @@ const lookupBinding = ({
   }
 };
 
+type ReflectedGlobalMemberOptions = {
+  scopes: BindingScopes;
+  node: ts.Expression;
+};
+
+const reflectedGlobalMember = ({
+  scopes,
+  node,
+}: ReflectedGlobalMemberOptions) => {
+  const value = unwrap(node);
+  if (!ts.isCallExpression(value)) {
+    return undefined;
+  }
+  const callee = unwrap(value.expression);
+  if (
+    !(
+      ts.isPropertyAccessExpression(callee) ||
+      ts.isElementAccessExpression(callee)
+    ) ||
+    memberName(callee) !== "get" ||
+    !ts.isIdentifier(callee.expression) ||
+    callee.expression.text !== "Reflect" ||
+    lookupBinding({ scopes, node: callee.expression, name: "Reflect" }) !==
+      undefined
+  ) {
+    return undefined;
+  }
+  const target = value.arguments.at(0);
+  if (!target) {
+    return undefined;
+  }
+  const key = value.arguments.at(1);
+  const member = key && unwrap(key);
+  return {
+    target,
+    name: member && ts.isStringLiteralLike(member) ? member.text : undefined,
+  };
+};
+
 type GlobalObjectNameOptions = {
   scopes: BindingScopes;
   node: ts.Expression;
@@ -292,6 +331,18 @@ const globalObjectName = ({
     return undefined;
   }
   seen.add(value);
+  const reflected = reflectedGlobalMember({ scopes, node: value });
+  if (reflected) {
+    const root = globalObjectName({ scopes, node: reflected.target, seen });
+    if (!root) {
+      return undefined;
+    }
+    // An unknown reflected member may return another global root.
+    if (reflected.name === undefined) {
+      return root;
+    }
+    return GLOBAL_ROOTS.has(reflected.name) ? reflected.name : undefined;
+  }
   if (
     ts.isPropertyAccessExpression(value) ||
     ts.isElementAccessExpression(value)
@@ -573,25 +624,12 @@ const visitGlobalReference = ({
     }
   }
   if (ts.isCallExpression(node)) {
-    const callee = unwrap(node.expression);
-    if (
-      (ts.isPropertyAccessExpression(callee) ||
-        ts.isElementAccessExpression(callee)) &&
-      memberName(callee) === "get" &&
-      ts.isIdentifier(callee.expression) &&
-      callee.expression.text === "Reflect" &&
-      lookupBinding({ scopes, node: callee.expression, name: "Reflect" }) ===
-        undefined
-    ) {
-      const target = node.arguments.at(0);
-      const key = node.arguments.at(1);
-      const value = key && unwrap(key);
-      if (target) {
-        registerGlobal({
-          capabilities,
-          object: globalObjectName({ scopes, node: target }),
-          name: value && ts.isStringLiteralLike(value) ? value.text : undefined,
-        });
+    const reflected = reflectedGlobalMember({ scopes, node });
+    if (reflected) {
+      const object = globalObjectName({ scopes, node: reflected.target });
+      if (object) {
+        capabilities.add(INDIRECT_TRANSPORT);
+        registerGlobal({ capabilities, object, name: reflected.name });
       }
     }
   }

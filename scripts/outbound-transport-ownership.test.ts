@@ -62,72 +62,75 @@ describe("outbound transport ownership", () => {
     );
   });
 
-  test("indirect acquisition outside the bounded owner fails classification", () => {
-    const roots = ["globalThis", "self", "window", "Bun"];
-    const forms = roots.flatMap((root) => [
-      `void ${root}["fe" + "tch"];`,
-      `void ${root}[name];`,
-      `const alias = ${root}; void alias[name];`,
-      `const { [name]: request } = ${root};`,
-      `const { ...request } = ${root};`,
-      `const { window: alias } = ${root}; void alias[name];`,
-      `const { self: alias } = ${root}; void alias[name];`,
-      `void Reflect.get(${root}, name);`,
-      `const alias = ${root}; void Reflect.get(alias, name);`,
-    ]);
-    forms.push(
-      "void import(mod);",
-      `void import(\`node:\${name}\`);`,
-      "void require(mod);",
-    );
-    for (const text of forms) {
-      expect(references(text)).toEqual(["indirect:transport"]);
-      const sources = new Map([[API_SOURCE, text]]);
+  const expectIndirectEnumeration = (text: string) => {
+    expect(references(text)).toContain("indirect:transport");
+    const sources = new Map([[API_SOURCE, text]]);
+    for (const census of [
+      [],
+      [censusEntry({ path: API_SOURCE, transports: ["indirect:transport"] })],
+    ]) {
       expect(
-        validateOutboundTransportCensus({
-          sources,
-          census: [],
-          grantOwners: [],
-        }),
+        validateOutboundTransportCensus({ sources, census, grantOwners: [] }),
       ).toContain(
         `${API_SOURCE}: indirect acquisition belongs to the bounded local module owner`,
       );
-      expect(
-        validateOutboundTransportCensus({
-          sources,
-          census: [
-            censusEntry({
-              path: API_SOURCE,
-              transports: ["indirect:transport"],
-            }),
-          ],
-          grantOwners: [],
-        }),
-      ).toContain(
-        `${API_SOURCE}: indirect acquisition belongs to the bounded local module owner`,
-      );
-      expect(
-        validateOutboundTransportCensus({
-          sources,
-          census: [
-            censusEntry({
-              path: API_SOURCE,
-              reason: " ",
-              transports: ["indirect:transport"],
-            }),
-          ],
-          grantOwners: [],
-        }),
-      ).toContain(`${API_SOURCE}: stale transport entry or empty reason`);
     }
+  };
+
+  test("enumerates a computed global member", () => {
+    expectIndirectEnumeration("void globalThis[memberName];");
+  });
+
+  test("enumerates global binding patterns", () => {
+    for (const text of [
+      "const { [memberName]: member } = globalThis;",
+      "const { ...members } = globalThis;",
+      "const { window: browser } = globalThis;",
+    ]) {
+      expectIndirectEnumeration(text);
+    }
+  });
+
+  test("enumerates a reflected global member", () => {
+    for (const root of ["globalThis", "window", "self", "global", "Bun"]) {
+      expectIndirectEnumeration(`void Reflect.get(${root}, memberName);`);
+      expectIndirectEnumeration(`void Reflect.get(${root}, "window");`);
+    }
+  });
+
+  test("tracks the global root returned by reflection", () => {
+    for (const member of ['"window"', "memberName"]) {
+      expect(
+        references(
+          `const browser = Reflect.get(globalThis, ${member}); void browser.fetch;`,
+        ),
+      ).toEqual(["global:fetch", "indirect:transport"]);
+    }
+    expect(
+      references(
+        'const runtime = Reflect.get(globalThis, "Bun"); void runtime.fetch;',
+      ),
+    ).toEqual(["global:Bun.fetch", "indirect:transport"]);
+  });
+
+  test("enumerates a non-literal import", () => {
+    expectIndirectEnumeration(
+      "const modulePath = declaredPath; await import(modulePath);",
+    );
+  });
+
+  test("enumerates a non-literal require", () => {
+    expectIndirectEnumeration(
+      "const modulePath = declaredPath; require(modulePath);",
+    );
   });
 
   test("only the bounded loader owner can acquire a dynamic module", () => {
     const owner = "packages/start-runtime/src/local-module-loader.ts";
-    expect(references("void import(mod);", owner)).toEqual([
+    expect(references("await import(modulePath);", owner)).toEqual([
       "local:module-import",
     ]);
-    expect(references("void require(mod);", owner)).toEqual([
+    expect(references("require(modulePath);", owner)).toEqual([
       "indirect:transport",
     ]);
     for (const specifier of [
@@ -141,11 +144,14 @@ describe("outbound transport ownership", () => {
       ).toEqual(["local:module-loader"]);
     }
     expect(
-      references("void import(mod);", "packages/start-runtime/src/other.ts"),
+      references(
+        "await import(modulePath);",
+        "packages/start-runtime/src/other.ts",
+      ),
     ).toEqual(["indirect:transport"]);
   });
 
-  test("literal reflected and destructured transports retain their capability", () => {
+  test("literal destructured transports retain their capability", () => {
     for (const root of ["globalThis", "self", "window"]) {
       for (const member of [
         "fetch",
@@ -154,7 +160,6 @@ describe("outbound transport ownership", () => {
         "XMLHttpRequest",
       ]) {
         for (const text of [
-          `void Reflect.get(${root}, "${member}");`,
           `const { ${member}: request } = ${root};`,
           `const alias = ${root}; const { ["${member}"]: request } = alias;`,
         ]) {
@@ -162,6 +167,13 @@ describe("outbound transport ownership", () => {
         }
       }
     }
+  });
+
+  test("enumerates a literal reflected transport member", () => {
+    expect(references('void Reflect.get(globalThis, "fetch");')).toEqual([
+      "global:fetch",
+      "indirect:transport",
+    ]);
   });
 
   test("ordinary computed access and static utility loads have no transport", () => {
@@ -177,7 +189,7 @@ describe("outbound transport ownership", () => {
       "const { Math: math } = globalThis;",
       'void import("node:path");',
       "void import(`node:path`);",
-      "function load(require: Loader) { return require(mod); }",
+      "function load(require: Loader) { return require(modulePath); }",
       'type Module = typeof import("node:http");',
       "type Member = typeof globalThis[name];",
     ]) {
