@@ -52,7 +52,7 @@ export const reconcilePlaybookSaveToolCalls = ({
 }: ReconcilePlaybookSaveToolCallsOptions): PlaybookSaveReconciliation | null => {
   const consumed = consumePlaybookSaveToolCalls({
     handledToolCallIds,
-    historicalToolCallIds,
+    ...(historicalToolCallIds === undefined ? {} : { historicalToolCallIds }),
     messages,
   });
   if (consumed === null) {
