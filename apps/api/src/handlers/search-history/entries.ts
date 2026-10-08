@@ -11,7 +11,11 @@ import { parseStatutePath } from "@stll/api-contract/statute-route";
 
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
-import { searchHistoryEntries, SEARCH_HISTORY_KINDS } from "@/api/db/schema";
+import {
+  searchHistoryEntries,
+  SEARCH_HISTORY_KINDS,
+  type SearchHistoryKind,
+} from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
