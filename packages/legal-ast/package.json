@@ -63,6 +63,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./paragraph-range": {
+      "types": "./src/paragraph-range.ts",
+      "import": "./src/paragraph-range.ts"
+    },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"

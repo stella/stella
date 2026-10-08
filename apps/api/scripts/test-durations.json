@@ -875,6 +875,10 @@
     "seconds": 2.121995,
     "source": "estimated"
   },
+  "src/handlers/case-law/decisions/reader.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/decisions/search-hydration.db.test.ts": {
     "seconds": 2.210343,
     "source": "estimated"
@@ -8287,6 +8291,14 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/mcp/app-guards.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/app-only-tools.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/auth.test.ts": {
     "seconds": 0.41,
     "source": "estimated"
@@ -8365,6 +8377,14 @@
   },
   "src/mcp/cursor-inputs.test.ts": {
     "seconds": 0.429256,
+    "source": "estimated"
+  },
+  "src/mcp/decision-reader-tools.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/decision-reader.logic.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/description-enum-drift.test.ts": {
@@ -8639,12 +8659,20 @@
     "seconds": 1.21972,
     "source": "estimated"
   },
+  "src/mcp/tool-schema-conversion.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/tool-types.test.ts": {
     "seconds": 0.440335,
     "source": "estimated"
   },
   "src/mcp/tool-utils.test.ts": {
     "seconds": 0.568477,
+    "source": "estimated"
+  },
+  "src/mcp/tool-visibility.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/tools.test.ts": {

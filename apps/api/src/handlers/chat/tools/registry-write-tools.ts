@@ -33,6 +33,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import {
   hasMcpToolAuthority,
   isAccountAuthorizedForMcpTool,
@@ -84,7 +85,10 @@ export type ChatRegistryWriteToolMap = {
 const projectedWriteToolNames = (): readonly RegistryWriteToolName[] => {
   const names: RegistryWriteToolName[] = [];
   for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-    if (definition.access !== "write") {
+    if (
+      definition.access !== "write" ||
+      !isMcpToolVisibleTo(definition, "model")
+    ) {
       continue;
     }
     if (WRITE_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
