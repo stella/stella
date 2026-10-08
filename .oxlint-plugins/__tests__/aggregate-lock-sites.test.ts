@@ -134,4 +134,62 @@ describe("aggregate lock confinement", () => {
       aggregateLockSites(file, 'sql`SELECT "pg_advisory_xact_lock"(1)`'),
     ).toHaveLength(1);
   });
+  test("rejects interpolated lock keywords and raw literal clauses", () => {
+    for (const prefix of [
+      "FOR",
+      "FOR NO",
+      "FOR NO KEY",
+      "FOR KEY",
+      "pg_advisory",
+      "pg_advisory_",
+      "pg_advisory_xact_",
+    ]) {
+      const source = `sql\`SELECT id FROM items ${prefix} \${sql.raw(mode)}\``;
+      const actual = aggregateLockBaseline(aggregateLockSites(file, source));
+      expect(actual).toHaveLength(1);
+      expect(
+        aggregateLockBaselineProblems({ actual, baseline: [] }),
+      ).toContainEqual(expect.stringContaining("Unowned aggregate lock"));
+    }
+    for (const mode of ["UPDATE", "NO KEY UPDATE", "SHARE", "KEY SHARE"]) {
+      const source = `sql\`SELECT id FROM items FOR \${sql.raw(${JSON.stringify(mode)})}\``;
+      expect(aggregateLockSites(file, source)).toHaveLength(1);
+      expect(
+        aggregateLockSites(file, `sql.raw(${JSON.stringify(`FOR ${mode}`)})`),
+      ).toHaveLength(1);
+    }
+    expect(
+      aggregateLockSites(file, 'sql.raw("pg_advisory_xact_lock")'),
+    ).toHaveLength(1);
+    expect(
+      aggregateLockSites(file, `sql\`SELECT pg_advisory_xact_lock(\${key})\``),
+    ).toHaveLength(1);
+    expect(
+      aggregateLockSites(
+        file,
+        `sql\`SELECT id FROM items FOR UPDATE OF \${items}\``,
+      ),
+    ).toHaveLength(1);
+    expect(
+      aggregateLockSites(
+        file,
+        `sql\`SELECT 'FOR \${mode}' -- FOR \${mode}\nFROM items\``,
+      ),
+    ).toEqual([]);
+  });
+  test("confines fragmented row locks to SQL contexts and excludes prose", () => {
+    for (const source of [
+      `const message = \`missing entry for \${id}\``,
+      `const message = \`must await withAggregateLock for \${aggregate}\``,
+    ]) {
+      expect(aggregateLockSites(file, source)).toEqual([]);
+    }
+    for (const source of [
+      `sql.raw(\`FOR \${mode}\`)`,
+      `const query = \`SELECT id FROM items FOR \${mode}\``,
+      `const query = \`SELECT pg_advisory_\${suffix}(1)\``,
+    ]) {
+      expect(aggregateLockSites(file, source)).toHaveLength(1);
+    }
+  });
 });

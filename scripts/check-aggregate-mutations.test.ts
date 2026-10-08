@@ -182,6 +182,56 @@ describe("aggregate mutation route coverage", () => {
     expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
   });
 
+  test("detached callbacks cannot cover an aggregate declaration", () => {
+    const sources = fixture('post("/existing", existing.handler)');
+    sources.set(
+      routes,
+      `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
+    );
+    const imports =
+      'import { Result } from "better-result"; import { abortableTx } from "@/api/db/safe-db"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+    const acquire =
+      'async (tx) => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
+    const declare =
+      'declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;';
+    const module = "apps/api/src/handlers/example/create.ts";
+    for (const detached of [
+      `setTimeout(${acquire}, 0);`,
+      `await arbitrary(${acquire});`,
+      `safeDb(${acquire});`,
+      `abortableTx(safeDb, ${acquire});`,
+      `tx.transaction(${acquire});`,
+      `await safeDb(async (tx) => { setTimeout(${acquire}, 0); });`,
+    ]) {
+      sources.set(
+        module,
+        `${imports} const existing = createSafeHandler({}, async ({safeDb}) => { ${detached} }); ${declare}`,
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    }
+    for (const joined of [
+      `await safeDb(${acquire});`,
+      `await abortableTx(safeDb, ${acquire});`,
+      `await tx.transaction(${acquire});`,
+    ]) {
+      sources.set(
+        module,
+        `${imports} const existing = createSafeHandler({}, async ({safeDb}) => { ${joined} }); ${declare}`,
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+    }
+    for (const yielded of [
+      `safeDb(${acquire})`,
+      `abortableTx(safeDb, ${acquire})`,
+    ]) {
+      sources.set(
+        module,
+        `${imports} const existing = createSafeHandler({}, async function* ({safeDb}) { yield* Result.await(${yielded}); }); ${declare}`,
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+    }
+  });
+
   test("inline declarations verify their own implementation and owner import", () => {
     const sources = fixture(
       'post("/inline", declareAggregateMutation(async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }, {type: "aggregate", aggregates: ["workspace"]}))',

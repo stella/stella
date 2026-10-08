@@ -702,14 +702,129 @@ const handlerImplementation = ({
   });
 };
 
+type JoinedRunnerOptions = {
+  call: ts.CallExpression;
+  source: ts.SourceFile;
+};
+const isYieldedResultAwait = ({ call, source }: JoinedRunnerOptions) => {
+  const expression = call.expression;
+  if (
+    !ts.isPropertyAccessExpression(expression) ||
+    expression.name.text !== "await" ||
+    !ts.isIdentifier(expression.expression)
+  ) {
+    return false;
+  }
+  const receiver = expression.expression.text;
+  const canonicalResult = source.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "better-result"
+    ) {
+      return false;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    return (
+      bindings !== undefined &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.some(
+        (binding) =>
+          binding.name.text === receiver &&
+          (binding.propertyName?.text ?? binding.name.text) === "Result",
+      )
+    );
+  });
+  return (
+    canonicalResult &&
+    ts.isYieldExpression(call.parent) &&
+    call.parent.asteriskToken !== undefined &&
+    call.parent.expression === call
+  );
+};
+const isJoinedRunner = ({ call, source }: JoinedRunnerOptions) => {
+  let expression: ts.Expression = call;
+  while (ts.isParenthesizedExpression(expression.parent)) {
+    expression = expression.parent;
+  }
+  const parent = expression.parent;
+  if (ts.isAwaitExpression(parent) && parent.expression === expression) {
+    return true;
+  }
+  return (
+    ts.isCallExpression(parent) &&
+    parent.arguments.includes(expression) &&
+    isYieldedResultAwait({ call: parent, source })
+  );
+};
+
+type TransactionCallbackOptions = {
+  callback: ts.ArrowFunction | ts.FunctionExpression;
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+};
+const isJoinedTransactionCallback = ({
+  callback,
+  implementation: { body, source, file },
+  access,
+}: TransactionCallbackOptions) => {
+  const call = callback.parent;
+  if (!ts.isCallExpression(call) || !isJoinedRunner({ call, source })) {
+    return false;
+  }
+  const expression = call.expression;
+  if (ts.isPropertyAccessExpression(expression)) {
+    return (
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === "tx" &&
+      expression.name.text === "transaction" &&
+      call.arguments.at(0) === callback
+    );
+  }
+  if (!ts.isIdentifier(expression)) {
+    return false;
+  }
+  if (expression.text === "safeDb" && call.arguments.at(0) === callback) {
+    const handler = body.parent;
+    return (
+      (ts.isArrowFunction(handler) ||
+        ts.isFunctionExpression(handler) ||
+        ts.isFunctionDeclaration(handler)) &&
+      handler.parameters.some(
+        (parameter) =>
+          ts.isObjectBindingPattern(parameter.name) &&
+          parameter.name.elements.some(
+            (element) =>
+              ts.isIdentifier(element.name) &&
+              element.name.text === "safeDb" &&
+              (element.propertyName === undefined ||
+                element.propertyName.getText(source) === "safeDb"),
+          ),
+      )
+    );
+  }
+  const reference = importedReference({
+    source,
+    file,
+    name: expression.text,
+    access,
+  });
+  return (
+    reference?.module === `${API}db/safe-db.ts` &&
+    reference.exported === "abortableTx" &&
+    call.arguments.at(1) === callback
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
 };
 const awaitedAggregateNames = ({
-  implementation: { body, source, file },
+  implementation,
   access,
 }: AwaitedAggregateOptions) => {
+  const { body, source, file } = implementation;
   const names = new Set<string>();
   const visit = (node: ts.Node) => {
     if (ts.isFunctionDeclaration(node)) {
@@ -717,8 +832,7 @@ const awaitedAggregateNames = ({
     }
     if (
       (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
-      (!ts.isCallExpression(node.parent) ||
-        !node.parent.arguments.includes(node))
+      !isJoinedTransactionCallback({ callback: node, implementation, access })
     ) {
       return;
     }
