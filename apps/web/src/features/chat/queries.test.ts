@@ -1132,8 +1132,9 @@ describe("chat runtime", () => {
   test("latches an explicitly stopped turn until authoritative hydration", async () => {
     const threadId = toChatThreadId("thread-stopped");
     const accepted = Promise.withResolvers<undefined>();
-    globalThis.fetch = createFetchMock(async (_input, init) => {
-      if (init?.method === "POST" && String(_input).endsWith("/cancel")) {
+    globalThis.fetch = createFetchMock(async (input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (init?.method === "POST" && url.endsWith("/cancel")) {
         return Response.json({
           turn: {
             id: "018f0000-0000-7000-8000-00000000000a",

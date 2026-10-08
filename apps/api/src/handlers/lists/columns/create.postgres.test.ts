@@ -18,6 +18,7 @@ import {
   LIST_COLUMN_OVERFLOW_ERROR_CODE,
 } from "@/api/lib/lists/column-error-codes";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -106,6 +107,7 @@ if (!databaseUrl || !runPostgres) {
             position,
           })),
         );
+        const auditedOperations: unknown[] = [];
         const baseContext = {
           workspaceId,
           session: { activeOrganizationId: organizationId },
@@ -145,6 +147,11 @@ if (!databaseUrl || !runPostgres) {
                     Parameters<typeof createColumn.handler>[0]
                   >({
                     ...baseContext,
+                    recordAuditEvent: auditRecorderDouble((events) => {
+                      auditedOperations.push(
+                        ...events.map((event) => event.metadata?.["operation"]),
+                      );
+                    }),
                     safeDb: createSafeDb(
                       workerDb,
                       [workspaceId],
@@ -200,6 +207,8 @@ if (!databaseUrl || !runPostgres) {
           (result) => result instanceof ElysiaCustomStatusResponse,
         );
         expect(refused).toHaveLength(workers.length - 1);
+        // Only the admitted column is audited; refusals record nothing.
+        expect(auditedOperations).toEqual(["column_added"]);
         for (const refusal of refused) {
           expect(refusal.code).toBe(400);
           expect(refusal.response).toHaveProperty(

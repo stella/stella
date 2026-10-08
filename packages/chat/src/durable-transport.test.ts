@@ -47,6 +47,9 @@ const response = (from: number, cut: number | undefined) => {
     { headers: { "Content-Type": "text/event-stream" } },
   );
 };
+const requestUrl = (input: RequestInfo | URL): URL =>
+  new URL(input instanceof Request ? input.url : input);
+
 const setup = (cut?: number) => {
   let calls = 0;
   let probes = 0;
@@ -55,7 +58,7 @@ const setup = (cut?: number) => {
     async (input: RequestInfo | URL, init?: RequestInit) => {
       calls += 1;
       if (init?.method === "GET") {
-        joinedRunIds.push(new URL(String(input)).searchParams.get("runId"));
+        joinedRunIds.push(requestUrl(input).searchParams.get("runId"));
         const last = new Headers(init.headers).get("Last-Event-ID");
         return response(last === null ? 0 : Number(last) + 1, undefined);
       }
@@ -135,7 +138,7 @@ describe("durable chat transport", () => {
             // Deliver a nonzero cursor before the old run disconnects.
             return response(0, 4);
           }
-          joins.push(new URL(String(input)));
+          joins.push(requestUrl(input));
           cursors.push(new Headers(init.headers).get("Last-Event-ID"));
           return new Response(
             [

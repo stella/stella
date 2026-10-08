@@ -1,5 +1,6 @@
 import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
 import type { UIMessage } from "@tanstack/ai-client";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import { keepShownRejoinMessages } from "./chat-rejoin-messages";
@@ -233,8 +234,18 @@ test("equal lifecycle states retain atomic payloads and advanced tools retain ap
             return { ...part, state: "complete", output: { saved: false } };
           case "structured-output":
             return { ...part, data: { saved: false } };
-          default:
+          case "audio":
+          case "document":
+          case "image":
+          case "subagent":
+          case "text":
+          case "thinking":
+          case "tool-result":
+          case "ui-resource":
+          case "video":
             return part;
+          default:
+            return panic(part satisfies never);
         }
       }),
     };

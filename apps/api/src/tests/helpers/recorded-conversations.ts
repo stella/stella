@@ -295,7 +295,7 @@ return { id: document.entityId, name: document.name };`;
   const step = async (
     recorder: Recorder,
     action: RecordedAction,
-    perform: () => Promise<void>,
+    perform: () => Promise<void> | void,
     { midStream = false }: { midStream?: boolean } = {},
   ) => {
     const before = recorder.exchanges.length;
@@ -664,7 +664,10 @@ return { id: document.entityId, name: document.name };`;
               type: "step",
               text: "Checking the register",
               toolCalls: [plainCall("call-1")],
-              pause: { at: "before-tool-end", wait: () => continued.promise },
+              pause: {
+                at: "before-tool-end",
+                wait: async () => await continued.promise,
+              },
             },
           ],
           [answers("Checked the register")],
@@ -681,7 +684,7 @@ return { id: document.entityId, name: document.name };`;
             ),
           { midStream: true },
         );
-        await step(recorder, { type: "drop-connection" }, async () => {
+        await step(recorder, { type: "drop-connection" }, () => {
           recorder.harness.dropConnection(recorder.threadId);
           // Closing delivery leaves production alive; once its input is ready,
           // read-only reconnection catches up to the completed transcript.

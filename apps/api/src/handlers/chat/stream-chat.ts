@@ -747,7 +747,7 @@ export const streamChat = async ({
     deadlineSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
-    onFinish: async (event) => {
+    onFinish: (event) => {
       settlement.event = event;
     },
     owningAssistantMessageId,

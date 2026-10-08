@@ -381,7 +381,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
         .some(({ response }) => response.turnId === turnRoute["turnId"])
     ) {
       if (method === "POST" && turnRoute["action"] === "cancel") {
-        if (cancel?.turnId === turnRoute["turnId"]) {
+        if (cancel !== undefined && cancel.turnId === turnRoute["turnId"]) {
           cancel.close();
         }
         return Response.json({ turn: { status: "cancelled" } });

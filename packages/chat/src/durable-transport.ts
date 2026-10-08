@@ -296,15 +296,13 @@ export const createDurableChatTransport = <
             body: null,
           });
           if (!response.ok) {
-            throw new ChatReconnectError({
-              code:
-                response.status === 401 ||
-                response.status === 403 ||
-                response.status === 404
-                  ? "refused"
-                  : undefined,
-              message: `Chat rejoin failed (${response.status}).`,
-            });
+            const message = `Chat rejoin failed (${response.status}).`;
+            // Access refusals are final; other statuses retry within the window.
+            throw response.status === 401 ||
+              response.status === 403 ||
+              response.status === 404
+              ? new ChatReconnectError({ code: "refused", message })
+              : new ChatReconnectError({ message });
           }
           if (
             response.headers.get("Content-Type")?.includes("application/json")

@@ -35,6 +35,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getAwaitedAssistantMessageId,
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
@@ -489,7 +490,15 @@ export const createChatRuntime = ({
         loadedResume.success &&
         (loadedResume.output.pendingInterrupts?.length ?? 0) > 0
           ? { type: "parked", runId: loadedResume.output.resumeState.runId }
-          : { type: activeTurnId === null ? "settled" : "active" },
+          : {
+              // A turn parked by a release without native resume state is
+              // already whole on the loaded page; reloading cannot change it.
+              type:
+                activeTurnId === null ||
+                getAwaitedAssistantMessageId(initialMessages) !== null
+                  ? "settled"
+                  : "active",
+            },
       threadId: key.threadId,
       sendUrl: getChatApiPath(),
       joinUrl: () => turnUrl("join"),
@@ -497,7 +506,9 @@ export const createChatRuntime = ({
       onReconnectChange: (reconnecting) => {
         setSnapshot({ reconnecting });
       },
-      onError: captureRuntimeError,
+      onError: (error) => {
+        captureRuntimeError(error);
+      },
       onTranscript: () => {
         setSnapshot({ turnAbandoned: true });
         reloadThread();

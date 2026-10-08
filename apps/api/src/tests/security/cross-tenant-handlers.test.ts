@@ -81,6 +81,7 @@ import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
@@ -1560,6 +1561,48 @@ const isolationCases: IsolationCase[] = [
       expect(recordField(result, "response")).toStrictEqual({});
       expect(recordField(result, "thread")).toBeNull();
     },
+  },
+  {
+    // Runs before the cancel case, which settles the shared accepted turn.
+    name: "chat turn resume probe",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(probeChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(probeChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
+  },
+  {
+    // Runs before the cancel case, which settles the shared accepted turn.
+    name: "chat turn resume join",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(joinChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(joinChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
   },
   {
     name: "chat turn cancel",

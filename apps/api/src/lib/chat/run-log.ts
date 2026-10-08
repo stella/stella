@@ -148,8 +148,7 @@ const createRunLogReader = ({
           // and closes the log. Hold an open tail terminal until that commit;
           // intermediate finishes release once the next iteration appends.
           if (
-            log !== undefined &&
-            log.closedAt === null &&
+            log?.closedAt === null &&
             entry.seq === log.nextSeq - 1n &&
             (entry.chunk.type === EventType.RUN_FINISHED ||
               entry.chunk.type === EventType.RUN_ERROR)
@@ -261,7 +260,7 @@ export const createChatRunLogReplay = async ({
       ? {
           ...reader,
           resumeFrom: () => resumeOffset,
-          append: async () => panic("A rejoined chat run cannot produce"),
+          append: () => panic("A rejoined chat run cannot produce"),
           close: async () => {
             // A viewer closes delivery without closing the producer log.
           },
@@ -313,7 +312,7 @@ export const createChatRunLogReplay = async ({
   return {
     ...reader,
     resumeFrom: () => resumeOffset,
-    append: async () => panic("A rejoined chat run cannot produce"),
+    append: () => panic("A rejoined chat run cannot produce"),
     close: async () => {
       // A viewer closes delivery without closing the producer log.
     },

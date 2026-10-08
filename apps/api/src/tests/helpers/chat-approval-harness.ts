@@ -937,6 +937,9 @@ export const createApprovalHarness = ({
 
   /** Threads whose next web request is served by a process that then dies. */
   const crashingThreads = new Set<string>();
+  /** The execution each crashed request left running, before the reaper
+   *  settles its turn and clears the turn's execution id. */
+  const crashedExecutions = new Map<string, string>();
   /** Reads of the responses a dying process left behind, still running. */
   const abandonedReads = new Set<Promise<string>>();
 
@@ -974,14 +977,19 @@ export const createApprovalHarness = ({
     await stalled;
     prompts.loseSince(beforeCrash);
     // The earliest lease the row allows: just after the turn was created.
-    await testDb
+    const expired = await testDb
       .update(chatTurns)
       .set({
         leaseExpiresAt: sql`${chatTurns.createdAt} + interval '1 millisecond'`,
       })
       .where(
         and(eq(chatTurns.threadId, threadId), eq(chatTurns.status, "running")),
-      );
+      )
+      .returning({ executionId: chatTurns.executionId });
+    const crashedExecution = expired.at(0)?.executionId;
+    if (crashedExecution !== undefined && crashedExecution !== null) {
+      crashedExecutions.set(threadId, crashedExecution);
+    }
     // Durable clients keep joining until the dead owner's turn settles. Run
     // the scheduler tick explicitly instead of waiting on its wall clock.
     await reapOwnerlessTurns();
@@ -1286,8 +1294,8 @@ export const createApprovalHarness = ({
       resume["turnId"] !== undefined &&
       (init?.method ?? "GET") === "GET"
     ) {
-      const handler =
-        resume["delivery"] === "join" ? joinChatTurn : probeChatTurn;
+      const delivery = resume["delivery"] === "join" ? "join" : "resume";
+      const handler = delivery === "join" ? joinChatTurn : probeChatTurn;
       const set = { headers: {}, status: 200 };
       const answer: unknown = await handler.handler(
         asTestRaw<Parameters<typeof handler.handler>[0]>({
@@ -1299,7 +1307,7 @@ export const createApprovalHarness = ({
           },
           query: Object.fromEntries(url.searchParams),
           request: new Request(url.toString(), init),
-          route: `/v1/chat/threads/:threadId/turns/:turnId/${resume["delivery"]}`,
+          route: `/v1/chat/threads/:threadId/turns/:turnId/${delivery}`,
           safeDb,
           scopedDb,
           session: { activeOrganizationId: ids.orgA },
@@ -1566,6 +1574,9 @@ export const createApprovalHarness = ({
     crashDuringNextRequest: (threadId: SafeId<"chatThread">) => {
       crashingThreads.add(threadId);
     },
+    /** The execution `threadId`'s crashed request left running, if any. */
+    crashedExecutionOf: (threadId: SafeId<"chatThread">) =>
+      crashedExecutions.get(threadId),
     /** Runs the scheduler's reaper once, as its minute tick does. */
     reapOwnerlessTurns,
     /**
