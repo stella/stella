@@ -9278,5 +9278,17 @@
   "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/handlers/case-law/research/columns-suggest-prompt.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/chat/case-law-prompt-invariants.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/chat/tools/registry-adapter/case-law-text-invariants.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
