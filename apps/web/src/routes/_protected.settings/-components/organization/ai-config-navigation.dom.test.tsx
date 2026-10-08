@@ -296,6 +296,35 @@ test("removing the last saved provider deletes the configuration", async () => {
   expect(hasUnsavedWork()).toBe(false);
 });
 
+test("removing the last provider clears edited roles and the leave prompt", async () => {
+  await mount(savedConfig);
+  const modelLabel = messages.organization.aiConfig.modelForRole.replace(
+    "{role}",
+    () => messages.organization.aiConfig.roles.chat,
+  );
+  const model = screen.getByLabelText(modelLabel);
+  fireEvent.change(model, { target: { value: "" } });
+  fireEvent.keyDown(model, { key: "Escape" });
+  fireEvent.blur(model);
+  expect(hasUnsavedWork()).toBe(true);
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.removeProvider,
+    }),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: messages.common.confirm }),
+  );
+  await waitFor(() => expect(screen.queryByText("AIza****1234")).toBeNull());
+  expect(screen.queryByLabelText(modelLabel)).toBeNull();
+  expect(hasUnsavedWork()).toBe(false);
+  const writes = requests.filter(
+    ({ method }) => method === "POST" || method === "DELETE",
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes.at(0)?.method).toBe("DELETE");
+});
+
 test("saving one dirty row preserves the other key and its leave prompt", async () => {
   const appRouter = await mount();
   fireEvent.click(

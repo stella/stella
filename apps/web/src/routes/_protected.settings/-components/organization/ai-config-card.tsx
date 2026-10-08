@@ -324,6 +324,9 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
             await api["organization-settings"]["ai-config"].delete({}),
           );
           setStoredProviders([]);
+          const emptyRoles = createDefaultRoleModels();
+          setRoleModels(emptyRoles);
+          setSavedRoles(emptyRoles);
           setStoredDecision(null);
           setDecisionState({ kind: "untouched" });
           await refresh(false);
