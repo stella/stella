@@ -1846,9 +1846,17 @@ describe("native interrupt boundary persistence", () => {
     });
     expect(finish?.responseMessage.parts).toMatchObject([
       { id: "call-1", name: "mcp__external__lookup", state: "complete" },
-      { toolCallId: "call-1", type: "tool-result" },
       { id: "call-2", name: "create-document", state: "input-complete" },
+      { toolCallId: "call-1", type: "tool-result" },
     ]);
+    const client = createStreamMessageCapture({
+      initialMessages: [],
+      capture: toChatMessage,
+    });
+    for (const chunk of emitted) {
+      client.processor.processChunk(chunk);
+    }
+    expect(client.message()?.parts).toEqual(finish?.responseMessage.parts);
     // The client-facing snapshot presents the same single assistant message,
     // under the persisted id, so the continuation targets the persisted turn.
     const snapshot = emitted.find(

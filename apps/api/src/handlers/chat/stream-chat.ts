@@ -2268,16 +2268,18 @@ const processPersistenceChunk = ({
     deferredRunFinishedChunks.push(chunk);
     return { type: "deferred" };
   }
-  // TanStack emits MESSAGES_SNAPSHOT before RUN_FINISHED at every
-  // interrupt boundary (client tool, approval) so the client can rehydrate.
-  // The persistence processor derives the assistant turn from the event
-  // stream itself; feeding it the snapshot resets its stream state, and the
-  // deferred RUN_FINISHED then finalizes with no active message, so
-  // `onStreamEnd` never fires and a turn that carries a complete tool call
-  // is persisted as an empty completion. Forward the snapshot; never
-  // process it.
-  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
-    processor.processChunk(chunk);
+  // Interrupt snapshots can be the only source of resumed tool results.
+  // Reconcile them through the SDK, then reactivate the turn's assistant:
+  // snapshots reset processor run state, while our deferred finish still
+  // needs an active message to capture the complete turn.
+  processor.processChunk(chunk);
+  if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    const assistant = processor
+      .getMessages()
+      .findLast(({ role }) => role === "assistant");
+    if (assistant !== undefined) {
+      processor.processChunk(assistantMessageStartChunk(assistant.id));
+    }
   }
   return { type: "chunk", chunk, lifecycle };
 };
@@ -2378,10 +2380,13 @@ export const processServerChatStream = async function* ({
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-      source: remapOutgoingMessageIds({
-        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
-        mapMessageId,
-        source,
+      source: keepDeniedApprovalsOnScreen({
+        deniedApprovals: findDeniedApprovals(initialMessages),
+        source: remapOutgoingMessageIds({
+          existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
+          mapMessageId,
+          source,
+        }),
       }),
     });
 

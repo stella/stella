@@ -9,6 +9,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   bindChatTurnRunId,
   claimChatTurnForExecution,
@@ -232,11 +233,10 @@ const produceUntilCut = ({
                   : null;
               if (assistantMessageId !== null) {
                 await tx.insert(chatMessages).values({
-                  content: {
+                  content: toPersistedChatMessageContentV3({
                     data: [{ content: "Done", type: "text" }],
                     metadata: { turnOutcome: outcome },
-                    version: 3,
-                  },
+                  }),
                   id: assistantMessageId,
                   role: "assistant",
                   threadId,

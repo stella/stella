@@ -44,7 +44,7 @@ export const keepPostedMessages = (
               message.parts.length !== 1 ||
               message.parts.at(0)?.type !== "activity"
             ) {
-              return panic(
+              panic(
                 "An activity message must contain exactly one activity part",
               );
             }

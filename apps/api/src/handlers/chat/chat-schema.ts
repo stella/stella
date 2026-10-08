@@ -1706,7 +1706,7 @@ const validateToolResultPart = ({
         }),
       );
     }
-    return validateToolErrorResult(part, toolCall.error);
+    return validateToolErrorResult(part, toolCall);
   }
 
   if (toolCall.type !== "schema" || toolCall.output.type === "absent") {
@@ -1757,16 +1757,36 @@ const validateToolResultPart = ({
 
 const validateToolErrorResult = (
   part: ChatToolResultPart,
-  toolCallError: string | undefined,
+  toolCall: Extract<ValidatedToolCallPart, { type: "error" }>,
 ): Result<void, HandlerError<400>> => {
   const contentResult = parseToolResultContent(part.content);
   if (Result.isError(contentResult)) {
     return Result.err(contentResult.error);
   }
 
+  // A denied result rebuilt from AG-UI history carries the approval decision
+  // as content, rather than the server execution error envelope.
+  const content = contentResult.value;
+  if (
+    part.outcome === "denied" &&
+    "approval" in toolCall.part &&
+    toolCall.part.approval?.approved === false &&
+    typeof content === "object" &&
+    content !== null &&
+    Object.keys(content).length === 2 &&
+    "approved" in content &&
+    content.approved === false &&
+    "message" in content &&
+    typeof content.message === "string" &&
+    content.message.length > 0 &&
+    part.error === undefined
+  ) {
+    return Result.ok();
+  }
+
   if (
     !part.error ||
-    (toolCallError !== undefined && toolCallError !== part.error)
+    (toolCall.error !== undefined && toolCall.error !== part.error)
   ) {
     return Result.err(
       new HandlerError({

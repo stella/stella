@@ -26,7 +26,7 @@ import type {
   ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { detached } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -57,7 +57,10 @@ const eagerlyDeliverTurn = (response: Response): Response => {
   const source: {
     current:
       | { status: "closed" }
-      | { status: "reading"; reader: ReadableStreamDefaultReader<Uint8Array> };
+      | {
+          status: "reading";
+          reader: Pick<ReadableStreamDefaultReader<Uint8Array>, "cancel">;
+        };
   } = { current: { status: "closed" } };
   const body = new ReadableStream<Uint8Array>(
     {
@@ -96,7 +99,7 @@ const eagerlyDeliverTurn = (response: Response): Response => {
               if (delivery === "open") {
                 controller.error(error);
               } else {
-                throw error;
+                captureError(error, { detached: "chat-turn-run.delivery" });
               }
             }
           } finally {
