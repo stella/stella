@@ -45,17 +45,18 @@ const offlineCheckEntry = (words: readonly string[], cwd: string) => {
   }
   const entry = invocation.positional.at(0);
   // Package scripts launch their own process; verify its command separately.
-  const protectedInvocation =
-    invocation.filter === undefined &&
-    invocation.dir === relativeCwd &&
-    entry !== undefined &&
-    SOURCE_FILE.test(entry) &&
-    invocation.preloads.some(
+  if (
+    entry === undefined ||
+    invocation.filter !== undefined ||
+    invocation.dir !== relativeCwd ||
+    !SOURCE_FILE.test(entry) ||
+    !invocation.preloads.some(
       (target) => path.resolve(root, target) === preload,
-    );
-  return protectedInvocation && entry !== undefined
-    ? path.resolve(cwd, entry)
-    : undefined;
+    )
+  ) {
+    return undefined;
+  }
+  return path.resolve(cwd, entry);
 };
 
 export const usesOfflineCheckPreload = (
@@ -313,7 +314,10 @@ export const offlineImportGraphViolations = ({
         (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
         node.moduleSpecifier &&
         ts.isStringLiteralLike(node.moduleSpecifier) &&
-        !(ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) &&
+        !(
+          ts.isImportDeclaration(node) &&
+          node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+        ) &&
         !(ts.isExportDeclaration(node) && node.isTypeOnly)
       ) {
         follow(node.moduleSpecifier.text);
@@ -324,7 +328,7 @@ export const offlineImportGraphViolations = ({
         ts.isExternalModuleReference(node.moduleReference)
       ) {
         const target = node.moduleReference.expression;
-        if (target && ts.isStringLiteralLike(target)) {
+        if (ts.isStringLiteralLike(target)) {
           follow(target.text);
         } else {
           violation(file, "Dynamic module target cannot be enumerated");
