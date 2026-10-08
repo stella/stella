@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import * as v from "valibot";
 
 import {
   DOC_SOURCE_EXCLUSIONS,
@@ -340,24 +341,32 @@ const gh = async (
   }
   return JSON.parse(stdout);
 };
-const record = (value: unknown): Record<string, unknown> => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    panic("Invalid GitHub object");
-  }
-  return value;
-};
-const textField = (value: unknown): string => {
-  if (typeof value !== "string") {
-    panic("Invalid GitHub string");
-  }
-  return value;
-};
-const prNumber = (value: unknown): number => {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
-    panic("Invalid GitHub PR number");
-  }
-  return value;
-};
+const PR_NUMBER = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(Number.MAX_SAFE_INTEGER),
+);
+const REF_LIST = v.array(v.object({ ref: v.string() }));
+const PR_LIST = v.array(
+  v.object({
+    number: PR_NUMBER,
+    body: v.nullish(v.string(), ""),
+    title: v.string(),
+  }),
+);
+const CREATED_PR = v.object({ number: PR_NUMBER });
+const FILE_CONTENT = v.object({ content: v.string() });
+const SIGNED_COMMIT = v.union([
+  v.object({
+    errors: v.pipe(v.array(v.object({ message: v.string() })), v.minLength(1)),
+  }),
+  v.object({
+    data: v.object({
+      createCommitOnBranch: v.object({ commit: v.object({ oid: v.string() }) }),
+    }),
+  }),
+]);
 
 // The two branch refs are reserved for this workflow. Build a proposal before
 // swapping the PR head; moving an open PR straight to main would close it.
@@ -384,13 +393,11 @@ export const publishRecheck = async ({
   const owner = repo.split("/").at(0);
   const api = `repos/${repo}`;
   const setRef = async (branch: string, sha: string): Promise<void> => {
-    const refs = await request([`${api}/git/matching-refs/heads/${branch}`]);
-    if (!Array.isArray(refs)) {
-      panic("Invalid GitHub refs");
-    }
-    const exists = refs.some(
-      (ref) => record(ref).ref === `refs/heads/${branch}`,
+    const refs = v.parse(
+      REF_LIST,
+      await request([`${api}/git/matching-refs/heads/${branch}`]),
     );
+    const exists = refs.some(({ ref }) => ref === `refs/heads/${branch}`);
     await request(
       [
         exists ? `${api}/git/refs/heads/${branch}` : `${api}/git/refs`,
@@ -417,30 +424,19 @@ export const publishRecheck = async ({
         "-f",
         "per_page=100",
       ]);
-      if (!Array.isArray(result)) {
-        panic("Invalid GitHub pull requests");
-      }
-      return result.map((raw: unknown) => {
-        const pr = record(raw);
-        return {
-          number: prNumber(pr.number),
-          body: textField(pr.body ?? ""),
-          title: textField(pr.title),
-        };
-      });
+      return v.parse(PR_LIST, result);
     },
     create: async (prBody: string): Promise<number> =>
-      prNumber(
-        record(
-          await request([`${api}/pulls`, "--method", "POST", "--input", "-"], {
-            head: RECHECK_BRANCH,
-            base: "main",
-            title: RECHECK_TITLE,
-            body: prBody,
-            draft: true,
-          }),
-        ).number,
-      ),
+      v.parse(
+        CREATED_PR,
+        await request([`${api}/pulls`, "--method", "POST", "--input", "-"], {
+          head: RECHECK_BRANCH,
+          base: "main",
+          title: RECHECK_TITLE,
+          body: prBody,
+          draft: true,
+        }),
+      ).number,
     update: async (number: number, prBody: string): Promise<void> => {
       await request(
         [`${api}/pulls/${number}`, "--method", "PATCH", "--input", "-"],
@@ -467,7 +463,8 @@ export const publishRecheck = async ({
   if (existing) {
     const sameFiles = await Promise.all(
       Object.entries(files).map(async ([file, content]) => {
-        const response = record(
+        const response = v.parse(
+          FILE_CONTENT,
           await request([
             `${api}/contents/${file}`,
             "--method",
@@ -477,9 +474,7 @@ export const publishRecheck = async ({
           ]),
         );
         return (
-          Buffer.from(textField(response.content), "base64").toString(
-            "utf-8",
-          ) === content
+          Buffer.from(response.content, "base64").toString("utf-8") === content
         );
       }),
     );
@@ -492,7 +487,8 @@ export const publishRecheck = async ({
   const base = baseSha;
   const buildBranch = `${RECHECK_BRANCH}-next`;
   await setRef(buildBranch, base);
-  const commit = record(
+  const commit = v.parse(
+    SIGNED_COMMIT,
     await request(["graphql", "--input", "-"], {
       query:
         "mutation ($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
@@ -511,14 +507,12 @@ export const publishRecheck = async ({
       },
     }),
   );
-  if (commit.errors !== undefined) {
+  if ("errors" in commit) {
     throw new GitHubRecheckError({
       message: `GitHub signed commit failed: ${JSON.stringify(commit.errors)}`,
     });
   }
-  const sha = textField(
-    record(record(record(commit.data).createCommitOnBranch).commit).oid,
-  );
+  const sha = commit.data.createCommitOnBranch.commit.oid;
   await setRef(RECHECK_BRANCH, sha);
   await request([`${api}/git/refs/heads/${buildBranch}`, "--method", "DELETE"]);
   return reconcileRecheckPr({ body, github });
@@ -601,7 +595,7 @@ const main = async (): Promise<void> => {
       baseFiles,
       body,
       files,
-      repo: process.env.GITHUB_REPOSITORY,
+      repo: Bun.env["GITHUB_REPOSITORY"],
       request: gh,
     });
     console.log(

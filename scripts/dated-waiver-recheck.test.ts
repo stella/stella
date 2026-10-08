@@ -100,8 +100,12 @@ describe("documentation rechecks", () => {
     });
     const before = declarations(source);
     const after = declarations(applyDocRechecks(source, [decision]));
+    const original = before.exclusions.at(0);
+    if (!original) {
+      throw new TypeError("Fixture exclusion absent");
+    }
     expect(after.exclusions.at(0)).toEqual({
-      ...before.exclusions.at(0),
+      ...original,
       checkedAt: "2026-09-29T00:00:00.000Z",
       expiresAt: "2026-10-29T00:00:00.000Z",
     });
@@ -359,6 +363,77 @@ describe("one recheck PR", () => {
     expect(await reconcileRecheckPr({ body: "new", github })).toBe(42);
     expect(pr.body).toBe("new");
     expect(creates).toBe(0);
+  });
+
+  test("invalid GitHub metadata is rejected before branch or PR writes", async () => {
+    const validPr = { number: 42, body: "checklist", title: RECHECK_TITLE };
+    const cases = [
+      { pulls: [{ ...validPr, number: "42" }], refs: [], content: "" },
+      { pulls: [{ ...validPr, number: 0 }], refs: [], content: "" },
+      {
+        pulls: [{ ...validPr, number: Number.MAX_SAFE_INTEGER + 1 }],
+        refs: [],
+        content: "",
+      },
+      { pulls: [{ ...validPr, title: null }], refs: [], content: "" },
+      { pulls: [], refs: [{ ref: 42 }], content: "" },
+      { pulls: [validPr], refs: [], content: 42 },
+    ];
+    for (const fixture of cases) {
+      let writes = 0;
+      const failure = await rejectionOf(
+        publishRecheck({
+          baseSha: "base-sha",
+          baseFiles: {},
+          body: "checklist",
+          files: { [CHECKLIST_FILE]: "checklist" },
+          repo: "stella/stella",
+          request: async (args, input) => {
+            if (input !== undefined || args.includes("DELETE")) {
+              writes++;
+              throw new TypeError("Unexpected write");
+            }
+            const endpoint = args.at(0) ?? "";
+            if (endpoint.endsWith("/pulls")) {
+              return fixture.pulls;
+            }
+            if (endpoint.includes("/git/matching-refs/")) {
+              return fixture.refs;
+            }
+            if (endpoint.includes("/contents/")) {
+              return { content: fixture.content };
+            }
+            throw new TypeError(`Unexpected GitHub call: ${endpoint}`);
+          },
+        }),
+      );
+      expect(failure).toMatchObject({ name: "ValiError" });
+      expect(writes).toBe(0);
+    }
+  });
+
+  test("GitHub null PR bodies normalize to empty text without an update", async () => {
+    const calls: (readonly string[])[] = [];
+    expect(
+      await publishRecheck({
+        baseSha: "base-sha",
+        baseFiles: {},
+        body: "",
+        files: {},
+        repo: "stella/stella",
+        request: async (args) => {
+          calls.push(args);
+          if (
+            args.at(0) === "repos/stella/stella/pulls" &&
+            args.includes("GET")
+          ) {
+            return [{ number: 42, body: null, title: RECHECK_TITLE }];
+          }
+          throw new TypeError("Unexpected GitHub mutation");
+        },
+      }),
+    ).toBe(42);
+    expect(calls.every((args) => args.includes("GET"))).toBe(true);
   });
 
   test("syntax diagnostics refuse generated modules before any GitHub call", async () => {

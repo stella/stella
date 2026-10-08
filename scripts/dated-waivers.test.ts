@@ -200,18 +200,17 @@ describe("dated waiver inventory", () => {
   });
 
   test("warning windows include the exact boundary and expired entries, excluding later ones", () => {
+    const boundary = waiver(new Date(now.getTime() + 5 * DAY_MS).toISOString());
+    const current = waiver(now.toISOString());
+    const expired = waiver(new Date(now.getTime() - DAY_MS).toISOString());
     const entries = [
-      waiver(new Date(now.getTime() + 5 * DAY_MS).toISOString()),
+      boundary,
       waiver(new Date(now.getTime() + 5 * DAY_MS + 1).toISOString()),
-      waiver(now.toISOString()),
-      waiver(new Date(now.getTime() - DAY_MS).toISOString()),
+      current,
+      expired,
       waiver("2027-01-01T00:00:00.000Z"),
     ];
-    expect(dueWaivers(entries, now)).toEqual([
-      entries[0],
-      entries[2],
-      entries[3],
-    ]);
+    expect(dueWaivers(entries, now)).toEqual([boundary, current, expired]);
     expect(
       dueWaivers(
         [
