@@ -3321,9 +3321,9 @@ const createGhGateway = ({
           if (steps !== undefined && !Array.isArray(steps)) {
             return { type: "unavailable" };
           }
-          const name = job["name"];
+          const jobName = job["name"];
           jobs.push({
-            ...(typeof name === "string" ? { name } : {}),
+            ...(typeof jobName === "string" ? { name: jobName } : {}),
             failedStep:
               Array.isArray(steps) &&
               steps.some(
