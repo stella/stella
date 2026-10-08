@@ -275,12 +275,14 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     setSaveState("saving");
     const result = await Result.tryPromise({
       try: async () => {
-        const next = [
-          ...storedProviders.filter(
-            (provider) => provider.provider !== draft.provider,
-          ),
-          draft,
-        ];
+        // Provider order determines the effective model for default roles.
+        const next = storedProviders.some(
+          (provider) => provider.provider === draft.provider,
+        )
+          ? storedProviders.map((provider) =>
+              provider.provider === draft.provider ? draft : provider,
+            )
+          : [...storedProviders, draft];
         const nextRoles = savedRoles;
         const saved = await persist({
           nextProviders: next,

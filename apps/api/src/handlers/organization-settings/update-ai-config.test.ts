@@ -2,10 +2,15 @@ import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
-import { TANSTACK_AI_PROVIDERS, BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import {
+  TANSTACK_AI_PROVIDERS,
+  BYOK_DEFAULT_MODELS,
+  MODEL_ROLES,
+} from "@stll/ai-catalog";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
 import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -430,6 +435,63 @@ describe("sparse custom model settings", () => {
       written.aiConfigIv,
     );
   };
+  test("replacing the first provider key preserves provider order and every default role", async () => {
+    const existing = {
+      providers: [
+        { provider: "google", apiKey: "fixture-google-existing" },
+        { provider: "anthropic", apiKey: "fixture-anthropic-existing" },
+      ],
+      overrideModels: null,
+      decision: null,
+    } satisfies OrgAIConfig;
+    const db = createSettingsDb("global", existing);
+    const probe = spyOn(outbound, "safeOutboundFetchBytes").mockImplementation(
+      async () =>
+        Result.ok({
+          body: new TextEncoder().encode('{"data":[]}').buffer,
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        }),
+    );
+    try {
+      const result = await updateAIConfig.handler(
+        createTestHandlerContext<UpdateContext>({
+          recordAuditEvent: auditRecorderDouble(),
+          safeDb: db.safeDb,
+          body: {
+            providers: [
+              { provider: "google", apiKey: "fixture-google-replacement" },
+              { provider: "anthropic" },
+            ],
+          },
+        }),
+      );
+      expect(result).toMatchObject({
+        providers: [{ provider: "google" }, { provider: "anthropic" }],
+        overrideModels: null,
+      });
+      const saved = await readSaved(db);
+      expect(saved.providers.map(({ provider }) => provider)).toEqual([
+        "google",
+        "anthropic",
+      ]);
+      expect(saved.providers.at(0)?.apiKey).toBe("fixture-google-replacement");
+      expect(saved.providers.at(1)?.apiKey).toBe("fixture-anthropic-existing");
+      expect(saved.overrideModels).toBeNull();
+      for (const role of MODEL_ROLES) {
+        const selection = {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
+        };
+        expect(resolveOrgAIModelForRole(existing, role)).toEqual(selection);
+        expect(resolveOrgAIModelForRole(saved, role)).toEqual(selection);
+      }
+      expect(probe).toHaveBeenCalledTimes(1);
+    } finally {
+      probe.mockRestore();
+    }
+  });
   test("key-only settings preserve defaults without creating overrides", async () => {
     const db = createSettingsDb("global", {
       providers: [{ provider: "google", apiKey: "test-key" }],
