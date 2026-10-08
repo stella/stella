@@ -299,6 +299,41 @@ describe("deferred scout emission recovery", () => {
     });
   }
 
+  test("hearing admission revoked during recovery retains its intent until regrant", async () => {
+    const hearingId = await seedHearing();
+    await enrol();
+    // The emitter reinserts its intent before its admission check, after recovery's precheck.
+    await db.execute(sql`CREATE FUNCTION scout_recovery_test_revoke_hearing() RETURNS trigger AS $$
+      BEGIN
+        DELETE FROM feature_enrolments WHERE organization_id = NEW.organization_id AND feature_id = 'signals';
+        RETURN NEW;
+      END;
+    $$ LANGUAGE plpgsql`);
+    await db.execute(
+      sql`CREATE TRIGGER scout_recovery_test_revoke_hearing BEFORE INSERT ON pending_scout_emissions FOR EACH ROW WHEN (NEW.source_kind = 'infosoud-hearing') EXECUTE FUNCTION scout_recovery_test_revoke_hearing()`,
+    );
+    try {
+      await runRecovery();
+      expect(
+        await db
+          .select({ userId: featureEnrolments.userId })
+          .from(featureEnrolments)
+          .where(eq(featureEnrolments.organizationId, organizationId)),
+      ).toEqual([]);
+      expect((await pending()).map((row) => row.sourceId)).toEqual([hearingId]);
+      expect(await emitted()).toEqual([]);
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER scout_recovery_test_revoke_hearing ON pending_scout_emissions`,
+      );
+      await db.execute(sql`DROP FUNCTION scout_recovery_test_revoke_hearing()`);
+    }
+    await enrol();
+    await runRecovery(new Date(initialTime.getTime() + 5 * 60 * 1000));
+    expect(await pending()).toEqual([]);
+    expect(await emitted()).toEqual([{ kind: "hearing.changed" }]);
+  });
+
   test("deployment disabled retains both source intents until re-enabled", async () => {
     await seedReview();
     await seedHearing();

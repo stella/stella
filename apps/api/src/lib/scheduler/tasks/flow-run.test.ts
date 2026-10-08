@@ -29,7 +29,10 @@ import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
-import type { FlowTrigger } from "@/api/lib/flows/flow-types";
+import type {
+  FlowTrigger,
+  FlowTriggerSource,
+} from "@/api/lib/flows/flow-types";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb, SchedulerJob } from "@/api/lib/scheduler/types";
@@ -60,8 +63,10 @@ describe("scheduled flow due day", () => {
   const authorId = mintAuthProviderId<"user">();
   const workspaceId = createSafeId<"workspace">();
   const started: string[] = [];
+  const startedSources = new Map<string, FlowTriggerSource>();
   const task = createScheduledFlowTask(async (input) => {
     started.push(input.definitionId);
+    startedSources.set(input.definitionId, input.triggerSource);
     return { status: "settled" };
   });
 
@@ -251,6 +256,10 @@ describe("scheduled flow due day", () => {
     const retryAt = new Date(TUESDAY_AFTER_MIDNIGHT.getTime() + 5 * 60 * 1000);
     const resumed = await runTick(definitionId, schedule, retryAt, retryAt);
     expect(started.filter((id) => id === definitionId)).toHaveLength(1);
+    expect(startedSources.get(definitionId)).toEqual({
+      type: "schedule",
+      dueSlot: MONDAY_SLOT.toISOString(),
+    });
     expect(resumed.payload).toEqual({ definitionId });
   });
 

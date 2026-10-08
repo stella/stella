@@ -24,6 +24,16 @@ CREATE INDEX CONCURRENTLY "flow_runs_upload_identity_idx"
   WHERE "trigger_source"->>'type' = 'file-upload';
 --> statement-breakpoint
 
+-- Scheduled delivery replays keep the original due slot across retries.
+DROP INDEX CONCURRENTLY IF EXISTS "flow_runs_schedule_identity_idx";
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "flow_runs_schedule_identity_idx"
+  ON "flow_runs" ("definition_id", "workspace_id", ("trigger_source"->>'dueSlot'))
+  WHERE "trigger_source"->>'type' = 'schedule'
+    AND "trigger_source"->>'dueSlot' IS NOT NULL;
+--> statement-breakpoint
+
 SET statement_timeout = '10s';
 --> statement-breakpoint
 SET lock_timeout = '1s';
