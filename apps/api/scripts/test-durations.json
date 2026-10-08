@@ -8947,6 +8947,10 @@
     "seconds": 0.364202,
     "source": "estimated"
   },
+  "src/tests/helpers/test-state.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/tests/helpers/transaction-interleaving.postgres.test.ts": {
     "seconds": 0.12467,
     "source": "estimated"
@@ -9263,7 +9267,19 @@
     "seconds": 1,
     "source": "estimated"
   },
-  "src/tests/helpers/test-state.test.ts": {
+  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-response-parity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-link-hint.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }
