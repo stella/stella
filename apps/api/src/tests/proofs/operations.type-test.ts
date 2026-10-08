@@ -59,15 +59,15 @@ export const scopedOperationProofMistakes = async <N, Other>(
     // @ts-expect-error A boolean cannot stand in for evidence.
     await runCheckedScopedHandler({ ...args, proof: true }),
   );
-  // @ts-expect-error Spreading evidence cannot rebind its private checked snapshot.
-  const rebound: typeof proof = {
-    ...proof, // oxlint-disable-line typescript/no-misused-spread -- planted rebinding attempt the type system must reject
+  // @ts-expect-error A spread copy of evidence is not evidence.
+  const copied: typeof proof = {
+    ...proof, // oxlint-disable-line typescript/no-misused-spread -- a spread copy must not type-check as evidence
     input: { ...args.input, value: args.scratch },
   };
-  rejectedAtCompileTime(rebound);
+  rejectedAtCompileTime(copied);
   // @ts-expect-error An object literal cannot construct evidence.
-  const fabricated: typeof proof = { kind: "HandlerUsageAllowed" };
-  return fabricated;
+  const literal: typeof proof = { kind: "HandlerUsageAllowed" };
+  return literal;
 };
 
 export const actionOperationProofMistakes = async <R, N, A, Other>(
@@ -84,26 +84,26 @@ export const actionOperationProofMistakes = async <R, N, A, Other>(
   );
   // @ts-expect-error Evidence must belong to this action's complete input.
   rejectedAtCompileTime(await runCheckedAction({ ...args, input: otherInput }));
-  // @ts-expect-error Admission evidence cannot be rebuilt with another scope.
-  const rebound: typeof proof = { ...proof, admission: args.admission }; // oxlint-disable-line typescript/no-misused-spread -- planted rebinding attempt the type system must reject
-  rejectedAtCompileTime(rebound);
+  // @ts-expect-error Admission evidence keeps its own scope.
+  const copied: typeof proof = { ...proof, admission: args.admission }; // oxlint-disable-line typescript/no-misused-spread -- a spread copy must not type-check as evidence
+  rejectedAtCompileTime(copied);
   // @ts-expect-error An object literal cannot construct evidence.
-  const fabricated: typeof proof = { kind: "ActionAdmitted" };
+  const literal: typeof proof = { kind: "ActionAdmitted" };
   rejectedAtCompileTime(
     // @ts-expect-error Evidence belongs to the admitted execution scope.
     await runCheckedAction({ ...args, admission: otherAdmission }),
   );
-  return fabricated;
+  return literal;
 };
 
 export const operationAuthorizationMistakes = <Kind extends string, Input>(
   authorization: OperationAuthorization<Kind, Input>,
 ) => {
   // @ts-expect-error The public method cannot reproduce the sealed authorization.
-  const fabricated: typeof authorization = {
+  const literal: typeof authorization = {
     execute: authorization.execute.bind(authorization),
   };
-  return fabricated;
+  return literal;
 };
 
 export const scopedOperationResultInference = async <N>(
