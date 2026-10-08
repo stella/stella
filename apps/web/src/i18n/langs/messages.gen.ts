@@ -3813,6 +3813,7 @@ type Messages = {
   };
   "lawHome": {
     "clearRecent": "Clear recent";
+    "clearRecentConfirmation": "Delete all your recent searches, decisions and statutes in this organization? This cannot be undone.";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
     "noRecent": "No recent activity";

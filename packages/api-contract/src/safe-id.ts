@@ -152,6 +152,7 @@ export type SafeIdType =
   | "sanctionsEdition"
   | "sanctionsScreeningEvent"
   | "savedSearch"
+  | "searchHistoryEntry"
   | "vatRate"
   | "sellerProfile"
   | "numberSeries"

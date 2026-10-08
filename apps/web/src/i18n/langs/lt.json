@@ -3810,6 +3810,7 @@
   },
   "lawHome": {
     "clearRecent": "Išvalyti naujausius",
+    "clearRecentConfirmation": "Ištrinti visas jūsų naujausias paieškas, teismų sprendimus ir teisės aktus šioje organizacijoje? Šio veiksmo negalima atšaukti.",
     "enteringIntoForce": "Netrukus įsigalios",
     "inForceFrom": "Įsigalioja {date}",
     "noRecent": "Naujausios veiklos dar nėra",

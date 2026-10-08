@@ -289,6 +289,25 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("every role keeps and erases its own search history", () => {
+    // History is a private trace of the caller's own reading, so no role,
+    // an external collaborator included, is refused recording or deleting it.
+    for (const role of [
+      "owner",
+      "admin",
+      "member",
+      "intern",
+      "external",
+    ] as const) {
+      expect({
+        role,
+        granted: roles[role].authorize({
+          searchHistory: ["read", "create", "delete"],
+        }).success,
+      }).toEqual({ role, granted: true });
+    }
+  });
+
   test("time entry and rate permissions separate timekeepers from reviewers", () => {
     expect(roles.external.authorize({ timeEntry: ["read"] }).success).toBe(
       false,

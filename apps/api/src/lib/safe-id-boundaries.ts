@@ -301,6 +301,10 @@ export const brandPersistedSavedSearchId = (
   savedSearchId: string,
 ): SafeId<"savedSearch"> => toSafeId<"savedSearch">(savedSearchId);
 
+export const brandPersistedSearchHistoryEntryId = (
+  entryId: string,
+): SafeId<"searchHistoryEntry"> => toSafeId<"searchHistoryEntry">(entryId);
+
 export const brandPersistedTemplateLookupFormatId = (
   formatId: string,
 ): SafeId<"templateLookupFormat"> => toSafeId<"templateLookupFormat">(formatId);

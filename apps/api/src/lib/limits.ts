@@ -381,6 +381,17 @@ export const LIMITS = {
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
   savedTimeNarrativesPerUser: 100,
+  /**
+   * Search history entries a list returns unless asked for more: the law
+   * page shows the latest 20. A display bound only; storage keeps every
+   * entry its user has not deleted, one row per distinct entry.
+   */
+  searchHistoryPageSizeDefault: 20,
+  searchHistoryPageSizeMax: 100,
+  /** Browser-kept entries one import call takes (three kinds of 50, twice). */
+  searchHistoryImportMax: 300,
+  searchHistoryTitleMaxLength: 512,
+  searchHistoryPathMaxLength: 1024,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
    *  cannot blow up the index; the headline only reads the first

@@ -7,7 +7,9 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   createFeatureAccessSnapshot,
@@ -3487,3 +3489,138 @@ test.each(["default-deny", "granted", "colleague"] as const)(
     }
   },
 );
+
+describe("personal search history capabilities", () => {
+  test("keeps personal history discovery and invocation out of AI chat", () => {
+    for (const tool of [
+      "list_capabilities",
+      "describe_capability",
+      "invoke_capability",
+    ] as const) {
+      expect(WRITE_TOOL_REF_FIELD_MAP[tool].chatProjectable).toBe(false);
+    }
+  });
+  test("describes caller-owned history without accepting tenant or owner ids", async () => {
+    for (const capability of [
+      "search-history.list",
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const result = await call("describe_capability", { capability });
+      const payload = parseToolPayload<{
+        id: string;
+        handlerKind: string;
+        inputSchema: unknown;
+      }>(result);
+      expect(payload.id).toBe(capability);
+      expect(payload.handlerKind).toBe("root");
+      if (capability === "search-history.list") {
+        expect(payload.inputSchema).toHaveProperty("query.properties.kind");
+        expect(payload.inputSchema).not.toHaveProperty(
+          "query.properties.kind.default",
+        );
+      }
+      expect(JSON.stringify(payload.inputSchema)).not.toContain(
+        "organizationId",
+      );
+      expect(JSON.stringify(payload.inputSchema)).not.toContain("userId");
+    }
+  });
+
+  test("lists own history through the shared handler", async () => {
+    const result = await call("invoke_capability", {
+      capability: "search-history.list",
+      input: { query: { limit: 20 } },
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      items: [],
+      nextCursor: null,
+    });
+  });
+
+  test("deletes and clears own history through the shared handlers", async () => {
+    const entryId = "a1111111-1111-4111-8111-111111111111";
+    for (const capability of [
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const database = createScopedDbMock({
+        delete: () => ({
+          where: () => ({
+            returning: async () => [{ id: entryId, kind: "search" }],
+          }),
+        }),
+        $with: () => ({ as: () => ({ kind: "search" }) }),
+        with: () => ({
+          select: () => ({
+            from: () => ({
+              groupBy: async () => [{ kind: "search", deleted: 1 }],
+            }),
+          }),
+        }),
+      });
+      const recordedEvents: Parameters<AuditRecorder>[1][] = [];
+      const context = createContext(database);
+      context.recordAuditEvent = async (_tx, event) => {
+        recordedEvents.push(event);
+      };
+      const result = await handleMcpToolCall({
+        args: {
+          capability,
+          input:
+            capability === "search-history.delete"
+              ? { params: { entryId } }
+              : {},
+          confirm: true,
+        },
+        context,
+        toolName: "invoke_capability",
+      });
+      expect(parseToolPayload(result)).toEqual(
+        capability === "search-history.delete"
+          ? { id: entryId }
+          : { deleted: 1 },
+      );
+      expect(recordedEvents).toEqual([
+        {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.SEARCH_HISTORY,
+          resourceId:
+            capability === "search-history.delete" ? entryId : context.userId,
+          metadata: {
+            operation:
+              capability === "search-history.delete" ? "delete" : "clear",
+            entryCount: 1,
+            kinds: [],
+          },
+        },
+      ]);
+    }
+  });
+
+  test("deleting history requires write consent and explicit confirmation", async () => {
+    for (const capability of [
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const readOnlyResult = await handleMcpToolCall({
+        args: { capability, input: {}, confirm: true },
+        context: createContext({ grantedScopes: ["stella:read"] }),
+        toolName: "invoke_capability",
+      });
+      expect(errorEnvelope(readOnlyResult).code).toBe("missing_scope");
+      expect(
+        errorEnvelope(await call("invoke_capability", { capability })).code,
+      ).toBe("confirmation_required");
+    }
+  });
+
+  test("delete validates ids before invoking the database", async () => {
+    const result = await call("invoke_capability", {
+      capability: "search-history.delete",
+      input: { params: { entryId: "invalid-history-id" } },
+      confirm: true,
+    });
+    expect(errorEnvelope(result).code).toBe("validation_error");
+  });
+});

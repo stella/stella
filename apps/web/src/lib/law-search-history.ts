@@ -1,23 +1,17 @@
-import { useSyncExternalStore } from "react";
-
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
-import { createStore } from "zustand/vanilla";
 
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { Temporal } from "@stll/time";
 
-import { browserStateStorage } from "@/lib/account/browser-storage";
-import {
-  onStorageOwnerChange,
-  userStorageKey,
-} from "@/lib/account/user-scoped-storage";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import { readStoredJson } from "@/lib/stored-json";
 
 // Keep the key so existing owner-scoped searches migrate without a second store.
-const STORAGE_KEY = "law_search_history";
-const RECENT_LIMIT_PER_KIND = 50;
+export const LAW_HISTORY_STORAGE_KEY = "law_search_history";
+// A display limit only; the server retains entries until their owner deletes them.
+export const LAW_HISTORY_DISPLAY_LIMIT = 20;
 const atSchema = v.pipe(
   v.string(),
   v.check((at) => Result.try(() => Temporal.Instant.from(at)).isOk()),
@@ -44,45 +38,30 @@ const legacyEntrySchema = v.object({
 });
 const recentEntrySchema = v.variant("kind", [
   v.object({ kind: v.literal("search"), ...legacyEntrySchema.entries }),
-  v.object({ kind: v.literal("decision"), ...openedFields }),
-  v.object({ kind: v.literal("statute"), ...openedFields }),
+  v.object({
+    kind: v.literal("decision"),
+    ...openedFields,
+    courtId: v.optional(v.nullable(v.string()), null),
+    courtAbbreviation: v.optional(v.nullable(v.string()), null),
+    courtTier: v.optional(v.nullable(v.picklist(COURT_TIER_LABELS)), null),
+  }),
+  v.object({
+    kind: v.literal("statute"),
+    ...openedFields,
+    statuteNumber: v.optional(v.nullable(v.string()), null),
+    statuteYear: v.optional(v.nullable(v.string()), null),
+  }),
 ]);
 
 export type LawRecentEntry = v.InferOutput<typeof recentEntrySchema>;
 export type LawRecentFilter = "all" | LawRecentEntry["kind"];
 const EMPTY: readonly LawRecentEntry[] = [];
 
-export const lawRecentKey = (entry: LawRecentEntry): string =>
-  entry.kind === "search"
-    ? `${entry.kind}:${entry.query}`
-    : `${entry.kind}:${entry.id}`;
-
-export const filterLawRecent = (
-  entries: readonly LawRecentEntry[],
+export const filterLawRecent = <Entry extends { kind: LawRecentEntry["kind"] }>(
+  entries: readonly Entry[],
   filter: LawRecentFilter,
-): readonly LawRecentEntry[] =>
+): readonly Entry[] =>
   filter === "all" ? entries : entries.filter((entry) => entry.kind === filter);
-
-const normalizeRecent = (
-  entries: readonly LawRecentEntry[],
-): readonly LawRecentEntry[] => {
-  const seen = new Set<string>();
-  const counts = new Map<LawRecentEntry["kind"], number>();
-  return entries
-    .toSorted((a, b) => Temporal.Instant.compare(b.at, a.at))
-    .filter((entry) => {
-      const key = lawRecentKey(entry);
-      if (
-        seen.has(key) ||
-        (counts.get(entry.kind) ?? 0) >= RECENT_LIMIT_PER_KIND
-      ) {
-        return false;
-      }
-      seen.add(key);
-      counts.set(entry.kind, (counts.get(entry.kind) ?? 0) + 1);
-      return true;
-    });
-};
 
 /** Bad rows are dropped individually; old searches become recent search rows. */
 export const readLawRecent = (
@@ -108,90 +87,77 @@ export const readLawRecent = (
       entries.push({ kind: "search", ...legacy.output });
     }
   }
-  return normalizeRecent(entries);
+  return entries;
 };
 
-type RecentState = { entries: readonly LawRecentEntry[]; hydrated: boolean };
-const recentStore = createStore<RecentState>(() => ({
-  entries: EMPTY,
-  hydrated: false,
-}));
+/** The only local-storage read: hand kept entries to the server in one batch. */
+export const localHistoryImportEntries = (values: readonly (string | null)[]) =>
+  values.flatMap((raw) =>
+    readLawRecent(raw).map((entry) => {
+      const usedAt = entry.at;
+      switch (entry.kind) {
+        case "search":
+          return { usedAt, entry: { kind: entry.kind, query: entry.query } };
+        case "decision":
+          return {
+            usedAt,
+            entry: {
+              kind: entry.kind,
+              documentId: entry.id,
+              title: entry.title,
+              path: entry.path,
+              courtId: entry.courtId,
+              courtAbbreviation: entry.courtAbbreviation,
+              courtTier: entry.courtTier,
+            },
+          };
+        case "statute":
+          return {
+            usedAt,
+            entry: {
+              kind: entry.kind,
+              documentId: entry.id,
+              title: entry.title,
+              path: entry.path,
+              statuteNumber: entry.statuteNumber,
+              statuteYear: entry.statuteYear,
+            },
+          };
+        default:
+          entry satisfies never;
+          return panic("Unhandled local law history kind");
+      }
+    }),
+  );
 
-const hydrate = (): void => {
-  if (recentStore.getState().hydrated) {
+type ImportLocalHistoryOptions = {
+  storage: Pick<Storage, "getItem" | "removeItem">;
+  userKey: string;
+  canRemove: () => boolean;
+  importEntries: (
+    entries: ReturnType<typeof localHistoryImportEntries>,
+  ) => Promise<void>;
+};
+
+/** Local data is removed only after the whole batch is accepted. */
+export const migrateLocalLawHistory = async ({
+  storage,
+  userKey,
+  importEntries,
+  canRemove,
+}: ImportLocalHistoryOptions) => {
+  const keys = [userKey, LAW_HISTORY_STORAGE_KEY];
+  const raw = keys.map((key) => storage.getItem(key));
+  if (raw.every((value) => value === null)) {
     return;
   }
-  const raw = browserStateStorage("local").getItem(userStorageKey(STORAGE_KEY));
-  recentStore.setState({ entries: readLawRecent(raw), hydrated: true });
-};
-const save = (entries: readonly LawRecentEntry[]): void => {
-  writeStoredJson(
-    browserStateStorage("local"),
-    userStorageKey(STORAGE_KEY),
-    entries,
-  );
-  recentStore.setState({ entries });
-};
-const record = (entry: LawRecentEntry): void => {
-  hydrate();
-  save(
-    normalizeRecent([
-      entry,
-      ...recentStore
-        .getState()
-        .entries.filter(
-          (previous) => lawRecentKey(previous) !== lawRecentKey(entry),
-        ),
-    ]),
-  );
-};
-const now = () =>
-  Temporal.Now.instant().toString({ fractionalSecondDigits: 3 });
-
-export const recordLawSearch = (query: string): void => {
-  const trimmed = query.trim();
-  if (trimmed.length === 0) {
+  await importEntries(localHistoryImportEntries(raw));
+  if (!canRemove()) {
     return;
   }
-  record({ kind: "search", query: trimmed, at: now() });
-};
-type OpenedLawEntry = Omit<
-  Extract<LawRecentEntry, { kind: "decision" | "statute" }>,
-  "at"
->;
-export const recordLawOpen = (entry: OpenedLawEntry): void =>
-  record({ ...entry, at: now() });
-
-export const removeLawRecent = (entry: LawRecentEntry): void => {
-  hydrate();
-  save(
-    recentStore
-      .getState()
-      .entries.filter(
-        (previous) => lawRecentKey(previous) !== lawRecentKey(entry),
-      ),
-  );
-};
-export const clearLawRecent = (): void => {
-  hydrate();
-  save(EMPTY);
-};
-
-onStorageOwnerChange(() => {
-  if (!recentStore.getState().hydrated) {
-    return;
+  for (const [index, key] of keys.entries()) {
+    if (storage.getItem(key) === raw.at(index)) {
+      storage.removeItem(key);
+    }
   }
-  recentStore.setState({ entries: EMPTY, hydrated: false });
-  hydrate();
-});
-const subscribe = (onChange: () => void) => {
-  const unsubscribe = recentStore.subscribe(onChange);
-  hydrate();
-  return unsubscribe;
 };
-const getSnapshot = () => recentStore.getState().entries;
-const getServerSnapshot = () => EMPTY;
-
-/** Browser-local activity, reset on owner change; never shared or sent to analytics. */
-export const useLawRecent = (): readonly LawRecentEntry[] =>
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

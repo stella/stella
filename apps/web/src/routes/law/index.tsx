@@ -50,6 +50,7 @@ import {
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
+import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { formatValidityDate } from "@/features/statutes/statute-format";
@@ -59,7 +60,6 @@ import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { recordLawSearch } from "@/lib/law-search-history";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -252,6 +252,7 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 );
 
 function LawHome() {
+  const { record: historyRecord } = useLawHistory();
   const t = useTranslations();
   const format = useFormatter();
   const uiLocale = useLocale();
@@ -318,7 +319,7 @@ function LawHome() {
     if (trimmed.length === 0) {
       return;
     }
-    recordLawSearch(trimmed);
+    historyRecord.mutate({ kind: "search", query: trimmed });
 
     if (
       statuteCountry !== null &&

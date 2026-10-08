@@ -3810,6 +3810,7 @@
   },
   "lawHome": {
     "clearRecent": "Előzmények törlése",
+    "clearRecentConfirmation": "Törli az összes legutóbbi keresését, határozatát és jogszabályát ebben a szervezetben? Ez a művelet nem vonható vissza.",
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
     "noRecent": "Még nincs legutóbbi tevékenység",

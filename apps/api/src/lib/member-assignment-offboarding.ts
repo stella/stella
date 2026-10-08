@@ -35,6 +35,7 @@ import {
   sharepointOAuthState,
   mcpOAuthState,
   contacts,
+  searchHistoryEntries,
   taskAssignees,
   workspaceMembers,
   workspaces,
@@ -1448,6 +1449,14 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
+    .delete(searchHistoryEntries)
+    .where(
+      and(
+        eq(searchHistoryEntries.organizationId, organizationId),
+        eq(searchHistoryEntries.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpUserConnections)
     .where(
       and(
@@ -1545,6 +1554,7 @@ export type MemberCleanupDisposition =
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
+  [searchHistoryEntries.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],
   [workObligations.ownerUserId, "reassigned"],

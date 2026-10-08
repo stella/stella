@@ -3810,6 +3810,7 @@
   },
   "lawHome": {
     "clearRecent": "Borrar recientes",
+    "clearRecentConfirmation": "¿Eliminar todas sus búsquedas, resoluciones y normas recientes en esta organización? Esta acción no se puede deshacer.",
     "enteringIntoForce": "Próxima entrada en vigor",
     "inForceFrom": "En vigor desde el {date}",
     "noRecent": "No hay actividad reciente",

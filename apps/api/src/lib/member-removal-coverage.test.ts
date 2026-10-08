@@ -451,6 +451,8 @@ const RETAINED_MEMBER_COLUMNS = {
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
+  "search_history_entries.user_id":
+    "The person's own organization-scoped search history; they stay an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

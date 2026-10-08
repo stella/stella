@@ -12,7 +12,9 @@
  */
 
 import { Result } from "better-result";
-import { hkdf } from "node:crypto";
+import { createHmac, hkdf } from "node:crypto";
+
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -165,6 +167,31 @@ export const decryptContent = async (
   iv: Buffer,
 ): Promise<string> =>
   await decryptScopedContent(organizationId, ciphertext, iv);
+
+const LOOKUP_KEY_SCOPE = "stella:content-lookup:v1:";
+
+/**
+ * A stable keyed hash (HMAC-SHA256, hex) of `value` for finding an equal
+ * encrypted value without decrypting: AES-GCM ciphertexts of one plaintext
+ * differ, so equality is matched on this instead. The key is derived from
+ * the content key per organization, so one firm's hashes match nothing in
+ * another's. Without the content key (local development and tests, as for
+ * the no-op envelope) it is an unkeyed SHA-256 of the same input.
+ */
+export const contentLookupKey = async (
+  organizationId: SafeId<"organization">,
+  value: string,
+): Promise<string> => {
+  const masterKey = getMasterKey();
+  if (!masterKey) {
+    return sha256Hex(`${organizationId}\u0000${value}`);
+  }
+  const scopeKey = await deriveScopeKey(
+    masterKey,
+    `${LOOKUP_KEY_SCOPE}${organizationId}`,
+  );
+  return createHmac("sha256", scopeKey).update(value).digest("hex");
+};
 
 const APP_CONTENT_SCOPE = "stella:app-content:v1";
 

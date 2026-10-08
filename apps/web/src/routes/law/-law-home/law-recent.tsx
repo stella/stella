@@ -1,15 +1,19 @@
 import { useState } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import {
-  BookTextIcon,
-  FileTextIcon,
-  HistoryIcon,
-  SearchIcon,
-  XIcon,
-} from "@stll/ui/icons";
+  AlertDialog,
+  AlertDialogPopup,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogClose,
+} from "@stll/ui/alert-dialog";
+import { Button } from "@stll/ui/button";
+import { HistoryIcon, SearchIcon, XIcon } from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -19,18 +23,16 @@ import {
 } from "@stll/ui/landing";
 import { cn } from "@stll/ui/utils";
 
+import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import {
-  clearLawRecent,
   filterLawRecent,
-  lawRecentKey,
-  removeLawRecent,
-  useLawRecent,
-  type LawRecentEntry,
   type LawRecentFilter,
 } from "@/lib/law-search-history";
 import { sanitizeHref } from "@/lib/sanitize-href";
+
+import { DocumentIdentityBadge } from "./document-identity-badge";
 
 const FILTER_OPTIONS = {
   all: { value: "all", labelKey: "common.all" },
@@ -41,104 +43,200 @@ const FILTER_OPTIONS = {
   [Kind in LawRecentFilter]: { value: Kind; labelKey: TranslationKey };
 };
 
-const ENTRY_ICONS = {
-  search: SearchIcon,
-  decision: FileTextIcon,
-  statute: BookTextIcon,
-} as const satisfies Record<LawRecentEntry["kind"], typeof SearchIcon>;
+type HistoryEntry = ReturnType<typeof useLawHistory>["entries"][number];
+const recentEntryIcon = (entry: HistoryEntry) => {
+  switch (entry.kind) {
+    case "search":
+      return <SearchIcon className="size-4" />;
+    case "statute":
+      return (
+        <DocumentIdentityBadge
+          identity={{
+            kind: "statute",
+            number: entry.statuteNumber,
+            year: entry.statuteYear,
+          }}
+        />
+      );
+    case "decision":
+      return entry.courtTier === null ? (
+        <DocumentIdentityBadge
+          identity={{
+            kind: "decision",
+            courtAbbreviation: entry.courtAbbreviation,
+          }}
+        />
+      ) : (
+        <DocumentIdentityBadge
+          identity={{
+            kind: "decision",
+            courtAbbreviation: entry.courtAbbreviation,
+            courtTier: entry.courtTier,
+          }}
+        />
+      );
+    default:
+      entry satisfies never;
+      return panic("Unhandled law history kind");
+  }
+};
 
 type LawRecentProps = {
   onSearch: (query: string) => void;
 };
 
 export const LawRecent = ({ onSearch }: LawRecentProps) => {
+  const history = useLawHistory();
+  return <LawRecentList onSearch={onSearch} history={history} />;
+};
+
+type LawRecentListProps = LawRecentProps & {
+  history: Pick<
+    ReturnType<typeof useLawHistory>,
+    "entries" | "isPending" | "error"
+  > & {
+    remove: {
+      mutate: (
+        id: ReturnType<typeof useLawHistory>["entries"][number]["id"],
+      ) => void;
+      isPending: boolean;
+    };
+    clear: {
+      mutate: (value: undefined, options: { onSuccess: () => void }) => void;
+      isPending: boolean;
+    };
+  };
+};
+
+export const LawRecentList = ({ onSearch, history }: LawRecentListProps) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
-  const entries = useLawRecent();
+  const { entries } = history;
+  const [clearOpen, setClearOpen] = useState(false);
   const [filter, setFilter] = useState<LawRecentFilter>("all");
   const visibleEntries = filterLawRecent(entries, filter);
+  let emptyLabel: TranslationKey | undefined;
+  if (history.error) {
+    emptyLabel = "common.error";
+  } else if (history.isPending) {
+    emptyLabel = "common.loading";
+  } else if (visibleEntries.length === 0) {
+    emptyLabel = "lawHome.noRecent";
+  }
 
   return (
-    <LandingSection
-      heading={
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className={LANDING_SECTION_HEADING_CLASS}>
-              <HistoryIcon className="size-4" />
-              {t("lawHome.recent")}
-            </span>
-            {entries.length > 0 && (
-              <Button onClick={clearLawRecent} size="xs" variant="ghost">
-                {t("lawHome.clearRecent")}
-              </Button>
-            )}
-          </div>
-          <div
-            aria-label={t("common.filter")}
-            className="flex flex-wrap gap-1 px-2"
-            role="group"
-          >
-            {Object.values(FILTER_OPTIONS).map(({ value, labelKey }) => (
-              <Button
-                aria-pressed={filter === value}
-                key={value}
-                onClick={() => setFilter(value)}
-                size="xs"
-                variant={filter === value ? "secondary" : "ghost"}
-              >
-                {t(labelKey)}
-              </Button>
-            ))}
-          </div>
-        </div>
-      }
-    >
-      {visibleEntries.length === 0 ? (
-        <LandingEmpty>{t("lawHome.noRecent")}</LandingEmpty>
-      ) : (
-        visibleEntries.map((entry) => {
-          const Icon = ENTRY_ICONS[entry.kind];
-          const title = entry.kind === "search" ? entry.query : entry.title;
-          const text = (
-            <LandingItemText
-              icon={<Icon className="size-4" />}
-              meta={relativeTime(entry.at)}
-              title={title}
-            />
-          );
-          return (
-            <div
-              className="group flex min-w-0 items-center gap-1"
-              key={lawRecentKey(entry)}
-            >
-              {entry.kind === "search" ? (
-                <button
-                  className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
-                  onClick={() => onSearch(entry.query)}
-                  type="button"
+    <>
+      <LandingSection
+        heading={
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className={LANDING_SECTION_HEADING_CLASS}>
+                <HistoryIcon className="size-4" />
+                {t("lawHome.recent")}
+              </span>
+              {entries.length > 0 && (
+                <Button
+                  onClick={() => setClearOpen(true)}
+                  size="xs"
+                  variant="ghost"
                 >
-                  {text}
-                </button>
-              ) : (
-                <a
-                  className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
-                  href={sanitizeHref(entry.path)}
-                >
-                  {text}
-                </a>
+                  {t("lawHome.clearRecent")}
+                </Button>
               )}
-              <Button
-                aria-label={t("common.remove")}
-                onClick={() => removeLawRecent(entry)}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <XIcon className="size-3.5" />
-              </Button>
             </div>
-          );
-        })
-      )}
-    </LandingSection>
+            <div
+              aria-label={t("common.filter")}
+              className="flex flex-wrap gap-1 px-2"
+              role="group"
+            >
+              {Object.values(FILTER_OPTIONS).map(({ value, labelKey }) => (
+                <Button
+                  aria-pressed={filter === value}
+                  key={value}
+                  onClick={() => setFilter(value)}
+                  size="xs"
+                  variant={filter === value ? "secondary" : "ghost"}
+                >
+                  {t(labelKey)}
+                </Button>
+              ))}
+            </div>
+          </div>
+        }
+      >
+        {emptyLabel !== undefined ? (
+          <LandingEmpty>{t(emptyLabel)}</LandingEmpty>
+        ) : (
+          visibleEntries.map((entry) => {
+            const title = entry.kind === "search" ? entry.query : entry.title;
+            const text = (
+              <LandingItemText
+                icon={recentEntryIcon(entry)}
+                meta={relativeTime(entry.lastUsedAt)}
+                title={title}
+              />
+            );
+            return (
+              <div
+                className="group flex min-w-0 items-center gap-1"
+                key={entry.id}
+              >
+                {entry.kind === "search" ? (
+                  <button
+                    className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
+                    onClick={() => onSearch(entry.query)}
+                    type="button"
+                  >
+                    {text}
+                  </button>
+                ) : (
+                  <a
+                    className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
+                    href={sanitizeHref(entry.path)}
+                  >
+                    {text}
+                  </a>
+                )}
+                <Button
+                  aria-label={t("common.remove")}
+                  disabled={history.remove.isPending}
+                  onClick={() => history.remove.mutate(entry.id)}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <XIcon className="size-3.5" />
+                </Button>
+              </div>
+            );
+          })
+        )}
+      </LandingSection>
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("lawHome.clearRecent")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("lawHome.clearRecentConfirmation")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              variant="destructive"
+              loading={history.clear.isPending}
+              onClick={() =>
+                history.clear.mutate(undefined, {
+                  onSuccess: () => setClearOpen(false),
+                })
+              }
+            >
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </>
   );
 };

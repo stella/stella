@@ -26,11 +26,11 @@ import Tooltip from "@/components/tooltip";
 import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
+import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { recordLawOpen } from "@/lib/law-search-history";
 import {
   extractId,
   fileMayHoldOthersOf,
@@ -58,18 +58,38 @@ export function PublicDecisionViewer({
   initialSearchQuery,
   routeId,
 }: PublicDecisionViewerProps) {
+  const {
+    record: { mutate: recordHistory },
+    enabled: historyEnabled,
+  } = useLawHistory();
   const decisionId = extractId(decision.id);
   const openedPath = useRouterState({
     select: ({ location }) => location.pathname,
   });
   useExternalSyncEffect(() => {
-    recordLawOpen({
+    if (!historyEnabled) {
+      return;
+    }
+    recordHistory({
       kind: "decision",
-      id: decision.id,
+      documentId: decision.id,
+      courtId: decision.courtId,
+      courtAbbreviation: decision.courtAbbreviation,
+      courtTier: decision.courtTier,
       title: `${decision.caseNumber} · ${decision.court}`,
       path: openedPath,
     });
-  }, [decision.id, decision.caseNumber, decision.court, openedPath]);
+  }, [
+    historyEnabled,
+    recordHistory,
+    decision.id,
+    decision.caseNumber,
+    decision.court,
+    decision.courtId,
+    decision.courtAbbreviation,
+    decision.courtTier,
+    openedPath,
+  ]);
   // The block the URL names. A results row that could not open beside the
   // list lands here instead, at the passage and on the words it matched.
   const initialAnchorId = useRouterState({

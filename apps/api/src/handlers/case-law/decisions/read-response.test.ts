@@ -40,6 +40,7 @@ const decisionWithText = (text: string) => {
     ecli: text,
     identifiers: [{ type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: text }],
     court: text,
+    courtId: text,
     courtAbbreviation: text,
     courtTier: "other",
     country: text,

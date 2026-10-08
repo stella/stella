@@ -3810,6 +3810,7 @@
   },
   "lawHome": {
     "clearRecent": "Vymazat nedávné",
+    "clearRecentConfirmation": "Smazat všechna vaše nedávná hledání, rozhodnutí a předpisy v této organizaci? Tuto akci nelze vrátit zpět.",
     "enteringIntoForce": "Brzy nabude účinnosti",
     "inForceFrom": "Účinné od {date}",
     "noRecent": "Zatím žádná nedávná aktivita",

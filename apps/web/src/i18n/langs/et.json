@@ -3810,6 +3810,7 @@
   },
   "lawHome": {
     "clearRecent": "Kustuta hiljutised",
+    "clearRecentConfirmation": "Kas kustutada kõik teie hiljutised otsingud, kohtulahendid ja õigusaktid selles organisatsioonis? Seda ei saa tagasi võtta.",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
     "noRecent": "Hiljutisi tegevusi pole",

@@ -3810,6 +3810,7 @@
   },
   "lawHome": {
     "clearRecent": "Effacer les éléments récents",
+    "clearRecentConfirmation": "Supprimer toutes vos recherches, décisions et textes législatifs récents dans cette organisation ? Cette action est irréversible.",
     "enteringIntoForce": "Entrée en vigueur prochaine",
     "inForceFrom": "En vigueur à partir du {date}",
     "noRecent": "Aucune activité récente",
