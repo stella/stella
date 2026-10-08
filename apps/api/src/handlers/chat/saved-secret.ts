@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import {
   chatThreads,
+  mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
@@ -12,6 +13,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 
 const config = {
   permissions: { chat: ["create"], integration: ["create"] },
@@ -71,6 +73,19 @@ const savedSecret = createSafeRootHandler(
               eq(mcpUserConnections.enabled, true),
             ),
           )
+          .leftJoin(
+            mcpConnectorAuthorizationReviews,
+            and(
+              eq(
+                mcpConnectorAuthorizationReviews.connectorId,
+                mcpConnectors.id,
+              ),
+              eq(
+                mcpConnectorAuthorizationReviews.organizationId,
+                session.activeOrganizationId,
+              ),
+            ),
+          )
           .where(
             and(
               eq(mcpConnectors.slug, connectorSlug),
@@ -78,6 +93,7 @@ const savedSecret = createSafeRootHandler(
                 isNull(mcpConnectors.organizationId),
                 eq(mcpConnectors.organizationId, session.activeOrganizationId),
               ),
+              approvedMcpAuthorizationReview,
             ),
           )
           .limit(2);

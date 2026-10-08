@@ -1,24 +1,35 @@
-import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import * as v from "valibot";
 
-import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import {
+  REQUEST_SECRET_TOOL_NAME,
+  requestSecretOutputSchema,
+} from "@stll/api-contract/chat-secret";
 import { rejectionOf } from "@stll/property-testing/rejection";
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   chatSecrets,
+  chatMessages,
+  chatTurns,
   chatThreads,
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import submitSecret from "@/api/handlers/chat/submit-secret";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 import { validatePrivateReceipts } from "./chat-secret-validation";
 import {
@@ -97,6 +108,129 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("chat secret receipts", () => {
+    test("recovers a stored submission after client continuation fails", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withFixture(db, async (scope) => {
+          const toolCallId = "retry-request";
+          const credential = Bun.randomUUIDv7();
+          const encrypted = await encryptMcpSecret({
+            ...scope,
+            purpose: "mcp_static_token",
+            secret: credential,
+          });
+          await db.transaction(
+            async (tx) =>
+              await saveChatSecretForFuture({ tx, ...scope, encrypted }),
+          );
+          const input = {
+            purpose: "Test operation",
+            kind: "token" as const,
+            target: {
+              type: "mcp-connector" as const,
+              connectorSlug: scope.targetSlug,
+            },
+          };
+          const part = {
+            type: "tool-call" as const,
+            id: toolCallId,
+            name: REQUEST_SECRET_TOOL_NAME,
+            arguments: JSON.stringify(input),
+            input,
+            state: "input-complete" as const,
+          };
+          const userMessageId = createSafeId<"chatMessage">();
+          const assistantMessageId = createSafeId<"chatMessage">();
+          await db.insert(chatMessages).values([
+            {
+              id: userMessageId,
+              threadId: scope.threadId,
+              userId: scope.userId,
+              role: "user",
+              content: toPersistedChatMessageContentV3({
+                data: [{ type: "text", text: "Test request" }],
+              }),
+            },
+            {
+              id: assistantMessageId,
+              threadId: scope.threadId,
+              userId: scope.userId,
+              role: "assistant",
+              content: toPersistedChatMessageContentV3({ data: [part] }),
+            },
+          ]);
+          await db.insert(chatTurns).values({
+            id: createSafeId<"chatTurn">(),
+            organizationId: scope.organizationId,
+            userId: scope.userId,
+            threadId: scope.threadId,
+            userMessageId,
+            assistantMessageId,
+            status: "awaiting-user",
+            interactionType: "client-tool",
+            interactionToolCallId: toolCallId,
+          });
+          const safeDb = safeDbFromScoped(
+            async (run) => await db.transaction(run),
+          );
+          const submit = (body: unknown) =>
+            submitSecret.handler(
+              createTestHandlerContext<
+                Parameters<typeof submitSecret.handler>[0]
+              >({
+                safeDb,
+                session: { activeOrganizationId: scope.organizationId },
+                user: { id: scope.userId },
+                params: { threadId: scope.threadId, toolCallId },
+                body,
+                recordAuditEvent: async () => {},
+              }),
+            );
+          const first = await submit({ decision: "use-saved" });
+          const parsed = v.safeParse(requestSecretOutputSchema, first);
+          if (!parsed.success) {
+            return panic("Expected stored receipt");
+          }
+          // The client continuation can fail independently after the submission commits.
+          const continuation = await Result.tryPromise(async () => {
+            throw new HandlerError({
+              status: 503,
+              message: "Continuation unavailable",
+            });
+          });
+          expect(continuation.isErr()).toBe(true);
+          const recovered = await submit({
+            decision: "provide",
+            value: credential,
+            saveForFuture: false,
+            normalConnectionAction: "preserve",
+          });
+          expect(recovered).toEqual(first);
+          expect(await submit({ decision: "use-saved" })).toEqual(first);
+          const resumed = await validatePrivateReceipts({
+            parts: [{ ...part, state: "complete", output: parsed.output }],
+            safeDb,
+            threadId: scope.threadId,
+            userId: scope.userId,
+          });
+          expect(resumed.isOk()).toBe(true);
+          expect(
+            await submit({
+              decision: "provide",
+              value: Bun.randomUUIDv7(),
+              saveForFuture: false,
+              normalConnectionAction: "preserve",
+            }),
+          ).toMatchObject({ code: 409 });
+          const rows = await db
+            .select({ id: chatSecrets.id })
+            .from(chatSecrets)
+            .where(eq(chatSecrets.threadId, scope.threadId));
+          expect(rows).toHaveLength(1);
+        });
+      });
+    });
+
     test("replays provided and declined receipts", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -307,6 +441,48 @@ if (!databaseUrl || !runPostgres) {
               cachedTools: null,
             },
           ]);
+        });
+      });
+    });
+
+    test("uses one timestamp when setting the receipt lifetime", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withFixture(db, async (scope) => {
+          const createdAt = new Date("2026-10-01T12:00:00Z");
+          setSystemTime(createdAt);
+          const secondClock = spyOn(Temporal.Now, "instant").mockImplementation(
+            () =>
+              Temporal.Instant.fromEpochMilliseconds(createdAt.getTime() + 1),
+          );
+          try {
+            const receipt = await db.transaction(
+              async (tx) =>
+                await storeChatSecret({
+                  tx,
+                  ...scope,
+                  toolCallId: "lifetime-request",
+                  decision: { status: "declined" },
+                }),
+            );
+            expect(receipt.status).toBe("declined");
+            const stored = await db
+              .select({
+                createdAt: chatSecrets.createdAt,
+                expiresAt: chatSecrets.expiresAt,
+              })
+              .from(chatSecrets)
+              .where(eq(chatSecrets.threadId, scope.threadId));
+            expect(stored).toEqual([
+              {
+                createdAt,
+                expiresAt: new Date(createdAt.getTime() + DAY_IN_MS),
+              },
+            ]);
+          } finally {
+            secondClock.mockRestore();
+            setSystemTime();
+          }
         });
       });
     });

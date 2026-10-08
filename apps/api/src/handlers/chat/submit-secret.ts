@@ -14,12 +14,13 @@ import {
   chatMessages,
   chatThreads,
   chatTurns,
-  chatSecrets,
+  mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { recoverChatSecretSubmission } from "@/api/handlers/chat/chat-secret-retry";
 import {
   readSavedChatSecret,
   saveChatSecretForFuture,
@@ -30,7 +31,9 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { secretSchema } from "@/api/lib/secret-brands";
@@ -75,6 +78,11 @@ const readPendingRequest = async ({
   threadId,
   toolCallId,
 }: PendingRequestOptions) => {
+  await withAggregateLock({
+    aggregate: "chatTurn",
+    tx,
+    id: { organizationId, userId, threadId, toolCallId },
+  });
   const turn = (
     await tx
       .select({ content: chatMessages.content, status: chatTurns.status })
@@ -91,7 +99,6 @@ const readPendingRequest = async ({
           eq(chatTurns.interactionToolCallId, toolCallId),
         ),
       )
-      .for("update", { of: chatTurns })
       .limit(1)
   ).at(0);
   if (!turn) {
@@ -207,6 +214,13 @@ const readEnabledConnector = async ({
         eq(mcpUserConnections.enabled, true),
       ),
     )
+    .leftJoin(
+      mcpConnectorAuthorizationReviews,
+      and(
+        eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+        eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+      ),
+    )
     .where(
       and(
         eq(mcpConnectors.slug, connectorSlug),
@@ -214,6 +228,7 @@ const readEnabledConnector = async ({
           isNull(mcpConnectors.organizationId),
           eq(mcpConnectors.organizationId, organizationId),
         ),
+        approvedMcpAuthorizationReview,
       ),
     )
     .limit(2);
@@ -256,6 +271,15 @@ const submitSecret = createSafeRootHandler(
     }
     const result = yield* Result.await(
       resultTx(safeDb, async (tx) => {
+        await withAggregateLock({
+          aggregate: "chatThread",
+          tx,
+          id: {
+            id: threadId,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          },
+        });
         const thread = (
           await tx
             .select({ id: chatThreads.id })
@@ -267,7 +291,6 @@ const submitSecret = createSafeRootHandler(
                 eq(chatThreads.userId, user.id),
               ),
             )
-            .for("update")
             .limit(1)
         ).at(0);
         if (!thread) {
@@ -275,32 +298,19 @@ const submitSecret = createSafeRootHandler(
             new HandlerError({ status: 404, message: "Chat thread not found" }),
           );
         }
-        const existing = (
-          await tx
-            .select({
-              id: chatSecrets.id,
-              status: chatSecrets.decision,
-              slug: chatSecrets.targetSlug,
-            })
-            .from(chatSecrets)
-            .where(
-              and(
-                eq(chatSecrets.threadId, threadId),
-                eq(chatSecrets.organizationId, session.activeOrganizationId),
-                eq(chatSecrets.userId, user.id),
-                eq(chatSecrets.toolCallId, toolCallId),
-              ),
-            )
-            .limit(1)
-        ).at(0);
-        if (existing) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              code: "CHAT_PRIVATE_INPUT_ALREADY_SUBMITTED",
-              message: "Private input was already submitted",
-            }),
-          );
+        const recovery = await recoverChatSecretSubmission({
+          tx,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          threadId,
+          toolCallId,
+          secretDecision,
+        });
+        if (recovery.isErr()) {
+          return Result.err(recovery.error);
+        }
+        if (recovery.value) {
+          return Result.ok(recovery.value);
         }
         const scope = {
           tx,

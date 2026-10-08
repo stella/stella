@@ -5,6 +5,9 @@ import type { SQL } from "drizzle-orm";
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  chatThreads,
+  chatTurns,
+  chatSecrets,
   workspaces,
   entities,
   flowRuns,
@@ -18,6 +21,9 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
   workspace: { rank: 100, kind: "row" },
+  chatThread: { rank: 200, kind: "row" },
+  chatTurn: { rank: 300, kind: "row" },
+  chatSecret: { rank: 400, kind: "row" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
@@ -33,6 +39,23 @@ type AggregateIdentities = {
   workspace: {
     id: SafeId<"workspace">;
     organizationId: SafeId<"organization">;
+  };
+  chatThread: {
+    id: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatTurn: {
+    threadId: SafeId<"chatThread">;
+    toolCallId: string;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatSecret: {
+    id: string;
+    threadId: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
   };
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
@@ -210,6 +233,22 @@ const lockIdentity = (options: AggregateLockOptions): string => {
     case "obligation":
     case "entity":
       return JSON.stringify([options.aggregate, options.id.id]);
+    case "chatThread":
+      return JSON.stringify([options.aggregate, options.id.id]);
+    case "chatSecret":
+      return JSON.stringify([
+        options.aggregate,
+        options.id.organizationId,
+        options.id.userId,
+        options.id.threadId,
+        options.id.id,
+      ]);
+    case "chatTurn":
+      return JSON.stringify([
+        options.aggregate,
+        options.id.threadId,
+        options.id.toolCallId,
+      ]);
     case "contactCapacity":
       return JSON.stringify([options.aggregate, options.id.organizationId]);
     case "personalCatalog":
@@ -238,6 +277,12 @@ const lockStatement = (options: AggregateLockOptions) => {
       return sql`SELECT ${workObligations.entityId} FROM ${workObligations} WHERE ${workObligations.entityId} = ${options.id.id} AND ${workObligations.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
     case "entity":
       return sql`SELECT ${entities.id} FROM ${entities} WHERE ${entities.id} = ${options.id.id} AND ${entities.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
+    case "chatThread":
+      return sql`SELECT ${chatThreads.id} FROM ${chatThreads} WHERE ${chatThreads.id} = ${options.id.id} AND ${chatThreads.organizationId} = ${options.id.organizationId} AND ${chatThreads.userId} = ${options.id.userId} FOR UPDATE`;
+    case "chatTurn":
+      return sql`SELECT ${chatTurns.id} FROM ${chatTurns} WHERE ${chatTurns.threadId} = ${options.id.threadId} AND ${chatTurns.interactionToolCallId} = ${options.id.toolCallId} AND ${chatTurns.organizationId} = ${options.id.organizationId} AND ${chatTurns.userId} = ${options.id.userId} FOR UPDATE`;
+    case "chatSecret":
+      return sql`SELECT ${chatSecrets.id} FROM ${chatSecrets} WHERE ${chatSecrets.id} = ${options.id.id} AND ${chatSecrets.threadId} = ${options.id.threadId} AND ${chatSecrets.organizationId} = ${options.id.organizationId} AND ${chatSecrets.userId} = ${options.id.userId} FOR UPDATE`;
     case "contactCapacity":
       return sql`SELECT pg_advisory_xact_lock(hashtext('contact_capacity'), hashtext(${options.id.organizationId}))`;
     case "personalCatalog":

@@ -27,6 +27,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import {
+  approvedMcpAuthorizationReview,
   recordMcpAuthorizationReview,
   resolveMcpIssuerBinding,
 } from "@/api/lib/mcp-upstream/authorization-review";
@@ -319,10 +320,7 @@ export const loadActiveMcpConnectionsForUser = async ({
             mcpUserConnections.responseDisposition,
             MCP_RESPONSE_DISPOSITION.normal,
           ),
-          or(
-            isNull(mcpConnectorAuthorizationReviews.status),
-            eq(mcpConnectorAuthorizationReviews.status, "approved"),
-          ),
+          approvedMcpAuthorizationReview,
         ),
       )
       .orderBy(asc(mcpUserConnections.createdAt), asc(mcpUserConnections.id))
@@ -389,10 +387,7 @@ export const loadMcpConnectionById = async ({
             mcpUserConnections.responseDisposition,
             MCP_RESPONSE_DISPOSITION.normal,
           ),
-          or(
-            isNull(mcpConnectorAuthorizationReviews.status),
-            eq(mcpConnectorAuthorizationReviews.status, "approved"),
-          ),
+          approvedMcpAuthorizationReview,
         ),
       )
       .limit(1),

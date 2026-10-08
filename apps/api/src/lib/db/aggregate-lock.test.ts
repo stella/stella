@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -17,11 +19,25 @@ type FenceFixtures = {
 const fences = () => {
   const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
+  const threadId = createSafeId<"chatThread">();
+  const userId = mintAuthProviderId<"user">();
   return {
     organization: { aggregate: "organization", id: organizationId },
     workspace: {
       aggregate: "workspace",
       id: { id: workspaceId, organizationId },
+    },
+    chatThread: {
+      aggregate: "chatThread",
+      id: { id: threadId, organizationId, userId },
+    },
+    chatTurn: {
+      aggregate: "chatTurn",
+      id: { threadId, organizationId, userId, toolCallId: "test-call" },
+    },
+    chatSecret: {
+      aggregate: "chatSecret",
+      id: { id: Bun.randomUUIDv7(), threadId, organizationId, userId },
     },
     run: {
       aggregate: "run",
@@ -48,6 +64,48 @@ const fences = () => {
 };
 
 describe("aggregate acquisition ordering", () => {
+  test("locks chat receipts in thread, interaction and receipt order", async () => {
+    const fixture = fences();
+    const statements: SQL[] = [];
+    const tx = {
+      execute: async (statement: SQL) => {
+        statements.push(statement);
+        return [{ id: "locked" }];
+      },
+    };
+    await withAggregateLock({ ...fixture.chatThread, tx });
+    await withAggregateLock({ ...fixture.chatTurn, tx });
+    await withAggregateLock({ ...fixture.chatSecret, tx });
+    const dialect = new PgDialect();
+    const queries = statements.map((statement) =>
+      dialect.sqlToQuery(statement),
+    );
+    expect(queries.map(({ sql }) => sql)).toEqual([
+      expect.stringContaining('FROM "chat_threads"'),
+      expect.stringContaining('FROM "chat_turns"'),
+      expect.stringContaining('FROM "chat_secrets"'),
+    ]);
+    expect(queries.map(({ params }) => params)).toEqual([
+      [
+        fixture.chatThread.id.id,
+        fixture.chatThread.id.organizationId,
+        fixture.chatThread.id.userId,
+      ],
+      [
+        fixture.chatTurn.id.threadId,
+        fixture.chatTurn.id.toolCallId,
+        fixture.chatTurn.id.organizationId,
+        fixture.chatTurn.id.userId,
+      ],
+      [
+        fixture.chatSecret.id.id,
+        fixture.chatSecret.id.threadId,
+        fixture.chatSecret.id.organizationId,
+        fixture.chatSecret.id.userId,
+      ],
+    ]);
+  });
+
   test("every ordered rank pair acquires and every inverted pair fails before execution", async () => {
     const ordered = Object.values(fences()).toSorted((left, right) => {
       const rankDifference =

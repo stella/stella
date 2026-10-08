@@ -11,11 +11,16 @@ import {
 } from "@stll/api-contract/chat-secret";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
+import {
+  mcpConnectorAuthorizationReviews,
+  mcpConnectors,
+  mcpUserConnections,
+} from "@/api/db/schema";
 import { consumeChatSecret } from "@/api/handlers/chat/chat-secrets";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { callWithChatSecret } from "@/api/lib/mcp-upstream/chat-secret";
 
 const useSecretInputSchema = v.strictObject({
@@ -83,6 +88,13 @@ export const createSecretTools = ({
             eq(mcpUserConnections.enabled, true),
           ),
         )
+        .leftJoin(
+          mcpConnectorAuthorizationReviews,
+          and(
+            eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+            eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+          ),
+        )
         .where(
           and(
             eq(mcpConnectors.slug, target.connectorSlug),
@@ -90,6 +102,7 @@ export const createSecretTools = ({
               isNull(mcpConnectors.organizationId),
               eq(mcpConnectors.organizationId, organizationId),
             ),
+            approvedMcpAuthorizationReview,
           ),
         )
         .limit(2),

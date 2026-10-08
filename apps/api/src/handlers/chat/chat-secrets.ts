@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, gt, isNotNull, lte, sql } from "drizzle-orm";
 
-import { DAY_IN_MS, Temporal } from "@stll/time";
+import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
@@ -12,6 +12,7 @@ import {
   MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { EncryptedSecret } from "@/api/lib/mcp-upstream/crypto";
 
@@ -113,9 +114,7 @@ export const storeChatSecret = async ({
         createdAt,
         decision: decision.status,
         ...encrypted,
-        expiresAt: new Date(
-          Temporal.Now.instant().epochMilliseconds + CHAT_SECRET_LIFETIME_MS,
-        ),
+        expiresAt: new Date(createdAt.getTime() + CHAT_SECRET_LIFETIME_MS),
         remainingUses: decision.status === "provided" ? 8 : 0,
       })
       .onConflictDoNothing({
@@ -167,6 +166,11 @@ export const consumeChatSecret = async ({
       eq(chatSecrets.targetUrl, targetUrl),
       eq(chatSecrets.id, secretRef),
     );
+    await withAggregateLock({
+      aggregate: "chatSecret",
+      tx,
+      id: { id: secretRef, organizationId, userId, threadId },
+    });
     const row = (
       await tx
         .select({
@@ -184,7 +188,6 @@ export const consumeChatSecret = async ({
           ),
         )
         .limit(1)
-        .for("update")
     ).at(0);
     if (row) {
       if (!row.ciphertext || !row.iv) {
