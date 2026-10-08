@@ -9230,5 +9230,13 @@
   "src/lib/db/aggregate-lock-order.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/generate.read-budget.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/observability/event-loop-delay.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
