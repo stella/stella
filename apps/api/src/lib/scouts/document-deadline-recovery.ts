@@ -265,15 +265,9 @@ type RecoverDocumentDeadlineScoutDispatchesOptions = {
 };
 
 /**
- * Return expired scout dispatches to `pending` and hand every pending one to
- * the scout queue.
- *
- * Exported because the scout worker and this dispatcher live in different
- * processes: the worker starts with the API server, while the reconciliation
- * loop that used to be the dispatcher's only driver runs in the document
- * processing worker. Wherever that worker is absent, `pending` rows had
- * nothing to dispatch them. The scheduler runs it too; the enqueue is keyed by
- * the source run, so the two drivers converge rather than duplicating work.
+ * Return expired dispatches to pending and enqueue admitted durable sources.
+ * Source-run identities deduplicate overlapping dispatches; grant waits stay
+ * recorded until admission resumes them.
  */
 export const recoverDocumentDeadlineScoutDispatches = async ({
   database,
@@ -302,14 +296,9 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
       asc(documentProcessingRuns.id),
     )
     .limit(RECONCILE_BATCH_SIZE);
-  // Compare-and-set on the state the select matched, not on the id alone.
-  // This sweep runs in the scheduler and in the processing worker's own
-  // reconciliation loop, so two of them can select the same expired dispatch.
-  // Once the first resets it a worker claims a fresh attempt, and an id-only
-  // update from the second would push that live claim back to `pending`: the
-  // worker's settlement predicate then rejects its own result and the metered
-  // scan is replayed on every later sweep. Re-asserting `running` and the same
-  // expired claim makes the second update match nothing.
+  // Match the expired claim and state again: overlapping sweeps must not
+  // retire a fresh claim acquired after selection. A stale update then matches
+  // nothing, preserving settlement and preventing a completed scan's replay.
   const reclaimedDispatchCount =
     staleDispatches.length === 0
       ? 0

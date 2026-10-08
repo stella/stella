@@ -2,6 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import { timeTimersKeys } from "@/features/time-timers/queries";
 import type { api } from "@/lib/api";
+import { inboxKeys } from "@/lib/inbox/queries";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { notificationsOptions } from "@/lib/notification-queries";
 import {
@@ -14,6 +15,10 @@ import {
 } from "@/lib/resource-query-roots.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import {
+  entityViewKeys,
+  entityViewsOptions,
+} from "@/lib/workspaces/queries/entity-views";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
 
@@ -45,6 +50,9 @@ export const resetFeatureEnrolmentCache = async ({
     viewsRootKey("").slice(0, 1),
     workspacesKeys.all,
     myWorkKeys.all,
+    inboxKeys.all(organizationId, userId),
+    entityViewKeys.all(organizationId, userId),
+    entityViewsOptions(organizationId, userId).queryKey,
     notificationsOptions({ organizationId, userId }).queryKey,
   ];
   const featureKeys = {
@@ -52,7 +60,7 @@ export const resetFeatureEnrolmentCache = async ({
       flowRunsQueryRoot("").slice(0, 1),
       knowledgeKeys.flows.all(organizationId),
     ],
-    signals: [],
+    signals: [inboxKeys.detail(organizationId, userId, "").slice(0, -1)],
     "time-billing": [
       timeEntriesQueryRoot("").slice(0, 1),
       expensesQueryRoot("").slice(0, 1),
@@ -71,4 +79,7 @@ export const resetFeatureEnrolmentCache = async ({
   await Promise.all(
     keys.map((queryKey) => queryClient.resetQueries({ queryKey })),
   );
+  for (const queryKey of keys) {
+    queryClient.removeQueries({ queryKey, type: "inactive" });
+  }
 };

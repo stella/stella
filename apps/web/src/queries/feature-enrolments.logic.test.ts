@@ -8,7 +8,10 @@ import { notificationsOptions } from "@/lib/notification-queries";
 import { flowRunsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
-import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
+import {
+  entityViewKeys,
+  entityViewsOptions,
+} from "@/lib/workspaces/queries/entity-views";
 import { taskKeys } from "@/lib/workspaces/queries/tasks.logic";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
 import { resetFeatureEnrolmentCache } from "@/queries/feature-enrolments.logic";
@@ -29,8 +32,16 @@ describe("feature enrollment cache reconciliation", () => {
       [...entitiesKeys.detail("matter-a", "task-a"), "links"],
       viewsRootKey("matter-a"),
       workspacesKeys.overview("matter-a"),
+      inboxKeys.all(CALLER.organizationId, CALLER.userId),
+      inboxKeys.count(CALLER.organizationId, CALLER.userId, "2026-10-08"),
       inboxKeys.detail(CALLER.organizationId, CALLER.userId, "signal-a"),
       entityViewKeys.all(CALLER.organizationId, CALLER.userId),
+      [
+        ...entityViewKeys.all(CALLER.organizationId, CALLER.userId),
+        "matter-a",
+        "open",
+      ],
+      entityViewsOptions(CALLER.organizationId, CALLER.userId).queryKey,
       notificationsOptions(CALLER).queryKey,
       ...(featureId === "flows"
         ? [
@@ -46,6 +57,9 @@ describe("feature enrollment cache reconciliation", () => {
     for (const queryKey of derivedKeys) {
       cachePrivatePayload(queryClient, queryKey);
       expect(queryClient.getQueryData(queryKey)).toBeDefined();
+      expect(
+        queryClient.getQueryCache().find({ queryKey, exact: true })?.isActive(),
+      ).toBe(false);
     }
     cachePrivatePayload(queryClient, otherCaller);
     queryClient.setQueryData(["unrelated-public-data"], "keep");
@@ -54,7 +68,11 @@ describe("feature enrollment cache reconciliation", () => {
 
     for (const queryKey of derivedKeys) {
       expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+      expect(
+        queryClient.getQueryCache().find({ queryKey, exact: true }),
+      ).toBeUndefined();
     }
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(2);
     expect(queryClient.getQueryData(otherCaller)).toBeDefined();
     expect(queryClient.getQueryData(["unrelated-public-data"])).toBe("keep");
     queryClient.clear();
