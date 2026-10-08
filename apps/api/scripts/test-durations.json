@@ -9246,5 +9246,9 @@
   "src/lib/observability/event-loop-delay.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/lib/oauth-revocation.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
