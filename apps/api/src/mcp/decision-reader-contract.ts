@@ -6,8 +6,8 @@ import { LIMITS } from "@/api/lib/limits";
 
 import { cursorInput, nullAsAbsent, uuidInputSchema } from "./tool-utils";
 
+export { READER_PAGE_MAX_CHARS } from "@stll/api-contract/limits";
 export {
-  READER_PAGE_MAX_CHARS,
   openDecisionOutput,
   blocksDecisionOutput,
   provisionPreviewOutput,

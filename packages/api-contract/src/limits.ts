@@ -109,3 +109,8 @@ export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
 
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;
+
+/** Character budget for app-only decision pages and provision previews. */
+export const READER_PAGE_MAX_CHARS = 60_000;
+export const READER_PROVISION_ANCHOR_MIN_CHARS = 1;
+export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;

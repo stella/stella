@@ -1,12 +1,13 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import {
+  READER_PAGE_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  READER_PROVISION_ANCHOR_MAX_CHARS,
+} from "@stll/api-contract/limits";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
-
-export const READER_PAGE_MAX_CHARS = 60_000;
-export const READER_PROVISION_ANCHOR_MIN_CHARS = 1;
-export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;
 
 const readerMetadataSchema = v.strictObject({
   decisionId: v.string(),

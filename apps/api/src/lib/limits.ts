@@ -15,7 +15,12 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
-import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import {
+  SEARCH_QUERY_MAX_LENGTH,
+  READER_PAGE_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  READER_PROVISION_ANCHOR_MAX_CHARS,
+} from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
@@ -25,12 +30,6 @@ import {
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 
 import type { env } from "@/api/env";
-
-import {
-  READER_PAGE_MAX_CHARS,
-  READER_PROVISION_ANCHOR_MIN_CHARS,
-  READER_PROVISION_ANCHOR_MAX_CHARS,
-} from "./chat/decision-reader-projections";
 
 /** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
  *  object literal instead of restating the page size. */
