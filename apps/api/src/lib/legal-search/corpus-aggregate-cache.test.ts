@@ -48,8 +48,6 @@ const PUBLIC: CorpusAggregateScope = {
   excludedSourceIds: [],
 };
 
-const REVOKED_SOURCE = "00000000-0000-4000-8000-0000000000aa";
-
 type EngineCall = { query: string; names: string[] };
 
 /**
@@ -124,13 +122,12 @@ describe("what an aggregation is keyed by", () => {
     "indexId",
     "query",
     "filter",
-    "visibility",
     "aggregation",
   ] as const;
 
   test("changing any one input misses; the same inputs, however assembled, hit", async () => {
     await assertProperty(
-      "corpus aggregate cache key covers every input",
+      "corpus aggregate cache key covers the request and target",
       fc.asyncProperty(
         fc.record({
           generation: fc.stringMatching(/^[a-z0-9_]{1,12}$/u),
@@ -140,7 +137,6 @@ describe("what an aggregation is keyed by", () => {
             fc.stringMatching(/^[a-z]{1,8}:[a-z0-9]{1,8}$/u),
             { minLength: 1, maxLength: 5 },
           ),
-          excluded: fc.uniqueArray(fc.uuid(), { maxLength: 4 }),
           field: fc.stringMatching(/^[a-z_]{1,12}$/u),
           dimension: fc.constantFrom(...DIMENSIONS),
           filterIndex: fc.nat(),
@@ -150,7 +146,6 @@ describe("what an aggregation is keyed by", () => {
           indexId,
           text,
           filters,
-          excluded,
           field,
           dimension,
           filterIndex,
@@ -159,16 +154,12 @@ describe("what an aggregation is keyed by", () => {
           const engine = countingEngine();
           const base = {
             target: { ...TARGET, generation, indexId },
-            scope: {
-              type: "public_corpus",
-              excludedSourceIds: excluded,
-            } satisfies CorpusAggregateScope,
             query: [text, ...filters].join(" AND "),
             aggs: { total: { cardinality: { field } } },
           };
           await read({ cache, load: engine.load, ...base });
 
-          // The same request, built in another order: keys, set members.
+          // The same request, its target built in another key order.
           const same = await read({
             cache,
             load: engine.load,
@@ -177,10 +168,6 @@ describe("what an aggregation is keyed by", () => {
               cluster: TARGET.cluster,
               generation,
               family: TARGET.family,
-            },
-            scope: {
-              excludedSourceIds: excluded.toReversed(),
-              type: "public_corpus",
             },
             query: base.query,
             aggs: { total: { cardinality: { field } } },
@@ -215,17 +202,6 @@ describe("what an aggregation is keyed by", () => {
                     ...filters.filter((_, index) => index !== dropped),
                   ].join(" AND "),
                 };
-              case "visibility":
-                return {
-                  ...base,
-                  scope: {
-                    type: "public_corpus",
-                    excludedSourceIds:
-                      excluded.length > 0
-                        ? excluded.slice(1)
-                        : [REVOKED_SOURCE],
-                  },
-                };
               case "aggregation":
                 return {
                   ...base,
@@ -250,23 +226,7 @@ describe("what an aggregation is keyed by", () => {
   });
 });
 
-describe("invalidation", () => {
-  test("a revoked source is never counted from an entry cached before it", async () => {
-    const { cache } = testCache();
-    const engine = countingEngine();
-
-    const before = await read({ cache, load: engine.load });
-    const after = await read({
-      cache,
-      load: engine.load,
-      scope: { type: "public_corpus", excludedSourceIds: [REVOKED_SOURCE] },
-    });
-
-    expect(valueOf(before.answer)).toEqual({ value: 1 });
-    expect(valueOf(after.answer)).toEqual({ value: 2 });
-    expect(after.outcome.hits).toBe(0);
-  });
-
+describe("what an entry is served for", () => {
   test("a new serving generation never reads the previous one's entries", async () => {
     const { cache } = testCache();
     const engine = countingEngine();
