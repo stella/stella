@@ -28,7 +28,6 @@ import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-a
 const searchRepairFailure = failureSink({
   event: "entities.move_search_repair_failed",
   expected: [],
-  legacy: { severity: "ERROR", capture: true },
 });
 
 const moveEntityBodySchema = t.Object({

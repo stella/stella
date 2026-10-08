@@ -55,7 +55,6 @@ import { selectCanonicalFileContents } from "./delete-file-snapshot";
 const searchRepairFailure = failureSink({
   event: "entities.delete_search_repair_failed",
   expected: [],
-  legacy: { severity: "ERROR", capture: true },
 });
 
 const deleteEntitiesBodySchema = t.Object({

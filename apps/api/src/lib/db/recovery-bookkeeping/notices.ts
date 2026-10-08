@@ -11,7 +11,7 @@ type DeferredNoticeOperation = {
   workspaceId: SafeId<"workspace">;
 };
 
-/** Caller holds the admitted completed-run transaction; no outcome is changed. */
+/** Caller holds the completed-run lock; only notice recovery bookkeeping changes. */
 export const recordDeferredNoticeState = async (
   tx: ScopedTransaction,
   operation: DeferredNoticeOperation,
