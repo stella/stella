@@ -8,9 +8,12 @@ import type {
   SafeDbRetryConfig as BaseSafeDbRetryConfig,
 } from "@/api/db/scoped";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DatabaseRlsError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
+
+export { abortTransaction };
 
 /**
  * Scoped database handle that wraps every operation in a short-lived RLS
@@ -58,11 +61,6 @@ export const safeDbFromScoped =
 export type SafeDbOrTx =
   | { safeDb: SafeDb; tx?: undefined }
   | { safeDb?: undefined; tx: Transaction };
-
-/** Reject a transaction callback so its writes roll back, preserving the refusal. */
-export function abortTransaction(error: unknown): never {
-  throw error;
-}
 
 /**
  * Recover the failure a transaction callback threw to abort itself.
