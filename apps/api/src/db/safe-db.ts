@@ -7,6 +7,7 @@ import type {
   CreateIngestionDbOptions,
   SafeDbRetryConfig as BaseSafeDbRetryConfig,
 } from "@/api/db/scoped";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DatabaseRlsError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -109,7 +110,7 @@ export const withResultSavepoint = async <T>(
   let refusal: HandlerError | SafeDbError | undefined;
   const result = await Result.tryPromise(
     async () =>
-      await tx.transaction(async (savepoint) => {
+      await withAggregateSavepoint(tx, async (savepoint) => {
         const outcome = await run(savepoint);
         if (outcome.isErr()) {
           refusal = outcome.error;

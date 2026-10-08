@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 const S3_DELETION_EFFECT_TYPE = "s3_delete" as const;
 export const S3_DELETION_EFFECT_CHUNK_SIZE = 50;
 export const DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE = 250;
@@ -33,14 +36,16 @@ export const consumeInBatches = async <T>({
   if (!Number.isSafeInteger(batchSize) || batchSize < 1) {
     panic("Batch size must be a positive safe integer");
   }
-  const consumeFrom = async (start: number): Promise<void> => {
-    if (start >= items.length) {
+  const itemBatches = chunkItems(items, batchSize)[Symbol.iterator]();
+  const consumeFrom = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
-    await consume(items.slice(start, start + batchSize));
-    await consumeFrom(start + batchSize);
+    await consume(nextBatch.value);
+    await consumeFrom();
   };
-  await consumeFrom(0);
+  await consumeFrom();
 };
 
 const sha256 = (value: string): string =>
@@ -56,15 +61,10 @@ export const createS3DeletionEffectChunks = (
 ): S3DeletionEffectChunk[] => {
   const canonicalKeys = [...new Set(keys)].toSorted();
   const chunks: S3DeletionEffectChunk[] = [];
-  for (
-    let start = 0;
-    start < canonicalKeys.length;
-    start += S3_DELETION_EFFECT_CHUNK_SIZE
-  ) {
-    const s3Keys = canonicalKeys.slice(
-      start,
-      start + S3_DELETION_EFFECT_CHUNK_SIZE,
-    );
+  for (const s3Keys of chunkItems(
+    canonicalKeys,
+    S3_DELETION_EFFECT_CHUNK_SIZE,
+  )) {
     const chunkIndex = chunks.length;
     chunks.push({
       chunkIndex,
@@ -110,5 +110,8 @@ export const getDestructiveEffectRetryDelayMs = (
   attemptCount: number,
 ): number => {
   const exponent = Math.min(Math.max(attemptCount - 1, 0), 30);
-  return Math.min(RETRY_BASE_DELAY_MS * 2 ** exponent, RETRY_MAX_DELAY_MS);
+  return backoffDelay(exponent, {
+    baseMs: RETRY_BASE_DELAY_MS,
+    maxMs: RETRY_MAX_DELAY_MS,
+  });
 };

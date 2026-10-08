@@ -2,6 +2,7 @@ import { Result, TaggedError, panic } from "better-result";
 import { load } from "cheerio";
 import { createHash } from "node:crypto";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   SANCTIONS_SOURCES,
   parseCzList,
@@ -569,7 +570,17 @@ const retryFetch = async <T>({
     ) {
       return result;
     }
-    await Bun.sleep(250 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    await Bun.sleep(
+      backoffDelay(attempt - 1, {
+        baseMs: 250,
+        jitter: {
+          type: "additive",
+          random: Math.random(),
+          rangeMs: 250,
+          rounding: "floor",
+        },
+      }),
+    );
   }
   return panic("Unreachable sanctions fetch retry state");
 };

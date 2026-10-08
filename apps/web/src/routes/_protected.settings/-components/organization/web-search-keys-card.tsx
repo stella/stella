@@ -19,9 +19,11 @@ import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon } from "@stll/ui/icons";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   webSearchConfigOptions,
   webSearchKeysKeys,
@@ -41,12 +43,19 @@ export const WebSearchKeysCard = () => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const { data: config } = useQuery(
+  const settingsQuery = useQuery(
     webSearchConfigOptions({ organizationId: activeOrganizationId }),
   );
+  const settingsView = useQueryView(settingsQuery);
+  const config = settingsView.type === "items" ? settingsView.items : undefined;
+
+  if (settingsView.type !== "items") {
+    return <QueryViewFeedback view={settingsView} />;
+  }
 
   return (
     <div className="flex flex-col gap-6">
+      <QueryViewFeedback view={settingsView} />
       <div>
         <h3 className="text-base font-medium">
           {t("webSearch.settings.title")}

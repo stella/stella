@@ -516,7 +516,7 @@ export type ScopeContext = {
 // the identifier outwards. Null for an unresolved (global) name.
 export const resolveVariable = (
   context: ScopeContext,
-  identifier: ESTree.IdentifierReference,
+  identifier: ESTree.IdentifierReference | ESTree.JSXIdentifier,
 ): Variable | null => {
   let scope: Scope | null = context.sourceCode.getScope(identifier);
   while (scope !== null) {

@@ -119,10 +119,6 @@
     "seconds": 1.541259,
     "source": "estimated"
   },
-  "scripts/lib/enumerate-safe-handlers.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "scripts/lib/feature-access-declarations.test.ts": {
     "seconds": 1.737437,
     "source": "estimated"
@@ -225,10 +221,6 @@
   },
   "src/db-url.test.ts": {
     "seconds": 0.261725,
-    "source": "estimated"
-  },
-  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/db/account-issuer-nullable-migration.db.test.ts": {
@@ -1881,6 +1873,10 @@
   },
   "src/handlers/chat/chat-refs-shown.test.ts": {
     "seconds": 0.457791,
+    "source": "estimated"
+  },
+  "src/handlers/chat/chat-run-shadow.test.ts": {
+    "seconds": 0.722587,
     "source": "estimated"
   },
   "src/handlers/chat/chat-sandbox-plan.test.ts": {
@@ -4695,10 +4691,6 @@
     "seconds": 7.8,
     "source": "measured"
   },
-  "src/lib/chat/run-log.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/lib/chat/tanstack-chat-runtime.test.ts": {
     "seconds": 0.166689,
     "source": "estimated"
@@ -4729,10 +4721,6 @@
   },
   "src/lib/chat/workspace-url-mentions.test.ts": {
     "seconds": 0.164799,
-    "source": "estimated"
-  },
-  "src/lib/chunked.test.ts": {
-    "seconds": 0.044816,
     "source": "estimated"
   },
   "src/lib/clauses/body-schema.test.ts": {
@@ -5069,10 +5057,6 @@
   },
   "src/lib/document-processing-reconciliation-feeds.db.test.ts": {
     "seconds": 3.84235,
-    "source": "estimated"
-  },
-  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/document-reference.test.ts": {
@@ -7583,10 +7567,6 @@
     "seconds": 0.586685,
     "source": "estimated"
   },
-  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/lib/search/projection-repair-queue.db.test.ts": {
     "seconds": 11.479625,
     "source": "estimated"
@@ -8803,10 +8783,6 @@
     "seconds": 0.4,
     "source": "measured"
   },
-  "src/scripts/review-account.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/scripts/review-account.logic.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -8865,6 +8841,10 @@
   },
   "src/tests/helpers/fake-s3.test.ts": {
     "seconds": 0.899616,
+    "source": "estimated"
+  },
+  "src/tests/helpers/handler-context.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/helpers/provider-request-transcript.test.ts": {
@@ -9181,6 +9161,46 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
+    "source": "estimated"
+  },
+  "src/scripts/review-account.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "scripts/lib/enumerate-safe-handlers.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/chat/run-log.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   }
 }

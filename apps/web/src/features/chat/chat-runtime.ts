@@ -27,6 +27,7 @@ import {
   chatResumeSnapshotSchema,
   chatTurnResumeProbeSchema,
 } from "@stll/chat/resume-contract";
+import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type {
@@ -241,11 +242,6 @@ const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
  *  settled yet (its run lives on another instance) asks again. */
 const STOP_SETTLE_POLL_MS = 500;
 const STOP_SETTLE_POLL_ATTEMPTS = 20;
-
-const waitMs = async (ms: number): Promise<void> =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /** Whether the stopped turn still runs (its owner settles it soon) or is
  *  settled. */
@@ -911,7 +907,7 @@ export const createChatRuntime = ({
       attempt < STOP_SETTLE_POLL_ATTEMPTS;
       attempt += 1
     ) {
-      await waitMs(STOP_SETTLE_POLL_MS);
+      await sleep(STOP_SETTLE_POLL_MS);
       answer = await requestChatTurnStop({
         threadId: key.threadId,
         turnId: stoppedTurn,

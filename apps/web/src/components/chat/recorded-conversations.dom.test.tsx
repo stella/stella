@@ -12,6 +12,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { browserStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -70,9 +71,7 @@ beforeAll(() => {
 
 afterAll(async () => {
   // Let React's scheduled work drain before the DOM goes away.
-  await new Promise((resolve) => {
-    setTimeout(resolve, 50);
-  });
+  await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
   await GlobalRegistrator.unregister();
@@ -306,9 +305,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
       },
       pull: async (controller) => {
         // One event per read, a task apart, as a network delivers them.
-        await new Promise((resolve) => {
-          setTimeout(resolve, 0);
-        });
+        await sleep(0);
         if (!open) {
           return;
         }
@@ -446,11 +443,6 @@ afterEach(() => {
 });
 
 const { act, fireEvent, waitFor, within } = testing;
-
-const sleep = async (ms: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /** Lets the page finish what the last event started: renders, effects and
  *  the page load a finished turn triggers. */

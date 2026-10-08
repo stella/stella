@@ -3,6 +3,7 @@ import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -253,10 +254,7 @@ export const cardsOf = (
 const MAX_SETTLE_TICKS = 20_000;
 const QUIET_TICKS = 3;
 
-const nextTick = async () =>
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
+const nextTick = async () => await sleep(0);
 
 export type WebChatClient = {
   /** The approval card's Allow or Deny. */

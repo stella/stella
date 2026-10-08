@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -321,10 +322,8 @@ const heldIdentitiesChunked = async (
 ): Promise<CzRegionalHeldIdentities> => {
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
-  for (let index = 0; index < items.length; index += HELD_LOOKUP_CHUNK) {
-    const held = await heldIdentities(
-      items.slice(index, index + HELD_LOOKUP_CHUNK),
-    );
+  for (const itemBatch of chunkItems(items, HELD_LOOKUP_CHUNK)) {
+    const held = await heldIdentities(itemBatch);
     for (const value of held.documentIds) {
       documentIds.add(value);
     }
