@@ -369,7 +369,7 @@ type ReadOnlySessionOptions = {
  * Wrap both handles so every transaction is `READ ONLY`. `execute` outside a
  * transaction runs inside one, so there is no path around the setting.
  */
-const readOnlyHandles = ({
+export const readOnlyHandles = ({
   rootDb,
   ingestionDb,
 }: CaseLawScriptHandles): CaseLawScriptHandles => {
