@@ -144,7 +144,11 @@ if (!databaseUrl || !enabled) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const statements: string[] = [];
         const { db } = openClient({
-          logger: { logQuery: (query) => statements.push(query) },
+          logger: {
+            logQuery: (query) => {
+              statements.push(query);
+            },
+          },
         });
         await db.transaction(async (tx) => {
           const organizationId = mintAuthProviderId<"organization">();
@@ -191,10 +195,11 @@ if (!databaseUrl || !enabled) {
                 status: "locked",
               });
             });
-            const blocked = await Result.tryPromise(() =>
-              contender.db.transaction(
-                async (otherTx) => await fixture.acquire(otherTx),
-              ),
+            const blocked = await Result.tryPromise(
+              async () =>
+                await contender.db.transaction(
+                  async (otherTx) => await fixture.acquire(otherTx),
+                ),
             );
             expect(blocked.isErr()).toBe(true);
             if (blocked.isErr()) {
@@ -224,10 +229,11 @@ if (!databaseUrl || !enabled) {
           });
           await holder.db.transaction(async (tx) => {
             await fixture.acquireLegacy(tx);
-            const blocked = await Result.tryPromise(() =>
-              contender.db.transaction(
-                async (otherTx) => await fixture.acquire(otherTx),
-              ),
+            const blocked = await Result.tryPromise(
+              async () =>
+                await contender.db.transaction(
+                  async (otherTx) => await fixture.acquire(otherTx),
+                ),
             );
             expect(blocked.isErr()).toBe(true);
             if (blocked.isErr()) {
@@ -236,11 +242,12 @@ if (!databaseUrl || !enabled) {
               );
             }
           });
-          const rolledBack = await Result.tryPromise(() =>
-            holder.db.transaction(async (tx) => {
-              expect(await fixture.acquire(tx)).toEqual({ status: "locked" });
-              tx.rollback();
-            }),
+          const rolledBack = await Result.tryPromise(
+            async () =>
+              await holder.db.transaction(async (tx) => {
+                expect(await fixture.acquire(tx)).toEqual({ status: "locked" });
+                tx.rollback();
+              }),
           );
           expect(rolledBack.isErr()).toBe(true);
           if (rolledBack.isErr()) {

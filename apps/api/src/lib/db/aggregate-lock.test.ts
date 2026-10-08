@@ -155,7 +155,7 @@ describe("aggregate acquisition ordering", () => {
     ).toMatchObject({ message: "Aggregate lock rank inversion" });
 
     const gate = Promise.withResolvers<unknown[]>();
-    const pendingTx = { execute: () => gate.promise };
+    const pendingTx = { execute: async () => await gate.promise };
     const pending = withAggregateLock({
       aggregate: "contactCapacity",
       id: { organizationId: first },
@@ -169,7 +169,9 @@ describe("aggregate acquisition ordering", () => {
           tx: pendingTx,
         }),
       ),
-    ).toMatchObject({ message: "Await each aggregate lock acquisition" });
+    ).toMatchObject({
+      message: "Await each aggregate lock acquisition before starting another",
+    });
     gate.resolve([]);
     expect(await pending).toEqual({ status: "locked" });
   });
