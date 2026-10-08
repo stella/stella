@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -13,6 +14,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import {
   lockTaskAssignmentMembers,
   writeTaskAssignments,
@@ -28,19 +31,17 @@ const moveAssigneeBodySchema = t.Object({
 export type MoveAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof moveAssigneeBodySchema>;
 };
-
-type MoveAssigneeTxResult =
-  | { ok: true }
-  | { ok: false; status: 400 | 404 | 409; message: string };
 
 // Lock workspace -> membership -> task for both halves of a move. A failed
 // destination validation preserves the previous assignments and their audit.
 export const moveAssigneeHandler = async function* ({
   safeDb,
   workspaceId,
+  userId,
   recordAuditEvent,
   body,
 }: MoveAssigneeHandlerProps) {
@@ -55,8 +56,17 @@ export const moveAssigneeHandler = async function* ({
     );
   }
 
-  const txResult = yield* Result.await(
-    safeDb(async (tx): Promise<MoveAssigneeTxResult> => {
+  yield* Result.await(
+    resultTx(safeDb, async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: { type: "entities", entityIds: [taskId] },
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+
       const members = await lockTaskAssignmentMembers({
         tx,
         workspaceId,
@@ -76,18 +86,23 @@ export const moveAssigneeHandler = async function* ({
       const task = taskRows.at(0);
 
       if (!task) {
-        return { ok: false, status: 404, message: "Task not found" };
+        return Result.err(
+          new HandlerError({ status: 404, message: "Task not found" }),
+        );
       }
       if (task.readOnly) {
-        return { ok: false, status: 409, message: "Task is read-only" };
+        return Result.err(
+          new HandlerError({ status: 409, message: "Task is read-only" }),
+        );
       }
 
       if (toUserId !== null && !members.has(toUserId)) {
-        return {
-          ok: false,
-          status: 400,
-          message: "User is not a member of this workspace",
-        };
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "User is not a member of this workspace",
+          }),
+        );
       }
 
       if (fromUserId !== null) {
@@ -141,15 +156,9 @@ export const moveAssigneeHandler = async function* ({
       }
       await recordAuditEvent(tx, events);
 
-      return { ok: true };
+      return Result.ok(undefined);
     }),
   );
-
-  if (!txResult.ok) {
-    return Result.err(
-      new HandlerError({ status: txResult.status, message: txResult.message }),
-    );
-  }
 
   return Result.ok({ success: true });
 };
@@ -165,14 +174,16 @@ const moveAssignee = createSafeHandler(
       "read-only.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: moveAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent, user }) {
     return yield* moveAssigneeHandler({
       safeDb,
       workspaceId,
+      userId: user.id,
       recordAuditEvent,
       body,
     });

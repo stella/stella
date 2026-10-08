@@ -45,6 +45,8 @@ import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
+import { admitFlowReviewTaskDeletion } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
@@ -1617,7 +1619,42 @@ export const copyEntities = async ({
   const sourceWorkspaceId =
     transfer.type === "move"
       ? transfer.sourceWorkspaceId
-      : copySourceWorkspaceId;
+      : (copySourceWorkspaceId ?? targetWorkspaceId);
+  const sourceAdmission = await admitTaskFlowMutation(tx, {
+    workspaceId: sourceWorkspaceId,
+    userId,
+    target: {
+      type: "subtree",
+      rootEntityIds: [sourceEntityId],
+      additionalEntityIds: sourceEntities.map((entity) => entity.id),
+    },
+  });
+  if (sourceAdmission.isErr()) {
+    return sourceAdmission;
+  }
+  const targetAdmission = await admitTaskFlowMutation(tx, {
+    workspaceId: targetWorkspaceId,
+    userId,
+    target: {
+      type: "entities",
+      entityIds: [targetParentId, targetRootEntityId].filter(
+        (id) => id !== null && id !== undefined,
+      ),
+    },
+  });
+  if (targetAdmission.isErr()) {
+    return targetAdmission;
+  }
+  if (transfer.type === "move") {
+    const deletionAdmission = await admitFlowReviewTaskDeletion(tx, {
+      workspaceId: sourceWorkspaceId,
+      taskEntityIds: sourceEntities.map((entity) => entity.id),
+      userId,
+    });
+    if (deletionAdmission.isErr()) {
+      return deletionAdmission;
+    }
+  }
   await lockCopyWorkspaces({
     tx,
     transfer,

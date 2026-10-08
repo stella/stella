@@ -1,5 +1,6 @@
 import { taskCreateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
 import {
   createTaskBodySchema,
   createTaskEntityHandler,
@@ -22,6 +23,7 @@ export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
         "tasks.update.",
       permissions: { entity: ["create"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
+      featureAccess: FLOW_TASK_FEATURE_ACCESS,
       realtime: taskCreateRealtimeUpdates,
       mcp: { type: "tool", name: "save_task" },
       body: createTaskBodySchema,

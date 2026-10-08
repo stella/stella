@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -10,6 +11,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { removeTaskAssignment } from "@/api/lib/tasks/assignment-membership";
 
 const removeAssigneeBodySchema = t.Object({
@@ -20,6 +23,7 @@ const removeAssigneeBodySchema = t.Object({
 export type RemoveAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof removeAssigneeBodySchema>;
 };
@@ -29,41 +33,44 @@ export type RemoveAssigneeHandlerProps = {
 export const removeAssigneeHandler = async function* ({
   safeDb,
   workspaceId,
+  userId,
   recordAuditEvent,
   body,
 }: RemoveAssigneeHandlerProps) {
-  const task = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entities.findFirst({
+  yield* Result.await(
+    resultTx(safeDb, async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: { type: "entities", entityIds: [body.taskId] },
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+      const task = await tx.query.entities.findFirst({
         where: {
           id: { eq: body.taskId },
           kind: { eq: "task" },
           workspaceId: { eq: workspaceId },
         },
         columns: { id: true, readOnly: true },
-      }),
-    ),
-  );
-  if (!task) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Task not found" }),
-    );
-  }
-  if (task.readOnly) {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Task is read-only" }),
-    );
-  }
-
-  yield* Result.await(
-    safeDb(async (tx) => {
+      });
+      if (!task) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Task not found" }),
+        );
+      }
+      if (task.readOnly) {
+        return Result.err(
+          new HandlerError({ status: 409, message: "Task is read-only" }),
+        );
+      }
       await removeTaskAssignment({
         tx,
         workspaceId,
         entityId: body.taskId,
         userId: body.userId,
       });
-
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -74,6 +81,7 @@ export const removeAssigneeHandler = async function* ({
           assigneeUserId: body.userId,
         },
       });
+      return Result.ok(undefined);
     }),
   );
 
@@ -88,14 +96,16 @@ const removeAssignee = createSafeHandler(
       "no assignee; a read-only task is refused.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: removeAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent, user }) {
     return yield* removeAssigneeHandler({
       safeDb,
       workspaceId,
+      userId: user.id,
       recordAuditEvent,
       body,
     });

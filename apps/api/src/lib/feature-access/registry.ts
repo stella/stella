@@ -4,6 +4,49 @@ import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 
 type OperationalFeatureEffect = "record-recovery" | "cleanup";
 
+export type TaskMutationEffectOwner = {
+  module: string;
+  symbol: string;
+  actor: "userId" | "deletedByUserId" | "user.id";
+  targets: readonly (
+    | {
+        type: "entities";
+        selector:
+          | "body.taskId"
+          | "body.entityId"
+          | "params.entityId"
+          | "entityId"
+          | "taskId"
+          | "body.parentId"
+          | "link-endpoints";
+        workspace: "workspaceId";
+      }
+    | {
+        type: "entities";
+        selector: "copy-destination";
+        workspace: "targetWorkspaceId";
+      }
+    | { type: "link"; selector: "body.linkId"; workspace: "workspaceId" }
+    | { type: "subtree"; selector: "move" | "delete"; workspace: "workspaceId" }
+    | {
+        type: "subtree";
+        selector: "copy-source";
+        workspace: "sourceWorkspaceId";
+      }
+  )[];
+  transaction:
+    | {
+        type: "callback";
+        callee: "safeDb" | "resultTx" | "withScopedTx" | "abortableTx";
+      }
+    | { type: "supplied"; parameter: "tx"; prefix: "copy-source-workspace" }
+    | {
+        type: "parent-insert";
+        callee: "withScopedTx";
+        parent: "body.parentId";
+      };
+};
+
 type FeatureDefinition = {
   enrolment: "invitation" | "self-serve";
   deploymentFeature?: DeploymentFeatureFlag;
@@ -13,6 +56,7 @@ type FeatureDefinition = {
     conditionalTableSchemas?: Readonly<Record<string, readonly string[]>>;
     coreModules: readonly string[];
     conditionalModules?: readonly string[];
+    taskMutationOwners?: readonly TaskMutationEffectOwner[];
     dispatchModules?: readonly (
       | { type: "registry"; module: string; registry: string }
       | {
@@ -289,12 +333,247 @@ export const FEATURE_REGISTRY = {
       ],
       conditionalModules: [
         "apps/api/src/lib/flows/review-gate-task.ts",
+        "apps/api/src/lib/flows/review-task-target.ts",
+        "apps/api/src/lib/flows/review-task-admission.ts",
         "apps/api/src/lib/tasks/update-task.ts",
         "apps/api/src/handlers/tasks/get.ts",
         "apps/api/src/handlers/tasks/update.ts",
         "apps/api/src/handlers/work-obligations/update.ts",
         "apps/api/src/handlers/work-obligations/transition.ts",
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
+      ],
+      taskMutationOwners: [
+        {
+          module: "apps/api/src/handlers/entities/delete.ts",
+          symbol: "applyEntityDeletion",
+          actor: "userId",
+          targets: [
+            { type: "subtree", selector: "delete", workspace: "workspaceId" },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/lib/tasks/update-task.ts",
+          symbol: "applyTaskUpdate",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "body.taskId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "abortableTx" },
+        },
+        {
+          module: "apps/api/src/handlers/fields/kanban-placement/update.ts",
+          symbol: "default",
+          actor: "user.id",
+          targets: [
+            {
+              type: "entities",
+              selector: "body.entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "abortableTx" },
+        },
+        {
+          module: "apps/api/src/handlers/work-obligations/update.ts",
+          symbol: "default",
+          actor: "user.id",
+          targets: [
+            {
+              type: "entities",
+              selector: "params.entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/handlers/tasks/assignees/add.ts",
+          symbol: "addAssigneeHandler",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "body.taskId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "resultTx" },
+        },
+        {
+          module: "apps/api/src/handlers/tasks/assignees/remove.ts",
+          symbol: "removeAssigneeHandler",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "body.taskId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "resultTx" },
+        },
+        {
+          module: "apps/api/src/handlers/tasks/assignees/move.ts",
+          symbol: "moveAssigneeHandler",
+          actor: "userId",
+          targets: [
+            { type: "entities", selector: "taskId", workspace: "workspaceId" },
+          ],
+          transaction: { type: "callback", callee: "resultTx" },
+        },
+        {
+          module: "apps/api/src/handlers/tasks/entity-links/create.ts",
+          symbol: "createEntityLinkHandler",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "link-endpoints",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "resultTx" },
+        },
+        {
+          module: "apps/api/src/handlers/tasks/entity-links/delete.ts",
+          symbol: "deleteEntityLinkHandler",
+          actor: "userId",
+          targets: [
+            { type: "link", selector: "body.linkId", workspace: "workspaceId" },
+          ],
+          transaction: { type: "callback", callee: "resultTx" },
+        },
+        {
+          module: "apps/api/src/handlers/entities/rename-operation.ts",
+          symbol: "createRenameEntityHandler",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "body.entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/handlers/entities/move.ts",
+          symbol: "applyEntityMove",
+          actor: "userId",
+          targets: [
+            { type: "subtree", selector: "move", workspace: "workspaceId" },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/handlers/entities/version-annotation.ts",
+          symbol: "updateVersionAnnotation",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/handlers/entities/versions/delete.ts",
+          symbol: "deleteEntityVersionHandler",
+          actor: "deletedByUserId",
+          targets: [
+            {
+              type: "entities",
+              selector: "entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/handlers/entities/versions/restore.ts",
+          symbol: "default",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "params.entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/lib/fields/write-field.ts",
+          symbol: "writeFieldValue",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/handlers/fields/cell-metadata/update.ts",
+          symbol: "default",
+          actor: "user.id",
+          targets: [
+            {
+              type: "entities",
+              selector: "body.entityId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: { type: "callback", callee: "safeDb" },
+        },
+        {
+          module: "apps/api/src/handlers/entities/copy-utils.ts",
+          symbol: "copyEntities",
+          actor: "userId",
+          targets: [
+            {
+              type: "subtree",
+              selector: "copy-source",
+              workspace: "sourceWorkspaceId",
+            },
+            {
+              type: "entities",
+              selector: "copy-destination",
+              workspace: "targetWorkspaceId",
+            },
+          ],
+          transaction: {
+            type: "supplied",
+            parameter: "tx",
+            prefix: "copy-source-workspace",
+          },
+        },
+        {
+          module: "apps/api/src/lib/tasks/create-task-entity.ts",
+          symbol: "createTaskEntityHandler",
+          actor: "userId",
+          targets: [
+            {
+              type: "entities",
+              selector: "body.parentId",
+              workspace: "workspaceId",
+            },
+          ],
+          transaction: {
+            type: "parent-insert",
+            callee: "withScopedTx",
+            parent: "body.parentId",
+          },
+        },
       ],
       dispatchModules: [
         {

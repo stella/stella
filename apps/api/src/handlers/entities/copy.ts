@@ -47,6 +47,8 @@ import {
   type FieldFileRef,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowTargetAccess } from "@/api/lib/flows/review-task-admission";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -372,6 +374,35 @@ const copyToWorkspaceHandler = async function* ({
   },
   dependencies,
 }: CopyToWorkspaceHandlerProps) {
+  const admission = yield* Result.await(
+    safeDb(async (tx) => {
+      const sourceAdmission = await admitTaskFlowTargetAccess(tx, {
+        access: "read",
+        workspaceId: sourceWorkspaceId,
+        userId,
+        target: {
+          type: "subtree",
+          rootEntityIds: [sourceEntityId],
+          additionalEntityIds: [],
+        },
+      });
+      if (sourceAdmission.isErr()) {
+        return sourceAdmission;
+      }
+      return await admitTaskFlowTargetAccess(tx, {
+        access: "read",
+        workspaceId: targetWorkspaceId,
+        userId,
+        target: {
+          type: "entities",
+          entityIds: targetParentId === null ? [] : [targetParentId],
+        },
+      });
+    }),
+  );
+  if (admission.isErr()) {
+    return admission;
+  }
   // One reading of the operation for the whole handler: `deleteSource` still
   // drives the deletion and its audit rows, while the transfer decides what
   // the target versions are.
@@ -739,6 +770,7 @@ const config = {
     "are dropped rather than remapped, so a move can lose column values; " +
     "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityRealtimeUpdates,
   mcp: {

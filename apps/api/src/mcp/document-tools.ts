@@ -1854,6 +1854,7 @@ const applyVersionAnnotations = async ({
       updateVersionLabelHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         entityId,
         versionId,
         label,
@@ -1869,6 +1870,7 @@ const applyVersionAnnotations = async ({
       updateVersionDescriptionHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         entityId,
         versionId,
         description,
@@ -1944,6 +1946,7 @@ const updateDocumentEntity = async ({
       renameEntityHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         recordAuditEvent,
         body: { entityId, name },
       }),
@@ -1958,6 +1961,7 @@ const updateDocumentEntity = async ({
       moveEntityHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         recordAuditEvent,
         body: { entityId, parentId: parentId ?? null },
       }),

@@ -7,6 +7,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 
 const VERSION_ANNOTATION_COLUMNS = {
   label: entityVersions.label,
@@ -21,6 +22,7 @@ type VersionAnnotation = {
 export type VersionAnnotationTarget = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
   entityId: SafeId<"entity">;
   versionId: SafeId<"entityVersion">;
   recordAuditEvent: AuditRecorder;
@@ -38,6 +40,7 @@ type UpdateVersionAnnotationOptions = VersionAnnotationTarget & {
 export const updateVersionAnnotation = async function* ({
   safeDb,
   workspaceId,
+  userId,
   entityId,
   versionId,
   recordAuditEvent,
@@ -45,6 +48,14 @@ export const updateVersionAnnotation = async function* ({
 }: UpdateVersionAnnotationOptions) {
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: { type: "entities", entityIds: [entityId] },
+      });
+      if (Result.isError(admission)) {
+        return { status: "denied" as const, error: admission.error };
+      }
       const existing = await tx
         .select({
           entityName: entities.name,
@@ -121,6 +132,8 @@ export const updateVersionAnnotation = async function* ({
   );
 
   switch (outcome.status) {
+    case "denied":
+      return Result.err(outcome.error);
     case "not-found": {
       return Result.err(
         new HandlerError({ status: 404, message: "Version not found" }),

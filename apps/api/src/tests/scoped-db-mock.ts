@@ -10,7 +10,7 @@ import {
   entities,
   featureEnrolments,
   flowRunSteps,
-  type workspaces,
+  workspaces,
 } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -85,6 +85,34 @@ const fixtureSelect =
             return panic("Flow ownership fixture must read flow run steps");
           }
           return query.from();
+        },
+      };
+    }
+    if (columns.length === 1 && columns.includes(workspaces.organizationId)) {
+      const query = createSelectQueryMock(options?.flowTaskGates ?? []);
+      return {
+        from: (table: unknown) => {
+          if (table === flowRunSteps) {
+            return query.from();
+          }
+          if (
+            typeof tx !== "object" ||
+            tx === null ||
+            !("select" in tx) ||
+            typeof tx.select !== "function"
+          ) {
+            return panic("Missing workspace identity fixture select");
+          }
+          const builder: unknown = Reflect.apply(tx.select, tx, [selection]);
+          if (
+            typeof builder !== "object" ||
+            builder === null ||
+            !("from" in builder) ||
+            typeof builder.from !== "function"
+          ) {
+            return panic("Missing workspace identity fixture builder");
+          }
+          return Reflect.apply(builder.from, builder, [table]);
         },
       };
     }

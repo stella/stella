@@ -408,13 +408,14 @@ describe("delete-version chain-of-custody guard", () => {
     expect(txStart).toBeGreaterThan(-1);
     // The lock and the liveness recheck both live inside the mutation tx.
     expect(source.indexOf('.for("update")')).toBeGreaterThan(txStart);
-    expect(source.indexOf("isNull(entityVersions.deletedAt)")).toBeGreaterThan(
+    expect(source.indexOf("deletedAt: { isNull: true }")).toBeGreaterThan(
       txStart,
     );
     // Restoring creates a new current-version timestamp. It must also queue
     // extraction/indexing after the transaction so freshness-filtered search
     // does not hide the document forever.
-    const restoredCheck = source.indexOf("if (!restoreOutcome.restored)");
+    const restoredCheck = source.indexOf("switch (restoreOutcome.status)");
+    expect(restoredCheck).toBeGreaterThan(txStart);
     expect(
       source.indexOf("processExtraction(params.entityId)"),
     ).toBeGreaterThan(restoredCheck);

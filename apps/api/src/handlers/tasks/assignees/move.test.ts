@@ -15,8 +15,10 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { moveAssigneeHandler } from "./move";
 
+const organizationId = mintAuthProviderId<"organization">();
 const workspaceId = createSafeId<"workspace">();
 const taskId = createSafeId<"entity">();
+const actorUserId = mintAuthProviderId<"user">();
 const fromUserId = mintAuthProviderId<"user">();
 const toUserId = mintAuthProviderId<"user">();
 
@@ -44,7 +46,7 @@ const createMock = ({
         if (table === entities) {
           rows = task ? [task] : [];
         } else if (table === workspaces) {
-          rows = [{ organizationId: mintAuthProviderId<"organization">() }];
+          rows = [{ organizationId }];
         } else if (
           (table === workspaceMembers || table === member) &&
           isMember
@@ -77,6 +79,9 @@ const createMock = ({
       },
     }),
     query: {
+      workspaces: {
+        findFirst: async () => ({ organizationId }),
+      },
       workspaceMembers: {
         findFirst: async () => (isMember ? { id: "member-1" } : undefined),
       },
@@ -125,6 +130,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId: null, toUserId: null },
       }),
@@ -147,6 +153,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId, toUserId },
       }),
@@ -168,6 +175,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId, toUserId },
       }),
@@ -189,6 +197,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId, toUserId },
       }),
@@ -217,6 +226,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId, toUserId: null },
       }),
@@ -243,6 +253,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId, toUserId },
       }),
@@ -293,6 +304,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId: null, toUserId },
       }),
@@ -313,6 +325,7 @@ describe("moveAssigneeHandler", () => {
       moveAssigneeHandler({
         safeDb,
         workspaceId,
+        userId: actorUserId,
         recordAuditEvent,
         body: { taskId, fromUserId, toUserId },
       }),

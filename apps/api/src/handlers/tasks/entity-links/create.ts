@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import type { ResourceRef } from "@stll/api-contract";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityLinks } from "@/api/db/schema";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -14,6 +15,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { includes } from "@/api/lib/type-guards";
 
 const createEntityLinkBodySchema = t.Object({
@@ -25,6 +28,7 @@ const createEntityLinkBodySchema = t.Object({
 export type CreateEntityLinkHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: {
     source: ResourceRef<"entity">;
@@ -38,6 +42,7 @@ export type CreateEntityLinkHandlerProps = {
 export const createEntityLinkHandler = async function* ({
   safeDb,
   workspaceId,
+  userId,
   recordAuditEvent,
   body,
 }: CreateEntityLinkHandlerProps) {
@@ -59,77 +64,72 @@ export const createEntityLinkHandler = async function* ({
     );
   }
 
-  const [sourceEntity, targetEntity] = yield* Result.await(
-    safeDb(
-      async (tx) =>
-        await Promise.all([
-          tx.query.entities.findFirst({
-            where: {
-              id: { eq: sourceEntityId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { id: true, kind: true, readOnly: true },
+  const inserted = yield* Result.await(
+    resultTx(safeDb, async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: {
+          type: "entities",
+          entityIds: [sourceEntityId, targetEntityId],
+        },
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+      const endpoints = await tx.query.entities.findMany({
+        where: {
+          id: { in: [sourceEntityId, targetEntityId] },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true, kind: true, readOnly: true },
+        limit: 2,
+      });
+      const sourceEntity = endpoints.find(({ id }) => id === sourceEntityId);
+      const targetEntity = endpoints.find(({ id }) => id === targetEntityId);
+      if (!sourceEntity || !targetEntity) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "One or both entities not found in this workspace",
           }),
-          tx.query.entities.findFirst({
-            where: {
-              id: { eq: targetEntityId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { id: true, kind: true, readOnly: true },
+        );
+      }
+
+      if (sourceEntity.kind !== "task" && targetEntity.kind !== "task") {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "At least one entity must be a task",
           }),
-        ]),
-    ),
-  );
+        );
+      }
+      if (
+        (sourceEntity.kind === "task" && sourceEntity.readOnly) ||
+        (targetEntity.kind === "task" && targetEntity.readOnly)
+      ) {
+        return Result.err(
+          new HandlerError({ status: 409, message: "Task is read-only" }),
+        );
+      }
 
-  if (!sourceEntity || !targetEntity) {
-    return Result.err(
-      new HandlerError({
-        status: 404,
-        message: "One or both entities not found in this workspace",
-      }),
-    );
-  }
-
-  if (sourceEntity.kind !== "task" && targetEntity.kind !== "task") {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "At least one entity must be a task",
-      }),
-    );
-  }
-  if (
-    (sourceEntity.kind === "task" && sourceEntity.readOnly) ||
-    (targetEntity.kind === "task" && targetEntity.readOnly)
-  ) {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Task is read-only" }),
-    );
-  }
-
-  const inverseLink = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entityLinks.findFirst({
+      const inverseLink = await tx.query.entityLinks.findFirst({
         where: {
           workspaceId: { eq: workspaceId },
           sourceEntityId: { eq: targetEntityId },
           targetEntityId: { eq: sourceEntityId },
         },
         columns: { id: true },
-      }),
-    ),
-  );
-  if (inverseLink) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        message: "A link between these entities already exists",
-      }),
-    );
-  }
+      });
+      if (inverseLink) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "A link between these entities already exists",
+          }),
+        );
+      }
 
-  const inserted = yield* Result.await(
-    safeDb(async (tx) => {
       const rows = await tx
         .insert(entityLinks)
         .values({
@@ -158,7 +158,7 @@ export const createEntityLinkHandler = async function* ({
         });
       }
 
-      return rows;
+      return Result.ok(rows);
     }),
   );
 
@@ -183,14 +183,16 @@ const createEntityLink = createSafeHandler(
       "the link with tasks.entity-links.delete.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: createEntityLinkBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent, user }) {
     return yield* createEntityLinkHandler({
       safeDb,
       workspaceId,
+      userId: user.id,
       recordAuditEvent,
       body: {
         source: resourceRef({

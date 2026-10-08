@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import type { TaskMutationEffectOwner } from "../../src/lib/feature-access/registry";
 import {
   assertFeatureAccessDeclarations,
   validateFeatureAccessDeclarations,
@@ -878,5 +879,820 @@ describe("module paths and SQL table ownership", () => {
       file: endpoint,
       message: "source ownership requires featureAccess fixture",
     });
+  });
+});
+
+const mutationModule = "apps/api/src/feature/mutation.ts";
+const mutationImports = `
+  import { Result } from "better-result";
+  import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
+  import { resultTx, withScopedTx, abortableTx, abortTransaction } from "@/api/db/safe-db";
+`;
+const mutationAdmission = `const admission = await admitTaskFlowMutation(tx, {
+  workspaceId, userId, target: { type: "entities", entityIds: [entityId] }
+});`;
+const mutationRefusal = "if (admission.isErr()) { return admission; }";
+const mutationOwner = {
+  module: mutationModule,
+  symbol: "mutate",
+  actor: "userId",
+  targets: [
+    { type: "entities", selector: "entityId", workspace: "workspaceId" },
+  ],
+  transaction: { type: "callback", callee: "safeDb" },
+} as const;
+const mutationCheck = (
+  source: string,
+  owner: TaskMutationEffectOwner = mutationOwner,
+) =>
+  validateFeatureAccessDeclarations({
+    registry: {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          taskMutationOwners: [owner],
+        },
+      },
+    },
+    endpoints: [],
+    sources: new Map([
+      ...baseSources,
+      [mutationModule, `${mutationImports}\n${source}`],
+      [
+        "apps/api/src/lib/flows/review-gate-task.ts",
+        "export const admitTaskFlowAccess = () => undefined;",
+      ],
+      [
+        "apps/api/src/lib/flows/review-task-admission.ts",
+        "export const admitTaskFlowMutation = () => undefined; export const admitTaskFlowTargetAccess = () => undefined;",
+      ],
+      [
+        "apps/api/src/db/safe-db.ts",
+        "export const resultTx = () => undefined; export const withScopedTx = () => undefined; export const abortableTx = () => undefined; export const abortTransaction = () => undefined;",
+      ],
+    ]),
+  });
+const mutationCallbackSource = (prologue: string) => `
+  export const mutate = async ({ safeDb, workspaceId, userId, entityId, body, sourceEntityId, targetEntityId }) =>
+    await safeDb(async (tx) => { ${prologue} await tx.update(rows).set({ value: body.value }); });
+`;
+
+describe("registered task mutation effect admission", () => {
+  test.each([
+    mutationRefusal,
+    "if (Result.isError(admission)) { return Result.err(admission.error); }",
+    "if (Result.isError(admission)) { return { status: 'denied', error: admission.error }; }",
+    "if (admission.isErr()) { return { ok: false, status: admission.error.status, message: admission.error.message }; }",
+  ])("accepts captured admission and immediate typed refusal: %s", (guard) => {
+    expect(
+      mutationCheck(mutationCallbackSource(`${mutationAdmission} ${guard}`)),
+    ).toEqual([]);
+  });
+
+  test.each([
+    [
+      "read preflight",
+      mutationAdmission.replace(
+        "admitTaskFlowMutation",
+        "admitTaskFlowTargetAccess",
+      ) + mutationRefusal,
+    ],
+    [
+      "late admission",
+      `await tx.select().from(rows); ${mutationAdmission} ${mutationRefusal}`,
+    ],
+    [
+      "wrong transaction",
+      mutationAdmission.replace(
+        "admitTaskFlowMutation(tx,",
+        "admitTaskFlowMutation(otherTx,",
+      ) + mutationRefusal,
+    ],
+    [
+      "ignored result",
+      mutationAdmission.replace("const admission = ", "") + mutationRefusal,
+    ],
+    ["no refusal guard", mutationAdmission],
+    [
+      "wrong actor",
+      mutationAdmission.replace(
+        "workspaceId, userId,",
+        "workspaceId, userId: body.userId,",
+      ) + mutationRefusal,
+    ],
+    [
+      "positive branch",
+      `${mutationAdmission} if (admission.isOk()) { return admission; }`,
+    ],
+    [
+      "effect in refusal",
+      `${mutationAdmission} if (admission.isErr()) { await tx.update(rows); return admission; }`,
+    ],
+    [
+      "refusal reports success",
+      `${mutationAdmission} if (admission.isErr()) { return { ok: true, status: admission.error.status, message: admission.error.message }; }`,
+    ],
+    [
+      "success discriminator",
+      `${mutationAdmission} if (admission.isErr()) { return { status: 'updated', error: admission.error }; }`,
+    ],
+    [
+      "read during target construction",
+      mutationAdmission.replace("[entityId]", "await tx.select().from(rows)") +
+        mutationRefusal,
+    ],
+    [
+      "computed target override",
+      mutationAdmission.replace(
+        "entityIds: [entityId]",
+        'entityIds: [entityId], ["type"]: "subtree"',
+      ) + mutationRefusal,
+    ],
+    [
+      "spread target override",
+      mutationAdmission.replace(
+        "entityIds: [entityId]",
+        "entityIds: [entityId], ...body",
+      ) + mutationRefusal,
+    ],
+  ])("rejects %s", (_name, prologue) => {
+    expect(mutationCheck(mutationCallbackSource(prologue))).toHaveLength(1);
+  });
+
+  test("rejects canonical admission outside the owning transaction", () => {
+    expect(
+      mutationCheck(`export const mutate = async ({ safeDb, workspaceId, userId, entityId, tx, body }) => {
+      ${mutationAdmission} ${mutationRefusal}
+      return await safeDb(async (tx) => { await tx.update(rows); });
+    };`),
+    ).toHaveLength(1);
+  });
+
+  test("rejects a shadowed canonical import and a fake transaction function", () => {
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `const admitTaskFlowMutation = fake; ${mutationAdmission} ${mutationRefusal}`,
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(`const safeDb = callback => callback(fakeTx);
+      export const mutate = async ({ workspaceId, userId, entityId }) => await safeDb(async (tx) => {
+        ${mutationAdmission} ${mutationRefusal} await tx.update(rows);
+      });`),
+    ).toHaveLength(1);
+  });
+
+  test("resolves the actual named canonical import including aliases", () => {
+    const source = mutationCallbackSource(
+      `${mutationAdmission.replaceAll("admitTaskFlowMutation", "admit")} ${mutationRefusal}`,
+    );
+    expect(
+      mutationCheck(
+        `import { admitTaskFlowMutation as admit } from "@/api/lib/flows/review-task-admission"; ${source}`,
+      ),
+    ).toHaveLength(1);
+    // The fixture's canonical non-alias import remains; two canonical imports fail closed.
+    const sources = new Map([
+      ...baseSources,
+      [
+        mutationModule,
+        `import { admitTaskFlowMutation as admit } from "@/api/lib/flows/review-task-admission"; ${source}`,
+      ],
+    ]);
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: {
+          fixture: {
+            ...registry.fixture,
+            ownership: {
+              ...registry.fixture.ownership,
+              taskMutationOwners: [mutationOwner],
+            },
+          },
+        },
+        endpoints: [],
+        sources,
+      }),
+    ).toEqual([]);
+  });
+
+  test("factory generators retain their handler parameter provenance", () => {
+    expect(
+      mutationCheck(`export const mutate = ({ dependency }) =>
+      async function* ({ safeDb, workspaceId, userId, entityId }) {
+        yield await safeDb(async (tx) => { ${mutationAdmission} ${mutationRefusal} await tx.update(rows); });
+      };`),
+    ).toEqual([]);
+  });
+
+  test("ordinary reads can precede the admitted effect callback", () => {
+    expect(
+      mutationCheck(`
+      import { admitTaskFlowAccess } from "@/api/lib/flows/review-gate-task";
+      export const mutate = async ({ safeDb, workspaceId, userId, entityId }) => {
+        await safeDb((tx) => tx.select().from(rows).limit(1));
+        await safeDb(async (tx) => await tx.query.entities.findFirst({ where: { id: { eq: entityId } } }));
+        await safeDb(async (tx) => await admitTaskFlowAccess(tx, { access: "read", workspaceId, userId, taskEntityId: entityId }));
+        return await safeDb(async (tx) => { ${mutationAdmission} ${mutationRefusal} await tx.update(rows); });
+      };
+    `),
+    ).toEqual([]);
+  });
+
+  test.each([
+    "await safeDb((tx) => tx.update(rows).set({ value: 1 }));",
+    "await resultTx(safeDb, async (tx) => { await tx.delete(rows); });",
+    "await safeDb((tx) => tx.select().from(effect()));",
+    "await safeDb((tx) => tx.select().from(rows).where((tx.update(rows), predicate)));",
+  ])("rejects a second effect or uncertified read callback: %s", (extra) => {
+    expect(
+      mutationCheck(`export const mutate = async ({ safeDb, workspaceId, userId, entityId }) => {
+      ${extra}
+      return await safeDb(async (tx) => { ${mutationAdmission} ${mutationRefusal} await tx.update(rows); });
+    };`),
+    ).toHaveLength(1);
+  });
+
+  test.each([
+    "const safeDb = callback => callback(fakeTx);",
+    "const userId = body.assigneeId;",
+    "userId = body.assigneeId;",
+    "({ userId } = body);",
+    "({ safeDb } = body);",
+  ])(
+    "rejects shadowed or reassigned transaction/actor parameters: %s",
+    (binding) => {
+      expect(
+        mutationCheck(`export const mutate = async ({ safeDb, workspaceId, userId, entityId, body }) => {
+      { ${binding}
+        return await safeDb(async (tx) => { ${mutationAdmission} ${mutationRefusal} await tx.update(rows); });
+      }
+    };`),
+      ).toHaveLength(1);
+    },
+  );
+
+  test("the admitted transaction binding cannot be reassigned for later effects", () => {
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${mutationAdmission} ${mutationRefusal} tx = fakeTx;`,
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("aliased transaction constructors cannot conceal a second effect", () => {
+    expect(
+      mutationCheck(`
+      import { resultTx as anotherTx } from "@/api/db/safe-db";
+      export const mutate = async ({ safeDb, workspaceId, userId, entityId }) => {
+        await anotherTx(safeDb, async (tx) => { await tx.delete(rows); });
+        return await safeDb(async (tx) => { ${mutationAdmission} ${mutationRefusal} await tx.update(rows); });
+      };
+    `),
+    ).toHaveLength(1);
+  });
+
+  test("actor aliases derive only from the authenticated user parameter", () => {
+    const source = `export const mutate = async ({ safeDb, workspaceId, user, entityId, body }) => {
+      const userId = user.id;
+      return await safeDb(async (tx) => { ${mutationAdmission} ${mutationRefusal} await tx.update(rows); });
+    };`;
+    expect(mutationCheck(source)).toEqual([]);
+    expect(
+      mutationCheck(
+        source.replace(
+          "const userId = user.id",
+          "const userId = body.assigneeId",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(
+        source.replace(
+          "const userId = user.id",
+          "const user = body.actor; const userId = user.id",
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(`export const mutate = async ({ safeDb, workspaceId, assigneeId: userId, entityId }) =>
+      await safeDb(async (tx) => { ${mutationAdmission} ${mutationRefusal} await tx.update(rows); });`),
+    ).toHaveLength(1);
+  });
+
+  test.each([
+    "[body.taskId]",
+    "otherEntityIds",
+    "[]",
+    "[entityId, otherEntityId]",
+  ])("single-entity admission must name the registered ID: %s", (selector) => {
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${mutationAdmission.replace("[entityId]", () => selector)} ${mutationRefusal}`,
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("link creation requires both registered endpoints", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        {
+          type: "entities",
+          selector: "link-endpoints",
+          workspace: "workspaceId",
+        },
+      ],
+    } as const;
+    const admission = mutationAdmission.replace(
+      "[entityId]",
+      "[sourceEntityId, targetEntityId]",
+    );
+    expect(
+      mutationCheck(
+        mutationCallbackSource(`${admission} ${mutationRefusal}`),
+        owner,
+      ),
+    ).toEqual([]);
+    for (const selector of [
+      "[sourceEntityId]",
+      "[targetEntityId]",
+      "[sourceEntityId, otherEntityId]",
+      "endpointIds",
+      "[]",
+    ]) {
+      expect(
+        mutationCheck(
+          mutationCallbackSource(
+            `${admission.replace("[sourceEntityId, targetEntityId]", () => selector)} ${mutationRefusal}`,
+          ),
+          owner,
+        ),
+      ).toHaveLength(1);
+    }
+  });
+
+  test.each([
+    "const body = replacement;",
+    "body = replacement;",
+    "({ body } = replacement);",
+    "workspaceId = otherWorkspaceId;",
+    "const workspaceId = otherWorkspaceId;",
+  ])("selector/workspace bindings cannot be replaced: %s", (replacement) => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        { type: "entities", selector: "body.taskId", workspace: "workspaceId" },
+      ],
+    } as const;
+    const admission = mutationAdmission.replace("[entityId]", "[body.taskId]");
+    const source = `export const mutate = async ({ safeDb, workspaceId, userId, body }) => {
+      { ${replacement}
+        return await safeDb(async (tx) => { ${admission} ${mutationRefusal} await tx.update(rows); });
+      }
+    };`;
+    expect(mutationCheck(source, owner)).toHaveLength(1);
+  });
+
+  test("endpoint and task aliases derive from their closed body fields", () => {
+    const endpointOwner = {
+      ...mutationOwner,
+      targets: [
+        {
+          type: "entities",
+          selector: "link-endpoints",
+          workspace: "workspaceId",
+        },
+      ],
+    } as const;
+    const endpointAdmission = mutationAdmission.replace(
+      "[entityId]",
+      "[sourceEntityId, targetEntityId]",
+    );
+    const endpointSource = `export const mutate = async ({ safeDb, workspaceId, userId, body }) => {
+      const sourceEntityId = body.source.id;
+      const targetEntityId = body.target.id;
+      return await safeDb(async (tx) => { ${endpointAdmission} ${mutationRefusal} await tx.update(rows); });
+    };`;
+    expect(mutationCheck(endpointSource, endpointOwner)).toEqual([]);
+    expect(
+      mutationCheck(
+        endpointSource.replace("body.source.id", "body.target.id"),
+        endpointOwner,
+      ),
+    ).toHaveLength(1);
+    const taskOwner = {
+      ...mutationOwner,
+      targets: [
+        { type: "entities", selector: "taskId", workspace: "workspaceId" },
+      ],
+    } as const;
+    const taskAdmission = mutationAdmission.replace("[entityId]", "[taskId]");
+    const taskSource = `export const mutate = async ({ safeDb, workspaceId, userId, body }) => {
+      const { taskId, fromUserId } = body;
+      return await safeDb(async (tx) => { ${taskAdmission} ${mutationRefusal} await tx.update(rows); });
+    };`;
+    expect(mutationCheck(taskSource, taskOwner)).toEqual([]);
+    expect(
+      mutationCheck(
+        taskSource.replace(
+          "taskId, fromUserId",
+          "entityId: taskId, fromUserId",
+        ),
+        taskOwner,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("ordinary effects require the registered workspace option", () => {
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${mutationAdmission.replace("workspaceId, userId", "workspaceId: targetWorkspaceId, userId")} ${mutationRefusal}`,
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("resultTx uses its actual callback transaction", () => {
+    const source = `export const mutate = async ({ safeDb, workspaceId, userId, entityId }) =>
+      await resultTx(safeDb, async (actualTx) => { ${mutationAdmission.replaceAll("(tx,", "(actualTx,")} ${mutationRefusal} await actualTx.update(rows); });`;
+    expect(
+      mutationCheck(source, {
+        ...mutationOwner,
+        transaction: { type: "callback", callee: "resultTx" },
+      }),
+    ).toEqual([]);
+    expect(
+      mutationCheck(
+        source.replace(
+          "admitTaskFlowMutation(actualTx,",
+          "admitTaskFlowMutation(tx,",
+        ),
+        {
+          ...mutationOwner,
+          transaction: { type: "callback", callee: "resultTx" },
+        },
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("subtree owners require descendant admission rather than a root-only entity selector", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        { type: "subtree", selector: "move", workspace: "workspaceId" },
+      ],
+    } as const;
+    expect(
+      mutationCheck(
+        mutationCallbackSource(`${mutationAdmission} ${mutationRefusal}`),
+        owner,
+      ),
+    ).toHaveLength(1);
+    const subtree = mutationAdmission.replace(
+      'type: "entities", entityIds: [entityId]',
+      'type: "subtree", rootEntityIds: [body.entityId], additionalEntityIds: body.parentId === null ? [] : [body.parentId]',
+    );
+    expect(
+      mutationCheck(
+        mutationCallbackSource(`${subtree} ${mutationRefusal}`),
+        owner,
+      ),
+    ).toEqual([]);
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${subtree.replace("rootEntityIds: [body.entityId]", "rootEntityIds: []")} ${mutationRefusal}`,
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("move admission cannot omit the destination parent or substitute another root", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        { type: "subtree", selector: "move", workspace: "workspaceId" },
+      ],
+    } as const;
+    const admission = mutationAdmission.replace(
+      'type: "entities", entityIds: [entityId]',
+      'type: "subtree", rootEntityIds: [body.entityId], additionalEntityIds: body.parentId === null ? [] : [body.parentId]',
+    );
+    for (const replacement of [
+      "rootEntityIds: []",
+      "rootEntityIds: otherEntityIds",
+      "rootEntityIds: [entityId]",
+    ]) {
+      expect(
+        mutationCheck(
+          mutationCallbackSource(
+            `${admission.replace("rootEntityIds: [body.entityId]", () => replacement)} ${mutationRefusal}`,
+          ),
+          owner,
+        ),
+      ).toHaveLength(1);
+    }
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${admission.replace("body.parentId === null ? [] : [body.parentId]", "[]")} ${mutationRefusal}`,
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${admission.replace("[body.parentId]", "[body.otherParentId]")} ${mutationRefusal}`,
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("deletion admits the exact requested root set as a subtree", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        { type: "subtree", selector: "delete", workspace: "workspaceId" },
+      ],
+    } as const;
+    const admission = mutationAdmission.replace(
+      'type: "entities", entityIds: [entityId]',
+      'type: "subtree", rootEntityIds: body.entityIds, additionalEntityIds: []',
+    );
+    const refusal =
+      'if (admission.isErr()) { return { status: "rejected", error: admission.error }; }';
+    expect(
+      mutationCheck(mutationCallbackSource(`${admission} ${refusal}`), owner),
+    ).toEqual([]);
+    for (const roots of ["[]", "[entityId]", "otherEntityIds"]) {
+      expect(
+        mutationCheck(
+          mutationCallbackSource(
+            `${admission.replace("rootEntityIds: body.entityIds", () => `rootEntityIds: ${roots}`)} ${refusal}`,
+          ),
+          owner,
+        ),
+      ).toHaveLength(1);
+    }
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${admission.replace("additionalEntityIds: []", "additionalEntityIds: otherEntityIds")} ${refusal}`,
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("link owners admit the persisted link before reading its endpoints", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        { type: "link", selector: "body.linkId", workspace: "workspaceId" },
+      ],
+    } as const;
+    const link = mutationAdmission.replace(
+      'type: "entities", entityIds: [entityId]',
+      'type: "link", linkId: body.linkId',
+    );
+    expect(
+      mutationCheck(
+        mutationCallbackSource(`${link} ${mutationRefusal}`),
+        owner,
+      ),
+    ).toEqual([]);
+    expect(
+      mutationCheck(
+        mutationCallbackSource(
+          `${link.replace("body.linkId", "body.otherLinkId")} ${mutationRefusal}`,
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(
+        mutationCallbackSource(`${mutationAdmission} ${mutationRefusal}`),
+        owner,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("a fresh insertion admits only its conditional parent before the first transaction effect", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        {
+          type: "entities",
+          selector: "body.parentId",
+          workspace: "workspaceId",
+        },
+      ],
+      transaction: {
+        type: "parent-insert",
+        callee: "withScopedTx",
+        parent: "body.parentId",
+      },
+    } as const;
+    const parentAdmission = mutationAdmission.replace(
+      "[entityId]",
+      "[body.parentId]",
+    );
+    const source = `export const mutate = async ({ ...props }) => {
+      const { workspaceId, userId, body } = props;
+      return await withScopedTx(props, async (tx) => {
+        if (body.parentId) { ${parentAdmission} ${mutationRefusal} }
+        await tx.insert(rows);
+      });
+    };`;
+    expect(mutationCheck(source, owner)).toEqual([]);
+    expect(
+      mutationCheck(
+        source.replace("[body.parentId]", "[body.entityId]"),
+        owner,
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(
+        source.replace(
+          "if (body.parentId)",
+          "await tx.select().from(rows); if (body.parentId)",
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(
+        source.replace("if (body.parentId)", "if (body.otherParentId)"),
+        owner,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("parent insertion accepts only trusted props capture and relevant bindings", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        {
+          type: "entities",
+          selector: "body.parentId",
+          workspace: "workspaceId",
+        },
+      ],
+      transaction: {
+        type: "parent-insert",
+        callee: "withScopedTx",
+        parent: "body.parentId",
+      },
+    } as const;
+    const admission = mutationAdmission.replace(
+      "[entityId]",
+      "[body.parentId]",
+    );
+    const source = `export const mutate = async function* ({ ...props }) {
+      const { workspaceId, userId, body, features = defaults() } = props;
+      yield await withScopedTx(props, async (tx) => {
+        if (body.parentId) { ${admission} ${mutationRefusal} }
+        await tx.insert(rows);
+      });
+    };`;
+    expect(mutationCheck(source, owner)).toEqual([]);
+    for (const replacement of [
+      "workspaceId, assigneeId: userId, body",
+      "workspaceId, userId = fallbackActor, body",
+      "workspaceId, userId, body = fallbackBody",
+      "sourceWorkspaceId: workspaceId, userId, body",
+    ]) {
+      expect(
+        mutationCheck(
+          source.replace("workspaceId, userId, body", () => replacement),
+          owner,
+        ),
+      ).toHaveLength(1);
+    }
+    expect(
+      mutationCheck(
+        source.replace("= props;", "= props; props = body.fakeOptions;"),
+        owner,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("supplied copy transactions admit the subtree and destination before workspace locks", () => {
+    const owner = {
+      ...mutationOwner,
+      targets: [
+        {
+          type: "subtree",
+          selector: "copy-source",
+          workspace: "sourceWorkspaceId",
+        },
+        {
+          type: "entities",
+          selector: "copy-destination",
+          workspace: "targetWorkspaceId",
+        },
+      ],
+      transaction: {
+        type: "supplied",
+        parameter: "tx",
+        prefix: "copy-source-workspace",
+      },
+    } as const;
+    const source = `export const mutate = async ({ tx, userId, transfer, copySourceWorkspaceId, targetWorkspaceId, sourceEntityId, sourceEntities, targetParentId, targetRootEntityId }) => {
+      const sourceWorkspaceId = transfer.type === "move" ? transfer.sourceWorkspaceId : (copySourceWorkspaceId ?? targetWorkspaceId);
+      const sourceAdmission = await admitTaskFlowMutation(tx, { workspaceId: sourceWorkspaceId, userId,
+        target: { type: "subtree", rootEntityIds: [sourceEntityId], additionalEntityIds: sourceEntities.map(entity => entity.id) } });
+      if (sourceAdmission.isErr()) { return sourceAdmission; }
+      const targetAdmission = await admitTaskFlowMutation(tx, { workspaceId: targetWorkspaceId, userId,
+        target: { type: "entities", entityIds: [targetParentId, targetRootEntityId].filter(id => id !== null && id !== undefined) } });
+      if (targetAdmission.isErr()) { return targetAdmission; }
+      await lockCopyWorkspaces(tx);
+    };`;
+    expect(mutationCheck(source, owner)).toEqual([]);
+    expect(
+      mutationCheck(
+        source.replace(
+          "const sourceAdmission",
+          "await lockCopyWorkspaces(tx); const sourceAdmission",
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(
+        source.replace(
+          'type: "subtree", rootEntityIds: [sourceEntityId], additionalEntityIds: sourceEntities.map(entity => entity.id)',
+          'type: "entities", entityIds: [sourceEntityId]',
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+    expect(
+      mutationCheck(
+        source.replace(
+          "transfer.sourceWorkspaceId",
+          "await tx.query.workspaces.findFirst()",
+        ),
+        owner,
+      ),
+    ).toHaveLength(1);
+    for (const [original, replacement] of [
+      ["rootEntityIds: [sourceEntityId]", "rootEntityIds: []"],
+      [
+        "rootEntityIds: [sourceEntityId]",
+        "rootEntityIds: [targetRootEntityId]",
+      ],
+      ["sourceEntities.map(entity => entity.id)", "[]"],
+      [
+        "sourceEntities.map(entity => entity.id)",
+        "sourceEntities.map(entity => entity.otherId)",
+      ],
+      ["[targetParentId, targetRootEntityId]", "[targetParentId]"],
+      ["[targetParentId, targetRootEntityId]", "targetIds"],
+      ["id !== null && id !== undefined", "id !== null"],
+      ["workspaceId: sourceWorkspaceId", "workspaceId: targetWorkspaceId"],
+      ["workspaceId: targetWorkspaceId", "workspaceId: sourceWorkspaceId"],
+      [
+        "await lockCopyWorkspaces(tx);",
+        "sourceEntities = []; await lockCopyWorkspaces(tx);",
+      ],
+      [
+        "await lockCopyWorkspaces(tx);",
+        "targetParentId = otherParentId; await lockCopyWorkspaces(tx);",
+      ],
+      [
+        "await lockCopyWorkspaces(tx);",
+        "sourceWorkspaceId = targetWorkspaceId; await lockCopyWorkspaces(tx);",
+      ],
+      [
+        "sourceEntities, targetParentId",
+        "otherSources: sourceEntities, targetParentId",
+      ],
+    ]) {
+      expect(
+        mutationCheck(
+          source.replace(original, () => replacement),
+          owner,
+        ),
+      ).toHaveLength(1);
+    }
+  });
+
+  test("a missing registered owner fails closed", () => {
+    expect(
+      mutationCheck("export const unrelated = () => undefined;"),
+    ).toHaveLength(1);
   });
 });

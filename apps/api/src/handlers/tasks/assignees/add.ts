@@ -15,6 +15,8 @@ import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import {
   lockTaskAssignmentMembers,
   writeTaskAssignments,
@@ -33,6 +35,7 @@ const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
 export type AddAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof addAssigneeBodySchema>;
 };
@@ -42,6 +45,7 @@ export type AddAssigneeHandlerProps = {
 export const addAssigneeHandler = async function* ({
   safeDb,
   workspaceId,
+  userId,
   recordAuditEvent,
   body,
 }: AddAssigneeHandlerProps) {
@@ -54,6 +58,14 @@ export const addAssigneeHandler = async function* ({
 
   yield* Result.await(
     resultTx(safeDb, async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: { type: "entities", entityIds: [body.taskId] },
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
       const members = await lockTaskAssignmentMembers({
         tx,
         workspaceId,
@@ -124,14 +136,16 @@ const addAssignee = createSafeHandler(
       "tasks.assignees.remove.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: addAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent, user }) {
     return yield* addAssigneeHandler({
       safeDb,
       workspaceId,
+      userId: user.id,
       recordAuditEvent,
       body,
     });

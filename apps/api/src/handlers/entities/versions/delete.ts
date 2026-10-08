@@ -23,6 +23,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { LIMITS } from "@/api/lib/limits";
 import {
   broadcastWorkspaceResourceSetUpdated,
@@ -45,6 +47,7 @@ const config = {
     "surviving one; the last remaining version, a read-only document, and a " +
     "version still being processed are refused.",
   permissions: { entity: ["update"] },
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "delete_document" },
   params: paramsSchema,
@@ -55,7 +58,7 @@ type DeleteEntityVersionHandlerProps = {
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   versionId: SafeId<"entityVersion">;
-  deletedByUserId: string;
+  deletedByUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -84,6 +87,18 @@ export const deleteEntityVersionHandler = async function* ({
   // whether the version can be tombstoned.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId: deletedByUserId,
+        target: { type: "entities", entityIds: [entityId] },
+      });
+      if (Result.isError(admission)) {
+        return {
+          ok: false as const,
+          status: admission.error.status,
+          message: admission.error.message,
+        };
+      }
       const targetProperties = await tx
         .select({ propertyId: fields.propertyId })
         .from(fields)

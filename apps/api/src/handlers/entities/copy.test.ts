@@ -359,7 +359,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 1,
@@ -546,7 +546,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -675,7 +675,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -803,7 +803,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -937,7 +937,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1063,7 +1063,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1164,7 +1164,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1290,7 +1290,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1494,7 +1494,7 @@ describe("copy-to-workspace", () => {
           findMany: async () => [],
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1632,7 +1632,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1741,7 +1741,9 @@ describe("copy-to-workspace", () => {
             },
           ],
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 0,
       select: () => ({ from: () => ({ where: async () => [] }) }),

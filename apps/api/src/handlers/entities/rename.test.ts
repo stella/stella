@@ -37,6 +37,7 @@ afterEach(async () => {
       name: originalEntity.name,
       kind: originalEntity.kind,
       readOnly: originalEntity.readOnly,
+      currentVersionId: originalEntity.currentVersionId,
       updatedAt: originalEntity.updatedAt,
     })
     .where(eq(entities.id, originalEntity.id));
@@ -79,6 +80,7 @@ const invocation = (entityId = fixture.ids.entityA1) => {
         rename({
           safeDb,
           workspaceId: ids.wsA1,
+          userId: ids.userA1,
           recordAuditEvent: audit,
           body: { entityId, name: "updated/name.md" },
         }),
@@ -205,4 +207,27 @@ test("an entity in another accessible matter returns 404 without writes", async 
   expect(enqueue).not.toHaveBeenCalled();
   expect(flush).not.toHaveBeenCalled();
   expect(audit).not.toHaveBeenCalled();
+});
+
+test("renames an ordinary task without creating a version or file field", async () => {
+  await fixture.testDb
+    .update(entities)
+    .set({ kind: "task", currentVersionId: null })
+    .where(eq(entities.id, fixture.ids.entityA1));
+  const { run, enqueue, audit } = invocation();
+  const result = await run();
+  if (result.isErr()) {
+    throw result.error;
+  }
+  expect(result.value).toEqual({
+    entityId: fixture.ids.entityA1,
+    name: "updated/name.md",
+    file: null,
+  });
+  const task = await stored();
+  expect(task?.name).toBe("updated/name.md");
+  expect(task?.currentVersionId).toBeNull();
+  expect(task?.currentVersion).toBeNull();
+  expect(enqueue).toHaveBeenCalledTimes(1);
+  expect(audit).toHaveBeenCalledTimes(1);
 });

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 
 import { FLOW_RUN_TERMINAL_STATUSES } from "@stll/api-contract";
 
@@ -7,17 +7,15 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps, workspaces } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
+import { admitLinkedFlowAccess } from "@/api/lib/flows/review-task-admission";
+import { flowTaskMutationTargetCondition } from "@/api/lib/flows/review-task-target";
 import { isRecord } from "@/api/lib/type-guards";
 import { WORK_OBLIGATION_TRANSITION_ACTION } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
@@ -89,33 +87,6 @@ export const admitTaskFlowAccess = async (
     userId,
     access,
   });
-};
-
-type AdmitLinkedFlowAccessOptions = {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  access: "read" | "write";
-};
-
-const admitLinkedFlowAccess = async (
-  tx: Transaction,
-  { organizationId, userId, access }: AdmitLinkedFlowAccessOptions,
-): Promise<Result<void, HandlerError>> => {
-  if (access === "write") {
-    await lockFeatureRecoveryAdmission({
-      tx,
-      organizationId,
-      featureId: "flows",
-    });
-  }
-  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
-    return Result.err(new HandlerError({ status: 404, message: "Not found" }));
-  }
-  const principal = { organizationId, userId };
-  const snapshot = await resolveFeatureAccessSnapshot({ tx, ...principal });
-  return isFeatureEnabled(snapshot, "flows", principal)
-    ? Result.ok(undefined)
-    : Result.err(new HandlerError({ status: 404, message: "Not found" }));
 };
 
 type AdmitFlowReviewTaskDeletionOptions = {
@@ -195,6 +166,18 @@ export const FLOW_TASK_FEATURE_ACCESS = {
       taskId ??
       (isRecord(body) ? (body["taskId"] ?? body["entityId"]) : undefined);
     const entityIds = typeof entityId === "string" ? [entityId] : [];
+    if (isRecord(body)) {
+      for (const key of [
+        "parentId",
+        "sourceEntityId",
+        "targetEntityId",
+      ] as const) {
+        const id = body[key];
+        if (typeof id === "string") {
+          entityIds.push(id);
+        }
+      }
+    }
     if (isRecord(body) && Array.isArray(body["entityIds"])) {
       for (const id of body["entityIds"]) {
         if (typeof id === "string") {
@@ -202,7 +185,8 @@ export const FLOW_TASK_FEATURE_ACCESS = {
         }
       }
     }
-    if (entityIds.length === 0) {
+    const linkId = isRecord(body) ? body["linkId"] : undefined;
+    if (entityIds.length === 0 && typeof linkId !== "string") {
       return false;
     }
     const gates = await scopedDb((tx) =>
@@ -212,10 +196,18 @@ export const FLOW_TASK_FEATURE_ACCESS = {
         .where(
           and(
             eq(flowRunSteps.workspaceId, workspaceId),
-            sql`${flowRunSteps.reviewTaskEntityId} IN (${sql.join(
-              entityIds.map((id) => sql`${id}`),
-              sql`, `,
-            )})`,
+            or(
+              flowTaskMutationTargetCondition(workspaceId, {
+                type: "entities",
+                entityIds,
+              }),
+              typeof linkId !== "string"
+                ? sql`false`
+                : flowTaskMutationTargetCondition(workspaceId, {
+                    type: "link",
+                    linkId,
+                  }),
+            ),
           ),
         )
         .limit(1),

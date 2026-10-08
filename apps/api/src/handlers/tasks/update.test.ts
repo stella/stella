@@ -21,6 +21,8 @@ import {
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
+const organizationId = mintAuthProviderId<"organization">();
+
 const TASK_FEATURES_ENABLED = {
   governedWorkflow: true,
   legalLists: true,
@@ -36,6 +38,9 @@ describe("updateTaskHandler feature compatibility", () => {
     const workspaceId = createSafeId<"workspace">();
     const userId = mintAuthProviderId<"user">();
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: { findFirst: async () => ({ organizationId }) },
+      },
       update: () => {
         throw new Error("database should not be accessed");
       },
@@ -66,6 +71,9 @@ describe("updateTaskHandler feature compatibility", () => {
     const workspaceId = createSafeId<"workspace">();
     const userId = mintAuthProviderId<"user">();
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: { findFirst: async () => ({ organizationId }) },
+      },
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
@@ -113,6 +121,9 @@ describe("updateTaskHandler feature compatibility", () => {
       hardDeadlineDate: null,
     };
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: { findFirst: async () => ({ organizationId }) },
+      },
       select: () => ({
         from: (table: unknown) =>
           createSelectQueryMock(
@@ -167,6 +178,9 @@ describe("updateTaskHandler feature compatibility", () => {
       hardDeadlineDate: "2026-08-15",
     };
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: { findFirst: async () => ({ organizationId }) },
+      },
       select: () => ({
         from: (table: unknown) =>
           createSelectQueryMock(
@@ -217,6 +231,9 @@ describe("updateTaskHandler legacy deadline compatibility", () => {
       hardDeadlineDate: "2026-08-10",
     };
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: { findFirst: async () => ({ organizationId }) },
+      },
       select: () => ({
         from: (table: unknown) =>
           createSelectQueryMock(
@@ -315,6 +332,9 @@ const runStatusWrite = async ({
     hardDeadlineDate: null,
   };
   const { safeDb } = createScopedDbMock({
+    query: {
+      workspaces: { findFirst: async () => ({ organizationId }) },
+    },
     select: () => ({
       from: (table: unknown) =>
         createSelectQueryMock(

@@ -32,6 +32,8 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowTargetAccess } from "@/api/lib/flows/review-task-admission";
 import { LIMITS } from "@/api/lib/limits";
 import {
   requestNativeExtractionRuns,
@@ -99,6 +101,25 @@ const duplicateEntityHandler = async function* ({
   body: { entityId: sourceEntityId, name, targetEntityId },
   dependencies,
 }: DuplicateEntityHandlerProps) {
+  const admission = yield* Result.await(
+    safeDb(
+      async (tx) =>
+        await admitTaskFlowTargetAccess(tx, {
+          access: "read",
+          workspaceId,
+          userId,
+          target: {
+            type: "subtree",
+            rootEntityIds: [sourceEntityId],
+            additionalEntityIds:
+              targetEntityId === undefined ? [] : [targetEntityId],
+          },
+        }),
+    ),
+  );
+  if (admission.isErr()) {
+    return admission;
+  }
   const source = yield* Result.await(
     safeDb(async (tx) => {
       const entity = await tx.query.entities.findFirst({
@@ -301,6 +322,7 @@ const config = {
     "extraction and PDF and thumbnail derivatives. Use " +
     "entities.copy to copy into a different matter.",
   permissions: { entity: ["create"] },
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityFileRealtimeUpdates,
   mcp: {

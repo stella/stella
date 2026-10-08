@@ -37,6 +37,7 @@ import {
   admitFlowReviewTaskDeletion,
   FLOW_TASK_FEATURE_ACCESS,
 } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -78,8 +79,7 @@ export type DeleteEntitiesHandlerProps = {
   body: DeleteEntitiesBodySchema;
 };
 
-export const deleteEntitiesHandler = async function* ({
-  enqueueCleanup = enqueueEntityDeletionCleanup,
+const applyEntityDeletion = async function* ({
   safeDb,
   organizationId,
   userId,
@@ -89,6 +89,18 @@ export const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const targetAdmission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: {
+          type: "subtree",
+          rootEntityIds: body.entityIds,
+          additionalEntityIds: [],
+        },
+      });
+      if (targetAdmission.isErr()) {
+        return { status: "rejected" as const, error: targetAdmission.error };
+      }
       const admission = await admitFlowReviewTaskDeletion(tx, {
         workspaceId,
         taskEntityIds: body.entityIds,
@@ -345,6 +357,19 @@ export const deleteEntitiesHandler = async function* ({
   if (txOutcome.status === "rejected") {
     return Result.err(txOutcome.error);
   }
+  return Result.ok(txOutcome);
+};
+
+export const deleteEntitiesHandler = async function* (
+  props: DeleteEntitiesHandlerProps,
+) {
+  const outcome = yield* applyEntityDeletion(props);
+  const txOutcome = yield* outcome;
+  const {
+    safeDb,
+    workspaceId,
+    enqueueCleanup = enqueueEntityDeletionCleanup,
+  } = props;
   const deletedEntities = txOutcome.entities;
   // Accelerate only a bounded prefix. The requests are already committed and
   // the reconciler claims every `pending` row on its own schedule, so a

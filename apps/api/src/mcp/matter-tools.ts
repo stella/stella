@@ -69,6 +69,7 @@ import {
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admitTaskFlowAccess } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowTargetAccess } from "@/api/lib/flows/review-task-admission";
 import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
@@ -1289,6 +1290,10 @@ const resolveTaskWorkspace = async ({
       where: {
         id: { eq: taskId },
         workspaceId: { in: context.accessibleWorkspaceIds },
+        RAW: flowRelatedTaskVisibilityConditions({
+          organizationId: context.organizationId,
+          userId: context.userId,
+        }).entity,
       },
       columns: { workspaceId: true, kind: true },
     }),
@@ -1793,6 +1798,18 @@ const validateLinkTarget = async ({
   if (linkTargetId === taskId) {
     return errorResult("Cannot link an entity to itself");
   }
+  const admission = await context.scopedDb(
+    async (tx) =>
+      await admitTaskFlowTargetAccess(tx, {
+        workspaceId,
+        userId: context.userId,
+        access: "read",
+        target: { type: "entities", entityIds: [taskId, linkTargetId] },
+      }),
+  );
+  if (admission.isErr()) {
+    return internalFailureResult(admission.error);
+  }
   const target = await context.scopedDb((tx) =>
     tx.query.entities.findFirst({
       where: { id: { eq: linkTargetId }, workspaceId: { eq: workspaceId } },
@@ -1852,6 +1869,18 @@ const validateUnlinkTarget = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<ReturnType<typeof errorResult> | null> => {
   const linkId = brandPersistedEntityLinkId(unlinkLinkId);
+  const admission = await context.scopedDb(
+    async (tx) =>
+      await admitTaskFlowTargetAccess(tx, {
+        workspaceId,
+        userId: context.userId,
+        access: "read",
+        target: { type: "link", linkId },
+      }),
+  );
+  if (admission.isErr()) {
+    return internalFailureResult(admission.error);
+  }
   const link = await context.scopedDb((tx) =>
     tx.query.entityLinks.findFirst({
       where: { id: { eq: linkId }, workspaceId: { eq: workspaceId } },
@@ -2101,6 +2130,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       addAssigneeHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         recordAuditEvent,
         body: { taskId, userId },
       }),
@@ -2116,6 +2146,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       removeAssigneeHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         recordAuditEvent,
         body: { taskId, userId },
       }),
@@ -2131,6 +2162,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       createEntityLinkHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         recordAuditEvent,
         body: {
           source: resourceRef({ type: RESOURCE_TYPE.ENTITY, id: taskId }),
@@ -2152,6 +2184,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       deleteEntityLinkHandler({
         safeDb: context.safeDb,
         workspaceId,
+        userId: context.userId,
         recordAuditEvent,
         body: { linkId },
       }),

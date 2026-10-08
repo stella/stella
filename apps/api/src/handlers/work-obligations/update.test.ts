@@ -40,6 +40,15 @@ describe("updateWorkObligation", () => {
     const lockOrder: unknown[] = [];
 
     const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            organizationId: toSafeId<"organization">(
+              "0198fa3d-fc8d-7000-8000-000000000006",
+            ),
+          }),
+        },
+      },
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
@@ -134,6 +143,15 @@ describe("updateWorkObligation", () => {
     let insertedLegacyObligation = false;
 
     const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            organizationId: toSafeId<"organization">(
+              "0198fa3d-fc8d-7000-8000-000000000014",
+            ),
+          }),
+        },
+      },
       select: () => ({
         from: (table: unknown) => {
           if (table === taskAssignees) {
@@ -298,6 +316,15 @@ describe("updateWorkObligation", () => {
       );
 
       const { safeDb, scopedDb } = createScopedDbMock({
+        query: {
+          workspaces: {
+            findFirst: async () => ({
+              organizationId: toSafeId<"organization">(
+                "0198fa3d-fc8d-7000-8000-000000000025",
+              ),
+            }),
+          },
+        },
         select: () => ({
           from: (table: unknown) => ({
             where: () => ({

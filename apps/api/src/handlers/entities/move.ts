@@ -20,6 +20,8 @@ import {
   treeParentCycleError,
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -42,6 +44,7 @@ const DESCENDANT_MOVE_MESSAGE =
 
 export type MoveEntityHandlerProps = {
   safeDb: SafeDb;
+  userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: MoveEntityBodySchema;
@@ -169,14 +172,26 @@ const lockMove = async ({
   return Result.ok(locked);
 };
 
-export const moveEntityHandler = async function* ({
+const applyEntityMove = async function* ({
   safeDb,
+  userId,
   workspaceId,
   recordAuditEvent,
   body,
-  syncSearchActivity = syncWorkspaceSearchActivity,
 }: MoveEntityHandlerProps) {
   const attempt = await safeDb(async (tx) => {
+    const admission = await admitTaskFlowMutation(tx, {
+      workspaceId,
+      userId,
+      target: {
+        type: "subtree",
+        rootEntityIds: [body.entityId],
+        additionalEntityIds: body.parentId === null ? [] : [body.parentId],
+      },
+    });
+    if (admission.isErr()) {
+      return admission;
+    }
     // Serialize ancestry decisions before taking any entity locks. Disjoint
     // source/target row pairs can still join into a cycle across two moves;
     // the `entities_parent_acyclic` trigger holds the rule for any writer
@@ -218,6 +233,19 @@ export const moveEntityHandler = async function* ({
   }
   const moved = yield* attempt;
   yield* moved;
+  return Result.ok();
+};
+
+export const moveEntityHandler = async function* (
+  props: MoveEntityHandlerProps,
+) {
+  const moved = yield* applyEntityMove(props);
+  yield* moved;
+  const {
+    safeDb,
+    workspaceId,
+    syncSearchActivity = syncWorkspaceSearchActivity,
+  } = props;
 
   Result.tryPromise(
     async () =>
@@ -305,6 +333,7 @@ const config = {
     "must be a folder in this matter, a folder may not be moved into itself " +
     "or into one of its own descendants, and a read-only entity is refused.",
   permissions: { entity: ["update"] },
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityRealtimeUpdates,
   mcp: { type: "covered", by: "save_document" },
@@ -313,9 +342,10 @@ const config = {
 
 const moveEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent, user }) {
     return yield* moveEntityHandler({
       safeDb,
+      userId: user.id,
       workspaceId,
       recordAuditEvent,
       body,

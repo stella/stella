@@ -641,7 +641,9 @@ describe("duplicate entity", () => {
               return entityLookupCount === 1 ? sourceDocument : undefined;
             },
           },
-          workspaces: { findFirst: async () => ({ reference: null }) },
+          workspaces: {
+            findFirst: async () => ({ reference: null, organizationId }),
+          },
         },
         $count: async () => 1,
         select: () => ({
@@ -727,7 +729,9 @@ describe("duplicate entity", () => {
             };
           },
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 1,
       select: () => ({
@@ -812,7 +816,9 @@ describe("duplicate entity", () => {
             };
           },
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 1,
       select: () => ({
@@ -917,7 +923,7 @@ describe("duplicate entity", () => {
           findMany: async () => sources,
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => sources.length,
@@ -1087,7 +1093,9 @@ describe("duplicate entity", () => {
           findFirst: async () => brokenSubtree.at(0),
           findMany: async () => brokenSubtree,
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => brokenSubtree.length,
       select: () => ({

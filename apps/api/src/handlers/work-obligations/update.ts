@@ -27,6 +27,7 @@ import {
   admitTaskFlowAccess,
   reviewGateForTask,
 } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
@@ -230,10 +231,9 @@ const updateWorkObligation = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const currentAdmission = await admitTaskFlowAccess(tx, {
-          access: "write",
+        const currentAdmission = await admitTaskFlowMutation(tx, {
           workspaceId,
-          taskEntityId: params.entityId,
+          target: { type: "entities", entityIds: [params.entityId] },
           userId: user.id,
         });
         if (currentAdmission.isErr()) {

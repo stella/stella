@@ -16,6 +16,8 @@ import type { FieldDiffs } from "@/api/lib/audit-log";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 
 // The wire vocabulary is the column's vocabulary: a flag the cell control
 // cannot render is one this endpoint refuses rather than stores.
@@ -36,6 +38,7 @@ const config = {
     entity: ["update"],
   },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: fieldRealtimeUpdates,
   mcp: {
     type: "capability",
@@ -52,6 +55,8 @@ const config = {
 } satisfies WorkspaceHandlerConfig;
 
 type UpdateCellMetadataResult =
+  | { status: "admission-refused"; error: HandlerError }
+  | { status: "entity-without-version" }
   | { status: "ok" }
   | { status: "entity-not-found" }
   | { status: "entity-read-only" }
@@ -112,11 +117,56 @@ const resolveLockProvenance = ({
   };
 };
 
+const mapUpdateCellMetadataResult = (result: UpdateCellMetadataResult) => {
+  switch (result.status) {
+    case "admission-refused":
+      return Result.err(result.error);
+    case "entity-without-version":
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Entity has no current version",
+        }),
+      );
+    case "entity-not-found":
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Entity not found in workspace",
+        }),
+      );
+    case "property-not-found":
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Property not found in workspace",
+        }),
+      );
+    case "entity-read-only":
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
+      );
+    case "ok":
+      return Result.ok({ success: true });
+    default:
+      result satisfies never;
+      return panic("Unknown cell metadata update outcome");
+  }
+};
+
 const updateCellMetadata = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body, user, recordAuditEvent }) {
     const txResult = yield* Result.await(
       safeDb(async (tx): Promise<UpdateCellMetadataResult> => {
+        const admission = await admitTaskFlowMutation(tx, {
+          workspaceId,
+          userId: user.id,
+          target: { type: "entities", entityIds: [body.entityId] },
+        });
+        if (admission.isErr()) {
+          return { status: "admission-refused", error: admission.error };
+        }
         const entityRows = await tx
           .select({
             id: entities.id,
@@ -143,6 +193,9 @@ const updateCellMetadata = createSafeHandler(
         }
 
         if (!entity.currentVersionId) {
+          if (entity.kind === "task") {
+            return { status: "entity-without-version" };
+          }
           panic("Entity has no current version");
         }
 
@@ -290,31 +343,7 @@ const updateCellMetadata = createSafeHandler(
       }),
     );
 
-    if (txResult.status === "entity-not-found") {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Entity not found in workspace",
-        }),
-      );
-    }
-
-    if (txResult.status === "property-not-found") {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Property not found in workspace",
-        }),
-      );
-    }
-
-    if (txResult.status === "entity-read-only") {
-      return Result.err(
-        new HandlerError({ status: 409, message: "Entity is read-only" }),
-      );
-    }
-
-    return Result.ok({ success: true });
+    return mapUpdateCellMetadataResult(txResult);
   },
 );
 

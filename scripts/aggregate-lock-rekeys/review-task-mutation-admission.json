@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/handlers/entities/versions/restore.ts",
+    "from": "0523b6e02ec871b0aa5c976ec8eaeef9bfe01382bb7de76164019127df3613bc",
+    "to": "661c80e77fceefecb12f07fce6185ad101b0e96b916f7954f5cda1451e217200",
+    "reason": "Existing entity row acquisition: table, identity, matter predicate and UPDATE mode are unchanged; projection now supplies the current version and restore metadata after admission. Count remains one."
+  }
+]

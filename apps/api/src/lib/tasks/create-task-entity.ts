@@ -27,6 +27,7 @@ import {
 } from "@/api/lib/entity-constants";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { LIMITS } from "@/api/lib/limits";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -228,6 +229,20 @@ export const createTaskEntityHandler = async function* ({
 
   const txResult = yield* Result.await(
     withScopedTx(props, async (tx) => {
+      if (body.parentId) {
+        const admission = await admitTaskFlowMutation(tx, {
+          workspaceId,
+          userId,
+          target: { type: "entities", entityIds: [body.parentId] },
+        });
+        if (admission.isErr()) {
+          return {
+            ok: false as const,
+            status: admission.error.status,
+            message: admission.error.message,
+          };
+        }
+      }
       // See `lockWorkspacesForEntityCap` for the canonical lock
       // order every entity-creating path follows (issue #1139).
       await lockWorkspacesForEntityCap(tx, [workspaceId]);

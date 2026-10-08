@@ -9,6 +9,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { and, eq } from "drizzle-orm";
 import JSZip from "jszip";
 
 import {
@@ -47,6 +48,8 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
   entities,
+  featureEnrolments,
+  taskAssignees,
   WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
@@ -78,7 +81,9 @@ import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -124,12 +129,15 @@ import {
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   CASE_LAW_COVERAGE_FIXTURE,
   CASE_LAW_COVERAGE_EXPECTED,
 } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -9097,6 +9105,125 @@ describe("OpenAI-compatible MCP tools", () => {
     expectValidationMessage(result, "matter_id is required to create a task");
   });
 
+  test.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
+    "save_task hides opted-out review metadata before read-only and assignment validation",
+    async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL");
+      const previousFlag = env.FEATURE_FLOWS;
+      const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+      env.FEATURE_FLOWS = true;
+      try {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient();
+          const fixture = await flowReviewGateFixture(db, {
+            intermediate: false,
+          });
+          const safeDb = fixture.safeDb(db);
+          const scopedDb: McpRequestContext["scopedDb"] = async (work) => {
+            const result = await safeDb(work);
+            return result.isErr()
+              ? await Promise.reject(result.error)
+              : result.value;
+          };
+          const context = {
+            ...createContext({
+              accessibleWorkspaceIds: [fixture.workspaceId],
+              scopedDb,
+            }),
+            organizationId: fixture.organizationId,
+            userId: fixture.userId,
+            safeDb,
+          };
+          try {
+            await withAggregateTransaction(db, async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId: fixture.organizationId,
+                featureId: "flows",
+              });
+              await tx
+                .delete(featureEnrolments)
+                .where(
+                  and(
+                    eq(
+                      featureEnrolments.organizationId,
+                      fixture.organizationId,
+                    ),
+                    eq(featureEnrolments.userId, fixture.userId),
+                    eq(featureEnrolments.featureId, "flows"),
+                  ),
+                );
+            });
+            const nonmemberId = mintAuthProviderId<"user">();
+            for (const readOnly of [true, false]) {
+              // db-await-in-loop: each retained metadata state must refuse before its distinct validation error.
+              await db
+                .update(entities)
+                .set({ readOnly })
+                .where(eq(entities.id, fixture.taskEntityId));
+              // db-await-in-loop: compare persisted state around the actual MCP dispatcher.
+              const before = await fixture.read();
+              // db-await-in-loop: execute both refusal variants through save_task.
+              const result = await handleMcpToolCall({
+                args: {
+                  task_id: fixture.taskEntityId,
+                  add_assignee_user_id: nonmemberId,
+                },
+                context,
+                toolName: "save_task",
+              });
+              expect(validationEnvelope(result)).toMatchObject({
+                code: "not_found",
+                message: "Task not found or not accessible",
+              });
+              // db-await-in-loop: prove refusal retains the gate, run, and task metadata.
+              expect(await fixture.read()).toEqual(before);
+            }
+            expect(
+              await db.$count(
+                taskAssignees,
+                eq(taskAssignees.entityId, fixture.taskEntityId),
+              ),
+            ).toBe(0);
+            await withAggregateTransaction(db, async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId: fixture.organizationId,
+                featureId: "flows",
+              });
+              await tx.insert(featureEnrolments).values({
+                organizationId: fixture.organizationId,
+                userId: fixture.userId,
+                featureId: "flows",
+              });
+            });
+            const restored = await handleMcpToolCall({
+              args: {
+                task_id: fixture.taskEntityId,
+                add_assignee_user_id: fixture.userId,
+              },
+              context,
+              toolName: "save_task",
+            });
+            expect(restored.isError).not.toBe(true);
+            expect(
+              await db.$count(
+                taskAssignees,
+                eq(taskAssignees.entityId, fixture.taskEntityId),
+              ),
+            ).toBe(1);
+          } finally {
+            await fixture.cleanup();
+          }
+        });
+      } finally {
+        env.FEATURE_FLOWS = previousFlag;
+        restore();
+      }
+    },
+  );
+
   // list_tasks (detail) and save_task confine themselves to entities of kind
   // "task": a document/folder ID the caller can otherwise access is rejected as
   // wrong-kind, not acted on.
@@ -9195,44 +9322,25 @@ describe("OpenAI-compatible MCP tools", () => {
   // unlink_link_id is validated against the task up front: a link belonging to
   // a different task in the same matter is rejected before any mutation runs.
   const createUnlinkMismatchScopedDb = () =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(
-        async (
-          callback: (tx: {
-            query: {
-              entities: {
-                findFirst: () => Promise<{
-                  kind: string;
-                  workspaceId: string;
-                }>;
-              };
-              entityLinks: {
-                findFirst: () => Promise<{
-                  sourceEntityId: string;
-                  targetEntityId: string;
-                }>;
-              };
-            };
-          }) => unknown,
-        ) =>
-          await callback({
-            query: {
-              entities: {
-                findFirst: async () => ({
-                  kind: "task",
-                  workspaceId: WORKSPACE_ID,
-                }),
-              },
-              entityLinks: {
-                findFirst: async () => ({
-                  sourceEntityId: "other_task",
-                  targetEntityId: "other_doc",
-                }),
-              },
-            },
+    createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({ organizationId: ORGANIZATION_ID }),
+        },
+        entities: {
+          findFirst: async () => ({
+            kind: "task",
+            workspaceId: WORKSPACE_ID,
           }),
-      ),
-    );
+        },
+        entityLinks: {
+          findFirst: async () => ({
+            sourceEntityId: "other_task",
+            targetEntityId: "other_doc",
+          }),
+        },
+      },
+    }).scopedDb;
 
   test("save_task rejects an unlink_link_id that belongs to another task", async () => {
     const result = await handleMcpToolCall({
@@ -9262,42 +9370,24 @@ describe("OpenAI-compatible MCP tools", () => {
     existingLink?: { id: string } | null;
     updateMock: ReturnType<typeof mock>;
   }) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
-      mock(
-        async (
-          callback: (tx: {
-            query: {
-              entities: {
-                findFirst: () => Promise<{
-                  kind: string;
-                  readOnly: boolean;
-                  workspaceId: string;
-                }>;
-              };
-              entityLinks: {
-                findFirst: () => Promise<{ id: string } | null>;
-              };
-            };
-            update: typeof updateMock;
-          }) => unknown,
-        ) =>
-          await callback({
-            query: {
-              entities: {
-                findFirst: async () => ({
-                  kind: "task",
-                  readOnly: false,
-                  workspaceId: WORKSPACE_ID,
-                }),
-              },
-              entityLinks: {
-                findFirst: async () => existingLink,
-              },
-            },
-            update: updateMock,
+    createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({ organizationId: ORGANIZATION_ID }),
+        },
+        entities: {
+          findFirst: async () => ({
+            kind: "task",
+            readOnly: false,
+            workspaceId: WORKSPACE_ID,
           }),
-      ),
-    );
+        },
+        entityLinks: {
+          findFirst: async () => existingLink,
+        },
+      },
+      update: updateMock,
+    }).scopedDb;
 
   test("save_task rejects a field edit combined with a self-link, without applying the edit", async () => {
     const updateMock = mock(() => ({
@@ -9360,6 +9450,9 @@ describe("OpenAI-compatible MCP tools", () => {
     const workflowUpdates: Record<string, unknown>[] = [];
     const { scopedDb } = createScopedDbMock({
       query: {
+        workspaces: {
+          findFirst: async () => ({ organizationId: ORGANIZATION_ID }),
+        },
         entities: {
           findFirst: async () => ({
             kind: "task",

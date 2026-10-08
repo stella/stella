@@ -6,6 +6,7 @@ import { entityVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-s
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
 
 const paramsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -23,6 +24,7 @@ const config = {
     "on. An annotation only, like entities.versions.description.update, which " +
     "carries the longer note. A tombstoned version is refused.",
   permissions: { entity: ["update"] },
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityVersionRealtimeUpdates,
   mcp: { type: "covered", by: "save_document" },
@@ -46,10 +48,18 @@ export const updateVersionLabelHandler = async function* ({
 
 export default createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    user,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     return yield* updateVersionLabelHandler({
       safeDb,
       workspaceId,
+      userId: user.id,
       entityId: params.entityId,
       versionId: params.versionId,
       label: body.label,

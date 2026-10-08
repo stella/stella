@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityLinks } from "@/api/db/schema";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -12,6 +13,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 
 const deleteEntityLinkBodySchema = t.Object({
   linkId: tSafeId("entityLink"),
@@ -20,6 +23,7 @@ const deleteEntityLinkBodySchema = t.Object({
 export type DeleteEntityLinkHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof deleteEntityLinkBodySchema>;
 };
@@ -29,12 +33,21 @@ export type DeleteEntityLinkHandlerProps = {
 export const deleteEntityLinkHandler = async function* ({
   safeDb,
   workspaceId,
+  userId,
   recordAuditEvent,
   body,
 }: DeleteEntityLinkHandlerProps) {
-  const link = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entityLinks.findFirst({
+  yield* Result.await(
+    resultTx(safeDb, async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: { type: "link", linkId: body.linkId },
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+      const link = await tx.query.entityLinks.findFirst({
         where: {
           id: { eq: body.linkId },
           workspaceId: { eq: workspaceId },
@@ -43,39 +56,35 @@ export const deleteEntityLinkHandler = async function* ({
           sourceEntity: { columns: { kind: true, readOnly: true } },
           targetEntity: { columns: { kind: true, readOnly: true } },
         },
-      }),
-    ),
-  );
-  if (!link) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Link not found" }),
-    );
-  }
-  // Both endpoints are guaranteed by the notNull sourceEntityId/targetEntityId
-  // FKs, so a missing relation is a broken invariant, not an expected state.
-  const sourceEntity =
-    link.sourceEntity ?? panic("Entity link is missing its source entity");
-  const targetEntity =
-    link.targetEntity ?? panic("Entity link is missing its target entity");
-  if (sourceEntity.kind !== "task" && targetEntity.kind !== "task") {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "This endpoint only manages task links",
-      }),
-    );
-  }
-  if (
-    (sourceEntity.kind === "task" && sourceEntity.readOnly) ||
-    (targetEntity.kind === "task" && targetEntity.readOnly)
-  ) {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Task is read-only" }),
-    );
-  }
+      });
+      if (!link) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Link not found" }),
+        );
+      }
+      // Both endpoints are guaranteed by the notNull sourceEntityId/targetEntityId
+      // FKs, so a missing relation is a broken invariant, not an expected state.
+      const sourceEntity =
+        link.sourceEntity ?? panic("Entity link is missing its source entity");
+      const targetEntity =
+        link.targetEntity ?? panic("Entity link is missing its target entity");
+      if (sourceEntity.kind !== "task" && targetEntity.kind !== "task") {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "This endpoint only manages task links",
+          }),
+        );
+      }
+      if (
+        (sourceEntity.kind === "task" && sourceEntity.readOnly) ||
+        (targetEntity.kind === "task" && targetEntity.readOnly)
+      ) {
+        return Result.err(
+          new HandlerError({ status: 409, message: "Task is read-only" }),
+        );
+      }
 
-  yield* Result.await(
-    safeDb(async (tx) => {
       await tx
         .delete(entityLinks)
         .where(
@@ -99,6 +108,7 @@ export const deleteEntityLinkHandler = async function* ({
           linkId: body.linkId,
         },
       });
+      return Result.ok(undefined);
     }),
   );
 
@@ -113,14 +123,16 @@ const deleteEntityLink = createSafeHandler(
       "on neither end, and a read-only task, are refused.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: deleteEntityLinkBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent, user }) {
     return yield* deleteEntityLinkHandler({
       safeDb,
       workspaceId,
+      userId: user.id,
       recordAuditEvent,
       body,
     });

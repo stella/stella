@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -259,41 +260,29 @@ export const writeFieldValue = async function* ({
     return Result.err(new HandlerError({ status: 403, message: "Forbidden" }));
   }
 
-  const property = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.properties.findFirst({
-        columns: { id: true, content: true },
-        where: {
-          id: { eq: propertyId },
-          workspaceId: { eq: workspaceId },
-        },
-      }),
-    ),
-  );
-
-  if (!property) {
-    return Result.err(
-      new HandlerError({
-        status: 404,
-        message: "Property not found in workspace",
-      }),
-    );
-  }
-
-  if (content !== null && property.content.type !== content.type) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Property content type mismatch",
-      }),
-    );
-  }
-
   const storedContent =
     content === null || isEmptyContent(content) ? null : content;
 
   const writeResult = yield* Result.await(
     safeDb(async (tx) => {
+      const admission = await admitTaskFlowMutation(tx, {
+        workspaceId,
+        userId,
+        target: { type: "entities", entityIds: [entityId] },
+      });
+      if (admission.isErr()) {
+        return { status: "admission-refused" as const, error: admission.error };
+      }
+      const property = await tx.query.properties.findFirst({
+        columns: { id: true, content: true },
+        where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
+      });
+      if (!property) {
+        return { status: "property-not-found" as const };
+      }
+      if (content !== null && property.content.type !== content.type) {
+        return { status: "property-type-mismatch" as const };
+      }
       // Lock acquisition order (entity row → advisory cell lock)
       // must match update-cell-metadata.ts. Reversing here would
       // deadlock against a concurrent manual-flag update on the
@@ -401,6 +390,25 @@ export const writeFieldValue = async function* ({
     }),
   );
 
+  if (writeResult.status === "admission-refused") {
+    return Result.err(writeResult.error);
+  }
+  if (writeResult.status === "property-not-found") {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Property not found in workspace",
+      }),
+    );
+  }
+  if (writeResult.status === "property-type-mismatch") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Property content type mismatch",
+      }),
+    );
+  }
   if (writeResult.status === "entity-not-found") {
     return Result.err(
       new HandlerError({

@@ -223,6 +223,13 @@ describe("createTaskHandler validation", () => {
   test("assigns legacy task creation to its workspace-member creator", async () => {
     const assigneeRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test123"),
+          }),
+        },
+      },
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -304,6 +311,13 @@ describe("createTaskHandler validation", () => {
   test("creates unassigned work for an authorized caller without workspace membership", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test123"),
+          }),
+        },
+      },
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -387,6 +401,13 @@ describe("createTaskHandler validation", () => {
   test("a non-task List row is created without governed work", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test123"),
+          }),
+        },
+      },
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>

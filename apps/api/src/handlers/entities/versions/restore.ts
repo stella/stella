@@ -1,9 +1,9 @@
-import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import { entities, fields, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -16,6 +16,8 @@ import {
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
@@ -28,6 +30,7 @@ const config = {
   description:
     "Restore a historical document version by copying it into a new current version; the prior history remains intact.",
   permissions: { entity: ["update"] },
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
@@ -42,10 +45,45 @@ export default createSafeHandler(
   async function* ({ safeDb, workspaceId, params, user, recordAuditEvent }) {
     const userId = user.id;
 
-    // Verify the version belongs to this entity in this workspace
-    const version = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entityVersions.findFirst({
+    const nextVersionId = createSafeId<"entityVersion">();
+
+    // Create a new version (copy-to-top) with all fields from the source version
+    const restoreOutcome = yield* Result.await(
+      safeDb(async (tx) => {
+        const admission = await admitTaskFlowMutation(tx, {
+          workspaceId,
+          userId,
+          target: { type: "entities", entityIds: [params.entityId] },
+        });
+        if (Result.isError(admission)) {
+          return { status: "denied" as const, error: admission.error };
+        }
+        // The entity lock serializes restore and tombstone; source metadata is
+        // read only after admission and under that lock in the effect transaction.
+        const entity = (
+          await tx
+            .select({
+              id: entities.id,
+              docSequence: entities.docSequence,
+              readOnly: entities.readOnly,
+              currentVersionId: entities.currentVersionId,
+            })
+            .from(entities)
+            .where(
+              and(
+                eq(entities.id, params.entityId),
+                eq(entities.workspaceId, workspaceId),
+              ),
+            )
+            .for("update")
+        ).at(0);
+        if (!entity) {
+          return { status: "not-found" as const };
+        }
+        if (entity.readOnly) {
+          return { status: "read-only" as const };
+        }
+        const version = await tx.query.entityVersions.findFirst({
           where: {
             id: { eq: params.versionId },
             entityId: { eq: params.entityId },
@@ -53,88 +91,16 @@ export default createSafeHandler(
             deletedAt: { isNull: true },
           },
           columns: { id: true, versionNumber: true },
-          with: {
-            fields: { columns: { content: true, propertyId: true } },
-          },
-        }),
-      ),
-    );
-
-    if (!version) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Version not found" }),
-      );
-    }
-
-    const nextVersionId = createSafeId<"entityVersion">();
-
-    // Get entity info for stamp
-    const entity = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          where: {
-            id: { eq: params.entityId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            docSequence: true,
-            readOnly: true,
-            currentVersionId: true,
-          },
-        }),
-      ),
-    );
-    if (entity?.readOnly) {
-      return Result.err(
-        new HandlerError({ status: 409, message: "Entity is read-only" }),
-      );
-    }
-    const previousCurrentVersionId = entity?.currentVersionId ?? null;
-
-    const workspace = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.workspaces.findFirst({
+          with: { fields: { columns: { content: true, propertyId: true } } },
+        });
+        if (!version) {
+          return { status: "not-found" as const };
+        }
+        const workspace = await tx.query.workspaces.findFirst({
           where: { id: { eq: workspaceId } },
           columns: { reference: true },
-        }),
-      ),
-    );
-
-    // Create a new version (copy-to-top) with all fields from the source version
-    const restoreOutcome = yield* Result.await(
-      safeDb(async (tx) => {
-        // Serialize with delete-version (which tombstones under the same entity
-        // FOR UPDATE) and re-verify the source version is still live before
-        // cloning its content into a new version. The pre-read liveness check
-        // above races: a delete committing between it and this mutation could
-        // tombstone the source mid-restore, and resurrecting a withdrawn
-        // version's content would defeat the withdrawal. Rechecking under the
-        // lock makes the delete and the restore run one at a time.
-        await tx
-          .select({ id: entities.id })
-          .from(entities)
-          .where(
-            and(
-              eq(entities.id, params.entityId),
-              eq(entities.workspaceId, workspaceId),
-            ),
-          )
-          .for("update");
-        const sourceLive = await tx
-          .select({ id: entityVersions.id })
-          .from(entityVersions)
-          .where(
-            and(
-              eq(entityVersions.id, params.versionId),
-              eq(entityVersions.entityId, params.entityId),
-              eq(entityVersions.workspaceId, workspaceId),
-              isNull(entityVersions.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (sourceLive.length === 0) {
-          return { restored: false as const };
-        }
+        });
+        const previousCurrentVersionId = entity.currentVersionId;
 
         // Allocate from MAX over all versions (incl. tombstoned) under the
         // entity lock, not source/current + 1, and inside the mutation tx so
@@ -144,7 +110,7 @@ export default createSafeHandler(
           workspaceId,
         });
         const nextVersionStamp = buildVersionStamp({
-          docSequence: entity?.docSequence ?? null,
+          docSequence: entity.docSequence,
           versionNumber: nextVersionNumber,
           workspaceReference: workspace?.reference ?? null,
         });
@@ -220,14 +186,29 @@ export default createSafeHandler(
           },
         ]);
 
-        return { restored: true as const, versionNumber: nextVersionNumber };
+        return {
+          status: "restored" as const,
+          versionNumber: nextVersionNumber,
+        };
       }),
     );
 
-    if (!restoreOutcome.restored) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Version not found" }),
-      );
+    switch (restoreOutcome.status) {
+      case "denied":
+        return Result.err(restoreOutcome.error);
+      case "not-found":
+        return Result.err(
+          new HandlerError({ status: 404, message: "Version not found" }),
+        );
+      case "read-only":
+        return Result.err(
+          new HandlerError({ status: 409, message: "Entity is read-only" }),
+        );
+      case "restored":
+        break;
+      default:
+        restoreOutcome satisfies never;
+        return panic("Unknown version restore outcome");
     }
 
     // The restore creates a brand-new current version. Queue extraction (or a

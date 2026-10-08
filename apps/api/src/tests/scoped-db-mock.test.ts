@@ -1,11 +1,19 @@
 import { expect, test } from "bun:test";
-import { getColumns } from "drizzle-orm";
+import { eq, getColumns } from "drizzle-orm";
 
-import { entities, featureEnrolments } from "@/api/db/schema";
+import {
+  entities,
+  featureEnrolments,
+  flowRunSteps,
+  workspaces,
+} from "@/api/db/schema";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 const organizationId = toSafeId<"organization">("org-a");
 const userId = "user-a";
@@ -101,4 +109,45 @@ test("default enrolment reads never consume a resource fixture with matching pro
   );
   expect(resourceRows).toEqual([{ featureId: resourceId }]);
   expect(resourceQueries).toBe(1);
+});
+
+test("linked ownership projections use explicit gates and preserve workspace resource fixtures", async () => {
+  const workspaceId = toSafeId<"workspace">("workspace-a");
+  const runId = toSafeId<"flowRun">("flow-run-a");
+  for (const gates of [
+    [],
+    [{ runId, status: "awaiting_review" as const, organizationId }],
+  ]) {
+    let resourceQueries = 0;
+    const database = createScopedDbMock(
+      {
+        select: () => {
+          resourceQueries += 1;
+          return createSelectQueryMock([{ organizationId }]);
+        },
+      },
+      { flowTaskGates: gates },
+    );
+    const ownership = await database.scopedDb(
+      async (tx) =>
+        await tx
+          .select({ organizationId: workspaces.organizationId })
+          .from(flowRunSteps)
+          .innerJoin(workspaces, eq(workspaces.id, flowRunSteps.workspaceId))
+          .where(eq(flowRunSteps.workspaceId, workspaceId))
+          .limit(1),
+    );
+    expect(ownership).toEqual(gates);
+    expect(resourceQueries).toBe(0);
+    const workspace = await database.scopedDb(
+      async (tx) =>
+        await tx
+          .select({ organizationId: workspaces.organizationId })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId))
+          .limit(1),
+    );
+    expect(workspace).toEqual([{ organizationId }]);
+    expect(resourceQueries).toBe(1);
+  }
 });

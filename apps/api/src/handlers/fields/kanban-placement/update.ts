@@ -21,6 +21,7 @@ import {
   admitTaskFlowAccess,
   decideGateForTask,
 } from "@/api/lib/flows/review-gate-task";
+import { admitTaskFlowMutation } from "@/api/lib/flows/review-task-admission";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
@@ -101,10 +102,9 @@ export const createUpdateKanbanPlacement = ({
 
       yield* Result.await(
         abortableTx(safeDb, async (tx) => {
-          const currentAdmission = await admitTaskFlowAccess(tx, {
-            access: "write",
+          const currentAdmission = await admitTaskFlowMutation(tx, {
             workspaceId,
-            taskEntityId: body.entityId,
+            target: { type: "entities", entityIds: [body.entityId] },
             userId: user.id,
           });
           if (currentAdmission.isErr()) {

@@ -5,6 +5,7 @@ import ts from "typescript";
 import { compareCodeUnit } from "@stll/collation";
 
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
+import { validateTaskMutationEffectOwner } from "./task-mutation-admission-declarations";
 
 type DeclarationOptions = {
   registry: FeatureRegistry;
@@ -1011,6 +1012,16 @@ const validateOwnership = (
       violations,
       tableOwners,
     });
+    for (const owner of ownership.taskMutationOwners ?? []) {
+      const ast = graph.sourceFile(owner.module);
+      const message =
+        ast === undefined
+          ? `feature ${featureId} owns a missing task mutation module`
+          : validateTaskMutationEffectOwner(ast, owner);
+      if (message !== undefined) {
+        violations.push({ file: owner.module, message });
+      }
+    }
     for (const boundary of ownership.dispatchModules ?? []) {
       const ast = graph.sourceFile(boundary.module);
       if (ast === undefined) {

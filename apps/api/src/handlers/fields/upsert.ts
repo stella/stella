@@ -9,6 +9,7 @@ import {
   upsertFieldContentSchema,
   writeFieldValue,
 } from "@/api/lib/fields/write-field";
+import { FLOW_TASK_FEATURE_ACCESS } from "@/api/lib/flows/review-gate-task";
 
 const config = {
   description:
@@ -21,6 +22,7 @@ const config = {
     "clears the cell.",
   permissions: FIELD_VALUE_WRITE_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: fieldRealtimeUpdates,
   mcp: { type: "tool", name: "set_field_value" },
   body: t.Object({
