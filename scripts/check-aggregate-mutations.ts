@@ -409,7 +409,7 @@ const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
     ) {
       return isRouteReceiver(node.expression.expression, visited);
     }
-    if (!ts.isIdentifier(node) || visited.has(node.text)) {
+    if (!ts.isIdentifier(node) || visited.has(node)) {
       return false;
     }
     visited.add(node.text);
@@ -561,7 +561,10 @@ const createRoutePrefix = ({ source, file, access }: RoutePrefixOptions) => {
     }
     return "";
   };
-  const prefix = (node: ts.Expression, visited = new Set<string>()): string => {
+  const prefix = (
+    node: ts.Expression,
+    visited = new Set<ts.Expression>(),
+  ): string => {
     if (
       ts.isAsExpression(node) ||
       ts.isParenthesizedExpression(node) ||
@@ -578,12 +581,12 @@ const createRoutePrefix = ({ source, file, access }: RoutePrefixOptions) => {
     ) {
       return prefix(node.expression.expression, visited);
     }
-    if (!ts.isIdentifier(node) || visited.has(node.text)) {
+    if (!ts.isIdentifier(node) || visited.has(node)) {
       panic(
         `Unresolved aggregate route prefix in ${file}: ${node.getText(source)}`,
       );
     }
-    visited.add(node.text);
+    visited.add(node);
     let ancestor = node.parent;
     while (!ts.isSourceFile(ancestor)) {
       if (

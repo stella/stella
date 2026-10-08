@@ -107,7 +107,7 @@ describe("aggregate mutation route coverage", () => {
   });
   test("router and nested group prefixes compose", () => {
     const sources = fixture(
-      'group("/inner", (app) => app.group("/child", (nested) => nested.post("/existing", existing.handler)))',
+      'group("/inner", (app) => app.group("/child", (app) => app.post("/existing", existing.handler)))',
     );
     sources.set(
       routes,
