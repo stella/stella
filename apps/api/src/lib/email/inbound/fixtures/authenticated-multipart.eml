@@ -1,0 +1,55 @@
+ARC-Seal: i=1; a=rsa-sha256; t=1790380800; cv=none; d=outside.test; s=case;
+ b=xig5g1h5JJYSCWhaHEsUKbLhR32r2imCzAa5gKkU278YHkduYrFhmKFs5RLrnkmmcJBFvKZ2K
+ wjzzaPRJrr2dGBhNX0N9/bLSgYkY6i28eQNqMV9aT1AAI1E23h6lCVLoUBs/4M/o8qnAcAafsgJ
+ SBzEV+b8dv7j6rTj5a2bbU+lDx617Yjmw3hEaE0yy3OMJB9xDGOKNv4MLd6R7EFeKFn6pZLeenn
+ RqwOD4pC3JxYwMxNImzhg3vDav7U6n5pjIQufiyZr2Zh41I0BhJhcHHWmAn/CDfd2iFEQa7t05H
+ VpzJMwm/LE5Pvr7Q9ic9Cv0A77LwgHW2dUJE1csfUTkA==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=outside.test; h=Content-Type: MIME-Version: Message-ID: Date: Subject:
+ To: From: DKIM-Signature; q=dns/txt; s=case; t=1790380800;
+ bh=H6TXRdP5VLdzeIMHH1t/DXjGO0PIqJxxQUfytZmLMK0=;
+ b=YcsJ1GjlYH21uyub+XvpiN6BQDWV6UnmBiJBeJxVuftgbTvrpA/3NUU62KPpQeRt1F1AVIFpS
+ NEM1tPgenA3JL1+HPbFRPmechtha9pvzo6i4AVkRkONTE3M+GDY8ztVtHRB2zSCVuHx0OqQa2Mi
+ 5tMjtRkDyHfx19tQEq9gEElwPQvjpDQjCkyCAszlQTv8ZUSdYUhgU7TBkqnc6j0eS5TiAPQ3NSG
+ ZIhpXFOwpaIR1PTmBAJPsSwERtWjNVJVWdRqkLpEsgR3kwgrosOTzZ4tVYRuWQg/fh6fdK8RGl9
+ EBCr02dW3R9d26NkP+RvUEaZFqaK1tH8i1ICXRNEqD7w==
+ARC-Authentication-Results: i=1; mx.example.test;
+ dkim=pass header.i=@outside.test header.s=case header.a=rsa-sha256 header.b=o3KxzJFs;
+ spf=pass (mx.example.test: domain of author@outside.test designates 192.0.2.1 as permitted sender) smtp.mailfrom=author@outside.test
+ smtp.helo=mail.outside.test;
+ dmarc=pass (p=REJECT arc=none) policy.dmarc=reject header.from=outside.test header.d=outside.test
+Received-SPF: pass (mx.example.test: domain of author@outside.test designates 192.0.2.1 as permitted sender) client-ip=192.0.2.1;
+ envelope-from="author@outside.test"; helo=mail.outside.test;
+Authentication-Results: mx.example.test;
+ dkim=pass header.i=@outside.test header.s=case header.a=rsa-sha256 header.b=o3KxzJFs;
+ spf=pass (mx.example.test: domain of author@outside.test designates 192.0.2.1 as permitted sender) smtp.mailfrom=author@outside.test
+ smtp.helo=mail.outside.test;
+ dmarc=pass (p=REJECT arc=none) policy.dmarc=reject header.from=outside.test header.d=outside.test
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=outside.test;
+ h=Content-Type: MIME-Version: Message-ID: Date: Subject: To: From;
+ q=dns/txt; s=case; t=1790380800;
+ bh=H6TXRdP5VLdzeIMHH1t/DXjGO0PIqJxxQUfytZmLMK0=;
+ b=o3KxzJFsgRbhODJJA6cLwX9bIHIA5cIdNYO60VwSGWYqjxrICKqTBh0bS0u//w4fmNXa4prHE
+ 20L8EvA1ONben6mw/NLFgyTm6/bcs9XPqfg1CDSyA966sJX/rBLPIu4II+WHqWszhkIOvTT1Ql7
+ oeSks3Q6oIFGp3sYUIIs4jhQ7Ij8jQmztny5XF8RQ4jLt8vRaSMz1KRGWwxJNxi+dea52wgYFR1
+ vAznXVx7l/TetrJvCZ2Sm3m/lJKzx97ElCLny9IA1vzcYGq/dcnExq1Xwz6YU+okQvnyBh3Xc6c
+ EStSh8p9z9XNz6XZUzmzy9zjJ6sAi0Uah7olwrHYDdsQ==
+From: =?UTF-8?Q?Ji=C5=99=C3=AD_Nov=C3=A1k?= <author@outside.test>
+To: Member <member@example.test>
+Subject: =?UTF-8?Q?Podepsan=C3=A1_zpr=C3=A1va?=
+Date: Fri, 25 Sep 2026 11:00:00 +0000
+Message-ID: <signed-original@outside.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="signed-parts"
+
+--signed-parts
+Content-Type: text/plain; charset=UTF-8
+
+Original body
+--signed-parts
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="document.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjcK
+--signed-parts--

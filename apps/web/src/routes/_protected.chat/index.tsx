@@ -54,6 +54,7 @@ import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-pre
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
@@ -105,6 +106,7 @@ import {
 import { formatRelativeTime } from "@/lib/relative-time";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
@@ -224,16 +226,24 @@ function ChatIndex() {
   const userId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.id,
   });
-  const { data: workspacesData } = useQuery(
+  const workspacesDataQuery = useQuery(
     workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
   );
+  const workspacesDataView = useQueryView(workspacesDataQuery);
+  const workspacesData =
+    workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
   const workspaces = workspacesData?.workspaces;
-  const { data: groupedThreadPages } = useInfiniteQuery(
+  const groupedThreadPagesQuery = useInfiniteQuery(
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
+  const groupedThreadPagesView = useQueryView(groupedThreadPagesQuery);
+  const groupedThreadPages =
+    groupedThreadPagesView.type === "items"
+      ? groupedThreadPagesView.items
+      : undefined;
   const groupedThreads = useMemo(
     () => mergeGroupedChatThreadPages(groupedThreadPages?.pages),
     [groupedThreadPages?.pages],
@@ -383,13 +393,17 @@ function ChatIndex() {
 
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
-  const { data: memberPreviews } = useQuery(
+  const memberPreviewsQuery = useQuery(
     workspaceMemberPreviewsOptions({
       organizationId: activeOrganizationId,
       userId,
       workspaceIds: visibleMatters.map((matter) => matter.id),
     }),
   );
+  const memberPreviewsView = useQueryView(memberPreviewsQuery);
+  useQueryViewError(memberPreviewsView);
+  const memberPreviews =
+    memberPreviewsView.type === "items" ? memberPreviewsView.items : undefined;
   const mattersHeading =
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
@@ -664,62 +678,65 @@ function ChatIndex() {
           </Link>
         }
       >
-        {visibleMatters.length > 0 ? (
-          visibleMatters.map((matter) => (
-            <MatterContextMenu
-              className="contents"
-              key={matter.id}
-              target={{
-                id: matter.id,
-                name: matter.name,
-                color: matter.color,
-                client: matter.client,
-              }}
-            >
-              <Link
-                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
-                params={{ workspaceId: matter.id }}
-                to="/workspaces/$workspaceId"
+        <QueryViewFeedback view={workspacesDataView} />
+        {(workspacesDataView.type === "items" ||
+          workspacesDataView.type === "empty") &&
+          (visibleMatters.length > 0 ? (
+            visibleMatters.map((matter) => (
+              <MatterContextMenu
+                className="contents"
+                key={matter.id}
+                target={{
+                  id: matter.id,
+                  name: matter.name,
+                  color: matter.color,
+                  client: matter.client,
+                }}
               >
-                <span className="min-w-0 flex-1">
-                  <LandingItemText
-                    icon={
-                      <MatterIcon
-                        className="size-4"
-                        matter={{ id: matter.id, color: matter.color }}
-                      />
-                    }
-                    iconTone="matter"
-                    meta={formatRelativeTime(matter.lastActivityAt)}
-                    title={matter.name}
-                  />
-                </span>
-                <MatterColleagues
-                  currentUserId={userId}
-                  preview={memberPreviews?.previews.find(
-                    (preview) => preview.workspaceId === matter.id,
-                  )}
-                />
-              </Link>
-            </MatterContextMenu>
-          ))
-        ) : (
-          <LandingEmpty>
-            <div className="flex flex-col items-start gap-2.5">
-              {t("chat.landing.noMatters")}
-              {canCreateMatter && (
-                <Button
-                  onClick={() => openCreateMatter()}
-                  size="sm"
-                  variant="outline"
+                <Link
+                  className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+                  params={{ workspaceId: matter.id }}
+                  to="/workspaces/$workspaceId"
                 >
-                  <PlusIcon className="size-4" />
-                  {t("workspaces.createNewWorkspace")}
-                </Button>
-              )}
-            </div>
-          </LandingEmpty>
-        )}
+                  <span className="min-w-0 flex-1">
+                    <LandingItemText
+                      icon={
+                        <MatterIcon
+                          className="size-4"
+                          matter={{ id: matter.id, color: matter.color }}
+                        />
+                      }
+                      iconTone="matter"
+                      meta={formatRelativeTime(matter.lastActivityAt)}
+                      title={matter.name}
+                    />
+                  </span>
+                  <MatterColleagues
+                    currentUserId={userId}
+                    preview={memberPreviews?.previews.find(
+                      (preview) => preview.workspaceId === matter.id,
+                    )}
+                  />
+                </Link>
+              </MatterContextMenu>
+            ))
+          ) : (
+            <LandingEmpty>
+              <div className="flex flex-col items-start gap-2.5">
+                {t("chat.landing.noMatters")}
+                {canCreateMatter && (
+                  <Button
+                    onClick={() => openCreateMatter()}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <PlusIcon className="size-4" />
+                    {t("workspaces.createNewWorkspace")}
+                  </Button>
+                )}
+              </div>
+            </LandingEmpty>
+          ))}
       </LandingSection>
       <LandingSection
         heading={
@@ -754,90 +771,93 @@ function ChatIndex() {
           />
         }
       >
-        {recentChats.length > 0 ? (
-          recentChats.map((chat) =>
-            chat.scope === "workspace" ? (
-              <Link
-                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
-                key={chat.id}
-                params={{
-                  workspaceId: chat.workspaceId,
-                  threadId: chat.id,
-                }}
-                to="/chat/workspaces/$workspaceId/$threadId"
-              >
-                <span className="min-w-0 flex-1">
-                  <LandingItemText
-                    meta={
-                      <>
-                        <ChatThreadOriginPrefix origin={chat.origin} />
-                        <span
-                          aria-hidden="true"
-                          // Centred on the cap height, not the x-height:
-                          // `align-middle` reads low beside capitals.
-                          className="me-1.5 inline-block size-1.5 rounded-full align-[0.1em]"
-                          style={{
-                            backgroundColor: resolveMatterColor(
-                              chat.workspaceId,
-                              storedMatterColor(chat.workspaceId),
-                            ),
-                          }}
-                        />
-                        <BidiText>{chat.workspaceName}</BidiText>
-                        {" · "}
-                        {formatRelativeTime(chat.updatedAt)}
-                      </>
-                    }
-                    title={
-                      isPlaceholderThreadTitle(chat.title)
-                        ? t("chat.newChat")
-                        : chat.title
-                    }
-                  />
-                </span>
-                <ChatFileStack attachedFiles={chat.context} />
-              </Link>
-            ) : (
-              <Link
-                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
-                key={chat.id}
-                params={{ threadId: chat.id }}
-                to="/chat/$threadId"
-              >
-                <span className="min-w-0 flex-1">
-                  <LandingItemText
-                    meta={
-                      <>
-                        <ChatThreadOriginPrefix origin={chat.origin} />
-                        {formatRelativeTime(chat.updatedAt)}
-                      </>
-                    }
-                    title={
-                      isPlaceholderThreadTitle(chat.title)
-                        ? t("chat.newChat")
-                        : chat.title
-                    }
-                  />
-                </span>
-                <ChatFileStack attachedFiles={chat.context} />
-              </Link>
-            ),
-          )
-        ) : (
-          <LandingEmpty>
-            <div className="flex flex-col items-start gap-2.5">
-              {t("chat.landing.noRecentChats")}
-              <Button
-                onClick={() => focusThread(threadRef)}
-                size="sm"
-                variant="outline"
-              >
-                <NewChatIcon className="size-4" />
-                {t("chat.newChat")}
-              </Button>
-            </div>
-          </LandingEmpty>
-        )}
+        <QueryViewFeedback view={groupedThreadPagesView} />
+        {(groupedThreadPagesView.type === "items" ||
+          groupedThreadPagesView.type === "empty") &&
+          (recentChats.length > 0 ? (
+            recentChats.map((chat) =>
+              chat.scope === "workspace" ? (
+                <Link
+                  className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+                  key={chat.id}
+                  params={{
+                    workspaceId: chat.workspaceId,
+                    threadId: chat.id,
+                  }}
+                  to="/chat/workspaces/$workspaceId/$threadId"
+                >
+                  <span className="min-w-0 flex-1">
+                    <LandingItemText
+                      meta={
+                        <>
+                          <ChatThreadOriginPrefix origin={chat.origin} />
+                          <span
+                            aria-hidden="true"
+                            // Centred on the cap height, not the x-height:
+                            // `align-middle` reads low beside capitals.
+                            className="me-1.5 inline-block size-1.5 rounded-full align-[0.1em]"
+                            style={{
+                              backgroundColor: resolveMatterColor(
+                                chat.workspaceId,
+                                storedMatterColor(chat.workspaceId),
+                              ),
+                            }}
+                          />
+                          <BidiText>{chat.workspaceName}</BidiText>
+                          {" · "}
+                          {formatRelativeTime(chat.updatedAt)}
+                        </>
+                      }
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
+                    />
+                  </span>
+                  <ChatFileStack attachedFiles={chat.context} />
+                </Link>
+              ) : (
+                <Link
+                  className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+                  key={chat.id}
+                  params={{ threadId: chat.id }}
+                  to="/chat/$threadId"
+                >
+                  <span className="min-w-0 flex-1">
+                    <LandingItemText
+                      meta={
+                        <>
+                          <ChatThreadOriginPrefix origin={chat.origin} />
+                          {formatRelativeTime(chat.updatedAt)}
+                        </>
+                      }
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
+                    />
+                  </span>
+                  <ChatFileStack attachedFiles={chat.context} />
+                </Link>
+              ),
+            )
+          ) : (
+            <LandingEmpty>
+              <div className="flex flex-col items-start gap-2.5">
+                {t("chat.landing.noRecentChats")}
+                <Button
+                  onClick={() => focusThread(threadRef)}
+                  size="sm"
+                  variant="outline"
+                >
+                  <NewChatIcon className="size-4" />
+                  {t("chat.newChat")}
+                </Button>
+              </div>
+            </LandingEmpty>
+          ))}
       </LandingSection>
     </LandingLayout>
   );

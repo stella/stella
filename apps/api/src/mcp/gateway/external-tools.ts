@@ -176,6 +176,16 @@ export const callGatewayExternalMcpTool = async ({
     });
   }
 
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return mcpStructuredErrorResult({
+      code: "permission_denied",
+      message:
+        "This tool reaches a third-party service and runs only as a direct tool call",
+      hint: "Call the tool directly instead of from a script.",
+    });
+  }
+
   const allowed = await consumeMcpGatewayRateLimit({
     connectorSlug: resolved.connectorSlug,
     userId: context.userId,
@@ -202,6 +212,7 @@ export const callGatewayExternalMcpTool = async ({
       args,
       cachedTool: resolved.cachedTool,
       organizationId: context.organizationId,
+      permit,
       row: resolved.connection,
       safeDb: context.safeDb,
       userId: context.userId,
@@ -281,6 +292,11 @@ const refreshMissingCachedTools = async ({
   rows: readonly GatewayConnectionToolRow[];
   dependencies: ExternalGatewayDependencies;
 }): Promise<boolean> => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return false;
+  }
+
   const missingRows = rows.filter((row) => row.cachedTools === null);
   if (missingRows.length === 0) {
     return false;
@@ -293,6 +309,7 @@ const refreshMissingCachedTools = async ({
         await dependencies.refreshCachedMcpToolsForConnection({
           connectionId: row.userConnectionId,
           organizationId: context.organizationId,
+          permit,
           safeDb: context.safeDb,
           userId: context.userId,
         }),

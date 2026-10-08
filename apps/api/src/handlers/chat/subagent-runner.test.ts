@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { createPipelineContext } from "@stll/anonymize";
 import { AI_ERROR_KINDS } from "@stll/api-contract";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
@@ -18,6 +19,10 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
@@ -28,6 +33,7 @@ import {
 } from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -91,6 +97,7 @@ type RunScriptedSubagentOverrides = Partial<
 > & {
   /** Wraps the scripted transport, e.g. to record what the provider receives. */
   wrapAdapter?: ((adapter: AnyTextAdapter) => AnyTextAdapter) | undefined;
+  admission?: ModelDispatchAdmission | undefined;
 };
 
 const runScriptedSubagent = async (
@@ -135,6 +142,7 @@ const runScriptedSubagent = async (
         workspaceId: ids.wsA1,
       },
       organizationId: ids.orgA,
+      admission: overrides.admission ?? testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       role: "fast",
@@ -361,6 +369,52 @@ describe("a subagent run across several model steps", () => {
         totalTokens: 275,
       },
     });
+  });
+});
+
+describe("a subagent run on its parent's admitted action", () => {
+  test("stops when the admitted action's lease is lost", async () => {
+    const lease = new AbortController();
+    const reached = Promise.withResolvers<AbortSignal>();
+    const run = admitModelDispatch({
+      organizationId: ids.orgA,
+      actionKind: "chat.send",
+      signal: lease.signal,
+      run: async (admission) =>
+        await runScriptedSubagent(
+          [{ finishReason: "stop", text: "never sent", type: "text" }],
+          {
+            admission,
+            wrapAdapter: (adapter) => ({
+              ...adapter,
+              async *chatStream(options) {
+                const signal = options.request?.signal;
+                if (!signal) {
+                  throw new Error(
+                    "Expected the engine to pass an abort signal.",
+                  );
+                }
+                reached.resolve(signal);
+                const aborted = Promise.withResolvers<never>();
+                signal.addEventListener(
+                  "abort",
+                  () => aborted.reject(signal.reason),
+                  { once: true },
+                );
+                await aborted.promise;
+                yield* adapter.chatStream(options);
+              },
+            }),
+          },
+        ),
+    });
+
+    const providerSignal = await reached.promise;
+    expect(providerSignal.aborted).toBe(false);
+    lease.abort();
+
+    expect(await rejectionOf(run)).toMatchObject({ name: "AbortError" });
+    expect(providerSignal.aborted).toBe(true);
   });
 });
 

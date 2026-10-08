@@ -5,6 +5,7 @@ import {
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
+import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 
 import {
   createChatRuntime,
@@ -214,9 +215,7 @@ const settled = (turnId: string, status: string) =>
 
 const tick = async (times = 20) => {
   for (let index = 0; index < times; index += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await ownerSleep(0);
   }
 };
 

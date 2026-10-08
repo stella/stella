@@ -1,6 +1,6 @@
 import type { Static, TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
-import { Result, UnhandledException } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
@@ -19,7 +19,6 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
   isFeatureEnabled,
@@ -30,6 +29,7 @@ import type {
   FeatureAccessProof,
 } from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
+import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -80,6 +80,10 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   announceResourceSetUpdates,
@@ -436,19 +440,22 @@ export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
  * their handlers admit the demo account and can only declare `sandbox`.
  */
 /**
- * Whether the configured demo account may call a handler. Every handler config
- * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ * Which restricted accounts may call a handler. Every handler config declares
+ * one: `sandbox` admits every account, `standard` refuses the demo account,
+ * and `account-control` (credentials, keys, billing, external connections,
+ * organization configuration) also refuses the restricted review account.
  */
 export const ACCOUNT_ACCESS = {
   standard: "standard",
   sandbox: "sandbox",
+  accountControl: "account-control",
 } as const;
 
 export type AccountAccess =
   (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
 
-const requiresStandardAccount = (accountAccess: AccountAccess) =>
-  accountAccess === ACCOUNT_ACCESS.standard;
+const requiresAccountCheck = (accountAccess: AccountAccess) =>
+  accountAccess !== ACCOUNT_ACCESS.sandbox;
 
 type SandboxAccountAccess = {
   accountAccess: typeof ACCOUNT_ACCESS.sandbox;
@@ -563,6 +570,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     usageLane?: UsageLaneDecision;
     /** Shared lease and client cancellation, set only for admitted finite work. */
     actionSignal?: AbortSignal;
+    /** Proof a model dispatch needs; set only for admitted finite work. */
+    modelAdmission?: ModelDispatchAdmission;
     /**
      * Whether stella may annotate AI requests for this org with
      * prompt-cache markers. Threaded through to the model resolver;
@@ -1058,12 +1067,19 @@ type FiniteActionContext = SafeHandlerLogContext & {
   session: { activeOrganizationId: SafeId<"organization"> };
   scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
+  modelAdmission?: ModelDispatchAdmission;
+};
+
+/** What admitted finite work runs with: its lease signal and model proof. */
+type AdmittedFiniteContext = {
+  actionSignal: AbortSignal;
+  modelAdmission: ModelDispatchAdmission;
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
   actionKind: PeriodActionKind;
   ctx: TContext;
-  handler: SafeHandlerFn<TContext, TResult>;
+  handler: SafeHandlerFn<TContext & AdmittedFiniteContext, TResult>;
   admit?: typeof withActionAdmission;
 };
 
@@ -1103,9 +1119,19 @@ const runAdmittedFiniteHandler = async function* <
                 }),
           );
         }
-        ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
-        ctx.actionSignal.throwIfAborted();
-        const outcome = await Result.gen(() => handler(ctx));
+        const outcome = await admitModelDispatch({
+          organizationId: ctx.session.activeOrganizationId,
+          actionKind,
+          signal,
+          run: async (modelAdmission) => {
+            const admitted = Object.assign(ctx, {
+              actionSignal: AbortSignal.any([ctx.request.signal, signal]),
+              modelAdmission,
+            });
+            admitted.actionSignal.throwIfAborted();
+            return await Result.gen(() => handler(admitted));
+          },
+        });
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();
@@ -1141,6 +1167,19 @@ const runAdmittedFiniteHandler = async function* <
 };
 
 /**
+ * The model proof of a handler whose config declares `actionAdmission`: the
+ * wrapper admits the request and sets it before the handler runs. The
+ * dispatch-admission guard checks that every caller declares the admission.
+ */
+export const configuredModelAdmission = ({
+  modelAdmission,
+}: {
+  modelAdmission?: ModelDispatchAdmission | undefined;
+}): ModelDispatchAdmission =>
+  modelAdmission ??
+  panic("A handler dispatched a model without its configured admission");
+
+/**
  * Call after resource authorization and the operation's usage preflight.
  * @yields Typed failures for the owning safe-handler boundary.
  */
@@ -1153,7 +1192,7 @@ export const admitFiniteAction = async function* <
   admit,
   actionKind,
 }: FiniteActionOptions<TContext, TResult> & {
-  handler: SafeHandlerFn<TContext, TResult> &
+  handler: SafeHandlerFn<TContext & AdmittedFiniteContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
   return yield* runAdmittedFiniteHandler({
@@ -1166,7 +1205,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
 };
 
@@ -1184,7 +1223,7 @@ const createSafeScopedHandler = <
   handler: SafeHandlerFn<TContext, TResult>,
   {
     admit = withActionAdmission,
-    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> =>
@@ -1199,8 +1238,11 @@ const createSafeScopedHandler = <
         });
       }
 
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
+      if (requiresAccountCheck(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(
+          ctx.user.email,
+          config.accountAccess,
+        );
         if (Result.isError(accountAccess)) {
           return toSafeStatusResponse(403, {
             code: "account_access_unavailable",
@@ -1797,7 +1839,7 @@ export const createSafeHandler = <
   );
 
 type SessionHandlerDependencies = {
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
 export const createSafeSessionHandler = <
@@ -1807,14 +1849,17 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
-    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
   recordSafeHandler({
     config,
     handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
+      if (requiresAccountCheck(config.accountAccess)) {
+        const accountAccess = checkAccountOperation(
+          ctx.user.email,
+          config.accountAccess,
+        );
         if (Result.isError(accountAccess)) {
           return toSafeStatusResponse(403, {
             code: "account_access_unavailable",

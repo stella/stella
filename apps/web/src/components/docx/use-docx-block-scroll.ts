@@ -5,6 +5,7 @@ import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { deviceStorage } from "@/lib/account/browser-storage";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 
 // A block that is not on screen yet is retried quickly while the editor
@@ -59,8 +60,7 @@ const debugDocxBlockScroll = (
   event: string,
   details: Record<string, unknown>,
 ) => {
-  const browserWindow = typeof window === "undefined" ? null : window;
-  if (browserWindow?.localStorage.getItem(FOLIO_SCROLL_DEBUG_KEY) !== "1") {
+  if (deviceStorage("local").getItem(FOLIO_SCROLL_DEBUG_KEY) !== "1") {
     return;
   }
 

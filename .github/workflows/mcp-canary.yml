@@ -3,9 +3,8 @@ name: MCP canary
 on:
   schedule:
     - cron: "*/10 * * * *"
-    # Overnight, offset from the other nightly jobs so a shared runner queue
-    # does not delay the probe past its own timeout.
-    - cron: "43 2 * * *"
+    # Daily, after the review organization's nightly reset in either daylight-saving season.
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       base_url:
@@ -13,7 +12,7 @@ on:
         required: false
         type: string
       mode:
-        description: Probe mode (full also registers an OAuth client)
+        description: Probe mode (full includes the restricted account journey)
         required: true
         default: frequent
         type: choice
@@ -36,7 +35,7 @@ jobs:
     steps:
       # The dispatch input takes any URL, and the token is a bearer credential
       # the probe sends to whatever it is pointed at, so the two are resolved
-      # together here: the credential travels only to the configured endpoint,
+      # together here: both credentials travel only to the configured endpoint,
       # and a run aimed anywhere else gets the public probes alone.
       - name: Resolve the probe target
         id: target
@@ -86,14 +85,18 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      # The token is optional on purpose: without it the public probes still
-      # run and the authenticated ones report as skipped, so a missing secret
+      # Optional credentials keep public probes runnable. Each authenticated
+      # journey reports missing credentials as skipped, so an absent secret
       # never masquerades as full coverage.
       - name: Probe MCP user journeys
         env:
           MCP_CANARY_ENVIRONMENT: production
           MCP_CANARY_BASE_URL: ${{ steps.target.outputs.base_url }}
           MCP_CANARY_FRONTEND_URL: ${{ vars.MCP_CANARY_FRONTEND_URL || 'https://my.stll.app' }}
-          MCP_CANARY_MODE: ${{ github.event.schedule == '43 2 * * *' && 'full' || inputs.mode || 'frequent' }}
+          MCP_CANARY_CONFIGURED_BASE_URL: ${{ vars.MCP_CANARY_BASE_URL || 'https://api.stll.app' }}
+          APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
+          APP_REVIEW_ORGANIZATION_ID: ${{ vars.APP_REVIEW_ORGANIZATION_ID }}
+          REVIEW_ACCOUNT_PASSWORD: ${{ steps.target.outputs.authenticated == 'true' && secrets.REVIEW_ACCOUNT_PASSWORD || '' }}
+          MCP_CANARY_MODE: ${{ github.event.schedule == '17 3 * * *' && 'full' || inputs.mode || 'frequent' }}
           MCP_CANARY_TOKEN: ${{ steps.target.outputs.authenticated == 'true' && secrets.MCP_CANARY_TOKEN || '' }}
         run: bun run canary:mcp

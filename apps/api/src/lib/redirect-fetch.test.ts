@@ -1,8 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   fetchBytesFollowingRedirects,
+  fetchStreamFollowingRedirects,
   RedirectChainError,
 } from "@/api/lib/redirect-fetch";
 
@@ -127,5 +130,129 @@ describe("fetchBytesFollowingRedirects", () => {
 
     expect(Result.isError(result)).toBe(true);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("streamed redirect lifecycle", () => {
+  test("rejects invalid redirect budgets before fetching", async () => {
+    for (const maxHops of [
+      -1,
+      Number.NaN,
+      Infinity,
+      0.5,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      let fetched = false;
+      expect(
+        await rejectionOf(
+          fetchBytesFollowingRedirects({
+            url: "https://publisher.test/start",
+            maxHops,
+            fetchBytes: async () => {
+              fetched = true;
+              return Result.ok(response(200));
+            },
+          }),
+        ),
+      ).toMatchObject({
+        message: "redirect hop limit must be a nonnegative safe integer",
+      });
+      expect(fetched).toBe(false);
+    }
+  });
+  test("cancels intermediate bodies and leaves the successful stream readable", async () => {
+    let cancellations = 0;
+    const visited: string[] = [];
+    const result = await fetchStreamFollowingRedirects({
+      url: "https://publisher.test/start",
+      maxHops: 2,
+      fetchStream: async (url) => {
+        visited.push(url);
+        const done = url === "https://object.test/final";
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("payload"));
+            if (done) {
+              controller.close();
+            }
+          },
+          cancel() {
+            cancellations += 1;
+          },
+        });
+        return Result.ok({
+          status: done ? 200 : 302,
+          ok: done,
+          headers: new Headers(
+            done
+              ? {}
+              : {
+                  location:
+                    visited.length === 1
+                      ? "https://object.test/moved"
+                      : "/final",
+                },
+          ),
+          body,
+        });
+      },
+    });
+    expect(await new Response(result.unwrap().body).text()).toBe("payload");
+    expect(cancellations).toBe(2);
+    expect(visited).toEqual([
+      "https://publisher.test/start",
+      "https://object.test/moved",
+      "https://object.test/final",
+    ]);
+  });
+
+  test("releases redirect bodies on every terminal chain failure", async () => {
+    for (const scenario of ["loop", "missing", "invalid", "cancel"] as const) {
+      let fetched = 0;
+      let cancelled = 0;
+      const result = await fetchStreamFollowingRedirects({
+        url: "https://publisher.test/start?token=secret",
+        maxHops: 2,
+        fetchStream: async () => {
+          fetched += 1;
+          return Result.ok({
+            body: new ReadableStream<Uint8Array>({
+              cancel() {
+                cancelled += 1;
+                if (scenario === "cancel") {
+                  throw new Error("secret");
+                }
+              },
+            }),
+            status: 302,
+            ok: false,
+            headers: new Headers(
+              scenario === "missing"
+                ? {}
+                : {
+                    location:
+                      scenario === "invalid" ? "http://[invalid" : "/start",
+                  },
+            ),
+          });
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      expect(cancelled).toBe(fetched);
+      expect(fetched).toBe(scenario === "loop" ? 3 : 1);
+      if (result.isErr()) {
+        expect(result.error.message).not.toContain("secret");
+        expect(result.error.code).toBe(
+          (
+            {
+              loop: "too_many_redirects",
+              missing: "missing_location",
+              invalid: "invalid_location",
+              cancel: "body_cancel_failed",
+            } as const
+          )[scenario],
+        );
+      }
+    }
   });
 });

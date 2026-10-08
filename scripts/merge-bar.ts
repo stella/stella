@@ -47,6 +47,10 @@
 // Usage:
 //   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
 //   bun scripts/merge-bar.ts --disarm <pr-number> [--repo owner/name] [--dry-run]
+//   bun scripts/merge-bar.ts --update-branch owner/name#<pr-number> --expected-head-sha <sha> [--dry-run]
+//   bun scripts/merge-bar.ts --classify-ejection <pr-number> --expected-head-sha <sha>
+//   bun scripts/merge-bar.ts --requeue-jump-reset <pr-number> --expected-head-sha <sha> [--dry-run]
+// STELLA_MERGE_BAR_STOP_FILE blocks native mutations while the file exists.
 //
 // A non-empty STELLA_MERGE_HOLD repository variable holds ordinary pull requests;
 // recognized release pull requests remain exempt, including --jump.
@@ -54,7 +58,8 @@
 // Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
 import { panic, Result, TaggedError } from "better-result";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -66,7 +71,26 @@ import {
   type PlanSelectorError,
   runPlanScopes,
 } from "./ci-plan-selector";
+import { pilotFastJobs, pilotQueueJobs } from "./ci-pr-pilot-plan";
+import { evaluate } from "./github-expression";
+import {
+  parseCiCoverageLog,
+  type CiCoverageEvidence,
+  type CiRunEvidence,
+  type CiCoverageLogError,
+} from "./merge-bar-ci-coverage";
 import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
+import {
+  classifyJumpReset,
+  createJumpResetStore,
+  type JumpResetClassification,
+  type JumpResetEvidence,
+} from "./merge-bar-jump-reset";
+import {
+  branchUpdateResponse,
+  createBranchUpdateStore,
+  updatePullRequestBranch,
+} from "./merge-bar-update-branch";
 
 const DEFAULT_REPO = "stella/stella" satisfies MergeBarRepository;
 const MERGEABLE_POLL_ATTEMPTS = 8;
@@ -272,6 +296,13 @@ type CheckRunSnapshot = {
   status: string;
   conclusion: string | null;
   outputTitle?: string;
+  checkSuiteId?: number;
+};
+
+type WorkflowRunSnapshot = {
+  checkSuiteId: number;
+  path: string;
+  event: string;
 };
 
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
@@ -355,6 +386,40 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
 };
 
 const CI_PLAN_CHECK_RUN = "ci-plan";
+
+// The events whose CI runs judge a pull request. A dispatched run on the same
+// head (a manual full-depth validation, for one) reports its own ci-result and
+// ci-checks, which must neither block nor pass the PR.
+const PULL_REQUEST_CI_EVENTS: ReadonlySet<string> = new Set([
+  "pull_request",
+  "merge_group",
+]);
+
+/**
+ * Drops the check runs that a CI workflow run outside the pull request events
+ * produced on the head. Check runs from any other workflow or app are kept.
+ */
+export const pullRequestCheckRuns = ({
+  checkRuns,
+  workflowRuns,
+}: {
+  checkRuns: readonly CheckRunSnapshot[];
+  workflowRuns: readonly WorkflowRunSnapshot[];
+}): readonly CheckRunSnapshot[] => {
+  const offEventSuites = new Set(
+    workflowRuns
+      .filter(
+        (run) =>
+          run.path.split("@")[0] === CI_WORKFLOW &&
+          !PULL_REQUEST_CI_EVENTS.has(run.event),
+      )
+      .map((run) => run.checkSuiteId),
+  );
+  return checkRuns.filter(
+    (run) =>
+      run.checkSuiteId === undefined || !offEventSuites.has(run.checkSuiteId),
+  );
+};
 
 const latestRunByName = (
   checkRuns: readonly CheckRunSnapshot[],
@@ -708,6 +773,7 @@ type JobScope =
 type FastRequiredJob = {
   id: string;
   scope: JobScope;
+  pilotGate?: "deferred-capable";
   // Matches the job's names in a workflow run, matrix legs included.
   runName: RegExp;
 };
@@ -724,6 +790,111 @@ const runNamePattern = (id: string, template: unknown): RegExp => {
   return new RegExp(`^${escaped}(?: \\(.+\\))?$`, "u");
 };
 
+type CheckFastJobPredicateOptions = {
+  id: string;
+  condition: string;
+  output: string | null;
+  workflow: unknown;
+};
+
+const checkFastJobPredicate = ({
+  id,
+  condition,
+  output,
+  workflow,
+}: CheckFastJobPredicateOptions) => {
+  // Every atom the freshness model pins must remain a declared workflow gate.
+  // Unsupported atoms fail even when another false gate would short-circuit them.
+  const atoms = [
+    "needs.ci-plan.outputs.run_required != 'false'",
+    "inputs.heavy_only != true",
+    "needs.ci-plan.outputs.trusted == 'true'",
+    "github.event_name == 'workflow_dispatch'",
+    "github.event_name != 'merge_group'",
+    "needs.ci-plan.outputs.queue_depth != 'thin'",
+    "needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'",
+    `contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), '${id}')`,
+    `contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), '${id}')`,
+    ...(output === null ? [] : [`needs.ci-plan.outputs.${output} == 'true'`]),
+  ];
+  let remainder = condition.replaceAll(/\s+/gu, " ").trim();
+  for (const atom of atoms) {
+    remainder = remainder.replaceAll(atom, "");
+  }
+  if (!/^[\s()&|]*$/u.test(remainder)) {
+    panic(`Unmodeled fast-required predicate: ${id}`);
+  }
+  const gated = condition.includes("needs.ci-plan.outputs.coverage_profile");
+  const fallback = pilotQueueJobs(workflow);
+  if (fallback.status === "invalid") {
+    panic(fallback.message);
+  }
+  const fast = pilotFastJobs(workflow);
+  if (fast.status === "invalid") {
+    panic(fast.message);
+  }
+  const deferred = gated && !fast.jobs.includes(id);
+  const fallbackJob = fallback.jobs.find((job) => job === id);
+  if (deferred && fallbackJob === undefined) {
+    panic(`No mandatory queue fallback for pilot-deferred ${id}`);
+  }
+  for (const selected of [false, true]) {
+    for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+      for (const included of [false, true]) {
+        const values: Record<string, string | boolean> = {
+          "github.event_name": "pull_request",
+          "inputs.heavy_only": false,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.queue_depth": "full",
+          "needs.ci-plan.outputs.coverage_profile": profile,
+          "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(
+            included ? [id] : [],
+          ),
+          ...Object.fromEntries(
+            output === null
+              ? []
+              : [[`needs.ci-plan.outputs.${output}`, String(selected)]],
+          ),
+        };
+        const planned = output === null || selected;
+        const expected =
+          planned && (!gated || profile === "normal-v1" || included);
+        if (
+          evaluate(condition, {
+            values,
+            status: { success: true, failure: false, cancelled: false },
+          }) !== expected
+        ) {
+          panic(`Unmodeled fast-required predicate: ${id}`);
+        }
+        if (deferred && planned) {
+          const queue = {
+            ...values,
+            "github.event_name": "merge_group",
+            "needs.ci-plan.outputs.suite_depth": "full",
+            "needs.ci-plan.outputs.queue_depth": "thin",
+            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+            "needs.ci-plan.outputs.normal_completion": "required",
+            "needs.ci-plan.outputs.queue_required_jobs": JSON.stringify(
+              fallback.jobs,
+            ),
+          };
+          if (
+            evaluate(condition, {
+              values: queue,
+              status: { success: true, failure: false, cancelled: false },
+            }) !== true
+          ) {
+            panic(`Pilot queue fallback cannot run ${id}`);
+          }
+        }
+      }
+    }
+  }
+  return deferred ? ({ pilotGate: "deferred-capable" } as const) : {};
+};
+
 /**
  * The jobs ci-result requires at fast depth, each with the ci-plan output
  * that plans it, read from a workflow's own ci-result step so the bar cannot
@@ -732,10 +903,8 @@ const runNamePattern = (id: string, template: unknown): RegExp => {
 export const readFastRequiredJobs = (
   workflowSource: string,
 ): FastRequiredJob[] | null => {
-  const jobs = readRecord(
-    readRecord(Bun.YAML.parse(workflowSource), "CI workflow")["jobs"],
-    "CI workflow jobs",
-  );
+  const workflow = readRecord(Bun.YAML.parse(workflowSource), "CI workflow");
+  const jobs = readRecord(workflow["jobs"], "CI workflow jobs");
   const planJob = jobs[CI_PLAN_JOB];
   const resultJob = jobs[CI_RESULT_JOB];
   if (planJob === undefined || resultJob === undefined) {
@@ -769,6 +938,9 @@ export const readFastRequiredJobs = (
   }
   // ci-result looks fast scopes up in JOB_SCOPES + FAST_JOB_SCOPES, the
   // latter winning; an absent or null scope means always planned.
+  const pilotEnabled =
+    Object.hasOwn(env, "COVERAGE_PROFILE") &&
+    Object.hasOwn(env, "PILOT_FAST_JOBS");
   const scopes = {
     ...readRecord(readJsonEnv(env, "JOB_SCOPES"), "JOB_SCOPES"),
     ...readRecord(readJsonEnv(env, "FAST_JOB_SCOPES"), "FAST_JOB_SCOPES"),
@@ -777,8 +949,16 @@ export const readFastRequiredJobs = (
     const output = scopes[id];
     const body = readRecord(jobs[id], `job ${id}`);
     const runName = runNamePattern(id, body["name"]);
+    const pilot = pilotEnabled
+      ? checkFastJobPredicate({
+          id,
+          condition: readString(body, "if"),
+          output: typeof output === "string" ? output : null,
+          workflow,
+        })
+      : {};
     if (output === null || output === undefined) {
-      return { id, scope: { type: "always" }, runName };
+      return { id, scope: { type: "always" }, runName, ...pilot };
     }
     if (typeof output !== "string") {
       return panic(`Expected a ci-plan output name as the scope of ${id}`);
@@ -792,6 +972,7 @@ export const readFastRequiredJobs = (
           ? { type: "not-file-derived", output }
           : { type: "selector", variable },
       runName,
+      ...pilot,
     };
   });
 };
@@ -802,6 +983,7 @@ type UnrunPlannedJobsOptions = {
   jobs: readonly FastRequiredJob[];
   plan: ReadonlyMap<string, boolean>;
   runJobs: readonly RunJob[];
+  coverage?: CiCoverageEvidence;
 };
 
 /**
@@ -813,8 +995,15 @@ export const unrunPlannedJobs = ({
   jobs,
   plan,
   runJobs,
+  coverage = { profile: "normal-v1" },
 }: UnrunPlannedJobsOptions): string[] =>
   jobs
+    .filter(
+      ({ id, pilotGate }) =>
+        coverage.profile !== "pilot-fast-v1" ||
+        pilotGate !== "deferred-capable" ||
+        coverage.jobs.includes(id),
+    )
     .filter(({ scope }) => {
       switch (scope.type) {
         case "always":
@@ -907,16 +1096,16 @@ const ratchetFreshnessFailure = ({
   ) {
     return "cannot read the ratchet definition paths from the base";
   }
-  const ratchetChanges = definitions.filter((filename) =>
-    changedPaths.has(filename),
-  );
+  const isDefinition = (filename: string) =>
+    definitions.some((pattern) => new Bun.Glob(pattern).match(filename));
+  const ratchetChanges = [...changedPaths].filter(isDefinition);
   if (ratchetChanges.length === 0) {
     return null;
   }
   // The recheck runs the base's checker, which cannot judge a PR that edits
   // the checker itself; the merge group runs the merged checker instead, and
   // a direct merge has none, so it needs CI on the merged tree.
-  if (pullFiles.some((filename) => definitions.includes(filename))) {
+  if (pullFiles.some(isDefinition)) {
     return mergeGroupRetests
       ? null
       : `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
@@ -1011,6 +1200,7 @@ type CheckGreenResultFreshnessOptions = {
     title: string;
   }) => Result<ReadonlyMap<string, boolean>, PlanSelectorError>;
   readRunJobs: (runId: number) => readonly RunJob[];
+  readRunCoverage: (runId: number) => Result<CiRunEvidence, CiCoverageLogError>;
   ratchet: RatchetFreshness;
   // True where landing hands the PR to a merge queue, whose merge group re-runs
   // the ratchet and full CI on the real merge commit. A direct merge has no such
@@ -1018,19 +1208,23 @@ type CheckGreenResultFreshnessOptions = {
   mergeGroupRetests: boolean;
 };
 
-export const checkGreenResultFreshness = ({
-  pullRequest,
-  jump,
-  checkRuns,
-  readWorkflowRun,
-  readBaseComparison,
-  readPullFiles,
-  readBaseWorkflow,
-  runSelector,
-  readRunJobs,
-  ratchet,
-  mergeGroupRetests,
-}: CheckGreenResultFreshnessOptions) => {
+export const checkGreenResultFreshness = (
+  options: CheckGreenResultFreshnessOptions,
+): Result<void, StaleGreenResultError> => {
+  const {
+    pullRequest,
+    jump,
+    checkRuns,
+    readWorkflowRun,
+    readBaseComparison,
+    readPullFiles,
+    readBaseWorkflow,
+    runSelector,
+    readRunJobs,
+    readRunCoverage,
+    ratchet,
+    mergeGroupRetests,
+  } = options;
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
   }
@@ -1133,10 +1327,47 @@ export const checkGreenResultFreshness = ({
   if (typeof runId !== "number") {
     return panic("Expected a numeric workflow run id");
   }
+  const evidence = readRunCoverage(runId);
+  if (evidence.isErr()) {
+    return refuse(`cannot read green CI coverage: ${evidence.error.message}`);
+  }
+  const coverage = evidence.value;
+  switch (coverage.profile) {
+    case "queue-validation": {
+      // The pull_request `enqueued` run re-checks earlier coverage and runs
+      // no jobs itself; it outlives the queue entry when the PR is ejected.
+      // Judge the run below it, from its own base: older evidence can only
+      // refuse more, never less.
+      const below = checkRuns.filter(({ id }) => id !== green.id);
+      const previous = latestRunByName(below).get("ci-result");
+      if (
+        previous?.status !== "completed" ||
+        previous.conclusion !== "success"
+      ) {
+        return refuse(
+          "no green ci-result run below the queue validation covers this head",
+        );
+      }
+      return checkGreenResultFreshness({ ...options, checkRuns: below });
+    }
+    case "pilot-fast-v1":
+      if (!mergeGroupRetests) {
+        return refuse(
+          "Pilot deferral requires mandatory merge-group validation",
+        );
+      }
+      break;
+    case "normal-v1":
+      break;
+    default:
+      coverage satisfies never;
+      return panic("Unhandled CI run evidence");
+  }
   const unrun = unrunPlannedJobs({
     jobs,
     plan: plan.value,
     runJobs: readRunJobs(runId),
+    coverage,
   });
   if (unrun.length > 0) {
     return Result.err(
@@ -1354,6 +1585,7 @@ type CheckEjectedHeadOptions = {
     "readMergeQueueRemovals" | "readMergeGroup" | "readBranchTip"
   >;
   pullRequest: Pick<PullRequestSnapshot, "headSha" | "baseRefName">;
+  readReset?: () => JumpResetClassification;
 };
 
 /**
@@ -1365,6 +1597,7 @@ type CheckEjectedHeadOptions = {
 export const checkEjectedHead = ({
   gateway,
   pullRequest,
+  readReset,
 }: CheckEjectedHeadOptions) => {
   const removal = latestEjection(gateway.readMergeQueueRemovals());
   if (removal === undefined) {
@@ -1392,6 +1625,11 @@ export const checkEjectedHead = ({
           : `${printed}; ${pullRequest.baseRefName} moved since (now ${mainTip.sha})`,
       );
     case "unchanged-retry":
+      if (readReset?.().type === "JUMP_RESET") {
+        return Result.ok(
+          `${printed}; JUMP_RESET: one recovery attempt permitted`,
+        );
+      }
       return Result.err(
         new UnchangedEjectedHeadError({
           message:
@@ -1415,11 +1653,13 @@ type GitHubGateway = {
   // needs the SHA, and a narrow read makes the TOCTOU window smaller.
   readHeadSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
+  readHeadWorkflowRuns: (headSha: string) => readonly WorkflowRunSnapshot[];
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
   readBaseWorkflow: (ref: string) => string | null;
   readRunJobs: (runId: number) => readonly RunJob[];
+  readRunCoverage: (runId: number) => Result<CiRunEvidence, CiCoverageLogError>;
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
@@ -1436,6 +1676,7 @@ type GitHubGateway = {
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
   readMergeQueueRemovals: () => readonly MergeQueueRemoval[];
   readMergeGroup: (groupSha: string) => MergeGroupRecord;
+  readJumpResetEvidence: (groupSha: string) => JumpResetEvidence;
   readBranchTip: (branch: string) => BranchTip;
   sleep: (milliseconds: number) => void;
 };
@@ -1487,17 +1728,71 @@ export class DisarmError extends TaggedError("DisarmError")<{
   message: string;
 }> {}
 
+class DisarmChangedError extends TaggedError("DisarmChangedError")<{
+  message: string;
+}> {}
+
+const DISARM_CHANGED_MESSAGE =
+  "disarmed, but the PR changed during the disarm; review and re-arm manually";
+
 type DisarmPullRequestOptions = {
   gateway: Pick<GitHubGateway, "readArmState" | "mutateHandoff">;
   dryRun: boolean;
+  expectedHeadSha?: string;
+};
+
+const checkDisarmHead = (raw: unknown, expectedHeadSha: string) => {
+  const pull = readRecord(raw, "disarm pull request");
+  if (pull["state"] !== "OPEN" || pull["headRefOid"] !== expectedHeadSha) {
+    return Result.err(
+      new DisarmError({
+        message:
+          "NOT DISARMED: expected head changed or its rollup is no longer red",
+      }),
+    );
+  }
+  const commits = readRecord(pull["commits"], "disarm commits")["nodes"];
+  if (!Array.isArray(commits) || commits.length !== 1) {
+    return Result.err(
+      new DisarmError({ message: "NOT DISARMED: head rollup unavailable" }),
+    );
+  }
+  const commit = readRecord(
+    readRecord(commits[0], "disarm commit node")["commit"],
+    "disarm commit",
+  );
+  const rawRollup = commit["statusCheckRollup"];
+  if (rawRollup === null || rawRollup === undefined) {
+    return Result.err(
+      new DisarmError({ message: "NOT DISARMED: head rollup unavailable" }),
+    );
+  }
+  const rollup = readRecord(rawRollup, "disarm head rollup");
+  if (commit["oid"] !== expectedHeadSha || rollup["state"] !== "FAILURE") {
+    return Result.err(
+      new DisarmError({
+        message:
+          "NOT DISARMED: expected head changed or its rollup is no longer red",
+      }),
+    );
+  }
+  return Result.ok();
 };
 
 export const disarmPullRequest = ({
   gateway,
   dryRun,
+  expectedHeadSha,
 }: DisarmPullRequestOptions) =>
   Result.try(() => {
-    const before = armState(gateway.readArmState());
+    const beforeRaw = gateway.readArmState();
+    const before = armState(beforeRaw);
+    if (expectedHeadSha !== undefined) {
+      const pinned = checkDisarmHead(beforeRaw, expectedHeadSha);
+      if (pinned.isErr()) {
+        return pinned;
+      }
+    }
     if (dryRun) {
       return Result.ok({ status: "dry-run", id: before.id } as const);
     }
@@ -1510,9 +1805,18 @@ export const disarmPullRequest = ({
     }
     // Disabling can race with auto-merge enqueueing; inspect queue membership
     // again before removing it, then verify both independent fields are clear.
-    const current = armState(gateway.readArmState());
+    const currentRaw = gateway.readArmState();
+    const current = armState(currentRaw);
     if (current.id !== before.id) {
       panic("Disarm read returned a different pull request");
+    }
+    if (
+      expectedHeadSha !== undefined &&
+      checkDisarmHead(currentRaw, expectedHeadSha).isErr()
+    ) {
+      return Result.err(
+        new DisarmChangedError({ message: DISARM_CHANGED_MESSAGE }),
+      );
     }
     if (current.queue !== null) {
       gateway.mutateHandoff(
@@ -1520,9 +1824,18 @@ export const disarmPullRequest = ({
         variables,
       );
     }
-    const after = armState(gateway.readArmState());
+    const afterRaw = gateway.readArmState();
+    const after = armState(afterRaw);
     if (after.id !== before.id) {
       panic("Disarm read returned a different pull request");
+    }
+    if (
+      expectedHeadSha !== undefined &&
+      checkDisarmHead(afterRaw, expectedHeadSha).isErr()
+    ) {
+      return Result.err(
+        new DisarmChangedError({ message: DISARM_CHANGED_MESSAGE }),
+      );
     }
     if (after.autoMerge !== null || after.queue !== null) {
       return Result.err(
@@ -1669,6 +1982,8 @@ type ArmAndVerifyOptions = {
   readState: () => unknown;
   readRemovals: () => readonly MergeQueueRemoval[];
   mutate: GitHubGateway["mutateHandoff"];
+  beforeWrite?: () => void;
+  onJumpAccepted?: (startedAt: string) => void;
 };
 
 type VerifyArmReceiptOptions = {
@@ -1739,6 +2054,8 @@ export const armAndVerify = ({
   readState,
   readRemovals,
   mutate,
+  beforeWrite,
+  onJumpAccepted,
 }: ArmAndVerifyOptions) =>
   Result.try(() => {
     const before = armState(readState());
@@ -1776,6 +2093,8 @@ export const armAndVerify = ({
       });
     }
     if (jump || checksSucceeded) {
+      beforeWrite?.();
+      const startedAt = new Date().toISOString();
       const result = readRecord(
         mutate(
           `mutation($id:ID!, $sha:GitObjectID!) {
@@ -1796,6 +2115,9 @@ export const armAndVerify = ({
           "enqueue entry",
         ),
       );
+      if (jump && receipt.jump) {
+        onJumpAccepted?.(startedAt);
+      }
       const after = armState(readState());
       if (after.id !== pullRequestId || after.headSha !== expectedHeadSha) {
         return refuseArm("HEAD_MOVED_DURING_ARMING");
@@ -1805,6 +2127,7 @@ export const armAndVerify = ({
       }
       return Result.ok({ kind: "queued", entry: receipt } as const);
     }
+    beforeWrite?.();
     if (before.autoMerge !== null) {
       const disabled = readRecord(
         mutate(
@@ -1990,15 +2313,29 @@ const githubEnvironment = (access: "read" | "write") => ({
       : process.env["GH_TOKEN"],
 });
 
+const checkMutationStop = () => {
+  const stopFile = process.env["STELLA_MERGE_BAR_STOP_FILE"];
+  if (stopFile !== undefined && existsSync(stopFile)) {
+    panic("Native mutations stopped by stop file");
+  }
+};
+
 const runGhProcess = (
   args: readonly string[],
   access: "read" | "write" = "read",
-) =>
-  Bun.spawnSync(["gh", ...args], {
-    env: githubEnvironment(access),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+) => {
+  if (access === "write") {
+    checkMutationStop();
+  }
+  return Bun.spawnSync(
+    ["bash", fileURLToPath(new URL("gh-retry.sh", import.meta.url)), ...args],
+    {
+      env: githubEnvironment(access),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+};
 
 const runGh = (
   args: readonly string[],
@@ -2381,20 +2718,25 @@ const createGhGateway = ({
         "--paginate",
         `repos/${repo}/commits/${headSha}/check-runs`,
         "--jq",
-        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // "")] | @tsv',
+        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // ""), (.check_suite.id // "")] | @tsv',
       ])
         .split("\n")
         .filter(Boolean);
 
       const runs: CheckRunSnapshot[] = [];
       for (const line of lines) {
-        const [rawId, runName, status, conclusion, outputTitle] =
+        const [rawId, runName, status, conclusion, outputTitle, rawSuiteId] =
           line.split("\t");
         const id = Number(rawId);
+        const checkSuiteId =
+          rawSuiteId === undefined || rawSuiteId === ""
+            ? undefined
+            : Number(rawSuiteId);
         if (
           !Number.isSafeInteger(id) ||
           runName === undefined ||
-          status === undefined
+          status === undefined ||
+          (checkSuiteId !== undefined && !Number.isSafeInteger(checkSuiteId))
         ) {
           panic(`Malformed check-run row from gh: ${line}`);
         }
@@ -2405,10 +2747,34 @@ const createGhGateway = ({
           conclusion:
             conclusion === undefined || conclusion === "" ? null : conclusion,
           outputTitle: outputTitle ?? "",
+          ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
         });
       }
       return runs;
     },
+
+    readHeadWorkflowRuns: (headSha) =>
+      runGh([
+        "api",
+        "--paginate",
+        `repos/${repo}/actions/runs?head_sha=${headSha}&per_page=100`,
+        "--jq",
+        ".workflow_runs[] | [.check_suite_id, .path, .event] | @tsv",
+      ])
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const [rawSuiteId, workflowPath, event] = line.split("\t");
+          const checkSuiteId = Number(rawSuiteId);
+          if (
+            !Number.isSafeInteger(checkSuiteId) ||
+            workflowPath === undefined ||
+            event === undefined
+          ) {
+            return panic(`Malformed workflow-run row from gh: ${line}`);
+          }
+          return { checkSuiteId, path: workflowPath, event };
+        }),
 
     readWorkflowRun: (checkRunId) => {
       const check = readRecord(
@@ -2461,11 +2827,31 @@ const createGhGateway = ({
       if (result.exitCode === 0) {
         return result.stdout.toString();
       }
-      if (result.stderr.toString().includes("(HTTP 404)")) {
+      if (result.stderr.toString().includes("HTTP 404")) {
         return null;
       }
       return panic(
         `gh could not read ${CI_WORKFLOW} at ${ref} (${result.exitCode}): ${result.stderr.toString()}`,
+      );
+    },
+
+    readRunCoverage: (runId) => {
+      const jobId = runGh([
+        "api",
+        `repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`,
+        "--jq",
+        '.jobs[] | select(.name == "ci-result") | .id',
+      ]).trim();
+      if (!PULL_NUMBER_PATTERN.test(jobId)) {
+        panic("Missing unique ci-result job for coverage evidence");
+      }
+      Bun.sleepSync(1100);
+      return parseCiCoverageLog(
+        runGh([
+          "api",
+          "--allow-escape-sequences",
+          `repos/${repo}/actions/jobs/${jobId}/logs`,
+        ]),
       );
     },
 
@@ -2669,7 +3055,8 @@ const createGhGateway = ({
           "-f",
           `query=query($owner:String!, $name:String!, $number:Int!) {
           repository(owner:$owner,name:$name) { pullRequest(number:$number) {
-            id headRefOid updatedAt autoMergeRequest { enabledAt }
+            id state headRefOid updatedAt autoMergeRequest { enabledAt }
+            commits(last:1) { nodes { commit { oid statusCheckRollup { state } } } }
             mergeQueueEntry { id position jump state }
           } }
         }`,
@@ -2829,6 +3216,131 @@ const createGhGateway = ({
       };
     },
 
+    readJumpResetEvidence: (groupSha) => {
+      const PAGE_LIMIT = 20;
+      let pagesRead = 0;
+      // Evidence that cannot be read completely is unavailable, never a
+      // crash: classification then fails closed (no recovery) and the
+      // ordinary ejection gate still answers.
+      const unavailable = (reason: string): null => {
+        console.error(`jump-reset evidence unavailable: ${reason}`);
+        return null;
+      };
+      type EvidenceRow = Record<string, unknown> & { id: number };
+      const readPages = (
+        endpoint: string,
+        field: string,
+      ): EvidenceRow[] | null => {
+        const rows: EvidenceRow[] = [];
+        const ids = new Set<number>();
+        let count: number | undefined;
+        for (let page = 1; page <= PAGE_LIMIT; page += 1) {
+          if (pagesRead >= PAGE_LIMIT) {
+            return unavailable("merge group evidence page budget exhausted");
+          }
+          pagesRead += 1;
+          if (page > 1) {
+            Bun.sleepSync(1100);
+          }
+          const body = readRecord(
+            runGhJson(["api", `${endpoint}&per_page=100&page=${page}`]),
+            "actions page",
+          );
+          const total = body["total_count"];
+          const items = body[field];
+          if (
+            typeof total !== "number" ||
+            !Number.isSafeInteger(total) ||
+            total < 0 ||
+            !Array.isArray(items)
+          ) {
+            return unavailable("incomplete merge group evidence");
+          }
+          if (count !== undefined && count !== total) {
+            return unavailable(
+              "merge group evidence changed during pagination",
+            );
+          }
+          count = total;
+          for (const item of items) {
+            const row = readRecord(item, field);
+            const id = row["id"];
+            if (
+              typeof id !== "number" ||
+              !Number.isSafeInteger(id) ||
+              id <= 0 ||
+              ids.has(id)
+            ) {
+              return unavailable(
+                "invalid or duplicate merge group evidence id",
+              );
+            }
+            ids.add(id);
+            rows.push({ ...row, id });
+          }
+          if (items.length < 100) {
+            if (rows.length !== count) {
+              return unavailable("truncated merge group evidence");
+            }
+            return rows;
+          }
+        }
+        return unavailable("merge group evidence page budget exhausted");
+      };
+      const runs = readPages(
+        `repos/${repo}/actions/runs?event=merge_group&head_sha=${encodeURIComponent(groupSha)}`,
+        "workflow_runs",
+      );
+      if (runs === null || runs.length === 0) {
+        return { type: "unavailable" };
+      }
+      const jobs: {
+        name?: string;
+        failedStep: boolean;
+        conclusion: string | null;
+        completedAt: string | null;
+      }[] = [];
+      for (const run of runs) {
+        if (
+          readString(run, "head_sha") !== groupSha ||
+          readString(run, "event") !== "merge_group"
+        ) {
+          return { type: "unavailable" };
+        }
+        const id = run.id;
+        Bun.sleepSync(1100);
+        const rows = readPages(
+          `repos/${repo}/actions/runs/${id}/jobs?filter=latest`,
+          "jobs",
+        );
+        if (rows === null || rows.length === 0) {
+          return { type: "unavailable" };
+        }
+        for (const job of rows) {
+          const steps = job["steps"];
+          if (steps !== undefined && !Array.isArray(steps)) {
+            return { type: "unavailable" };
+          }
+          const jobName = job["name"];
+          jobs.push({
+            ...(typeof jobName === "string" ? { name: jobName } : {}),
+            failedStep:
+              Array.isArray(steps) &&
+              steps.some(
+                (step) => readRecord(step, "step")["conclusion"] === "failure",
+              ),
+            conclusion:
+              job["conclusion"] === null ? null : readString(job, "conclusion"),
+            completedAt:
+              job["completed_at"] === null
+                ? null
+                : readTimestamp(job, "completed_at"),
+          });
+        }
+      }
+      return { type: "complete", jobs, cancellationReason: null };
+    },
+
     readBranchTip: (branch) => {
       const tip = readRecord(
         runGhJson([
@@ -2849,27 +3361,78 @@ const createGhGateway = ({
 
 // --- CLI --------------------------------------------------------------------
 
-type MergeBarOptions = {
+type MergeBarCommonOptions = {
   pullNumber: number;
   repo: MergeBarRepository;
   dryRun: boolean;
-  // Enqueue at the front of the queue only when explicitly requested.
-  jump: boolean;
-  mode: "merge" | "disarm";
+};
+
+type MergeBarOptions = MergeBarCommonOptions &
+  (
+    | { mode: "merge"; jump: boolean }
+    | { mode: "disarm"; jump: false; expectedHeadSha?: string }
+    | { mode: "update-branch"; jump: false; expectedHeadSha: string }
+    | {
+        mode: "classify-ejection" | "requeue-jump-reset";
+        jump: false;
+        expectedHeadSha: string;
+      }
+  );
+
+type ReadPullReferenceOptions = {
+  reference: string;
+  explicitRepo: MergeBarRepository | undefined;
+  mode: MergeBarOptions["mode"];
+};
+
+const readPullReference = ({
+  reference,
+  explicitRepo,
+  mode,
+}: ReadPullReferenceOptions) => {
+  let repo = explicitRepo ?? DEFAULT_REPO;
+  let rawNumber = reference;
+  if (rawNumber.includes("#")) {
+    if (mode !== "update-branch") {
+      panic(
+        "Repository#number references are accepted only with --update-branch",
+      );
+    }
+    const [referenceRepo, referenceNumber, extra] = rawNumber.split("#");
+    repo = readMergeBarRepository(referenceRepo ?? panic("Missing repository"));
+    if (
+      extra !== undefined ||
+      (explicitRepo !== undefined && explicitRepo !== repo)
+    ) {
+      panic(
+        "Pull request reference conflicts with --repo or contains multiple separators",
+      );
+    }
+    rawNumber = referenceNumber ?? panic("Missing pull request number");
+  }
+  if (!PULL_NUMBER_PATTERN.test(rawNumber)) {
+    panic(`PR number must be digits only, got: ${rawNumber}`);
+  }
+  const pullNumber = Number(rawNumber);
+  if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
+    panic(`PR number must be a positive integer, got: ${rawNumber}`);
+  }
+  return { pullNumber, repo };
 };
 
 export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   const positional: string[] = [];
-  let repo: MergeBarRepository = DEFAULT_REPO;
+  let explicitRepo: MergeBarRepository | undefined;
   let dryRun = false;
   let jump = false;
   let mode: MergeBarOptions["mode"] = "merge";
+  let expectedHeadSha: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--repo") {
       index += 1;
-      repo = readMergeBarRepository(
+      explicitRepo = readMergeBarRepository(
         argv[index] ?? panic("--repo requires a value"),
       );
       continue;
@@ -2882,8 +3445,38 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       jump = true;
       continue;
     }
-    if (argument === "--disarm") {
-      mode = "disarm";
+    if (
+      argument === "--disarm" ||
+      argument === "--update-branch" ||
+      argument === "--classify-ejection" ||
+      argument === "--requeue-jump-reset"
+    ) {
+      if (mode !== "merge") {
+        panic("Only one merge-bar mode may be supplied");
+      }
+      switch (argument) {
+        case "--disarm":
+          mode = "disarm";
+          break;
+        case "--update-branch":
+          mode = "update-branch";
+          break;
+        case "--classify-ejection":
+          mode = "classify-ejection";
+          break;
+        case "--requeue-jump-reset":
+          mode = "requeue-jump-reset";
+          break;
+      }
+      continue;
+    }
+    if (argument === "--expected-head-sha") {
+      index += 1;
+      expectedHeadSha =
+        argv[index] ?? panic("--expected-head-sha requires a value");
+      if (!/^[a-f0-9]{40}$/u.test(expectedHeadSha)) {
+        panic("--expected-head-sha requires a full lowercase commit SHA");
+      }
       continue;
     }
     if (argument === undefined || argument.startsWith("--")) {
@@ -2891,32 +3484,42 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     }
     positional.push(argument);
   }
-
-  // Exactly one, all digits. `Number.parseInt("2137oops", 10)` is 2137, so a
-  // mistyped suffix would silently merge a different real pull request; extra
-  // positionals would silently pick the first.
   if (positional.length !== 1) {
     panic(
-      `Expected exactly one PR number, got ${positional.length}. ` +
-        "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
-        "[--dry-run] [--jump | --disarm]",
+      `Expected exactly one PR number, got ${positional.length}. Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run] [--jump | --disarm | --update-branch | --classify-ejection | --requeue-jump-reset] [--expected-head-sha <sha>]`,
     );
   }
-  const rawNumber = positional[0] ?? panic("unreachable: length checked above");
-  if (!PULL_NUMBER_PATTERN.test(rawNumber)) {
-    panic(`PR number must be digits only, got: ${rawNumber}`);
+  const { pullNumber, repo } = readPullReference({
+    reference: positional[0] ?? panic("unreachable: length checked above"),
+    explicitRepo,
+    mode,
+  });
+  if (mode !== "merge" && jump) {
+    panic(`--${mode} cannot be combined with --jump`);
   }
-  const pullNumber = Number(rawNumber);
-  if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
-    panic(`PR number must be a positive integer, got: ${rawNumber}`);
+  if (mode === "merge" && expectedHeadSha !== undefined) {
+    panic("--expected-head-sha requires a head-pinned mode");
   }
-
-  if (mode === "disarm" && jump) {
-    panic("--disarm cannot be combined with --jump");
+  switch (mode) {
+    case "update-branch":
+    case "classify-ejection":
+    case "requeue-jump-reset":
+      if (expectedHeadSha === undefined) {
+        panic(`--${mode} requires --expected-head-sha`);
+      }
+      return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
+    case "disarm":
+      if (expectedHeadSha === undefined) {
+        return { mode, pullNumber, repo, dryRun, jump: false };
+      }
+      return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
+    case "merge":
+      return { mode, pullNumber, repo, dryRun, jump };
+    default:
+      mode satisfies never;
+      return panic("Unknown merge-bar mode");
   }
-  return { pullNumber, repo, dryRun, jump, mode };
 };
-
 const formatVerdict = (verdict: MergeBarVerdict): string =>
   verdict.gates
     .map((gate) =>
@@ -2996,17 +3599,181 @@ if (import.meta.main) {
   if (barFreshness.type === "branch-bar") {
     console.log(barFreshness.message);
   }
+  if (options.mode === "update-branch") {
+    let lastCall = 0;
+    const paced = (
+      args: readonly string[],
+      access: "read" | "write" = "read",
+    ) => {
+      const wait = 1100 - (Date.now() - lastCall);
+      if (wait > 0) {
+        Bun.sleepSync(wait);
+      }
+      lastCall = Date.now();
+      // The existing transport resolves gh from PATH and never retries writes.
+      return runGhProcess(args, access);
+    };
+    const stateRoot =
+      process.env["STELLA_MERGE_BAR_STATE_DIR"] ??
+      path.join(
+        process.env["XDG_STATE_HOME"] ??
+          path.join(homedir(), ".local", "state"),
+        "stella",
+        "merge-bar",
+        "branch-updates",
+      );
+    const receipt = updatePullRequestBranch({
+      repo: options.repo,
+      pullNumber: options.pullNumber,
+      expectedHeadSha: options.expectedHeadSha,
+      dryRun: options.dryRun,
+      store: createBranchUpdateStore(stateRoot),
+      readPullRequest: () => {
+        const response = paced([
+          "api",
+          `repos/${options.repo}/pulls/${options.pullNumber}`,
+        ]);
+        if (response.exitCode !== 0) {
+          panic(`Cannot read pull request (gh exit ${response.exitCode})`);
+        }
+        const raw = readRecord(
+          JSON.parse(response.stdout.toString()),
+          "pull request",
+        );
+        const head = readRecord(raw["head"], "head");
+        const base = readRecord(raw["base"], "base");
+        return {
+          state: readString(raw, "state"),
+          headSha: readString(head, "sha"),
+          headRepository:
+            head["repo"] === null
+              ? null
+              : readString(
+                  readRecord(head["repo"], "head repository"),
+                  "full_name",
+                ),
+          baseRepository: readString(
+            readRecord(base["repo"], "base repository"),
+            "full_name",
+          ),
+        };
+      },
+      update: (expectedHeadSha) => {
+        const response = paced(
+          [
+            "api",
+            "--include",
+            "--method",
+            "PUT",
+            `repos/${options.repo}/pulls/${options.pullNumber}/update-branch`,
+            "-f",
+            `expected_head_sha=${expectedHeadSha}`,
+          ],
+          "write",
+        );
+        return branchUpdateResponse({
+          stdout: response.stdout.toString(),
+          stderr: response.stderr.toString(),
+          exitCode: response.exitCode,
+        });
+      },
+    });
+    if (receipt.isErr()) {
+      console.error(receipt.error.message);
+      process.exit(1);
+    }
+    console.log(
+      `${options.repo}#${options.pullNumber}: ${JSON.stringify(receipt.value)}`,
+    );
+    process.exit(0);
+  }
   const gateway = createGhGateway({
     repo: options.repo,
     pullNumber: options.pullNumber,
     migrationDirectory: MERGE_BAR_REPOSITORIES[options.repo].migrationDirectory,
   });
+  const resetStore = createJumpResetStore(
+    path.join(
+      process.env["STELLA_MERGE_BAR_STATE_DIR"] ??
+        path.join(
+          process.env["XDG_STATE_HOME"] ??
+            path.join(homedir(), ".local", "state"),
+          "stella",
+          "merge-bar",
+        ),
+      "jump-resets",
+    ),
+  );
+  const resetKey = (head: string) =>
+    `${options.repo}#${options.pullNumber}@${head}`;
+  const readReset = (head: string): JumpResetClassification => {
+    const removal = gateway.readMergeQueueRemovals().at(-1);
+    if (
+      removal === undefined ||
+      removalDisposition(removal.reason) !== "ejected" ||
+      removal.headSha !== head ||
+      removal.groupSha === null
+    ) {
+      return { type: "not-reset" };
+    }
+    const jumps = resetStore.readJumps();
+    if (jumps.isErr()) {
+      panic(jumps.error.message);
+    }
+    const evidence = gateway.readJumpResetEvidence(removal.groupSha);
+    return classifyJumpReset({
+      repo: options.repo,
+      evidence:
+        evidence.type === "complete"
+          ? {
+              type: "complete",
+              jobs: evidence.jobs,
+              cancellationReason: removal.reason.value,
+            }
+          : evidence,
+      jumps: jumps.value,
+    });
+  };
+
+  if (options.mode === "classify-ejection") {
+    const pr = gateway.readPullRequest();
+    if (
+      pr.state !== "OPEN" ||
+      pr.isCrossRepository ||
+      pr.headSha !== options.expectedHeadSha
+    ) {
+      panic("PR changed or ownership unverified");
+    }
+    const classification = readReset(pr.headSha);
+    const used = resetStore.hasReservation(resetKey(pr.headSha));
+    if (used.isErr()) {
+      panic(used.error.message);
+    }
+    console.log(
+      JSON.stringify({
+        status: classification.type,
+        head: pr.headSha,
+        retry: used.value ? "reserved" : "available",
+        ...(classification.type === "JUMP_RESET" &&
+        classification.cause === "jump-record"
+          ? { jump_at: classification.jump.at }
+          : {}),
+      }),
+    );
+    process.exit(0);
+  }
 
   if (options.mode === "disarm") {
-    const receipt = disarmPullRequest({ gateway, dryRun: options.dryRun });
+    const receipt = disarmPullRequest({
+      gateway,
+      dryRun: options.dryRun,
+      ...(options.expectedHeadSha === undefined
+        ? {}
+        : { expectedHeadSha: options.expectedHeadSha }),
+    });
     if (receipt.isErr()) {
       console.error(receipt.error.message);
-      process.exit(1);
+      process.exit(receipt.error instanceof DisarmChangedError ? 2 : 1);
     }
     console.log(
       `${receipt.value.status === "dry-run" ? "DRY RUN: would disarm" : "DISARMED"} ${options.repo}#${options.pullNumber}: ${JSON.stringify(receipt.value)}`,
@@ -3034,10 +3801,38 @@ if (import.meta.main) {
   }
 
   const pullRequest = readSettledPullRequest(gateway);
+  if (
+    options.mode === "requeue-jump-reset" &&
+    (pullRequest.headSha !== options.expectedHeadSha ||
+      pullRequest.isCrossRepository)
+  ) {
+    panic("PR changed or ownership unverified");
+  }
+  let reset: JumpResetClassification = { type: "not-reset" };
+  const readUnusedReset = () => {
+    reset = readReset(pullRequest.headSha);
+    const used = resetStore.hasReservation(resetKey(pullRequest.headSha));
+    if (used.isErr()) {
+      panic(used.error.message);
+    }
+    return used.value ? ({ type: "not-reset" } as const) : reset;
+  };
+  if (
+    options.mode === "requeue-jump-reset" &&
+    readUnusedReset().type !== "JUMP_RESET"
+  ) {
+    panic("NOT ARMED: no unused JUMP_RESET recovery for this head");
+  }
   const policy = readLiveRepositoryPolicy(
     options.repo,
     pullRequest.baseRefName,
   );
+  if (
+    options.mode === "requeue-jump-reset" &&
+    policy.landing !== "merge-when-ready"
+  ) {
+    panic("JUMP_RESET recovery requires a merge queue");
+  }
   const jump = options.jump;
   const requireFrontOfQueue = (
     context: string,
@@ -3075,7 +3870,11 @@ if (import.meta.main) {
     process.exit(0);
   }
   if (policy.landing === "merge-when-ready") {
-    const ejectedHead = checkEjectedHead({ gateway, pullRequest });
+    const ejectedHead = checkEjectedHead({
+      gateway,
+      pullRequest,
+      readReset: readUnusedReset,
+    });
     if (ejectedHead.isErr()) {
       console.error(ejectedHead.error.message);
       process.exit(1);
@@ -3086,7 +3885,10 @@ if (import.meta.main) {
   }
   // Read order is load-bearing: each gate's window is the time between its
   // own read and the write, so the head SHA the write pins is read last.
-  const checkRuns = gateway.readCheckRuns(pullRequest.headSha);
+  const checkRuns = pullRequestCheckRuns({
+    checkRuns: gateway.readCheckRuns(pullRequest.headSha),
+    workflowRuns: gateway.readHeadWorkflowRuns(pullRequest.headSha),
+  });
   const freshness = checkGreenResultFreshness({
     pullRequest,
     jump: options.jump,
@@ -3102,6 +3904,7 @@ if (import.meta.main) {
         cwd: fileURLToPath(new URL("..", import.meta.url)),
       }),
     readRunJobs: gateway.readRunJobs,
+    readRunCoverage: gateway.readRunCoverage,
     mergeGroupRetests: policy.landing === "merge-when-ready",
     ratchet: ratchetFreshnessFor({
       repo: options.repo,
@@ -3204,6 +4007,34 @@ if (import.meta.main) {
             readState: gateway.readArmState,
             readRemovals: gateway.readMergeQueueRemovals,
             mutate: gateway.mutateHandoff,
+            beforeWrite: () => {
+              checkMutationStop();
+              if (reset.type !== "JUMP_RESET") {
+                return;
+              }
+              const fresh = readReset(snapshot.headShaBeforeMerge);
+              if (fresh.type !== "JUMP_RESET") {
+                panic("JUMP_RESET evidence changed before requeue");
+              }
+              checkMutationStop();
+              const reserved = resetStore.reserve(
+                resetKey(snapshot.headShaBeforeMerge),
+              );
+              if (reserved.isErr()) {
+                panic(reserved.error.message);
+              }
+            },
+            onJumpAccepted: (at) => {
+              const saved = resetStore.recordJump({
+                repo: options.repo,
+                pr: options.pullNumber,
+                head: snapshot.headShaBeforeMerge,
+                at,
+              });
+              if (saved.isErr()) {
+                panic(saved.error.message);
+              }
+            },
           });
           if (handoff.isErr()) {
             console.error(handoff.error.message);
@@ -3248,6 +4079,15 @@ if (import.meta.main) {
             default:
               handoffResult satisfies never;
               panic("Unhandled arm result");
+          }
+          if (options.mode === "requeue-jump-reset") {
+            console.log(
+              `REQUEUE ${options.repo}#${options.pullNumber}: ${JSON.stringify({
+                status:
+                  handoffResult.kind === "armed" ? "armed" : "re-enqueued",
+                head: snapshot.headShaBeforeMerge,
+              })}`,
+            );
           }
           break;
         }

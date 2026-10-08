@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
 
-import { type Block, plainTextOf } from "@/api/handlers/case-law/document-ast";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { conservesText } from "./blocks";

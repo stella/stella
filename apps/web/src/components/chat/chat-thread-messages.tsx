@@ -12,11 +12,11 @@ import {
   ChevronRightIcon,
   ClockIcon,
   FileTextIcon,
-  Loader2Icon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -51,6 +51,7 @@ import {
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
+  sentinelIsAboveRoot,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
@@ -212,7 +213,7 @@ export const ChatThreadMessages = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
@@ -296,6 +297,7 @@ export const ChatThreadMessages = ({
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
+              threadRef={threadRef}
             />
             <div
               className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
@@ -524,14 +526,10 @@ const StickyUserTurn = ({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
-        if (!entry) {
-          return;
+        const stuck = sentinelIsAboveRoot(entries);
+        if (stuck !== undefined) {
+          setIsStuck(stuck);
         }
-        const rootTop = entry.rootBounds?.top ?? 0;
-        setIsStuck(
-          !entry.isIntersecting && entry.boundingClientRect.top <= rootTop,
-        );
       },
       { root, rootMargin: "0px", threshold: [0] },
     );
@@ -669,7 +667,7 @@ type LoadOlderSentinelProps = {
  * Top-of-list paging affordance. The `div` is the IntersectionObserver
  * target that auto-loads when scrolled near; the button is the manual,
  * keyboard-accessible fallback. While a page is in flight it shows a
- * spinner instead so the observer (re-armed only when idle) cannot
+ * loader instead so the observer (re-armed only when idle) cannot
  * stack requests.
  */
 const LoadOlderSentinel = ({
@@ -682,8 +680,12 @@ const LoadOlderSentinel = ({
   return (
     <div className="flex justify-center py-1" ref={ref}>
       {isLoadingOlder ? (
-        <span className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (
@@ -1359,6 +1361,7 @@ type AssistantMessagePartsProps = Pick<
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
   | "streamdownComponents"
+  | "threadRef"
   | "workspaceId"
 > & {
   activeOrganizationId: string;
@@ -1535,6 +1538,7 @@ const toAssistantPartRenderGroups = (
  * remount on every streaming text delta.
  */
 const AssistantMessageParts = ({
+  threadRef,
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
@@ -1565,6 +1569,8 @@ const AssistantMessageParts = ({
         <ChatRichMessagePart
           key={`${message.id}-${entry.key}`}
           part={entry.part}
+          organizationId={activeOrganizationId}
+          threadRef={threadRef}
         />
       );
     }

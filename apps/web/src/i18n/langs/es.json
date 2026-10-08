@@ -145,6 +145,7 @@
       "useBackupCode": "Usar un código de copia de seguridad en su lugar"
     },
     "useDifferentEmail": "Usar otro correo",
+    "usePassword": "Usar una contraseña",
     "weSentCodeTo": "Hemos enviado un código a <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "Elegir una lista",
+      "createList": "Crear una lista",
       "evidenceList": "Hechos de",
       "noLists": "Este asunto no tiene listas.",
       "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
@@ -1049,6 +1051,7 @@
       "toastDescription": "El chat a pantalla completa llegará con conversaciones guardadas.",
       "toastTitle": "La vista completa aún no está disponible"
     },
+    "activateGeneratedView": "Interactuar con esta vista",
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",
@@ -1194,6 +1197,8 @@
     "forkedFromUnavailable": "Creado a partir de un chat que ya no está disponible",
     "forkedThread": "De otro chat",
     "forkingThread": "Creando un chat nuevo…",
+    "generatedView": "Vista generada",
+    "generatedViewDrill": "Busca resoluciones con el filtro de tribunal {court} y el año {year}.",
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
@@ -1696,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# elemento eliminado} other {# elementos eliminados}}",
     "description": "Descripción",
     "details": "Detalles",
+    "detailsHiddenFeatureUnavailable": "Detalles ocultos: función no activada",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nombre para mostrar",
@@ -2364,6 +2370,7 @@
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
       "encryptedContent": "No se puede extraer el contenido de un documento cifrado. Quita la contraseña del archivo y vuelve a intentarlo.",
       "filePropertyTypeImmutable": "No se puede cambiar el tipo de una propiedad de archivo. Mantén el tipo actual; crea una propiedad personalizada para otros valores.",
+      "fileSecurityRejected": "Una comprobación de seguridad rechazó el archivo. Quita el contenido señalado y sube una copia limpia.",
       "forbidden": "No tienes permiso para hacer esto.",
       "hostedCheckoutOpen": "Ya hay un pago abierto para esta organización. Complételo o inicie uno nuevo cuando caduque.",
       "hostedSubscriptionLive": "Esta organización ya tiene una suscripción. Cámbiela en «Gestionar uso alojado».",
@@ -5336,7 +5343,6 @@
       "noLanguagesFound": "No se encontraron idiomas",
       "notConfigured": "DeepL no está configurado para esta organización. Añade una clave de API de DeepL en la configuración de la organización para habilitar la traducción.",
       "outputLabel": "Tipo de traducción",
-      "progress": "Progreso de la traducción",
       "progressCount": "{completed} de {total} completados",
       "providerUnavailable": "El servicio de traducción no está disponible. Inténtelo de nuevo más tarde o póngase en contacto con su administrador.",
       "runFailed": "No se pudo completar la traducción.",
@@ -5468,14 +5474,8 @@
     "exportToCsv": "Exportar a CSV",
     "fields": {
       "calculating": "Calculando...",
-      "currencyLabel": "Moneda (opcional)",
-      "currencyPlaceholder": "p. ej. USD, EUR",
-      "editFieldValue": "Editar valor del campo",
       "errored": "Error",
-      "fieldValueLabel": "Valor del campo",
-      "fieldValuePlaceholder": "Introduzca el valor del campo",
       "formatNotSupported": "Formato no compatible",
-      "numberPlaceholder": "Introduzca un número",
       "selectAValue": "Seleccione un valor",
       "selectValues": "Seleccione valores"
     },

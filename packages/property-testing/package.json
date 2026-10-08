@@ -25,6 +25,7 @@
     "fast-check": "catalog:"
   },
   "devDependencies": {
+    "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   }

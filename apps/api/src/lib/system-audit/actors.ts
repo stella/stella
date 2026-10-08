@@ -58,6 +58,26 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "blocked",
     "failed",
   ],
+  "system:review-organization-reset": [
+    "deletedMatters",
+    "deletedContacts",
+    "deletedClauses",
+    "deletedTemplates",
+    "deletedPlaybooks",
+    "sweptRows",
+    "failedDeletes",
+    "seededContacts",
+    "seededMatters",
+    "seededDocuments",
+    "seededTasks",
+    "seededTimeEntries",
+    "seededClauses",
+    "seededTemplates",
+    "seededPlaybooks",
+    "seededRateTables",
+    "enabledTimeBilling",
+    "seedFailed",
+  ],
   "system:eu-corpus-completion": [
     "attempted",
     "applied",
@@ -65,6 +85,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "reviewRequired",
     "failed",
   ],
+  "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
 export type SystemRunActor = keyof typeof SYSTEM_RUN_ACTOR_COUNTS;

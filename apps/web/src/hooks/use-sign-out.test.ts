@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 // The browser this test signs out of: its storage and the sign-out endpoint.
 const local = new Map<string, string>();
 const memoryStorage = {
@@ -30,8 +32,9 @@ globalThis.fetch = Object.assign(
 );
 
 const { signOutAndRelease } = await import("@/hooks/use-sign-out");
-const { installUserScopedStorage, storageOwner } =
-  await import("@/lib/account/user-scoped-storage");
+const { installUserScopedStorage } =
+  await import("@/lib/account/install-user-scoped-storage");
+const { storageOwner } = await import("@/lib/account/user-scoped-storage");
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
@@ -52,9 +55,7 @@ describe("signing out", () => {
     });
 
     const result = await signOutAndRelease(areas());
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
+    await sleep(20);
 
     expect(result.error).not.toBeNull();
     expect(storageOwner()).toEqual({ kind: "visitor" });

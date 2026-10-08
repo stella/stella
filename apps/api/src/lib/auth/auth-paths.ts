@@ -1,6 +1,6 @@
 import { env } from "@/api/env";
 
-export const AUTH_API_PATH = "/api/auth" as const;
+const AUTH_API_PATH = "/api/auth" as const;
 
 export const OAUTH_UI_LOGIN_PATH = "/oauth-ui/auth" as const;
 export const OAUTH_UI_ORGANIZATION_PATH =

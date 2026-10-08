@@ -256,7 +256,21 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
       }
     }
   }
-  expect(Object.keys(recording.jobs)).toEqual(["build", "record"]);
+  expect(Object.keys(recording.jobs)).toEqual(["build", "record", "deliver"]);
+  expect(recording["permissions"]).toEqual({});
+  expect(recording.jobs["deliver"]).toMatchObject({
+    needs: "record",
+    uses: "./.github/workflows/network-baseline-deliver.yml",
+    permissions: { contents: "read", actions: "read" },
+  });
+  const delivery = read("network-baseline-deliver");
+  expect(Object.keys(delivery.on)).toEqual(["workflow_call"]);
+  expect(delivery["permissions"]).toEqual({});
+  expect(Object.keys(delivery.jobs)).toEqual(["deliver"]);
+  expect(delivery.jobs["deliver"]?.permissions).toEqual({
+    contents: "read",
+    actions: "read",
+  });
   for (const job of Object.values(recording.jobs)) {
     expect(
       Object.values(job.permissions ?? {}).every((value) => value === "read"),
@@ -428,7 +442,7 @@ test("landing dispatch ends after acceptance, propagates rejection and never wai
       ?.run,
   );
   expect(script).not.toMatch(
-    /gh run (?:watch|list|view)|\bsleep\b|attempt_deploy/u,
+    /(?:gh|gh-retry\.sh["']?|\$GH_RETRY_SCRIPT"?) run (?:watch|list|view)|\bsleep\b|attempt_deploy/u,
   );
   const directory = mkdtempSync(path.join(tmpdir(), "landing-dispatch-"));
   try {

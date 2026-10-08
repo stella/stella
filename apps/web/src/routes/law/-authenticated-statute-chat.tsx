@@ -16,7 +16,11 @@ export const AuthenticatedStatuteChat = ({
   <ChatMentionProviders>
     <AIAvailabilityProvider>
       <ChatEditorProvider>
-        <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
+        <LegalReaderAIChat
+          activeLegal={activeLegal}
+          aiMode="enabled"
+          className="h-full"
+        >
           {children}
         </LegalReaderAIChat>
       </ChatEditorProvider>

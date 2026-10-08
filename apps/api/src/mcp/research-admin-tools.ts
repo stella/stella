@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -236,6 +237,7 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       resourceType: v.string(),
       resourceId: v.string(),
       changes: v.unknown(),
+      changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
   ),
   limit: v.pipe(v.number(), v.integer()),
@@ -666,6 +668,8 @@ const handleListAuditLogTool: McpToolHandler<
     queryAuditLogPage({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
+      userId: context.userId,
+      featureAccessSnapshot: context.featureAccessSnapshot,
       recordAuditEvent: context.recordAuditEvent,
       query: filter,
     }),
@@ -685,6 +689,7 @@ const handleListAuditLogTool: McpToolHandler<
         resourceType: item.resourceType,
         resourceId: item.resourceId,
         changes: item.changes,
+        changesStatus: item.changesStatus,
       })),
     }),
   );
@@ -937,7 +942,7 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
-  accountAccess: "standard",
+  accountAccess: "account-control",
   permissions: selectOperationByValue<(typeof MANAGE_ORG_ACTIONS)[number]>(
     "action",
     {
@@ -1128,7 +1133,7 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
   );
 };
 
-export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
+const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   SEARCH_BOE_LEGISLATION_TOOL_DEFINITION,
   LIST_AUDIT_LOG_TOOL_DEFINITION,
   MANAGE_ORGANIZATION_TOOL_DEFINITION,

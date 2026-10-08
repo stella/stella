@@ -110,27 +110,27 @@ const providerAllocationSchema = v.object({
   metadata: v.optional(providerMetadataSchema),
 });
 
-export const entitlementCreatedEventSchema = v.looseObject({
+const entitlementCreatedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_CREATED_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
-export const entitlementUpdatedEventSchema = v.looseObject({
+const entitlementUpdatedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_UPDATED_EVENT_TYPE),
   data: providerUpdatedEntitlementSchema,
 });
 
-export const entitlementActiveEventSchema = v.looseObject({
+const entitlementActiveEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_ACTIVE_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
-export const entitlementCanceledEventSchema = v.looseObject({
+const entitlementCanceledEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_CANCELED_EVENT_TYPE),
   data: providerClosedEntitlementSchema,
 });
 
-export const entitlementRevokedEventSchema = v.looseObject({
+const entitlementRevokedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_REVOKED_EVENT_TYPE),
   data: providerClosedEntitlementSchema,
 });
@@ -147,7 +147,7 @@ const entitlementPausedEventSchema = v.looseObject({
   data: providerClosedEntitlementSchema,
 });
 
-export const allocationCreatedEventSchema = v.looseObject({
+const allocationCreatedEventSchema = v.looseObject({
   type: v.literal(ALLOCATION_CREATED_EVENT_TYPE),
   data: providerAllocationSchema,
 });
@@ -182,7 +182,3 @@ export type HostedUsageAllocationPayload = v.InferOutput<
 export const hostedUsageUnknownEventEnvelopeSchema = v.looseObject({
   type: v.string(),
 });
-
-export type HostedUsageEnvelope = v.InferOutput<
-  typeof hostedUsageUnknownEventEnvelopeSchema
->;

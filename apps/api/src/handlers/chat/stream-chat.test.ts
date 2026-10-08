@@ -75,7 +75,8 @@ import type {
   ChatAnonRestoration,
   ChatMessage,
 } from "@/api/handlers/chat/types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,
@@ -1729,6 +1730,8 @@ describe("native interrupt boundary persistence", () => {
     const { safeDb } = createScopedDbMock({});
     const tools = createSpawnSubagentsTool({
       buildSubagentToolset: () => ({}),
+      // The tool pauses for approval here and never runs a subagent.
+      modelAdmission: undefined,
       organizationId: toSafeId<"organization">(
         "22222222-2222-4222-8222-222222222222",
       ),
@@ -3372,10 +3375,51 @@ describe("outgoing chat stream message ids", () => {
       expect(errorSpy).toHaveBeenCalledWith("chat.stream_failed", {
         kind: "unknown",
         "error.class": "UnknownError",
+        "error.provider.reason": "unrecognized",
         "error.provider.status": "403",
         "failure.shadow_grade": "defect",
         "failure.shadow_reason": "unclassified",
       });
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  test("names the template of a refused OpenAI request, never its text", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const errorSpy = spyOn(logger, "error");
+    try {
+      const stream = processServerChatStream({
+        abortSignal: new AbortController().signal,
+        deadlineSignal: new AbortController().signal,
+        getResponseMessage: () => null,
+        initialMessages: [],
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: () => undefined,
+        processor: new StreamProcessor(),
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.RUN_ERROR,
+            message:
+              "Item 'rs_0a1b' of type 'reasoning' was provided without its required following item.",
+            rawEvent: { statusCode: 400 },
+          },
+        ]),
+      });
+
+      await collectChunks(stream);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "chat.stream_failed",
+        expect.objectContaining({
+          "error.provider.reason": "reasoning_without_following_item",
+          "error.provider.status": "400",
+        }),
+      );
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain("rs_0a1b");
     } finally {
       errorSpy.mockRestore();
     }
@@ -5489,5 +5533,166 @@ describe("a superseded client-tool call in the engine's history", () => {
     expect(finish?.responseMessage.parts).toMatchObject([
       { type: "text", content: "It will say one sentence." },
     ]);
+  });
+});
+
+describe("native visual stream persistence", () => {
+  test("preserves issued resources through client-tool continuation and reload", () => {
+    const origin = createVisualResourceOrigin();
+    const messageId = createSafeId<"chatMessage">();
+    const part = origin.issue({
+      fileId: createSafeId<"userFile">(),
+      title: "Court overview",
+      toolCallId: "visual-call",
+    });
+    const capture = createStreamMessageCapture({
+      initialMessages: [],
+      capture: (message) => toChatMessage(message, origin),
+    });
+    const chunks = [
+      {
+        type: EventType.RUN_STARTED,
+        runId: "visual-run",
+        threadId: "visual-thread",
+      },
+      {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: messageId,
+        toolCallId: "visual-call",
+        toolCallName: "show_visual",
+      },
+      { type: EventType.CUSTOM, name: "ui-resource", value: part },
+      {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: messageId,
+        toolCallId: "client-call",
+        toolCallName: "client-view",
+      },
+      {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: "client-call",
+        delta: "{}",
+      },
+      { type: EventType.TOOL_CALL_END, toolCallId: "client-call" },
+      {
+        type: EventType.RUN_FINISHED,
+        runId: "visual-run",
+        threadId: "visual-thread",
+        finishReason: "tool_calls",
+      },
+    ] as const satisfies readonly StreamChunk[];
+    for (const chunk of chunks) {
+      capture.processor.processChunk(chunk);
+    }
+    capture.processor.finalizeStream();
+    const persisted =
+      capture.message() ?? panic("Visual stream produced no message");
+    const streamed =
+      capture.processor
+        .getMessages()
+        .find(({ role }) => role === "assistant") ??
+      panic("Visual stream produced no assistant");
+    const streamedVisuals = streamed.parts.filter(
+      (messagePart) => messagePart.type === "ui-resource",
+    );
+    expect(streamedVisuals).toEqual([part]);
+    expect(
+      persisted.parts.filter(
+        (messagePart) => messagePart.type === "ui-resource",
+      ),
+    ).toEqual(streamedVisuals);
+    const stored = chatMessageContentFromMessage(
+      toPersistableChatMessage({
+        id: toSafeId<"chatMessage">(persisted.id),
+        role: persisted.role,
+        parts: persisted.parts,
+      }),
+    );
+    const reloaded = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">(persisted.id),
+      role: persisted.role,
+      content: stored,
+    });
+    expect(
+      reloaded.parts.filter(
+        (messagePart) => messagePart.type === "ui-resource",
+      ),
+    ).toEqual(streamedVisuals);
+    expect(
+      toChatMessage(streamed)?.parts.some(
+        (messagePart) => messagePart.type === "ui-resource",
+      ) ?? false,
+    ).toBe(false);
+    expect(
+      reloaded.parts.find(
+        (messagePart) =>
+          messagePart.type === "tool-call" && messagePart.id === "client-call",
+      ),
+    ).toMatchObject({ state: "input-complete", name: "client-view" });
+    const resumedOrigin = createVisualResourceOrigin({
+      persistedParts: reloaded.parts,
+    });
+    const resumed = createStreamMessageCapture({
+      initialMessages: [reloaded],
+      capture: (message) => toChatMessage(message, resumedOrigin),
+    });
+    const resumeChunks = [
+      {
+        type: EventType.RUN_STARTED,
+        runId: "visual-resume",
+        threadId: "visual-thread",
+      },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId: "client-call",
+        messageId: "client-result",
+        content: "View selected",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: "Selection received.",
+      },
+      { type: EventType.TEXT_MESSAGE_END, messageId },
+      {
+        type: EventType.RUN_FINISHED,
+        runId: "visual-resume",
+        threadId: "visual-thread",
+        finishReason: "stop",
+      },
+    ] as const satisfies readonly StreamChunk[];
+    for (const chunk of resumeChunks) {
+      resumed.processor.processChunk(chunk);
+    }
+    resumed.processor.finalizeStream();
+    const resumedMessage =
+      resumed.message() ?? panic("Continuation produced no message");
+    expect(
+      resumedMessage.parts.filter(({ type }) => type === "ui-resource"),
+    ).toEqual([part]);
+    const resumedContent = chatMessageContentFromMessage(
+      toPersistableChatMessage({
+        id: toSafeId<"chatMessage">(resumedMessage.id),
+        role: resumedMessage.role,
+        parts: resumedMessage.parts,
+      }),
+    );
+    const resumedReload = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">(resumedMessage.id),
+      role: resumedMessage.role,
+      content: resumedContent,
+    });
+    expect(
+      resumedReload.parts.filter(({ type }) => type === "ui-resource"),
+    ).toEqual([part]);
+    expect(resumedReload.parts).toContainEqual({
+      type: "text",
+      content: "Selection received.",
+    });
   });
 });

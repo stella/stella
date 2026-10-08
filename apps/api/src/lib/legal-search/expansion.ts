@@ -616,7 +616,7 @@ export const shadowExpansionAttributes = ({
 });
 
 /** Record what expansion would have done to a query that ran unexpanded. */
-export const logShadowExpansion = (log: ShadowExpansionLog): void => {
+const logShadowExpansion = (log: ShadowExpansionLog): void => {
   logger.info(EXPANSION_SHADOW, shadowExpansionAttributes(log));
 };
 

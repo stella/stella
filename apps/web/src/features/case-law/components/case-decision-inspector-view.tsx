@@ -123,13 +123,14 @@ export const CaseDecisionInspectorView = ({
   const provisionAnchors = useDecisionProvisionAnchors({
     court: decision?.court ?? null,
     caseNumber: decision?.caseNumber ?? null,
-    blocks: visibleDecisionBlocks(ast, caseNumberType),
+    surface: "inspector",
+    blocks: visibleDecisionBlocks(ast, caseNumberType, decision?.fulltext),
     country: decision?.country ?? null,
     decisionId,
     decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast, caseNumberType),
+    visibleDecisionBlocks(ast, caseNumberType, decision?.fulltext),
     decisionDate,
   );
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -231,6 +232,7 @@ export const CaseDecisionInspectorView = ({
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}
       <LegalReaderAIChat
+        aiMode="enabled"
         activeLegal={activeLegalFromReaderTarget(annotationTarget)}
         className="min-h-0 flex-1"
       >
@@ -285,6 +287,7 @@ export const CaseDecisionInspectorView = ({
                 {/* The find bar owns every search mark; the landing passage
                     remains independent of the query the reader edits. */}
                 <DecisionText
+                  surface="inspector"
                   annotationAnchors={annotations.anchors}
                   citationAnchors={citationAnchors}
                   decision={decision}

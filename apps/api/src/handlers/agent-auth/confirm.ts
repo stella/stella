@@ -21,7 +21,7 @@ const config = {
   // the agent inherits the confirming user's least-privilege scopes, not
   // the organization's. External collaborators hold no integration grant.
   permissions: { integration: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies HandlerConfig;
 

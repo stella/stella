@@ -14,6 +14,8 @@ set -euo pipefail
 
 bun scripts/check-swallowed-item-error-ledger.ts --self-test
 bun scripts/check-swallowed-item-error-ledger.ts
+bun scripts/check-concurrency-exceptions.ts
+bun test ./scripts/check-concurrency-exceptions.test.ts
 bun scripts/check-contract-domain-ledger.ts --self-test
 bun scripts/check-contract-domain-ledger.ts
 bun scripts/calendar-day-ledger.ts --self-test

@@ -1,0 +1,85 @@
+Correct DNS MX and DKIM signing declarations to match mailauth 7.1.0 runtime.
+Also model the absent alignment on DMARC results without a usable policy.
+Remove when upstream declarations include these runtime shapes.
+
+diff --git a/index.d.ts b/index.d.ts
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -5,11 +5,12 @@
+ /// <reference types="node" />
+ 
+ import { Readable, Transform } from 'stream';
++import type { MxRecord } from 'node:dns';
+ 
+ /**
+  * DNS resolver function type for custom DNS resolution
+  */
+-export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[]>;
++export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[] | MxRecord[]>;
+ 
+ /**
+  * Input types accepted by mailauth functions
+@@ -661,7 +662,7 @@
+     /**
+      * Alignment results
+      */
+-    alignment: {
++    alignment?: {
+         spf: {
+             /**
+              * Aligned SPF domain, or undefined if no domain aligned
+@@ -872,22 +873,18 @@
+ /**
+  * DKIM signing options
+  */
++export interface DKIMSignatureData {
++    signingDomain: string;
++    selector: string;
++    privateKey: string | Buffer;
++    canonicalization?: string;
++    algorithm?: string;
++    headerList?: string[] | string;
++    maxBodyLength?: number;
++    identity?: string;
++}
++
+ export interface DKIMSignOptions {
+-    /**
+-     * Signing domain (d= tag)
+-     */
+-    signingDomain: string;
+-
+-    /**
+-     * Key selector (s= tag)
+-     */
+-    selector: string;
+-
+-    /**
+-     * Private key for signing (PEM format)
+-     */
+-    privateKey: string | Buffer;
+-
+     /**
+      * Canonicalization algorithm (default: 'relaxed/relaxed')
+      * Format: 'header/body' where each can be 'simple' or 'relaxed'
+@@ -918,19 +915,9 @@
+     expires?: Date | string | number;
+ 
+     /**
+-     * Maximum body length to sign (l= tag)
+-     */
+-    maxBodyLength?: number;
+-
+-    /**
+-     * Identity (i= tag), an address whose domain is the signing domain or its subdomain
+-     */
+-    identity?: string;
+-
+-    /**
+      * Multiple signature configurations
+      */
+-    signatureData?: DKIMSignOptions[];
++    signatureData?: DKIMSignatureData[];
+ 
+     /**
+      * Follow the RFCs exactly (default: false). Strict mode refuses rsa-sha1, RSA keys

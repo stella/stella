@@ -240,6 +240,7 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 17_500,
   },
   // models.dev: anthropic:claude-sonnet-5-5
+  // reviewed rate correction: cost.cache_read 0.1 -> 0.2 (2026-10-07: models.dev lists half the provider cache-read price; https://platform.claude.com/docs/en/models/sonnet-5-5/overview)
   "claude-sonnet-5-5": {
     kind: "flat",
     inputPerMTok: 200_000,
@@ -378,6 +379,13 @@ export const MODEL_RATES = {
     kind: "flat",
     inputPerMTok: 7000,
     outputPerMTok: 30_000,
+  },
+  // models.dev: mistral:mistral-large-4
+  "mistral-large-4": {
+    kind: "flat",
+    inputPerMTok: 68_000,
+    outputPerMTok: 209_000,
+    cachedInputPerMTok: 7000,
   },
   // models.dev: mistral:mistral-large-latest
   "mistral-large-latest": {

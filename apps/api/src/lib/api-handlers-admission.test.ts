@@ -9,6 +9,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
   admitFiniteAction,
+  configuredModelAdmission,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -619,4 +620,50 @@ describe("finite HTTP action admission", () => {
       });
     },
   );
+
+  test("admitted finite work hands its handler the proof of its organization and kind", async () => {
+    await withFeature(false, async () => {
+      const proofs: unknown[] = [];
+      const endpoint = createSafeRootHandler(
+        config,
+        async function* ({ modelAdmission }) {
+          proofs.push(configuredModelAdmission({ modelAdmission }));
+          return Result.ok({ ok: true });
+        },
+      );
+      expect(await endpoint.handler(asTestRaw(context()))).toEqual({
+        ok: true,
+      });
+      const finite = await Result.gen(() =>
+        admitFiniteAction({
+          ctx: { ...context(), scopedDb: createScopedDbMock({}).scopedDb },
+          actionKind: "chat.suggested-prompts",
+          async *handler({ modelAdmission }) {
+            proofs.push(modelAdmission);
+            return Result.ok({ ok: true });
+          },
+        }),
+      );
+      expect(Result.isOk(finite)).toBe(true);
+      const organizationId = context().session.activeOrganizationId;
+      expect(proofs).toEqual([
+        expect.objectContaining({
+          type: "organization",
+          organizationId,
+          actionKind: config.actionAdmission.actionKind,
+        }),
+        expect.objectContaining({
+          type: "organization",
+          organizationId,
+          actionKind: "chat.suggested-prompts",
+        }),
+      ]);
+    });
+  });
+
+  test("a handler without a configured admission holds no model proof", () => {
+    expect(() => configuredModelAdmission({})).toThrow(
+      "A handler dispatched a model without its configured admission",
+    );
+  });
 });

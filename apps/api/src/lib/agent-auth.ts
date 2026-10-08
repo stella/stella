@@ -194,9 +194,7 @@ export type TokenResponseShape = {
   scope: string;
 };
 
-export const isTokenResponse = (
-  value: unknown,
-): value is TokenResponseShape => {
+const isTokenResponse = (value: unknown): value is TokenResponseShape => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -210,7 +208,7 @@ export const isTokenResponse = (
   );
 };
 
-export const reshapeTokenResponse = (
+const reshapeTokenResponse = (
   value: TokenResponseShape,
 ): TokenResponseShape => ({
   access_token: value.access_token,
@@ -219,8 +217,22 @@ export const reshapeTokenResponse = (
   scope: value.scope,
 });
 
-/** The redirect URI every agent client is bound to (never navigated to). */
-export const getAgentRedirectUri = (): string => AGENT_REDIRECT_URI;
+export type AgentTokenErrorCode =
+  | "authorization_pending"
+  | "slow_down"
+  | "expired_token"
+  | "access_denied"
+  | "invalid_grant"
+  | "token_mint_failed";
+
+export class AgentTokenError extends Error {
+  readonly code: AgentTokenErrorCode;
+  constructor(code: AgentTokenErrorCode) {
+    super(code);
+    this.code = code;
+    this.name = "AgentTokenError";
+  }
+}
 
 /**
  * Exchange a stored authorization code for an MCP-audience JWT using the
@@ -289,23 +301,6 @@ const mintAnonymousToken = async (
   }
   return Result.ok(reshapeTokenResponse(result.value));
 };
-
-export type AgentTokenErrorCode =
-  | "authorization_pending"
-  | "slow_down"
-  | "expired_token"
-  | "access_denied"
-  | "invalid_grant"
-  | "token_mint_failed";
-
-export class AgentTokenError extends Error {
-  readonly code: AgentTokenErrorCode;
-  constructor(code: AgentTokenErrorCode) {
-    super(code);
-    this.code = code;
-    this.name = "AgentTokenError";
-  }
-}
 
 export type ServiceAuthCeremony = {
   registrationId: string;

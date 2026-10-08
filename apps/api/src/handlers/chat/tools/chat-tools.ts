@@ -62,6 +62,7 @@ import {
   createRememberTool,
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
+import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   createSpawnSubagentsTool,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -109,9 +110,11 @@ import type {
   DocumentWriteAccess,
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
+import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
@@ -356,6 +359,7 @@ type FolderConsistencyReviewTools = ReturnType<
 type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
+type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -379,7 +383,8 @@ type BuiltInChatTools = OrgTools &
   FolderConsistencyReviewTools &
   RegistryWriteTools &
   SubagentTools &
-  RememberTools;
+  RememberTools &
+  ShowVisualTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -393,6 +398,8 @@ type BuiltInChatToolPolicyName =
   | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
+  /** Only the owning chat turn can issue and store displayed visual resources. */
+  visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
@@ -401,6 +408,11 @@ export type GetChatToolsProps = {
   scopedDb: ScopedDb;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   organizationId: SafeId<"organization">;
+  /**
+   * The turn's admission. A run's tool set carries it; a set built only to
+   * validate or name tools never executes and has none.
+   */
+  modelAdmission?: ModelDispatchAdmission | undefined;
   /**
    * Caller's workspace member role. Gates role-restricted tools so a
    * chat-capable role without the matching grant cannot reach them.
@@ -766,6 +778,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     scopedDb,
     pinServerValidatedWorkspaceId,
     organizationId,
+    modelAdmission,
     memberRole,
     orgAIConfig,
     managedAIResidency,
@@ -822,6 +835,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ? createFolderConsistencyReviewTools({
           createAbortSignal: createAIAbortSignal,
           organizationId,
+          modelAdmission,
           orgAIConfig,
           managedAIResidency,
           promptCachingEnabled,
@@ -1080,6 +1094,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           scopedDb,
           safeDb,
           organizationId,
+          modelAdmission,
           userId,
           orgAIConfig,
           managedAIResidency,
@@ -1098,6 +1113,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     ? createTemplateAuthoringTools({
         safeDb,
         organizationId,
+        modelAdmission,
         userId,
         orgAIConfig,
         managedAIResidency,
@@ -1181,12 +1197,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           getChatTools({
             ...props,
             browserClient: undefined,
+            visualTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
             projectToolSet: (tools) =>
               projectToolMapForSubagent(tools, proposalSink),
           }),
         organizationId,
+        modelAdmission,
         orgAIConfig,
         managedAIResidency,
         safeDb,
@@ -1201,6 +1219,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const registered = applyChatToolPolicies({
     policyKinds,
     tools: {
+      ...(props.visualTools === undefined
+        ? {}
+        : createShowVisualTools(props.visualTools)),
       ...orgTools,
       ...executionTools,
       ...skillTools,
@@ -1238,7 +1259,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         },
         kind: "tools",
         id: name,
-        featureId: getStaticMcpToolDefinition(name)?.featureId,
+        featureId:
+          CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
+            (definition) => definition.name === name,
+          )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId,
       }),
     ),
   );

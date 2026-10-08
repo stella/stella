@@ -1,0 +1,7 @@
+# Storing a generated case-law decision analysis
+
+Generated from `scripts/ownership/case-law-analysis-store.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                 | Owner                                         | Enforcement                                                       | Summary                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `case-law-analysis-store` — Storing a generated case-law decision analysis | `apps/api/src/lib/case-law/analysis-store.ts` | import `@/api/lib/case-law/analysis-store` (plus 2 allowed files) | An analysis is global corpus state written from a background task that outlives its request. The store's claim/save/clear operations are the only way the generation handlers reach the row, and a deployment reading a shared corpus never writes there. |

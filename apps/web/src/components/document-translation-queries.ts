@@ -16,7 +16,7 @@ type DocumentTranslationPreparationRef = {
   entityVersionKey: number | string;
 };
 
-export const documentTranslationPreparationKeys = {
+const documentTranslationPreparationKeys = {
   all: (workspaceId: string) =>
     ["document-translation-preparations", workspaceId] as const,
   detail: ({
@@ -49,10 +49,6 @@ const fetchDocumentTranslationPreparation = async (
       ),
   );
 
-export type DocumentTranslationPreparation = Awaited<
-  ReturnType<typeof fetchDocumentTranslationPreparation>
->;
-
 export const documentTranslationPreparationOptions = (
   ref: DocumentTranslationPreparationRef,
 ) =>
@@ -69,7 +65,7 @@ type DocumentTranslationRunRef = {
   runId: string;
 };
 
-export const documentTranslationRunKeys = {
+const documentTranslationRunKeys = {
   all: (workspaceId: string) =>
     ["document-translation-runs", workspaceId] as const,
   detail: ({ workspaceId, runId }: DocumentTranslationRunRef) =>
@@ -89,7 +85,7 @@ const fetchDocumentTranslationRun = async (
       .get({ ...(signal === undefined ? {} : { fetch: { signal } }) }),
   );
 
-export type DocumentTranslationRunDetail = Awaited<
+type DocumentTranslationRunDetail = Awaited<
   ReturnType<typeof fetchDocumentTranslationRun>
 >;
 export type DocumentTranslationRun = DocumentTranslationRunDetail["run"];

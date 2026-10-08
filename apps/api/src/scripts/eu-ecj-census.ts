@@ -1,5 +1,6 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -179,8 +180,12 @@ console.error(`distinct CELEX: ${distinctCelex.length}`);
 /** `celex:LANG` pairs Cellar lists as existing XHTML manifestations. */
 const listedVariants = new Set<string>();
 const listedCelex = new Set<string>();
-for (let index = 0; index < distinctCelex.length; index += sparqlChunk) {
-  const chunk = distinctCelex.slice(index, index + sparqlChunk);
+for (const [batchIndex, chunk] of chunkItems(
+  distinctCelex,
+  sparqlChunk,
+).entries()) {
+  const index = batchIndex * sparqlChunk;
+
   const variants = await listCelexVariants({
     celexNumbers: chunk,
     signal: AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),

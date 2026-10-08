@@ -8,21 +8,21 @@ export const rootDbExecuteMock = mock(
   async (_query: SQL): Promise<Record<string, unknown>[]> =>
     await Promise.resolve([]),
 );
-export const rootDbTransactionMock = mock(
+const rootDbTransactionMock = mock(
   async (
     runTransaction: (tx: {
       execute: typeof rootDbExecuteMock;
     }) => Promise<unknown>,
   ) => await runTransaction({ execute: rootDbExecuteMock }),
 );
-export const rootDbLimitMock = mock(
+const rootDbLimitMock = mock(
   async (): Promise<Record<string, unknown>[]> =>
     await Promise.resolve([{ searchableText: "Document content" }]),
 );
-export const rootDbWhereMock = mock(() => ({ limit: rootDbLimitMock }));
-export const rootDbFromMock = mock(() => ({ where: rootDbWhereMock }));
+const rootDbWhereMock = mock(() => ({ limit: rootDbLimitMock }));
+const rootDbFromMock = mock(() => ({ where: rootDbWhereMock }));
 export const rootDbSelectMock = mock(() => ({ from: rootDbFromMock }));
-export const rootDbCaseLawDecisionFindFirstMock = mock(
+const rootDbCaseLawDecisionFindFirstMock = mock(
   async () => await Promise.resolve(null),
 );
 export const rootDbChatThreadFindFirstMock = mock(
