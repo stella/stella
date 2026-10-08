@@ -37,7 +37,10 @@ const setup = () => {
     "https://web.example.test",
     "https://alternate.example.test",
   ];
-  const onRender = mock(() => undefined);
+  const rendered: { renderId?: string } = {};
+  const onRender = mock(({ renderId }: { renderId: string }) => {
+    rendered.renderId = renderId;
+  });
   const onTheme = mock(() => undefined);
   const onGuestMessage = mock(() => undefined);
   const activation = { active: false };
@@ -52,13 +55,14 @@ const setup = () => {
     onGuestMessage,
     hasUserActivation: () => activation.active,
     now: () => clock.now,
+    createRenderId: () => Bun.randomUUIDv7(),
   });
-  const connect = () => {
+  const connect = (data?: unknown) => {
     const fake = createFakePort();
     handle({
       source: innerWindow,
       origin: "null",
-      data: { kind: "port" },
+      data: data ?? { kind: "port", renderId: rendered.renderId },
       ports: [fake.port],
     });
     return fake;
@@ -74,6 +78,7 @@ const setup = () => {
     innerWindow,
     connect,
     renderView,
+    rendered,
     onRender,
     onTheme,
     onGuestMessage,
@@ -109,7 +114,11 @@ describe("visual frame bridge", () => {
       data: render,
     });
     expect(onRender).toHaveBeenCalledTimes(1);
-    expect(onRender).toHaveBeenCalledWith({ ...render, links: [] });
+    expect(onRender).toHaveBeenCalledWith({
+      ...render,
+      links: [],
+      renderId: expect.any(String),
+    });
   });
 
   test("forwards validated themes only from the pinned host after a valid render", () => {
@@ -150,6 +159,7 @@ describe("visual frame bridge", () => {
       data: {},
       links: [],
       theme,
+      renderId: expect.any(String),
     });
     for (const event of [
       { source: innerWindow, origin: "null", data },
@@ -191,7 +201,11 @@ describe("visual frame bridge", () => {
       origin: "https://web.example.test",
       data: timelineRender,
     });
-    expect(onRender).toHaveBeenCalledWith({ ...timelineRender, links: [] });
+    expect(onRender).toHaveBeenCalledWith({
+      ...timelineRender,
+      links: [],
+      renderId: expect.any(String),
+    });
     connect().send({ kind: "resize", height: 300 });
     expect(onGuestMessage).toHaveBeenCalledWith(
       { kind: "resize", height: 300 },
@@ -234,6 +248,7 @@ describe("visual frame bridge", () => {
       title: "Timeline",
       html: "<p>Dates</p>",
       links: [],
+      renderId: expect.any(String),
     });
   });
 
@@ -286,6 +301,7 @@ describe("visual frame bridge", () => {
       parentWindow,
       renderView,
       connect,
+      rendered,
       onRender,
       onGuestMessage,
       handle,
@@ -324,7 +340,7 @@ describe("visual frame bridge", () => {
     for (const data of [
       { kind: "resize", height: 0 },
       { kind: "resize", height: 300, title: "Timeline" },
-      { kind: "port" },
+      { kind: "port", renderId: rendered.renderId },
       "resize",
     ]) {
       send(data);
@@ -335,8 +351,14 @@ describe("visual frame bridge", () => {
   });
 
   test("binds only the view's first port, from the view frame, after a render", () => {
-    const { innerWindow, renderView, connect, onGuestMessage, handle } =
-      setup();
+    const {
+      innerWindow,
+      renderView,
+      connect,
+      rendered,
+      onGuestMessage,
+      handle,
+    } = setup();
     const resize = { kind: "resize", height: 300 };
     const offer = (event: {
       source: unknown;
@@ -348,7 +370,7 @@ describe("visual frame bridge", () => {
       handle({
         source: event.source,
         origin: event.origin,
-        data: event.data ?? { kind: "port" },
+        data: event.data ?? { kind: "port", renderId: rendered.renderId },
         ports: fakes.map(({ port }) => port),
       });
       for (const fake of fakes) {
@@ -363,7 +385,17 @@ describe("visual frame bridge", () => {
       { source: {}, origin: "null" },
       { source: innerWindow, origin: "https://web.example.test" },
       { source: innerWindow, origin: "null", data: { kind: "ports" } },
-      { source: innerWindow, origin: "null", data: { kind: "port", id: 1 } },
+      {
+        source: innerWindow,
+        origin: "null",
+        data: { kind: "port", renderId: rendered.renderId, id: 1 },
+      },
+      { source: innerWindow, origin: "null", data: { kind: "port" } },
+      {
+        source: innerWindow,
+        origin: "null",
+        data: { kind: "port", renderId: Bun.randomUUIDv7() },
+      },
       { source: innerWindow, origin: "null", count: 0 },
       { source: innerWindow, origin: "null", count: 2 },
     ]) {
@@ -372,6 +404,7 @@ describe("visual frame bridge", () => {
     expect(onGuestMessage).not.toHaveBeenCalled();
     const first = connect();
     const second = connect();
+    expect(second.state.closed).toBe(true);
     second.send(resize);
     expect(onGuestMessage).not.toHaveBeenCalled();
     first.send(resize);
@@ -420,14 +453,54 @@ describe("visual frame bridge", () => {
     );
   });
 
+  test("binds the port of the latest render when an earlier view's port arrives late", () => {
+    const { renderView, connect, rendered, onGuestMessage } = setup();
+    renderView();
+    const firstRenderId = rendered.renderId;
+    renderView();
+    const stale = connect({ kind: "port", renderId: firstRenderId });
+    expect(stale.state.closed).toBe(true);
+    stale.send({ kind: "resize", height: 100 });
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    const current = connect();
+    expect(current.state.closed).toBe(false);
+    current.send({ kind: "resize", height: 300 });
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+    expect(onGuestMessage).toHaveBeenLastCalledWith(
+      { kind: "resize", height: 300 },
+      "https://web.example.test",
+    );
+  });
+
+  test("rejects and closes ports offered without the current render id", () => {
+    const { renderView, connect, rendered, onGuestMessage } = setup();
+    renderView();
+    for (const data of [
+      { kind: "port" },
+      { kind: "port", renderId: Bun.randomUUIDv7() },
+      { kind: "port", renderId: "render" },
+    ]) {
+      const offered = connect(data);
+      expect(offered.state.closed).toBe(true);
+      offered.send({ kind: "resize", height: 100 });
+    }
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    connect({ kind: "port", renderId: rendered.renderId }).send({
+      kind: "resize",
+      height: 300,
+    });
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+  });
+
   test("receives view messages on a browser message port", async () => {
-    const { innerWindow, renderView, onGuestMessage, handle } = setup();
+    const { innerWindow, renderView, rendered, onGuestMessage, handle } =
+      setup();
     renderView();
     const channel = new MessageChannel();
     handle({
       source: innerWindow,
       origin: "null",
-      data: { kind: "port" },
+      data: { kind: "port", renderId: rendered.renderId },
       ports: [visualGuestPortFrom(channel.port2)],
     });
     const delivered = new Promise<void>((resolve) => {

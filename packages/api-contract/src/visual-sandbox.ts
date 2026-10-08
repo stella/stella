@@ -1,6 +1,11 @@
 import * as v from "valibot";
 
 export const VISUAL_GUEST_MARKER_ATTRIBUTE = "data-stella-visual-guest";
+/**
+ * Holds the id the shell gives each render. The view's runtime returns it
+ * with its port, so the shell binds only the port of the view it rendered.
+ */
+export const VISUAL_RENDER_ID_SCRIPT_ID = "stella-visual-render-id";
 
 export const VISUAL_SHELL_NONCE_PARAMETER = "n";
 export const visualShellReadySchema = v.strictObject({
@@ -81,4 +86,5 @@ export type VisualGuestMessage = v.InferOutput<typeof visualGuestMessageSchema>;
  */
 export const visualGuestPortMessageSchema = v.strictObject({
   kind: v.literal("port"),
+  renderId: v.pipe(v.string(), v.uuid()),
 });

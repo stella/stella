@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { load } from "cheerio";
 
 import { VISUAL_DATA_SCRIPT_ID } from "@stll/api-contract/generated-visual";
-import { VISUAL_GUEST_MARKER_ATTRIBUTE } from "@stll/api-contract/visual-sandbox";
+import {
+  VISUAL_GUEST_MARKER_ATTRIBUTE,
+  VISUAL_RENDER_ID_SCRIPT_ID,
+} from "@stll/api-contract/visual-sandbox";
 import { VISUAL_THEME_SCRIPT_ID } from "@stll/api-contract/visual-theme";
 
 import { VISUAL_INNER_POLICY, visualOuterPolicy } from "./document";
@@ -14,6 +17,7 @@ import {
 } from "./srcdoc";
 
 const markup = sanitizeVisualHtml("<p>Timeline</p>").unwrap();
+const renderId = Bun.randomUUIDv7();
 
 describe("visual document composition", () => {
   test("provides initial theme JSON before executable runtime without changing policy", () => {
@@ -24,6 +28,7 @@ describe("visual document composition", () => {
     const $ = load(
       composeVisualDocument({
         html: markup,
+        renderId,
         data: {},
         runtime: "void 0",
         policy: VISUAL_INNER_POLICY,
@@ -54,6 +59,7 @@ describe("visual document composition", () => {
       const document = load(
         composeVisualDocument({
           html: markup,
+          renderId,
           data: {},
           runtime: `const title=${encoded};`,
           policy: "default-src 'none'",
@@ -69,6 +75,7 @@ describe("visual document composition", () => {
     const $ = load(
       composeVisualDocument({
         html: markup,
+        renderId,
         data: {},
         runtime: "void 0",
         policy: "default-src 'none'",
@@ -96,6 +103,7 @@ describe("visual document composition", () => {
       const $ = load(
         composeVisualDocument({
           html: markup,
+          renderId,
           data: {},
           runtime: "void 0",
           policy,
@@ -110,6 +118,7 @@ describe("visual document composition", () => {
     const $ = load(
       composeVisualDocument({
         html: markup,
+        renderId,
         data: {},
         runtime: "void 0",
         policy: VISUAL_INNER_POLICY,
@@ -136,16 +145,20 @@ describe("visual document composition", () => {
     const $ = load(
       composeVisualDocument({
         html: markup,
+        renderId,
         data,
         runtime: "void 0",
         policy: "default-src 'none'",
       }),
     );
     const scripts = $("head script");
-    expect(scripts).toHaveLength(2);
+    expect(scripts).toHaveLength(3);
     expect(scripts.first().attr("type")).toBe("application/json");
     expect(scripts.first().attr("id")).toBe(VISUAL_DATA_SCRIPT_ID);
     expect(JSON.parse(scripts.first().text())).toEqual(data);
+    expect(scripts.eq(1).attr("type")).toBe("application/json");
+    expect(scripts.eq(1).attr("id")).toBe(VISUAL_RENDER_ID_SCRIPT_ID);
+    expect(JSON.parse(scripts.eq(1).text())).toBe(renderId);
     expect(scripts.last().attr("type")).toBeUndefined();
     expect(scripts.last().text()).toBe("void 0");
   });

@@ -7,7 +7,9 @@ import {
 } from "@stll/api-contract/generated-visual";
 import {
   VISUAL_GUEST_MARKER_ATTRIBUTE,
+  VISUAL_RENDER_ID_SCRIPT_ID,
   VISUAL_SANDBOX_LIMITS,
+  visualGuestPortMessageSchema,
   visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
 import {
@@ -31,15 +33,32 @@ const bootGuest = (): void => {
   // This runs before any page script. Every message to the shell travels on
   // a private port whose sender is captured here, so page script can neither
   // reach the port nor replace how it sends. The shell binds only the first
-  // port a view hands over and ignores view messages sent to the window.
+  // port a view hands over for its render and ignores view messages sent to
+  // the window.
   const channel = new MessageChannel();
   const send = channel.port1.postMessage.bind(channel.port1);
-  window.parent.postMessage({ kind: "port" }, "*", [channel.port2]);
   const gesture = createVisualGestureGate({
     now: performance.now.bind(performance),
   });
   gesture.listen(window);
   try {
+    const renderIdElement = document.querySelector(
+      `#${VISUAL_RENDER_ID_SCRIPT_ID}`,
+    );
+    if (!renderIdElement) {
+      panic("The visual document has no render id");
+    }
+    const renderId = v.parse(
+      visualGuestPortMessageSchema.entries.renderId,
+      JSON.parse(renderIdElement.textContent),
+    );
+    window.parent.postMessage(
+      { kind: "port", renderId } satisfies v.InferOutput<
+        typeof visualGuestPortMessageSchema
+      >,
+      "*",
+      [channel.port2],
+    );
     isolateVisualGuest();
     installVisualPresentation(document);
     const themeElement = document.querySelector(`#${VISUAL_THEME_SCRIPT_ID}`);
@@ -199,13 +218,14 @@ const bootOuter = (runtime: string) => {
     innerWindow: inner.contentWindow,
     outerOrigin: window.location.origin,
     origins,
-    onRender: ({ title, html, data, theme }) => {
+    onRender: ({ renderId, title, html, data, theme }) => {
       latestTheme = theme;
       inner.title = title;
       // safe-html: sanitizeVisualHtml output validated at the message boundary, composed with Stella's bundled runtime and fixed policy.
       inner.srcdoc = composeVisualDocument({
         html,
         data,
+        renderId,
         runtime,
         policy,
         theme,
@@ -222,6 +242,7 @@ const bootOuter = (runtime: string) => {
     hasUserActivation: () =>
       "userActivation" in navigator && navigator.userActivation.isActive,
     now: () => performance.now(),
+    createRenderId: () => crypto.randomUUID(),
   });
   boot.current = { type: "ready", receive };
   const reportReady = () => {

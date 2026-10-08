@@ -37,8 +37,9 @@ export const visualGuestPortFrom = (port: MessagePort): VisualGuestPort => ({
 });
 
 type VisualGuestPortState =
-  | { type: "awaiting" }
-  | { type: "bound"; port: VisualGuestPort };
+  | { type: "unrendered" }
+  | { type: "awaiting"; renderId: string }
+  | { type: "bound"; renderId: string; port: VisualGuestPort };
 
 type VisualFrameEvent = {
   source: unknown;
@@ -52,7 +53,7 @@ type VisualMessageHandlerOptions = {
   innerWindow: unknown;
   outerOrigin: string;
   origins: readonly string[];
-  onRender: (message: SanitizedRenderMessage) => void;
+  onRender: (message: SanitizedRenderMessage & { renderId: string }) => void;
   onTheme: (theme: VisualTheme) => void;
   onGuestMessage: (
     message: v.InferOutput<typeof visualGuestMessageSchema>,
@@ -65,6 +66,8 @@ type VisualMessageHandlerOptions = {
    */
   hasUserActivation: () => boolean;
   now: () => number;
+  /** Returns a fresh, unguessable id for each render. */
+  createRenderId: () => string;
 };
 
 const GUEST_ACTION_INTERVAL_MS = 1000;
@@ -79,13 +82,16 @@ export const createVisualMessageHandler = ({
   onGuestMessage,
   hasUserActivation,
   now,
+  createRenderId,
 }: VisualMessageHandlerOptions) => {
   let hostOrigin: string | undefined;
   const lastAction = new Map<string, number>();
   let actionGate: ReturnType<typeof createVisualActionGate> | undefined;
   // Each render loads a new view, whose runtime sends its port first, before
-  // any page script runs. Only that first port is bound for the render.
-  let guestPort: VisualGuestPortState = { type: "awaiting" };
+  // any page script runs, with the id of its render. The frame keeps its
+  // window and origin across renders, so a late port from an earlier view is
+  // told apart only by that id. Only the first matching port is bound.
+  let guestPort: VisualGuestPortState = { type: "unrendered" };
   const receiveGuest = (data: unknown) => {
     if (!hostOrigin) {
       return;
@@ -119,16 +125,25 @@ export const createVisualMessageHandler = ({
     }
     onGuestMessage(parsed.output, hostOrigin);
   };
-  const bindGuestPort = (event: VisualFrameEvent) => {
-    const port = event.ports?.length === 1 ? event.ports[0] : undefined;
+  const bindGuestPort = ({ data: message, ports = [] }: VisualFrameEvent) => {
+    const port = ports.length === 1 ? ports[0] : undefined;
+    const offer = v.safeParse(visualGuestPortMessageSchema, message);
     if (
       guestPort.type !== "awaiting" ||
       port === undefined ||
-      !v.safeParse(visualGuestPortMessageSchema, event.data).success
+      !offer.success ||
+      offer.output.renderId !== guestPort.renderId
     ) {
+      for (const rejected of ports) {
+        rejected.close();
+      }
       return;
     }
-    const bound: VisualGuestPortState = { type: "bound", port };
+    const bound: VisualGuestPortState = {
+      type: "bound",
+      renderId: guestPort.renderId,
+      port,
+    };
     guestPort = bound;
     port.listen((data) => {
       if (guestPort === bound) {
@@ -169,8 +184,10 @@ export const createVisualMessageHandler = ({
       if (guestPort.type === "bound") {
         guestPort.port.close();
       }
-      guestPort = { type: "awaiting" };
+      const renderId = createRenderId();
+      guestPort = { type: "awaiting", renderId };
       onRender({
+        renderId,
         type: parsed.output.type,
         title: parsed.output.title,
         html: sanitized.value.html,

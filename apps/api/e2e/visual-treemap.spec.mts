@@ -119,6 +119,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       const document = composeVisualDocument({
         html,
         data: {},
+        renderId: crypto.randomUUID(),
         runtime,
         policy: policy
           .split(";")
