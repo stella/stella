@@ -67,6 +67,67 @@ describe("expanded case-law headnotes", () => {
     },
   );
 
+  test.each([
+    null,
+    {
+      type: "present" as const,
+      text: "A holding. ".repeat(500),
+      truncated: false,
+    },
+  ])(
+    "an oversized identity envelope explicitly omits headnotes without growing",
+    (headnote) => {
+      const page = {
+        ...APP_SEARCH_FIXTURE,
+        results: Array.from({ length: 20 }, () => ({
+          ...first,
+          caseNumber: "A long public reference ".repeat(200),
+          headnote,
+        })),
+      };
+      const baseline = JSON.stringify({
+        ...page,
+        headnotes: "omitted",
+        results: page.results.map((row) => ({ ...row, headnote: null })),
+      }).length;
+      expect(baseline).toBeGreaterThan(LIMITS.mcpCaseLawSearchPageMaxChars);
+      const result = boundCaseLawSearchHeadnotes(page);
+      expect(result.headnotes).toBe("omitted");
+      expect(result.results.every((row) => row.headnote === null)).toBe(true);
+      expect(JSON.stringify(result).length).toBeLessThanOrEqual(baseline);
+      expect(result.results.at(0)?.appUrl).toBe(first.appUrl);
+    },
+  );
+
+  test("a nearly full envelope omits headnotes when no prose object fits", () => {
+    const row = {
+      ...first,
+      headnote: {
+        type: "present" as const,
+        text: "A holding.",
+        truncated: false,
+      },
+    };
+    const page = { ...APP_SEARCH_FIXTURE, results: [row] };
+    const baseline = JSON.stringify({
+      ...page,
+      headnotes: "omitted",
+      results: [{ ...row, headnote: null }],
+    }).length;
+    row.caseNumber += "x".repeat(
+      LIMITS.mcpCaseLawSearchPageMaxChars - baseline - 1,
+    );
+    expect(JSON.stringify(page).length).toBeGreaterThan(
+      LIMITS.mcpCaseLawSearchPageMaxChars,
+    );
+    const result = boundCaseLawSearchHeadnotes(page);
+    expect(result.headnotes).toBe("omitted");
+    expect(result.results.at(0)?.headnote).toBeNull();
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(
+      LIMITS.mcpCaseLawSearchPageMaxChars,
+    );
+  });
+
   test("short headnotes stay whole while longer rows share the remaining budget", () => {
     const page = {
       ...APP_SEARCH_FIXTURE,

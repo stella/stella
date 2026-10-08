@@ -2537,6 +2537,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   );
 
   const payload = boundCaseLawSearchHeadnotes({
+    headnotes: "included",
     facets: first.exhausted ? null : first.page.facets,
     searches,
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,

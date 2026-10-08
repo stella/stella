@@ -9,16 +9,33 @@ type SearchPage = Extract<
   { results: unknown }
 >;
 
+// The identity/excerpt envelope is preserved even if it alone exceeds the budget.
+// Its headnote-free size is the upper bound in that case; omitted is explicit,
+// so consumers never describe budget exclusions as publisher absence.
+const omitHeadnotes = (page: SearchPage) => {
+  page.headnotes = "omitted";
+  for (const row of page.results) {
+    row.headnote = null;
+  }
+  return page;
+};
+
 /** Spend the page's text budget fairly, keeping shorter headnotes whole. */
 export const boundCaseLawSearchHeadnotes = (page: SearchPage) => {
   const { results: rows } = page;
   const baseline = JSON.stringify({
     ...page,
+    headnotes: "omitted",
     results: rows.map((row) => ({ ...row, headnote: null })),
   }).length;
+  if (baseline >= LIMITS.mcpCaseLawSearchPageMaxChars) {
+    return omitHeadnotes(page);
+  }
+  page.headnotes = "included";
+  // Included costs one character more than omitted.
   // The baseline already paid four characters for each null headnote.
   let remaining =
-    LIMITS.mcpCaseLawSearchPageMaxChars - baseline + rows.length * 4;
+    LIMITS.mcpCaseLawSearchPageMaxChars - baseline - 1 + rows.length * 4;
   const ordered = rows.toSorted(
     (a, b) =>
       JSON.stringify(a.headnote).length - JSON.stringify(b.headnote).length,
@@ -69,5 +86,8 @@ export const boundCaseLawSearchHeadnotes = (page: SearchPage) => {
     }
     remaining -= JSON.stringify(row.headnote).length;
   }
-  return page;
+  // Even the minimum prose object may not fit a nearly full envelope.
+  return JSON.stringify(page).length > LIMITS.mcpCaseLawSearchPageMaxChars
+    ? omitHeadnotes(page)
+    : page;
 };

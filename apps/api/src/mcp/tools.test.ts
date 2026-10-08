@@ -2480,6 +2480,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      headnotes: "included",
       facets: {
         courtYear: COURT_YEAR_FIXTURE,
         court: [
@@ -2738,6 +2739,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      headnotes: "included",
       facets: {
         courtYear: null,
         court: [],

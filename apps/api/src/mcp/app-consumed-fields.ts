@@ -11,6 +11,7 @@ const decisionFields = [
 ] as const;
 export const MCP_APP_CONSUMED_FIELDS = {
   search_case_law: [
+    "headnotes",
     ...decisionFields.map((field) => `results[].${field}`),
     "results[].snippet",
     "results[].headnote.type",

@@ -99,6 +99,22 @@ const ResultTableRow = ({
   const format = useFormatter();
   const panelId = useId();
   const [expanded, setExpanded] = useState(false);
+  const headnoteText = (() => {
+    if (row.type === "lookup") {
+      return null;
+    }
+    const { headnote } = row;
+    switch (headnote.type) {
+      case "present":
+        return headnote.text;
+      case "omitted":
+        return t("headnoteOmitted");
+      case "not_stated":
+        return t("headnoteNotStated");
+      default:
+        return panic("Unknown headnote state", headnote satisfies never);
+    }
+  })();
   const url = row.appUrl;
   const sourceUrl = row.source_url;
   const open = () => {
@@ -187,10 +203,7 @@ const ResultTableRow = ({
             <AccordionItem value={row.decisionId} className="border-0">
               <div className="flex min-w-0 items-center gap-2">
                 <p className="snippet text-muted-foreground min-w-0 flex-1 truncate text-sm">
-                  {row.snippet ??
-                    (row.headnote.type === "present"
-                      ? row.headnote.text
-                      : t("headnoteNotStated"))}
+                  {row.snippet ?? headnoteText}
                 </p>
                 <AccordionTrigger
                   aria-controls={panelId}
@@ -224,9 +237,7 @@ const ResultTableRow = ({
                     dir="auto"
                     className="text-sm leading-relaxed break-words whitespace-pre-wrap"
                   >
-                    {row.headnote.type === "not_stated"
-                      ? t("headnoteNotStated")
-                      : row.headnote.text}
+                    {headnoteText}
                   </p>
                   {row.headnote.type === "present" &&
                     row.headnote.truncated && (

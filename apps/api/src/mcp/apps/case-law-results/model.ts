@@ -19,7 +19,8 @@ type RowContent =
       keywords: SearchPage["results"][number]["keywords"];
       headnote:
         | NonNullable<SearchPage["results"][number]["headnote"]>
-        | { type: "not_stated" };
+        | { type: "not_stated" }
+        | { type: "omitted" };
     }
   | { type: "lookup"; snippet: null };
 
@@ -89,6 +90,29 @@ const lookupRows = (items: LookupPage["items"]) => {
   return { rows, notices };
 };
 
+const searchHeadnote = (
+  row: SearchPage["results"][number],
+  availability: SearchPage["headnotes"],
+) => {
+  switch (availability) {
+    case "omitted":
+      return { type: "omitted" } as const;
+    case "included":
+      return row.headnote === null
+        ? ({ type: "not_stated" } as const)
+        : {
+            type: row.headnote.type,
+            text: row.headnote.text,
+            truncated: row.headnote.truncated,
+          };
+    default:
+      return panic(
+        "Unknown headnote availability",
+        availability satisfies never,
+      );
+  }
+};
+
 // Only the rendered fields and the next-page handle survive in the view state.
 export const searchView = (data: SearchResults) => {
   if (!("results" in data)) {
@@ -112,14 +136,7 @@ export const searchView = (data: SearchResults) => {
                 items: row.keywords.items.map((item) => item),
                 omitted: row.keywords.omitted,
               },
-        headnote:
-          row.headnote === null
-            ? { type: "not_stated" }
-            : {
-                type: row.headnote.type,
-                text: row.headnote.text,
-                truncated: row.headnote.truncated,
-              },
+        headnote: searchHeadnote(row, data.headnotes),
       }),
     ),
     facets:

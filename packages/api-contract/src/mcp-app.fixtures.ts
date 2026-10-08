@@ -1,4 +1,5 @@
 export const APP_SEARCH_FIXTURE = {
+  headnotes: "included" as const,
   facets: {
     court: [
       {
@@ -44,6 +45,7 @@ export const APP_SEARCH_FIXTURE = {
       language: "cs",
       matchedQueries: [0],
       matchingPassages: 1,
+      snippet: "Náhrada škody: <b>právní jistota</b>.",
       keywords: {
         type: "keywords" as const,
         items: ["Náhrada škody", "Příčinná souvislost"],
@@ -54,7 +56,6 @@ export const APP_SEARCH_FIXTURE = {
         text: "Právo na náhradu škody vyžaduje posouzení příčinné souvislosti.",
         truncated: false,
       },
-      snippet: "Náhrada škody: <b>právní jistota</b>.",
       sourceUrl: "https://example.test/decision",
     },
   ],

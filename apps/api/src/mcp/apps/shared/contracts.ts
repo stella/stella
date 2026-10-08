@@ -30,7 +30,7 @@ const failed = lookupOptions[3].pipe[0];
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,
   v.object({
-    ...v.pick(search, ["nextCursor", "nextStep"]).entries,
+    ...v.pick(search, ["nextCursor", "nextStep", "headnotes"]).entries,
     results: v.array(
       v.object(
         v.pick(search.entries.results.item, [

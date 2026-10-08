@@ -99,6 +99,8 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
   projectionBranch(publicCountryUnavailableSchema),
   projectionBranch(
     v.strictObject({
+      // Omitted means the page budget excluded headnotes; null is then not an absence claim.
+      headnotes: v.picklist(["included", "omitted"]),
       // Facets describe the first phrasing on page one; continuations are null.
       facets: v.nullable(
         v.strictObject({
@@ -174,7 +176,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           matchingPassages: v.number(),
           snippet: v.nullable(v.string()),
           // Publisher prose uses the expanded reading budget (up to 4000 characters).
-          // Classifications are not headnotes; null means none was stated.
+          // Classifications are not headnotes; when included, null means none was stated.
           keywords: v.nullable(
             v.strictObject({
               type: v.literal(DECISION_HEADNOTE_KEYWORDS),

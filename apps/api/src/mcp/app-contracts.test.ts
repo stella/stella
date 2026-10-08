@@ -321,6 +321,24 @@ describe("MCP app registry and contracts", () => {
       lookup.rows.every((row) => row.type === "lookup" && row.snippet === null),
     ).toBe(true);
   });
+  test("app consumed-field headnote omission stays distinct from publisher absence", () => {
+    const view = searchView({
+      ...APP_SEARCH_FIXTURE,
+      headnotes: "omitted",
+      results: APP_SEARCH_FIXTURE.results.map((row) => ({
+        ...row,
+        headnote: null,
+      })),
+    });
+    if (view.type !== "search") {
+      throw new Error("Expected search view");
+    }
+    expect(
+      view.results.every(
+        (row) => row.type === "search" && row.headnote.type === "omitted",
+      ),
+    ).toBe(true);
+  });
   test("decision actions use only HTTP links from their own contract fields", () => {
     const first = APP_SEARCH_FIXTURE.results.at(0);
     if (first === undefined) {
@@ -510,6 +528,7 @@ describe("MCP app registry and contracts", () => {
       }
     }
     const empty = {
+      headnotes: "included",
       facets: null,
       nextCursor: null,
       searches: [],
@@ -525,12 +544,13 @@ describe("MCP app registry and contracts", () => {
       {
         "content": [
           {
-            "text": "{"facets":null,"nextCursor":null,"searches":[],"results":[],"total":{"type":"not_counted"}}",
+            "text": "{"headnotes":"included","facets":null,"nextCursor":null,"searches":[],"results":[],"total":{"type":"not_counted"}}",
             "type": "text",
           },
         ],
         "structuredContent": {
           "facets": null,
+          "headnotes": "included",
           "nextCursor": null,
           "results": [],
           "searches": [],
