@@ -14,6 +14,7 @@
     "release.yml/promote": "main",
     "release.yml/promote-staging": "main",
     "auth-md-spec-check.yml/auth-md-spec-check": "main",
+    "dated-waiver-recheck.yml/recheck": "main",
     "marketing-screenshots-update.yml/update": "main",
     "publish-product-media.yml/publish": "main",
     "docs-source-policy.yml/docs-source-policy": "main",
