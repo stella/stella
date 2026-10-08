@@ -5721,7 +5721,9 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Longest leg: 12m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
+    # Checkout reached 5m53s under load; green Playwright shards reached 5m04s.
+    timeout-minutes: 27
     permissions:
       contents: read
       actions: write
@@ -5733,6 +5735,7 @@ jobs:
         shard: [1, 2, network-baseline]
     steps:
       - name: Checkout
+        timeout-minutes: 7
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5740,17 +5743,20 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Bun
+        timeout-minutes: 1
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 1
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
+        timeout-minutes: 3
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
@@ -5761,6 +5767,7 @@ jobs:
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
       - name: Prepare merge-base network budget
+        timeout-minutes: 2
         if: matrix.shard == 'network-baseline'
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -5768,6 +5775,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Check route network baseline
+        timeout-minutes: 4
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard == 'network-baseline'
@@ -5780,6 +5788,7 @@ jobs:
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5791,6 +5800,7 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
+        timeout-minutes: 7
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
@@ -5806,6 +5816,7 @@ jobs:
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.
       - name: Run API browser checks
+        timeout-minutes: 1
         if: >-
           !cancelled()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5815,6 +5826,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
+        timeout-minutes: 1
         if: >-
           always()
           && !cancelled()
@@ -5832,6 +5844,7 @@ jobs:
           --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5843,6 +5856,7 @@ jobs:
           retention-days: 7
 
       - name: Upload route-smoke Playwright blob report
+        timeout-minutes: 1
         if: >-
           always()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -5854,6 +5868,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
+        timeout-minutes: 1
         if: failure() && steps.e2e-stack.outputs.status == 'ready'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -5864,6 +5879,7 @@ jobs:
           retention-days: 7
 
       - name: Upload browser test timings
+        timeout-minutes: 1
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -7394,13 +7410,38 @@ jobs:
             echo "Queued tree validation belongs to merge_group."
             exit 0
           fi
-          # Read cancellation evidence before any early aggregation exit.
+          # Read failure and timeout evidence before any early aggregation exit.
           cancelled_jobs=""
-          if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
+          if jq -e 'any(.[]; .result == "cancelled" or .result == "failure" or .result == "timed_out")' <<< "$NEEDS" > /dev/null; then
             cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
               echo "::error::Cancelled CI job failed-step lookup was unavailable."
               exit 1
             }
+            # Job deadlines can appear as cancelled or failure in needs.
+            # Inspect runner annotations before a generic cancellation masks them.
+            while IFS=$'\t' read -r job_name conclusion url; do
+              if [[ "$conclusion" == timed_out ]]; then
+                echo "::error::CI job timed out: $job_name"
+                exit 1
+              fi
+              [[ "$url" != missing ]] || continue
+              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || exit 1
+              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || {
+                echo "::error::CI job timeout lookup was unavailable: $job_name"
+                exit 1
+              }
+              timed_out=$(jq -r 'flatten | any(.[]; (.message // "") | (contains("has exceeded the maximum execution time") or test("^The action .* has timed out after [0-9]+ minutes[.]$")))' <<< "$annotations") || {
+                echo "::error::CI job timeout annotations were invalid: $job_name"
+                exit 1
+              }
+              if [[ "$timed_out" == true ]]; then
+                echo "::error::CI job timed out: $job_name"
+                exit 1
+              fi
+            done < <(jq -r '
+              .[].jobs[] | select(.conclusion == "cancelled" or .conclusion == "failure" or .conclusion == "timed_out")
+              | [.name, .conclusion, (.check_run_url // "missing")] | @tsv
+              ' <<< "$cancelled_jobs")
             failed_steps=$(jq -r '
               .[].jobs[] | select(.conclusion == "cancelled") | . as $job
               | (.steps // [])[] | select(.conclusion == "failure")
@@ -7429,7 +7470,7 @@ jobs:
           # the same workflow/group proves supersession, unless any cancelled
           # job timed out. Every API lookup fails closed.
           cancelled_dependencies_were_superseded() {
-            local current workflow created runs urls url annotations
+            local current workflow created runs
             current=$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
             workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
             created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
@@ -7443,20 +7484,8 @@ jobs:
                   elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
                   else false end))
               ' <<< "$runs" > /dev/null || return 1
-            urls=$(jq -er '
-              [.[].jobs[] | select(.conclusion == "cancelled")]
-              | if length == 0 then error("Cancelled run has no cancelled jobs")
-                else [.[] | .check_run_url | select(. != null)] | join("\n") end
-              ' <<< "$cancelled_jobs") || return 1
-            while IFS= read -r url; do
-              [[ -n "$url" ]] || continue
-              [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
-              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || return 1
-              jq -e '
-                flatten
-                | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
-                ' <<< "$annotations" > /dev/null || return 1
-            done <<< "$urls"
+            # Timeout annotations were checked before aggregation above.
+            jq -e 'any(.[].jobs[]; .conclusion == "cancelled")' <<< "$cancelled_jobs" > /dev/null
           }
 
           # The plan skips a draft pull request, and every job with it. The
