@@ -748,7 +748,6 @@
       "none": "Noch keine Zitierungen erfasst.",
       "openAtCitation": "An der Zitatstelle öffnen",
       "openDecision": "Entscheidung öffnen",
-      "openInStella": "In stella öffnen",
       "partialSummary": "Zitationszahlen und Zeitachse sind unvollständig.",
       "passageNotFound": "Die zitierende Stelle wurde im Text nicht gefunden",
       "positiveCount": "{count, plural, one {# zustimmend} other {# zustimmend}}",

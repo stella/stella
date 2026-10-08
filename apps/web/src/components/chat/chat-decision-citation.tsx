@@ -302,7 +302,12 @@ export const ChatAnswerDecisionProvider = ({
 };
 
 /** A quotation remains prose; its decision annotation owns metadata and actions. */
-export const ChatDecisionCitation = (props: ChatDecisionCitationProps) => {
+// Explicit ReactNode: returning the bare passage infers a type containing
+// React 19's Promise<AwaitedReactNode> member, which promise-function-async
+// would otherwise flag on this sync component.
+export const ChatDecisionCitation = (
+  props: ChatDecisionCitationProps,
+): ReactNode => {
   if (!props.interactive) {
     return props.renderPassage !== false && props.passage;
   }
@@ -313,7 +318,7 @@ export const ChatDecisionCitation = (props: ChatDecisionCitationProps) => {
 export const ChatRouteDecisionCitation = ({
   params,
   ...props
-}: ChatRouteDecisionCitationProps) => {
+}: ChatRouteDecisionCitationProps): ReactNode => {
   const country = publicCaseLawCountryFromParam(params.country);
   if (!props.interactive || country === null) {
     return props.renderPassage !== false && props.passage;

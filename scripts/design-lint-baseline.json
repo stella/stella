@@ -53,7 +53,6 @@
     "apps/web/src/components/inspector/versions-facet.tsx": 9,
     "apps/web/src/components/keyboard-shortcuts-dialog.tsx": 1,
     "apps/web/src/components/legal-reader/annotations/annotation-toolbar.tsx": 6,
-    "apps/web/src/components/legal-reader/cited-decision-link.tsx": 3,
     "apps/web/src/components/legal-reader/cited-provision-link.tsx": 3,
     "apps/web/src/components/legal-reader/cited-statute-link.tsx": 2,
     "apps/web/src/components/legal-reader/outline-jump-field.tsx": 1,

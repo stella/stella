@@ -22,6 +22,7 @@ const firstId = "019a0000-0000-7000-8000-000000000101";
 const secondId = "019a0000-0000-7000-8000-000000000103";
 const origins = new Set(["https://app.example.test"]);
 const publisherUrl = "https://publisher.example.test/decision/one";
+const secondPublisherUrl = "https://publisher.example.test/decision/two";
 const sources = [
   {
     title: "First decision",
@@ -30,7 +31,7 @@ const sources = [
   },
   {
     title: "Second decision",
-    url: "https://publisher.example.test/decision/two",
+    url: secondPublisherUrl,
     caseLawDecision: { decisionId: secondId, caseNumber: "SYN 2/2026" },
   },
 ] satisfies ExternalSourceReference[];
@@ -59,7 +60,7 @@ test("publisher aliases and GFM links count only the cited decision rather than 
     targets(`${publisherUrl}\n\n[Same decision](${decisionHref(firstId)})`),
   ).toEqual([{ type: "id", decisionId: firstId }]);
   expect(
-    targets(`[First](${publisherUrl}) and [Second](${sources.at(1)?.url}).`),
+    targets(`[First](${publisherUrl}) and [Second](${secondPublisherUrl}).`),
   ).toEqual([
     { type: "id", decisionId: firstId },
     { type: "id", decisionId: secondId },

@@ -58,7 +58,7 @@ const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
   await act(async () => {
     cleanup();
-    await Promise.all(clients.map((client) => client.cancelQueries()));
+    await Promise.all(clients.map(async (client) => client.cancelQueries()));
     for (const client of clients) {
       client.clear();
     }
@@ -466,7 +466,7 @@ for (const anchorId of [null, "p-12"]) {
     });
     expect(source.getAttribute("href")).toBe(publisher);
     const open = screen.getByRole("link", {
-      name: messages.caseLaw.citation.openInStella,
+      name: messages.common.openInStella,
     });
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     open.dispatchEvent(click);
@@ -593,7 +593,7 @@ test("a publisher alias with a canonical decision keeps the passage before the s
   expect(
     screen
       .getByRole("link", {
-        name: messages.caseLaw.citation.openInStella,
+        name: messages.common.openInStella,
       })
       .getAttribute("href"),
   ).toBe(primary.getAttribute("href"));
@@ -625,7 +625,7 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
     });
     fireEvent.focus(primary);
     const open = await screen.findByRole("link", {
-      name: messages.caseLaw.citation.openInStella,
+      name: messages.common.openInStella,
     });
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     open.dispatchEvent(click);

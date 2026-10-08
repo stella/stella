@@ -1,4 +1,4 @@
-import { ECLI_COURT_REGISTRY } from "./case-law-courts";
+import { ECLI_COURT_REGISTRY, type RegisteredCourt } from "./case-law-courts";
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import { SK_COURT_TIERS } from "./sk-court-tiers";
 
@@ -156,10 +156,13 @@ export const COURT_NAME_REGISTRY = {
  * than an appellate one. Built once: the object literal above is what is
  * reviewed, and this is what is read.
  */
-const registeredEcliCourts = new Map(
+const registeredEcliCourts = new Map<
+  string,
+  ReadonlyMap<string, RegisteredCourt>
+>(
   Object.entries(ECLI_COURT_REGISTRY).map(([country, courts]) => [
     country,
-    new Map(Object.entries(courts).map(([code, court]) => [code, court])),
+    new Map(Object.entries<RegisteredCourt>(courts)),
   ]),
 );
 
@@ -247,11 +250,11 @@ export type CourtAbbreviationInput = {
   ecli?: string | null | undefined;
 };
 
-const registeredCourtNames = new Map(
+const registeredCourtNames = new Map<string, ReadonlyMap<string, string>>(
   Object.entries(ECLI_COURT_REGISTRY).map(([jurisdiction, courts]) => [
     jurisdiction,
     new Map(
-      Object.values(courts).map((court) => [
+      Object.values<RegisteredCourt>(courts).map((court) => [
         court.name.toLowerCase(),
         court.shortCode,
       ]),
@@ -272,7 +275,7 @@ const registeredSlovakCourtTypes = Object.entries(SK_COURT_TIERS).toSorted(
 const registeredCourtFromName = ({
   country,
   court,
-}: CourtAbbreviationInput) => {
+}: CourtAbbreviationInput): string | undefined => {
   const jurisdiction = Object.entries(ECLI_JURISDICTION_BY_COUNTRY)
     .find(([candidate]) => candidate === country.toUpperCase())
     ?.at(1);

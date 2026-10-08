@@ -174,7 +174,7 @@ export const DecisionCitationChip = ({
             size="sm"
             variant="outline"
           >
-            {t("caseLaw.citation.openInStella")}
+            {t("common.openInStella")}
           </Button>
           {originalUrl ? (
             <Button

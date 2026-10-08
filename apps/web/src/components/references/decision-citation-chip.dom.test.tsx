@@ -94,7 +94,7 @@ for (const activation of Object.values(ACTIVATION)) {
       expect(screen.getByText(passage)).toBeTruthy();
       expect(
         screen
-          .getByRole("link", { name: messages.caseLaw.citation.openInStella })
+          .getByRole("link", { name: messages.common.openInStella })
           .getAttribute("href"),
       ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
       const original = screen.getByRole("link", {
@@ -116,7 +116,7 @@ test("Escape restores focus without reopening, and a later focus opens again", a
     trigger.focus();
   });
   const reader = await screen.findByRole("link", {
-    name: messages.caseLaw.citation.openInStella,
+    name: messages.common.openInStella,
   });
   await act(async () => {
     reader.focus();
@@ -144,7 +144,7 @@ test("an unavailable original remains a disabled action alongside the reader act
     ).toBe(true);
     expect(
       screen
-        .getByRole("link", { name: messages.caseLaw.citation.openInStella })
+        .getByRole("link", { name: messages.common.openInStella })
         .getAttribute("href"),
     ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
   });
@@ -170,7 +170,7 @@ for (const protocol of ["javascript", "data"]) {
       ).toBe(true);
       expect(
         screen
-          .getByRole("link", { name: messages.caseLaw.citation.openInStella })
+          .getByRole("link", { name: messages.common.openInStella })
           .getAttribute("href"),
       ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
     });

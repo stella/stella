@@ -26,18 +26,16 @@ export const chatAnswerCitationHrefs = (markdown: string) => {
   const references: string[] = [];
   const hrefs: string[] = [];
   for (let node = nodes.pop(); node !== undefined; node = nodes.pop()) {
-    switch (node.type) {
-      case "definition":
-        if (!definitions.has(node.identifier)) {
-          definitions.set(node.identifier, node.url);
-        }
-        break;
-      case "link":
-        hrefs.push(node.url);
-        break;
-      case "linkReference":
-        references.push(node.identifier);
-        break;
+    // Only these three node types carry a link; every other mdast node is
+    // walked for its children alone.
+    if (node.type === "definition") {
+      if (!definitions.has(node.identifier)) {
+        definitions.set(node.identifier, node.url);
+      }
+    } else if (node.type === "link") {
+      hrefs.push(node.url);
+    } else if (node.type === "linkReference") {
+      references.push(node.identifier);
     }
     if ("children" in node) {
       nodes.push(...node.children.toReversed());
@@ -136,9 +134,7 @@ export const chatAnswerMarkdownDocuments = (
       part.name === "ask-user" &&
       part.state !== "input-streaming" &&
       (isAwaitingUser ||
-        (part.state === "complete" &&
-          part.output !== undefined &&
-          part.output !== null)) &&
+        (part.state === "complete" && part.output !== undefined)) &&
       part.input?.analysis
     ) {
       text.push(part.input.analysis);

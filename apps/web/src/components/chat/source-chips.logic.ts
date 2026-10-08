@@ -232,7 +232,7 @@ const isChatSourceDocument = (value: unknown): value is ChatSourceDocument => {
   );
 };
 
-export const collectSourceDocuments = (
+const collectSourceDocuments = (
   value: unknown,
   sources: SourceDocumentEntry[],
   depth = 0,
