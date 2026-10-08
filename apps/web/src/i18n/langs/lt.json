@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
     "openCitation": "Atidaryti citatą {label}",
     "openThread": "Atidaryti pokalbį",
+    "overlayLoadFailed": "Nepavyko įkelti dokumento pokalbio.",
+    "overlayUpdated": "stella atnaujinta. Norėdami naudoti dokumento pokalbį, iš naujo įkelkite puslapį.",
     "pastedChars": "Įklijuota · {count} simb.",
     "pastedText": {
       "expand": "Rodyti visą tekstą",

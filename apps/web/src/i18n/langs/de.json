@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
     "openCitation": "Fundstelle {label} öffnen",
     "openThread": "Konversation öffnen",
+    "overlayLoadFailed": "Der Dokumentchat konnte nicht geladen werden.",
+    "overlayUpdated": "stella wurde aktualisiert. Laden Sie die Seite neu, um den Dokumentchat zu verwenden.",
     "pastedChars": "Eingefügt · {count} Zeichen",
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",

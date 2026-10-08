@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "See viide pole enam saadaval.",
     "openCitation": "Ava viide {label}",
     "openThread": "Ava vestlus",
+    "overlayLoadFailed": "Dokumendi vestlust ei õnnestunud laadida.",
+    "overlayUpdated": "stella on uuendatud. Dokumendi vestluse kasutamiseks laadige leht uuesti.",
     "pastedChars": "Kleebitud · {count} märki",
     "pastedText": {
       "expand": "Näita kogu teksti",

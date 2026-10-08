@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
     "openCitation": "Otwórz cytowanie {label}",
     "openThread": "Otwórz konwersację",
+    "overlayLoadFailed": "Nie udało się wczytać czatu dokumentu.",
+    "overlayUpdated": "stella została zaktualizowana. Odśwież stronę, aby korzystać z czatu dokumentu.",
     "pastedChars": "Wklejono · {count} znaków",
     "pastedText": {
       "expand": "Pokaż pełny tekst",

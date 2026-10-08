@@ -1,8 +1,5 @@
 import { lazy, useCallback, useState } from "react";
 
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -10,6 +7,7 @@ import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
+import { FileChatOverlayErrorFallback } from "./file-chat-overlay-error-fallback";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "./file-viewer-with-ai-config";
 import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import type { FileViewerWithAIProps } from "./file-viewer-with-ai.impl";
@@ -116,8 +114,9 @@ export const FileViewerWithAI = ({
           // anonymous visitor.
           <QuerySuspenseBoundary
             area="gated-chat-composer"
-            errorFallback={({ reset }) => (
+            errorFallback={({ reset, error }) => (
               <FileChatOverlayErrorFallback
+                error={error}
                 onRetry={() => {
                   // React.lazy caches a rejected thenable. Recreate the lazy type
                   // before resetting the boundary so a transient chunk failure
@@ -142,8 +141,9 @@ export const FileViewerWithAI = ({
         {overlayIsActive && (
           <QuerySuspenseBoundary
             area="file-chat-overlay"
-            errorFallback={({ reset }) => (
+            errorFallback={({ reset, error }) => (
               <FileChatOverlayErrorFallback
+                error={error}
                 onRetry={() => {
                   // React.lazy caches a rejected thenable. Recreate the lazy type
                   // before resetting the boundary so a transient chunk failure
@@ -184,23 +184,6 @@ export const FileViewerWithAI = ({
         {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
       </div>
     </DockedChatStackProvider>
-  );
-};
-
-const FileChatOverlayErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
-  const t = useTranslations();
-
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
-      <div className="bg-background/95 pointer-events-auto flex items-center gap-3 rounded-md border px-3 py-2 shadow-sm">
-        <span className="text-muted-foreground text-sm">
-          {t("common.somethingWentWrong")}
-        </span>
-        <Button onClick={onRetry} size="sm" variant="outline">
-          {t("common.tryAgain")}
-        </Button>
-      </div>
-    </div>
   );
 };
 
