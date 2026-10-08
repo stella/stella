@@ -3219,13 +3219,20 @@ const createGhGateway = ({
     readJumpResetEvidence: (groupSha) => {
       const PAGE_LIMIT = 20;
       let pagesRead = 0;
+      // Evidence that cannot be read completely is unavailable, never a
+      // crash: classification then fails closed (no recovery) and the
+      // ordinary ejection gate still answers.
+      const unavailable = (reason: string): undefined => {
+        console.error(`jump-reset evidence unavailable: ${reason}`);
+        return undefined;
+      };
       const readPages = (endpoint: string, field: string) => {
         const rows: (Record<string, unknown> & { id: number })[] = [];
         const ids = new Set<number>();
         let count: number | undefined;
         for (let page = 1; page <= PAGE_LIMIT; page += 1) {
           if (pagesRead >= PAGE_LIMIT) {
-            panic("Merge group evidence page budget exhausted");
+            return unavailable("merge group evidence page budget exhausted");
           }
           pagesRead += 1;
           if (page > 1) {
@@ -3243,10 +3250,10 @@ const createGhGateway = ({
             total < 0 ||
             !Array.isArray(items)
           ) {
-            panic("Incomplete merge group evidence");
+            return unavailable("incomplete merge group evidence");
           }
           if (count !== undefined && count !== total) {
-            panic("Merge group evidence changed during pagination");
+            return unavailable("merge group evidence changed during pagination");
           }
           count = total;
           for (const item of items) {
@@ -3258,25 +3265,25 @@ const createGhGateway = ({
               id <= 0 ||
               ids.has(id)
             ) {
-              panic("Invalid or duplicate merge group evidence id");
+              return unavailable("invalid or duplicate merge group evidence id");
             }
             ids.add(id);
             rows.push({ ...row, id });
           }
           if (items.length < 100) {
             if (rows.length !== count) {
-              panic("Truncated merge group evidence");
+              return unavailable("truncated merge group evidence");
             }
             return rows;
           }
         }
-        return panic("Merge group evidence page budget exhausted");
+        return unavailable("merge group evidence page budget exhausted");
       };
       const runs = readPages(
         `repos/${repo}/actions/runs?event=merge_group&head_sha=${encodeURIComponent(groupSha)}`,
         "workflow_runs",
       );
-      if (runs.length === 0) {
+      if (runs === undefined || runs.length === 0) {
         return { type: "unavailable" };
       }
       const jobs: { conclusion: string | null; completedAt: string | null }[] =
@@ -3294,7 +3301,7 @@ const createGhGateway = ({
           `repos/${repo}/actions/runs/${id}/jobs?filter=latest`,
           "jobs",
         );
-        if (rows.length === 0) {
+        if (rows === undefined || rows.length === 0) {
           return { type: "unavailable" };
         }
         for (const job of rows) {
