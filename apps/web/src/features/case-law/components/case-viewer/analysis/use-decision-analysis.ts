@@ -39,6 +39,10 @@ export const analysisStateFromQuery = ({
   result,
   queryError,
 }: AnalysisQuerySnapshot): Exclude<AnalysisState, { status: "idle" }> => {
+  if (result?.kind === "done") {
+    return { status: "done", analysis: result.analysis };
+  }
+
   // TanStack Query retains the settled error result while a manual refetch is
   // in flight. Fetching must win, otherwise Retry appears to do nothing and
   // leaves the adjacent layer controls visually stuck beside a stale error.
@@ -46,10 +50,18 @@ export const analysisStateFromQuery = ({
     return { status: "generating", tree: [] };
   }
 
+  // A failed poll retains its previous progress data, but polling has stopped.
+  // Surface the settled failure so the reader can inspect it and retry.
+  if (hasQueryError && !isFetching && result?.kind !== "error") {
+    const diagnostic = providerDiagnosticFromThrown(queryError);
+    return {
+      status: "error",
+      ...(diagnostic === undefined ? {} : { providerDiagnostic: diagnostic }),
+    };
+  }
+
   if (result !== undefined) {
     switch (result.kind) {
-      case "done":
-        return { status: "done", analysis: result.analysis };
       case "generating":
         return { status: "generating", tree: result.tree };
       case "error":
@@ -65,14 +77,7 @@ export const analysisStateFromQuery = ({
     }
   }
 
-  if (!hasQueryError) {
-    return { status: "generating", tree: [] };
-  }
-  const diagnostic = providerDiagnosticFromThrown(queryError);
-  return {
-    status: "error",
-    ...(diagnostic === undefined ? {} : { providerDiagnostic: diagnostic }),
-  };
+  return { status: "generating", tree: [] };
 };
 
 type UseDecisionAnalysisOptions = DecisionAnalysisRequestKey & {

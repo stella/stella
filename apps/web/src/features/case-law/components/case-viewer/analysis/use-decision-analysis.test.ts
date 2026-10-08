@@ -150,3 +150,41 @@ test("decision analysis diagnostics survive stored failure and HTTP failure stat
     }),
   ).toEqual({ status: "error", providerDiagnostic: diagnostic });
 });
+
+test("retained progress yields to a settled query failure while completed analysis wins", () => {
+  const diagnostic = {
+    provider: "openai",
+    code: PROVIDER_SETUP_ERROR_CODE.openaiInsufficientQuota,
+    message: "Insufficient quota. Full billing reason.",
+  } satisfies ProviderDiagnostic;
+  const queryError = toAPIError({
+    status: 429,
+    value: { message: "Refused", providerDiagnostic: diagnostic },
+  });
+  expect(
+    analysisStateFromQuery({
+      hasQueryError: true,
+      isFetching: false,
+      result: { kind: "generating", tree: [heading] },
+      queryError,
+    }),
+  ).toEqual({ status: "error", providerDiagnostic: diagnostic });
+  expect(
+    analysisStateFromQuery({
+      hasQueryError: true,
+      isFetching: true,
+      result: { kind: "generating", tree: [heading] },
+      queryError,
+    }),
+  ).toEqual({ status: "generating", tree: [] });
+  for (const isFetching of [false, true]) {
+    expect(
+      analysisStateFromQuery({
+        hasQueryError: true,
+        isFetching,
+        result: { kind: "done", analysis },
+        queryError,
+      }),
+    ).toEqual({ status: "done", analysis });
+  }
+});
