@@ -159,13 +159,13 @@ export const applyDocRechecks = (
       }
       case "available": {
         // Scanner trivia includes comments between an argument and its comma.
-        scanner.setTextPos(object.end);
+        scanner.resetTokenState(object.end);
         const token = scanner.scan();
         edits.push({
           start: object.getStart(ast),
           end:
             token === ts.SyntaxKind.CommaToken
-              ? scanner.getTextPos()
+              ? scanner.getTokenEnd()
               : object.end,
           text: "",
         });
@@ -390,7 +390,7 @@ export const publishRecheck = async ({
   if (repo !== "stella/stella") {
     panic("Dated-waiver publishing requires stella/stella");
   }
-  const owner = repo.split("/").at(0);
+  const owner = repo.slice(0, repo.indexOf("/"));
   const api = `repos/${repo}`;
   const setRef = async (branch: string, sha: string): Promise<void> => {
     const refs = v.parse(

@@ -2109,7 +2109,7 @@ jobs:
           bun scripts/check-oxlint-rule-coverage.ts
 
       - name: Dated waiver warnings
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/dated-waivers.test.ts scripts/dated-waiver-recheck.test.ts
           bun scripts/dated-waivers.ts --warn

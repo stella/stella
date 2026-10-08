@@ -697,7 +697,10 @@ describe("one recheck PR", () => {
       }
       if (endpoint?.includes("/git/matching-refs/heads/")) {
         const branch = endpoint.split("/heads/").at(1);
-        return refs.has(branch ?? "") ? [{ ref: `refs/heads/${branch}` }] : [];
+        if (branch === undefined) {
+          throw new TypeError("Fixture branch absent");
+        }
+        return refs.has(branch) ? [{ ref: `refs/heads/${branch}` }] : [];
       }
       if (
         endpoint === "repos/stella/stella/git/refs" &&
