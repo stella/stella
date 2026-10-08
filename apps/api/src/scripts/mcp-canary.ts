@@ -14,6 +14,10 @@ import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
 import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import { DAY_IN_MS, Temporal } from "@stll/time";
@@ -1083,6 +1087,9 @@ export const runDesktopProbe = async (
                   ...(key ? { authorization: `Bearer ${key}` } : {}),
                   "content-type": "application/json",
                   "user-agent": "stella-desktop",
+                  [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
+                    DESKTOP_ACCOUNT_POLICY.linkProtocol,
+                  ),
                 },
                 body: JSON.stringify({
                   correlationId,

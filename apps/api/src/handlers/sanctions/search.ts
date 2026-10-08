@@ -6,6 +6,7 @@ import { isCountryCode } from "@stll/country-codes";
 import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import type { PublicSanctionsScreening } from "@/api/handlers/sanctions/search-response";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
@@ -18,7 +19,10 @@ import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanct
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { sanctionsPublicReadDb } from "@/api/lib/lists/sanctions/public-read-owner";
-import { screenPublicSanctionsSubject } from "@/api/lib/lists/sanctions/public-screening";
+import {
+  SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+  screenPublicSanctionsSubject,
+} from "@/api/lib/lists/sanctions/public-screening";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { SANCTIONS_SUBJECT_ERROR_MESSAGES } from "@/api/lib/lists/sanctions/screening-service";
 import type {
@@ -131,8 +135,17 @@ const screeningBusy = () =>
   });
 
 type PublicSanctionsSearchResult =
-  | SanctionsScreening
+  | PublicSanctionsScreening
   | ReturnType<typeof screeningBusy>;
+
+const toPublicScreening = (
+  screening: SanctionsScreening,
+): PublicSanctionsScreening => ({
+  ...screening,
+  retryAfterSeconds: screening.lists.some((list) => list.reason === "warming")
+    ? SANCTIONS_WARMING_RETRY_AFTER_SECONDS
+    : null,
+});
 
 // CPU admission is per API process, shared by all mounted public handlers.
 let activePublicScreenings = 0;
@@ -197,7 +210,7 @@ export const createPublicSanctionsSearchHandler = ({
             catch: screeningUnavailable,
           }),
         );
-        return result.mapError(
+        return result.map(toPublicScreening).mapError(
           (error) =>
             new HandlerError({
               status: 400,

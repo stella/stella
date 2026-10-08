@@ -56,6 +56,15 @@ rules.
 - Create a package with `bun run new-package <name> --description "…"`; copying a
   helper between apps is not an option when a package can own it.
 
+## Finding Things
+
+- Stored data: `rg <word> apps/api/src/db/schema-index`, generated from the
+  schema with one line per column (`file:line` and comment included).
+- Owners: `bun scripts/ownership.ts --print` lists the module that owns each
+  capability; extend it rather than adding a second one.
+- Custom lint rules: the catalogue in `.oxlint-plugins/README.md`, one line per
+  rule. Read the rules for the area before writing code in it.
+
 ## Commands
 
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
