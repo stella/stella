@@ -47,6 +47,7 @@ export const applyVisualTheme = (document: Document, theme: VisualTheme) => {
   let style = themeStyles.get(document);
   if (style === undefined) {
     style = document.createElement("style");
+    style.id = "stella-theme";
     themeStyles.set(document, style);
     document.head.prepend(style);
   }

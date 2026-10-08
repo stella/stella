@@ -4,7 +4,7 @@ import { applyVisualTheme } from "./presentation";
 
 test("keeps the theme in its own stylesheet when authored markup reuses an id", () => {
   const authored = { id: "stella-theme", textContent: "Authored paragraph" };
-  const prepended: { tagName: string; textContent: string }[] = [];
+  const prepended: { tagName: string; textContent: string; id?: string }[] = [];
   const events: string[] = [];
   const document = {
     createElement: (tagName: string) => ({ tagName, textContent: "" }),
@@ -33,6 +33,7 @@ test("keeps the theme in its own stylesheet when authored markup reuses an id", 
   expect(prepended).toEqual([
     {
       tagName: "style",
+      id: "stella-theme",
       textContent: ":root{color-scheme:light;--foreground:#171717}",
     },
   ]);
