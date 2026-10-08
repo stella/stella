@@ -343,6 +343,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-user-id-schema.fixture.ts", [
     "no-raw-user-id-schema/no-raw-user-id-schema",
   ]),
+  fixtureRuleOverride("confine-aggregate-lock.fixture.ts", [
+    "confine-aggregate-lock/confine-aggregate-lock",
+  ]),
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
   ]),
@@ -910,6 +913,7 @@ const config = defineConfig({
     },
   },
   rules: {
+    "confine-aggregate-lock/confine-aggregate-lock": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
       { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
@@ -1606,6 +1610,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
