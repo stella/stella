@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -1020,8 +1020,8 @@ test("a stalled read that ignores cancellation is never repeated and the edition
       // Ignores its abort signal, like a driver call already on the wire.
       await release.promise;
       const entries = await loadEditionEntries({
-        ...options,
-        signal: undefined,
+        db: options.db,
+        edition: options.edition,
       });
       reads.outstanding -= 1;
       landed.resolve(undefined);

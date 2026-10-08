@@ -486,9 +486,13 @@ describe("public sanctions search parity", () => {
     "a public reader grant failure does not poison signed-in screening",
     async () => {
       const context = new InMemoryRateLimitContext();
+      const publicScreen = createPublicSanctionsScreening({
+        pool: benchmarkPool(),
+      });
       const route = createPublicSanctionsRoute({
         db: publicDb,
         now: FRESH_NOW,
+        screen: publicScreen,
         rateLimitOptions: {
           context,
           generator: scopedGenerator("failure-isolation-test"),
@@ -498,8 +502,8 @@ describe("public sanctions search parity", () => {
       });
       await db.execute(sql`REVOKE SELECT (content_hash, payload)
         ON sanctions_entry_payloads FROM stella_public_sanctions_reader`);
-      try {
-        const response = await route.handle(
+      const search = async () =>
+        await route.handle(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -508,6 +512,11 @@ describe("public sanctions search parity", () => {
             }),
           }),
         );
+      try {
+        // The first answer only starts the background reads, which fail.
+        expect((await search()).status).toBe(200);
+        await publicScreen.warmupSettled();
+        const response = await search();
         expect(response.status).toBe(200);
         expect(await response.json()).toMatchObject({
           status: "unavailable",

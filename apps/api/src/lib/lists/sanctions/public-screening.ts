@@ -316,7 +316,6 @@ const createEditionWarmer = ({
     /** Every pass started so far, including any that start as one ends. */
     settled: async () => {
       while (state.running !== null) {
-        // db-await-in-loop: drains a bounded chain of warmup passes in tests
         await state.running;
       }
     },

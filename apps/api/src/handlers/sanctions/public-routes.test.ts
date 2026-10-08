@@ -107,11 +107,13 @@ describe("anonymous sanctions search", () => {
         request({ type: "organization", name: "Example Trading" }),
       );
       expect(response.status).toBe(200);
-      const body = await response.json();
+      const body = asTestRaw<{
+        status: string;
+        retryAfterSeconds: number | null;
+        lists: { reason: string | null }[];
+      }>(await response.json());
       expect(body).toMatchObject({ status: "unavailable", retryAfterSeconds });
-      expect(
-        body.lists.every((list: { reason: string }) => list.reason === reason),
-      ).toBe(true);
+      expect(body.lists.every((list) => list.reason === reason)).toBe(true);
     },
   );
 

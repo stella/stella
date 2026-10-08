@@ -33,8 +33,6 @@ export const SANCTIONS_UNAVAILABLE_REASONS = [
   "stale",
   // The stored edition could not be read or its screening could not complete.
   "load-failed",
-  // The edition is still loading into the matcher; ask again shortly.
-  "warming",
   // A company ID was given without a name and the register holds no company
   // under it, so there was no name to screen.
   "company-not-found",
@@ -42,8 +40,18 @@ export const SANCTIONS_UNAVAILABLE_REASONS = [
   "registry-unavailable",
 ] as const;
 
+/**
+ * The public search's reasons: also "warming", while an edition loads into
+ * its matcher and the caller should ask again shortly. Only the public
+ * matcher produces it, so signed-in output schemas leave it out.
+ */
+export const SANCTIONS_PUBLIC_UNAVAILABLE_REASONS = [
+  ...SANCTIONS_UNAVAILABLE_REASONS,
+  "warming",
+] as const;
+
 export type SanctionsUnavailableReason =
-  (typeof SANCTIONS_UNAVAILABLE_REASONS)[number];
+  (typeof SANCTIONS_PUBLIC_UNAVAILABLE_REASONS)[number];
 
 // Value lists of the matcher's closed vocabularies, for output schemas.
 export const SANCTIONS_SOURCE_IDS = [
