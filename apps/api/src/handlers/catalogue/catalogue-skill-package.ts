@@ -10,6 +10,7 @@ import type { LoadedCatalogueSkillInstallPayload } from "@stll/catalogue/install
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 import { catalogueLicensesMatch } from "@stll/catalogue/schema";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fetchGithubCatalogueSkillPackage } from "@/api/lib/skills/skill-package";
 import type {
@@ -35,13 +36,15 @@ export type ResolvedCatalogueSkill = {
   package: ParsedSkillPackage;
 };
 
-type FetchGithubCatalogueSkill = (options: {
-  githubToken?: string;
-  sourceUrl: string;
-  target: GithubSkillPath;
-}) => Promise<Result<ParsedSkillPackage, HandlerError>>;
+type FetchGithubCatalogueSkill = (
+  options: Omit<
+    Parameters<typeof fetchGithubCatalogueSkillPackage>[0],
+    "fetchFiles"
+  >,
+) => ReturnType<typeof fetchGithubCatalogueSkillPackage>;
 
 type ResolveCatalogueSkillPackageOptions = {
+  permit: ThirdPartyOutboundPermit;
   fetchGithubSkill?: FetchGithubCatalogueSkill;
   githubToken?: string;
 };
@@ -121,9 +124,10 @@ const fetchCachedGithubCatalogueSkillPackage =
 export const resolveCatalogueSkillPackage = async (
   slug: string,
   {
+    permit,
     fetchGithubSkill = fetchCachedGithubCatalogueSkillPackage,
     githubToken,
-  }: ResolveCatalogueSkillPackageOptions = {},
+  }: ResolveCatalogueSkillPackageOptions,
 ): Promise<Result<ResolvedCatalogueSkill, HandlerError>> => {
   const payload = findCatalogueSkillInstallPayload(slug);
   if (payload) {
@@ -137,6 +141,7 @@ export const resolveCatalogueSkillPackage = async (
   const entry = findCatalogueEntry("skill", slug);
   if (entry && isGithubSkillEntry(entry)) {
     const fetched = await fetchGithubSkill({
+      permit,
       ...(githubToken ? { githubToken } : {}),
       sourceUrl: githubRawContentBaseUrl(entry),
       target: githubSkillTargetFromEntry(entry),

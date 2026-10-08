@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   createFallbackTimestampAuthority,
   createHttpTimestampAuthority,
@@ -23,6 +24,7 @@ import {
 } from "@/api/tests/helpers/timestamp-token";
 
 const keyPool = createTestRsaKeyPool();
+const permit = grantThirdPartyOutboundPermit();
 beforeEach(() => keyPool.reset());
 
 const failing = (url: string) => ({
@@ -267,10 +269,11 @@ describe("requesting a timestamp over the guarded fetcher", () => {
 
   test("posts an RFC 3161 query and accepts the token that answers it", async () => {
     const responder = await createTestTimestampResponder({ keyPool });
-    const authority = createHttpTimestampAuthority(
-      "https://tsa.example/",
-      responder.fetcher,
-    );
+    const authority = createHttpTimestampAuthority({
+      fetcher: responder.fetcher,
+      permit,
+      url: "https://tsa.example/",
+    });
 
     const token = await authority.timestamp(digest, "SHA-256");
     expect(token.byteLength).toBeGreaterThan(0);
@@ -287,10 +290,11 @@ describe("requesting a timestamp over the guarded fetcher", () => {
       keyPool,
       misbehaviour: { dropNonce: true },
     });
-    const authority = createHttpTimestampAuthority(
-      "https://tsa.example/",
-      responder.fetcher,
-    );
+    const authority = createHttpTimestampAuthority({
+      fetcher: responder.fetcher,
+      permit,
+      url: "https://tsa.example/",
+    });
 
     const failure = await authority
       .timestamp(digest, "SHA-256")
@@ -299,10 +303,11 @@ describe("requesting a timestamp over the guarded fetcher", () => {
   });
 
   test("treats an authority that cannot be reached as a failure", async () => {
-    const authority = createHttpTimestampAuthority(
-      "https://tsa.example/",
-      async () => null,
-    );
+    const authority = createHttpTimestampAuthority({
+      fetcher: async () => null,
+      permit,
+      url: "https://tsa.example/",
+    });
 
     const failure = await authority
       .timestamp(digest, "SHA-256")

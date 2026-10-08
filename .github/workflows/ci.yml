@@ -2791,6 +2791,12 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
 
+      - name: Outbound transport ownership
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/outbound-transport-ownership.ts --check
+          bun test scripts/outbound-transport-ownership.test.ts
+
       - name: Module ownership invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Invariants the ownership table cannot state itself, such as
