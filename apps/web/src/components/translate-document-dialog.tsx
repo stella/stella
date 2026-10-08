@@ -26,6 +26,7 @@ import {
   DialogTrigger,
 } from "@stll/ui/dialog";
 import { LanguagesIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
@@ -406,8 +407,6 @@ export const TranslateDocumentDialog = (
   const isStarting = translateMutation.isPending;
   const isLoadingRun = runId !== null && runQuery.isPending;
   const isRunning = run ? isDocumentTranslationRunActive(run.status) : false;
-  const progress =
-    run && run.total > 0 ? Math.min(1, run.completed / run.total) : 0;
   const canStart =
     canTranslateDocument({ canUseDeepL, isDocx }) &&
     canStartDocumentTranslation({
@@ -471,25 +470,19 @@ export const TranslateDocumentDialog = (
 
         <DialogPanel>
           {run && (isRunning || run.status === "completed") ? (
-            <div className="flex flex-col gap-3">
+            <div
+              aria-busy={isRunning || undefined}
+              className="flex flex-col gap-3"
+              role="status"
+            >
               <p className="text-sm font-medium">
                 {run.status === "completed"
                   ? t("translate.dialog.completed")
                   : t("translate.dialog.translating")}
               </p>
-              <div
-                aria-label={t("translate.dialog.progress")}
-                aria-valuemax={run.total}
-                aria-valuemin={0}
-                aria-valuenow={run.completed}
-                className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
-                role="progressbar"
-              >
-                <div
-                  className="bg-primary h-full w-full origin-left rounded-full transition-transform duration-500 ease-out"
-                  style={{ transform: `scaleX(${String(progress)})` }}
-                />
-              </div>
+              {isRunning && (
+                <Loader className="size-4" size="sm" variant="decorative" />
+              )}
               <p className="text-muted-foreground text-xs tabular-nums">
                 {t("translate.dialog.progressCount", {
                   completed: String(run.completed),

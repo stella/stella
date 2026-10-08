@@ -643,7 +643,7 @@ export type DehydratedInput = {
  * regardless of any anonymization setting, and the model can do nothing about
  * it, so the message says both.
  */
-export const REF_PROJECTION_FAILURE_MESSAGE =
+const REF_PROJECTION_FAILURE_MESSAGE =
   "The tool result contained an internal identifier the chat projection " +
   "could not map to a reference. This is a server-side defect, not a " +
   "problem with your input; do not retry this call.";
