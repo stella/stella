@@ -66,7 +66,7 @@ const caseLawMatterLinksRoute = new Elysia({
  * Admin routes: authenticated. Ingestion observability for operators. The
  * admin/owner gate lives in the handler config (`auditLog: ["read"]`, a
  * permission only owner/admin hold) and is enforced by the safe-handler wrapper,
- * so REST and `invoke_capability` share one gate; no route-level hook is needed.
+ * so REST and capability executors share one gate; no route-level hook is needed.
  */
 const caseLawAdminRoute = new Elysia({
   prefix: "/case/admin",

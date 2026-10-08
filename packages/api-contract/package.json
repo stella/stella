@@ -12,6 +12,7 @@
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./limits": "./src/limits.ts",
+    "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
     "./audit-log": "./src/audit-log.ts",
     "./verification-run-caps": "./src/verification-run-caps.ts",
