@@ -419,6 +419,10 @@
       "previousMonth": "Mes anterior",
       "previousYear": "Año anterior",
       "time": "Hora"
-    }
+    },
+    "copySummary": "Copiar resumen",
+    "copied": "Copiado",
+    "blockSummary": "{date}, {time}, {hours} h: {apps}",
+    "errorCopy": "No se pudo copiar el resumen."
   }
 }

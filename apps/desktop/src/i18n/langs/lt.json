@@ -419,6 +419,10 @@
       "previousMonth": "Ankstesnis mėnuo",
       "previousYear": "Ankstesni metai",
       "time": "Laikas"
-    }
+    },
+    "copySummary": "Kopijuoti santrauką",
+    "copied": "Nukopijuota",
+    "blockSummary": "{date}, {time}, {hours} val.: {apps}",
+    "errorCopy": "Nepavyko nukopijuoti santraukos."
   }
 }

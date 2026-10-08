@@ -419,6 +419,10 @@
       "previousMonth": "الشهر السابق",
       "previousYear": "السنة السابقة",
       "time": "الوقت"
-    }
+    },
+    "copySummary": "نسخ الملخص",
+    "copied": "تم النسخ",
+    "blockSummary": "{date}، {time}، {hours} س: {apps}",
+    "errorCopy": "تعذّر نسخ الملخص."
   }
 }

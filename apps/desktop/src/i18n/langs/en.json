@@ -419,6 +419,10 @@
       "previousMonth": "Previous month",
       "previousYear": "Previous year",
       "time": "Time"
-    }
+    },
+    "copySummary": "Copy summary",
+    "copied": "Copied",
+    "blockSummary": "{date}, {time}, {hours} h: {apps}",
+    "errorCopy": "The summary could not be copied."
   }
 }

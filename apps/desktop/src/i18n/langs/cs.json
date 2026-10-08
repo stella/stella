@@ -419,6 +419,10 @@
       "previousMonth": "Předchozí měsíc",
       "previousYear": "Předchozí rok",
       "time": "Čas"
-    }
+    },
+    "copySummary": "Kopírovat souhrn",
+    "copied": "Zkopírováno",
+    "blockSummary": "{date}, {time}, {hours} h: {apps}",
+    "errorCopy": "Souhrn se nepodařilo zkopírovat."
   }
 }

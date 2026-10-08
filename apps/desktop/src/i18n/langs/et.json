@@ -419,6 +419,10 @@
       "previousMonth": "Eelmine kuu",
       "previousYear": "Eelmine aasta",
       "time": "Kellaaeg"
-    }
+    },
+    "copySummary": "Kopeeri kokkuvõte",
+    "copied": "Kopeeritud",
+    "blockSummary": "{date}, {time}, {hours} h: {apps}",
+    "errorCopy": "Kokkuvõtet ei õnnestunud kopeerida."
   }
 }

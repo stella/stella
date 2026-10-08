@@ -286,6 +286,9 @@ test("only explicit confirmation creates a draft with the editable billing field
   await expect(
     dialog.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
   ).toHaveValue("");
+  await dialog
+    .getByRole("textbox", { name: enMessages.activity.entryNarrative })
+    .fill("Draft-only confidential narrative 71f3");
   await dialog.getByRole("button", { name: "Example matter (M-001)" }).click();
   await dialog
     .getByRole("button", { name: enMessages.activity.confirmDraftEntry })
@@ -314,7 +317,7 @@ test("only explicit confirmation creates a draft with the editable billing field
         dateWorked: "2026-10-07",
         timezoneId,
         durationMinutes: 30,
-        narrative: "",
+        narrative: "Draft-only confidential narrative 71f3",
         billable: true,
       },
     },
@@ -344,6 +347,79 @@ test("only explicit confirmation creates a draft with the editable billing field
     page.getByText(enMessages.activity.draftedEntry, { exact: true }),
   ).toBeVisible();
   await expect(createDraft).toHaveCount(0);
+  await page
+    .getByRole("button", { name: enMessages.activity.copySummary })
+    .click();
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.copied }),
+  ).toBeVisible();
+  const callsAfterCopy = await invocations(page);
+  expect(callsAfterCopy).toContainEqual({
+    command: "activity_copy_text",
+    args: { text: expect.stringContaining("Example Editor") },
+  });
+  for (const draftField of [
+    "Draft-only confidential narrative 71f3",
+    "Example matter",
+    "M-001",
+    "draft-1",
+  ]) {
+    expect(callsAfterCopy).not.toContainEqual({
+      command: "activity_copy_text",
+      args: { text: expect.stringContaining(draftField) },
+    });
+  }
+});
+
+test("only an explicit summary copy publishes activity to the clipboard", async ({
+  page,
+}) => {
+  await installNativeBoundary(page);
+  await page.evaluate(() => {
+    const changed: unknown = Reflect.get(
+      window,
+      "__STELLA_TEST_ACTIVITY_CHANGED__",
+    );
+    if (typeof changed !== "function") {
+      throw new TypeError("Activity event fixture is missing");
+    }
+    changed();
+  });
+  await page
+    .getByRole("button", { name: enMessages.activity.previousDay })
+    .click();
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.nextDay }),
+  ).toBeEnabled();
+  const callsBeforeCopy = await invocations(page);
+  expect(callsBeforeCopy).not.toContainEqual(
+    expect.objectContaining({ command: "activity_copy_text" }),
+  );
+  expect(callsBeforeCopy).not.toContainEqual(
+    expect.objectContaining({ command: expect.stringContaining("clipboard_") }),
+  );
+  await page
+    .getByRole("button", { name: enMessages.activity.copySummary })
+    .click();
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.copied }),
+  ).toBeVisible();
+  const callsAfterCopy = await invocations(page);
+  expect(callsAfterCopy).toContainEqual({
+    command: "activity_copy_text",
+    args: { text: expect.stringContaining("Example Editor") },
+  });
+  expect(
+    Array.isArray(callsAfterCopy)
+      ? callsAfterCopy.filter(
+          (call: unknown) =>
+            typeof call === "object" &&
+            call !== null &&
+            "command" in call &&
+            call.command === "activity_copy_text",
+        )
+      : [],
+  ).toHaveLength(1);
 });
 
 for (const state of [

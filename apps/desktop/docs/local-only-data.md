@@ -1,8 +1,9 @@
 # Local-only data
 
 Some desktop features keep data on the device: clipboard history and the
-activity timeline. Recorded activity never enters the system clipboard.
-They share one set of guardrails. A new
+activity timeline. Activity recording never exports data automatically; its
+Copy summary action explicitly publishes the selected summary to the system
+clipboard at the user's request. They share one set of guardrails. A new
 local-only feature follows every rule below and adds one entry to
 `tests/local-only-features.ts`, which the guard tests iterate.
 

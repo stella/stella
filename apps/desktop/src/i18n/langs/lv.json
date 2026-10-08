@@ -419,6 +419,10 @@
       "previousMonth": "Iepriekšējais mēnesis",
       "previousYear": "Iepriekšējais gads",
       "time": "Laiks"
-    }
+    },
+    "copySummary": "Kopēt kopsavilkumu",
+    "copied": "Nokopēts",
+    "blockSummary": "{date}, {time}, {hours} st.: {apps}",
+    "errorCopy": "Neizdevās nokopēt kopsavilkumu."
   }
 }

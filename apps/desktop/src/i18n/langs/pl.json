@@ -419,6 +419,10 @@
       "previousMonth": "Poprzedni miesiąc",
       "previousYear": "Poprzedni rok",
       "time": "Godzina"
-    }
+    },
+    "copySummary": "Kopiuj podsumowanie",
+    "copied": "Skopiowano",
+    "blockSummary": "{date}, {time}, {hours} godz.: {apps}",
+    "errorCopy": "Nie udało się skopiować podsumowania."
   }
 }

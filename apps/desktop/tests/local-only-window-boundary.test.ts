@@ -83,7 +83,7 @@ const commandFunctions = (source: string) =>
   ].map((match) => ({ name: match[1] ?? "", parameters: match[2] ?? "" }));
 
 describe("local-only data stays in the feature's own windows", () => {
-  test("activity has no system clipboard publication", async () => {
+  test("activity clipboard access is confined to the explicit copy command", async () => {
     const files = (await readdir(path.join(NATIVE_ROOT, "src"))).filter(
       (file) =>
         file === "activity.rs" ||
@@ -92,8 +92,30 @@ describe("local-only data stays in the feature's own windows", () => {
     expect(files).toContain("activity_commands.rs");
     for (const file of files) {
       const source = await readNative(`src/${file}`);
-      expect(source, file).not.toMatch(
+      if (file !== "activity_commands.rs") {
+        expect(source, file).not.toMatch(
+          /\bclipboard::|\bwrite_plain_text\b|\buse[^;]*\bclipboard\b/u,
+        );
+        continue;
+      }
+      const copyCommand =
+        /#\[tauri::command\]\s*pub fn activity_copy_text\([^)]*\)[^{]*\{[\s\S]*?\n\}/gu;
+      const matches = [...source.matchAll(copyCommand)];
+      expect(matches).toHaveLength(1);
+      expect(matches.at(0)?.[0]).toContain(
+        "crate::clipboard::write_plain_text(text)",
+      );
+      expect(source.replaceAll(copyCommand, ""), file).not.toMatch(
         /\bclipboard::|\bwrite_plain_text\b|\buse[^;]*\bclipboard\b/u,
+      );
+    }
+  });
+
+  test("confirmed draft entry modules cannot access the clipboard", async () => {
+    for (const file of ["time_entry_commands.rs", "time_entry_submit.rs"]) {
+      const source = await readNative(`src/${file}`);
+      expect(source, file).not.toMatch(
+        /\bclipboard\b|\bwrite_plain_text\b|\bClipboard\w*\b|\barboard\b|\bwrite_text\b|\bset_text\b/u,
       );
     }
   });

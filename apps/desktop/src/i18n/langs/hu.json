@@ -419,6 +419,10 @@
       "previousMonth": "Előző hónap",
       "previousYear": "Előző év",
       "time": "Időpont"
-    }
+    },
+    "copySummary": "Összegzés másolása",
+    "copied": "Másolva",
+    "blockSummary": "{date}, {time}, {hours} ó: {apps}",
+    "errorCopy": "Az összegzést nem sikerült másolni."
   }
 }
