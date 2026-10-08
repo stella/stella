@@ -122,14 +122,15 @@ test("script boundary prints sanitized query rejections and reports a failing ex
     expect(code).toBe(1);
     throw new RangeError("script boundary exited");
   };
-  const result = await Result.tryPromise(() =>
-    runScriptWithErrorOutput(async () => {
-      throw failure("insert into account values ($1)");
-    }),
+  const result = await Result.tryPromise(
+    async () =>
+      await runScriptWithErrorOutput(async () => {
+        throw failure("insert into account values ($1)");
+      }),
   );
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
-    expect(String(result.error)).toContain("script boundary exited");
+    expect(result.error.cause).toBeInstanceOf(RangeError);
   }
   expect(records).toHaveLength(1);
   expect(inspect(records, { depth: 20 })).not.toContain(SECRET);
@@ -158,7 +159,7 @@ test("SDK error output preserves log levels and redacts query values at every co
         failure("insert into account values ($1)"),
       );
     }
-    expect(records.map(({ method }) => method)).toEqual(methods);
+    expect(records.map(({ method }) => method)).toEqual([...methods]);
     expect(inspect(records, { depth: 20 })).not.toContain(SECRET);
     expect(inspect(records, { depth: 20 })).toContain("account_token_unique");
   } finally {
@@ -166,4 +167,15 @@ test("SDK error output preserves log levels and redacts query values at every co
       console[method] = originals[method];
     }
   }
+});
+
+test("query output preserves structural PostgreSQL driver codes", () => {
+  const error = Object.assign(new Error(SECRET), {
+    name: "PostgresError",
+    code: "ERR_POSTGRES_CONNECTION_REFUSED",
+    params: [SECRET],
+  });
+  const output = inspect(sanitizeErrorForOutput(error));
+  expect(output).toContain("ERR_POSTGRES_CONNECTION_REFUSED");
+  expect(output).not.toContain(SECRET);
 });

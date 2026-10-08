@@ -2,13 +2,16 @@ import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
   filenameForContext,
+  getPropertyName,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isImportedFrom,
+  isStringLiteral as isStringValueLiteral,
   resolveVariable,
   resolveImport,
   stableInitializer,
+  unwrapExpression,
   type ImportedFromOptions,
   type AstNode,
 } from "./utils.ts";
@@ -50,6 +53,19 @@ const OUTPUT_METHODS = new Set([
   "request",
   "warn",
   "write",
+]);
+const CONSOLE_INSPECTION_METHODS = new Set([
+  "assert",
+  "clear",
+  "count",
+  "countReset",
+  "dir",
+  "dirxml",
+  "group",
+  "groupCollapsed",
+  "table",
+  "timeLog",
+  "trace",
 ]);
 type RuleContext = ImportedFromOptions["context"];
 
@@ -94,8 +110,8 @@ const propertyName = (node: AstNode): string | null => {
   return null;
 };
 
-const isStringLiteral = (node: AstNode): boolean =>
-  (node.type === "Literal" && typeof node.value === "string") ||
+const isStringLiteralExpression = (node: AstNode): boolean =>
+  isStringValueLiteral(node) ||
   (node.type === "TemplateLiteral" &&
     Array.isArray(node.expressions) &&
     node.expressions.length === 0);
@@ -117,19 +133,20 @@ const isStringAnnotated = (variable: Variable): boolean => {
 };
 
 const isSafeTransform = (context: RuleContext, node: AstNode): boolean => {
-  if (!isAstNode(node) || node.type !== "CallExpression") {
+  if (node.type !== "CallExpression" || !isAstNode(node.callee)) {
     return false;
   }
+  const callee = node.callee;
   return (
     isImportedFrom({
       context,
-      node: node.callee,
+      node: callee,
       modules: [ERRORS_PACKAGE],
       names: SAFE_TRANSFORMS,
     }) ||
     isImportedFrom({
       context,
-      node: node.callee,
+      node: callee,
       modules: [
         (moduleId) => moduleId.endsWith("apps/api/src/lib/errors/utils"),
       ],
@@ -137,25 +154,25 @@ const isSafeTransform = (context: RuleContext, node: AstNode): boolean => {
     }) ||
     isOwnedSafeProjection(
       context,
-      node.callee,
+      callee,
       "apps/api/src/lib/errors/error-tag",
       API_ERROR_TAG_FORMATTERS,
     ) ||
     isOwnedSafeProjection(
       context,
-      node.callee,
+      callee,
       "apps/api/src/lib/pg-error",
       API_PG_FORMATTERS,
     ) ||
     isOwnedSafeProjection(
       context,
-      node.callee,
+      callee,
       "apps/api/src/lib/observability/failure",
       API_FAILURE_FORMATTERS,
     ) ||
     isImportedFrom({
       context,
-      node: node.callee,
+      node: callee,
       modules: [
         (moduleId) =>
           moduleId.endsWith("apps/api/src/scripts/better-auth-script-failure"),
@@ -183,6 +200,7 @@ const isOwnedSafeProjection = (
   }
   if (
     filenameForContext(context).endsWith(`${modulePath}.ts`) &&
+    isIdentifierReference(node) &&
     isIdentifier(node) &&
     names.has(node.name)
   ) {
@@ -214,23 +232,40 @@ const hasSharedBetterAuthLogger = (
   if (!Array.isArray(options.properties)) {
     return false;
   }
-  const loggerProperty = options.properties.find(
-    (property) =>
-      isAstNode(property) &&
-      property.type === "Property" &&
-      isAstNode(property.key) &&
-      (isIdentifier(property.key, "logger") ||
-        (property.key.type === "Literal" && property.key.value === "logger")),
-  );
-  return (
-    isAstNode(loggerProperty) &&
-    isImportedFrom({
-      context,
-      node: loggerProperty.value,
-      modules: [ERRORS_PACKAGE],
-      names: new Set(["errorOutputLogger"]),
-    })
-  );
+  let effectiveLoggerIsSafe = false;
+  for (const property of options.properties) {
+    if (!isAstNode(property)) {
+      continue;
+    }
+    if (property.type === "SpreadElement") {
+      effectiveLoggerIsSafe = false;
+      continue;
+    }
+    if (property.type !== "Property") {
+      continue;
+    }
+    const key = property.computed
+      ? isStringValueLiteral(property.key)
+        ? property.key.value
+        : null
+      : getPropertyName(property.key);
+    if (property.computed && key === null) {
+      effectiveLoggerIsSafe = false;
+      continue;
+    }
+    if (key === "logger") {
+      effectiveLoggerIsSafe =
+        isAstNode(property.value) &&
+        isImportedFrom({
+          context,
+          node: property.value,
+          modules: [ERRORS_PACKAGE],
+          names: new Set(["errorOutputLogger"]),
+        });
+      continue;
+    }
+  }
+  return effectiveLoggerIsSafe;
 };
 
 const isBetterAuthFactory = (context: RuleContext, node: AstNode): boolean =>
@@ -296,7 +331,7 @@ const isOutputSink = (
   }
   if (
     isGlobalIdentifier(context, object, "console") &&
-    OUTPUT_METHODS.has(key) &&
+    (OUTPUT_METHODS.has(key) || CONSOLE_INSPECTION_METHODS.has(key)) &&
     key !== "write"
   ) {
     return true;
@@ -356,7 +391,7 @@ const isRawErrorIdentifier = (
     return !isStringAnnotated(variable) && ERROR_NAMES.has(node.name);
   }
   if (
-    isStringLiteral(initializer) ||
+    isStringLiteralExpression(initializer) ||
     isSafeTransform(options.context, initializer)
   ) {
     return false;
@@ -429,6 +464,13 @@ const isRawErrorCollection = (
 };
 
 const isRawError = (options: RawErrorOptions, node: AstNode): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
+    return false;
+  }
+  if (expression !== node) {
+    return isRawError(options, expression);
+  }
   const { context, seen } = options;
   if (seen.has(node)) {
     return false;

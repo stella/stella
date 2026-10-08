@@ -26,11 +26,9 @@ const SECRETS = [
   "fixture-private-token-9f8a",
   "fixture-person@example.test",
   "fixture-value-shaped-as-frame",
-];
-const QUERY_PARAMS = [
-  ...SECRETS,
-  `prefix\n    at packages/${SECRETS.at(3)}.ts:1:1`,
-];
+] as const;
+const FRAME_PARAM = `prefix\n    at packages/${SECRETS[3]}.ts:1:1`;
+const QUERY_PARAMS = [...SECRETS, FRAME_PARAM];
 const queryFailure = () => {
   const driver = Object.assign(
     new Error(`Key (token)=(${SECRETS.at(1)}) already exists`),
@@ -64,8 +62,8 @@ afterEach(() => {
 
 test("query error output excludes parameter values across console, dev sink and script printer", () => {
   const error = queryFailure();
-  expect(inspect(error)).toContain(SECRETS.at(0));
-  expect(error.stack).toContain(QUERY_PARAMS.at(-1));
+  expect(inspect(error)).toContain(SECRETS[0]);
+  expect(error.stack).toContain(FRAME_PARAM);
   const consoleRecords: unknown[][] = [];
   const sinkRecords: unknown[] = [];
   console.error = (...args: unknown[]) => {
@@ -111,7 +109,11 @@ test("query error output excludes parameter values through logger and captureErr
   };
   try {
     const error = queryFailure();
-    captureError(error, { params: SECRETS.join(","), query: error.query });
+    captureError(error, {
+      params: SECRETS.join(","),
+      query: error.query,
+      toolName: "list_matters",
+    });
     logger.error("query.failed", {
       ...errorFingerprint(error),
       ...unredactedErrorFields(error),
@@ -119,6 +121,7 @@ test("query error output excludes parameter values through logger and captureErr
     logger.warn("query.failed", connectionErrorFields(error));
     logger.error(error.message, { "error.msg": error.message });
     expect(analytics.exceptions()).toHaveLength(1);
+    expect(inspect(analytics.events)).toContain("list_matters");
     expect(logs.records).toHaveLength(3);
     assertSafe(analytics.events);
     assertSafe(logs.records);
@@ -151,7 +154,7 @@ test("query error output excludes parameter values from stdout and stderr logger
       });
     }
     logger.request({
-      message: error.message,
+      message: "request.failed",
       method: "POST",
       severity: "ERROR",
       statusCode: 500,
@@ -166,4 +169,10 @@ test("query error output excludes parameter values from stdout and stderr logger
     process.stdout.write = stdout;
     process.stderr.write = stderr;
   }
+});
+
+test("dev JSONL derives ordinary error names from their class", () => {
+  const error = new Error("failure");
+  error.name = SECRETS[0];
+  expect(serializeDevError(error)).toHaveProperty("name", "Error");
 });

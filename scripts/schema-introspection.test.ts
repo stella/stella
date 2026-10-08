@@ -110,6 +110,28 @@ describe("schema-only dependency validation", () => {
     );
   });
 
+  test("distinguishes error query metadata and console dispatch from database calls", () => {
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst error = { query: "shape", params: [] }; const shape = error["query"]; console[level](shape);`,
+      ),
+    ).toEqual([]);
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst query = connection.query; query("select 1");`,
+      ),
+    ).toContain(
+      "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: query",
+    );
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst run = (console: Record<string, () => void>, level: string) => console[level]();`,
+      ),
+    ).toContain(
+      "apps/api/src/inventory.ts: unresolved runtime call in apps/api/src/inventory.ts",
+    );
+  });
+
   test("reports method aliases and malformed runtime sources", () => {
     expect(
       validate(

@@ -63,9 +63,17 @@ test("requires the shared logger for every imported betterAuth factory", async (
 import { errorOutputLogger as sharedLogger } from "@stll/errors";
 createAuth({});
 createAuth({ logger: console });
-createAuth({ logger: sharedLogger });`,
+createAuth({ logger: sharedLogger });
+createAuth({ ...options, logger: sharedLogger });
+createAuth({ logger: sharedLogger, ...options });
+createAuth({ logger: sharedLogger, ...options, logger: console });
+createAuth({ ...options, logger: sharedLogger, ...overrides });
+createAuth({ logger: sharedLogger, [key]: otherLogger });
+createAuth({ logger: sharedLogger, logger: console });
+createAuth({ logger: console, logger: sharedLogger });
+createAuth({ ...options, ["logger"]: sharedLogger });`,
     ),
-  ).toEqual([3, 4]);
+  ).toEqual([3, 4, 7, 8, 9, 10, 11]);
 });
 
 test("accepts safe formatter output and benign local error text", async () => {
@@ -136,4 +144,35 @@ console.error(error.toString());
 console.error(Error("failed"));`,
     ),
   ).toEqual([2, 3, 4]);
+});
+
+test("rejects errors through transparent TypeScript expression wrappers", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-error-output",
+      `console.error((error as Error)!);
+console.error(<Error>error);
+console.error(error satisfies Error);
+console.error(identity<Error>(error));
+console.error((error as Error).cause);`,
+    ),
+  ).toEqual([1, 2, 3, 4, 5]);
+});
+
+test("covers console inspection methods without treating them as logger methods", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-error-output",
+      `console.dir(error);
+console.dirxml(error);
+console.trace(error);
+console.table(error);
+console.assert(false, error);
+console.group(error);
+console.groupCollapsed(error);
+console.timeLog("timer", error);
+logger.dir(error);
+logger.table(error);`,
+    ),
+  ).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 });

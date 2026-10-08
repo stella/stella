@@ -9194,5 +9194,13 @@
   "src/tests/security/aggregate-mutations.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/lib/errors/query-error-output.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/scripts/script-success-exit.contract.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

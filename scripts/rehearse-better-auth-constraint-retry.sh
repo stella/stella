@@ -9,6 +9,7 @@ fi
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 readonly repo_root
+source "$repo_root/scripts/lib/has-postgres-sqlstate.sh"
 readonly constraints_migration="20260825220000_better_auth_17_constraints"
 readonly constraints_sql="$repo_root/apps/api/drizzle/$constraints_migration/migration.sql"
 # The later migration that relaxes the column this rehearsal tightens. Its
@@ -91,14 +92,29 @@ if (
   exit 1
 fi
 
-if ! grep -Fq 'account_issuer_not_null_check' "$failure_log"; then
+if ! has_postgres_sqlstate "$failure_log" P0001; then
   echo "Constraints migration failed for an unrelated reason" >&2
   tail -40 "$failure_log" >&2
   exit 1
 fi
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At \
+  -v constraints_migration="$constraints_migration" \
+  -v constraints_hash="$constraints_hash" <<'SQL' | grep -qx t || {
 SELECT
+  EXISTS (
+    SELECT 1
+    FROM public.account
+    WHERE id = 'constraint-retry-account'
+      AND issuer IS NULL
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM drizzle.__drizzle_migrations
+    WHERE name = :'constraints_migration'
+      AND hash = :'constraints_hash'
+  )
+  AND
   NOT EXISTS (
     SELECT 1
     FROM pg_constraint
@@ -106,7 +122,7 @@ SELECT
       AND conname = 'account_issuer_not_null_check'
   )
   AND to_regclass('public.account_issuer_account_id_uidx') IS NULL;
-" | grep -qx t || {
+SQL
   echo "Incomplete backfill left committed constraint side effects" >&2
   exit 1
 }

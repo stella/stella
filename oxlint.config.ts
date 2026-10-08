@@ -4454,7 +4454,6 @@ const config = defineConfig({
       files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
       rules: {
         "no-raw-error-logging/no-raw-error-logging": "off",
-        "no-redacted-log-attribute-key/no-redacted-log-attribute-key": "off",
       },
     },
     {

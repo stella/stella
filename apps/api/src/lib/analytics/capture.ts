@@ -20,7 +20,6 @@ import {
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
-import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
 /**
@@ -64,6 +63,7 @@ type CaptureRequestErrorOptions = {
 // Keys the capture owns: the analytics envelope, the error identity and the
 // failure grade. A caller's context carrying one is dropped and counted, so a
 // context value can neither regroup an issue nor dodge suppression.
+const QUERY_CONTEXT_KEY = /(?:params|query|sqltext)/iu;
 const RESERVED_CONTEXT_KEY = /^(?:\$|error\.|failure\.)/u;
 const RESERVED_CONTEXT_NAMES: ReadonlySet<string> = new Set([
   "message",
@@ -85,7 +85,7 @@ const acceptCaptureContext = (
     if (
       RESERVED_CONTEXT_KEY.test(key) ||
       RESERVED_CONTEXT_NAMES.has(key) ||
-      SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key)
+      QUERY_CONTEXT_KEY.test(key)
     ) {
       rejected += 1;
       continue;

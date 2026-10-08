@@ -63,6 +63,60 @@ const sourceProgram = (source: ts.SourceFile) => {
   return ts.createProgram([source.fileName], options, host);
 };
 
+const isCalledAlias = (source: ts.SourceFile, member: ts.Node): boolean => {
+  const checker = sourceProgram(source).getTypeChecker();
+  const parent = member.parent;
+  if (ts.isCallExpression(parent) && parent.expression === member) {
+    return true;
+  }
+  if (
+    !ts.isVariableDeclaration(parent) ||
+    parent.initializer !== member ||
+    !ts.isIdentifier(parent.name)
+  ) {
+    return false;
+  }
+  const symbol = checker.getSymbolAtLocation(parent.name);
+  return (
+    symbol !== undefined &&
+    source.statements.some((statement) => {
+      let invoked = false;
+      const visit = (node: ts.Node): void => {
+        if (
+          ts.isIdentifier(node) &&
+          checker.getSymbolAtLocation(node) === symbol &&
+          ts.isCallExpression(node.parent) &&
+          node.parent.expression === node
+        ) {
+          invoked = true;
+          return;
+        }
+        if (!invoked) {
+          ts.forEachChild(node, visit);
+        }
+      };
+      visit(statement);
+      return invoked;
+    })
+  );
+};
+
+type GlobalConsoleDispatchOptions = {
+  node: ts.Expression;
+  method: string;
+  checker: ts.TypeChecker;
+};
+
+const isGlobalConsoleDispatch = ({
+  node,
+  method,
+  checker,
+}: GlobalConsoleDispatchOptions): boolean =>
+  method === DYNAMIC_CALL &&
+  ts.isIdentifier(node) &&
+  node.text === "console" &&
+  checker.getSymbolAtLocation(node) === undefined;
+
 const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
   const checker = sourceProgram(source).getTypeChecker();
   const importedCryptoHash = (node: ts.Node): boolean => {
@@ -137,6 +191,9 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
           (ts.isArrowFunction(property.initializer) ||
             ts.isFunctionExpression(property.initializer)),
       );
+    }
+    if (isGlobalConsoleDispatch({ node, method, checker })) {
+      return true;
     }
     const member = checker.getTypeAtLocation(node).getProperty(method);
     if (member !== undefined) {
@@ -383,6 +440,9 @@ export const validateSchemaIntrospection = ({
           return;
         }
         if (name === undefined || !isDatabaseOperationMethod(name)) {
+          return;
+        }
+        if (name === "query" && !isCalledAlias(source, node)) {
           return;
         }
         knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);

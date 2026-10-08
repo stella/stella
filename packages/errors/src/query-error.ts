@@ -4,6 +4,7 @@ import { Result } from "better-result";
 // Project them before serialization; inspecting an Error exposes non-enumerable
 // fields and its cause, so removing only `params` is insufficient.
 const QUERY_ERROR_NAME = /^DrizzleQueryError\d*$/u;
+const POSTGRES_DRIVER_CODE = /^ERR_POSTGRES_[A-Z0-9_]{1,64}$/u;
 const SQLSTATE = /^(?=.*[0-9])[0-9A-Z]{5}$/u;
 const MAX_ERROR_DEPTH = 32;
 const MAX_ERROR_NODES = 1000;
@@ -18,11 +19,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const isQueryError = (value: Record<string, unknown>): boolean =>
-  (typeof value.name === "string" && QUERY_ERROR_NAME.test(value.name)) ||
-  (typeof value.query === "string" && Array.isArray(value.params)) ||
-  value.name === "PostgresError" ||
-  (typeof value.code === "string" && SQLSTATE.test(value.code)) ||
-  (typeof value.errno === "string" && SQLSTATE.test(value.errno));
+  (typeof value["name"] === "string" && QUERY_ERROR_NAME.test(value["name"])) ||
+  (typeof value["query"] === "string" && Array.isArray(value["params"])) ||
+  value["name"] === "PostgresError" ||
+  (typeof value["code"] === "string" && SQLSTATE.test(value["code"])) ||
+  (typeof value["errno"] === "string" && SQLSTATE.test(value["errno"]));
 
 /** Only vocabulary and placeholders survive; literals and identifiers do not. */
 const queryShape = (query: string): string => {
@@ -66,7 +67,7 @@ const containsQueryError = (value: unknown): boolean => {
     for (const key of Object.getOwnPropertyNames(item)) {
       pending.push(item[key]);
     }
-    pending.push(item.cause);
+    pending.push(item["cause"]);
   }
   // A graph too large to inspect is also too large to safely print.
   return pending.length > 0;
@@ -90,7 +91,8 @@ const queryErrorMetadata = (input: Record<string, unknown>, cause: unknown) => {
     if (
       typeof field === "string" &&
       (key === "code" || key === "errno"
-        ? SQLSTATE.test(field)
+        ? SQLSTATE.test(field) ||
+          (key === "code" && POSTGRES_DRIVER_CODE.test(field))
         : IDENTIFIER.test(field))
     ) {
       fields.push([key, field]);
@@ -132,21 +134,21 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
     seen.add(input);
     const database = databaseCause || isQueryError(input);
     const cause =
-      input.cause === undefined
+      input["cause"] === undefined
         ? undefined
         : visit({
-            input: input.cause,
+            input: input["cause"],
             databaseCause: database,
             depth: depth + 1,
           });
-    const causeChanged = cause !== input.cause;
+    const causeChanged = cause !== input["cause"];
     if (input instanceof Error || database) {
       if (
         !database &&
         !causeChanged &&
         !containsQueryError(input) &&
-        (typeof input.message !== "string" ||
-          sanitizeQueryErrorText(input.message) === input.message)
+        (typeof input["message"] !== "string" ||
+          sanitizeQueryErrorText(input["message"]) === input["message"])
       ) {
         return input;
       }
@@ -156,8 +158,8 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
           : "Error caused by database query failure",
       );
       output.name =
-        typeof input.name === "string" && IDENTIFIER.test(input.name)
-          ? input.name
+        typeof input["name"] === "string" && IDENTIFIER.test(input["name"])
+          ? input["name"]
           : "Error";
       if (cause !== undefined) {
         output.cause = cause;
@@ -167,9 +169,9 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       )) {
         Reflect.set(output, key, field);
       }
-      if (typeof input.query === "string") {
-        Reflect.set(output, "query", queryShape(input.query));
-        output.message += `: ${queryShape(input.query)}`;
+      if (typeof input["query"] === "string") {
+        Reflect.set(output, "query", queryShape(input["query"]));
+        output.message += `: ${queryShape(input["query"])}`;
       }
       // Input stacks include untrusted message continuation lines. Query
       // projections omit them; telemetry reads trusted frames separately.
@@ -199,7 +201,6 @@ type ErrorOutputOptions = {
 /** Preserve SDK log levels while projecting every value before inspection. */
 export const logErrorOutput = ({ level, values }: ErrorOutputOptions): void => {
   const method = level === "info" ? "log" : level;
-  // oxlint-disable-next-line no-console -- sanitized console output boundary
   console[method](...values.map((value) => sanitizeErrorForOutput(value)));
 };
 

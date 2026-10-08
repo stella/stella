@@ -5,7 +5,11 @@ import path from "node:path";
 import { createDevErrorLogger, sanitizeErrorForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import { errorTag, isErrorInstance } from "@/api/lib/errors/error-tag";
+import {
+  errorClassName,
+  errorTag,
+  isErrorInstance,
+} from "@/api/lib/errors/error-tag";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import {
   identityFields,
@@ -256,7 +260,7 @@ const serializeSafeError = (error: unknown): unknown => {
     const stack = safeErrorStack(error);
     const cause = safeErrorCause(error);
     const out: SerializedError = {
-      name: error.name,
+      name: errorClassName(error),
       ...errorSystemFields(error),
       message: safeErrorMessage(error) ?? "",
       ...(stack !== undefined && { stack }),
