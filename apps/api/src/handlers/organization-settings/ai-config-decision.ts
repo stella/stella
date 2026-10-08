@@ -6,7 +6,7 @@ import type {
   OrgDecisionModelConfig,
 } from "@/api/lib/ai-config";
 
-export type DecisionConfigInput = {
+type DecisionConfigInput = {
   provider: DecisionModelProvider;
   apiKey?: string | null | undefined;
   region?: "eu" | "global" | undefined;
