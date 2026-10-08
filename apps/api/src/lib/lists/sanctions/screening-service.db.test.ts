@@ -794,12 +794,15 @@ test("a cold start converges when editions load for longer than any request dead
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });
   const loadMs = 4000;
+  // Reads start inside the first request's lease; they run slow only once it answered.
+  const coldAnswered = Promise.withResolvers<undefined>();
   const publicScreen = createPublicSanctionsScreening({
     pool,
     clock,
     loadEntries: async (options) => {
       // Seven editions at four seconds each: far past the request deadline and
       // any total a single bounded warmup could take. No pending timer may fire.
+      await coldAnswered.promise;
       clock.advance(loadMs);
       return await loadEditionEntries(options);
     },
@@ -815,6 +818,7 @@ test("a cold start converges when editions load for longer than any request dead
   } as const;
   try {
     const cold = (await publicScreen(person)).unwrap();
+    coldAnswered.resolve(undefined);
     expect(cold.status).toBe("unavailable");
     expect(cold.lists.every(({ reason }) => reason === "warming")).toBe(true);
     await publicScreen.warmupSettled();
