@@ -20,6 +20,7 @@
  *   bun apps/api/src/scripts/backfill-citation-authority.ts --batch 2000
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+import { runScriptWithErrorOutput } from "@stll/errors";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import {
@@ -31,70 +32,72 @@ import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
-const { rootDb } = await enterCaseLawMaintenanceLane();
+await runScriptWithErrorOutput(async () => {
+  const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const plan = backfillEntrypoints["citation-authority"]({
-  args: process.argv.slice(2),
-});
-const { asOf, after: rawAfter } = plan;
+  const plan = backfillEntrypoints["citation-authority"]({
+    args: process.argv.slice(2),
+  });
+  const { asOf, after: rawAfter } = plan;
 
-console.log("=== BACKFILL CITATION AUTHORITY ===");
-console.log(
-  `Sweep instant: ${asOf.toISOString()} ` +
-    "(pass it back with --as-of, with --after, to resume this run)",
-);
+  console.log("=== BACKFILL CITATION AUTHORITY ===");
+  console.log(
+    `Sweep instant: ${asOf.toISOString()} ` +
+      "(pass it back with --as-of, with --after, to resume this run)",
+  );
 
-const courtWeightEntries = await loadCitationCourtWeightEntries();
+  const courtWeightEntries = await loadCitationCourtWeightEntries();
 
-let after: string | null = rawAfter ?? null;
-let scanned = 0;
-let written = 0;
-let cited = 0;
+  let after: string | null = rawAfter ?? null;
+  let scanned = 0;
+  let written = 0;
+  let cited = 0;
 
-const runtime = plan.open((options) =>
-  createScriptBackfillRuntime({ ...options, db: rootDb }),
-);
-try {
-  const pass = await runBackfillPass({
-    step: async () => {
-      const result = await runtime.step(async ({ tx, size, cursor }) => {
-        const batch = await recomputeCitationAuthorityBatch(tx, {
-          after: cursor ?? rawAfter ?? null,
-          limit: size,
-          now: { type: "pinned", at: asOf },
-          courtWeightEntries,
+  const runtime = plan.open((options) =>
+    createScriptBackfillRuntime({ ...options, db: rootDb }),
+  );
+  try {
+    const pass = await runBackfillPass({
+      step: async () => {
+        const result = await runtime.step(async ({ tx, size, cursor }) => {
+          const batch = await recomputeCitationAuthorityBatch(tx, {
+            after: cursor ?? rawAfter ?? null,
+            limit: size,
+            now: { type: "pinned", at: asOf },
+            courtWeightEntries,
+          });
+          return {
+            cursor: batch.lastId ?? cursor,
+            done: batch.scanned < size,
+            value: batch,
+          };
         });
         return {
-          cursor: batch.lastId ?? cursor,
-          done: batch.scanned < size,
-          value: batch,
+          ...result,
+          value: { batch: result.value, cursor: result.cursor },
         };
-      });
-      return {
-        ...result,
-        value: { batch: result.value, cursor: result.cursor },
-      };
-    },
-    onBatch: ({ value: { batch, cursor } }) => {
-      scanned += batch.scanned;
-      written += batch.written;
-      cited += batch.cited;
-      after = cursor ?? after;
-      console.log(
-        `  ${scanned} examined, ${written} rewritten, ${cited} cited; last ${after ?? "-"}`,
-      );
-    },
-    sleep: Bun.sleep,
-  });
-  if (pass.isErr()) {
-    throw pass.error;
+      },
+      onBatch: ({ value: { batch, cursor } }) => {
+        scanned += batch.scanned;
+        written += batch.written;
+        cited += batch.cited;
+        after = cursor ?? after;
+        console.log(
+          `  ${scanned} examined, ${written} rewritten, ${cited} cited; last ${after ?? "-"}`,
+        );
+      },
+      sleep: Bun.sleep,
+    });
+    if (pass.isErr()) {
+      throw pass.error;
+    }
+  } finally {
+    await runtime.close();
   }
-} finally {
-  await runtime.close();
-}
 
-console.log(
-  `Done. ${scanned} decisions examined, ${written} rewritten, ${cited} carry a citation.`,
-);
+  console.log(
+    `Done. ${scanned} decisions examined, ${written} rewritten, ${cited} carry a citation.`,
+  );
 
-process.exit(0);
+  process.exit(0);
+});

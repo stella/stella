@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Import the Czech Constitutional Court's published roster of its justices
  * into `case_law_judges`, then re-link the decision rows whose printed name
@@ -14,12 +15,15 @@
  * implementations pull their connections in on first use: importing this
  * module opens nothing.
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
+import {
+  printError,
+  runScriptWithErrorOutput,
+  sanitizeErrorForOutput,
+} from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { caseLawJudges } from "@/api/db/schema";
@@ -766,7 +770,9 @@ export const importCzUsRoster = async ({
       );
       const outcome = Result.flatten(attempted);
       if (Result.isError(outcome)) {
-        const reason = outcome.error.message;
+        const safeError = sanitizeErrorForOutput(outcome.error);
+        const reason =
+          safeError instanceof Error ? safeError.message : String(safeError);
         result.failures.push({
           name: entry.name,
           profileUrl: entry.profileUrl,
@@ -938,23 +944,25 @@ export const corpusPortraitStore: RosterPortraitStore = {
 };
 
 if (import.meta.main) {
-  // The maintenance lane is the door an operator pass takes to the case-law
-  // tables and it holds a connection for the life of the process, so only a
-  // direct run opens one.
-  const { enterCaseLawMaintenanceLane } =
-    await import("@/api/lib/case-law/maintenance-lane");
-  const { ingestionDb } = await enterCaseLawMaintenanceLane();
-  const imported = await importCzUsRoster({
-    store: czUsRosterStore(ingestionDb),
-    fetch: courtSiteFetch,
-    s3: corpusPortraitStore,
-    now: () => new Date(),
-    intervalMs: CZ_US_ROSTER_REQUEST_INTERVAL_MS,
+  await runScriptWithErrorOutput(async () => {
+    // The maintenance lane is the door an operator pass takes to the case-law
+    // tables and it holds a connection for the life of the process, so only a
+    // direct run opens one.
+    const { enterCaseLawMaintenanceLane } =
+      await import("@/api/lib/case-law/maintenance-lane");
+    const { ingestionDb } = await enterCaseLawMaintenanceLane();
+    const imported = await importCzUsRoster({
+      store: czUsRosterStore(ingestionDb),
+      fetch: courtSiteFetch,
+      s3: corpusPortraitStore,
+      now: () => new Date(),
+      intervalMs: CZ_US_ROSTER_REQUEST_INTERVAL_MS,
+    });
+    if (Result.isError(imported)) {
+      printError(imported.error);
+      process.exit(1);
+    }
+    process.stdout.write(`${JSON.stringify(imported.value, null, 2)}\n`);
+    process.exit(imported.value.failures.length === 0 ? 0 : 1);
   });
-  if (Result.isError(imported)) {
-    process.stderr.write(`${imported.error.message}\n`);
-    process.exit(1);
-  }
-  process.stdout.write(`${JSON.stringify(imported.value, null, 2)}\n`);
-  process.exit(imported.value.failures.length === 0 ? 0 : 1);
 }

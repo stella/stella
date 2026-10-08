@@ -316,6 +316,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
     "no-raw-error-logging/no-raw-error-logging",
   ]),
+  fixtureRuleOverride("no-raw-error-output.fixture.ts", [
+    "no-raw-error-output/no-raw-error-output",
+  ]),
   fixtureRuleOverride("failure-sink-handle.fixture.ts", [
     "failure-sink-handle/failure-sink-handle",
   ]),
@@ -1432,6 +1435,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
+    "./.oxlint-plugins/no-raw-error-output.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
@@ -4433,6 +4437,24 @@ const config = defineConfig({
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
+      },
+    },
+    {
+      files: ["apps/api/scripts/**/*.ts", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "apps/api/src/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-raw-error-output/no-raw-error-output": "error",
+      },
+    },
+    {
+      // This sink contract deliberately injects unsafe records and verifies redaction.
+      files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
+      rules: {
+        "no-raw-error-logging/no-raw-error-logging": "off",
+        "no-redacted-log-attribute-key/no-redacted-log-attribute-key": "off",
       },
     },
     {

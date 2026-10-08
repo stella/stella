@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import type {
   CorpusIndexClient,
   CorpusIndexHit,
@@ -172,112 +174,114 @@ if (
   fail(`--max-divergence must be within [0, 1], got: ${rawMaxDivergence}`);
 }
 
-const content = await Result.tryPromise({
-  try: async () => await Bun.file(queriesPath).text(),
-  catch: (cause) =>
-    cause instanceof Error ? cause.message : "query file is not readable",
-});
-if (Result.isError(content)) {
-  // A missing input file is a runtime failure (exit 2), not divergence.
-  abort(`cannot read ${queriesPath}: ${content.error}`);
-}
-const queries = parseGoldenQueryFile(content.value);
-if (Result.isError(queries)) {
-  fail(queries.error.message);
-}
-
-/**
- * Bounded offset scan until the top-N distinct documents are collected.
- * A passage-granularity index can put hundreds of one judgment's passages
- * ahead of the next document, so a single fixed-size page cannot promise
- * N distinct documents; the scan widens page by page (the production
- * reader's shape) up to the shared scan limit.
- *
- * Each generation gets its own route: from generation 3 on a physical
- * index may hold several jurisdictions, and the query then carries the
- * jurisdiction clause the search paths carry.
- */
-type RunQueryOptions = {
-  client: CorpusIndexClient;
-  generation: string;
-  query: GoldenQuery;
-  queryVariant: CorpusIndexQueryVariant;
-};
-
-const runQuery = async ({
-  client,
-  generation,
-  query,
-  queryVariant,
-}: RunQueryOptions): Promise<QueryRunOutcome> => {
-  const request =
-    goldenQueryRequest({ generation, query, queryVariant }) ??
-    fail(`query ${query.id} holds no searchable term: ${query.text}`);
-  const { indexId, engineQuery } = request;
-  const scanned: CorpusIndexHit[] = [];
-  let totalHits = 0;
-  let startOffset = 0;
-  let ranked = rankDocumentHits(scanned, depth);
-  for (;;) {
-    const searched = await client.search({
-      observer: "unobserved",
-      indexId,
-      query: engineQuery,
-      maxHits: LIMITS.corpusIndexSearchCandidateLimit,
-      startOffset,
-      sortBy: "_score",
-    });
-    if (Result.isError(searched)) {
-      // Exit 2, not an uncaught throw: exit 1 is reserved for divergence,
-      // and an unqueryable generation must not read as a diverged one.
-      abort(`search against ${indexId} failed: ${searched.error.message}`);
-    }
-    totalHits = searched.value.numHits;
-    scanned.push(...searched.value.hits);
-    startOffset += searched.value.hits.length;
-    ranked = rankDocumentHits(scanned, depth);
-    const exhausted =
-      searched.value.hits.length === 0 || startOffset >= totalHits;
-    if (
-      ranked.rankedDocumentIds.length >= depth ||
-      exhausted ||
-      startOffset >= LIMITS.corpusIndexSearchScanLimit
-    ) {
-      break;
-    }
-  }
-  return { totalHits, ...ranked };
-};
-
-const rows: GoldenQueryDiffRow[] = [];
-const baseClient = corpusIndexQueryDiffClientForGeneration(baseGeneration);
-const candidateClient =
-  corpusIndexQueryDiffClientForGeneration(candidateGeneration);
-for (const query of queries.value) {
-  const [base, candidate] = await Promise.all([
-    runQuery({
-      client: baseClient,
-      generation: baseGeneration,
-      query,
-      queryVariant: baseQueryVariant,
-    }),
-    runQuery({
-      client: candidateClient,
-      generation: candidateGeneration,
-      query,
-      queryVariant: candidateQueryVariant,
-    }),
-  ]);
-  rows.push({
-    query,
-    base,
-    candidate,
-    diff: diffRankedDocuments({ base, candidate, depth }),
+await runScriptWithErrorOutput(async () => {
+  const content = await Result.tryPromise({
+    try: async () => await Bun.file(queriesPath).text(),
+    catch: (cause) =>
+      cause instanceof Error ? cause.message : "query file is not readable",
   });
-  console.error(`compared ${rows.length}/${queries.value.length}…`);
-}
+  if (Result.isError(content)) {
+    // A missing input file is a runtime failure (exit 2), not divergence.
+    abort(`cannot read ${queriesPath}: ${content.error}`);
+  }
+  const queries = parseGoldenQueryFile(content.value);
+  if (Result.isError(queries)) {
+    fail(queries.error.message);
+  }
 
-console.log(renderDiffTable({ rows, depth, maxDivergence }));
-process.exit(
-  divergedQueries(rows, maxDivergence).length > 0 ? DIVERGED_EXIT_CODE : 0,
-);
+  /**
+   * Bounded offset scan until the top-N distinct documents are collected.
+   * A passage-granularity index can put hundreds of one judgment's passages
+   * ahead of the next document, so a single fixed-size page cannot promise
+   * N distinct documents; the scan widens page by page (the production
+   * reader's shape) up to the shared scan limit.
+   *
+   * Each generation gets its own route: from generation 3 on a physical
+   * index may hold several jurisdictions, and the query then carries the
+   * jurisdiction clause the search paths carry.
+   */
+  type RunQueryOptions = {
+    client: CorpusIndexClient;
+    generation: string;
+    query: GoldenQuery;
+    queryVariant: CorpusIndexQueryVariant;
+  };
+
+  const runQuery = async ({
+    client,
+    generation,
+    query,
+    queryVariant,
+  }: RunQueryOptions): Promise<QueryRunOutcome> => {
+    const request =
+      goldenQueryRequest({ generation, query, queryVariant }) ??
+      fail(`query ${query.id} holds no searchable term: ${query.text}`);
+    const { indexId, engineQuery } = request;
+    const scanned: CorpusIndexHit[] = [];
+    let totalHits = 0;
+    let startOffset = 0;
+    let ranked = rankDocumentHits(scanned, depth);
+    for (;;) {
+      const searched = await client.search({
+        observer: "unobserved",
+        indexId,
+        query: engineQuery,
+        maxHits: LIMITS.corpusIndexSearchCandidateLimit,
+        startOffset,
+        sortBy: "_score",
+      });
+      if (Result.isError(searched)) {
+        // Exit 2, not an uncaught throw: exit 1 is reserved for divergence,
+        // and an unqueryable generation must not read as a diverged one.
+        abort(`search against ${indexId} failed: ${searched.error.message}`);
+      }
+      totalHits = searched.value.numHits;
+      scanned.push(...searched.value.hits);
+      startOffset += searched.value.hits.length;
+      ranked = rankDocumentHits(scanned, depth);
+      const exhausted =
+        searched.value.hits.length === 0 || startOffset >= totalHits;
+      if (
+        ranked.rankedDocumentIds.length >= depth ||
+        exhausted ||
+        startOffset >= LIMITS.corpusIndexSearchScanLimit
+      ) {
+        break;
+      }
+    }
+    return { totalHits, ...ranked };
+  };
+
+  const rows: GoldenQueryDiffRow[] = [];
+  const baseClient = corpusIndexQueryDiffClientForGeneration(baseGeneration);
+  const candidateClient =
+    corpusIndexQueryDiffClientForGeneration(candidateGeneration);
+  for (const query of queries.value) {
+    const [base, candidate] = await Promise.all([
+      runQuery({
+        client: baseClient,
+        generation: baseGeneration,
+        query,
+        queryVariant: baseQueryVariant,
+      }),
+      runQuery({
+        client: candidateClient,
+        generation: candidateGeneration,
+        query,
+        queryVariant: candidateQueryVariant,
+      }),
+    ]);
+    rows.push({
+      query,
+      base,
+      candidate,
+      diff: diffRankedDocuments({ base, candidate, depth }),
+    });
+    console.error(`compared ${rows.length}/${queries.value.length}…`);
+  }
+
+  console.log(renderDiffTable({ rows, depth, maxDivergence }));
+  process.exit(
+    divergedQueries(rows, maxDivergence).length > 0 ? DIVERGED_EXIT_CODE : 0,
+  );
+});

@@ -1,3 +1,5 @@
+import { printError, runScriptWithErrorOutput } from "@stll/errors";
+
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -18,14 +20,16 @@ const query = actionCostReportQuery({
   end: new Date(end),
 });
 if (query.isErr()) {
-  process.stderr.write(`${query.error.message}\n`);
+  printError(query.error);
   process.exit(1);
 }
 const db = openMaintenanceDb({ readOnly: true });
-const rows = await db.execute(query.value);
-if (rows.length > MAX_ACTION_COST_REPORT_KINDS) {
-  process.stderr.write("Too many action kinds; narrow the report period.\n");
-  process.exit(1);
-}
-process.stdout.write(`${JSON.stringify(rows)}\n`);
-process.exit(0);
+await runScriptWithErrorOutput(async () => {
+  const rows = await db.execute(query.value);
+  if (rows.length > MAX_ACTION_COST_REPORT_KINDS) {
+    process.stderr.write("Too many action kinds; narrow the report period.\n");
+    process.exit(1);
+  }
+  process.stdout.write(`${JSON.stringify(rows)}\n`);
+  process.exit(0);
+});

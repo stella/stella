@@ -3,6 +3,7 @@ import type { ReservedSQL } from "bun";
 import { eq } from "drizzle-orm";
 
 import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
+import { runScriptWithErrorOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { readEuCompletionTickEnvironment } from "@/api/env-eu-completion";
@@ -615,7 +616,9 @@ export const runEuCompletionTickScript = async ({
 };
 
 if (import.meta.main) {
-  process.exit(
-    await runEuCompletionTickScript({ args: process.argv.slice(2) }),
-  );
+  await runScriptWithErrorOutput(async () => {
+    process.exit(
+      await runEuCompletionTickScript({ args: process.argv.slice(2) }),
+    );
+  });
 }

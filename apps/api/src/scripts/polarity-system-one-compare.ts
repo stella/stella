@@ -3,6 +3,7 @@ import { and, eq, exists, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { mkdir } from "node:fs/promises";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import { runScriptWithErrorOutput } from "@stll/errors";
 
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -215,220 +216,224 @@ type CitingDecision = {
   textS3Key: string | null;
 };
 
-const { rootDb } = await openCaseLawReadOnlySession();
+await runScriptWithErrorOutput(async () => {
+  const { rootDb } = await openCaseLawReadOnlySession();
 
-const readSample = async () =>
-  await rootDb.transaction(async (tx) => {
-    const citations = await tx.execute<SampledCitation>(
-      sql.join(
-        planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),
-        sql.raw(" UNION ALL "),
-      ),
-    );
-    const citingIds = [
-      ...new Set(citations.map((citation) => citation.citingDecisionId)),
-    ].map(brandPersistedCaseLawDecisionId);
-    const decisions = new Map<string, CitingDecision>();
-    if (citingIds.length === 0) {
+  const readSample = async () =>
+    await rootDb.transaction(async (tx) => {
+      const citations = await tx.execute<SampledCitation>(
+        sql.join(
+          planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),
+          sql.raw(" UNION ALL "),
+        ),
+      );
+      const citingIds = [
+        ...new Set(citations.map((citation) => citation.citingDecisionId)),
+      ].map(brandPersistedCaseLawDecisionId);
+      const decisions = new Map<string, CitingDecision>();
+      if (citingIds.length === 0) {
+        return { citations, decisions };
+      }
+      const rows = await tx
+        .select({
+          id: caseLawDecisions.id,
+          language: caseLawDecisions.language,
+          court: caseLawDecisions.court,
+          caseNumber: caseLawDecisions.caseNumber,
+          sections: caseLawDecisions.sections,
+          fulltext: caseLawDecisions.fulltext,
+          textS3Key: caseLawDecisions.textS3Key,
+        })
+        .from(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, citingIds));
+      for (const { id, ...decision } of rows) {
+        decisions.set(id, decision);
+      }
       return { citations, decisions };
-    }
-    const rows = await tx
-      .select({
-        id: caseLawDecisions.id,
-        language: caseLawDecisions.language,
-        court: caseLawDecisions.court,
-        caseNumber: caseLawDecisions.caseNumber,
-        sections: caseLawDecisions.sections,
-        fulltext: caseLawDecisions.fulltext,
-        textS3Key: caseLawDecisions.textS3Key,
-      })
-      .from(caseLawDecisions)
-      .where(inArray(caseLawDecisions.id, citingIds));
-    for (const { id, ...decision } of rows) {
-      decisions.set(id, decision);
-    }
-    return { citations, decisions };
-  });
-
-const { citations, decisions } = await readSample();
-
-/** One sampled citation with the context window both tiers read. */
-type ComparisonItem = {
-  citation: SampledCitation;
-  decision: CitingDecision;
-  context: string;
-};
-
-/** The row's text: its Postgres copy, else its corpus object, else nothing. */
-const decisionText = async (
-  decision: CitingDecision,
-): Promise<string | null> => {
-  if (decision.fulltext !== null) {
-    return decision.fulltext;
-  }
-  if (decision.textS3Key === null) {
-    return null;
-  }
-  const read = await Result.tryPromise(
-    async () => await readCorpusText(decision.textS3Key ?? ""),
-  );
-  return Result.isOk(read) ? read.value : null;
-};
-
-const items: ComparisonItem[] = [];
-const skipped: SampleSkipReason[] = [];
-for (const citation of citations) {
-  const decision =
-    decisions.get(citation.citingDecisionId) ??
-    panic("a sampled citation has no citing decision", {
-      citationId: citation.id,
     });
-  // Most rows carry no segmentation; the classifier's own runner reads the
-  // window off the sections, so the full text stands in for them here and
-  // the section index is dropped with them. A canonical row keeps that text
-  // in object storage, read through the corpus client (one object per row).
-  const text = await decisionText(decision);
-  const sections = decision.sections ?? (text === null ? null : [{ text }]);
-  if (sections === null) {
-    skipped.push("sections-missing");
-    continue;
-  }
-  const windows = extractContexts(
-    sections,
-    citation.citationText,
-    decision.sections === null ? null : citation.sectionIndex,
-  );
-  if (windows === null) {
-    skipped.push("context-not-found");
-    continue;
-  }
-  items.push({ citation, decision, context: excerptOf(windows.contexts) });
-}
 
-/**
- * The raw model, not a decision: the agreement curve is what sets the floor,
- * so every reading is kept whatever its confidence, together with the model,
- * latency and tokens the run is priced from.
- */
-const readWithSystemOne = async (item: ComparisonItem): Promise<JevOutcome> => {
-  const asked = await client.ask({
-    state: {
-      language: item.decision.language,
-      citation: item.citation.citationText,
-      excerpt: item.context,
-    },
-    questions: { polarity: POLARITY_QUESTION },
-    abortSignal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (Result.isError(asked)) {
-    return {
-      status: "failed",
-      kind: asked.error.kind,
-      message: asked.error.message,
-    };
-  }
-  const { answers, model, latencyMs, usage } = asked.value;
-  return {
-    status: "read",
-    polarity: answers.polarity.choice,
-    probabilities: answers.polarity.probabilities,
-    confidence: answers.polarity.confidence,
-    latencyMs,
-    inputTokens: usage.inputTokens,
-    model,
+  const { citations, decisions } = await readSample();
+
+  /** One sampled citation with the context window both tiers read. */
+  type ComparisonItem = {
+    citation: SampledCitation;
+    decision: CitingDecision;
+    context: string;
   };
-};
 
-const readWithLlm = async (item: ComparisonItem): Promise<LlmOutcome> => {
-  if (!options.llm) {
-    return { status: "not-run" };
-  }
-  const startedAt = performance.now();
-  const classified = await classifyWithLLM({
-    context: item.context,
-    citationText: item.citation.citationText,
-    language: item.decision.language,
-  });
-  const latencyMs = Math.round(performance.now() - startedAt);
-  if (Result.isError(classified)) {
-    return { status: "failed", message: classified.error.message };
-  }
-  const { polarity, confidence, keyPhrase } = classified.value;
-  return { status: "read", polarity, confidence, keyPhrase, latencyMs };
-};
+  /** The row's text: its Postgres copy, else its corpus object, else nothing. */
+  const decisionText = async (
+    decision: CitingDecision,
+  ): Promise<string | null> => {
+    if (decision.fulltext !== null) {
+      return decision.fulltext;
+    }
+    if (decision.textS3Key === null) {
+      return null;
+    }
+    const read = await Result.tryPromise(
+      async () => await readCorpusText(decision.textS3Key ?? ""),
+    );
+    return Result.isOk(read) ? read.value : null;
+  };
 
-let completed = 0;
-const rows = await mapWithConcurrency({
-  items,
-  limit: options.concurrency,
-  operation: async (item: ComparisonItem): Promise<ComparisonRow> => {
-    const [jev, llm] = await Promise.all([
-      readWithSystemOne(item),
-      readWithLlm(item),
-    ]);
-    completed += 1;
-    console.error(`read ${completed}/${items.length}…`);
+  const items: ComparisonItem[] = [];
+  const skipped: SampleSkipReason[] = [];
+  for (const citation of citations) {
+    const decision =
+      decisions.get(citation.citingDecisionId) ??
+      panic("a sampled citation has no citing decision", {
+        citationId: citation.id,
+      });
+    // Most rows carry no segmentation; the classifier's own runner reads the
+    // window off the sections, so the full text stands in for them here and
+    // the section index is dropped with them. A canonical row keeps that text
+    // in object storage, read through the corpus client (one object per row).
+    const text = await decisionText(decision);
+    const sections = decision.sections ?? (text === null ? null : [{ text }]);
+    if (sections === null) {
+      skipped.push("sections-missing");
+      continue;
+    }
+    const windows = extractContexts(
+      sections,
+      citation.citationText,
+      decision.sections === null ? null : citation.sectionIndex,
+    );
+    if (windows === null) {
+      skipped.push("context-not-found");
+      continue;
+    }
+    items.push({ citation, decision, context: excerptOf(windows.contexts) });
+  }
+
+  /**
+   * The raw model, not a decision: the agreement curve is what sets the floor,
+   * so every reading is kept whatever its confidence, together with the model,
+   * latency and tokens the run is priced from.
+   */
+  const readWithSystemOne = async (
+    item: ComparisonItem,
+  ): Promise<JevOutcome> => {
+    const asked = await client.ask({
+      state: {
+        language: item.decision.language,
+        citation: item.citation.citationText,
+        excerpt: item.context,
+      },
+      questions: { polarity: POLARITY_QUESTION },
+      abortSignal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (Result.isError(asked)) {
+      return {
+        status: "failed",
+        kind: asked.error.kind,
+        message: asked.error.message,
+      };
+    }
+    const { answers, model, latencyMs, usage } = asked.value;
     return {
-      citationId: item.citation.id,
-      citingDecisionId: item.citation.citingDecisionId,
-      citedDecisionId:
-        item.citation.citedDecisionId ??
-        panic("a sampled citation resolved to no decision", {
-          citationId: item.citation.id,
-        }),
-      caseNumber: item.decision.caseNumber,
-      court: item.decision.court,
-      language: item.decision.language,
-      citationText: item.citation.citationText,
-      excerpt: truncateExcerpt(item.context),
-      stored: storedLabelOf(item.citation.storedPolarity),
-      jev,
-      llm,
+      status: "read",
+      polarity: answers.polarity.choice,
+      probabilities: answers.polarity.probabilities,
+      confidence: answers.polarity.confidence,
+      latencyMs,
+      inputTokens: usage.inputTokens,
+      model,
     };
-  },
-});
+  };
 
-const summary = summariseComparison({
-  rows,
-  sampled: citations.length,
-  skipped,
-  usdPerInputToken: SYSTEM_ONE_USD_PER_INPUT_TOKEN,
-});
+  const readWithLlm = async (item: ComparisonItem): Promise<LlmOutcome> => {
+    if (!options.llm) {
+      return { status: "not-run" };
+    }
+    const startedAt = performance.now();
+    const classified = await classifyWithLLM({
+      context: item.context,
+      citationText: item.citation.citationText,
+      language: item.decision.language,
+    });
+    const latencyMs = Math.round(performance.now() - startedAt);
+    if (Result.isError(classified)) {
+      return { status: "failed", message: classified.error.message };
+    }
+    const { polarity, confidence, keyPhrase } = classified.value;
+    return { status: "read", polarity, confidence, keyPhrase, latencyMs };
+  };
 
-const markdown = renderComparisonReport({
-  summary,
-  options,
-  rows,
-  acceptFloor: SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
-  model:
-    rows
-      .flatMap((row) => (row.jev.status === "read" ? [row.jev.model] : []))
-      .at(0) ?? null,
-});
+  let completed = 0;
+  const rows = await mapWithConcurrency({
+    items,
+    limit: options.concurrency,
+    operation: async (item: ComparisonItem): Promise<ComparisonRow> => {
+      const [jev, llm] = await Promise.all([
+        readWithSystemOne(item),
+        readWithLlm(item),
+      ]);
+      completed += 1;
+      console.error(`read ${completed}/${items.length}…`);
+      return {
+        citationId: item.citation.id,
+        citingDecisionId: item.citation.citingDecisionId,
+        citedDecisionId:
+          item.citation.citedDecisionId ??
+          panic("a sampled citation resolved to no decision", {
+            citationId: item.citation.id,
+          }),
+        caseNumber: item.decision.caseNumber,
+        court: item.decision.court,
+        language: item.decision.language,
+        citationText: item.citation.citationText,
+        excerpt: truncateExcerpt(item.context),
+        stored: storedLabelOf(item.citation.storedPolarity),
+        jev,
+        llm,
+      };
+    },
+  });
 
-await mkdir(options.outDir, { recursive: true });
-const jsonPath = `${options.outDir}/report.json`;
-const markdownPath = `${options.outDir}/report.md`;
-await Bun.write(
-  jsonPath,
-  `${JSON.stringify({ options, summary, rows }, null, 2)}\n`,
-);
-await Bun.write(markdownPath, `${markdown}\n`);
+  const summary = summariseComparison({
+    rows,
+    sampled: citations.length,
+    skipped,
+    usdPerInputToken: SYSTEM_ONE_USD_PER_INPUT_TOKEN,
+  });
 
-console.log(markdown);
-// The examples again, unwrapped: a table cell folds the excerpt onto one line,
-// and this is the part a human reads to judge who is right.
-for (const row of disagreements(rows, DISAGREEMENT_EXAMPLES)) {
-  const read =
-    row.jev.status === "read"
-      ? row.jev
-      : panic("a disagreement carries no reading", {
-          citationId: row.citationId,
-        });
-  console.log(
-    `\n${row.caseNumber} — stored ${row.stored}, Jev ${read.polarity} (${read.confidence.toFixed(2)})\n  ${row.citationText}\n  ${row.excerpt}`,
+  const markdown = renderComparisonReport({
+    summary,
+    options,
+    rows,
+    acceptFloor: SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
+    model:
+      rows
+        .flatMap((row) => (row.jev.status === "read" ? [row.jev.model] : []))
+        .at(0) ?? null,
+  });
+
+  await mkdir(options.outDir, { recursive: true });
+  const jsonPath = `${options.outDir}/report.json`;
+  const markdownPath = `${options.outDir}/report.md`;
+  await Bun.write(
+    jsonPath,
+    `${JSON.stringify({ options, summary, rows }, null, 2)}\n`,
   );
-}
-console.log(`\nwrote ${jsonPath} and ${markdownPath}`);
+  await Bun.write(markdownPath, `${markdown}\n`);
 
-process.exit(summary.read === 0 ? EMPTY_SAMPLE_EXIT_CODE : 0);
+  console.log(markdown);
+  // The examples again, unwrapped: a table cell folds the excerpt onto one line,
+  // and this is the part a human reads to judge who is right.
+  for (const row of disagreements(rows, DISAGREEMENT_EXAMPLES)) {
+    const read =
+      row.jev.status === "read"
+        ? row.jev
+        : panic("a disagreement carries no reading", {
+            citationId: row.citationId,
+          });
+    console.log(
+      `\n${row.caseNumber} — stored ${row.stored}, Jev ${read.polarity} (${read.confidence.toFixed(2)})\n  ${row.citationText}\n  ${row.excerpt}`,
+    );
+  }
+  console.log(`\nwrote ${jsonPath} and ${markdownPath}`);
+
+  process.exit(summary.read === 0 ? EMPTY_SAMPLE_EXIT_CODE : 0);
+});

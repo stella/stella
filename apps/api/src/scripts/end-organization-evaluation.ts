@@ -8,6 +8,8 @@
  */
 import { panic } from "better-result";
 
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { endOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
@@ -22,13 +24,15 @@ if (organizationId === null) {
 }
 
 const db = openMaintenanceDb({ readOnly: false });
-const ended = await db.transaction(
-  async (tx) =>
-    await endOrganizationEvaluation(tx, { organizationId, now: new Date() }),
-);
+await runScriptWithErrorOutput(async () => {
+  const ended = await db.transaction(
+    async (tx) =>
+      await endOrganizationEvaluation(tx, { organizationId, now: new Date() }),
+  );
 
-console.log(
-  ended
-    ? `Ended the evaluation period of ${organizationId}.`
-    : `${organizationId} has no running evaluation period; nothing changed.`,
-);
+  console.log(
+    ended
+      ? `Ended the evaluation period of ${organizationId}.`
+      : `${organizationId} has no running evaluation period; nothing changed.`,
+  );
+});

@@ -1,3 +1,5 @@
+import { sanitizeErrorForOutput } from "./query-error";
+
 // Dev-only error logging, shared by the API and web apps. Both surface
 // errors to `console.error` in dev and no-op in prod; the API additionally
 // forwards to a JSONL file sink so headless tools can tail errors without
@@ -27,7 +29,19 @@ export const createDevErrorLogger =
     if (!echoErrors) {
       return;
     }
+    const safeError = sanitizeErrorForOutput(error);
     // oxlint-disable-next-line no-console -- dev-only error echo
-    console.error(error);
-    sink?.({ error, context });
+    console.error(safeError);
+    sink?.({
+      error: safeError,
+      context:
+        context === undefined
+          ? undefined
+          : Object.fromEntries(
+              Object.entries(context).map(([key, value]) => [
+                key,
+                sanitizeErrorForOutput(value),
+              ]),
+            ),
+    });
   };

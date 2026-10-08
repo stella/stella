@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createDetached } from "@stll/errors";
+import { createDetached, sanitizeQueryErrorText } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -20,12 +20,14 @@ import {
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
 /**
  * Capture an error for observability.
  *
- * - Dev: full error logged to `console.error` *and* appended to
+ * - Dev: query values redacted before logging to `console.error` and
+ *   appending to
  *   `apps/api/.dev-logs/errors.jsonl` (with the same `context`
  *   below) so headless tools can read it without holding the dev
  *   tty. Both paths are dev-only.
@@ -80,11 +82,15 @@ const acceptCaptureContext = (
   const accepted: ErrorTelemetryContext = {};
   let rejected = 0;
   for (const [key, value] of Object.entries(context ?? {})) {
-    if (RESERVED_CONTEXT_KEY.test(key) || RESERVED_CONTEXT_NAMES.has(key)) {
+    if (
+      RESERVED_CONTEXT_KEY.test(key) ||
+      RESERVED_CONTEXT_NAMES.has(key) ||
+      SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key)
+    ) {
       rejected += 1;
       continue;
     }
-    accepted[key] = value;
+    accepted[key] = sanitizeQueryErrorText(value);
   }
   return { context: accepted, rejected };
 };

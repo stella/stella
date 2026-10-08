@@ -2,7 +2,11 @@ import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
 import type { FailureGrade, FailureReason } from "@stll/errors";
-import { FAILURE_GRADES, isFailureReason } from "@stll/errors";
+import {
+  FAILURE_GRADES,
+  isFailureReason,
+  sanitizeQueryErrorText,
+} from "@stll/errors";
 
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
@@ -95,7 +99,8 @@ export const sanitizeLogAttributes = (
       continue;
     }
 
-    safeAttributes[key] = value;
+    safeAttributes[key] =
+      typeof value === "string" ? sanitizeQueryErrorText(value) : value;
   }
 
   if (dropped > 0) {
@@ -162,18 +167,23 @@ const emit = ({
   severityNumber: SeverityNumber;
   severityText: string;
 }): void => {
+  const safeMessage = sanitizeQueryErrorText(message);
   const safeAttributes = annotateUnowned(
     severityNumber,
     sanitizeLogAttributes(attributes),
   );
   if (recordSink !== null) {
-    recordSink({ severityText, message, attributes: safeAttributes });
+    recordSink({
+      severityText,
+      message: safeMessage,
+      attributes: safeAttributes,
+    });
     return;
   }
   const record = {
     severityNumber,
     severityText,
-    body: message,
+    body: safeMessage,
   };
 
   if (safeAttributes) {
@@ -204,7 +214,7 @@ const emit = ({
     process.stderr.write(
       `${JSON.stringify({
         severity: severityText,
-        message,
+        message: safeMessage,
         ...safeAttributes,
       })}\n`,
     );
@@ -231,44 +241,52 @@ const emitRequest = ({
   severity,
   statusCode,
 }: RequestLogOptions): void => {
-  const safeAttributes = annotateUnowned(REQUEST_SEVERITY[severity], {
-    // The fingerprint's keys are already this sink's attribute names, so the
-    // record ships whole rather than being re-listed field by field. A second
-    // copy of that key set can only ever be a shorter one, and a field it
-    // leaves out is a field no reader of this sink can get back. It goes
-    // first, so none of its keys can override the request's own.
-    ...sanitizeLogAttributes(errorFingerprint),
-    "http.method": method,
-    "http.route": route ?? "unmatched",
-    "http.status_code": statusCode,
-    "request.duration_ms": durationMs,
-    ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
-    ...(errorType === undefined ? {} : { "error.type": errorType }),
-    ...(requestId === undefined ? {} : { "request.id": requestId }),
-    ...(clientAddressSource === undefined
-      ? {}
-      : { "client.address_source": clientAddressSource }),
-    ...(failure === undefined
-      ? {}
-      : {
-          "failure.grade": failure.grade,
-          "failure.reason": failure.reason,
-          "failure.shadow": "true",
-        }),
-  });
+  const safeMessage = sanitizeQueryErrorText(message);
+  const safeAttributes = annotateUnowned(
+    REQUEST_SEVERITY[severity],
+    sanitizeLogAttributes({
+      // The fingerprint's keys are already this sink's attribute names, so the
+      // record ships whole rather than being re-listed field by field. A second
+      // copy of that key set can only ever be a shorter one, and a field it
+      // leaves out is a field no reader of this sink can get back. It goes
+      // first, so none of its keys can override the request's own.
+      ...errorFingerprint,
+      "http.method": method,
+      "http.route": route ?? "unmatched",
+      "http.status_code": statusCode,
+      "request.duration_ms": durationMs,
+      ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
+      ...(errorType === undefined ? {} : { "error.type": errorType }),
+      ...(requestId === undefined ? {} : { "request.id": requestId }),
+      ...(clientAddressSource === undefined
+        ? {}
+        : { "client.address_source": clientAddressSource }),
+      ...(failure === undefined
+        ? {}
+        : {
+            "failure.grade": failure.grade,
+            "failure.reason": failure.reason,
+            "failure.shadow": "true",
+          }),
+    }),
+  );
 
   if (recordSink !== null) {
-    recordSink({ severityText: severity, message, attributes: safeAttributes });
+    recordSink({
+      severityText: severity,
+      message: safeMessage,
+      attributes: safeAttributes,
+    });
     return;
   }
   otelLogger.emit({
     ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
-    body: message,
+    body: safeMessage,
     severityNumber: REQUEST_SEVERITY[severity],
     severityText: severity,
   });
   process.stdout.write(
-    `${JSON.stringify({ severity, message, ...safeAttributes })}\n`,
+    `${JSON.stringify({ severity, message: safeMessage, ...safeAttributes })}\n`,
   );
 };
 

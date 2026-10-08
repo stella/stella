@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Seed realistic test data for local development.
  *
@@ -21,8 +22,6 @@
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
  */
-
-import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type {
@@ -33,6 +32,7 @@ import type {
 } from "@stll/api-contract";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { logErrorOutput, printError } from "@stll/errors";
 import { deriveBlockId } from "@stll/folio-core/server";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
@@ -6429,10 +6429,13 @@ export async function seed(organizationId?: string, userId?: string) {
   try {
     await seedCaseLaw();
   } catch (error) {
-    console.warn(
-      "  Case-law seed skipped (non-fatal — likely local schema drift):",
-      error instanceof Error ? error.message : error,
-    );
+    logErrorOutput({
+      level: "warn",
+      values: [
+        "  Case-law seed skipped (non-fatal — likely local schema drift):",
+        error,
+      ],
+    });
   }
 
   console.log("\nDone. Dev data seeded successfully.");
@@ -6561,7 +6564,7 @@ if (import.meta.main) {
   seed(target.organizationId, target.userId)
     .then(() => process.exit(0))
     .catch((error: unknown) => {
-      console.error("Seed failed:", error);
+      printError("Seed failed:", error);
       process.exit(1);
     });
 }

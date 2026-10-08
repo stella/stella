@@ -32,3 +32,12 @@ export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
   message: string;
   cause?: unknown;
 }> {}
+
+export {
+  sanitizeErrorForOutput,
+  sanitizeQueryErrorText,
+  printError,
+  logErrorOutput,
+  errorOutputLogger,
+  runScriptWithErrorOutput,
+} from "./query-error";

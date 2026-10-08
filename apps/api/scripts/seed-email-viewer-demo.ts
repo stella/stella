@@ -8,6 +8,7 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { runScriptWithErrorOutput } from "@stll/errors";
 
 import {
   member as authMember,
@@ -375,4 +376,4 @@ const seedEmailViewerDemo = async () => {
   );
 };
 
-await seedEmailViewerDemo();
+await runScriptWithErrorOutput(seedEmailViewerDemo);

@@ -10,6 +10,8 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import {
   auditLogs,
   entities,
@@ -325,5 +327,5 @@ export const seedMatterActivity = async () => {
 };
 
 if (import.meta.main) {
-  await seedMatterActivity();
+  await runScriptWithErrorOutput(seedMatterActivity);
 }

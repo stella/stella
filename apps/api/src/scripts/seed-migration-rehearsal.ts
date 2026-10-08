@@ -14,6 +14,8 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import { resolveDatabaseUrl } from "@/api/db-url";
 import type { RehearsalSeedStep } from "@/api/scripts/seed-migration-rehearsal-plan";
 import {
@@ -98,31 +100,33 @@ const applyStepAt = async (
   await applyStepAt(client, steps, offset + 1);
 };
 
-const seed = async (): Promise<void> => {
-  const url = resolveDatabaseUrl();
-  if (!url) {
-    panic(
-      "seed-migration-rehearsal: no database connection; set DATABASE_URL or the DB_* components",
-    );
-  }
+await runScriptWithErrorOutput(async () => {
+  const seed = async (): Promise<void> => {
+    const url = resolveDatabaseUrl();
+    if (!url) {
+      panic(
+        "seed-migration-rehearsal: no database connection; set DATABASE_URL or the DB_* components",
+      );
+    }
 
-  const decisions = flagInteger("decisions", REHEARSAL_DEFAULT_DECISIONS);
-  // One connection: the plan's numbering table is a temporary table, which
-  // lives in the session that created it.
-  const client = new SQL({ url, max: 1, connectionTimeout: 30 });
-  const startedAt = performance.now();
+    const decisions = flagInteger("decisions", REHEARSAL_DEFAULT_DECISIONS);
+    // One connection: the plan's numbering table is a temporary table, which
+    // lives in the session that created it.
+    const client = new SQL({ url, max: 1, connectionTimeout: 30 });
+    const startedAt = performance.now();
 
-  try {
-    // A bound per statement, well above the largest seed on a CI runner:
-    // a statement that runs into it is stuck, not slow.
-    await client.unsafe(`SET statement_timeout = '${STATEMENT_TIMEOUT}'`);
-    await applyStepAt(client, rehearsalSeedSteps(decisions));
-    console.info(
-      `seeded ${String(decisions)} decisions and their dependents in ${((performance.now() - startedAt) / 1000).toFixed(1)}s`,
-    );
-  } finally {
-    await client.end();
-  }
-};
+    try {
+      // A bound per statement, well above the largest seed on a CI runner:
+      // a statement that runs into it is stuck, not slow.
+      await client.unsafe(`SET statement_timeout = '${STATEMENT_TIMEOUT}'`);
+      await applyStepAt(client, rehearsalSeedSteps(decisions));
+      console.info(
+        `seeded ${String(decisions)} decisions and their dependents in ${((performance.now() - startedAt) / 1000).toFixed(1)}s`,
+      );
+    } finally {
+      await client.end();
+    }
+  };
 
-await seed();
+  await seed();
+});

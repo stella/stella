@@ -19,6 +19,8 @@ import { panic, Result } from "better-result";
 import { asc, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import { chatMessages, chatThreads, workspaces } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
@@ -422,25 +424,27 @@ const afterIndex = process.argv.indexOf("--after");
 const dryRun = process.argv.includes("--dry-run");
 const db = openMaintenanceDb({ readOnly: dryRun });
 console.log(`=== RECOMPUTE CHAT DATA SCOPE${dryRun ? " (dry run)" : ""} ===`);
-const { heldThreadIds, ...totals } = await runBatches({
-  after: parseCursor(
-    afterIndex === -1 ? null : (process.argv.at(afterIndex + 1) ?? null),
-  ),
-  batch: 1,
-  dryRun,
-  totals: {
-    scannedThreads: 0,
-    widenedThreads: 0,
-    widenedDerivedRows: 0,
-    heldThreadIds: [],
-  },
+await runScriptWithErrorOutput(async () => {
+  const { heldThreadIds, ...totals } = await runBatches({
+    after: parseCursor(
+      afterIndex === -1 ? null : (process.argv.at(afterIndex + 1) ?? null),
+    ),
+    batch: 1,
+    dryRun,
+    totals: {
+      scannedThreads: 0,
+      widenedThreads: 0,
+      widenedDerivedRows: 0,
+      heldThreadIds: [],
+    },
+  });
+  console.log(`done: ${JSON.stringify(totals)}`);
+  if (heldThreadIds.length > 0) {
+    console.log(
+      `held ${heldThreadIds.length} thread(s) with unreadable messages; ` +
+        `repair them and re-run: ${heldThreadIds.join(",")}`,
+    );
+    process.exit(1);
+  }
+  process.exit(0);
 });
-console.log(`done: ${JSON.stringify(totals)}`);
-if (heldThreadIds.length > 0) {
-  console.log(
-    `held ${heldThreadIds.length} thread(s) with unreadable messages; ` +
-      `repair them and re-run: ${heldThreadIds.join(",")}`,
-  );
-  process.exit(1);
-}
-process.exit(0);

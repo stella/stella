@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
+
+import { runScriptWithErrorOutput } from "@stll/errors";
 /**
  * Seed templates & clauses (Knowledge section).
  *
@@ -18,7 +20,6 @@ import JSZip from "jszip";
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
  */
-
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
@@ -2601,17 +2602,11 @@ export async function seedTemplates(
 // ─── Standalone CLI entry point ─────────────────────────
 
 if (import.meta.main) {
-  requireLocalDevOpen("Seeding");
-
-  console.log("Seeding templates & clauses...\n");
-  await ensureTestUsers(DEFAULT_ORG_ID);
-  seedTemplates()
-    .then(() => {
-      console.log("\nDone.");
-      process.exit(0);
-    })
-    .catch((error: unknown) => {
-      console.error("Seed failed:", error);
-      process.exit(1);
-    });
+  await runScriptWithErrorOutput(async () => {
+    requireLocalDevOpen("Seeding");
+    console.log("Seeding templates & clauses...\n");
+    await ensureTestUsers(DEFAULT_ORG_ID);
+    await seedTemplates();
+    console.log("\nDone.");
+  });
 }

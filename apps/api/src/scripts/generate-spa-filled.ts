@@ -9,6 +9,8 @@ import { Result } from "better-result";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
+
 import { fillTemplate } from "../lib/docx/patch-template";
 import { scanUpload } from "../lib/file-scan/scan-upload";
 import { DOCX_MIME_TYPE } from "../mime-types";
@@ -45,6 +47,6 @@ const run = async () => {
 };
 
 run().catch((error: unknown) => {
-  console.error(error);
+  printError(error);
   process.exit(1);
 });

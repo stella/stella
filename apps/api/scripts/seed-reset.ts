@@ -13,6 +13,8 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import { resolveDatabaseUrl } from "@/api/db-url";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
@@ -41,7 +43,12 @@ if (!/^[a-z_][a-z0-9_]*$/u.test(database) || database === ADMIN_DATABASE) {
 
 url.pathname = `/${ADMIN_DATABASE}`;
 const admin = new SQL({ max: 1, url: url.toString() });
-await admin.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
-await admin.unsafe(`CREATE DATABASE "${database}"`);
-await admin.close();
-console.log(`Recreated local database ${database}`);
+await runScriptWithErrorOutput(async () => {
+  try {
+    await admin.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
+    await admin.unsafe(`CREATE DATABASE "${database}"`);
+    console.log(`Recreated local database ${database}`);
+  } finally {
+    await admin.close();
+  }
+});

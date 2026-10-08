@@ -1,4 +1,6 @@
 import { panic } from "better-result";
+
+import { runScriptWithErrorOutput } from "@stll/errors";
 /**
  * Repair `case_law_decisions.decision_date` values no publisher could have
  * meant.
@@ -96,209 +98,211 @@ import { flagInteger, readApplyFlag } from "@/api/scripts/repair-flags";
  * Rows per transaction. Small on purpose: the batch holds the citation-graph
  * advisory lock while it reopens edges, and the standing resolver waits on it.
  */
-const BATCH = 50;
-/**
- * Rows this run may repair. The population is bounded by construction, but an
- * operator run that discovers otherwise should stop and report rather than walk
- * a table for an hour.
- */
-const DEFAULT_LIMIT = 5000;
-/** Survey rows printed. A result at the cap is reported as truncated. */
-const SURVEY_LIMIT = 200;
+await runScriptWithErrorOutput(async () => {
+  const BATCH = 50;
+  /**
+   * Rows this run may repair. The population is bounded by construction, but an
+   * operator run that discovers otherwise should stop and report rather than walk
+   * a table for an hour.
+   */
+  const DEFAULT_LIMIT = 5000;
+  /** Survey rows printed. A result at the cap is reported as truncated. */
+  const SURVEY_LIMIT = 200;
 
-const USAGE = `Usage: bun run src/scripts/repair-decision-dates.ts [options]
+  const USAGE = `Usage: bun run src/scripts/repair-decision-dates.ts [options]
 
   --apply        Write the repairs. Omitted, the run only reports.
   --dry-run      Report only, the default. Accepted so it cannot be mistaken
                  for a flag this script ignores; contradicts --apply.
   --limit <n>    Rows this run may repair (default ${String(DEFAULT_LIMIT)}).`;
 
-const apply = readApplyFlag(USAGE);
+  const apply = readApplyFlag(USAGE);
 
-// A report run only reads, so it takes no lane and cannot block a writer; the
-// read-only session makes that a property of the connection, not a promise.
-const { rootDb } = apply
-  ? await enterCaseLawMaintenanceLane()
-  : await openCaseLawReadOnlySession();
-const limit = flagInteger({
-  fallback: DEFAULT_LIMIT,
-  name: "limit",
-  usage: USAGE,
-});
+  // A report run only reads, so it takes no lane and cannot block a writer; the
+  // read-only session makes that a property of the connection, not a promise.
+  const { rootDb } = apply
+    ? await enterCaseLawMaintenanceLane()
+    : await openCaseLawReadOnlySession();
+  const limit = flagInteger({
+    fallback: DEFAULT_LIMIT,
+    name: "limit",
+    usage: USAGE,
+  });
 
-const surveyNumber = (row: Record<string, unknown>, key: string): number => {
-  const value = row[key];
-  if (typeof value !== "number") {
-    panic(`Survey column ${key} is not a number`);
-  }
-  return value;
-};
+  const surveyNumber = (row: Record<string, unknown>, key: string): number => {
+    const value = row[key];
+    if (typeof value !== "number") {
+      panic(`Survey column ${key} is not a number`);
+    }
+    return value;
+  };
 
-const surveyText = (row: Record<string, unknown>, key: string): string => {
-  const value = row[key];
-  if (value === null) {
-    return "—";
-  }
-  if (typeof value !== "string") {
-    panic(`Survey column ${key} is not text`);
-  }
-  return value;
-};
+  const surveyText = (row: Record<string, unknown>, key: string): string => {
+    const value = row[key];
+    if (value === null) {
+      return "—";
+    }
+    if (typeof value !== "string") {
+      panic(`Survey column ${key} is not text`);
+    }
+    return value;
+  };
 
-const printSurvey = async (): Promise<number> => {
-  const bySource = executedRows(
-    await rootDb.execute(decisionDateSourceSurveyStatement(SURVEY_LIMIT)),
-  ).filter(isRecord);
-  const byYear = executedRows(
-    await rootDb.execute(decisionDateYearSurveyStatement(SURVEY_LIMIT)),
-  ).filter(isRecord);
+  const printSurvey = async (): Promise<number> => {
+    const bySource = executedRows(
+      await rootDb.execute(decisionDateSourceSurveyStatement(SURVEY_LIMIT)),
+    ).filter(isRecord);
+    const byYear = executedRows(
+      await rootDb.execute(decisionDateYearSurveyStatement(SURVEY_LIMIT)),
+    ).filter(isRecord);
 
-  console.info("--- out-of-bounds decision dates, per source ---");
-  let total = 0;
-  for (const row of bySource) {
-    const rows = surveyNumber(row, "rows");
-    total += rows;
-    console.info(
-      `${surveyText(row, "adapterKey").padEnd(14)} ${String(rows).padStart(7)}  ` +
-        `${surveyText(row, "minDate")} … ${surveyText(row, "maxDate")}`,
+    console.info("--- out-of-bounds decision dates, per source ---");
+    let total = 0;
+    for (const row of bySource) {
+      const rows = surveyNumber(row, "rows");
+      total += rows;
+      console.info(
+        `${surveyText(row, "adapterKey").padEnd(14)} ${String(rows).padStart(7)}  ` +
+          `${surveyText(row, "minDate")} … ${surveyText(row, "maxDate")}`,
+      );
+    }
+    console.info(`${"total".padEnd(14)} ${String(total).padStart(7)}`);
+
+    console.info("--- and per year ---");
+    for (const row of byYear) {
+      console.info(
+        `${surveyText(row, "adapterKey").padEnd(14)} ${String(surveyNumber(row, "year")).padStart(6)}  ${String(surveyNumber(row, "rows")).padStart(7)}`,
+      );
+    }
+    if (bySource.length >= SURVEY_LIMIT || byYear.length >= SURVEY_LIMIT) {
+      console.info(
+        `survey truncated at ${String(SURVEY_LIMIT)} rows; the counts above are a floor`,
+      );
+    }
+    return total;
+  };
+
+  const repairBatch = async (size: number): Promise<DecisionDateRepairBatch> =>
+    await runCitationGraphTransaction(
+      rootDb.transaction.bind(rootDb),
+      async (tx) => {
+        const batch = await repairDecisionDateBatch(tx, size, {
+          // The source lock is what keeps a crawl refreshing the same decision
+          // from interleaving with the repair and its reconcile.
+          reconcileProjection: async (entityId: SafeId<"caseLawDecision">) => {
+            const subject = { family: "case_law", entityId } as const;
+            const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+            if (lock !== null) {
+              await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+                lock,
+                subject,
+              });
+            }
+          },
+        });
+        for (const row of batch.unannounced) {
+          console.error(
+            `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
+          );
+        }
+        return batch;
+      },
     );
-  }
-  console.info(`${"total".padEnd(14)} ${String(total).padStart(7)}`);
 
-  console.info("--- and per year ---");
-  for (const row of byYear) {
+  /**
+   * Repair batches until the population is empty or `--limit` is reached.
+   *
+   * Each batch depends on the previous one having committed, which is what makes
+   * this a walk rather than a fan-out.
+   */
+  const repairUntilDone = async (counts: {
+    cleared: number;
+    rederived: number;
+    skipped: number;
+  }): Promise<void> => {
+    const done = counts.cleared + counts.rederived + counts.skipped;
+    if (done >= limit) {
+      return;
+    }
+    const batch = await repairBatch(Math.min(BATCH, limit - done));
+    if (batch.cleared + batch.rederived + batch.skipped === 0) {
+      return;
+    }
+    counts.cleared += batch.cleared;
+    counts.rederived += batch.rederived;
+    counts.skipped += batch.skipped;
     console.info(
-      `${surveyText(row, "adapterKey").padEnd(14)} ${String(surveyNumber(row, "year")).padStart(6)}  ${String(surveyNumber(row, "rows")).padStart(7)}`,
+      `${String(counts.cleared + counts.rederived)} repaired (${String(counts.rederived)} re-derived)`,
     );
-  }
-  if (bySource.length >= SURVEY_LIMIT || byYear.length >= SURVEY_LIMIT) {
+    await repairUntilDone(counts);
+  };
+
+  /**
+   * What the repair would decide, without writing or claiming anything.
+   *
+   * The counts an operator authorises on are these, not the population size: a
+   * cleared row loses its date for good, so how many rows that is has to be on
+   * the report rather than discovered afterwards.
+   */
+  const printDecisions = async (): Promise<void> => {
+    const rows = executedRows(
+      await rootDb.execute(
+        selectCorruptDecisionDatesStatement({
+          limit,
+          lock: DECISION_DATE_ROW_LOCKS.NONE,
+        }),
+      ),
+    ).map(parseCorruptDecisionDateRow);
+    const decided = rows.map(decideDecisionDateRepair);
+    const rederived = decided.filter(
+      ({ outcome }) => outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED,
+    ).length;
+    console.info("--- what a repair would decide ---");
+    console.info(`re-derived from metadata: ${String(rederived)}`);
     console.info(
-      `survey truncated at ${String(SURVEY_LIMIT)} rows; the counts above are a floor`,
+      `cleared to NULL:          ${String(decided.length - rederived)}`,
     );
-  }
-  return total;
-};
+    if (rows.length >= limit) {
+      console.info(
+        `decisions capped at --limit ${String(limit)}; the counts above are a floor`,
+      );
+    }
+  };
 
-const repairBatch = async (size: number): Promise<DecisionDateRepairBatch> =>
-  await runCitationGraphTransaction(
-    rootDb.transaction.bind(rootDb),
-    async (tx) => {
-      const batch = await repairDecisionDateBatch(tx, size, {
-        // The source lock is what keeps a crawl refreshing the same decision
-        // from interleaving with the repair and its reconcile.
-        reconcileProjection: async (entityId: SafeId<"caseLawDecision">) => {
-          const subject = { family: "case_law", entityId } as const;
-          const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
-          if (lock !== null) {
-            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-              lock,
-              subject,
-            });
-          }
-        },
-      });
-      for (const row of batch.unannounced) {
-        console.error(
-          `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
-        );
-      }
-      return batch;
-    },
-  );
+  const total = await printSurvey();
 
-/**
- * Repair batches until the population is empty or `--limit` is reached.
- *
- * Each batch depends on the previous one having committed, which is what makes
- * this a walk rather than a fan-out.
- */
-const repairUntilDone = async (counts: {
-  cleared: number;
-  rederived: number;
-  skipped: number;
-}): Promise<void> => {
-  const done = counts.cleared + counts.rederived + counts.skipped;
-  if (done >= limit) {
-    return;
+  if (!apply) {
+    await printDecisions();
+    console.info(
+      "Report only: nothing written. Re-run with --apply to repair, and note " +
+        "that a run reporting zero rows is the precondition for adding the " +
+        "bounds CHECK constraint.",
+    );
+    process.exit(0);
   }
-  const batch = await repairBatch(Math.min(BATCH, limit - done));
-  if (batch.cleared + batch.rederived + batch.skipped === 0) {
-    return;
-  }
-  counts.cleared += batch.cleared;
-  counts.rederived += batch.rederived;
-  counts.skipped += batch.skipped;
-  console.info(
-    `${String(counts.cleared + counts.rederived)} repaired (${String(counts.rederived)} re-derived)`,
-  );
+
+  const counts = { cleared: 0, rederived: 0, skipped: 0 };
   await repairUntilDone(counts);
-};
 
-/**
- * What the repair would decide, without writing or claiming anything.
- *
- * The counts an operator authorises on are these, not the population size: a
- * cleared row loses its date for good, so how many rows that is has to be on
- * the report rather than discovered afterwards.
- */
-const printDecisions = async (): Promise<void> => {
-  const rows = executedRows(
-    await rootDb.execute(
-      selectCorruptDecisionDatesStatement({
-        limit,
-        lock: DECISION_DATE_ROW_LOCKS.NONE,
-      }),
-    ),
-  ).map(parseCorruptDecisionDateRow);
-  const decided = rows.map(decideDecisionDateRepair);
-  const rederived = decided.filter(
-    ({ outcome }) => outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED,
-  ).length;
-  console.info("--- what a repair would decide ---");
-  console.info(`re-derived from metadata: ${String(rederived)}`);
   console.info(
-    `cleared to NULL:          ${String(decided.length - rederived)}`,
+    `done: ${String(counts.cleared)} cleared, ${String(counts.rederived)} re-derived, ` +
+      `${String(counts.skipped)} already repaired by a concurrent observation ` +
+      `(survey reported ${String(total)} before the run).`,
   );
-  if (rows.length >= limit) {
-    console.info(
-      `decisions capped at --limit ${String(limit)}; the counts above are a floor`,
-    );
-  }
-};
-
-const total = await printSurvey();
-
-if (!apply) {
-  await printDecisions();
   console.info(
-    "Report only: nothing written. Re-run with --apply to repair, and note " +
-      "that a run reporting zero rows is the precondition for adding the " +
-      "bounds CHECK constraint.",
+    "The corpus projection is reconciled and the affected citations are back " +
+      "in the resolver's queue; both settle on their own schedules.",
   );
+
+  // Re-surveyed rather than inferred from the counts above: what the constraint
+  // needs is that the population is empty now, and a run that hit `--limit`, or
+  // raced a crawl still writing unbounded dates, has counts that say otherwise.
+  const remaining = await printSurvey();
+  console.info(
+    remaining === 0
+      ? "population empty: the bounds CHECK constraint can now be added."
+      : `${String(remaining)} rows remain; re-run before adding the bounds CHECK constraint.`,
+  );
+
   process.exit(0);
-}
-
-const counts = { cleared: 0, rederived: 0, skipped: 0 };
-await repairUntilDone(counts);
-
-console.info(
-  `done: ${String(counts.cleared)} cleared, ${String(counts.rederived)} re-derived, ` +
-    `${String(counts.skipped)} already repaired by a concurrent observation ` +
-    `(survey reported ${String(total)} before the run).`,
-);
-console.info(
-  "The corpus projection is reconciled and the affected citations are back " +
-    "in the resolver's queue; both settle on their own schedules.",
-);
-
-// Re-surveyed rather than inferred from the counts above: what the constraint
-// needs is that the population is empty now, and a run that hit `--limit`, or
-// raced a crawl still writing unbounded dates, has counts that say otherwise.
-const remaining = await printSurvey();
-console.info(
-  remaining === 0
-    ? "population empty: the bounds CHECK constraint can now be added."
-    : `${String(remaining)} rows remain; re-run before adding the bounds CHECK constraint.`,
-);
-
-process.exit(0);
+});

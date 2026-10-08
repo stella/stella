@@ -336,6 +336,7 @@ implies a hazard that is gone.
 
 - [`no-direct-error-toast`](./no-direct-error-toast.ts) (`no-direct-error-toast`): confines error toast creation, updates, and promise handling to the shared notifier.
 - [`no-raw-child-exit-status`](./no-raw-child-exit-status.ts) (`no-raw-child-exit-status`): requires the shared `childExitStatus` helper when forwarding child-process statuses to process exit sinks, including aliases and local return values.
+- [`no-raw-error-output`](./no-raw-error-output.ts) (`no-raw-error-output`): rejects caught/rejection errors and their message, cause, or stack when sent to console, logger, or process stream sinks; requires every imported `betterAuth` factory to use `errorOutputLogger` from `@stll/errors`. It tracks stable local aliases and callback bindings, including arbitrary `.catch(...)` parameter names.
 
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.
 

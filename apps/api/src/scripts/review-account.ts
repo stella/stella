@@ -10,6 +10,8 @@
  * Better Auth's password hashing, and ends the account's browser sessions;
  * OAuth grants stay. Only fixed outcome words and counts are printed.
  */
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import { bindOwnerReviewAccountOrganizationStore } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
@@ -43,26 +45,28 @@ const readStdin = (): AsyncIterable<Uint8Array> => {
   return process.stdin;
 };
 
-const exitCode = await runReviewAccountCommand({
-  argv: process.argv.slice(2),
-  config: {
-    email: env.APP_REVIEW_ACCOUNT_EMAIL,
-    organizationId: env.APP_REVIEW_ORGANIZATION_ID,
-  },
-  demoEmail: env.DEMO_ACCOUNT_EMAIL,
-  io: {
-    stdin: readStdin,
-    writeOut: (line) => {
-      process.stdout.write(`${line}\n`);
+await runScriptWithErrorOutput(async () => {
+  const exitCode = await runReviewAccountCommand({
+    argv: process.argv.slice(2),
+    config: {
+      email: env.APP_REVIEW_ACCOUNT_EMAIL,
+      organizationId: env.APP_REVIEW_ORGANIZATION_ID,
     },
-    writeErr: (line) => {
-      process.stderr.write(`${line}\n`);
+    demoEmail: env.DEMO_ACCOUNT_EMAIL,
+    io: {
+      stdin: readStdin,
+      writeOut: (line) => {
+        process.stdout.write(`${line}\n`);
+      },
+      writeErr: (line) => {
+        process.stderr.write(`${line}\n`);
+      },
     },
-  },
-  store: createStore,
+    store: createStore,
+  });
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(false);
+    process.stderr.write("\n");
+  }
+  process.exit(exitCode);
 });
-if (process.stdin.isTTY) {
-  process.stdin.setRawMode(false);
-  process.stderr.write("\n");
-}
-process.exit(exitCode);

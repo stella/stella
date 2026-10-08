@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 
+import { runScriptWithErrorOutput } from "@stll/errors";
+
 import { caseLawSources } from "@/api/db/schema";
 /**
  * Read and un-retire the items the standing reconciliation loop is carrying.
@@ -48,13 +50,14 @@ import {
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
-const { ingestionDb } = await enterCaseLawMaintenanceLane();
+await runScriptWithErrorOutput(async () => {
+  const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
-/** Bounded by default: both modes read, and neither should scan a corpus. */
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 1000;
+  /** Bounded by default: both modes read, and neither should scan a corpus. */
+  const DEFAULT_LIMIT = 50;
+  const MAX_LIMIT = 1000;
 
-const USAGE = `Usage: bun run src/scripts/case-law-reconciliation-items.ts <mode> --adapter <key> [options]
+  const USAGE = `Usage: bun run src/scripts/case-law-reconciliation-items.ts <mode> --adapter <key> [options]
 
 Modes (exactly one):
   --list                 Print the parked and terminal items this source
@@ -71,140 +74,141 @@ Options:
 
 Adapter keys: ${listAdapterKeys().join(", ")}`;
 
-const flagValue = (name: string): string | undefined => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
-    return undefined;
-  }
-  const value = process.argv[index + 1];
-  if (value === undefined || value.startsWith("--")) {
-    console.error(`--${name} requires a value`);
+  const flagValue = (name: string): string | undefined => {
+    const index = process.argv.indexOf(`--${name}`);
+    if (index === -1) {
+      return undefined;
+    }
+    const value = process.argv[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      console.error(`--${name} requires a value`);
+      console.error(USAGE);
+      process.exit(1);
+    }
+    return value;
+  };
+
+  const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
+
+  const DECIMAL_INTEGER = /^\d+$/u;
+
+  const list = hasFlag("list");
+  const resetTerminal = hasFlag("reset-terminal");
+  const adapterFlag = flagValue("adapter");
+  const sliceFlag = flagValue("slice");
+  const afterFlag = flagValue("after");
+  const limitFlag = flagValue("limit");
+
+  if ([list, resetTerminal].filter(Boolean).length !== 1) {
+    console.error("Exactly one of --list or --reset-terminal is required.");
     console.error(USAGE);
     process.exit(1);
   }
-  return value;
-};
 
-const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
-
-const DECIMAL_INTEGER = /^\d+$/u;
-
-const list = hasFlag("list");
-const resetTerminal = hasFlag("reset-terminal");
-const adapterFlag = flagValue("adapter");
-const sliceFlag = flagValue("slice");
-const afterFlag = flagValue("after");
-const limitFlag = flagValue("limit");
-
-if ([list, resetTerminal].filter(Boolean).length !== 1) {
-  console.error("Exactly one of --list or --reset-terminal is required.");
-  console.error(USAGE);
-  process.exit(1);
-}
-
-if (adapterFlag === undefined) {
-  console.error("--adapter is required.");
-  console.error(USAGE);
-  process.exit(1);
-}
-
-const adapterKey = adapterFlag;
-if (!listAdapterKeys().some((candidate) => candidate === adapterKey)) {
-  console.error(`Unknown adapter: ${adapterKey}`);
-  console.error(USAGE);
-  process.exit(1);
-}
-
-// A cursor only means something against an ordering, and the reset selects
-// its own rows. Refused rather than ignored: an operator who paged a listing
-// and then reset would otherwise believe the reset resumed where they were.
-if (afterFlag !== undefined && !list) {
-  console.error("--after applies to --list only.");
-  console.error(USAGE);
-  process.exit(1);
-}
-
-const limit = (() => {
-  if (limitFlag === undefined) {
-    return DEFAULT_LIMIT;
-  }
-  const parsed = DECIMAL_INTEGER.test(limitFlag)
-    ? Number.parseInt(limitFlag, 10)
-    : Number.NaN;
-  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_LIMIT) {
-    console.error(
-      `--limit must be an integer between 1 and ${MAX_LIMIT}, got: ${limitFlag}`,
-    );
+  if (adapterFlag === undefined) {
+    console.error("--adapter is required.");
+    console.error(USAGE);
     process.exit(1);
   }
-  return parsed;
-})();
 
-const source = (
-  await ingestionDb((tx) =>
-    tx
-      .select({ id: caseLawSources.id, name: caseLawSources.name })
-      .from(caseLawSources)
-      .where(eq(caseLawSources.adapterKey, adapterKey))
-      .limit(1),
-  )
-).at(0);
+  const adapterKey = adapterFlag;
+  if (!listAdapterKeys().some((candidate) => candidate === adapterKey)) {
+    console.error(`Unknown adapter: ${adapterKey}`);
+    console.error(USAGE);
+    process.exit(1);
+  }
 
-if (!source) {
-  console.error(`No case-law source configured for adapter ${adapterKey}`);
-  process.exit(1);
-}
+  // A cursor only means something against an ordering, and the reset selects
+  // its own rows. Refused rather than ignored: an operator who paged a listing
+  // and then reset would otherwise believe the reset resumed where they were.
+  if (afterFlag !== undefined && !list) {
+    console.error("--after applies to --list only.");
+    console.error(USAGE);
+    process.exit(1);
+  }
 
-const counts = await countReconciliationItems(ingestionDb, source.id);
-console.log(`=== RECONCILIATION ITEMS ${adapterKey} (${source.name}) ===`);
-console.log(`parked:    ${counts.parked}`);
-console.log(`terminal:  ${counts.terminal}`);
+  const limit = (() => {
+    if (limitFlag === undefined) {
+      return DEFAULT_LIMIT;
+    }
+    const parsed = DECIMAL_INTEGER.test(limitFlag)
+      ? Number.parseInt(limitFlag, 10)
+      : Number.NaN;
+    if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_LIMIT) {
+      console.error(
+        `--limit must be an integer between 1 and ${MAX_LIMIT}, got: ${limitFlag}`,
+      );
+      process.exit(1);
+    }
+    return parsed;
+  })();
 
-if (list) {
-  const items = await listReconciliationItems(ingestionDb, {
+  const source = (
+    await ingestionDb((tx) =>
+      tx
+        .select({ id: caseLawSources.id, name: caseLawSources.name })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.adapterKey, adapterKey))
+        .limit(1),
+    )
+  ).at(0);
+
+  if (!source) {
+    console.error(`No case-law source configured for adapter ${adapterKey}`);
+    process.exit(1);
+  }
+
+  const counts = await countReconciliationItems(ingestionDb, source.id);
+  console.log(`=== RECONCILIATION ITEMS ${adapterKey} (${source.name}) ===`);
+  console.log(`parked:    ${counts.parked}`);
+  console.log(`terminal:  ${counts.terminal}`);
+
+  if (list) {
+    const items = await listReconciliationItems(ingestionDb, {
+      sourceId: source.id,
+      limit,
+      ...(sliceFlag === undefined ? {} : { slice: sliceFlag }),
+      ...(afterFlag === undefined ? {} : { after: afterFlag }),
+    });
+    const scope = sliceFlag === undefined ? "all slices" : `slice ${sliceFlag}`;
+    console.log(
+      `--- ${items.length} item(s), ${scope}, of ${counts.parked + counts.terminal} total ---`,
+    );
+    for (const item of items) {
+      const attempts = String(item.attempts).padStart(2);
+      const next = item.nextAttemptAt?.toISOString() ?? "-";
+      const seen = item.firstSeenAt.toISOString();
+      console.log(
+        `${item.status.padEnd(8)} ${item.slice.padEnd(12)} attempts=${attempts} firstSeen=${seen} next=${next} lastError=${item.lastError ?? "-"} ${item.identityKey}`,
+      );
+    }
+    // The whole backlog is reachable by walking this cursor, so a page that
+    // filled its limit says how to ask for the next one rather than leaving the
+    // operator to assume they have seen everything.
+    const lastKey = items.at(-1)?.identityKey;
+    if (items.length === limit && lastKey !== undefined) {
+      console.log(`next page: --after '${lastKey}'`);
+    }
+    process.exit(0);
+  }
+
+  const reset = await resetTerminalReconciliationItems(ingestionDb, {
     sourceId: source.id,
+    now: new Date(),
     limit,
     ...(sliceFlag === undefined ? {} : { slice: sliceFlag }),
-    ...(afterFlag === undefined ? {} : { after: afterFlag }),
   });
+
   const scope = sliceFlag === undefined ? "all slices" : `slice ${sliceFlag}`;
+  console.log(`--- reset ---`);
   console.log(
-    `--- ${items.length} item(s), ${scope}, of ${counts.parked + counts.terminal} total ---`,
+    `${adapterKey}: returned ${reset} terminal item(s) to parked (${scope})`,
   );
-  for (const item of items) {
-    const attempts = String(item.attempts).padStart(2);
-    const next = item.nextAttemptAt?.toISOString() ?? "-";
-    const seen = item.firstSeenAt.toISOString();
-    console.log(
-      `${item.status.padEnd(8)} ${item.slice.padEnd(12)} attempts=${attempts} firstSeen=${seen} next=${next} lastError=${item.lastError ?? "-"} ${item.identityKey}`,
-    );
-  }
-  // The whole backlog is reachable by walking this cursor, so a page that
-  // filled its limit says how to ask for the next one rather than leaving the
-  // operator to assume they have seen everything.
-  const lastKey = items.at(-1)?.identityKey;
-  if (items.length === limit && lastKey !== undefined) {
-    console.log(`next page: --after '${lastKey}'`);
+  // Bounded per run, so a source carrying more retired items than the limit
+  // needs another pass; saying so beats an operator assuming the source is now
+  // clear.
+  if (reset === limit) {
+    console.log(`the limit of ${limit} was reached; run again to continue`);
   }
   process.exit(0);
-}
-
-const reset = await resetTerminalReconciliationItems(ingestionDb, {
-  sourceId: source.id,
-  now: new Date(),
-  limit,
-  ...(sliceFlag === undefined ? {} : { slice: sliceFlag }),
 });
-
-const scope = sliceFlag === undefined ? "all slices" : `slice ${sliceFlag}`;
-console.log(`--- reset ---`);
-console.log(
-  `${adapterKey}: returned ${reset} terminal item(s) to parked (${scope})`,
-);
-// Bounded per run, so a source carrying more retired items than the limit
-// needs another pass; saying so beats an operator assuming the source is now
-// clear.
-if (reset === limit) {
-  console.log(`the limit of ${limit} was reached; run again to continue`);
-}
-process.exit(0);

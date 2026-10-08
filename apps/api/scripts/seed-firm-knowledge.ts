@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 /**
  * Seed matters from Harvey LAB (https://github.com/harveyai/harvey-labs), a
  * public corpus of synthetic legal documents, MIT licensed,
@@ -18,13 +19,12 @@
  * Usage: bun run db:seed-firm-knowledge --matters 15 [--api <origin>]
  *   [--replace-incomplete]
  */
-
-import { TaggedError } from "better-result";
 import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { printError } from "@stll/errors";
 
 import { sessionCookieNameForDevPort } from "@/api/lib/auth/auth-cookie-name";
 
@@ -165,9 +165,6 @@ class FirmKnowledgeSeedError extends TaggedError("FirmKnowledgeSeedError")<{
 const fail: (message: string) => never = (message) => {
   throw new FirmKnowledgeSeedError({ message });
 };
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Seed failed";
 
 const parseArgs = () => {
   const args = process.argv.slice(2);
@@ -660,7 +657,7 @@ const main = async () => {
 // `seedFirmKnowledge`, so importing the module never starts a run.
 if (import.meta.main) {
   await main().catch((error: unknown) => {
-    console.error(getErrorMessage(error));
+    printError(error);
     process.exitCode = 1;
   });
 }
