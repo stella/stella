@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Vybrat seznam",
+      "createList": "Vytvořit seznam",
       "evidenceList": "Fakta ze seznamu",
       "noLists": "Tento spis nemá žádné seznamy.",
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
@@ -2369,6 +2370,7 @@
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nejsou povoleny. Použijte trvalou e-mailovou adresu.",
       "encryptedContent": "Obsah šifrovaného dokumentu nelze extrahovat. Odstraňte ze souboru heslo a zkuste to znovu.",
       "filePropertyTypeImmutable": "Typ souborové vlastnosti nelze změnit. Ponechte stávající typ; pro jiné hodnoty vytvořte vlastní vlastnost.",
+      "fileSecurityRejected": "Soubor neprošel bezpečnostní kontrolou. Odstraňte označený obsah a nahrajte upravenou kopii.",
       "forbidden": "K této akci nemáte oprávnění.",
       "hostedCheckoutOpen": "Pro tuto organizaci už je otevřená objednávka. Dokončete ji, nebo začněte novou, až vyprší.",
       "hostedSubscriptionLive": "Tato organizace už má předplatné. Změňte ho v části Spravovat hostované využití.",
@@ -5472,14 +5474,8 @@
     "exportToCsv": "Uložit do CSV",
     "fields": {
       "calculating": "Načítá se…",
-      "currencyLabel": "Měna (nepovinné)",
-      "currencyPlaceholder": "např. USD, EUR",
-      "editFieldValue": "Upravit hodnotu pole",
       "errored": "Chyba",
-      "fieldValueLabel": "Hodnota pole",
-      "fieldValuePlaceholder": "Zadejte hodnotu pole",
       "formatNotSupported": "Formát není podporován",
-      "numberPlaceholder": "Zadejte číslo",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty"
     },

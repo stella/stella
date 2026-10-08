@@ -78,7 +78,7 @@ type CanaryActor = {
   runId: string;
 };
 
-export type CanaryEvent = CanaryActor & {
+type CanaryEvent = CanaryActor & {
   type: CanaryEventType;
   workspaceId: string;
   at: string;
@@ -89,7 +89,7 @@ export type CanaryEvent = CanaryActor & {
   };
 };
 
-export type CanaryAuthRejection = {
+type CanaryAuthRejection = {
   reason: CanaryAuthRejectionReason;
   at: string;
 };

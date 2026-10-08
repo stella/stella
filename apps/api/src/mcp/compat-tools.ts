@@ -321,7 +321,7 @@ export const resolveCompatFetchReadClass = (args: unknown) => {
   }
 };
 
-export const COMPAT_TOOL_DEFINITIONS = [
+const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: true,
     annotations: {

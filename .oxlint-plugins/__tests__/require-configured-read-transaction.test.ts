@@ -71,3 +71,20 @@ test("accepts both configured deployment branches before invoking the callback",
     ),
   ).toEqual([]);
 });
+
+test("requires configuration in every deployment transaction callback", async () => {
+  expect(
+    await lintSingleRule(
+      "require-configured-read-transaction",
+      [
+        "const publicLawReadDb = async fn => {",
+        "if (env.PUBLIC_LAW_DATABASE_URL) {",
+        "return external.transaction(async tx => { await configureReadTransaction(tx); return fn(tx); });",
+        "}",
+        "return primary.transaction(async tx => { return fn(tx); });",
+        "};",
+      ].join("\n"),
+      { plugin: "public-law-read-boundary" },
+    ),
+  ).toEqual([1]);
+});

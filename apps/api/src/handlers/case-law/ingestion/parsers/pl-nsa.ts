@@ -12,6 +12,7 @@
  * matched to find a boundary (rule 9).
  */
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,

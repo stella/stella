@@ -13,6 +13,7 @@ import * as v from "valibot";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 import { CLASSIFIABLE_POLARITIES } from "./consts";
@@ -87,6 +88,9 @@ export const classifyWithLLM = async ({
         serviceTier: "flex",
         orgAIConfig: null,
         organizationId: null,
+        // Corpus-wide work on the deployment's own key: no organization's
+        // budget to draw from.
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         // Public case-law corpus: no tenant workspace scope to guard against.
         tenantWorkspaceIds: [],
         analytics: aiAnalytics,

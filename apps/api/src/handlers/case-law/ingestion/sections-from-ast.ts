@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import type {

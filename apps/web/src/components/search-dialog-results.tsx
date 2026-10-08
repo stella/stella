@@ -152,7 +152,7 @@ export const SearchSummaryItem = ({
       >
         <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
           {isPending ? (
-            <Loader variant="decorative" size="sm" className="size-3.5" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <AiActionIcon className="size-3.5" />
           )}
@@ -188,15 +188,15 @@ export const SearchSummaryItem = ({
       </div>
       <div className="border-border/70 mt-2 border-t pt-2">
         <Button
-          className="h-auto gap-2 px-1.5 py-1"
           aria-busy={isOpeningChat || undefined}
+          className="h-auto gap-2 px-1.5 py-1"
           disabled={isOpeningChat}
           onClick={onOpenChat}
           size="sm"
           variant="ghost"
         >
           {isOpeningChat ? (
-            <Loader variant="decorative" size="sm" className="size-3.5" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <MessageSquareIcon className="size-3.5" />
           )}

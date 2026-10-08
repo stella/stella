@@ -108,7 +108,7 @@ const toImportCandidate = (
  * `idle` shows the drop zone (plus whatever else the host renders),
  * `review` shows editable outorgante rows, `done` shows the import receipt.
  */
-export type ProcuracaoExtractionStage = "idle" | "review" | "done";
+type ProcuracaoExtractionStage = "idle" | "review" | "done";
 
 export type ProcuracaoExtractionState = {
   stage: ProcuracaoExtractionStage;

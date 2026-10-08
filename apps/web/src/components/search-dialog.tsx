@@ -1849,12 +1849,13 @@ export const SearchDialog = ({
                 </SearchScopeInput>
                 {isFetching && !isFetchingNextPage && (
                   <Loader
-                    size="sm"
-                    label={t("common.loading")}
                     className="size-4 shrink-0"
+                    label={t("common.loading")}
+                    size="sm"
                   />
                 )}
                 <Button
+                  aria-busy={refineSearchMutation.isPending || undefined}
                   aria-label={t("search.aiRefine")}
                   className="size-8 shrink-0"
                   disabled={!query.trim() || refineSearchMutation.isPending}
@@ -1866,7 +1867,7 @@ export const SearchDialog = ({
                   variant="ghost"
                 >
                   {refineSearchMutation.isPending ? (
-                    <Loader variant="decorative" size="sm" className="size-4" />
+                    <Loader className="size-4" size="sm" variant="decorative" />
                   ) : (
                     <AiActionIcon className="size-4" />
                   )}
@@ -2407,6 +2408,7 @@ const SearchDialogFooter = ({
         )}
         {canAskAI && mode === "browse" && scope !== "registries" && (
           <Button
+            aria-busy={isAskingAI || undefined}
             aria-keyshortcuts="Tab"
             className="h-auto gap-1.5"
             disabled={isAskingAI}
@@ -2415,7 +2417,7 @@ const SearchDialogFooter = ({
             variant="muted"
           >
             {isAskingAI && (
-              <Loader variant="decorative" size="sm" className="size-3" />
+              <Loader className="size-3" size="sm" variant="decorative" />
             )}
             <span className="sm:hidden">{t("common.askAI")}</span>
             <span className="hidden sm:inline">
@@ -2670,9 +2672,9 @@ const SearchHitResults = ({
           {!pagination.isFetchNextPageError &&
             pagination.isFetchingNextPage && (
               <Loader
-                size="sm"
-                label={t("common.loading")}
                 className="size-4"
+                label={t("common.loading")}
+                size="sm"
               />
             )}
           {!pagination.isFetchNextPageError &&

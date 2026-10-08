@@ -552,9 +552,9 @@ export const ToolApprovalCard = ({
         <span className="font-medium">{label}</span>
         {isProcessing && (
           <Loader
+            className="ms-auto size-3.5 shrink-0"
             label={t("common.running")}
             size="sm"
-            className="ms-auto size-3.5 shrink-0"
           />
         )}
         {isApproved && (

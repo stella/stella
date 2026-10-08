@@ -1,0 +1,7 @@
+# Managing member-owned credentials in the denied auth table
+
+Generated from `scripts/ownership/personal-api-key-lifecycle.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                | Owner                                                     | Enforcement                                                                   | Summary                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `personal-api-key-lifecycle` — Managing member-owned credentials in the denied auth table | `apps/api/src/lib/machine-api-keys/personal-lifecycle.ts` | import `@/api/lib/machine-api-keys/personal-lifecycle` (plus 8 allowed files) | Bounded lifecycle operations retain organization and owner SQL predicates, lock live membership, enforce policy and active-key limits, and audit within the mutation transaction. No raw database handle is exported. |

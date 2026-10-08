@@ -304,8 +304,10 @@ test.each(TEST_LOCALES)(
       catalog.chat.tool.spawn_subagents,
     );
     expect(
-      view.container.querySelector('[data-slot="loader"][aria-hidden="true"]'),
-    ).not.toBeNull();
+      view.getByRole("status", {
+        name: catalog.tasks.statusValues.in_progress,
+      }).dataset["slot"],
+    ).toBe("loader");
     expect(view.container.textContent).toBe(catalog.chat.tool.spawn_subagents);
     expect(view.queryAllByRole("button")).toHaveLength(0);
     expect(view.container.textContent).not.toContain(title);

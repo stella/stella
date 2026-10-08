@@ -16,6 +16,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";

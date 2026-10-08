@@ -25,7 +25,8 @@ const LOADER_ICON_NAMES = new Set([
   "LoaderPinwheelIcon",
 ]);
 
-const BANNED_UTILITY = /(?:^|[\s:])animate-(?:spin|pulse)(?:\s|$)/u;
+// Tailwind accepts the important modifier on either side of a utility.
+const BANNED_UTILITY = /(?:^|[\s:])!?animate-(?:spin|pulse)!?(?:\s|$)/u;
 
 const jsxElementName = (node: unknown): string | null => {
   if (!isAstNode(node)) {

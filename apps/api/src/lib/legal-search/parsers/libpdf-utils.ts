@@ -7,6 +7,7 @@
  * and bold range mapping.
  */
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 
 // ── Types ────────────────────────────────────────────────

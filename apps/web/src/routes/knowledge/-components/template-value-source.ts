@@ -83,7 +83,7 @@ type ValueSourcePatch = Pick<
 type ValueSourceOptions = { preserveDraft?: boolean };
 
 /** Derive one active source from an untrusted or legacy field shape. */
-export const templateValueSourceOf = (
+const templateValueSourceOf = (
   field: ValueSourceField,
   options: ValueSourceOptions = {},
 ): TemplateValueSource => {

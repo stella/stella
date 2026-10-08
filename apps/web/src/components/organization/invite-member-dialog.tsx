@@ -55,23 +55,6 @@ type InviteMemberDialogProps = {
   showIcon?: boolean;
 };
 
-export const useCanInviteMembers = () => {
-  const currentUserRoleQuery = useQuery({
-    ...roleOptions,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  const currentUserRoleView = useQueryView(currentUserRoleQuery);
-  useQueryViewError(currentUserRoleView);
-  const currentUserRole =
-    currentUserRoleView.type === "items"
-      ? currentUserRoleView.items
-      : undefined;
-
-  return currentUserRoleQuery.status === "success" && currentUserRole
-    ? assignableRoles(currentUserRole).length > 0
-    : false;
-};
-
 export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
   const currentUserRoleQuery = useQuery({
     ...roleOptions,

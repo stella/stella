@@ -518,9 +518,9 @@ const ExportFormatIcon = ({ Icon, pending }: ExportFormatIconProps) => {
   if (pending) {
     return (
       <Loader
+        className="size-4.5 sm:size-4"
         label={t("common.loading")}
         size="sm"
-        className="size-4.5 sm:size-4"
       />
     );
   }
@@ -600,7 +600,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
           {exportingFormat === null ? (
             <DownloadIcon className="size-3.5" />
           ) : (
-            <Loader variant="decorative" size="sm" className="size-3.5" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           )}
         </MenuTrigger>
         <MenuPopup className="min-w-56">

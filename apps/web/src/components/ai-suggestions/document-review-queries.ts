@@ -15,7 +15,7 @@ const DOCUMENT_REVIEW_SOURCE_LIMIT = 20;
 // through a document's whole review history.
 const DOCUMENT_REVIEW_RUN_HISTORY_LIMIT = 10;
 
-export const documentReviewSourceKeys = {
+const documentReviewSourceKeys = {
   all: (workspaceId: string) =>
     ["document-review-sources", workspaceId] as const,
   search: (workspaceId: string, q: string) =>
@@ -92,10 +92,6 @@ const fetchDocumentReviewParties = async (
         { fetch: { signal } },
       ),
   );
-
-export type DocumentReviewPartiesAnswer = Awaited<
-  ReturnType<typeof fetchDocumentReviewParties>
->;
 
 export const documentReviewPartiesOptions = (target: DocumentReviewRunTarget) =>
   queryOptions({
@@ -260,7 +256,6 @@ export type ReviewFinding = DocumentReviewFindingRow["payload"]["finding"];
 
 export type ReviewVerdict = NonNullable<ReviewFinding["verdict"]>;
 export type ReviewSeverity = ReviewFinding["severity"];
-export type ReviewCitation = ReviewFinding["citations"][number];
 
 /** What a reviewer decided about one finding, and how many findings sit in
  *  each decision. Both read back from the run itself, so the client cannot
@@ -283,14 +278,6 @@ export const REVIEW_DECISION = {
 } as const satisfies Record<
   Uppercase<DocumentReviewDecision>,
   DocumentReviewDecision
->;
-
-export const REVIEW_APPLICATION_STATUS = {
-  PENDING: "pending",
-  APPLIED: "applied",
-} as const satisfies Record<
-  Uppercase<DocumentReviewApplicationStatus>,
-  DocumentReviewApplicationStatus
 >;
 
 /** A decision the reviewer has actually taken: everything the vocabulary holds

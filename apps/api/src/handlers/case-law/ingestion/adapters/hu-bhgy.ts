@@ -54,6 +54,7 @@ import type { Document as FolioDocument } from "@stll/docx-core/model";
  * (rule 16).
  */
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 

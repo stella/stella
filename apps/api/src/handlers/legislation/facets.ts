@@ -37,7 +37,7 @@ export const legislationFacetsQuerySchema = t.Object({
 
 type LegislationFacetsQuery = Static<typeof legislationFacetsQuerySchema>;
 
-export type LegislationFacetBucket = { value: string; count: number };
+type LegislationFacetBucket = { value: string; count: number };
 
 export type LegislationFacets = {
   /** Works per kind of act, most common first. */

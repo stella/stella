@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Liste auswählen",
+      "createList": "Liste erstellen",
       "evidenceList": "Fakten aus",
       "noLists": "Diese Akte hat keine Listen.",
       "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
@@ -2369,6 +2370,7 @@
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
       "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "filePropertyTypeImmutable": "Der Typ einer Dateieigenschaft kann nicht geändert werden. Behalten Sie den bestehenden Typ bei; erstellen Sie für andere Werte eine benutzerdefinierte Eigenschaft.",
+      "fileSecurityRejected": "Die Datei wurde von einer Sicherheitsprüfung abgelehnt. Entfernen Sie den beanstandeten Inhalt und laden Sie eine bereinigte Kopie hoch.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "hostedCheckoutOpen": "Für diese Organisation ist bereits ein Bezahlvorgang geöffnet. Schließen Sie ihn ab oder starten Sie nach seinem Ablauf einen neuen.",
       "hostedSubscriptionLive": "Diese Organisation hat bereits ein Abonnement. Ändern Sie es unter „Gehostete Nutzung verwalten“.",
@@ -5472,14 +5474,8 @@
     "exportToCsv": "Als CSV exportieren",
     "fields": {
       "calculating": "Berechnung...",
-      "currencyLabel": "Währung (optional)",
-      "currencyPlaceholder": "z. B. USD, EUR",
-      "editFieldValue": "Feldwert bearbeiten",
       "errored": "Fehler",
-      "fieldValueLabel": "Feldwert",
-      "fieldValuePlaceholder": "Feldwert eingeben",
       "formatNotSupported": "Format nicht unterstützt",
-      "numberPlaceholder": "Zahl eingeben",
       "selectAValue": "Wert auswählen",
       "selectValues": "Werte auswählen"
     },

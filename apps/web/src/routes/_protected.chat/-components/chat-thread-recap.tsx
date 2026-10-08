@@ -101,8 +101,12 @@ export const ChatThreadRecap = ({
 
   if (isFetching) {
     return (
-      <div className="text-foreground-muted flex items-center gap-2 px-1 text-sm italic">
-        <Loader variant="decorative" size="sm" className="size-3.5 shrink-0" />
+      <div
+        aria-busy="true"
+        className="text-foreground-muted flex items-center gap-2 px-1 text-sm italic"
+        role="status"
+      >
+        <Loader className="size-3.5 shrink-0" size="sm" variant="decorative" />
         <span>{t("chat.recapLoading")}</span>
       </div>
     );

@@ -3,7 +3,11 @@ import type { Static } from "elysia";
 
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { suggestColumnPrompt } from "@/api/lib/properties/column-prompt-suggestion";
@@ -42,6 +46,7 @@ const suggestPromptBodySchema = t.Object({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "properties.suggest-prompt" },
   description:
     "Draft or refine a column's extraction prompt with the model, from the " +
     "column name, value type, select options, a free-text instruction, and " +
@@ -62,6 +67,7 @@ const suggestPrompt = createSafeHandler(
   config,
   // oxlint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; no DB ops to Result.await
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -73,6 +79,7 @@ const suggestPrompt = createSafeHandler(
     workspaceId,
   }) {
     return await suggestColumnPrompt({
+      admission: configuredModelAdmission({ modelAdmission }),
       draft: {
         name: body.name,
         contentType: body.contentType,

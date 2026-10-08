@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -99,6 +100,7 @@ const createContext = (
     grantedScopes: [],
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_1"),
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     recordAuditEvent: asTestRaw<AuditRecorder>(async () => undefined),
     safeDb,
     scopedDb,
@@ -135,12 +137,24 @@ describe("external MCP gateway tools", () => {
     expect(refreshCachedMcpToolsForConnectionMock).toHaveBeenCalledWith({
       connectionId,
       organizationId: context.organizationId,
+      permit: context.thirdPartyOutboundPermit,
       safeDb: context.safeDb,
       userId: context.userId,
     });
     expect(tools).toHaveLength(1);
     expect(tools.at(0)?.cachedTool.rawName).toBe("lookup");
     expect(tools.at(0)?.connection).toEqual(activeConnection);
+  });
+
+  test("keeps uncached tools unavailable for a context without request authority", async () => {
+    const context = {
+      ...createContext([[row({ cachedTools: null })]]),
+      thirdPartyOutboundPermit: undefined,
+    };
+    expect(
+      await listGatewayExternalMcpTools({ context, dependencies }),
+    ).toEqual([]);
+    expect(refreshCachedMcpToolsForConnectionMock).not.toHaveBeenCalled();
   });
 
   test("propagates a backing-store load fault instead of shrinking to an empty list", async () => {

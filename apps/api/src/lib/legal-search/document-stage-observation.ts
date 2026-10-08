@@ -3,6 +3,7 @@
 import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,

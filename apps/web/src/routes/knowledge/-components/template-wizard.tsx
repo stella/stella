@@ -109,7 +109,7 @@ const LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH = 2000;
 
 /** Canonical icon + name for a field's value type (shared with the matter
  *  table's property chips via the value-type registry). */
-export const ValueTypeLabel = ({
+const ValueTypeLabel = ({
   inputType,
 }: {
   inputType: InputType | "company";

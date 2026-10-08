@@ -4,6 +4,7 @@
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";

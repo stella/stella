@@ -23,10 +23,8 @@ export type AnalyticsPrimitive = boolean | number | string;
 export type TokenBucket = "0_1k" | "1k_5k" | "5k_20k" | "20k_plus";
 export type LatencyBucket = "0_2s" | "2_10s" | "10_30s" | "30s_plus";
 export type CountBucket = "0" | "1" | "2_3" | "4_plus";
-export type ModelKeySource =
-  | ResolvedTanStackTextModelInfo["keySource"]
-  | "unknown";
-export type AIFailureReason =
+type ModelKeySource = ResolvedTanStackTextModelInfo["keySource"] | "unknown";
+type AIFailureReason =
   | "auth"
   | "byok_quota"
   | "configuration"
@@ -60,7 +58,7 @@ type AIModelTelemetryProperties = {
   region?: string;
 };
 
-export type AIGenerationCompletedProperties = AIModelTelemetryProperties &
+type AIGenerationCompletedProperties = AIModelTelemetryProperties &
   SafeAIAnalyticsMetadata & {
     input_tokens_bucket: TokenBucket;
     latency_bucket: LatencyBucket;
@@ -69,7 +67,7 @@ export type AIGenerationCompletedProperties = AIModelTelemetryProperties &
     total_tokens_bucket: TokenBucket;
   };
 
-export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
+type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
   error_message?: string;
   error_message_kind?: "non_standard";
   error_type: string;
@@ -125,7 +123,7 @@ export type FeedbackReportSubmittedProperties = {
   github_delivery: FeedbackDeliveryOutcome;
 };
 
-export type ExceptionListEntry = {
+type ExceptionListEntry = {
   mechanism: { handled: boolean; synthetic: boolean; type: string };
   type: string;
   value: string;
@@ -145,7 +143,7 @@ type DebugAIProperties = Record<string, unknown>;
 // PostHog group attachment. `organization` is the only group type; it must
 // match the browser adapter's `posthog.group` call so client and server
 // events aggregate under the same group.
-export type ServerAnalyticsGroups = {
+type ServerAnalyticsGroups = {
   organization: string;
 };
 
@@ -186,7 +184,7 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
 // code path that owns the state it mirrors (creation/rename for `name`,
 // settings for jurisdictions). `groupIdentify` merges properties into the
 // existing profile, so a caller sends only the keys it owns.
-export type OrganizationGroupProperties = {
+type OrganizationGroupProperties = {
   name: string;
   practice_jurisdictions: string[];
   primary_jurisdiction: string | null;

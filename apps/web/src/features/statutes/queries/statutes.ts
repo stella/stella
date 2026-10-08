@@ -54,7 +54,7 @@ export type StatuteSlugKey = {
   slug: string;
 };
 
-export const statuteKeys = {
+const statuteKeys = {
   all: ["statutes"],
   list: (key: StatuteListKey) => [
     ...statuteKeys.all,

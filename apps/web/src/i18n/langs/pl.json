@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Wybierz listę",
+      "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
@@ -2369,6 +2370,7 @@
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
+      "fileSecurityRejected": "Plik został odrzucony przez kontrolę bezpieczeństwa. Usuń oznaczoną zawartość i prześlij oczyszczoną kopię.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
@@ -5472,14 +5474,8 @@
     "exportToCsv": "Eksportuj do CSV",
     "fields": {
       "calculating": "Obliczanie...",
-      "currencyLabel": "Waluta (opcjonalnie)",
-      "currencyPlaceholder": "np. USD, EUR",
-      "editFieldValue": "Edytuj wartość pola",
       "errored": "Błąd",
-      "fieldValueLabel": "Wartość pola",
-      "fieldValuePlaceholder": "Wprowadź wartość pola",
       "formatNotSupported": "Format nie jest obsługiwany",
-      "numberPlaceholder": "Wprowadź liczbę",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości"
     },

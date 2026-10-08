@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Vali loend",
+      "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
@@ -2369,6 +2370,7 @@
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
       "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
       "filePropertyTypeImmutable": "Faili omaduse tüüpi ei saa muuta. Säilitage praegune tüüp; muude väärtuste jaoks looge kohandatud omadus.",
+      "fileSecurityRejected": "Turvakontroll lükkas faili tagasi. Eemalda märgitud sisu ja laadi üles puhastatud koopia.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "hostedCheckoutOpen": "Selle organisatsiooni jaoks on makse juba avatud. Viige see lõpule või alustage uut pärast selle aegumist.",
       "hostedSubscriptionLive": "Sellel organisatsioonil on juba tellimus. Muutke seda jaotises „Halda majutatud kasutust”.",
@@ -5472,14 +5474,8 @@
     "exportToCsv": "Ekspordi CSV-sse",
     "fields": {
       "calculating": "Arvutamine...",
-      "currencyLabel": "Valuuta (valikuline)",
-      "currencyPlaceholder": "nt USD, EUR",
-      "editFieldValue": "Muuda välja väärtust",
       "errored": "Viga",
-      "fieldValueLabel": "Välja väärtus",
-      "fieldValuePlaceholder": "Sisestage välja väärtus",
       "formatNotSupported": "Formaat ei ole toetatud",
-      "numberPlaceholder": "Sisestage number",
       "selectAValue": "Valige väärtus",
       "selectValues": "Valige väärtused"
     },

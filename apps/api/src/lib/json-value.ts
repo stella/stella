@@ -1,11 +1,11 @@
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
-export type JsonPrimitive = string | number | boolean | null;
+type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 export type JsonObject = {
   [key: string]: JsonValue;
 };
-export type JsonArray = JsonValue[];
+type JsonArray = JsonValue[];
 
 export const toJsonValue = (value: unknown): JsonValue => {
   if (

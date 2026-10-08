@@ -17,7 +17,6 @@ export {
   OFFICE_EVIDENCE_STATUS,
   OFFICE_EVIDENCE_UNAVAILABLE_CODE,
   type OfficeEvidenceFormat,
-  type OfficeEvidenceUnavailableCode,
 };
 
 export const OFFICE_EVIDENCE_PARSER_VERSION = 1;

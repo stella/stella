@@ -416,9 +416,9 @@ export const DocumentAiSourceBar = ({
       >
         {isGeneratingBoxes && (
           <Loader
-            size="sm"
-            label={t("common.loading")}
             className="size-3 shrink-0"
+            label={t("common.loading")}
+            size="sm"
           />
         )}
         <button

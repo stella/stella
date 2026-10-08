@@ -6,14 +6,10 @@ import { PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
-import {
-  PropertyIcon,
-  PropertyName,
-  PropertyPopoverLabel,
-} from "@/components/workspaces/property-helpers";
+import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
-import type { PropertyOptionColor, PropertyContent } from "@/lib/api-contract";
+import type { PropertyOptionColor } from "@/lib/api-contract";
 import type { WorkspaceProperty } from "@/lib/types";
 
 const isPropertyValid = (property: WorkspaceProperty) => {
@@ -69,23 +65,6 @@ export const PropertyPopoverTrigger = ({
         <HighlightedText text={name} />
       </span>
     </Tooltip>
-  );
-};
-
-type PropertyPopoverTypeProps = {
-  type: PropertyContent["type"];
-};
-
-export const PropertyPopoverType = ({ type }: PropertyPopoverTypeProps) => {
-  const t = useTranslations();
-
-  return (
-    <div className="w-full px-2.5 pt-2">
-      <div className="flex justify-between">
-        <PropertyPopoverLabel>{t("common.type")}</PropertyPopoverLabel>
-        <PropertyName type={type} />
-      </div>
-    </div>
   );
 };
 

@@ -1173,7 +1173,7 @@ const useShownReviewRun = ({
  * endpoint returned, which of them is on screen, and whether it is on screen
  * as the tracked run or as a record opened from the history.
  */
-export type ReviewRunHistoryView = {
+type ReviewRunHistoryView = {
   runs: readonly DocumentReviewRunSummary[];
   /** The run on screen, or `null` when the facet is showing no run at all
    *  (the launcher, after a reviewer chose to start again). */

@@ -90,8 +90,6 @@ const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
 // load-bearing.
 const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 250;
 const CHAT_DRAFT_PERSIST_MAX_WAIT_MS = 1500;
-
-export { CHAT_FILE_INPUT_ACCEPT };
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
@@ -207,7 +205,7 @@ const readMentionSources = async (
 
 const EMPTY_MENTION_SOURCES: readonly ChatInputMentionSource[] = [];
 
-export type ChatInputPluginRegistration = {
+type ChatInputPluginRegistration = {
   key: string | PluginKey;
   plugin: Plugin;
 };
