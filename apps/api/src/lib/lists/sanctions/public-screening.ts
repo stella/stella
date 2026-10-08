@@ -37,11 +37,32 @@ export const SANCTIONS_WARM_RETRY_MS = {
   max: 5 * 60 * 1000,
 } as const;
 
+/**
+ * How long one edition's database read may run before it counts as stalled:
+ * its read is cancelled and the warmup moves on to the next edition.
+ */
+export const SANCTIONS_WARM_READ_STALL_MS = 5 * 60 * 1000;
+
+type WarmClock = {
+  now: () => number;
+  schedule: (expire: () => void, durationMs: number) => () => void;
+};
+
+const warmClock = {
+  now: () => performance.now(),
+  schedule: (expire, durationMs) => {
+    const timer = setTimeout(expire, durationMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  },
+} satisfies WarmClock;
+
 type PublicScreeningOptions = {
   pool?: typeof sharedSanctionsMatcherPool;
   loadEntries?: typeof loadEditionEntries;
   reportFailure?: typeof reportSanctionsScreeningFailure;
-  now?: () => number;
+  clock?: WarmClock;
 };
 
 type WarmTarget = {
@@ -73,8 +94,9 @@ const createEditionWarmer = ({
   pool,
   loadEntries,
   reportFailure,
-  now,
+  clock,
 }: Required<PublicScreeningOptions>) => {
+  const { now } = clock;
   const targets = new Map<SanctionsSource, WarmTarget>();
   const state: {
     db: SanctionsReadDb | null;
@@ -93,9 +115,24 @@ const createEditionWarmer = ({
     { edition }: WarmTarget,
   ): Promise<MatcherWorkOutcome<Result<void, WarmFailure>>> => {
     const startedAt = now();
-    const loaded = await Result.tryPromise(
-      async () => await loadEntries({ db, edition }),
-    );
+    const read = new AbortController();
+    const stalled = Promise.withResolvers<"stalled">();
+    const cancelStall = clock.schedule(() => {
+      read.abort();
+      stalled.resolve("stalled");
+    }, SANCTIONS_WARM_READ_STALL_MS);
+    const loaded = await Promise.race([
+      Result.tryPromise(
+        async () => await loadEntries({ db, edition, signal: read.signal }),
+      ),
+      stalled.promise,
+    ]).finally(cancelStall);
+    if (loaded === "stalled") {
+      return {
+        status: "completed",
+        value: Result.err({ reason: "read-stalled" }),
+      };
+    }
     if (loaded.isErr()) {
       return {
         status: "completed",
@@ -247,7 +284,7 @@ export const createPublicSanctionsScreening = ({
   pool = sharedSanctionsMatcherPool,
   loadEntries = loadEditionEntries,
   reportFailure = reportSanctionsScreeningFailure,
-  now = () => performance.now(),
+  clock = warmClock,
 }: PublicScreeningOptions = {}) => {
   // Indexes live per worker and the warmup loads into the one it leases, so
   // only a single worker is guaranteed to hold what was warmed.
@@ -258,7 +295,7 @@ export const createPublicSanctionsScreening = ({
     pool,
     loadEntries,
     reportFailure,
-    now,
+    clock,
   });
   const notLoaded = ({
     db,

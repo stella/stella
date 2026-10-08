@@ -59,6 +59,7 @@ import type {
 } from "./matcher-protocol";
 import {
   createPublicSanctionsScreening,
+  SANCTIONS_WARM_READ_STALL_MS,
   SANCTIONS_WARM_RETRY_MS,
   SANCTIONS_WARM_STALL_MS,
 } from "./public-screening";
@@ -795,7 +796,7 @@ test("a cold start converges when editions load for longer than any request dead
   const loadMs = 4000;
   const publicScreen = createPublicSanctionsScreening({
     pool,
-    now: clock.now,
+    clock,
     loadEntries: async (options) => {
       // Seven editions at four seconds each: far past the request deadline and
       // any total a single bounded warmup could take. No pending timer may fire.
@@ -867,7 +868,7 @@ test("concurrent cold requests share one warmup and its read never holds the mat
         return await pool.run(work, options);
       },
     },
-    now: clock.now,
+    clock,
     loadEntries: async (options) => {
       reads += 1;
       firstRead.resolve(undefined);
@@ -937,7 +938,7 @@ test("loaded lists keep screening while another edition reloads behind a held re
           options,
         ),
     },
-    now: clock.now,
+    clock,
     loadEntries: async (options) => {
       const entries = await loadEditionEntries(options);
       if (evicted.current && entries.at(0)?.source === reloading) {
@@ -987,6 +988,71 @@ test("loaded lists keep screening while another edition reloads behind a held re
   }
 });
 
+test("a read that never settles is cancelled and the editions behind it still load", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const stalling: SanctionsSource = "us-sdn";
+  const stalled = Promise.withResolvers<undefined>();
+  const signals: AbortSignal[] = [];
+  let attempts = 0;
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    clock,
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    loadEntries: async (options) => {
+      if (options.edition.id === editionIds.get(stalling)) {
+        attempts += 1;
+        if (attempts === 1) {
+          signals.push(options.signal ?? panic("A warmup read needs a signal"));
+          stalled.resolve(undefined);
+          // Never settles: only the stall limit moves the warmup on.
+          return await new Promise<never>(() => {});
+        }
+      }
+      return await loadEditionEntries(options);
+    },
+  });
+  const ask = async () =>
+    (await publicScreen(publicProps("A Completely Distant Name"))).unwrap();
+  try {
+    await ask();
+    await stalled.promise;
+    const behind = sanctionsSourceIds().slice(
+      sanctionsSourceIds().indexOf(stalling) + 1,
+    );
+    expect(behind.length).toBeGreaterThan(0);
+    const waiting = reasonsBySource((await ask()).lists);
+    for (const source of [stalling, ...behind]) {
+      expect(waiting[source]).toBe("warming");
+    }
+    expect(clock.pending()).toEqual([SANCTIONS_WARM_READ_STALL_MS]);
+    clock.advance(SANCTIONS_WARM_READ_STALL_MS);
+    await publicScreen.warmupSettled();
+    expect(signals.at(0)?.aborted).toBe(true);
+    expect(reasonsBySource((await ask()).lists)).toEqual({
+      ...Object.fromEntries(
+        sanctionsSourceIds().map((source) => [source, null]),
+      ),
+      [stalling]: "load-failed",
+    });
+    expect(
+      reports.map(({ stage, reason, source }) => ({ stage, reason, source })),
+    ).toEqual([
+      { stage: "public-warmup", reason: "read-stalled", source: stalling },
+    ]);
+    clock.advance(SANCTIONS_WARM_RETRY_MS.initial);
+    await ask();
+    await publicScreen.warmupSettled();
+    expect((await ask()).status).toBe("clear");
+    expect(attempts).toBe(2);
+  } finally {
+    await pool.close();
+  }
+});
+
 test.each(["entries-read", "short-read"] as const)(
   "one list failing on %s does not block the other six and retries with backoff",
   async (fault) => {
@@ -997,7 +1063,7 @@ test.each(["entries-read", "short-read"] as const)(
     const failing: SanctionsSource = "uk";
     const publicScreen = createPublicSanctionsScreening({
       pool,
-      now: clock.now,
+      clock,
       reportFailure: (report) => {
         reports.push(report);
       },
@@ -1103,7 +1169,7 @@ test.each(["hang", "crash"] as const)(
     });
     const publicScreen = createPublicSanctionsScreening({
       pool,
-      now: clock.now,
+      clock,
       reportFailure: (report) => {
         reports.push(report);
       },
