@@ -5,7 +5,7 @@
 //! This module holds no network code; `feature_access` fetches decisions and
 //! writes them here, and features read them without reaching the network.
 
-use std::{collections::HashSet, sync::RwLock};
+use std::{collections::HashSet, num::NonZeroUsize, sync::RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DesktopFeature {
@@ -27,11 +27,13 @@ impl DesktopFeature {
   }
 }
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum AccountPhase {
   #[default]
   Ready,
-  Changing,
+  Changing {
+    pending: NonZeroUsize,
+  },
 }
 
 #[derive(Default)]
@@ -76,7 +78,13 @@ impl FeatureGates {
   /// Closing access and superseding in-flight requests is one atomic change.
   pub fn invalidate(&self) {
     if let Ok(mut state) = self.0.write() {
-      state.phase = AccountPhase::Changing;
+      let pending = match state.phase {
+        AccountPhase::Ready => NonZeroUsize::MIN,
+        AccountPhase::Changing { pending } => pending
+          .checked_add(1)
+          .expect("account unload count is representable"),
+      };
+      state.phase = AccountPhase::Changing { pending };
       state.generation = state.generation.wrapping_add(1);
       state.namespace = None;
       state.expires_at = None;
@@ -88,7 +96,13 @@ impl FeatureGates {
   /// been unloaded, including periodic refreshes already in progress.
   pub fn finish_account_change(&self) {
     if let Ok(mut state) = self.0.write() {
-      state.phase = AccountPhase::Ready;
+      state.phase = match state.phase {
+        AccountPhase::Changing { pending } => NonZeroUsize::new(pending.get() - 1)
+          .map_or(AccountPhase::Ready, |pending| AccountPhase::Changing {
+            pending,
+          }),
+        AccountPhase::Ready => AccountPhase::Ready,
+      };
     }
   }
 
@@ -138,6 +152,59 @@ impl FeatureGates {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn overlapping_account_unloads_keep_decisions_closed_until_all_complete() {
+    for pending in 2..=4 {
+      let gates = FeatureGates::default();
+      for _ in 0..pending {
+        gates.invalidate();
+      }
+      let generation = gates.generation().unwrap();
+      let expiry = Some(chrono::Utc::now() + chrono::Duration::hours(1));
+      for _ in 1..pending {
+        gates.finish_account_change();
+        assert!(
+          gates
+            .install(
+              generation,
+              Some("current".into()),
+              expiry,
+              HashSet::from([DesktopFeature::ActivityTimeline])
+            )
+            .is_none()
+        );
+        assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+        assert!(
+          gates
+            .account_binding(DesktopFeature::ActivityTimeline)
+            .is_none()
+        );
+      }
+      gates.finish_account_change();
+      assert!(
+        gates
+          .install(
+            generation,
+            Some("current".into()),
+            expiry,
+            HashSet::from([DesktopFeature::ActivityTimeline])
+          )
+          .is_some()
+      );
+      assert!(gates.is_enabled(DesktopFeature::ActivityTimeline));
+      assert!(
+        gates
+          .install(
+            generation - 1,
+            Some("stale".into()),
+            expiry,
+            HashSet::from([DesktopFeature::ActivityTimeline])
+          )
+          .is_none()
+      );
+    }
+  }
 
   #[test]
   fn features_start_closed_and_report_only_changes() {
