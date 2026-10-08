@@ -140,6 +140,12 @@ export const FEATURE_REGISTRY = {
       ],
       dispatchModules: [
         {
+          type: "admitted",
+          module: "apps/api/src/lib/feature-access/background.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
+        {
           type: "registry",
           module: "apps/api/src/lib/review-organization/reset-census.ts",
           registry: "REVIEW_RESET_SWEEP",
@@ -263,6 +269,12 @@ export const FEATURE_REGISTRY = {
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
       ],
       dispatchModules: [
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/feature-access/background.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
         {
           type: "registry",
           module: "apps/api/src/lib/review-organization/reset-census.ts",
