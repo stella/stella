@@ -344,7 +344,7 @@ describe("every shared selection-column host", () => {
     test(`${host}: the number and checkbox sit on the first text line, not the row's middle`, async () => {
       const { view } = await renderHost(host);
       const number = view.getByText("1");
-      expect(number.dataset.slot).toBe("table-row-number");
+      expect(number.dataset["slot"]).toBe("table-row-number");
       const checkboxSlot = view
         .getByRole("checkbox", { name: "1" })
         .querySelector('[data-slot="checkbox"]')?.parentElement;
