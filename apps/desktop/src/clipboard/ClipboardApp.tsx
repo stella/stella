@@ -1440,9 +1440,14 @@ const ClipboardWelcomeDialog = ({
           </span>
         </DialogHeader>
         <DialogPanel className="px-5 pt-2 pb-1" scrollFade={false}>
-          {connectionStatus === "disconnected" ? (
+          {connectionStatus === "disconnected" ||
+          connectionStatus === "expired" ? (
             <p className="text-muted-foreground mb-3 text-sm leading-relaxed">
-              {settingsT("connectToStellaDescription")}
+              {settingsT(
+                connectionStatus === "expired"
+                  ? "connectionExpiredDescription"
+                  : "connectToStellaDescription",
+              )}
             </p>
           ) : null}
           {connectionError ? (
@@ -1507,7 +1512,9 @@ const ClipboardWelcomeDialog = ({
           </Label>
         </DialogPanel>
         <DialogFooter className="px-5 pb-5" variant="bare">
-          {connectionStatus === "disconnected" ? connectControl : null}
+          {connectionStatus === "disconnected" || connectionStatus === "expired"
+            ? connectControl
+            : null}
           {connectionStatus === "unavailable" ? (
             <Button
               className="min-h-11 rounded-xl"
@@ -1523,7 +1530,10 @@ const ClipboardWelcomeDialog = ({
             onClick={completeWelcome}
             type="button"
             variant={
-              connectionStatus === "disconnected" ? "outline" : "default"
+              connectionStatus === "disconnected" ||
+              connectionStatus === "expired"
+                ? "outline"
+                : "default"
             }
           >
             {t("welcomeStart")}

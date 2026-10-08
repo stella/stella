@@ -5,6 +5,7 @@ import type {
 import { Panic, panic, Result } from "better-result";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
@@ -418,7 +419,7 @@ const dispatchMcpToolCall = async ({
 
   if (
     mode === "documents" &&
-    toolName === "invoke_capability" &&
+    toolName === MCP_CAPABILITY_EXECUTORS.write &&
     !isDocumentsMcpCapabilityAllowed(args)
   ) {
     return serializeForSurface(

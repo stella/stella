@@ -106,12 +106,10 @@ export const MCP_ALLOWED_HEADERS = [
 // discovery. CLI package versions are deliberately absent: compatibility is a
 // property of the wire protocol and capabilities, not release numbering.
 export const STELLA_API_CONTRACT = {
-  // 2: the agent surface renamed the client-engagement container to "matter"
-  // (tool inputs, capability ids, capability params), with no alias. A CLI
-  // built for protocol 1 refuses this server up front instead of failing on
-  // its first renamed input.
-  protocol: 2,
-  revision: 3,
+  // 3: capability execution is split into read_capability and write_capability.
+  // Clients built for the mixed executor refuse this protocol before dispatch.
+  protocol: 3,
+  revision: 1,
   capabilities: {
     "document-version-upload": 1,
     "mcp-v2-transport": 1,
@@ -163,7 +161,7 @@ export const STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON = {
 } as const satisfies Record<McpToolOmissionReason, string>;
 
 // The same deployment-feature evidence for catalog capabilities, which ride
-// `invoke_capability` rather than tools/list: the exact capability ids gated off.
+// capability executors rather than tools/list: the exact capability ids gated off.
 export const STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER =
   "x-stella-feature-omitted-capabilities";
 
