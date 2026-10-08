@@ -560,7 +560,7 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
 
 test("enqueue aggregation accepts only the queued PR event and successful structural checks", () => {
   const start = aggregate.indexOf('if [[ "$QUEUE_VALIDATION" == true');
-  const end = aggregate.indexOf("# Read cancellation evidence", start);
+  const end = aggregate.indexOf("# Read failure and timeout evidence", start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   const branch = `${aggregate.slice(start, end)}\nexit 9`;

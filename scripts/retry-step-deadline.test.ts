@@ -79,8 +79,8 @@ const boundedRetrySteps = (): BoundedStep[] => {
 };
 
 export const retryEnvelopeViolation = ({ where, step, env }: BoundedStep) => {
-  const attempts = Number(env.RETRY_ATTEMPTS ?? DEFAULT_ATTEMPTS);
-  const delays = String(env.RETRY_DELAYS_SECONDS ?? DEFAULT_DELAYS)
+  const attempts = Number(env["RETRY_ATTEMPTS"] ?? DEFAULT_ATTEMPTS);
+  const delays = String(env["RETRY_DELAYS_SECONDS"] ?? DEFAULT_DELAYS)
     .trim()
     .split(/\s+/u)
     .map(Number);

@@ -1459,7 +1459,7 @@ test("ci-result diagnoses timeouts before main-heavy cancellation or supersessio
       },
       heavyOnly,
       cancellationEvidence,
-      jobConclusion,
+      ...(jobConclusion === undefined ? {} : { jobConclusion }),
       embeddedStepFailure,
     }),
   )) {
