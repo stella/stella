@@ -299,12 +299,20 @@ const toPossibleMatch = (
   },
 });
 
-type SanctionsListMatchFailure = {
-  code: "load-failed";
-  stage: "public-matcher" | "list-screening";
-  reason: SanctionsScreeningFailureCause;
-  cause?: unknown;
-};
+type SanctionsListMatchFailure =
+  | {
+      code: "load-failed";
+      stage: "public-matcher" | "list-screening";
+      reason: SanctionsScreeningFailureCause;
+      cause?: unknown;
+    }
+  // Expected while an edition loads, or already reported by the warmup that
+  // owns the failure: answered without a report per request.
+  | {
+      code: "warming" | "load-failed";
+      stage: "public-warmup";
+      reason: null;
+    };
 
 type SanctionsListMatcher = (props: {
   db: SanctionsReadDb;
@@ -396,14 +404,16 @@ const screenList = async ({
     return unavailableList(base, "load-failed", freshness);
   }
   if (matched.value.isErr()) {
-    reportFailure({
-      stage: matched.value.error.stage,
-      reason: matched.value.error.reason,
-      error:
-        "cause" in matched.value.error ? matched.value.error.cause : undefined,
-      source: freshness.source,
-    });
-    return unavailableList(base, matched.value.error.code, freshness);
+    const failure = matched.value.error;
+    if (failure.reason !== null) {
+      reportFailure({
+        stage: failure.stage,
+        reason: failure.reason,
+        error: "cause" in failure ? failure.cause : undefined,
+        source: freshness.source,
+      });
+    }
+    return unavailableList(base, failure.code, freshness);
   }
   const screened = matched.value.value;
   const screenedEdition: ScreenedEdition = {

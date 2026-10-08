@@ -43,6 +43,7 @@ export type SanctionsScreeningFailureCause =
 type SanctionsScreeningFailureStage =
   | "matcher-pool"
   | "public-matcher"
+  | "public-warmup"
   | "list-screening"
   | "whole-screening";
 

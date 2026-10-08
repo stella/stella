@@ -33,6 +33,8 @@ export const SANCTIONS_UNAVAILABLE_REASONS = [
   "stale",
   // The stored edition could not be read or its screening could not complete.
   "load-failed",
+  // The edition is still loading into the matcher; ask again shortly.
+  "warming",
   // A company ID was given without a name and the register holds no company
   // under it, so there was no name to screen.
   "company-not-found",

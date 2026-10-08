@@ -21,6 +21,12 @@ import {
 } from "@/api/lib/search/response-text-bounds";
 
 const TEXT_BYTES = { metadata: 16_384, id: 1024, url: 8192, date: 64 } as const;
+/** The public answer: the screening, and when to ask again while lists load. */
+export type PublicSanctionsScreening = SanctionsScreening & {
+  /** Seconds until a retry can find more lists loaded; null when none is loading. */
+  retryAfterSeconds: number | null;
+};
+
 type ListOutcome = SanctionsScreening["lists"][number];
 type PossibleMatch = ListOutcome["possibleMatches"][number];
 
@@ -97,11 +103,12 @@ const successSchema = t.Object(
       ),
       { maxItems: SANCTIONS_SOURCE_IDS.length },
     ),
-  } satisfies Record<keyof SanctionsScreening, TSchema>,
+    retryAfterSeconds: t.Union([t.Number(), t.Null()]),
+  } satisfies Record<keyof PublicSanctionsScreening, TSchema>,
   { additionalProperties: false },
 );
 
-true satisfies SanctionsScreening extends Static<typeof successSchema>
+true satisfies PublicSanctionsScreening extends Static<typeof successSchema>
   ? true
   : never;
 
