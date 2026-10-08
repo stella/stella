@@ -712,6 +712,36 @@ describe("aggregate mutation route coverage", () => {
       }
     });
 
+    test("generators and indirect invocations earn no credit", () => {
+      const sources = setup();
+      const imports =
+        'import { lockExample } from "@/api/services/example-lock";';
+      for (const [definition, body] of [
+        [
+          `export async function* lockExample(tx) { ${acquisition} }`,
+          "await safeDb(async (tx) => { await lockExample(tx); });",
+        ],
+        [
+          `export const lockExample = async function* (tx) { ${acquisition} };`,
+          "await safeDb(async (tx) => { await lockExample(tx); });",
+        ],
+        [
+          `import { rootDb } from "@/api/db/root"; export const lockExample = async () => { await rootDb.transaction(async function* (tx) { ${acquisition} }); };`,
+          "await lockExample();",
+        ],
+        [
+          `export const lockExample = async (tx) => { ${acquisition} };`,
+          "await safeDb(async (tx) => { await lockExample.call(undefined, tx); });",
+        ],
+      ]) {
+        sources.set(service, `${lockImport} ${definition}`);
+        sources.set(module, handlerModule({ imports, body }));
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+    });
+
     test("the helper two levels deep does not cover the route", () => {
       const sources = setup();
       sources.set(

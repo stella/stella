@@ -1093,7 +1093,11 @@ type TrustedBinding =
       specifier: string;
       exported: string;
     }
-  | { kind: "function"; body: ts.ConciseBody }
+  | {
+      kind: "function";
+      body: ts.ConciseBody;
+      node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
+    }
   | { kind: "const"; initializer: ts.Expression }
   | {
       kind: "parameter";
@@ -1121,7 +1125,7 @@ const trustedTopLevel = ({
       statement.name?.text === name &&
       statement.body !== undefined
     ) {
-      return { kind: "function", body: statement.body };
+      return { kind: "function", body: statement.body, node: statement };
     }
     if (!ts.isVariableStatement(statement)) {
       continue;
@@ -1142,7 +1146,7 @@ const trustedTopLevel = ({
     const initializer = unwrapExpression(variable.initializer);
     return ts.isArrowFunction(initializer) ||
       ts.isFunctionExpression(initializer)
-      ? { kind: "function", body: initializer.body }
+      ? { kind: "function", body: initializer.body, node: initializer }
       : { kind: "const", initializer: variable.initializer };
   }
   const reference = importedReference({
@@ -1337,6 +1341,23 @@ type TransactionCallbackOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
 };
+/**
+ * The only function kinds whose bodies earn lock credit when a followed call
+ * or a joining runner invokes them: non-generator function declarations,
+ * function expressions and arrows. Calling a generator only creates an
+ * iterator; methods, accessors, constructors and class members are never
+ * credited (`awaitedAggregateNames` does not descend into them). Followed
+ * calls must invoke the identifier itself: `.call`, `.apply` and `.bind`
+ * are property accesses and are never followed.
+ */
+const isCreditableFunction = (
+  node: ts.Node,
+): node is ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression =>
+  (ts.isFunctionDeclaration(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isFunctionExpression(node)) &&
+  node.asteriskToken === undefined;
+
 const isJoinedTransactionCallback = ({
   callback,
   implementation: { body, source },
@@ -1349,6 +1370,9 @@ const isJoinedTransactionCallback = ({
    */
   handlerSafeDb: boolean;
 }) => {
+  if (!isCreditableFunction(callback)) {
+    return false;
+  }
   const call = callback.parent;
   if (!ts.isCallExpression(call) || !isJoinedRunner({ call, access })) {
     return false;
@@ -1542,9 +1566,11 @@ const resultPropertyCredit = ({
 const calleeCallbackCredit = (
   options: TransactionCallbackOptions,
 ): CalleeCallbackCredit =>
-  importedRunnerCredit(options) ??
-  transactionMethodCredit(options) ??
-  resultPropertyCredit(options);
+  isCreditableFunction(options.callback)
+    ? (importedRunnerCredit(options) ??
+      transactionMethodCredit(options) ??
+      resultPropertyCredit(options))
+    : undefined;
 
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
@@ -1661,7 +1687,9 @@ const calleeImplementation = ({
   }
   const binding = trustedBinding({ identifier: call.expression, access });
   if (binding?.kind === "function") {
-    return { body: binding.body, source, file };
+    return isCreditableFunction(binding.node)
+      ? { body: binding.body, source, file }
+      : undefined;
   }
   if (
     binding?.kind !== "import" ||
@@ -1689,7 +1717,8 @@ const calleeImplementation = ({
     source: target,
     access,
   });
-  return definition?.kind === "function"
+  return definition?.kind === "function" &&
+    isCreditableFunction(definition.node)
     ? { body: definition.body, source: target, file: binding.module }
     : undefined;
 };
