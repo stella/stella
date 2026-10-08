@@ -1,4 +1,6 @@
 import { panic } from "better-result";
+import { sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 import * as v from "valibot";
 
 import { schedulerJobs } from "@/api/db/schema";
@@ -27,7 +29,7 @@ import type {
 /**
  * Scheduler task backing a definition's `schedule` trigger. One
  * `scheduler_jobs` row per schedule-triggered definition (see
- * `syncFlowScheduleTrigger`) fires this daily at the trigger's UTC hour; the
+ * `syncFlowScheduleTriggerInTransaction`) fires this daily at the trigger's UTC hour; the
  * task gates weekly / monthly frequencies to the day of the slot that was due, revalidates the
  * definition + target workspace, then defers to `startAutomatedFlowRun` (actor
  * guarantee + daily cap + run start).
@@ -35,14 +37,51 @@ import type {
 export const FLOW_RUN_TASK = "flow.run" as const;
 
 /** Deterministic scheduler-job id so one definition owns at most one row. */
+const FLOW_SCHEDULE_JOB_PREFIX = `${FLOW_RUN_TASK}.`;
 export const flowScheduleJobId = (definitionId: string): string =>
-  `flow.run.${definitionId}`;
+  `${FLOW_SCHEDULE_JOB_PREFIX}${definitionId}`;
 
-const flowRunPayloadSchema = v.strictObject({
-  definitionId: v.pipe(v.string(), v.uuid()),
+export const flowScheduleJobIdSql = (definitionId: SQLWrapper) =>
+  sql`${FLOW_SCHEDULE_JOB_PREFIX} || (${definitionId})::text`;
+
+const retainedSlotFields = {
   pendingDueAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
   pendingClaimedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+};
+
+export const flowRunPayloadSchema = v.strictObject({
+  definitionId: v.pipe(v.string(), v.uuid()),
+  ...retainedSlotFields,
 });
+
+type FlowRunPayloadMatchesSqlOptions = {
+  payload: SQLWrapper;
+  definitionId: SQLWrapper;
+};
+
+/** Repair preserves only payloads the task accepts, including retained slot identity. */
+export const flowRunPayloadMatchesSql = ({
+  payload,
+  definitionId,
+}: FlowRunPayloadMatchesSqlOptions) => {
+  const retainedKeys = Object.keys(retainedSlotFields);
+  const validSlots = retainedKeys.map(
+    (key) => sql`(
+    NOT (${payload} ? ${key}) OR (
+      jsonb_typeof(${payload}->${key}) = 'string'
+      AND ${payload}->>${key} ~ ${v.ISO_TIMESTAMP_REGEX.source}
+    )
+  )`,
+  );
+  return sql`CASE WHEN jsonb_typeof(${payload}) = 'object' THEN COALESCE((
+    (${payload} - ARRAY[${sql.join(
+      retainedKeys.map((key) => sql`${key}`),
+      sql`, `,
+    )}]::text[])
+      = jsonb_build_object('definitionId', (${definitionId})::text)
+    AND ${sql.join(validSlots, sql` AND `)}
+  ), false) ELSE false END`;
+};
 
 type StartScheduledFlowRun = (
   input: Parameters<typeof startAutomatedFlowRun>[0],

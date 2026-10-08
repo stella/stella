@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import * as v from "valibot";
 
+import type { Transaction } from "@/api/db/root";
 import {
   featureEnrolments,
   flowDefinitions,
@@ -17,6 +19,8 @@ import {
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
+  flowRunPayloadSchema,
+  flowRunPayloadMatchesSql,
 } from "@/api/lib/scheduler/tasks/flow-run";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
@@ -32,6 +36,230 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("flow schedule reconciliation (postgres)", () => {
+    test("repair ignores clean manual definitions and spends transactions only on schedule drift", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const f = await flowReviewGateFixture(db, { intermediate: false });
+        const cases = [
+          "missing",
+          "changed",
+          "stale manual",
+          "disabled",
+          "valid retained",
+          "wrong payload",
+        ] as const;
+        const definitions = cases.map((type) => ({
+          type,
+          id: createSafeId<"flowDefinition">(),
+        }));
+        const manualIds = Array.from({ length: 9 }, () =>
+          createSafeId<"flowDefinition">(),
+        );
+        const definitionIds = [
+          ...manualIds,
+          ...definitions.map((item) => item.id),
+        ];
+        const jobIds = definitions.map((item) => flowScheduleJobId(item.id));
+        let transactions = 0;
+        const database = {
+          select: db.select.bind(db),
+          transaction: async <Value>(
+            run: (tx: Transaction) => Promise<Value>,
+          ) => {
+            transactions += 1;
+            return await db.transaction(run);
+          },
+        };
+        const principal = {
+          organizationId: f.organizationId,
+          userId: f.userId,
+        };
+        const pendingDueAt = "2040-01-01T07:00:00.000Z";
+        try {
+          await db.insert(flowDefinitions).values(
+            manualIds.map((id) => ({
+              id,
+              organizationId: f.organizationId,
+              createdByUserId: f.userId,
+              name: "Manual flow",
+              steps: [],
+              trigger: { type: "manual" as const },
+            })),
+          );
+          await repairFlowScheduleTriggers({
+            database,
+            principal,
+            batchSize: 2,
+          });
+          expect(transactions).toBe(0);
+          await db.insert(flowDefinitions).values(
+            definitions.map(({ type, id }) => ({
+              id,
+              organizationId: f.organizationId,
+              createdByUserId: f.userId,
+              name: type,
+              steps: [],
+              enabled: type !== "disabled",
+              trigger:
+                type === "stale manual"
+                  ? { type: "manual" as const }
+                  : {
+                      type: "schedule" as const,
+                      workspaceId: f.workspaceId,
+                      schedule: {
+                        frequency: "weekly" as const,
+                        hourUtc: 7,
+                        dayOfWeek: 1,
+                      },
+                    },
+            })),
+          );
+          await db.insert(schedulerJobs).values(
+            definitions
+              .filter((item) => item.type !== "missing")
+              .map(({ type, id }) => ({
+                id: flowScheduleJobId(id),
+                task: FLOW_RUN_TASK,
+                enabled: true,
+                schedule: {
+                  type: "daily" as const,
+                  hour: type === "changed" ? 9 : 7,
+                  minute: 0,
+                  timeZone: "UTC",
+                },
+                nextRunAt: new Date(pendingDueAt),
+                payload: {
+                  definitionId:
+                    type === "wrong payload"
+                      ? createSafeId<"flowDefinition">()
+                      : id,
+                  ...(type === "valid retained"
+                    ? { pendingDueAt, pendingClaimedAt: pendingDueAt }
+                    : {}),
+                },
+              })),
+          );
+          await repairFlowScheduleTriggers({
+            database,
+            principal,
+            batchSize: 2,
+          });
+          expect(transactions).toBe(5);
+          const jobs = await db
+            .select()
+            .from(schedulerJobs)
+            .where(inArray(schedulerJobs.id, jobIds));
+          for (const definition of definitions) {
+            const job = jobs.find(
+              (item) => item.id === flowScheduleJobId(definition.id),
+            );
+            if (definition.type === "stale manual") {
+              expect(job).toBeUndefined();
+              continue;
+            }
+            expect(job?.schedule).toEqual({
+              type: "daily",
+              hour: 7,
+              minute: 0,
+              timeZone: "UTC",
+            });
+            expect(job?.enabled).toBe(definition.type !== "disabled");
+            expect(job?.payload?.["definitionId"]).toBe(definition.id);
+            if (definition.type === "valid retained") {
+              expect(job?.payload).toEqual({
+                definitionId: definition.id,
+                pendingDueAt,
+                pendingClaimedAt: pendingDueAt,
+              });
+            }
+          }
+          transactions = 0;
+          await repairFlowScheduleTriggers({
+            database,
+            principal,
+            batchSize: 2,
+          });
+          expect(transactions).toBe(0);
+          await db
+            .delete(featureEnrolments)
+            .where(
+              and(
+                eq(featureEnrolments.organizationId, f.organizationId),
+                eq(featureEnrolments.userId, f.userId),
+                eq(featureEnrolments.featureId, "flows"),
+              ),
+            );
+          await repairFlowScheduleTriggers({
+            database,
+            principal,
+            batchSize: 2,
+          });
+          const missing =
+            definitions.find((item) => item.type === "missing") ??
+            panic("Missing schedule fixture");
+          await db
+            .delete(schedulerJobs)
+            .where(eq(schedulerJobs.id, flowScheduleJobId(missing.id)));
+          transactions = 0;
+          await repairFlowScheduleTriggers({
+            database,
+            principal,
+            batchSize: 2,
+          });
+          expect(transactions).toBe(0);
+        } finally {
+          await db
+            .delete(schedulerJobs)
+            .where(inArray(schedulerJobs.id, jobIds));
+          await db
+            .delete(flowDefinitions)
+            .where(inArray(flowDefinitions.id, definitionIds));
+          await f.cleanup();
+        }
+      });
+    });
+
+    test("payload drift SQL matches the task schema and source identity", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const definitionId = createSafeId<"flowDefinition">();
+        const payloads = [
+          { definitionId },
+          { definitionId, pendingDueAt: "2040-01-01T07:00:00.000Z" },
+          { definitionId, pendingClaimedAt: "2040-01-01 07:00:00+01" },
+          {
+            definitionId,
+            pendingDueAt: "2040-01-01T07:00:00.123456789Z",
+            pendingClaimedAt: "2040-01-01T07:00:00Z",
+          },
+          { definitionId, pendingDueAt: "invalid" },
+          { definitionId, pendingDueAt: null },
+          { definitionId, pendingClaimedAt: 42 },
+          { definitionId, extra: true },
+          { definitionId: createSafeId<"flowDefinition">() },
+          null,
+          "scalar",
+          42,
+          [],
+        ];
+        for (const payload of payloads) {
+          // db-await-in-loop: compare the finite schema boundary matrix with actual PostgreSQL matching.
+          const rows = await db
+            .select({
+              matches: flowRunPayloadMatchesSql({
+                payload: sql`${JSON.stringify(payload)}::text::jsonb`,
+                definitionId: sql`${definitionId}::text`,
+              }),
+            })
+            .from(sql`(VALUES (true)) AS payload_fixture(value)`);
+          const parsed = v.safeParse(flowRunPayloadSchema, payload);
+          expect(rows.at(0)?.matches).toBe(
+            parsed.success && parsed.output.definitionId === definitionId,
+          );
+        }
+      });
+    });
+
     test("opt-out retains the due slot, regrant preserves it, and schedule changes replace it", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();

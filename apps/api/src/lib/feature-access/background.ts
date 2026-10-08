@@ -230,6 +230,30 @@ export const loadBackgroundFeatureActors = async ({
   return admitted;
 };
 
+type BackgroundFeatureMemberExistsOptions = {
+  organizationId: SQLWrapper | string;
+  userId: SQLWrapper | string;
+  featureId: "signals" | "flows";
+};
+
+/** SQL admission for org-only automation owners, matching live self-serve policy. */
+export const backgroundFeatureMemberExists = ({
+  organizationId,
+  userId,
+  featureId,
+}: BackgroundFeatureMemberExistsOptions) => sql`EXISTS (
+  SELECT 1 FROM ${member}
+  JOIN ${user} ON ${user.id} = ${member.userId}
+  JOIN ${featureEnrolments}
+    ON ${featureEnrolments.organizationId} = ${member.organizationId}
+    AND ${featureEnrolments.userId} = ${member.userId}
+    AND ${featureEnrolments.featureId} = ${featureId}
+  WHERE ${member.organizationId} = ${organizationId}
+    AND ${member.userId} = ${userId}
+    AND ${user.emailVerified} = true
+    AND ${user.deletedAt} IS NULL
+)`;
+
 type BackgroundFeatureActorExistsOptions = {
   organizationId: SQLWrapper | string;
   workspaceId: SQLWrapper | string;

@@ -11,14 +11,24 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { writeSchedulerBookkeeping } from "@/api/lib/db/recovery-bookkeeping/scheduler";
-import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  backgroundFeatureMemberExists,
+  isBackgroundFeatureEnabled,
+} from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
-import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
+import {
+  flowScheduleToSchedulerSchedule,
+  flowScheduleToSchedulerScheduleSql,
+} from "@/api/lib/flows/flow-trigger-logic";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
+  flowScheduleJobIdSql,
+  flowRunPayloadSchema,
+  flowRunPayloadMatchesSql,
 } from "@/api/lib/scheduler/tasks/flow-run";
 import {
   schedulerSchedulesEqual,
@@ -75,7 +85,11 @@ export const syncFlowScheduleTriggerInTransaction = async ({
   }
   const existing = (
     await tx
-      .select({ schedule: schedulerJobs.schedule, task: schedulerJobs.task })
+      .select({
+        schedule: schedulerJobs.schedule,
+        task: schedulerJobs.task,
+        payload: schedulerJobs.payload,
+      })
       .from(schedulerJobs)
       .where(eq(schedulerJobs.id, jobId))
       .limit(1)
@@ -92,9 +106,12 @@ export const syncFlowScheduleTriggerInTransaction = async ({
     return;
   }
   const schedule = flowScheduleToSchedulerSchedule(definition.trigger.schedule);
+  const existingPayload = v.safeParse(flowRunPayloadSchema, existing?.payload);
   const unchanged =
     existing !== undefined &&
     existing.task === FLOW_RUN_TASK &&
+    existingPayload.success &&
+    existingPayload.output.definitionId === definitionId &&
     schedulerSchedulesEqual(existing.schedule, schedule);
   await upsertSchedulerJob(
     {
@@ -194,7 +211,7 @@ const repairOrphanedFlowScheduleJobs = async ({
   }
 };
 
-/** Definitions are durable repair sources; every bounded page is cursor-drained. */
+/** Only drift consumes repair transactions; locked sync revalidates each source. */
 export const repairFlowScheduleTriggers = async ({
   database,
   principal,
@@ -202,6 +219,23 @@ export const repairFlowScheduleTriggers = async ({
   batchSize = LIMITS.flowDefinitionsCount,
 }: RepairFlowScheduleTriggersOptions): Promise<void> => {
   let cursor: SafeId<"flowDefinition"> | null = null;
+  const expectedEnabled = sql`(
+    ${flowDefinitions.enabled}
+    AND ${isDeploymentFeatureEnabled("FEATURE_FLOWS")}
+    AND ${backgroundFeatureMemberExists({
+      organizationId: flowDefinitions.organizationId,
+      userId: flowDefinitions.createdByUserId,
+      featureId: "flows",
+    })}
+  )`;
+  const drift = sql`CASE WHEN ${flowDefinitions.trigger}->>'type' = 'schedule' THEN (
+    CASE WHEN ${schedulerJobs.id} IS NULL THEN ${expectedEnabled} ELSE (
+      ${schedulerJobs.task} IS DISTINCT FROM ${FLOW_RUN_TASK}
+      OR ${schedulerJobs.schedule} IS DISTINCT FROM (${flowScheduleToSchedulerScheduleSql(sql`${flowDefinitions.trigger}->'schedule'`)})
+      OR ${schedulerJobs.enabled} IS DISTINCT FROM ${expectedEnabled}
+      OR NOT ${flowRunPayloadMatchesSql({ payload: schedulerJobs.payload, definitionId: flowDefinitions.id })}
+    ) END
+  ) ELSE ${schedulerJobs.id} IS NOT NULL END`;
   for (;;) {
     if (signal?.aborted) {
       break;
@@ -214,8 +248,13 @@ export const repairFlowScheduleTriggers = async ({
           organizationId: flowDefinitions.organizationId,
         })
         .from(flowDefinitions)
+        .leftJoin(
+          schedulerJobs,
+          eq(schedulerJobs.id, flowScheduleJobIdSql(flowDefinitions.id)),
+        )
         .where(
           and(
+            drift,
             cursor === null ? undefined : gt(flowDefinitions.id, cursor),
             principal === undefined
               ? undefined

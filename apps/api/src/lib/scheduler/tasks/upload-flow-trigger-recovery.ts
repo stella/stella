@@ -5,6 +5,7 @@ import {
   eq,
   getTableColumns,
   inArray,
+  isNotNull,
   lte,
   not,
   or,
@@ -595,6 +596,58 @@ export const resumeUploadTriggersAfterGrant = async ({
   });
 };
 
+const selectResumedUploadTriggerState = async (
+  database: SchedulerDb,
+  status: "awaiting_grant" | "skipped",
+) =>
+  (
+    await readCursorPage(
+      database
+        .select({
+          ...getTableColumns(flowUploadTriggerIntents),
+          retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
+        })
+        .from(flowDefinitions)
+        .innerJoin(
+          flowUploadTriggerIntents,
+          and(
+            eq(flowUploadTriggerIntents.definitionId, flowDefinitions.id),
+            eq(
+              flowUploadTriggerIntents.organizationId,
+              flowDefinitions.organizationId,
+            ),
+          ),
+        )
+        .where(
+          and(
+            eq(flowDefinitions.enabled, true),
+            isNotNull(flowDefinitions.createdByUserId),
+            eq(flowUploadTriggerIntents.status, status),
+            backgroundFeatureActorExists({
+              organizationId: flowDefinitions.organizationId,
+              workspaceId: flowUploadTriggerIntents.workspaceId,
+              featureId: "flows",
+              userId: flowDefinitions.createdByUserId,
+            }),
+            fileUploadTriggerMatchesSql({
+              trigger: flowDefinitions.trigger,
+              workspaceId: flowUploadTriggerIntents.workspaceId,
+              extension: flowUploadTriggerIntents.fileExtension,
+            }),
+          ),
+        )
+        .orderBy(
+          asc(flowUploadTriggerIntents.definitionId),
+          asc(flowUploadTriggerIntents.retryAt),
+          asc(flowUploadTriggerIntents.entityId),
+        ),
+      {
+        limit: UPLOAD_TRIGGER_BATCH_SIZE,
+        cursorForItem: (row) => row.entityId,
+      },
+    )
+  ).items;
+
 type ReconcileUploadTriggerGrantStateOptions = {
   database: SchedulerDb;
   now: Date;
@@ -606,33 +659,11 @@ const reconcileUploadTriggerGrantState = async ({
 }: ReconcileUploadTriggerGrantStateOptions) => {
   // Grant repair has its own budget; an older ungranted prefix cannot consume it.
   const resumed = (
-    await readCursorPage(
-      database
-        .select({
-          ...getTableColumns(flowUploadTriggerIntents),
-          retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
-        })
-        .from(flowUploadTriggerIntents)
-        .where(
-          and(
-            inArray(flowUploadTriggerIntents.status, [
-              "awaiting_grant",
-              "skipped",
-            ]),
-            uploadTriggerActorExists(),
-            uploadTriggerReplayEligible(),
-          ),
-        )
-        .orderBy(
-          asc(flowUploadTriggerIntents.retryAt),
-          asc(flowUploadTriggerIntents.entityId),
-        ),
-      {
-        limit: UPLOAD_TRIGGER_BATCH_SIZE,
-        cursorForItem: (row) => row.entityId,
-      },
-    )
-  ).items;
+    await Promise.all([
+      selectResumedUploadTriggerState(database, "awaiting_grant"),
+      selectResumedUploadTriggerState(database, "skipped"),
+    ])
+  ).flat();
   const blocked = (
     await readCursorPage(
       database

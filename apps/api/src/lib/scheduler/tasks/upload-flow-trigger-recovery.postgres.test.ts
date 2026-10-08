@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -21,6 +21,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { fileUploadTriggerMatchesSql } from "@/api/lib/flows/flow-trigger-logic";
 import {
   automatedFlowRunDependencies,
   startAutomatedFlowRun,
@@ -239,6 +240,94 @@ const changeTrigger = async ({
 };
 
 describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
+  test("workspace-filtered uploads match UUID receipt columns and parameter inputs", async () => {
+    await withGatedTestClients(
+      databaseUrl ?? panic("Missing PostgreSQL test URL"),
+      async ({ openClient }) => {
+        const { db } = openClient();
+        const fixture = await uploadFixture(db);
+        try {
+          const cases = [
+            {
+              workspaceId: fixture.workspaceId,
+              extensions: [".PDF"],
+              expected: true,
+            },
+            {
+              workspaceId: fixture.otherWorkspaceId,
+              extensions: [".PDF"],
+              expected: false,
+            },
+            {
+              workspaceId: fixture.workspaceId,
+              extensions: [".DOCX"],
+              expected: false,
+            },
+            {
+              workspaceId: fixture.otherWorkspaceId,
+              extensions: [".DOCX"],
+              expected: false,
+            },
+          ];
+          for (const { workspaceId, extensions, expected } of cases) {
+            // db-await-in-loop: each persisted trigger configuration exercises both SQL operand types.
+            await db
+              .update(flowDefinitions)
+              .set({
+                trigger: {
+                  type: "file-upload",
+                  workspaceIds: [workspaceId],
+                  fileExtensions: extensions,
+                },
+              })
+              .where(eq(flowDefinitions.id, fixture.definitionId));
+            // db-await-in-loop: read the real UUID receipt column after the configuration change.
+            const rows = await db
+              .select({
+                columnMatches: fileUploadTriggerMatchesSql({
+                  trigger: flowDefinitions.trigger,
+                  workspaceId: flowUploadTriggerIntents.workspaceId,
+                  extension: flowUploadTriggerIntents.fileExtension,
+                }).mapWith(Boolean),
+                parameterMatches: fileUploadTriggerMatchesSql({
+                  trigger: flowDefinitions.trigger,
+                  workspaceId: fixture.workspaceId,
+                  extension: "pdf",
+                }).mapWith(Boolean),
+              })
+              .from(flowUploadTriggerIntents)
+              .innerJoin(
+                flowDefinitions,
+                eq(flowDefinitions.id, flowUploadTriggerIntents.definitionId),
+              )
+              .where(
+                and(
+                  eq(
+                    flowUploadTriggerIntents.organizationId,
+                    fixture.organizationId,
+                  ),
+                  eq(
+                    flowUploadTriggerIntents.definitionId,
+                    fixture.definitionId,
+                  ),
+                  eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                ),
+              )
+              .limit(1);
+            expect(rows).toEqual([
+              { columnMatches: expected, parameterMatches: expected },
+            ]);
+          }
+        } finally {
+          await db
+            .delete(organization)
+            .where(eq(organization.id, fixture.organizationId));
+          await db.delete(user).where(eq(user.id, fixture.userId));
+        }
+      },
+    );
+  });
+
   test("inactive receipt prefixes do not consume dispatch budget and scoped uploads avoid foreign reconciliation", async () => {
     const previous = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
@@ -973,6 +1062,159 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
       restoreMode();
     }
   });
+
+  test.each(["awaiting_grant", "skipped"] as const)(
+    "%s grant repair joins live definitions before retained historical skips",
+    async (status) => {
+      const previousFlag = env.FEATURE_FLOWS;
+      const restoreMode = setRuntimeModeForTesting({
+        mode: RUNTIME_MODE.strict,
+      });
+      env.FEATURE_FLOWS = true;
+      try {
+        await withGatedTestClients(
+          databaseUrl ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const queries: string[] = [];
+            const { db } = openClient({
+              logger: {
+                logQuery(query) {
+                  queries.push(query);
+                },
+              },
+            });
+            const disabled = await uploadFixture(db);
+            const authorless = await uploadFixture(db);
+            const eligible = await uploadFixture(db);
+            try {
+              const older = new Date(NOW.getTime() - 60_000);
+              await db
+                .update(flowDefinitions)
+                .set({ enabled: false })
+                .where(eq(flowDefinitions.id, disabled.definitionId));
+              await db
+                .update(flowDefinitions)
+                .set({ createdByUserId: null })
+                .where(eq(flowDefinitions.id, authorless.definitionId));
+              await db
+                .update(flowUploadTriggerIntents)
+                .set({
+                  status: "skipped",
+                  skipReason: "definition_disabled",
+                  retryAt: older,
+                })
+                .where(
+                  eq(
+                    flowUploadTriggerIntents.definitionId,
+                    disabled.definitionId,
+                  ),
+                );
+              await db
+                .update(flowUploadTriggerIntents)
+                .set({
+                  status: "skipped",
+                  skipReason: "actor_missing",
+                  retryAt: older,
+                })
+                .where(
+                  eq(
+                    flowUploadTriggerIntents.definitionId,
+                    authorless.definitionId,
+                  ),
+                );
+              const extra = Array.from({ length: 99 }, () => ({
+                id: createSafeId<"entity">(),
+                workspaceId: disabled.workspaceId,
+                name: "Historical upload",
+                createdBy: disabled.userId,
+              }));
+              await db.insert(entities).values(extra);
+              await db.insert(flowUploadTriggerIntents).values(
+                extra.map(({ id }) => ({
+                  definitionId: disabled.definitionId,
+                  entityId: id,
+                  organizationId: disabled.organizationId,
+                  workspaceId: disabled.workspaceId,
+                  fileExtension: "pdf",
+                  status: "skipped" as const,
+                  skipReason: "definition_disabled" as const,
+                  retryAt: older,
+                })),
+              );
+              await db
+                .update(flowUploadTriggerIntents)
+                .set({
+                  status,
+                  skipReason:
+                    status === "skipped" ? "definition_disabled" : null,
+                  retryAt: LATER,
+                })
+                .where(
+                  eq(
+                    flowUploadTriggerIntents.definitionId,
+                    eligible.definitionId,
+                  ),
+                );
+              const retained = async () =>
+                await db
+                  .select()
+                  .from(flowUploadTriggerIntents)
+                  .where(
+                    sql`${flowUploadTriggerIntents.definitionId} IN (${disabled.definitionId}, ${authorless.definitionId})`,
+                  )
+                  .orderBy(
+                    asc(flowUploadTriggerIntents.definitionId),
+                    asc(flowUploadTriggerIntents.entityId),
+                  );
+              const before = await retained();
+              queries.length = 0;
+              const started: string[] = [];
+              await recoverUploadFlowTriggerIntents({
+                database: asTestRaw<SchedulerDb>(db),
+                now: NOW,
+                start: async ({ definitionId }) => {
+                  started.push(definitionId);
+                  return { status: "settled" };
+                },
+              });
+              expect(started).toEqual([eligible.definitionId]);
+              expect(await retained()).toEqual(before);
+              expect(
+                await db.$count(
+                  flowUploadTriggerIntents,
+                  eq(
+                    flowUploadTriggerIntents.definitionId,
+                    eligible.definitionId,
+                  ),
+                ),
+              ).toBe(0);
+              const resumedQuery = queries.find((query) =>
+                /from\s+"flow_definitions"\s+inner join\s+"flow_upload_trigger_intents"/iu.test(
+                  query,
+                ),
+              );
+              expect(resumedQuery).toBeDefined();
+              expect(resumedQuery).toContain('"flow_definitions"."enabled"');
+              expect(resumedQuery?.toLowerCase()).toContain(
+                '"flow_definitions"."created_by_user_id" is not null',
+              );
+            } finally {
+              for (const fixture of [disabled, authorless, eligible]) {
+                // db-await-in-loop: clean each separately seeded tenant and its principal.
+                await db
+                  .delete(organization)
+                  .where(eq(organization.id, fixture.organizationId));
+                await db.delete(user).where(eq(user.id, fixture.userId));
+              }
+            }
+          },
+        );
+      } finally {
+        env.FEATURE_FLOWS = previousFlag;
+        restoreMode();
+      }
+    },
+  );
 
   test("grant repair and eligible dispatch survive an older blocked receipt prefix", async () => {
     const previousFlag = env.FEATURE_FLOWS;
