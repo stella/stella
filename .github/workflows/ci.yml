@@ -358,7 +358,7 @@ jobs:
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
             const profile = queue ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
-            const marker = `ci-completed-v4-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+            const marker = `ci-completed-v5-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
             if (!queue) core.setOutput("marker", marker);
             if (!queue && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
             try {
@@ -396,6 +396,60 @@ jobs:
                   || sourceRun.path !== ".github/workflows/ci.yml"
                   || sourceRun.status !== "completed"
                   || sourceRun.conclusion !== "success") return;
+              // The name alone proves nothing: a superseded run once published
+              // it. Reuse only evidence whose contents show that the producing
+              // run planned its suites for this exact head and that every
+              // planned job succeeded with no job cancelled or failed.
+              if (!Number.isSafeInteger(completed.id) || completed.id <= 0
+                  || !Number.isSafeInteger(completed.size_in_bytes)
+                  || completed.size_in_bytes <= 0
+                  || completed.size_in_bytes > 65536) return;
+              const { data: archive } = await github.rest.actions.downloadArtifact({
+                ...context.repo, artifact_id: completed.id, archive_format: "zip",
+                request: { timeout: 10000 },
+              });
+              // upload-artifact zips the one evidence file; read it through
+              // the central directory, since a streamed entry defers its sizes.
+              const zip = Buffer.from(archive);
+              const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+              if (end < 0 || zip.readUInt16LE(end + 10) !== 1) return;
+              const entry = zip.readUInt32LE(end + 16);
+              if (zip.readUInt32LE(entry) !== 0x02014b50) return;
+              const method = zip.readUInt16LE(entry + 10);
+              const packed = zip.readUInt32LE(entry + 20);
+              const nameLength = zip.readUInt16LE(entry + 28);
+              const local = zip.readUInt32LE(entry + 42);
+              if (zip.toString("utf8", entry + 46, entry + 46 + nameLength) !== "ci-completed-depth.json"
+                  || zip.readUInt32LE(local) !== 0x04034b50
+                  || packed > 65536) return;
+              const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+              const body = zip.subarray(start, start + packed);
+              if (body.length !== packed || ![0, 8].includes(method)) return;
+              const evidence = JSON.parse((method === 8
+                ? require("node:zlib").inflateRawSync(body, { maxOutputLength: 65536 })
+                : body).toString("utf8"));
+              const results = evidence?.jobs;
+              const planned = evidence?.planned;
+              if (evidence?.version !== 5
+                  || evidence.marker !== marker
+                  || evidence.event !== "pull_request"
+                  || evidence.run_id !== sourceId
+                  || !Number.isSafeInteger(evidence.run_attempt)
+                  || evidence.run_attempt < 1
+                  || evidence.pr_number !== pr.number
+                  || evidence.head_repo_id !== pr.head.repo.id
+                  || evidence.head_sha !== pr.head.sha
+                  || evidence.base_sha !== pr.base.sha
+                  || evidence.suite_depth !== depth
+                  || evidence.coverage_profile !== profile
+                  || results === null || typeof results !== "object" || Array.isArray(results)
+                  || results["ci-plan"] !== "success"
+                  || Object.keys(results).length < 2
+                  || !Object.values(results).every((outcome) => outcome === "success" || outcome === "skipped")
+                  || !Array.isArray(planned) || planned.length === 0
+                  || new Set(planned).size !== planned.length
+                  || !planned.every((job) => typeof job === "string"
+                    && Object.hasOwn(results, job) && results[job] === "success")) return;
               if (queue) {
                 core.setOutput("normal_completion", "complete");
                 return;
@@ -2918,6 +2972,14 @@ jobs:
         # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
         run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
+      - name: Offline check transport policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/offline-check-policy.test.ts
+          bun scripts/offline-check-policy.ts
+          bun --filter @stll/ai-catalog gen:rates --check
+          bun --filter @stll/ai-catalog gen:capabilities --check
+
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
         # These fetch models.dev and OpenRouter and byte-compare the
@@ -2979,6 +3041,12 @@ jobs:
         # uses still reports growth, shrinkage, a changed tool count and a
         # missing audience, so a broken guard cannot pass silently.
         run: bun apps/api/scripts/mcp-surface-baseline.ts --self-test
+
+      - name: Offline catalogue pinned-content policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/offline-check-policy.ts
+          bun --filter @stll/catalogue check-pinned --check
 
       - name: Catalogue pinned-content check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -7332,6 +7400,7 @@ jobs:
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Evaluate CI outcome
+        id: outcome
         env:
           EVENT: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
@@ -7344,6 +7413,10 @@ jobs:
           PLAN: ${{ toJSON(needs.ci-plan.outputs) }}
           RUN_REQUIRED: ${{ needs.ci-plan.outputs.run_required }}
           COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
+          COMPLETION_MARKER: ${{ needs.ci-plan.outputs.completion_marker }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
           QUEUE_VALIDATION: ${{ needs.ci-plan.outputs.queue_validation }}
           PR_ACTION: ${{ github.event.action }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
@@ -7605,6 +7678,41 @@ jobs:
               exit 1
               ;;
           esac
+          # Completion evidence lets a later unchanged-head run skip every
+          # suite, so only a run that planned and ran them records it: every
+          # planned job succeeded and no job was cancelled or failed. A run
+          # that passed as superseded never completed its suite.
+          if [[ "$EVENT" == pull_request && "${RUN_REQUIRED:-}" == true && -n "${COMPLETION_MARKER:-}" ]]; then
+            if [[ "$SUITE_DEPTH" == full ]]; then
+              evidence_scopes="$JOB_SCOPES"
+              evidence_required=$(jq -c 'keys' <<< "$JOB_SCOPES")
+            else
+              evidence_scopes=$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')
+              evidence_required="$FAST_REQUIRED"
+            fi
+            evidence=$(jq -ce --argjson plan "$PLAN" --argjson scopes "$evidence_scopes" --argjson required "$evidence_required" \
+              --arg marker "$COMPLETION_MARKER" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+              --arg pr "$PR_NUMBER" --arg repo "$HEAD_REPO_ID" --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
+              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" '
+              (with_entries(.value = .value.result)) as $jobs
+              | ([$required[] | select($scopes[.] == null or $plan[$scopes[.]] == "true")] | unique) as $planned
+              | select(($jobs | length) > 1 and $jobs["ci-plan"] == "success"
+                and all($jobs[]; . == "success" or . == "skipped")
+                and ($planned | length) > 0
+                and all($planned[]; . as $job | $jobs[$job] == "success")
+                and ($head | test("^[0-9a-f]{40}$")) and ($base | test("^[0-9a-f]{40}$")))
+              | {version: 5, marker: $marker, event: "pull_request",
+                run_id: ($run | tonumber), run_attempt: ($attempt | tonumber),
+                pr_number: ($pr | tonumber), head_repo_id: ($repo | tonumber),
+                head_sha: $head, base_sha: $base, suite_depth: $depth,
+                coverage_profile: (if $profile == "" then "normal-v1" else $profile end),
+                planned: $planned, jobs: $jobs}' <<< "$NEEDS") || evidence=""
+            if [[ -n "$evidence" ]]; then
+              echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
+            else
+              echo "Not every planned CI job succeeded in this run; recording no completion evidence."
+            fi
+          fi
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule
@@ -7628,20 +7736,22 @@ jobs:
           STELLA_MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
         run: bash scripts/check-main-merge-hold.sh
 
-      # Only an actual validated PR run publishes evidence; reuse never renews it.
+      # Only an actual validated PR run publishes evidence; reuse never renews
+      # it, and a superseded or cancelled run never completed its suite.
       - name: Record completed suite depth
-        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != ''
+        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
         env:
-          MARKER_PATH: ${{ runner.temp }}/ci-completed-depth.txt
-        run: printf 'validated\n' > "$MARKER_PATH"
+          EVIDENCE: ${{ steps.outcome.outputs.evidence }}
+          MARKER_PATH: ${{ runner.temp }}/ci-completed-depth.json
+        run: printf '%s\n' "$EVIDENCE" > "$MARKER_PATH"
 
       - name: Publish completed suite depth
-        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != ''
+        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ needs.ci-plan.outputs.completion_marker }}
           overwrite: true
-          path: ${{ runner.temp }}/ci-completed-depth.txt
+          path: ${{ runner.temp }}/ci-completed-depth.json
           retention-days: 7
           if-no-files-found: error
 

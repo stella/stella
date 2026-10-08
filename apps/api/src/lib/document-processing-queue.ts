@@ -39,6 +39,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -209,6 +210,29 @@ export const storeOcrSearchablePdfDerivative = async ({
     sizeBytes: pdfBytes.byteLength,
     write: writePdf,
   });
+};
+
+type RootTransaction = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
+
+/** Locks a run's organization and matter first; false when either is gone. */
+const lockRunParents = async (
+  tx: RootTransaction,
+  {
+    organizationId,
+    workspaceId,
+  }: {
+    organizationId: SafeId<"organization">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<boolean> => {
+  const parents = await lockForWrite(tx, {
+    organizationIds: [organizationId],
+    workspaceIds: [workspaceId],
+  });
+  return (
+    parents.organizationIds.has(organizationId) &&
+    parents.workspaceIds.has(workspaceId)
+  );
 };
 
 /**
@@ -472,7 +496,7 @@ type OcrProjectionPersistenceOutcome =
   | "source_cancelled"
   | "stale_claim";
 
-const persistOcrProjection = async ({
+export const persistOcrProjection = async ({
   claimToken,
   ciphertext,
   database,
@@ -494,6 +518,9 @@ const persistOcrProjection = async ({
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
   await database.transaction(async (tx) => {
+    if (!(await lockRunParents(tx, run))) {
+      return "source_cancelled";
+    }
     const lockedRows = await tx
       .select({
         content: fields.content,
@@ -835,6 +862,10 @@ export const processDocumentProcessingRun = async (
       .limit(1);
     const runContext = runRows.at(0);
     if (!runContext) {
+      return null;
+    }
+
+    if (!(await lockRunParents(tx, runContext))) {
       return null;
     }
 
@@ -1442,7 +1473,49 @@ const isSameNativeExtractionSource = (
   field.content.id === candidate.content.id &&
   field.content.sha256Hex === candidate.content.sha256Hex;
 
-const persistMissingNativeExtractionRuns = async (
+/** Parents first: candidates whose organization or matter is gone drop out. */
+const lockLiveNativeCandidates = async (
+  tx: RootTransaction,
+  candidates: DocumentProcessingCandidate[],
+): Promise<DocumentProcessingCandidate[]> => {
+  const parents = await lockForWrite(tx, {
+    organizationIds: candidates.map((candidate) => candidate.organizationId),
+    workspaceIds: candidates.map((candidate) => candidate.workspaceId),
+  });
+  return candidates.filter(
+    (candidate) =>
+      parents.organizationIds.has(candidate.organizationId) &&
+      parents.workspaceIds.has(candidate.workspaceId),
+  );
+};
+
+/**
+ * A projection without source provenance predates it and counts as current;
+ * otherwise it must be the candidate's exact source.
+ */
+const isCurrentNativeProjection = (
+  projection:
+    | Pick<
+        typeof extractedContent.$inferSelect,
+        | "sourceEntityVersionId"
+        | "sourceFieldId"
+        | "sourceFileId"
+        | "sourceSha256Hex"
+      >
+    | undefined,
+  candidate: DocumentProcessingCandidate,
+): boolean =>
+  projection !== undefined &&
+  ((projection.sourceEntityVersionId === null &&
+    projection.sourceFieldId === null &&
+    projection.sourceFileId === null &&
+    projection.sourceSha256Hex === null) ||
+    (projection.sourceEntityVersionId === candidate.entityVersionId &&
+      projection.sourceFieldId === candidate.fieldId &&
+      projection.sourceFileId === candidate.content.id &&
+      projection.sourceSha256Hex === candidate.content.sha256Hex));
+
+export const persistMissingNativeExtractionRuns = async (
   candidates: DocumentProcessingCandidate[],
   database: typeof rootDb,
 ): Promise<SafeId<"documentProcessingRun">[]> => {
@@ -1451,6 +1524,10 @@ const persistMissingNativeExtractionRuns = async (
   }
 
   return await database.transaction(async (tx) => {
+    const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
+    if (liveCandidates.length === 0) {
+      return [];
+    }
     const lockedEntities = await tx
       .select({
         currentVersionId: entities.currentVersionId,
@@ -1463,11 +1540,11 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             entities.id,
-            candidates.map(({ entityId }) => entityId),
+            liveCandidates.map(({ entityId }) => entityId),
           ),
           inArray(
             entities.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       )
@@ -1489,11 +1566,11 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             fields.id,
-            candidates.map(({ fieldId }) => fieldId),
+            liveCandidates.map(({ fieldId }) => fieldId),
           ),
           inArray(
             fields.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       )
@@ -1514,15 +1591,15 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             extractedContent.organizationId,
-            candidates.map((candidate) => candidate.organizationId),
+            liveCandidates.map((candidate) => candidate.organizationId),
           ),
           inArray(
             extractedContent.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
           inArray(
             extractedContent.entityId,
-            candidates.map(({ entityId }) => entityId),
+            liveCandidates.map(({ entityId }) => entityId),
           ),
         ),
       )
@@ -1531,20 +1608,14 @@ const persistMissingNativeExtractionRuns = async (
       currentProjections.map((projection) => [projection.entityId, projection]),
     );
     const queuedAt = new Date();
-    const values = candidates.flatMap((candidate) => {
+    const values = liveCandidates.flatMap((candidate) => {
       const entity = lockedEntityById.get(candidate.entityId);
       const field = currentFieldById.get(candidate.fieldId);
       const projection = currentProjectionByEntityId.get(candidate.entityId);
-      const hasCurrentProjection =
-        projection !== undefined &&
-        ((projection.sourceEntityVersionId === null &&
-          projection.sourceFieldId === null &&
-          projection.sourceFileId === null &&
-          projection.sourceSha256Hex === null) ||
-          (projection.sourceEntityVersionId === candidate.entityVersionId &&
-            projection.sourceFieldId === candidate.fieldId &&
-            projection.sourceFileId === candidate.content.id &&
-            projection.sourceSha256Hex === candidate.content.sha256Hex));
+      const hasCurrentProjection = isCurrentNativeProjection(
+        projection,
+        candidate,
+      );
       if (
         entity?.currentVersionId !== candidate.entityVersionId ||
         entity.workspaceId !== candidate.workspaceId ||

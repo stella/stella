@@ -224,6 +224,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Drizzle rolls back transaction callbacks through rejection; returning a
+  // Result would commit their writes instead of preserving the original refusal.
+  "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.

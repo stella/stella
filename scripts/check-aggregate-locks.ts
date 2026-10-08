@@ -1,10 +1,11 @@
 import { panic } from "better-result";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import {
   type AggregateLockBaselineRow,
+  type AggregateLockRekey,
   aggregateLockSourceIncluded,
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
@@ -25,6 +26,31 @@ const baselineSchema = v.array(
 );
 export const parseAggregateLockBaseline = (text: string) =>
   v.parse(baselineSchema, JSON.parse(text));
+
+/** One reviewed file per PR, named after it: `scripts/aggregate-lock-rekeys/<pr-slug>.json`. */
+export const AGGREGATE_LOCK_REKEYS_DIR = "scripts/aggregate-lock-rekeys";
+const rekeySchema = v.array(
+  v.strictObject({
+    file: v.string(),
+    from: v.string(),
+    to: v.string(),
+    fromFile: v.optional(v.string()),
+    reason: v.pipe(v.string(), v.trim(), v.minLength(1)),
+  }),
+);
+export const parseAggregateLockRekeys = (text: string): AggregateLockRekey[] =>
+  v.parse(rekeySchema, JSON.parse(text));
+const readAggregateLockRekeys = (): AggregateLockRekey[] =>
+  existsSync(AGGREGATE_LOCK_REKEYS_DIR)
+    ? readdirSync(AGGREGATE_LOCK_REKEYS_DIR)
+        .filter((name) => name.endsWith(".json"))
+        .toSorted()
+        .flatMap((name) =>
+          parseAggregateLockRekeys(
+            readFileSync(path.join(AGGREGATE_LOCK_REKEYS_DIR, name), "utf-8"),
+          ),
+        )
+    : [];
 
 const git = (args: string[]) => {
   const result = Bun.spawnSync(["git", ...args]);
@@ -126,6 +152,7 @@ export const checkAggregateLocks = () => {
     actual,
     baseline,
     previous: previousAggregateLocks(baseline),
+    rekeys: readAggregateLockRekeys(),
   });
 };
 if (import.meta.main) {
@@ -139,9 +166,15 @@ if (import.meta.main) {
           readFileSync(AGGREGATE_LOCK_BASELINE_PATH, "utf-8"),
         )
       : [];
-    const reasons = new Map(
-      existing.map((row) => [`${row.file}:${row.fingerprint}`, row.reason]),
-    );
+    const rekeys = readAggregateLockRekeys();
+    const reasons = new Map([
+      ...existing.map(
+        (row) => [`${row.file}:${row.fingerprint}`, row.reason] as const,
+      ),
+      ...rekeys.map(
+        (rekey) => [`${rekey.file}:${rekey.to}`, rekey.reason] as const,
+      ),
+    ]);
     const rows = aggregateLockBaseline(
       files.flatMap((file) =>
         aggregateLockSites(file, readFileSync(file, "utf-8")),
@@ -154,6 +187,7 @@ if (import.meta.main) {
       actual: rows,
       baseline: rows,
       previous: previousAggregateLocks(rows),
+      rekeys,
     });
     if (problems.length) {
       panic(problems.join("\n"));

@@ -362,6 +362,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
   ]),
+  fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
+    "no-section-sign-glyph/no-section-sign-glyph",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -1201,6 +1204,7 @@ const config = defineConfig({
       },
     ],
     "no-nanoid/no-nanoid": "error",
+    "no-section-sign-glyph/no-section-sign-glyph": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
@@ -1438,6 +1442,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",

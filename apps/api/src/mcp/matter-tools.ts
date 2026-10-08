@@ -2419,7 +2419,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save matter",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2508,7 +2508,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save contact",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2660,7 +2660,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save task",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2720,7 +2720,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Link contact to matter",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,

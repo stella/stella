@@ -1165,16 +1165,14 @@ const describeCapabilityHandler: McpToolHandler<
     return notFoundWithHint(id, context);
   }
 
-  // Match the static-tool surface: a gated-off tool is hidden from the list
-  // AND rejected on direct dispatch, so describing a gated-off capability is
-  // refused too (never leak a disabled feature's schema by direct id).
+  // Caller-hidden entries share the unknown-id contract, including hints.
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return notFoundWithHint(id, context);
+  }
   if (!contextFeatureEnabled(entry.feature, context)) {
     return entry.featureId === undefined
       ? featureDisabledResult(entry.feature)
       : notFoundResult("Not found");
-  }
-  if (!capabilityFeatureEnabled(entry, context)) {
-    return notFoundResult("Not found");
   }
 
   const loaded = await loadEndpointGuarded(id, "describe_capability");
@@ -1650,17 +1648,14 @@ const invokeCapabilityHandler = async ({
     return notFoundWithHint(id, context);
   }
 
-  // 2. Deployment feature gate. Mirrors the static-tool dispatch guard
-  // (tools.ts): the list surface hides a gated-off entry, and this closes the
-  // guess-the-id bypass. Runs before every other gate (validateOnly included)
-  // so a disabled feature leaks nothing about its capabilities.
+  // 2. Caller admission precedes deployment availability for discovery parity.
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return notFoundWithHint(id, context);
+  }
   if (!contextFeatureEnabled(entry.feature, context)) {
     return entry.featureId === undefined
       ? featureDisabledResult(entry.feature)
       : notFoundResult("Not found");
-  }
-  if (!capabilityFeatureEnabled(entry, context)) {
-    return notFoundResult("Not found");
   }
 
   // 3. Disposition / fidelity. token/public capabilities self-authorize from a
