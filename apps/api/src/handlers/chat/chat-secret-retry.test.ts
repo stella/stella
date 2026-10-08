@@ -18,11 +18,9 @@ const scriptedTransaction = (selects: unknown[][]) => {
     };
     return chain;
   };
+  const handle = { execute: async () => [{ id: "locked" }], select };
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- scripted handle answers only the calls recovery makes
-  return {
-    execute: async () => [{ id: "locked" }],
-    select,
-  } as unknown as Transaction;
+  return handle as unknown as Transaction;
 };
 
 describe("chat secret retry lock order", () => {

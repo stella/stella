@@ -10,7 +10,7 @@ import {
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 
 import type { Transaction } from "@/api/db/root";
-import { resultTx } from "@/api/db/safe-db";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import {
   chatMessages,
   chatThreads,
@@ -36,6 +36,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
@@ -295,7 +296,7 @@ const submitSecret = createSafeRootHandler(
       );
     }
     const result = yield* Result.await(
-      resultTx<SubmitOutcome>(safeDb, async (tx) => {
+      abortableTx(safeDb, async (tx): Promise<SubmitOutcome> => {
         await withAggregateLock({
           aggregate: "chatThread",
           tx,
@@ -319,7 +320,7 @@ const submitSecret = createSafeRootHandler(
             .limit(1)
         ).at(0);
         if (!thread) {
-          return Result.err(
+          return abortTransaction(
             new HandlerError({ status: 404, message: "Chat thread not found" }),
           );
         }
@@ -333,7 +334,7 @@ const submitSecret = createSafeRootHandler(
         });
         // Commit the consumed retry attempt; the conflict is answered after.
         if (recovery.kind !== "absent") {
-          return Result.ok(recovery);
+          return recovery;
         }
         const scope = {
           tx,
@@ -344,7 +345,7 @@ const submitSecret = createSafeRootHandler(
         };
         const input = await readPendingRequest(scope);
         if (input.isErr()) {
-          return Result.err(input.error);
+          return abortTransaction(input.error);
         }
         if (secretDecision.decision === "decline") {
           const receipt = await storeChatSecret({
@@ -365,10 +366,10 @@ const submitSecret = createSafeRootHandler(
               savedForFuture: false,
             },
           });
-          return Result.ok({
+          return {
             kind: "receipt" as const,
             receipt: { ...receipt, target: input.value.target },
-          });
+          };
         }
         const connector = await readEnabledConnector({
           tx,
@@ -377,7 +378,7 @@ const submitSecret = createSafeRootHandler(
           connectorSlug: input.value.target.connectorSlug,
         });
         if (!connector || connector.authType !== "bearer") {
-          return Result.err(
+          return abortTransaction(
             new HandlerError({
               status: 404,
               message: "Connector does not accept this credential",
@@ -389,7 +390,7 @@ const submitSecret = createSafeRootHandler(
             secretDecision.targetConnection.connectionId ||
           new URL(connector.url).host !== secretDecision.targetConnection.host
         ) {
-          return Result.err(
+          return abortTransaction(
             new HandlerError({
               status: 409,
               code: "CHAT_PRIVATE_INPUT_TARGET_CHANGED",
@@ -402,7 +403,7 @@ const submitSecret = createSafeRootHandler(
           secretDecision.decision === "provide" &&
           !envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY
         ) {
-          return Result.err(
+          return abortTransaction(
             new HandlerError({
               status: 503,
               message: "Private input storage is unavailable",
@@ -421,7 +422,7 @@ const submitSecret = createSafeRootHandler(
           secretDecision,
         });
         if (encryptedDecision.isErr()) {
-          return Result.err(encryptedDecision.error);
+          return abortTransaction(encryptedDecision.error);
         }
         const encrypted = encryptedDecision.value;
         const saved = await storeChatSecret({
@@ -455,13 +456,20 @@ const submitSecret = createSafeRootHandler(
               secretDecision.saveForFuture,
           },
         });
-        return Result.ok({
+        return {
           kind: "receipt" as const,
           receipt: { ...saved, target: input.value.target },
-        });
+        };
       }),
     );
     return submitOutcomeResult(result);
   },
 );
+// The thread fence comes first; the request's turn and receipt fences follow
+// in rank order inside the same transaction.
+declareAggregateMutation(submitSecret.handler, {
+  type: "aggregate",
+  aggregates: ["chatThread"],
+});
+
 export default submitSecret;

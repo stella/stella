@@ -278,12 +278,11 @@ describe("request secret card", () => {
       },
       continueRequestSecret: async (_toolCallId, receipt) => {
         continuations.push(receipt);
-        if (continuations.length > 1) {
-          return Promise.resolve();
+        if (continuations.length === 1) {
+          await new Promise<void>((_resolve, reject) => {
+            rejectFirst = reject;
+          });
         }
-        return new Promise<void>((_resolve, reject) => {
-          rejectFirst = reject;
-        });
       },
     });
 

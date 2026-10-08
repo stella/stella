@@ -505,12 +505,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:@tanstack/ai-mcp"],
   },
   {
-    path: "apps/api/src/lib/mcp-upstream/chat-secret.ts",
-    class: "third-party",
-    reason: "Calls a configured MCP connector with a scoped private reference.",
-    transports: ["module:@tanstack/ai-mcp"],
-  },
-  {
     path: "apps/api/src/lib/auth/demo-account-policy.ts",
     class: "vendor-sdk",
     reason: "Uses Better Auth middleware APIs for demo account policy.",
