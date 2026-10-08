@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { SEARCH_PAGE_REACH } from "@stll/api-contract/search";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { withPinnedDecisions } from "@/api/handlers/case-law/decisions/search-identity-role";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -1803,6 +1804,61 @@ describe("a page addressed by offset", () => {
 
     expect(page.pageRanked).toHaveLength(20);
     expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+  });
+
+  test("with decisions pinned above the text results, offset pages match the cursor chain with no gap or repeat", async () => {
+    // The composition the case-law search performs for an entry carrying a
+    // reference among other words: the decisions it names are pinned above
+    // the first page and dropped from the text ranking on every page.
+    engineHits = Array.from({ length: 300 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+    const limit = 25;
+    // One named decision outside the text ranking, one inside page 1's text
+    // slice and one inside page 2's.
+    const named = ["named-elsewhere", documentId(3), documentId(30)];
+    const pinnedIds = new Set(named);
+    const pinned = named.map((id) => ({ id }));
+    const shown = (
+      page: Awaited<ReturnType<typeof readOffsetPage>>,
+      prefix: readonly { id: string }[],
+    ) =>
+      withPinnedDecisions({
+        pinned: prefix,
+        pinnedIds,
+        ranked: page.pageRanked.map(({ id }) => ({ id })),
+      }).map(({ id }) => id);
+
+    const firstRead = await readOffsetPage({ limit, skip: 0 });
+    const first = shown(firstRead, pinned);
+    const byCursor: string[][] = [];
+    let cursor = firstRead.nextCursor;
+    for (let page = 0; page < 2; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      byCursor.push(shown(read, []));
+      cursor = read.nextCursor;
+    }
+    const byOffset = await Promise.all(
+      [1, 2].map(async (page) =>
+        shown(await readOffsetPage({ limit, skip: page * limit }), []),
+      ),
+    );
+
+    expect(byOffset).toEqual(byCursor);
+    const reading = [...first, ...byOffset.flat()];
+    expect(new Set(reading).size).toBe(reading.length);
+    // Every text result up to the third page's end is read once, in order,
+    // after the named decisions.
+    expect(reading).toEqual([
+      ...named,
+      ...Array.from({ length: 3 * limit }, (_, index) =>
+        documentId(index),
+      ).filter((id) => !pinnedIds.has(id)),
+    ]);
   });
 
   test("a continuation of an offset page replays as deep as its cursor says", () => {
