@@ -1895,9 +1895,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           postLogin: {
             page: OAUTH_UI_ORGANIZATION_PATH,
             shouldRedirect: async ({
-              headers,
               scopes,
               session,
+              user,
             }): Promise<boolean> => {
               const needsOrganization = scopes.some(isMcpResourceScope);
               if (!needsOrganization) {
@@ -1913,14 +1913,19 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                 return false;
               }
 
-              const organizations: { id: string }[] =
-                await auth.api.listOrganizations({
-                  headers,
-                });
+              // Read the memberships directly: an internal call to the
+              // organization list endpoint carries no request method, so the
+              // account plugins' organization rules cannot tell it is a read.
+              // Two rows already decide the answer.
+              const memberships = await rootDb
+                .select({ organizationId: member.organizationId })
+                .from(member)
+                .where(eq(member.userId, user.id))
+                .limit(2);
 
               return (
-                organizations.length !== 1 ||
-                organizations.at(0)?.id !== activeOrganizationId
+                memberships.length !== 1 ||
+                memberships.at(0)?.organizationId !== activeOrganizationId
               );
             },
             consentReferenceId: ({ scopes, session }) => {
