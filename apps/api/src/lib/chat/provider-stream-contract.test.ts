@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/chat/provider-stream-contract";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const started: StreamChunk = {
@@ -543,3 +544,115 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
     ).toEqual(["call-1"]);
   });
 }
+
+describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
+  const openCall = {
+    id: "call-1",
+    type: "function",
+    function: { name: "delete", arguments: "{}" },
+  } as const;
+
+  /** The body `provider` sends to continue a tool-use turn holding `thinking`. */
+  const continuationBody = async (
+    provider: ReasoningProvider,
+    thinking: ModelMessage["thinking"],
+    modelOptions: Record<string, unknown>,
+  ) => {
+    const { bodies, fetch } = recordingFetch(refused);
+    const adapter = reasoningAdapter(provider, fetch);
+    for await (const _chunk of adapter.chatStream({
+      logger: resolveDebugOption(false),
+      messages: [
+        { role: "user", content: "Delete the draft." },
+        {
+          role: "assistant",
+          content: null,
+          toolCalls: [openCall],
+          ...(thinking === undefined ? {} : { thinking }),
+        },
+        {
+          role: "tool",
+          toolCallId: openCall.id,
+          content: JSON.stringify({ status: "completed" }),
+        },
+      ],
+      model: adapter.model,
+      modelOptions,
+    })) {
+      // The refusal ends the stream once the request is written.
+    }
+    expect(bodies).toHaveLength(1);
+    const body: unknown = bodies.at(0);
+    return isRecord(body) ? body : panic("The request body is not an object");
+  };
+
+  /** Each Anthropic content block as role, type and the call it names. */
+  const anthropicBlocks = (body: Record<string, unknown>) => {
+    const messages = body["messages"];
+    return (Array.isArray(messages) ? messages : []).flatMap(
+      (message: unknown) => {
+        if (!isRecord(message) || !Array.isArray(message["content"])) {
+          return [];
+        }
+        const role = message["role"];
+        return message["content"].flatMap((block: unknown) =>
+          isRecord(block)
+            ? [
+                {
+                  role,
+                  type: block["type"],
+                  call: block["id"] ?? block["tool_use_id"],
+                },
+              ]
+            : [],
+        );
+      },
+    );
+  };
+
+  test("Anthropic continues it with thinking disabled for that request and the call still answered", async () => {
+    // Stored before reasoning carried provenance: it cannot be replayed.
+    const body = await continuationBody(
+      "anthropic",
+      [{ content: REASONING, signature: "stored-signature" }],
+      { thinking: { type: "adaptive" } },
+    );
+    expect(body["thinking"]).toEqual({ type: "disabled" });
+    const blocks = anthropicBlocks(body);
+    expect(blocks.filter(({ type }) => type === "thinking")).toEqual([]);
+    const use = blocks.findIndex(({ type }) => type === "tool_use");
+    const result = blocks.findIndex(({ type }) => type === "tool_result");
+    expect(blocks.at(use)).toEqual({
+      role: "assistant",
+      type: "tool_use",
+      call: openCall.id,
+    });
+    expect(blocks.at(result)).toEqual({
+      role: "user",
+      type: "tool_result",
+      call: openCall.id,
+    });
+    expect(result).toBeGreaterThan(use);
+  });
+
+  test("OpenAI continues it with its reasoning options unchanged", async () => {
+    const body = await continuationBody(
+      "openai",
+      [{ content: REASONING, signature: "stored-signature" }],
+      { reasoning: { effort: "medium" } },
+    );
+    expect(body["reasoning"]).toMatchObject({ effort: "medium" });
+    expect(body["thinking"]).toBeUndefined();
+  });
+
+  test("Anthropic keeps thinking when the turn's own reasoning is replayed", async () => {
+    const thinking = await reasoningSignedBy("anthropic");
+    const body = await continuationBody("anthropic", [thinking], {
+      thinking: { type: "adaptive" },
+    });
+    expect(body["thinking"]).toEqual({ type: "adaptive" });
+    expect(
+      anthropicBlocks(body).filter(({ type }) => type === "thinking"),
+    ).toHaveLength(1);
+  });
+});

@@ -9,6 +9,7 @@ import {
 
 import {
   buildClosedTranscript,
+  continuationThinkingFor,
   TOOL_CLOSE_KINDS,
 } from "@/api/lib/chat/closed-transcript";
 
@@ -294,5 +295,91 @@ describe("closed provider transcript", () => {
     expect(closed.at(0)?.toolCalls?.at(0)?.metadata).toEqual({});
     expect(closed.at(0)?.toolCalls?.at(0)?.id).toBe("call-1");
     expect(closed.at(1)?.toolCallId).toBe("call-1");
+  });
+});
+
+describe("continuing a tool-use turn whose reasoning was not replayed", () => {
+  const anthropic = {
+    provider: "anthropic",
+    modelId: "claude-sonnet-4-6",
+  } as const;
+  const result = {
+    role: "tool",
+    toolCallId: "call-1",
+    content: JSON.stringify({ status: "completed" }),
+  } satisfies ModelMessage;
+  const decide = (
+    messages: readonly ModelMessage[],
+    decisionTarget: { provider: "anthropic" | "openai"; modelId: string },
+    thinkingRequested = true,
+  ) => {
+    const drops: unknown[] = [];
+    const transcript = buildClosedTranscript({
+      messages,
+      target: decisionTarget,
+      onReasoningDropped: () => undefined,
+    });
+    const decision = continuationThinkingFor({
+      transcript,
+      target: decisionTarget,
+      thinkingRequested,
+      onReasoningDropped: (drop) => drops.push(drop),
+    });
+    return { decision, drops };
+  };
+
+  test("Anthropic thinking is disabled for that request, and the decision is counted", () => {
+    const stored = {
+      ...call,
+      thinking: [{ content: "Stored", signature: "stored" }],
+    } satisfies ModelMessage;
+    expect(decide([stored, result], anthropic)).toEqual({
+      decision: "disabled",
+      drops: [
+        {
+          fromProvider: "unknown",
+          toProvider: "anthropic",
+          reason: "continuation-thinking-disabled",
+        },
+      ],
+    });
+  });
+
+  test("a turn whose own reasoning is replayed keeps thinking as requested", () => {
+    const own = {
+      ...call,
+      thinking: [
+        {
+          content: "Own",
+          signature: "own",
+          provenance: {
+            provider: "anthropic",
+            model: anthropic.modelId,
+            format: "anthropic-thinking-signature",
+          },
+        },
+      ],
+    };
+    expect(decide([own, result], anthropic)).toEqual({
+      decision: "as-requested",
+      drops: [],
+    });
+  });
+
+  test("other providers, unrequested thinking and answered turns keep the request as built", () => {
+    expect(decide([call, result], target)).toEqual({
+      decision: "as-requested",
+      drops: [],
+    });
+    expect(decide([call, result], anthropic, false)).toEqual({
+      decision: "as-requested",
+      drops: [],
+    });
+    expect(
+      decide(
+        [call, result, { role: "user", content: "Next question" }],
+        anthropic,
+      ),
+    ).toEqual({ decision: "as-requested", drops: [] });
   });
 });

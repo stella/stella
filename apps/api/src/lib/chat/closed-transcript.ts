@@ -31,14 +31,7 @@ const closedTranscriptSchema = v.pipe(
 /** Only buildClosedTranscript closes calls and admits reasoning for replay. */
 export type ClosedTranscript = v.InferOutput<typeof closedTranscriptSchema>;
 
-type ReplayDrop = {
-  fromProvider: TanStackAIProvider | "unknown";
-  toProvider: TanStackAIProvider;
-  reason:
-    | "missing-provenance"
-    | "incompatible-provenance"
-    | "unpaired-reasoning";
-};
+type ReplayDrop = Parameters<typeof emitReasoningReplayDroppedMetric>[0];
 type BuildClosedTranscriptOptions = {
   messages: readonly ModelMessage[];
   target: { provider: TanStackAIProvider; modelId: string };
@@ -143,6 +136,62 @@ export const buildClosedTranscript = ({
     closedTranscriptSchema,
     closeToolCalls(paired, target.provider),
   );
+};
+
+export const CONTINUATION_THINKING = ["as-requested", "disabled"] as const;
+export type ContinuationThinking = (typeof CONTINUATION_THINKING)[number];
+
+type ContinuationThinkingOptions = {
+  transcript: ClosedTranscript;
+  target: { provider: TanStackAIProvider; modelId: string };
+  /** Whether the request as built asks the model to think. */
+  thinkingRequested: boolean;
+  onReasoningDropped?: (drop: ReplayDrop) => void;
+};
+
+/**
+ * Anthropic continues a tool-use turn with thinking enabled only when the
+ * turn's last assistant message starts with that turn's thinking. A turn
+ * whose reasoning cannot be replayed here (started on another model, or
+ * stored before reasoning carried its provenance) is therefore continued
+ * with thinking disabled for this one request; the next user turn thinks as
+ * requested again. The decision is counted, never silent.
+ */
+export const continuationThinkingFor = ({
+  transcript,
+  target,
+  thinkingRequested,
+  onReasoningDropped = emitReasoningReplayDroppedMetric,
+}: ContinuationThinkingOptions): ContinuationThinking => {
+  const capabilities = getModelReasoningCapabilities(target.modelId);
+  if (
+    target.provider !== "anthropic" ||
+    !thinkingRequested ||
+    capabilities === null ||
+    capabilities.anthropicThinking === "none"
+  ) {
+    return "as-requested";
+  }
+  const lastAssistant = transcript.findLastIndex(
+    ({ role }) => role === "assistant",
+  );
+  const openTurn = transcript.at(lastAssistant);
+  if (
+    lastAssistant === -1 ||
+    openTurn === undefined ||
+    openTurn.toolCalls === undefined ||
+    openTurn.toolCalls.length === 0 ||
+    transcript.slice(lastAssistant + 1).some(({ role }) => role !== "tool") ||
+    (openTurn.thinking !== undefined && openTurn.thinking.length > 0)
+  ) {
+    return "as-requested";
+  }
+  onReasoningDropped({
+    fromProvider: "unknown",
+    toProvider: target.provider,
+    reason: "continuation-thinking-disabled",
+  });
+  return "disabled";
 };
 
 const closeToolCalls = (

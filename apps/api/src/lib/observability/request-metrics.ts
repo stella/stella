@@ -38,7 +38,8 @@ export const emitReasoningReplayDroppedMetric = (dimensions: {
   reason:
     | "missing-provenance"
     | "incompatible-provenance"
-    | "unpaired-reasoning";
+    | "unpaired-reasoning"
+    | "continuation-thinking-disabled";
 }): void => {
   const name = "chat.reasoning_replay_dropped";
   writeMetricLine({

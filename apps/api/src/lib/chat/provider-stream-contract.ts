@@ -10,8 +10,14 @@ import type { ReasoningProvenance, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
-import type { ClosedTranscript } from "@/api/lib/chat/closed-transcript";
+import {
+  buildClosedTranscript,
+  continuationThinkingFor,
+} from "@/api/lib/chat/closed-transcript";
+import type {
+  ClosedTranscript,
+  ContinuationThinking,
+} from "@/api/lib/chat/closed-transcript";
 import {
   refuseTurnPausingRequest,
   withDecidedStopReasons,
@@ -428,6 +434,36 @@ async function* withProducedReasoning({
   }
 }
 
+/** Whether provider options ask an Anthropic model to think. */
+const requestsThinking = (modelOptions: unknown): boolean => {
+  if (!isRecord(modelOptions)) {
+    return false;
+  }
+  const thinking = modelOptions["thinking"];
+  return isRecord(thinking) && thinking["type"] !== "disabled";
+};
+
+const withContinuationThinking = (
+  options: ClosedProviderRequest,
+  decision: ContinuationThinking,
+): ClosedProviderRequest => {
+  switch (decision) {
+    case "as-requested":
+      return options;
+    case "disabled":
+      return {
+        ...options,
+        modelOptions: {
+          ...(isRecord(options.modelOptions) ? options.modelOptions : {}),
+          thinking: { type: "disabled" },
+        },
+      };
+    default:
+      decision satisfies never;
+      return panic(`Unhandled continuation thinking: ${String(decision)}`);
+  }
+};
+
 const contracted = (contract: StreamContract): AnyTextAdapter => {
   const { adapter, ledger, provider, reasoning } = contract;
   const decided = (chunks: AsyncIterable<StreamChunk>) =>
@@ -487,12 +523,23 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
   const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
     const closed = closeMessages(requested, reasoning);
     const options =
-      closed === undefined ? requested : { ...requested, messages: closed };
+      closed === undefined
+        ? requested
+        : withContinuationThinking(
+            { ...requested, messages: closed },
+            provider === undefined
+              ? "as-requested"
+              : continuationThinkingFor({
+                  transcript: closed,
+                  target: { provider, modelId: requested.model },
+                  thinkingRequested: requestsThinking(requested.modelOptions),
+                }),
+          );
     refuseTurnPausingRequest(provider, options);
     const dispatched =
       closed === undefined
         ? adapter.chatStream(requested)
-        : dispatchClosedRequest(adapter, { ...requested, messages: closed });
+        : dispatchClosedRequest(adapter, { ...options, messages: closed });
     const produced =
       provider === undefined
         ? dispatched
