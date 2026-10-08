@@ -151,6 +151,7 @@ import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -1916,16 +1917,19 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               // Read the memberships directly: an internal call to the
               // organization list endpoint carries no request method, so the
               // account plugins' organization rules cannot tell it is a read.
-              // Two rows already decide the answer.
-              const memberships = await rootDb
-                .select({ organizationId: member.organizationId })
-                .from(member)
-                .where(eq(member.userId, user.id))
-                .limit(2);
+              // More than one membership always needs the picker.
+              const memberships = await readBounded(
+                rootDb
+                  .select({ organizationId: member.organizationId })
+                  .from(member)
+                  .where(eq(member.userId, user.id)),
+                1,
+              );
 
               return (
-                memberships.length !== 1 ||
-                memberships.at(0)?.organizationId !== activeOrganizationId
+                memberships.type === "overflow" ||
+                memberships.rows.length !== 1 ||
+                memberships.rows.at(0)?.organizationId !== activeOrganizationId
               );
             },
             consentReferenceId: ({ scopes, session }) => {
