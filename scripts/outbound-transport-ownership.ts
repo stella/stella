@@ -11,6 +11,14 @@ import {
 } from "./outbound-transport-census.ts";
 import { parseSource } from "./parse-memo.ts";
 
+const INDIRECT_TRANSPORT = "indirect:transport";
+const LOCAL_MODULE_LOADER_OWNER =
+  "packages/start-runtime/src/local-module-loader.ts";
+export const LOCAL_MODULE_CAPABILITIES: ReadonlySet<string> = new Set([
+  "local:module-import",
+  "local:module-loader",
+]);
+
 const GLOBAL_ROOTS = new Set(["globalThis", "self", "window", "Bun"]);
 const GLOBAL_TRANSPORT_NAMES = new Set([
   "fetch",
@@ -105,10 +113,26 @@ const memberName = (
   if (ts.isPropertyAccessExpression(node)) {
     return node.name.text;
   }
-  if (ts.isStringLiteralLike(node.argumentExpression)) {
-    return node.argumentExpression.text;
+  const argument = unwrap(node.argumentExpression);
+  if (ts.isStringLiteralLike(argument)) {
+    return argument.text;
   }
   return undefined;
+};
+
+const bindingMemberName = (element: ts.BindingElement) => {
+  if (element.dotDotDotToken) {
+    return undefined;
+  }
+  const name = element.propertyName ?? element.name;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
+    return name.text;
+  }
+  if (!ts.isComputedPropertyName(name)) {
+    return undefined;
+  }
+  const value = unwrap(name.expression);
+  return ts.isStringLiteralLike(value) ? value.text : undefined;
 };
 
 const bindingNames = (name: ts.BindingName): string[] => {
@@ -153,12 +177,10 @@ const dynamicLoadNames = (node: ts.CallExpression): string[] | null => {
     if (parent.name.elements.some((element) => element.dotDotDotToken)) {
       return null;
     }
-    return parent.name.elements.flatMap((element) => {
-      const name = element.propertyName ?? element.name;
-      return ts.isIdentifier(name) || ts.isStringLiteralLike(name)
-        ? [name.text]
-        : [];
-    });
+    const names = parent.name.elements.map(bindingMemberName);
+    return names.some((name) => name === undefined)
+      ? null
+      : names.filter((name) => name !== undefined);
   }
   if (
     ts.isPropertyAccessExpression(parent) ||
@@ -302,7 +324,11 @@ const registerGlobal = ({
   object,
   name,
 }: RegisterGlobalOptions): void => {
-  if (!object || !name) {
+  if (!object) {
+    return;
+  }
+  if (name === undefined) {
+    capabilities.add(INDIRECT_TRANSPORT);
     return;
   }
   if (
@@ -336,6 +362,13 @@ const registerModule = ({
     (names === null || names.includes(PERMIT_GRANT))
   ) {
     capabilities.add("permit:grant");
+  }
+  if (
+    module === "@stll/start-runtime/local-module-loader" ||
+    module === canonicalModuleId(LOCAL_MODULE_LOADER_OWNER, file)
+  ) {
+    capabilities.add("local:module-loader");
+    return;
   }
   const bunClientNames = ["S3Client", "SQL", "RedisClient", "connect", "fetch"];
   if (
@@ -415,12 +448,16 @@ type VisitModuleLoadOptions = {
   node: ts.Node;
   scopes: BindingScopes;
   register: ModuleRegistration;
+  file: string;
+  capabilities: Set<string>;
 };
 
 const visitModuleLoad = ({
   node,
   scopes,
   register,
+  file,
+  capabilities,
 }: VisitModuleLoadOptions): void => {
   if (
     ts.isImportDeclaration(node) &&
@@ -465,9 +502,19 @@ const visitModuleLoad = ({
         lookupBinding({ scopes, node, name: "require" }) === undefined))
   ) {
     const specifier = node.arguments.at(0);
-    if (specifier && ts.isStringLiteralLike(specifier)) {
-      register(specifier.text, dynamicLoadNames(node));
+    const value = specifier && unwrap(specifier);
+    if (value && ts.isStringLiteralLike(value)) {
+      register(value.text, dynamicLoadNames(node));
+      return;
     }
+    if (
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      file === LOCAL_MODULE_LOADER_OWNER
+    ) {
+      capabilities.add("local:module-import");
+      return;
+    }
+    capabilities.add(INDIRECT_TRANSPORT);
   }
 };
 
@@ -517,16 +564,35 @@ const visitGlobalReference = ({
     node.initializer
   ) {
     for (const element of node.name.elements) {
-      const name = element.propertyName ?? element.name;
-      const member =
-        ts.isIdentifier(name) || ts.isStringLiteralLike(name)
-          ? name.text
-          : undefined;
-      registerGlobal({
-        capabilities,
-        object: globalObjectName({ scopes, node: node.initializer }),
-        name: member,
-      });
+      const member = bindingMemberName(element);
+      const object = globalObjectName({ scopes, node: node.initializer });
+      if (object && member !== undefined && GLOBAL_ROOTS.has(member)) {
+        capabilities.add(INDIRECT_TRANSPORT);
+      }
+      registerGlobal({ capabilities, object, name: member });
+    }
+  }
+  if (ts.isCallExpression(node)) {
+    const callee = unwrap(node.expression);
+    if (
+      (ts.isPropertyAccessExpression(callee) ||
+        ts.isElementAccessExpression(callee)) &&
+      memberName(callee) === "get" &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "Reflect" &&
+      lookupBinding({ scopes, node: callee.expression, name: "Reflect" }) ===
+        undefined
+    ) {
+      const target = node.arguments.at(0);
+      const key = node.arguments.at(1);
+      const value = key && unwrap(key);
+      if (target) {
+        registerGlobal({
+          capabilities,
+          object: globalObjectName({ scopes, node: target }),
+          name: value && ts.isStringLiteralLike(value) ? value.text : undefined,
+        });
+      }
     }
   }
   if (
@@ -559,7 +625,13 @@ const visitSource = (source: ts.SourceFile, context: VisitContext): void => {
     if (ts.isTypeNode(node)) {
       return;
     }
-    visitModuleLoad({ node, scopes: context.scopes, register });
+    visitModuleLoad({
+      node,
+      scopes: context.scopes,
+      register,
+      file: context.file,
+      capabilities: context.capabilities,
+    });
     visitGlobalReference({
       node,
       scopes: context.scopes,
@@ -641,6 +713,11 @@ export const validateOutboundTransportCensus = ({
           `${file}: permit creation belongs to a listed direct boundary`,
         );
       }
+    }
+    if (references.includes(INDIRECT_TRANSPORT)) {
+      problems.push(
+        `${file}: indirect acquisition belongs to the bounded local module owner`,
+      );
     }
     const transports = references.filter(
       (reference) => reference !== "permit:grant",

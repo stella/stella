@@ -48,6 +48,8 @@ import {
 } from "./lint-suppressions";
 import {
   isApiProductionModule,
+  isOutboundProductionModule,
+  LOCAL_MODULE_CAPABILITIES,
   outboundTransportReferences,
 } from "./outbound-transport-ownership";
 import {
@@ -2427,6 +2429,30 @@ const countParserValidatorLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
+const countOutboundIndirectAccessExceptions = (
+  context: ScanContext,
+): RepoMetricResult => {
+  const files: Record<string, number> = {};
+  for (const file of scanRepoFiles(context, [
+    "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "apps/{web,collab}/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "packages/*/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+  ])) {
+    if (!isOutboundProductionModule(file)) {
+      continue;
+    }
+    if (
+      outboundTransportReferences({
+        file,
+        text: readSource(context, file),
+      }).includes("indirect:transport")
+    ) {
+      files[file] = 1;
+    }
+  }
+  return { count: Object.keys(files).length, files };
+};
+
 // --- Repo-scope counters ----------------------------------------------------
 // Duplication is invisible to a per-file counter: the second copy of a helper
 // is a perfectly ordinary file. These counters compare files against each
@@ -2982,6 +3008,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "repo",
+    id: "outbound-indirect-access-exceptions",
+    description:
+      "Unclassified indirect transport acquisition outside the bounded local module owner; each owner only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: countOutboundIndirectAccessExceptions,
+  },
+  {
+    scope: "repo",
     id: "api-legacy-outbound-transports",
     description:
       "Raw transport and client capabilities acquired by each classified API owner; each file's capability set only shrinks",
@@ -3002,7 +3037,10 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
           file,
           text: readSource(context, file),
         })) {
-          if (capability !== "permit:grant") {
+          if (
+            capability !== "permit:grant" &&
+            !LOCAL_MODULE_CAPABILITIES.has(capability)
+          ) {
             keys.push(`${file}#${capability}`);
           }
         }
@@ -5995,6 +6033,10 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
       id: "internal-module-mock-ledger-entries",
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
     },
+    {
+      id: "outbound-indirect-access-exceptions",
+      expected: 1,
+    },
   ]) {
     const metric = requireSnapshot(snapshot, id);
     if (metric.count !== expected) {
@@ -6627,6 +6669,11 @@ const runSelfTest = (): number => {
       root,
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/runtime.ts",
+      "const module = await import(mod);",
     );
     writeFixture(
       root,

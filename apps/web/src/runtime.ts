@@ -6,6 +6,8 @@ import {
   verifyServerModuleGraph,
 } from "@stll/start-runtime";
 
+import serverEntry from "./server/server.js";
+
 const DEFAULT_PORT = 3002;
 const DEFAULT_HOST = "0.0.0.0";
 const SERVER_DIRECTORY_URL = new URL("server/", import.meta.url);
@@ -15,18 +17,9 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   "Cross-Origin-Embedder-Policy": "credentialless",
 } as const;
 
-const serverEntry: unknown = await import(
-  new URL("server/server.js", import.meta.url).href
-);
-const handler =
-  typeof serverEntry === "object" &&
-  serverEntry !== null &&
-  "default" in serverEntry
-    ? serverEntry.default
-    : null;
 const runtime = createStartRuntime({
   clientDirectoryUrl: CLIENT_DIRECTORY_URL,
-  handler,
+  handler: serverEntry,
   responseHeaders: CROSS_ORIGIN_ISOLATION_HEADERS,
 });
 

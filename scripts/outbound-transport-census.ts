@@ -32,6 +32,32 @@ export type OutboundTransportCensusEntry = {
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "packages/start-runtime/src/local-module-loader.ts",
+    class: "package-owned-client",
+    reason:
+      "Imports trusted local modules after resolving entry paths inside a declared root.",
+    transports: ["local:module-import"],
+  },
+  {
+    path: "packages/start-runtime/src/runtime.ts",
+    class: "package-owned-client",
+    reason: "Verifies emitted server modules through the bounded local loader.",
+    transports: ["local:module-loader"],
+  },
+  {
+    path: "apps/api/scripts/lib/enumerate-safe-handlers.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Loads handler modules inside the repository handlers directory.",
+    transports: ["local:module-loader"],
+  },
+  {
+    path: "apps/api/scripts/record-docx-engine-parity.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Loads the selected archived engine inside the recorder's temporary directory.",
+    transports: ["local:module-loader"],
+  },
+  {
     path: "apps/api/scripts/ai-provider-cassette-probe.ts",
     class: "vendor-sdk",
     reason:
