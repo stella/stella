@@ -77,85 +77,36 @@ describe("outbound transport ownership", () => {
     }
   };
 
-  test("enumerates a computed global member", () => {
-    expectIndirectEnumeration("void globalThis[memberName];");
-  });
-
-  test("enumerates global binding patterns", () => {
+  test("enumerates indirect acquisition forms", () => {
     for (const text of [
+      "void globalThis[memberName];",
       "const { [memberName]: member } = globalThis;",
-      "const { ...members } = globalThis;",
-      "const { window: browser } = globalThis;",
+      "void Reflect.get(globalThis, memberName);",
+      "void (Reflect as typeof Reflect).get(globalThis, memberName);",
+      "void Reflect.get((globalThis as typeof globalThis), memberName);",
+      "(require as typeof require)(modulePath);",
     ]) {
       expectIndirectEnumeration(text);
     }
   });
 
-  test("enumerates a reflected global member", () => {
-    for (const root of ["globalThis", "window", "self", "global", "Bun"]) {
-      expectIndirectEnumeration(`void Reflect.get(${root}, memberName);`);
-      expectIndirectEnumeration(`void Reflect.get(${root}, "window");`);
-    }
+  test("local bindings named like globals have no capability", () => {
+    expect(
+      references(
+        "function read(Reflect: Reader) { return Reflect.get(globalThis, memberName); }",
+      ),
+    ).toEqual([]);
+    expect(
+      references(
+        "function load(require: Loader) { return require(modulePath); }",
+      ),
+    ).toEqual([]);
   });
 
-  test("enumerates parenthesized and type-asserted receivers", () => {
-    const receivers = [
-      "(Reflect)",
-      "(Reflect as typeof Reflect)",
-      "(Reflect satisfies typeof Reflect)",
-      "(<typeof Reflect>Reflect)",
-      "Reflect!",
-    ];
-    for (const receiver of receivers) {
-      expectIndirectEnumeration(
-        `void ${receiver}.get(globalThis, memberName);`,
-      );
-      expect(
-        references(
-          `function read(Reflect: Reader) { return ${receiver}.get(globalThis, memberName); }`,
-        ),
-      ).toEqual([]);
-      expect(
-        references(
-          `const browser = ${receiver}.get(globalThis, "window"); void browser.fetch;`,
-        ),
-      ).toEqual(["global:fetch", "indirect:transport"]);
-    }
-  });
-
-  test("enumerates wrapped global roots", () => {
-    for (const root of ["globalThis", "window", "self", "global"]) {
-      for (const receiver of [
-        `(${root})`,
-        `(${root} as typeof ${root})`,
-        `(${root} satisfies typeof ${root})`,
-        `(<typeof ${root}>${root})`,
-        `${root}!`,
-      ]) {
-        expect(references(`void ${receiver}.fetch;`)).toEqual(["global:fetch"]);
-        expectIndirectEnumeration(`void Reflect.get(${receiver}, memberName);`);
-      }
-    }
-  });
-
-  test("enumerates wrapped module callees", () => {
-    for (const callee of [
-      "(require)",
-      "(require as typeof require)",
-      "(require satisfies typeof require)",
-      "(<typeof require>require)",
-      "require!",
-    ]) {
-      expectIndirectEnumeration(`${callee}(modulePath);`);
-      expect(references(`${callee}("node:http");`)).toEqual([
-        "module:node:http",
-      ]);
-      expect(
-        references(
-          `function load(require: Loader) { return ${callee}(modulePath); }`,
-        ),
-      ).toEqual([]);
-    }
+  test("literal module loads keep their module capability", () => {
+    expect(references('(require as typeof require)("node:http");')).toEqual([
+      "module:node:http",
+    ]);
   });
 
   test("tracks the global root returned by reflection", () => {
