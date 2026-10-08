@@ -1274,6 +1274,8 @@ type Messages = {
     "officeCitationUnavailable": "This citation is no longer available.";
     "openCitation": "Open citation {label}";
     "openThread": "Open conversation";
+    "overlayLoadFailed": "The document chat couldn't load.";
+    "overlayUpdated": "stella was updated. Reload the page to use the document chat.";
     "pastedChars": "Pasted · {count} chars";
     "pastedText": {
       "expand": "Show full text";
@@ -5524,6 +5526,7 @@ type Messages = {
       "desktopGate": {
         "alreadyInstalled": "Already installed? Connect it";
         "connect": "Connect stella desktop";
+        "connected": "stella desktop is connected";
         "editNone": "Download stella desktop to edit this file";
         "editOutdated": "Update stella desktop to edit";
         "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.";
@@ -5545,6 +5548,7 @@ type Messages = {
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued for the next OCR batch";
       "pdfSigning": {
+        "alreadySigningTitle": "Signing is already in progress in stella desktop";
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.";
         "cancelledCertificateDescription": "The selected certificate cannot be used for signing. Choose one that allows digital signatures.";
         "cancelledCertifiedDescription": "This PDF is certified, and its certification does not allow further signatures.";
@@ -5565,6 +5569,9 @@ type Messages = {
         "inProgressDescription": "This file is already being signed. Finish or cancel that signing in stella desktop first.";
         "noFileDescription": "This document has no file to sign.";
         "notAPdfDescription": "Only PDF files can be signed.";
+        "notOpeningConnect": "Not opening? Connect stella desktop";
+        "notPickedUpDescription": "stella desktop may not be running or connected to this account. Connect it, then retry.";
+        "notPickedUpTitle": "stella desktop did not open the PDF";
         "placementBox": "Stamp position";
         "placementConfirm": "Open stella desktop";
         "placementDescription": "Choose how the signature appears in the PDF.";
@@ -5579,10 +5586,12 @@ type Messages = {
         "placementTooSmall": "This page is too small for a stamp. Choose another page.";
         "placementVisible": "Visible stamp";
         "placementVisibleDescription": "A box on the page shows who signed and when.";
+        "preparingDescription": "Preparing the PDF for stella desktop.";
         "readOnlyDescription": "This document is read-only.";
         "signedDescription": "The signature was saved as version {versionNumber, number}.";
         "signedDescriptionNoVersion": "The signature was saved as a new version.";
         "signedTitle": "PDF signed";
+        "signingLabel": "Signing in stella desktop…";
         "stampLocation": "Location";
         "stampRejectedDescription": "The stamp could not be placed there. Place it again and retry.";
         "stampSignedBy": "Digitally signed by";

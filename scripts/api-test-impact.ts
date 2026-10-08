@@ -125,17 +125,54 @@ const workspaceExports = (root: string) => {
   return packages;
 };
 
+const transpilers = {
+  ts: new Bun.Transpiler({ loader: "ts" }),
+  tsx: new Bun.Transpiler({ loader: "tsx" }),
+  js: new Bun.Transpiler({ loader: "jsx" }),
+};
+
+const READER_PATTERN =
+  /\b(?:readFile(?:Sync)?|readdir(?:Sync)?|Glob)\b|\bBun\s*\.\s*file\b/u;
+// Computed imports cannot appear in scanImports; directory scanners and
+// computed module loaders therefore run whenever source files change.
+const SCANNER_PATTERN =
+  /\b(?:readdir(?:Sync)?|Glob|glob)\b|import\.meta\.glob|\b(?:import|require)\s*\(\s*[^"'\s]/u;
+
+/**
+ * Reads a module for the import graph: its static imports and whether its
+ * code (not its comments) reads files or scans directories, so prose that
+ * mentions a glob cannot mark a hub module as a scanner and widen every plan
+ * through it. Only sources whose raw text matches are transpiled, which keeps
+ * the graph fast. The transpiler rejects a leading shebang that Bun itself
+ * runs, and one unscannable module widens every failure-strict plan to the
+ * full suite, so strip it first.
+ */
+export const analyzeModule = (file: string, source: string) => {
+  let transpiler = transpilers.js;
+  if (file.endsWith(".tsx")) {
+    transpiler = transpilers.tsx;
+  } else if (/\.[cm]?ts$/u.test(file)) {
+    transpiler = transpilers.ts;
+  }
+  const runnable = source.replace(/^#![^\n]*/u, "");
+  const imports = transpiler.scanImports(runnable);
+  const mentionsReads = READER_PATTERN.test(runnable);
+  const mentionsScans = SCANNER_PATTERN.test(runnable);
+  const code =
+    mentionsReads || mentionsScans ? transpiler.transformSync(runnable) : "";
+  return {
+    imports,
+    reads: mentionsReads && READER_PATTERN.test(code),
+    scans: mentionsScans && SCANNER_PATTERN.test(code),
+  };
+};
+
 const buildGraph = (root: string, starts: readonly string[]) => {
   const packages = workspaceExports(root);
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();
   const scanners = new Set<string>();
   const failed = new Set<string>();
-  const transpilers = {
-    ts: new Bun.Transpiler({ loader: "ts" }),
-    tsx: new Bun.Transpiler({ loader: "tsx" }),
-    js: new Bun.Transpiler({ loader: "jsx" }),
-  };
   const resolveWorkspace = (specifier: string): string | undefined => {
     const name = specifier.startsWith("@")
       ? specifier.split("/").slice(0, 2).join("/")
@@ -184,30 +221,17 @@ const buildGraph = (root: string, starts: readonly string[]) => {
       continue;
     }
     const scanned = Result.try(() => {
-      const source = readFileSync(absolute, "utf-8");
-      if (
-        /\b(?:readFile(?:Sync)?|readdir(?:Sync)?|Glob)\b|\bBun\s*\.\s*file\b/u.test(
-          source,
-        )
-      ) {
+      const { imports, reads, scans } = analyzeModule(
+        file,
+        readFileSync(absolute, "utf-8"),
+      );
+      if (reads) {
         readers.add(file);
       }
-      // Computed imports cannot appear in scanImports; directory scanners and
-      // computed module loaders therefore run whenever source files change.
-      if (
-        /\b(?:readdir(?:Sync)?|Glob|glob)\b|import\.meta\.glob|\b(?:import|require)\s*\(\s*[^"'\s]/u.test(
-          source,
-        )
-      ) {
+      if (scans) {
         scanners.add(file);
       }
-      let transpiler = transpilers.js;
-      if (file.endsWith(".tsx")) {
-        transpiler = transpilers.tsx;
-      } else if (/\.[cm]?ts$/u.test(file)) {
-        transpiler = transpilers.ts;
-      }
-      return transpiler.scanImports(source);
+      return imports;
     });
     if (scanned.isErr()) {
       failed.add(file);
