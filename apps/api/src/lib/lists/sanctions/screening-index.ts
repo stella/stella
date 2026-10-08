@@ -17,7 +17,7 @@ import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
-import { createEventLoopSlicer } from "@/api/lib/event-loop-slicer";
+import { createEventLoopSlicer } from "@/api/lib/lists/sanctions/event-loop-slicer";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { failureSink } from "@/api/lib/observability/failure";

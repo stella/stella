@@ -90,12 +90,11 @@ test(
         yield bytes;
       })(),
     );
-    if (version.isErr()) {
-      return panic("The synthetic list has no readable edition stamp");
-    }
     const marker: FetchedMarker = {
       source: "us-sdn",
-      version: version.value,
+      version: version.unwrap(
+        "The synthetic list has no readable edition stamp",
+      ),
       downloadUrl: "https://lists.example.test/sdn.xml",
       lastModified: null,
     };
@@ -153,11 +152,9 @@ test(
       edition,
     });
     expect(screeningBuilds).toBe(buildsBefore);
-    if (index.isErr()) {
-      return panic("The refreshed index was not built");
-    }
-    expect(index.value.entries).toHaveLength(ENTRY_COUNT);
-    expect(index.value.identifierEntries.has("P101234")).toBe(true);
+    const built = index.unwrap("The refreshed index was not built");
+    expect(built.entries).toHaveLength(ENTRY_COUNT);
+    expect(built.identifierEntries.has("P101234")).toBe(true);
     expectEventLoopResponsive(report, { budgetMs: LOOP_BUDGET_MS });
   },
   TEST_TIMEOUT_MS,

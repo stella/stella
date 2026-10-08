@@ -164,7 +164,11 @@ const roundTripQueries = <T extends PGlite | Transaction>(client: T): T =>
               await Reflect.apply(value, target, args),
           );
       }
-      return typeof value === "function" ? value.bind(target) : value;
+      if (typeof value !== "function") {
+        return value;
+      }
+      return (...args: unknown[]): unknown =>
+        Reflect.apply(value, target, args);
     },
   });
 
@@ -178,7 +182,8 @@ export const pgliteAsOutOfProcess = (client: PGlite): PGlite =>
   new Proxy(roundTripQueries(client), {
     get(target, property, receiver) {
       if (property !== "transaction") {
-        return Reflect.get(target, property, receiver);
+        const value: unknown = Reflect.get(target, property, receiver);
+        return value;
       }
       return async <T>(
         callback: (tx: Transaction) => Promise<T>,

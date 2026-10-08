@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
-import { createEventLoopSlicer } from "@/api/lib/event-loop-slicer";
+import { createEventLoopSlicer } from "@/api/lib/lists/sanctions/event-loop-slicer";
 
 import { startEventLoopLagProbe } from "./event-loop-lag-probe";
 

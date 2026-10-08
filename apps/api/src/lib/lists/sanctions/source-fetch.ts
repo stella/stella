@@ -28,7 +28,7 @@ import type {
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
-import { createEventLoopSlicer } from "@/api/lib/event-loop-slicer";
+import { createEventLoopSlicer } from "@/api/lib/lists/sanctions/event-loop-slicer";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   fetchStreamFollowingRedirects,

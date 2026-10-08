@@ -22,7 +22,7 @@ import {
 } from "@/api/db/schema";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createEventLoopSlicer } from "@/api/lib/event-loop-slicer";
+import { createEventLoopSlicer } from "@/api/lib/lists/sanctions/event-loop-slicer";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   fetchSanctionsEdition,
