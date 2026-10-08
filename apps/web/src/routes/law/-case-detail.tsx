@@ -30,7 +30,7 @@ import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { recordLawOpen } from "@/lib/law-search-history";
+import { recordLawOpen } from "@/lib/law-search-history/law-search-history";
 import {
   extractId,
   fileMayHoldOthersOf,
