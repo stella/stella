@@ -82,4 +82,12 @@ describe("view gesture tokens", () => {
     gate.observe({ isTrusted: true, type: "keydown", repeat: true });
     expect(gate.take()).toBe(false);
   });
+
+  test("a click with no key press before it is its own gesture", () => {
+    const { gate } = setup();
+    // Assistive technology activates a control with a click of detail 0.
+    gate.observe({ isTrusted: true, type: "click", detail: 0 });
+    expect(gate.take()).toBe(true);
+    expect(gate.take()).toBe(false);
+  });
 });

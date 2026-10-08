@@ -43,19 +43,30 @@ export const createVisualGestureGate = ({
   let grantedAt: number | null = null;
   // `isTrusted` is an own, unforgeable property of every event, read here
   // from the event the browser dispatched.
+  let keyPressedAt: number | null = null;
   // A key press is one gesture: a held key's repeats and the click the
-  // browser derives from Enter or Space on a control grant nothing more.
+  // browser derives from Enter or Space on a control grant nothing more. A
+  // click with no key press before it, such as one from assistive
+  // technology, is a gesture of its own.
   const observe = (event: GestureEvent) => {
     if (event.isTrusted !== true) {
       return;
     }
-    if (event.type === "keydown" && event.repeat === true) {
-      return;
+    const current = now();
+    if (event.type === "keydown") {
+      if (event.repeat === true) {
+        return;
+      }
+      keyPressedAt = current;
+    } else if (event.type === "click" && event.detail === 0) {
+      const derived =
+        keyPressedAt !== null && current - keyPressedAt < windowMs;
+      keyPressedAt = null;
+      if (derived) {
+        return;
+      }
     }
-    if (event.type === "click" && event.detail === 0) {
-      return;
-    }
-    grantedAt = now();
+    grantedAt = current;
   };
   return Object.freeze({
     observe,
