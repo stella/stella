@@ -37,6 +37,7 @@
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/decision-reader",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/decision-reader",
@@ -54,10 +55,12 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "20.14.5",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19"
   },

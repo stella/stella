@@ -843,10 +843,12 @@
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "20.14.5",
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
       },
