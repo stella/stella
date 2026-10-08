@@ -122,9 +122,84 @@ describe("aggregate mutation route coverage", () => {
     expect(enumerate(sources).at(0)?.declared).toBe(false);
     sources.set(
       "apps/api/src/handlers/example/create.ts",
-      'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; const existing = createSafeHandler({}); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;',
+      'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;',
     );
     expect(enumerate(sources).at(0)?.declared).toBe(true);
+  });
+
+  test("a default export declaration does not classify a different named handler", () => {
+    const sources = fixture('post("/named", foo.handler)');
+    sources.set(
+      routes,
+      `import { foo } from "@/api/handlers/example/create"; ${sources.get(routes)}`,
+    );
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const foo = createSafeHandler({}, async () => {}); const bar = createSafeHandler({}, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }); declareAggregateMutation(bar.handler, {type: "aggregate", aggregates: ["workspace"]}); export default bar;',
+    );
+    expect(enumerate(sources).at(0)?.declared).toBe(false);
+    expect(
+      checkAggregateMutationCoverage({
+        registrations: enumerate(sources),
+        baseline: [],
+        previous: [],
+      }),
+    ).toEqual([expect.stringContaining("Undeclared aggregate mutation")]);
+  });
+
+  test("each declared aggregate is acquired by the exact handler", () => {
+    const sources = fixture('post("/existing", existing.handler)');
+    sources.set(
+      routes,
+      `import existing from "@/api/handlers/example/create"; ${sources.get(routes)}`,
+    );
+    const prefix =
+      'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+    const suffix =
+      'declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;';
+    const acquisition =
+      'await withAggregateLock({aggregate: "workspace", id, tx});';
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      `${prefix} const existing = createSafeHandler({}, async () => { ${acquisition} }); ${suffix}`,
+    );
+    expect(enumerate(sources).at(0)?.declared).toBe(true);
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      `${prefix} const existing = createSafeHandler({}, async () => {}); ${suffix}`,
+    );
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      `${prefix} const unrelated = async () => { ${acquisition} }; const existing = createSafeHandler({}, async () => {}); ${suffix}`,
+    );
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      `${prefix} const existing = createSafeHandler({}, async () => { withAggregateLock({aggregate: "workspace", id, tx}); }); ${suffix}`,
+    );
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+  });
+
+  test("inline declarations verify their own implementation and owner import", () => {
+    const sources = fixture(
+      'post("/inline", declareAggregateMutation(async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }, {type: "aggregate", aggregates: ["workspace"]}))',
+    );
+    const imports =
+      'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+    const routeSource = sources.get(routes);
+    sources.set(routes, `${imports} ${routeSource}`);
+    expect(enumerate(sources).at(0)?.declared).toBe(true);
+    sources.set(
+      routes,
+      `${imports} ${routeSource?.replace('await withAggregateLock({aggregate: "workspace", id, tx});', "")}`,
+    );
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    sources.set(
+      routes,
+      `${imports.replace("@/api/lib/db/aggregate-lock", "@/api/lib/fake-lock")} ${routeSource}`,
+    );
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
   });
 
   test("mounted producers are followed regardless of their filename", () => {

@@ -72,7 +72,13 @@ export const parseAggregateLockGitBatch = (
   return sources;
 };
 const previousAggregateLocks = (rows: readonly AggregateLockBaselineRow[]) => {
-  const base = git(["merge-base", "HEAD", "origin/main"]).trim();
+  const explicitBase = process.env["BASE_SHA"];
+  const requestedBase = process.env["BASE_REF"] ?? "origin/main";
+  const base = git(
+    explicitBase
+      ? ["rev-parse", "--verify", `${explicitBase}^{commit}`]
+      : ["merge-base", "HEAD", requestedBase],
+  ).trim();
   const existing = Bun.spawnSync([
     "git",
     "cat-file",

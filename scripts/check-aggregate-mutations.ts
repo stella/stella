@@ -525,14 +525,294 @@ const createHandlerIdentity = ({ source, file, bindings }: IdentityOptions) => {
   return identity;
 };
 
+type SourceReferenceOptions = {
+  source: ts.SourceFile;
+  file: string;
+  name: string;
+  access: SourceAccess;
+};
+const importedReference = ({
+  source,
+  file,
+  name,
+  access,
+}: SourceReferenceOptions) => {
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    const module = access.resolveSourceModule({
+      file,
+      name: statement.moduleSpecifier.text,
+    });
+    const clause = statement.importClause;
+    if (clause?.name?.text === name) {
+      return { module, exported: "default" };
+    }
+    if (
+      clause?.namedBindings === undefined ||
+      !ts.isNamedImports(clause.namedBindings)
+    ) {
+      continue;
+    }
+    const binding = clause.namedBindings.elements.find(
+      (item) => item.name.text === name,
+    );
+    if (binding !== undefined) {
+      return {
+        module,
+        exported: binding.propertyName?.text ?? binding.name.text,
+      };
+    }
+  }
+  return undefined;
+};
+
+type HandlerImplementationOptions = {
+  handler: ts.Expression;
+  source: ts.SourceFile;
+  file: string;
+  access: SourceAccess;
+  visited?: Set<string>;
+};
+type HandlerImplementation =
+  | { body: ts.Node; source: ts.SourceFile; file: string }
+  | undefined;
+const handlerImplementation = ({
+  handler,
+  source,
+  file,
+  access,
+  visited = new Set<string>(),
+}: HandlerImplementationOptions): HandlerImplementation => {
+  if (ts.isArrowFunction(handler) || ts.isFunctionExpression(handler)) {
+    return { body: handler.body, source, file };
+  }
+  if (ts.isParenthesizedExpression(handler) || ts.isAsExpression(handler)) {
+    return handlerImplementation({
+      handler: handler.expression,
+      source,
+      file,
+      access,
+      visited,
+    });
+  }
+  if (
+    ts.isPropertyAccessExpression(handler) &&
+    handler.name.text === "handler"
+  ) {
+    return handlerImplementation({
+      handler: handler.expression,
+      source,
+      file,
+      access,
+      visited,
+    });
+  }
+  if (ts.isCallExpression(handler) && ts.isIdentifier(handler.expression)) {
+    const factory = importedReference({
+      source,
+      file,
+      name: handler.expression.text,
+      access,
+    });
+    const callback = handler.arguments.at(1);
+    if (
+      factory?.module !== `${API}lib/api-handlers.ts` ||
+      callback === undefined
+    ) {
+      return undefined;
+    }
+    return handlerImplementation({
+      handler: callback,
+      source,
+      file,
+      access,
+      visited,
+    });
+  }
+  if (!ts.isIdentifier(handler)) {
+    return undefined;
+  }
+  const key = `${file}#${handler.text}`;
+  if (visited.has(key)) {
+    return undefined;
+  }
+  visited.add(key);
+  for (const statement of source.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === handler.text &&
+      statement.body !== undefined
+    ) {
+      return { body: statement.body, source, file };
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    const variable = statement.declarationList.declarations.find(
+      (item) => ts.isIdentifier(item.name) && item.name.text === handler.text,
+    );
+    if (variable?.initializer !== undefined) {
+      return handlerImplementation({
+        handler: variable.initializer,
+        source,
+        file,
+        access,
+        visited,
+      });
+    }
+  }
+  const imported = importedReference({
+    source,
+    file,
+    name: handler.text,
+    access,
+  });
+  if (imported?.module === undefined) {
+    return undefined;
+  }
+  const content = access.load(imported.module);
+  if (content === undefined) {
+    return undefined;
+  }
+  const importedSource = parse({ file: imported.module, source: content });
+  let exported = ts.factory.createIdentifier(imported.exported);
+  if (imported.exported === "default") {
+    const assignment = importedSource.statements.find(ts.isExportAssignment);
+    if (assignment === undefined || !ts.isIdentifier(assignment.expression)) {
+      return undefined;
+    }
+    exported = assignment.expression;
+  }
+  return handlerImplementation({
+    handler: exported,
+    source: importedSource,
+    file: imported.module,
+    access,
+    visited,
+  });
+};
+
+type AwaitedAggregateOptions = {
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+};
+const awaitedAggregateNames = ({
+  implementation: { body, source, file },
+  access,
+}: AwaitedAggregateOptions) => {
+  const names = new Set<string>();
+  const visit = (node: ts.Node) => {
+    if (ts.isFunctionDeclaration(node)) {
+      return;
+    }
+    if (
+      (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+      (!ts.isCallExpression(node.parent) ||
+        !node.parent.arguments.includes(node))
+    ) {
+      return;
+    }
+    if (
+      ts.isAwaitExpression(node) &&
+      ts.isCallExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression)
+    ) {
+      const reference = importedReference({
+        source,
+        file,
+        name: node.expression.expression.text,
+        access,
+      });
+      const options = node.expression.arguments.at(0);
+      if (
+        reference?.module === REGISTRY &&
+        reference.exported === "withAggregateLock" &&
+        options !== undefined &&
+        ts.isObjectLiteralExpression(options)
+      ) {
+        const aggregate = options.properties.find(
+          (property) =>
+            ts.isPropertyAssignment(property) &&
+            property.name.getText(source) === "aggregate",
+        );
+        if (
+          aggregate !== undefined &&
+          ts.isPropertyAssignment(aggregate) &&
+          ts.isStringLiteral(aggregate.initializer)
+        ) {
+          names.add(aggregate.initializer.text);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return names;
+};
+
+type DeclaredHandlerLocksOptions = ValidateDeclarationOptions & {
+  handler: ts.Expression;
+  access: SourceAccess;
+};
+const assertDeclaredHandlerLocks = ({
+  declaration,
+  handler,
+  source,
+  file,
+  access,
+}: DeclaredHandlerLocksOptions) => {
+  const fields = new Map(
+    declaration.properties
+      .filter(ts.isPropertyAssignment)
+      .map((field) => [field.name.getText(source), field.initializer]),
+  );
+  const type = fields.get("type");
+  if (
+    type !== undefined &&
+    ts.isStringLiteral(type) &&
+    type.text === "independent"
+  ) {
+    return;
+  }
+  const implementation = handlerImplementation({
+    handler,
+    source,
+    file,
+    access,
+  });
+  if (implementation === undefined) {
+    panic(
+      `Cannot resolve declared aggregate handler implementation in ${file}`,
+    );
+  }
+  const held = awaitedAggregateNames({ implementation, access });
+  const aggregates = fields.get("aggregates");
+  if (aggregates === undefined || !ts.isArrayLiteralExpression(aggregates)) {
+    panic(`Missing declared aggregate list in ${file}`);
+  }
+  for (const aggregate of aggregates.elements) {
+    if (!ts.isStringLiteral(aggregate) || !held.has(aggregate.text)) {
+      panic(
+        `Declared handler must await withAggregateLock for ${aggregate.getText(source)} in ${file}`,
+      );
+    }
+  }
+};
+
 type ImportedDeclarationOptions = {
   bindings: ReadonlyMap<string, string>;
   access: SourceAccess;
 };
 const collectImportedDeclarations = ({
   bindings,
-  access: { load, resolveSourceModule, registry },
+  access,
 }: ImportedDeclarationOptions) => {
+  const { load, resolveSourceModule, registry } = access;
   const declared = new Set<string>();
   for (const target of bindings.values()) {
     const [module, exported = "default"] = target.split("#");
@@ -548,6 +828,7 @@ const collectImportedDeclarations = ({
     let exportedBinding = exported === "default" ? undefined : exported;
     for (const statement of ownerSource.statements) {
       if (
+        exported === "default" &&
         ts.isExportAssignment(statement) &&
         !statement.isExportEquals &&
         ts.isIdentifier(statement.expression)
@@ -595,6 +876,14 @@ const collectImportedDeclarations = ({
             file: module,
             registry,
           });
+          assertDeclaredHandlerLocks({
+            declaration,
+            handler,
+            source: ownerSource,
+            file: module,
+            registry,
+            access,
+          });
           declared.add(`${target}.handler`);
         }
       }
@@ -612,6 +901,7 @@ type LocalDeclarationOptions = {
   declarationNames: ReadonlySet<string>;
   declared: Set<string>;
   identity: (handler: ts.Expression) => string;
+  access: SourceAccess;
 };
 const collectLocalDeclarations = ({
   source,
@@ -620,6 +910,7 @@ const collectLocalDeclarations = ({
   declarationNames,
   declared,
   identity,
+  access,
 }: LocalDeclarationOptions) => {
   const declarationCall = (node: ts.CallExpression) =>
     ts.isIdentifier(node.expression) &&
@@ -636,6 +927,14 @@ const collectLocalDeclarations = ({
         panic(`Invalid aggregate mutation declaration in ${file}`);
       }
       validateDeclaration({ declaration, source, file, registry });
+      assertDeclaredHandlerLocks({
+        declaration,
+        handler,
+        source,
+        file,
+        registry,
+        access,
+      });
       declared.add(identity(handler));
     }
     ts.forEachChild(node, collectDeclarations);
@@ -879,6 +1178,7 @@ export const enumerateAggregateMutations = (
       declarationNames,
       declared,
       identity,
+      access,
     });
     enumerateModuleRegistrations({
       source,
@@ -946,7 +1246,35 @@ const legacyReason = (route: MutationRegistration) => {
   }
 };
 
+const aggregateMutationComparisonCommit = () => {
+  const requested =
+    process.env["BASE_SHA"] ?? process.env["BASE_REF"] ?? "origin/main";
+  const resolved = spawnSync(
+    "git",
+    ["rev-parse", "--verify", `${requested}^{commit}`],
+    { cwd: ROOT, encoding: "utf-8" },
+  );
+  if (resolved.status !== 0) {
+    panic(`Aggregate mutation comparison ref is unavailable: ${requested}`);
+  }
+  if (process.env["BASE_SHA"] !== undefined) {
+    return resolved.stdout.trim();
+  }
+  const base = spawnSync(
+    "git",
+    ["merge-base", "HEAD", resolved.stdout.trim()],
+    { cwd: ROOT, encoding: "utf-8" },
+  );
+  if (base.status !== 0) {
+    panic(
+      `Cannot resolve aggregate mutation comparison merge-base: ${requested}`,
+    );
+  }
+  return base.stdout.trim();
+};
+
 if (import.meta.main) {
+  const comparisonCommit = aggregateMutationComparisonCommit();
   const load: SourceLoader = (file) =>
     existsSync(path.join(ROOT, file))
       ? readFileSync(path.join(ROOT, file), "utf-8")
@@ -955,7 +1283,7 @@ if (import.meta.main) {
   if (process.argv.includes("--generate")) {
     const existing = spawnSync(
       "git",
-      ["cat-file", "-e", `origin/main:${BASELINE}`],
+      ["cat-file", "-e", `${comparisonCommit}:${BASELINE}`],
       { cwd: ROOT, encoding: "utf-8" },
     );
     if (existing.status === 0) {
@@ -978,7 +1306,7 @@ if (import.meta.main) {
       baselineSchema,
       JSON.parse(readFileSync(path.join(ROOT, BASELINE), "utf-8")),
     );
-    const base = spawnSync("git", ["show", `origin/main:${BASELINE}`], {
+    const base = spawnSync("git", ["show", `${comparisonCommit}:${BASELINE}`], {
       cwd: ROOT,
       encoding: "utf-8",
     });
@@ -987,10 +1315,14 @@ if (import.meta.main) {
       base.status === 0
         ? v.parse(baselineSchema, JSON.parse(base.stdout))
         : enumerateAggregateMutations((file) => {
-            const result = spawnSync("git", ["show", `origin/main:${file}`], {
-              cwd: ROOT,
-              encoding: "utf-8",
-            });
+            const result = spawnSync(
+              "git",
+              ["show", `${comparisonCommit}:${file}`],
+              {
+                cwd: ROOT,
+                encoding: "utf-8",
+              },
+            );
             return result.status === 0 ? result.stdout : undefined;
           })
             .filter((route) => !route.declared)
