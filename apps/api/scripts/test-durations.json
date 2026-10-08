@@ -9202,5 +9202,9 @@
   "src/lib/chat/run-log.postgres.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

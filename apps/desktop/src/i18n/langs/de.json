@@ -248,6 +248,8 @@
     "link": "Link",
     "local": "Lokal",
     "memoryOnly": "Der verschlüsselte Speicher ist nicht verfügbar. Zwischenablageverlauf und Einstellungen für ausgeschlossene Apps bleiben nur bis zum Beenden von stella desktop erhalten.",
+    "moveGroupEarlier": "Nach links verschieben",
+    "moveGroupLater": "Nach rechts verschieben",
     "moreOptions": "Weitere Optionen",
     "noResults": "Keine passenden Inhalte",
     "noResultsDescription": "Möchten Sie stattdessen in den Registern nach „{query}“ suchen?",

@@ -3,7 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   adjacentClipboardIndex,
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
+  CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
@@ -93,6 +95,37 @@ describe("clipboardDraggedItemId", () => {
           type: CLIPBOARD_ITEM_DRAG_TYPE,
         },
         itemIds,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("clipboardDraggedGroupId", () => {
+  const groupIds = new Set(["research", "templates"]);
+
+  test("accepts a known group chip", () => {
+    expect(
+      clipboardDraggedGroupId(
+        { groupId: "research", type: CLIPBOARD_GROUP_DRAG_TYPE },
+        groupIds,
+      ),
+    ).toBe("research");
+  });
+
+  test("rejects a dragged clip", () => {
+    expect(
+      clipboardDraggedGroupId(
+        { groupId: "research", type: CLIPBOARD_ITEM_DRAG_TYPE },
+        groupIds,
+      ),
+    ).toBeNull();
+  });
+
+  test("rejects a deleted group", () => {
+    expect(
+      clipboardDraggedGroupId(
+        { groupId: "gone", type: CLIPBOARD_GROUP_DRAG_TYPE },
+        groupIds,
       ),
     ).toBeNull();
   });
