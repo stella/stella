@@ -114,6 +114,7 @@
         "@stll/scripts": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/stable-stringify": "workspace:*",
+        "@stll/start-runtime": "workspace:^",
         "@stll/template-conditions": "workspace:*",
         "@stll/template-packs": "workspace:*",
         "@stll/text-normalize": "workspace:*",

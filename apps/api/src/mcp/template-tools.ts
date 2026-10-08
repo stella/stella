@@ -628,7 +628,7 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Create template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
     readOnlyHint: false,
@@ -720,7 +720,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Configure template fields",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
     openWorldHint: false,
     readOnlyHint: false,
@@ -902,7 +902,7 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   inputSchema: saveFilledTemplateArgsSchema,
   annotations: {
     title: "Save filled template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: true,
     readOnlyHint: false,

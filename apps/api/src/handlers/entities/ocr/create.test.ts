@@ -39,6 +39,18 @@ const sourceFileContent = {
   version: 1 as const,
 };
 
+const executeParentLock = async (query: SQL) => {
+  const compiled = new PgDialect().sqlToQuery(query);
+  expect(compiled.sql).toContain("FOR KEY SHARE");
+  if (compiled.sql.includes('FROM "organization"')) {
+    expect(compiled.params).toEqual([organizationId]);
+    return [{ id: organizationId }];
+  }
+  expect(compiled.sql).toContain('FROM "workspaces"');
+  expect(compiled.params).toEqual([workspaceId]);
+  return [{ id: workspaceId }];
+};
+
 const createSafeDb =
   (content: unknown): SafeDb =>
   async (callback) => {
@@ -189,6 +201,7 @@ describe("requestManualOcrHandler", () => {
       let retryWhere: SQL | undefined;
       let selectCount = 0;
       const tx = asTestRaw<Transaction>({
+        execute: executeParentLock,
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
@@ -314,6 +327,7 @@ describe("requestManualOcrHandler", () => {
       let updateSet: unknown;
       let updateWhere: SQL | undefined;
       const tx = asTestRaw<Transaction>({
+        execute: executeParentLock,
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
@@ -429,6 +443,7 @@ describe("requestManualOcrHandler", () => {
       let selectCount = 0;
       let updateSet: unknown;
       const tx = asTestRaw<Transaction>({
+        execute: executeParentLock,
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
@@ -545,6 +560,7 @@ describe("requestManualOcrHandler", () => {
     let cancellationWhere: SQL | undefined;
     let selectCount = 0;
     const tx = asTestRaw<Transaction>({
+      execute: executeParentLock,
       insert: () => ({
         values: () => ({
           onConflictDoNothing: () => ({
@@ -644,6 +660,7 @@ describe("requestManualOcrHandler", () => {
       }),
     }));
     const tx = asTestRaw<Transaction>({
+      execute: executeParentLock,
       insert,
       select: () => {
         selectCount += 1;
@@ -700,6 +717,7 @@ describe("requestManualOcrHandler", () => {
     let selectCount = 0;
     let workspaceWhere: SQL | undefined;
     const tx = asTestRaw<Transaction>({
+      execute: executeParentLock,
       select: () => {
         selectCount += 1;
         return {
