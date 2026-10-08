@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 /**
  * pl-uokik against rows and pages the register actually served.
  *
@@ -8,11 +9,11 @@
  * and answers `Start`, `Count` and `NavigateReverse` the way Domino does. The
  * decision pages and the PDF are the register's own responses.
  */
-
-import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
+
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
@@ -46,6 +47,7 @@ import {
   plUokikPreviousSlice,
   plUokikRawPartsOf,
   plUokikRulingId,
+  plUokikQuarantineId,
   plUokikSortKey,
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
@@ -357,6 +359,11 @@ describe("a decision", () => {
       await buildFrom(entry, page, [
         { name, status: PL_UOKIK_FILE_STATUS.READ, bytes: await pdfBytes() },
       ]),
+    );
+    expect(decision.rawHash).toBe(
+      legacySha256Hex(
+        `${decision.sourceRaw}\n${legacySha256Hex(await pdfBytes())}`,
+      ),
     );
     expect(decision.sourceDocumentId).toBe(WITH_RULINGS);
     expect(decision.caseNumber === "DOK-9/2011").toBe(true);
@@ -941,6 +948,13 @@ describe("the court rulings a decision page attaches", () => {
     const { decisions } = await walkCrawl(null);
     expect(decisions).toHaveLength(4);
     const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    const kept =
+      appeal.sourceRawObjects?.["ruling-file"]?.bytes ??
+      panic("ruling bytes missing");
+    expect(appeal.metadata["attachmentSha256"]).toBe(legacySha256Hex(kept));
+    expect(appeal.rawHash).toBe(
+      legacySha256Hex(`${appeal.sourceRaw}\n${legacySha256Hex(kept)}`),
+    );
     expect(appeal.court === "Sąd Apelacyjny w Warszawie").toBe(true);
     expect(appeal.caseNumber === "VI ACa 527/08").toBe(true);
     expect(appeal.decisionDate).toBe("2008-09-29");
@@ -1147,9 +1161,9 @@ describe("the court rulings a decision page attaches", () => {
   });
 
   test("a file name too long to key on is keyed by its digest", () => {
-    const long = `${"a".repeat(400)}.pdf`;
+    const long = `${"Zażółć gęślą jaźń e\u0301".repeat(40)}.pdf`;
     const id = plUokikRulingId(APPEALED_TO_SUPREME, long);
-    expect(id.startsWith(`${APPEALED_TO_SUPREME}/sha256:`)).toBe(true);
+    expect(id).toBe(`${APPEALED_TO_SUPREME}/sha256:${legacySha256Hex(long)}`);
     expect(plUokikRulingId(APPEALED_TO_SUPREME, long)).toBe(id);
   });
 });
@@ -1455,4 +1469,20 @@ test("competition metadata ignores excluded HTML in every label and value", asyn
   const expected = parsePlUokikDetail(html);
   expect(expected).not.toBeNull();
   expect(parsePlUokikDetail(contaminated)).toEqual(expected);
+});
+
+test("quarantine column identities retain legacy bytes including empty and Unicode", async () => {
+  const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+  const row = normalizePlUokikRow(entry);
+  for (const column of [
+    "",
+    "ordinary",
+    "Zażółć gęślą jaźń",
+    "e\u0301",
+    "<A HREF=/removed>Łódź</A>",
+  ]) {
+    expect(plUokikQuarantineId({ ...row, column })).toBe(
+      `pl-uokik-quarantine:${legacySha256Hex(column.replaceAll(/HREF=[^\s>]*/gu, "HREF="))}`,
+    );
+  }
 });

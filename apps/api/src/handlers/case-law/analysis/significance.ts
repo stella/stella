@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 /**
  * The significance layer: what later courts made of a decision.
  *
@@ -14,13 +15,13 @@
  * of a document analysis has not seen the corpus and is never asked to
  * guess at it (`case-law.analysis.update` rejects the layer).
  */
-
-import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { AnalysisGraphFingerprint } from "@stll/legal-ast/analysis";
 import { ANALYSIS_SIGNIFICANCE_MAX_LENGTH } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import {
   caseLawCitations,
@@ -205,7 +206,7 @@ export const graphFingerprintOf = (
     | "treatmentCounts"
   >,
 ): AnalysisGraphFingerprint => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(facts.reportedInCollection ? "reported" : "unreported");
   hasher.update(`\nlater-negative=${String(facts.laterNegativeCount)}`);
   // The corpus's own vocabulary, in its own order: a fixed list rather than
