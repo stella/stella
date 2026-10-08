@@ -1506,34 +1506,31 @@ const lockLiveNativeCandidates = async (
   );
 };
 
-/** Then the source entities, in id order, under the parents already held. */
-const lockNativeCandidateEntities = async (
-  tx: RootTransaction,
-  liveCandidates: DocumentProcessingCandidate[],
-) =>
-  await tx
-    .select({
-      currentVersionId: entities.currentVersionId,
-      id: entities.id,
-      readOnly: entities.readOnly,
-      workspaceId: entities.workspaceId,
-    })
-    .from(entities)
-    .where(
-      and(
-        inArray(
-          entities.id,
-          liveCandidates.map(({ entityId }) => entityId),
-        ),
-        inArray(
-          entities.workspaceId,
-          liveCandidates.map((candidate) => candidate.workspaceId),
-        ),
-      ),
-    )
-    .orderBy(asc(entities.id))
-    .limit(RECONCILE_BATCH_SIZE)
-    .for("update");
+/**
+ * A projection without source provenance predates it and counts as current;
+ * otherwise it must be the candidate's exact source.
+ */
+const isCurrentNativeProjection = (
+  projection:
+    | Pick<
+        typeof extractedContent.$inferSelect,
+        | "sourceEntityVersionId"
+        | "sourceFieldId"
+        | "sourceFileId"
+        | "sourceSha256Hex"
+      >
+    | undefined,
+  candidate: DocumentProcessingCandidate,
+): boolean =>
+  projection !== undefined &&
+  ((projection.sourceEntityVersionId === null &&
+    projection.sourceFieldId === null &&
+    projection.sourceFileId === null &&
+    projection.sourceSha256Hex === null) ||
+    (projection.sourceEntityVersionId === candidate.entityVersionId &&
+      projection.sourceFieldId === candidate.fieldId &&
+      projection.sourceFileId === candidate.content.id &&
+      projection.sourceSha256Hex === candidate.content.sha256Hex));
 
 export const persistMissingNativeExtractionRuns = async (
   candidates: DocumentProcessingCandidate[],
@@ -1548,10 +1545,29 @@ export const persistMissingNativeExtractionRuns = async (
     if (liveCandidates.length === 0) {
       return [];
     }
-    const lockedEntities = await lockNativeCandidateEntities(
-      tx,
-      liveCandidates,
-    );
+    const lockedEntities = await tx
+      .select({
+        currentVersionId: entities.currentVersionId,
+        id: entities.id,
+        readOnly: entities.readOnly,
+        workspaceId: entities.workspaceId,
+      })
+      .from(entities)
+      .where(
+        and(
+          inArray(
+            entities.id,
+            liveCandidates.map(({ entityId }) => entityId),
+          ),
+          inArray(
+            entities.workspaceId,
+            liveCandidates.map((candidate) => candidate.workspaceId),
+          ),
+        ),
+      )
+      .orderBy(asc(entities.id))
+      .limit(RECONCILE_BATCH_SIZE)
+      .for("update");
     const lockedEntityById = new Map(
       lockedEntities.map((entity) => [entity.id, entity]),
     );
@@ -1613,16 +1629,10 @@ export const persistMissingNativeExtractionRuns = async (
       const entity = lockedEntityById.get(candidate.entityId);
       const field = currentFieldById.get(candidate.fieldId);
       const projection = currentProjectionByEntityId.get(candidate.entityId);
-      const hasCurrentProjection =
-        projection !== undefined &&
-        ((projection.sourceEntityVersionId === null &&
-          projection.sourceFieldId === null &&
-          projection.sourceFileId === null &&
-          projection.sourceSha256Hex === null) ||
-          (projection.sourceEntityVersionId === candidate.entityVersionId &&
-            projection.sourceFieldId === candidate.fieldId &&
-            projection.sourceFileId === candidate.content.id &&
-            projection.sourceSha256Hex === candidate.content.sha256Hex));
+      const hasCurrentProjection = isCurrentNativeProjection(
+        projection,
+        candidate,
+      );
       if (
         entity?.currentVersionId !== candidate.entityVersionId ||
         entity.workspaceId !== candidate.workspaceId ||

@@ -2785,7 +2785,7 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "c2f531a036b7187c4c4d27a7a2dc608e4e65e1fbf361b035511524616a35fce8",
+    "fingerprint": "cbc674f845ecb6ec9e49507cd2a227e63359c012ed5d9bf43d33744d6d29a46d",
     "count": 1,
     "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
