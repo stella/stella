@@ -22,6 +22,7 @@ import {
   mcpUserConnections,
 } from "@/api/db/schema";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import savedSecret from "@/api/handlers/chat/saved-secret";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -734,6 +735,67 @@ if (!databaseUrl || !runPostgres) {
               code: "CHAT_SECRET_UNAVAILABLE",
             });
           }
+        });
+      });
+    });
+
+    test("answers the owner's own thread and refuses a thread that does not exist", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withFixture(db, async (scope) => {
+          const safeDb = safeDbFromScoped(
+            async (run) => await db.transaction(run),
+          );
+          const readSaved = async (threadId: Fixture["threadId"]) =>
+            await savedSecret.handler(
+              createTestHandlerContext<
+                Parameters<typeof savedSecret.handler>[0]
+              >({
+                safeDb,
+                session: { activeOrganizationId: scope.organizationId },
+                user: { id: scope.userId },
+                params: { threadId },
+                query: { connectorSlug: "missing-connector" },
+              }),
+            );
+          const submitDecline = async (threadId: Fixture["threadId"]) =>
+            await submitSecret.handler(
+              createTestHandlerContext<
+                Parameters<typeof submitSecret.handler>[0]
+              >({
+                safeDb,
+                session: { activeOrganizationId: scope.organizationId },
+                user: { id: scope.userId },
+                params: { threadId, toolCallId: "missing-request" },
+                body: { decision: "decline" },
+                recordAuditEvent: async () => {},
+              }),
+            );
+
+          // The owner's thread reaches the connector lookup, which has no
+          // enabled connector for this slug.
+          expect(await readSaved(scope.threadId)).toMatchObject({
+            code: 404,
+            response: {
+              message:
+                "Enable this connector in settings before providing a credential",
+            },
+          });
+          // The owner's thread reaches the pending-request check, which finds
+          // no request awaiting input.
+          expect(await submitDecline(scope.threadId)).toMatchObject({
+            code: 409,
+          });
+
+          const unknownThread = createSafeId<"chatThread">();
+          const threadNotFound = {
+            code: 404,
+            response: { message: "Chat thread not found" },
+          };
+          expect(await readSaved(unknownThread)).toMatchObject(threadNotFound);
+          expect(await submitDecline(unknownThread)).toMatchObject(
+            threadNotFound,
+          );
         });
       });
     });

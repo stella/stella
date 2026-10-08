@@ -1431,8 +1431,6 @@ const isolationCases: IsolationCase[] = [
       expect(result).toEqual({ title: expect.any(String) }),
   },
   {
-    // The owner reaches the connector lookup, which has no enabled connector
-    // for this slug; the foreign caller stops at the thread.
     name: "chat saved private input availability",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(readSavedChatSecret, workspaceA, {
@@ -1459,8 +1457,6 @@ const isolationCases: IsolationCase[] = [
     },
   },
   {
-    // The owner reaches the pending-request check, which finds no request
-    // awaiting input; the foreign caller stops at the thread.
     name: "chat private input submission",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(submitChatSecret, workspaceA, {
