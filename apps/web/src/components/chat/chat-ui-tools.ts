@@ -1199,7 +1199,10 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
- * Consume the successful `save_playbook` calls this session has not handled.
+ * Consume the successful `save_playbook` calls this session has not handled,
+ * returning whether caches changed and the latest playbook to follow. A
+ * newly completed older call still changed caches even when a later call
+ * was already handled and must remain the pane's target.
  * A refused save returns an error envelope with no `playbookId`, and wrote
  * nothing, so it is not a reason to refetch.
  */
@@ -1209,8 +1212,9 @@ export const consumePlaybookSaveToolCalls = ({
 }: {
   handledToolCallIds: Set<string>;
   messages: readonly PlaybookSaveMessage[];
-}): boolean => {
-  let hasSave = false;
+}): { playbookId: string | null } | null => {
+  let latestPlaybookId: string | null = null;
+  let hasNewSaves = false;
 
   for (const message of messages) {
     if (message.role !== "assistant") {
@@ -1224,19 +1228,41 @@ export const consumePlaybookSaveToolCalls = ({
         part["state"] !== "complete" ||
         typeof part["id"] !== "string" ||
         !isJsonObject(part["output"]) ||
-        typeof part["output"]["playbookId"] !== "string" ||
-        handledToolCallIds.has(part["id"])
+        typeof part["output"]["playbookId"] !== "string"
       ) {
+        continue;
+      }
+      if (handledToolCallIds.has(part["id"])) {
+        latestPlaybookId = null;
         continue;
       }
 
       handledToolCallIds.add(part["id"]);
-      hasSave = true;
+      hasNewSaves = true;
+      latestPlaybookId = part["output"]["playbookId"];
     }
   }
 
-  return hasSave;
+  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
 };
+
+/** The playbook a tool call saved, if it is a completed `save_playbook`
+ *  that succeeded. */
+export const savedPlaybookId = ({
+  name,
+  state,
+  output,
+}: {
+  name: string;
+  state: string;
+  output?: unknown;
+}): string | null =>
+  name === SAVE_PLAYBOOK_TOOL_NAME &&
+  state === "complete" &&
+  isJsonObject(output) &&
+  typeof output["playbookId"] === "string"
+    ? output["playbookId"]
+    : null;
 
 type ReaderAnnotationWriteToolName = Extract<
   BuiltInChatToolName,

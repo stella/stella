@@ -83,6 +83,7 @@ const ChatThreadDomPage = ({
     chat,
     conversationId: threadId,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   onSession(session);
@@ -120,6 +121,7 @@ const ChatThreadDomPage = ({
             onLoadOlder={session.loadOlder}
             onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
             onOpenCreatedDocument={session.handleOpenCreatedDocument}
+            onOpenPlaybook={session.handleOpenPlaybook}
             onResend={session.resendLatestMessage}
             queuedMessageActions={{
               remove: session.removeQueuedMessage,
