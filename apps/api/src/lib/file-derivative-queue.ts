@@ -205,7 +205,7 @@ const getQueue = createLazyBullMqQueue<FileDerivativeJobData>({
   },
 });
 
-export const enqueuePdfDerivative = async ({
+const enqueuePdfDerivative = async ({
   encrypted,
   entityId,
   fieldId,
@@ -264,7 +264,7 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
   }
 };
 
-export const enqueueImageThumbnail = async ({
+const enqueueImageThumbnail = async ({
   encrypted,
   entityId,
   fieldId,

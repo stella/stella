@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * How long the citation-authority sweep waits before its next batch, given how
  * the batch that just finished ended.
@@ -11,7 +12,7 @@
  * exercised on its own.
  */
 
-import { panic } from "better-result";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 export const RECOMPUTE_OUTCOME = {
   /** A batch of the current pass ran. */
@@ -71,10 +72,10 @@ export const nextRecomputeDelayMs = ({
     case RECOMPUTE_OUTCOME.IDLE:
       return idleDelayMs;
     case RECOMPUTE_OUTCOME.FAILED:
-      return Math.min(
-        batchDelayMs * 2 ** Math.max(0, consecutiveFailures - 1),
-        idleDelayMs,
-      );
+      return backoffDelay(Math.max(0, consecutiveFailures - 1), {
+        baseMs: batchDelayMs,
+        maxMs: idleDelayMs,
+      });
     default: {
       outcome satisfies never;
       return panic(`Unhandled outcome: ${String(outcome)}`);

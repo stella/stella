@@ -526,7 +526,7 @@ const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Upload document version",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
     readOnlyHint: false,
@@ -565,6 +565,8 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
     "document. Use only when upload_document_version cannot receive a host file " +
     "reference; do not use when the host already supplied an attached file.",
   inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
+  nonDestructiveReason:
+    "Validates document access and returns upload panel metadata without modifying any document or version.",
   access: "write",
   accountAccess: "sandbox",
   permissions: { type: "all", permissions: { entity: ["update"] } },
@@ -2502,7 +2504,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save document",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2595,7 +2597,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     // effect (a duplicate audit entry) in this compliance context.
     annotations: {
       title: "Set field value",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,

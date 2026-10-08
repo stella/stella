@@ -4,9 +4,9 @@ name: Model Catalog Upstream Check
 # nightly job compares stella's picker (@stll/ai-catalog) bidirectionally
 # with live, public, keyless listings (OpenRouter + models.dev). It fails
 # when an eligible new model has no reviewed disposition, an offered model is
-# deprecated or gone upstream, committed rates and request capabilities
-# drift from live model metadata, or the committed Text Arena quality ratings
+# deprecated or gone upstream, or the committed Text Arena quality ratings
 # (Hugging Face lmarena-ai/leaderboard-dataset) drift or lose a mapped row.
+# Rates and request capabilities refresh together in one maintained pull request.
 # Benchmark availability is inconclusive twice, then alerts on the third
 # consecutive scheduled run. A successful fetch resets the persisted streak.
 
@@ -30,6 +30,9 @@ jobs:
     permissions:
       contents: read
       actions: read
+    env:
+      REFRESH_BRANCH: bot/model-catalog-refresh
+      REFRESH_CHANGESET: .changeset/model-catalog-refresh.md
 
     steps:
       - name: Checkout GitHub API tooling
@@ -51,6 +54,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Rebuild the managed proposal from current main; a branch dispatch
+          # still validates its selected source without publishing a proposal.
+          ref: ${{ github.ref == 'refs/heads/main' && github.event.repository.default_branch || github.sha }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -88,6 +94,36 @@ jobs:
           unzip -p .benchmark-state/state.zip state.json > .benchmark-state/state.json
           test -s .benchmark-state/state.json
 
+      - name: Refresh upstream catalog snapshots
+        id: refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Rates owns acquisition of both shared inputs; capabilities stays offline.
+          bun --filter @stll/ai-catalog gen:rates --refresh
+          bun --filter @stll/ai-catalog gen:capabilities --from-snapshot
+
+          unexpected="$(git status --porcelain --untracked-files=all -- . ":(exclude,literal)packages/ai-catalog/upstream/models.dev.gen.json" ":(exclude,literal)packages/ai-catalog/upstream/openrouter.gen.json" ":(exclude,literal)packages/ai-catalog/src/model-rates.gen.ts" ":(exclude,literal)packages/ai-catalog/src/capabilities.gen.ts" ":(exclude).benchmark-state")"
+          if [[ -n "$unexpected" ]]; then
+            echo '::error::The refresh changed files outside the catalog snapshots.'
+            echo "$unexpected"
+            exit 1
+          fi
+
+          changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/upstream packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
+          if [[ -z "$changed" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cat > "$REFRESH_CHANGESET" <<'CHANGESET'
+          ---
+          "@stll/ai-catalog": patch
+          ---
+
+          Refresh upstream model rates and request capabilities.
+          CHANGESET
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
       - name: Discover models and validate IDs, rates, and capabilities
         run: |
           bun packages/scripts/src/model-catalog-upstream.ts
@@ -113,3 +149,36 @@ jobs:
           path: .benchmark-state/state.json
           if-no-files-found: error
           retention-days: 90
+
+      - name: Mint app token
+        if: ${{ !cancelled() && github.repository == 'stella/stella' && github.ref == 'refs/heads/main' && steps.refresh.outcome == 'success' }}
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # A reserved branch replaces the current proposal; the app token lets
+      # the signed refresh commit trigger the pull request checks. A refresh
+      # with no changes closes a proposal that no longer differs from main.
+      - name: Open or update the refresh PR
+        if: ${{ !cancelled() && steps.app-token.outcome == 'success' }}
+        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: refresh-pr
+          branch: ${{ env.REFRESH_BRANCH }}
+          base: main
+          paths: |
+            packages/ai-catalog/upstream/models.dev.gen.json
+            packages/ai-catalog/upstream/openrouter.gen.json
+            packages/ai-catalog/src/model-rates.gen.ts
+            packages/ai-catalog/src/capabilities.gen.ts
+            .changeset/model-catalog-refresh.md
+          commit-message: "chore: refresh model catalog snapshots"
+          pr-title: "chore: refresh model catalog snapshots"
+          pr-body: "Refreshes committed upstream inputs, generated model rates, and request capabilities together. Includes a patch changeset for @stll/ai-catalog."

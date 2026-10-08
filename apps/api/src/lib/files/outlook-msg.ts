@@ -46,7 +46,7 @@ const PROPERTY_ID = {
   attachmentMimeTag: "370e",
 } as const;
 
-export type OutlookMsgAttachment = {
+type OutlookMsgAttachment = {
   contentId: string | null;
   fileName: string | null;
   mimeType: string | null;

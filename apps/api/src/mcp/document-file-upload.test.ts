@@ -7,6 +7,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -49,6 +50,7 @@ const createContext = (): McpRequestContext => {
       "00000000-0000-4000-8000-000000000002",
     ),
     request: new Request("https://stella.example/mcp"),
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     recordAuditEvent: noopRecorder,
     safeDb,
     scopedDb: emptyScopedDb,
@@ -89,7 +91,12 @@ describe("document file upload surface", () => {
       },
     });
 
+    expect(listedUpload?.annotations?.destructiveHint).toBe(true);
+    expect(pickerDefinition).toMatchObject({
+      nonDestructiveReason: expect.stringContaining("without modifying"),
+    });
     const listedPicker = toMcpTools([pickerDefinition]).at(0);
+    expect(listedPicker?.annotations?.destructiveHint).toBe(false);
     const parsedUi = McpUiToolMetaSchema.safeParse(listedPicker?._meta?.["ui"]);
     expect(parsedUi.success).toBe(true);
     if (!parsedUi.success) {
@@ -245,6 +252,45 @@ describe("document file upload surface", () => {
         },
       },
     });
+  });
+
+  test("stops before downloading when the request context has no permit", async () => {
+    const download = mock(async () =>
+      Result.ok({
+        body: new ArrayBuffer(0),
+        headers: new Headers(),
+        ok: false,
+        status: 500,
+      }),
+    );
+    const result = await uploadRemoteDocumentVersion({
+      context: { ...createContext(), thirdPartyOutboundPermit: undefined },
+      entityId: "00000000-0000-4000-8000-000000000010",
+      file: {
+        download_url: "https://files.example/agreement.docx",
+        file_id: "file_123",
+      },
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      dependencies: {
+        abort: mock(async () => ({
+          status: "ok" as const,
+          payload: { aborted: true },
+        })),
+        captureCleanupFailure: mock(() => undefined),
+        download,
+        invoke: mock(async () => ({
+          status: "error" as const,
+          result: errorResult("unexpected invocation"),
+        })),
+        put: mock(async () => Result.ok(new Response(null, { status: 200 }))),
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "error",
+      error: { type: "structured", code: "permission_denied" },
+    });
+    expect(download).not.toHaveBeenCalled();
   });
 
   test("aborts the canonical reservation when the storage PUT fails", async () => {

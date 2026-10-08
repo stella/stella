@@ -263,6 +263,10 @@
     "seconds": 6.4,
     "source": "measured"
   },
+  "src/db/case-law-citation-review-provenance-migration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/case-law-citation-reviews-migration.test.ts": {
     "seconds": 4.6,
     "source": "measured"
@@ -277,6 +281,10 @@
   },
   "src/db/case-law-replay-rls.db.test.ts": {
     "seconds": 1.753123,
+    "source": "estimated"
+  },
+  "src/db/case-law-source-lease-purpose-migration.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/db/chat-matter-document-tool-rename.db.test.ts": {
@@ -683,6 +691,14 @@
     "seconds": 0.182872,
     "source": "estimated"
   },
+  "src/handlers/case-law/analysis/generate.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/prompts/prompt-registry.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/analysis/significance.test.ts": {
     "seconds": 0.620126,
     "source": "estimated"
@@ -797,6 +813,10 @@
   },
   "src/handlers/case-law/decisions/document-on-demand.test.ts": {
     "seconds": 6.156543,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/decisions/document-ownership-route.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/decisions/document-state.test.ts": {
@@ -1727,6 +1747,10 @@
     "seconds": 0.154141,
     "source": "estimated"
   },
+  "src/handlers/case-law/polarity/consts.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/polarity/context.test.ts": {
     "seconds": 0.446202,
     "source": "estimated"
@@ -1843,10 +1867,6 @@
     "seconds": 0.460327,
     "source": "estimated"
   },
-  "src/handlers/chat/chat-execution-admission.test.ts": {
-    "seconds": 0.463732,
-    "source": "estimated"
-  },
   "src/handlers/chat/chat-message-parts.test.ts": {
     "seconds": 0.521217,
     "source": "estimated"
@@ -1925,6 +1945,10 @@
   },
   "src/handlers/chat/data-scope.test.ts": {
     "seconds": 0.479054,
+    "source": "estimated"
+  },
+  "src/handlers/chat/decline-continuation-request.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/chat/export/citation-footnotes.test.ts": {
@@ -3121,6 +3145,10 @@
   },
   "src/handlers/legislation/work-names.db.test.ts": {
     "seconds": 3.41409,
+    "source": "estimated"
+  },
+  "src/handlers/lists/columns/create.postgres.test.ts": {
+    "seconds": 3,
     "source": "estimated"
   },
   "src/handlers/lists/generation-candidates/acceptance/create.db.test.ts": {
@@ -4705,10 +4733,6 @@
   },
   "src/lib/chat/workspace-url-mentions.test.ts": {
     "seconds": 0.164799,
-    "source": "estimated"
-  },
-  "src/lib/chunked.test.ts": {
-    "seconds": 0.044816,
     "source": "estimated"
   },
   "src/lib/clauses/body-schema.test.ts": {
@@ -6343,6 +6367,14 @@
     "seconds": 0.078638,
     "source": "estimated"
   },
+  "src/lib/legal-search/deferred-document-ownership-contract.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/deferred-document-source-ownership.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/document-stage-observation.test.ts": {
     "seconds": 3.71102,
     "source": "estimated"
@@ -7075,12 +7107,24 @@
     "seconds": 0.154125,
     "source": "estimated"
   },
+  "src/lib/rate-limit/execution-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/rate-limit/mcp-read-fence.test.ts": {
     "seconds": 0.730715,
     "source": "estimated"
   },
   "src/lib/rate-limit/mcp-read-fence.valkey.test.ts": {
     "seconds": 0.0948,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-action-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-dispatch-admission.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/rate-limit/organization-action-admission.test.ts": {
@@ -7899,6 +7943,10 @@
     "seconds": 0.247414,
     "source": "estimated"
   },
+  "src/lib/usage/effective-policy.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/usage/index.test.ts": {
     "seconds": 3.462843,
     "source": "estimated"
@@ -7927,8 +7975,16 @@
     "seconds": 3.2,
     "source": "measured"
   },
+  "src/lib/usage/organization-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/usage/organization-action-budget.test.ts": {
     "seconds": 0.207401,
+    "source": "estimated"
+  },
+  "src/lib/usage/organization-effective-policy.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/usage/policy-catalog.test.ts": {
@@ -8173,6 +8229,10 @@
   },
   "src/mcp/auth.test.ts": {
     "seconds": 0.41,
+    "source": "estimated"
+  },
+  "src/mcp/caller-feature-projection.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/capability-feature.test.ts": {
@@ -8623,6 +8683,14 @@
     "seconds": 0.566837,
     "source": "estimated"
   },
+  "src/scripts/corpus-generation.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/scripts/corpus-generation.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/scripts/corpus-index-query-diff-client.test.ts": {
     "seconds": 0.12729,
     "source": "estimated"
@@ -8789,6 +8857,10 @@
   },
   "src/tests/helpers/fake-s3.test.ts": {
     "seconds": 0.899616,
+    "source": "estimated"
+  },
+  "src/tests/helpers/handler-context.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/helpers/provider-request-transcript.test.ts": {
@@ -9105,6 +9177,58 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
+    "source": "estimated"
+  },
+  "src/scripts/review-account.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/lock-for-write.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-extension.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-query.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-order.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   }
 }

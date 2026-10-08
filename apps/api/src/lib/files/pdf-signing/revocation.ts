@@ -21,6 +21,7 @@ import * as pkijs from "pkijs";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   accessLocations,
   carriedCertificates,
@@ -231,13 +232,15 @@ const ocspRequestFor = async (
   return new Uint8Array(request.toSchema(true).toBER(false));
 };
 
-export const createTrackedRevocationProvider = (
-  fetcher: PkiFetcher = withFetchBudget(
-    safePkiFetch,
-    REVOCATION_FETCH_BUDGET_MS,
-  ),
-  now: () => Date = () => new Date(),
-): TrackedRevocationProvider => {
+export const createTrackedRevocationProvider = ({
+  permit,
+  fetcher = withFetchBudget(safePkiFetch, REVOCATION_FETCH_BUDGET_MS),
+  now = () => new Date(),
+}: {
+  permit: ThirdPartyOutboundPermit;
+  fetcher?: PkiFetcher;
+  now?: () => Date;
+}): TrackedRevocationProvider => {
   const covered = new Set<string>();
   const revoked = new Set<string>();
   const record = (certificateDer: Uint8Array, verdict: "good" | "revoked") =>
@@ -266,6 +269,7 @@ export const createTrackedRevocationProvider = (
           contentType: "application/ocsp-request",
           maxBytes: OCSP_RESPONSE_MAX_BYTES,
           method: "POST",
+          permit,
           url,
         });
         const status =
@@ -299,6 +303,7 @@ export const createTrackedRevocationProvider = (
         const crl = await fetcher({
           maxBytes: CRL_MAX_BYTES,
           method: "GET",
+          permit,
           url,
         });
         const verdict =

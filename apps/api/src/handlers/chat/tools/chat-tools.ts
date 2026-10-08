@@ -114,6 +114,7 @@ import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/reg
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
@@ -407,6 +408,11 @@ export type GetChatToolsProps = {
   scopedDb: ScopedDb;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   organizationId: SafeId<"organization">;
+  /**
+   * The turn's admission. A run's tool set carries it; a set built only to
+   * validate or name tools never executes and has none.
+   */
+  modelAdmission?: ModelDispatchAdmission | undefined;
   /**
    * Caller's workspace member role. Gates role-restricted tools so a
    * chat-capable role without the matching grant cannot reach them.
@@ -772,6 +778,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     scopedDb,
     pinServerValidatedWorkspaceId,
     organizationId,
+    modelAdmission,
     memberRole,
     orgAIConfig,
     managedAIResidency,
@@ -828,6 +835,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ? createFolderConsistencyReviewTools({
           createAbortSignal: createAIAbortSignal,
           organizationId,
+          modelAdmission,
           orgAIConfig,
           managedAIResidency,
           promptCachingEnabled,
@@ -1086,6 +1094,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           scopedDb,
           safeDb,
           organizationId,
+          modelAdmission,
           userId,
           orgAIConfig,
           managedAIResidency,
@@ -1104,6 +1113,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     ? createTemplateAuthoringTools({
         safeDb,
         organizationId,
+        modelAdmission,
         userId,
         orgAIConfig,
         managedAIResidency,
@@ -1194,6 +1204,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
               projectToolMapForSubagent(tools, proposalSink),
           }),
         organizationId,
+        modelAdmission,
         orgAIConfig,
         managedAIResidency,
         safeDb,

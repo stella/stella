@@ -348,21 +348,21 @@ describe("benchmark check availability", () => {
     expect(checked.output).toContain("model catalog issue(s)");
   });
 
-  test("capability checks still fail immediately", async () => {
+  test("capability checks use committed inputs during upstream outages", async () => {
     const { run } = await setup();
     const checked = await run(
-      { status: 200, body: { data: [] } },
+      { network: true },
       "model-catalog-capabilities-gen.ts",
     );
-    expect(checked.exitCode).toBe(1);
-    expect(checked.output).toContain("absent from models.dev");
+    expect(checked.exitCode).toBe(0);
+    expect(checked.output).toContain("capabilities.gen.ts is current");
   });
 
-  test("rate checks still fail immediately", async () => {
+  test("rate checks use committed inputs during upstream outages", async () => {
     const { run } = await setup();
     const checked = await run({ status: 503 }, "model-catalog-rates-gen.ts");
-    expect(checked.exitCode).toBe(1);
-    expect(checked.output).toContain("models.dev responded 503");
+    expect(checked.exitCode).toBe(0);
+    expect(checked.output).toContain("model-rates.gen.ts is current");
   });
 
   test("snapshot drift fails and resets the availability streak", async () => {

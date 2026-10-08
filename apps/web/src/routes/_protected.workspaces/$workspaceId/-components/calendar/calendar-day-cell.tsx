@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 
-import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -14,6 +13,7 @@ import { withDropAnnouncementData } from "@/components/drag-and-drop-live-region
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
+import { dropTargetForElements } from "@/lib/drag-and-drop/element-registration";
 import type { EntityKind } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";

@@ -173,10 +173,9 @@ returns a single text content of
 with `isError` set. `hint` and `retryable` are omitted when absent. Build these
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
-`code` set is closed (`error-codes.ts`): `validation_error`, `missing_scope`,
-`feature_disabled`, `not_found`, `confirmation_required`, `rate_limited`,
-`search_index_unavailable` (retryable: the legal search index is unreachable),
-`unknown_tool`, `internal_error`. Agents branch on `code`; `hint` states the
+`code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).
+Verification active and daily run limits preserve their distinct codes from
+`@stll/api-contract/verification-run-caps`. Agents branch on `code`; `hint` states the
 next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
 CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
 the string values are a stable contract. `internal_error` never leaks internals:
@@ -185,12 +184,19 @@ message plus the feedback-tool hint.
 
 ## Destructive-op confirm guardrail
 
-Every tool with `annotations.destructiveHint === true` (the `delete_*` tools)
-advertises a `confirm` boolean (`confirmProp()`) and is refused before dispatch
-unless the call sets `confirm: true`. The gate lives in `handleMcpToolCall`,
-before any DB access, and returns `confirmation_required`. This stops an agent
-from deleting tenant data without an explicit, human-approved confirmation; the
-handlers themselves tolerate and ignore the extra `confirm` arg.
+`annotations.destructiveHint` tells clients that a tool can change existing
+stored data, including updates and deletions. It does not require a server
+confirmation gate: reversible updates may declare the hint without a
+`destructiveBehavior` or a `confirm` input.
+
+`destructiveBehavior` declares the server confirmation policy. The `always`
+behavior (used by the `delete_*` tools) requires `confirm: true` on every call;
+`input-discriminator` requires it only for the declared actions. These tools
+advertise a `confirm` boolean (`confirmProp()`). The gate in
+`handleMcpToolCall` returns `confirmation_required` before dispatch when
+confirmation is required and absent. Catalog-dispatched capabilities resolve
+their confirmation policy from the selected target; upstream servers own their
+operation-specific confirmation protocol.
 
 ## Feedback pipeline
 

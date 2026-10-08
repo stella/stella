@@ -33,6 +33,7 @@ import type {
 } from "@stll/api-contract";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { deriveBlockId } from "@stll/folio-core/server";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
@@ -74,7 +75,6 @@ import type {
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
@@ -5771,7 +5771,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   // Chunks keep input order, so a folder lands before the documents in it.
-  for (const chunk of chunked(entityRows, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(entityRows, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -5788,7 +5788,7 @@ export async function seed(organizationId?: string, userId?: string) {
           }),
     );
   }
-  for (const chunk of chunked(plainVersionRows, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(plainVersionRows, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx.insert(entityVersions).values(chunk).onConflictDoNothing(),
@@ -5830,7 +5830,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   // Link currentVersionId
-  for (const chunk of chunked(allEntities, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allEntities, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6127,7 +6127,7 @@ export async function seed(organizationId?: string, userId?: string) {
     const wsEntities = allEntities.filter((e) => e.workspaceId === plan.wsId);
     allFields.push(...buildFields(plan.wsLabel, wsEntities));
   }
-  for (const chunk of chunked(allFields, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allFields, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6153,7 +6153,7 @@ export async function seed(organizationId?: string, userId?: string) {
       ...buildExportReviewJustifications(plan.wsId, plan.wsLabel, wsEntities),
     );
   }
-  for (const chunk of chunked(allJustifications, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allJustifications, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx

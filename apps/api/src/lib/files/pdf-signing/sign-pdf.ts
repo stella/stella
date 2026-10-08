@@ -35,6 +35,7 @@ import type {
 import { panic, Result, TaggedError } from "better-result";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/files/pdf-signing/certificate";
@@ -417,6 +418,7 @@ export const captureSigningDigest = async (
 };
 
 type ApplySignatureInvocation = SigningInvocation & {
+  permit: ThirdPartyOutboundPermit;
   expectedDigestHex: string;
   signature: Uint8Array;
   /** Tried in order; empty signs without trusted time. */
@@ -572,7 +574,8 @@ export const applySignature = async (
       invocation.timestampAuthorities,
     );
     const provider =
-      invocation.revocationProvider ?? createTrackedRevocationProvider();
+      invocation.revocationProvider ??
+      createTrackedRevocationProvider({ permit: invocation.permit });
     const signerChain = [
       invocation.certificate,
       ...invocation.certificateChain,
@@ -639,6 +642,7 @@ export const applySignature = async (
     // The timestamp's own chain, completed like the signer's: what the
     // token carries, then its issuers' AIA URLs through the guard.
     const timestampIssuers = await completeCertificateChain({
+      permit: invocation.permit,
       candidates: [
         ...timestamp.certificates,
         ...invocation.timestampTrustAnchors,

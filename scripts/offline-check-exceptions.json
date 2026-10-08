@@ -1,0 +1,90 @@
+[
+  {
+    "command": "[\"bun\",\"apps/api/scripts/export-capability-catalog.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"--filter\",\"@stll/api\",\"gen:web-api-types\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"--filter\",\"@stll/web\",\"generate:route-tree\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"--bun\",\"turbo\",\"run\",\"format\",\"${args[@]}\",\"--\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/ratchet.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bash\",\".ai/shared/scripts/sync-ai-skills.sh\",\"--check\",\".\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/check-published-package-lists.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"cargo\",\"fmt\",\"--manifest-path\",\"apps/desktop/src-tauri/Cargo.toml\",\"--\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/rc-bailouts.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/design-lint-baseline.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/sql-perf-baseline.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"apps/api/scripts/chat-mutation-matrix.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"apps/api/scripts/refresh-test-durations.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/ownership.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/outbound-transport-ownership.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/queue-authority.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/design-tokens-doc.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/suppression-waivers.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/crawl-posture.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"apps/api/scripts/refresh-test-durations.ts\",\"--check\",\"$API_TEST_TIMINGS_DIR\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "[\"bun\",\"scripts/bundle-baseline.ts\",\"--check\"]",
+    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
+  },
+  {
+    "command": "source:model-catalog-benchmarks-gen.ts",
+    "reason": "Benchmark enrichment is an explicit live refresh outside blocking catalog snapshot verification; preserve its existing upstream fetch."
+  }
+]
