@@ -196,6 +196,14 @@ struct OpenSegment {
   privacy: CapturedWindowPrivacy,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityDraftedEntry {
+  pub start: String,
+  pub end: String,
+  pub entry_id: String,
+}
+
 /// The day a view asks for, with what the window needs to render it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -216,6 +224,8 @@ pub struct ActivityDaySnapshot {
   segments: Vec<ActivitySegment>,
   /// A day whose file exists but cannot be read.
   unreadable: bool,
+  drafted_entries: Vec<ActivityDraftedEntry>,
+  pub(crate) time_billing_enabled: bool,
 }
 
 /// The tray receives only status, a day total and an approved short label.
@@ -256,6 +266,7 @@ pub struct ActivityManager {
   /// so a flush never drops what an earlier run stored.
   days: BTreeMap<NaiveDate, Vec<ActivitySegment>>,
   dirty: BTreeSet<NaiveDate>,
+  drafted_entries: BTreeMap<NaiveDate, Vec<ActivityDraftedEntry>>,
   last_flush: Option<Instant>,
   last_sample: Option<(DateTime<Utc>, Instant)>,
   wall_floor: Option<DateTime<Utc>>,
@@ -412,6 +423,7 @@ impl ActivityManager {
       open: None,
       days: BTreeMap::new(),
       dirty: BTreeSet::new(),
+      drafted_entries: BTreeMap::new(),
       last_flush: None,
       last_sample: None,
       wall_floor: None,
@@ -453,6 +465,7 @@ impl ActivityManager {
     self.settings = settings;
     self.open = None;
     self.days.clear();
+    self.drafted_entries.clear();
     self.dirty.clear();
     self.last_flush = None;
     self.last_sample = None;
@@ -1039,6 +1052,7 @@ impl ActivityManager {
     let before = self.days.len();
     self.days.retain(|date, _| *date >= earliest);
     self.dirty.retain(|date| *date >= earliest);
+    self.drafted_entries.retain(|date, _| *date >= earliest);
     let dropped = self.days.len() != before;
     match &self.persistence {
       ActivityPersistence::Encrypted(store) => {
@@ -1065,6 +1079,7 @@ impl ActivityManager {
       store.delete_day(date)?;
     }
     self.days.remove(&date);
+    self.drafted_entries.remove(&date);
     self.dirty.remove(&date);
     Ok(())
   }
@@ -1092,7 +1107,49 @@ impl ActivityManager {
     }
     self.open = None;
     self.days.clear();
+    self.drafted_entries.clear();
     self.dirty.clear();
+    Ok(())
+  }
+
+  fn drafted_for_day(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivityDraftedEntry>, String> {
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      return store.load_drafted(date);
+    }
+    Ok(self.drafted_entries.get(&date).cloned().unwrap_or_default())
+  }
+
+  pub(crate) fn require_draftable(
+    &self,
+    date: NaiveDate,
+    start: &str,
+    _end: &str,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self
+      .drafted_for_day(date)?
+      .iter()
+      .any(|marker| marker.start == start)
+    {
+      return Err("activity block already drafted".to_string());
+    }
+    Ok(())
+  }
+
+  pub(crate) fn record_drafted(
+    &mut self,
+    date: NaiveDate,
+    marker: ActivityDraftedEntry,
+  ) -> Result<(), String> {
+    self.require_draftable(date, &marker.start, &marker.end)?;
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      store.record_drafted(date, marker)?;
+    } else {
+      self.drafted_entries.entry(date).or_default().push(marker);
+    }
     Ok(())
   }
 
@@ -1249,6 +1306,10 @@ impl ActivityManager {
       }
     }
     foreground_app::normalize_exclusions(&mut browser_apps, MAX_EXCLUSIONS);
+    let (drafted_entries, draft_unreadable) = match self.drafted_for_day(date) {
+      Ok(entries) => (entries, false),
+      Err(_) => (Vec::new(), true),
+    };
     ActivityDaySnapshot {
       date: format_date(date),
       today: format_date(today),
@@ -1264,7 +1325,9 @@ impl ActivityManager {
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps,
       segments,
-      unreadable,
+      unreadable: unreadable || draft_unreadable,
+      drafted_entries,
+      time_billing_enabled: false,
     }
   }
 }

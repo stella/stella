@@ -14,7 +14,9 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::activity::{ActivitySegment, ActivitySettings, format_date, parse_date};
+use crate::activity::{
+  ActivityDraftedEntry, ActivitySegment, ActivitySettings, format_date, parse_date,
+};
 use crate::local_store::{EncryptedJsonFile, create_private_dir};
 
 const LABEL: &str = "activity";
@@ -26,6 +28,8 @@ const DAY_FILE_SUFFIX: &str = ".json.enc";
 #[serde(rename_all = "camelCase")]
 struct ActivityDayFile {
   segments: Vec<ActivitySegment>,
+  #[serde(default)]
+  drafted_entries: Vec<ActivityDraftedEntry>,
 }
 
 #[derive(Clone)]
@@ -117,13 +121,53 @@ impl ActivityStore {
     date: NaiveDate,
     segments: &[ActivitySegment],
   ) -> Result<(), String> {
-    if segments.is_empty() {
+    let drafted_entries = self.load_drafted(date)?;
+    if segments.is_empty() && drafted_entries.is_empty() {
       return self.delete_day(date);
     }
     self.ensure_dirs()?;
     self.day_file(date).persist(&ActivityDayFile {
       segments: segments.to_vec(),
+      drafted_entries,
     })
+  }
+
+  pub fn load_drafted(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivityDraftedEntry>, String> {
+    Ok(
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .map(|day| day.drafted_entries)
+        .unwrap_or_default(),
+    )
+  }
+
+  pub fn record_drafted(
+    &self,
+    date: NaiveDate,
+    marker: ActivityDraftedEntry,
+  ) -> Result<(), String> {
+    let mut day =
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .unwrap_or(ActivityDayFile {
+          segments: Vec::new(),
+          drafted_entries: Vec::new(),
+        });
+    if day
+      .drafted_entries
+      .iter()
+      .any(|saved| saved.start == marker.start)
+    {
+      return Err("activity block already drafted".to_string());
+    }
+    day.drafted_entries.push(marker);
+    self.ensure_dirs()?;
+    self.day_file(date).persist(&day)
   }
 
   pub fn delete_day(&self, date: NaiveDate) -> Result<(), String> {
@@ -364,6 +408,34 @@ mod tests {
       start: Utc.with_ymd_and_hms(2026, 3, 1, 9, 0, 0).unwrap(),
       end: Utc.with_ymd_and_hms(2026, 3, 1, 9, 30, 0).unwrap(),
     }
+  }
+
+  #[test]
+  fn draft_markers_survive_segment_flushes_and_stay_in_their_day_and_account() {
+    let (store_a, root_a) = store();
+    let (store_b, root_b) = store();
+    let day = date(7);
+    store_a.save_day(day, &[segment("app")]).unwrap();
+    store_a
+      .record_drafted(
+        day,
+        ActivityDraftedEntry {
+          start: "2026-10-07T08:00:00Z".into(),
+          end: "2026-10-07T08:12:00Z".into(),
+          entry_id: "entry_a".into(),
+        },
+      )
+      .unwrap();
+    store_a.save_day(day, &[segment("app_updated")]).unwrap();
+    assert_eq!(store_a.load_drafted(day).unwrap()[0].entry_id, "entry_a");
+    assert!(store_a.load_drafted(date(8)).unwrap().is_empty());
+    assert!(store_b.load_drafted(day).unwrap().is_empty());
+    let restored = ActivityStore::new(store_a.key, root_a.clone());
+    assert_eq!(restored.load_drafted(day).unwrap()[0].entry_id, "entry_a");
+    store_a.delete_day(day).unwrap();
+    assert!(store_a.load_drafted(day).unwrap().is_empty());
+    let _ = fs::remove_dir_all(root_a);
+    let _ = fs::remove_dir_all(root_b);
   }
 
   #[test]

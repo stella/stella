@@ -13,6 +13,8 @@
     "allow-activity-set-browser-title-capture",
     "allow-activity-set-app-detail-capture",
     "allow-activity-open-accessibility-settings",
+    "allow-time-entry-search-matters",
+    "allow-time-entry-submit-confirmed",
     "allow-activity-set-recording-status",
     "allow-activity-set-retention",
     "allow-activity-exclude-app",

@@ -17,8 +17,6 @@ use crate::{
   local_window::ActivityCaller,
 };
 
-const MAX_COPY_BYTES: usize = 16 * 1024;
-
 fn lock_error() -> String {
   "activity timeline is unavailable".to_string()
 }
@@ -43,6 +41,7 @@ pub fn activity_get_day(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
+  gates: State<'_, crate::feature_gate::FeatureGates>,
   date: Option<String>,
 ) -> Result<ActivityDaySnapshot, String> {
   let now = Utc::now();
@@ -61,13 +60,16 @@ pub fn activity_get_day(
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   let other_account_history_days = manager.other_account_history_days()?;
-  Ok(manager.day_snapshot(
+  let mut snapshot = manager.day_snapshot(
     date,
     now,
     &caller,
     other_account_history_days,
     details_access,
-  ))
+  );
+  snapshot.time_billing_enabled =
+    gates.is_enabled(crate::feature_gate::DesktopFeature::TimeBilling);
+  Ok(snapshot)
 }
 
 #[tauri::command]
