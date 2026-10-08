@@ -69,7 +69,7 @@ const normalizeStructuredCitation = (value: string): string =>
     .replace(/[\p{P}\p{Z}\s]+/gu, "")
     .trim();
 
-const identifierValueSchema = v.pipe(
+export const identifierValueSchema = v.pipe(
   v.string(),
   v.maxLength(DECISION_IDENTIFIER_MAX_LENGTH),
   v.check(
@@ -78,7 +78,7 @@ const identifierValueSchema = v.pipe(
   ),
 );
 
-const structuredIdentifierValueSchema = v.pipe(
+export const structuredIdentifierValueSchema = v.pipe(
   identifierValueSchema,
   v.check(
     (value) => normalizeStructuredCitation(value).length > 0,
