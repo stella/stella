@@ -159,7 +159,9 @@ const mountAction = async ({
           workspaceId={workspaceId}
           listId={listId}
           itemEntityId={itemEntityId}
-          onCreated={() => created.push(itemEntityId)}
+          onCreated={() => {
+            created.push(itemEntityId);
+          }}
         />
         {showSources && (
           <ListItemSources
