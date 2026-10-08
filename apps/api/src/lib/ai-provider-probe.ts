@@ -28,7 +28,8 @@ import type {
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const DEFAULT_VALIDATION_TIMEOUT_MS = 5000;
-const PROBE_MAX_BYTES = 64 * 1024;
+const PROBE_MAX_BYTES = 1_000_000;
+const PROBE_ERROR_MAX_BYTES = 64 * 1024;
 type ProbeFetch = (opts: {
   body?: SafeOutboundFetchBody;
   headers?: SafeOutboundHeaders;
@@ -140,6 +141,46 @@ const extractDetail = (
   return undefined;
 };
 
+type ProviderProbeFailureOptions = {
+  apiKey: string;
+  provider: ProviderProbeValue;
+  response: SafeOutboundFetchResponse;
+};
+
+const providerProbeFailure = ({
+  apiKey,
+  provider,
+  response,
+}: ProviderProbeFailureOptions): ProviderProbeResult => {
+  const label = PROVIDER_LABELS[provider];
+  const detail = extractDetail(response, apiKey);
+  if (
+    detail !== undefined &&
+    new TextEncoder().encode(detail).byteLength > PROBE_ERROR_MAX_BYTES
+  ) {
+    return {
+      valid: false,
+      error: `${label} returned an error message exceeding the 64 KiB diagnostic limit (HTTP ${response.status}); verification could not display the full provider error`,
+    };
+  }
+
+  const error = parseJsonBody(response)?.["error"];
+  const code = identifyProviderSetupError({
+    provider,
+    error: isRecord(error) ? error : undefined,
+  });
+  const rejected =
+    provider === "azure_foundry" || provider === "huggingface"
+      ? "key or endpoint"
+      : "key";
+  const summary = `${label} rejected the ${rejected} (HTTP ${response.status})`;
+  return {
+    valid: false,
+    ...(code === undefined ? {} : { code }),
+    error: detail ? `${summary}: ${detail}` : summary,
+  };
+};
+
 /**
  * Where a provider without a fixed endpoint is served, which Azure
  * deployments it must expose, and how the probe reaches it.
@@ -213,20 +254,7 @@ export const probeProvider = async ({
     return { valid: true };
   }
 
-  const detail = extractDetail(response.value, apiKey);
-  const error = parseJsonBody(response.value)?.["error"];
-  const code = identifyProviderSetupError({
-    provider,
-    error: isRecord(error) ? error : undefined,
-  });
-  const label = PROVIDER_LABELS[provider];
-  return {
-    valid: false,
-    ...(code === undefined ? {} : { code }),
-    error: detail
-      ? `${label} rejected the key (HTTP ${response.value.status}): ${detail}`
-      : `${label} rejected the key (HTTP ${response.value.status})`,
-  };
+  return providerProbeFailure({ apiKey, provider, response: response.value });
 };
 
 const probeHuggingFace = async ({
@@ -273,13 +301,11 @@ const probeHuggingFace = async ({
     return { valid: true };
   }
 
-  const detail = extractDetail(response.value, apiKey);
-  return {
-    valid: false,
-    error: detail
-      ? `Hugging Face rejected the key or endpoint (HTTP ${response.value.status}): ${detail}`
-      : `Hugging Face rejected the key or endpoint (HTTP ${response.value.status})`,
-  };
+  return providerProbeFailure({
+    apiKey,
+    provider: "huggingface",
+    response: response.value,
+  });
 };
 
 const probeAzureFoundry = async ({
@@ -327,13 +353,11 @@ const probeAzureFoundry = async ({
   }
 
   if (!response.value.ok) {
-    const detail = extractDetail(response.value, apiKey);
-    return {
-      valid: false,
-      error: detail
-        ? `Azure Foundry rejected the key or endpoint (HTTP ${response.value.status}): ${detail}`
-        : `Azure Foundry rejected the key or endpoint (HTTP ${response.value.status})`,
-    };
+    return providerProbeFailure({
+      apiKey,
+      provider: "azure_foundry",
+      response: response.value,
+    });
   }
 
   if (!expectedDeployments || expectedDeployments.length === 0) {

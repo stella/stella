@@ -13,6 +13,7 @@ GlobalRegistrator.register({
 });
 const originalFetch = globalThis.fetch;
 const requests: { method: string; url: string; body: string }[] = [];
+let settingsFailure: { code: string; message: string } | undefined;
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const config = {
   configured: false,
@@ -50,6 +51,12 @@ globalThis.fetch = Object.assign(
     }
     requests.push({ method, url, body });
     if (url.includes("organization-settings/ai-config")) {
+      if (
+        settingsFailure !== undefined &&
+        (method === "POST" || method === "DELETE")
+      ) {
+        return Response.json(settingsFailure, { status: 400 });
+      }
       return Response.json(savedConfig);
     }
     return Response.json({ models: [] });
@@ -74,6 +81,7 @@ afterEach(() => {
   }
   clients.length = 0;
   requests.length = 0;
+  settingsFailure = undefined;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -337,4 +345,78 @@ test("saving one dirty row preserves the other key and its leave prompt", async 
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(appRouter.state.location.pathname).toBe("/settings/organization");
+});
+
+test("card save preserves the full Eden provider error and Workspace ID guidance", async () => {
+  await mount();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.addProvider,
+    }),
+  );
+  const input = screen
+    .getAllByLabelText(messages.organization.aiConfig.apiKey)
+    .at(1);
+  const save = screen
+    .getAllByRole("button", { name: messages.common.save })
+    .at(1);
+  if (input === undefined || save === undefined) {
+    panic("Anthropic row must be present");
+  }
+  const key = `sk-ant-api03-${"b".repeat(32)}5678`;
+  const reason = `Anthropic: This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. ${"Provider setup details. ".repeat(30)}Final workspace recovery instruction.`;
+  settingsFailure = {
+    code: "ai_config_anthropic_workspace_required",
+    message: reason,
+  };
+  fireEvent.change(input, { target: { value: key } });
+  expect(
+    screen.queryByLabelText(
+      messages.organization.aiConfig.anthropicWorkspaceId,
+    ),
+  ).toBeNull();
+  fireEvent.click(save);
+  const error = await screen.findByRole("alert");
+  expect(error.textContent).toContain(reason);
+  expect(error.textContent).toContain(
+    messages.organization.aiConfig.anthropicWorkspaceRequired,
+  );
+  expect(
+    screen.getByRole("link", {
+      name: messages.organization.aiConfig.anthropicWorkspaces,
+    }),
+  ).toHaveProperty("href", "https://console.anthropic.com/settings/workspaces");
+  expect(
+    screen.getByLabelText(messages.organization.aiConfig.anthropicWorkspaceId),
+  ).toBeDefined();
+  expect(input).toHaveProperty("value", key);
+  expect(
+    screen.queryByText(messages.organization.aiConfig.savedVerified),
+  ).toBeNull();
+  const writes = requests.filter(
+    ({ method }) => method === "POST" || method === "DELETE",
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes.at(0)?.body).toContain('"provider":"anthropic"');
+});
+
+test("card removal preserves the full Eden provider error in the saved row", async () => {
+  await mount(savedConfig);
+  const reason = `Google: Configuration removal was refused. ${"Full provider details. ".repeat(30)}Final removal instruction.`;
+  settingsFailure = { code: "ai_config_invalid", message: reason };
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.removeProvider,
+    }),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: messages.common.confirm }),
+  );
+  expect((await screen.findByRole("alert")).textContent).toContain(reason);
+  expect(screen.getByText("AIza****1234")).toBeDefined();
+  const writes = requests.filter(
+    ({ method }) => method === "POST" || method === "DELETE",
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes.at(0)?.method).toBe("DELETE");
 });

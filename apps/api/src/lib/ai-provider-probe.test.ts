@@ -70,6 +70,13 @@ const mockSafeOutboundFetchBytes = async (opts: {
       ? nextResponse.body
       : JSON.stringify(nextResponse.body),
   );
+  if (bodyBytes.byteLength > opts.maxBytes) {
+    return Result.err(
+      new MockSafeOutboundFetchError({
+        message: "Response exceeds transport limit",
+      }),
+    );
+  }
   return Result.ok({
     body: bodyBytes.buffer.slice(
       bodyBytes.byteOffset,
@@ -452,9 +459,88 @@ test("provider transport is bounded without shortening accepted diagnostic text"
     provider: "openai",
     apiKey: "fixture-key",
   });
-  expect(calls.at(0)?.maxBytes).toBe(64 * 1024);
+  expect(calls.at(0)?.maxBytes).toBe(1_000_000);
   expect(result).toMatchObject({
     valid: false,
     error: expect.stringContaining(message),
+  });
+});
+
+const largeModelListOptions = [
+  { provider: "openai", apiKey: "fixture-key" },
+  { provider: "google", apiKey: "fixture-key" },
+  { provider: "bedrock", apiKey: "fixture-key" },
+  { provider: "mistral", apiKey: "fixture-key" },
+  { provider: "anthropic", apiKey: "fixture-key" },
+  { provider: "openrouter", apiKey: "fixture-key" },
+  {
+    provider: "azure_foundry",
+    apiKey: "fixture-key",
+    endpoint: "https://example.openai.azure.com/openai/v1",
+    expectedAzureDeployments: ["fixture-deployment"],
+  },
+  {
+    provider: "huggingface",
+    apiKey: "fixture-key",
+    endpoint: "https://example.endpoints.huggingface.cloud/v1",
+  },
+] as const satisfies readonly Omit<
+  ProbeProviderOptions,
+  "fetchBytes" | "permit"
+>[];
+
+const assertLargeModelList = async (
+  options: Omit<ProbeProviderOptions, "fetchBytes" | "permit">,
+) => {
+  const body = {
+    data: [
+      {
+        id: "fixture-deployment",
+        description: "Model details ".repeat(10_000),
+      },
+    ],
+  };
+  expect(
+    new TextEncoder().encode(JSON.stringify(body)).byteLength,
+  ).toBeGreaterThan(64 * 1024);
+  nextResponse = { kind: "ok", status: 200, body };
+  expect(await probeProvider(options)).toEqual({ valid: true });
+  expect(calls.at(0)?.maxBytes).toBe(1_000_000);
+};
+
+const assertOversizedError = async (
+  options: Omit<ProbeProviderOptions, "fetchBytes" | "permit">,
+) => {
+  const message = "Neutral provider diagnostic ".repeat(3000);
+  nextResponse = { kind: "ok", status: 400, body: { error: { message } } };
+  const result = await probeProvider(options);
+  expect(JSON.stringify(result)).not.toContain("Neutral provider diagnostic");
+  expect(result).toMatchObject({
+    valid: false,
+    error: expect.stringContaining("exceeding the 64 KiB diagnostic limit"),
+  });
+};
+
+for (const options of largeModelListOptions) {
+  test(`accepts successful model lists above 64 KiB for ${options.provider}`, () =>
+    assertLargeModelList(options));
+  test(`refuses oversized error diagnostics without truncation for ${options.provider}`, () =>
+    assertOversizedError(options));
+}
+
+test("retains a full short diagnostic from a large error response", async () => {
+  const message = "The configured project does not have access to this model.";
+  const body = {
+    error: { message, metadata: "Neutral error metadata ".repeat(5000) },
+  };
+  expect(
+    new TextEncoder().encode(JSON.stringify(body)).byteLength,
+  ).toBeGreaterThan(64 * 1024);
+  nextResponse = { kind: "ok", status: 403, body };
+  expect(
+    await probeProvider({ provider: "openai", apiKey: "fixture-key" }),
+  ).toEqual({
+    valid: false,
+    error: `OpenAI rejected the key (HTTP 403): ${message}`,
   });
 });

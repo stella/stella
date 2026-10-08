@@ -158,6 +158,12 @@ type AIConfigFormProps = {
   organizationId: string;
 };
 
+type PersistAIConfigOptions = {
+  nextProviders: ProviderCredentialDraft[];
+  nextRoles: RoleModelSelections;
+  mode: "credentials" | "settings";
+};
+
 export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
   const t = useTranslations("organization");
   const common = useTranslations("common");
@@ -215,11 +221,6 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     await invalidateAIConfigurationCaches(queryClient, organizationId);
   };
 
-  type PersistAIConfigOptions = {
-    nextProviders: ProviderCredentialDraft[];
-    nextRoles: RoleModelSelections;
-    mode: "credentials" | "settings";
-  };
   const persist = async ({
     nextProviders,
     nextRoles,
@@ -230,13 +231,12 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       roleModels: nextRoles,
     });
     if (!overrideModels) {
-      return Result.err(
-        new APIError({
-          code: "ai_config_model_invalid",
-          status: 400,
-          message: t("aiConfig.selectModelForEachRole"),
-        }),
-      ).unwrap();
+      const error = new APIError({
+        code: "ai_config_model_invalid",
+        status: 400,
+        message: t("aiConfig.selectModelForEachRole"),
+      });
+      throw error;
     }
     const decision =
       mode === "settings" ? serializeDecisionModel(decisionState) : undefined;
@@ -297,7 +297,9 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       catch: (error: unknown) => error,
     });
     setSaveState("idle");
-    result.unwrap();
+    if (result.isErr()) {
+      throw result.error;
+    }
   };
 
   const removeProvider = async (draft: ProviderCredentialDraft) => {
@@ -340,7 +342,9 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       catch: (error: unknown) => error,
     });
     setSaveState("idle");
-    result.unwrap();
+    if (result.isErr()) {
+      throw result.error;
+    }
   };
 
   const saveSettings = async () => {
