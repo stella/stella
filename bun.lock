@@ -111,6 +111,7 @@
         "@stll/runtime-mode": "workspace:*",
         "@stll/sanctions": "workspace:*",
         "@stll/scripts": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/stable-stringify": "workspace:*",
         "@stll/start-runtime": "workspace:^",
