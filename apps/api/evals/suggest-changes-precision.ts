@@ -52,6 +52,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -848,6 +849,7 @@ const resolveModels = async (
         managedAIResidency: "eu",
         role: "chat",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

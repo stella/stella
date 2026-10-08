@@ -132,13 +132,21 @@
     "takeoverSubtitle": "سيتابع من آخر نقطة حفظ لديك.",
     "takeoverTitle": "يريد {requester} تولي التحرير",
     "takeoverWindowTitle": "طلب تولي التحرير",
-    "webOrigin": "أصل الويب"
+    "webOrigin": "أصل الويب",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "حدّث Stella Desktop، ثم افتح المستند مرة أخرى من Stella.",
+    "handoffAccountRequired": "اربط Stella Desktop بحسابك، ثم افتح المستند مرة أخرى من Stella.",
+    "handoffFailed": "تعذّر فتح المستند",
+    "handoffUnavailable": "تعذّر فتح المستند. ابدأ من جديد من Stella.",
+    "handoffRetry": "إعادة المحاولة",
+    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها"
   },
   "settings": {
     "about": "حول",
     "accountLinked": "الحساب مرتبط",
     "connectToStella": "الاتصال بـ stella على الويب",
     "connectToStellaDescription": "اربط هذا الحاسوب بحسابك الحالي في stella دون فتح مستند.",
+    "desktopBenefit": "ملفات Office وسجل محلي للحافظة",
     "disconnectAccount": "فصل الحساب",
     "errorDisconnectAccount": "تعذّر على stella desktop فصل حسابك.",
     "errorReadAccount": "تعذّر على stella desktop التحقق من اتصال حسابك.",

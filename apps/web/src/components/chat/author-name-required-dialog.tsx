@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -81,6 +82,12 @@ export const AuthorNameRequiredDialog = ({
       open={open}
     >
       <DialogPopup className="max-w-sm">
+        <DialogFormState
+          dirty={preferredName !== ""}
+          onDiscard={() => {
+            setPreferredName("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("chat.tool.suggestChangesAuthorNameDialogTitle")}

@@ -11,25 +11,32 @@ type ActionAdmissionReason =
   | "period_exhausted"
   | "daily_exhausted"
   | "not_enabled"
+  | "not_on_plan"
   | "unavailable";
 
-// A daily refusal knows when its budget resets; no other refusal may claim one.
+// A daily refusal knows when its budget resets. An action period refusal
+// names its window's reset; the MCP read fence's window refusal does not. No
+// other refusal may claim one.
 type ActionAdmissionErrorProps = { message: string; cause?: unknown } & (
   | { reason: "daily_exhausted"; retryAtMs: number }
+  | { reason: "period_exhausted"; retryAtMs?: number }
   | {
-      reason: Exclude<ActionAdmissionReason, "daily_exhausted">;
+      reason: Exclude<
+        ActionAdmissionReason,
+        "daily_exhausted" | "period_exhausted"
+      >;
       retryAtMs?: never;
     }
 );
 
 // TaggedError cannot take a union of props, so the constructor binds
-// `retryAtMs` to the daily reason and the base keeps the shared fields.
+// `retryAtMs` to the exhausted reasons and the base keeps the shared fields.
 export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   message: string;
   reason: ActionAdmissionReason;
   cause?: unknown;
 }> {
-  /** Epoch milliseconds at which a `daily_exhausted` budget resets. */
+  /** Epoch milliseconds at which an exhausted budget resets. */
   readonly retryAtMs: number | undefined;
 
   constructor({ retryAtMs, ...props }: ActionAdmissionErrorProps) {
@@ -47,6 +54,8 @@ const ADMISSION_REASON_CODES = {
   period_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
   daily_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
   not_enabled: ACTION_ADMISSION_CODES.notEnabled,
+  // A helper the plan does not offer answers as not enabled on the wire.
+  not_on_plan: ACTION_ADMISSION_CODES.notEnabled,
   unavailable: ACTION_ADMISSION_CODES.admissionUnavailable,
 } as const satisfies Record<
   ActionAdmissionError["reason"],

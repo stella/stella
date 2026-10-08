@@ -19,6 +19,7 @@
     "types": ["bun-types"],
     "useUnknownInCatchVariables": true
   },
+  "files": [".oxlint-plugins/__fixtures__/canonical-owners.fixture.d.ts"],
   "include": [
     ".oxlint-plugins/**/*.ts",
     "oxlint.config.ts",

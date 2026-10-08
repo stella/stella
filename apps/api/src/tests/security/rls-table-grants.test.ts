@@ -138,6 +138,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
   // Global reference editions are read by request code and written by ingestion.
+  "sanctions_edition_fanouts",
   "sanctions_sources",
   "sanctions_editions",
   "sanctions_entry_payloads",
@@ -187,6 +188,10 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_replay_daily_rows",
   "case_law_replay_source_progress",
   "case_law_replay_audit_events",
+  "eu_completion_receipts",
+  "eu_completion_request_hours",
+  "eu_completion_approvals",
+  "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.

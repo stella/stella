@@ -14,6 +14,8 @@ export type CaseLawDecisionSourceReference = {
 };
 
 export type ExternalSourceReference = {
+  appUrl?: string | undefined;
+  sourceUrl?: string | undefined;
   businessRegistry?: BusinessRegistrySourceReference | undefined;
   caseLawDecision?: CaseLawDecisionSourceReference | undefined;
   connectorSlug?: string | undefined;
@@ -26,29 +28,48 @@ export type ExternalSourceReference = {
   url: string;
 };
 
+const sourceKey = (url: string) =>
+  URL.canParse(url) ? new URL(url).href : url;
+
 type ExternalSourceState = {
   sourcesByUrl: Record<string, ExternalSourceReference>;
   getSource: (url: string) => ExternalSourceReference | undefined;
+  getDecisionSource: (ref: string) => ExternalSourceReference | undefined;
   registerSources: (sources: ExternalSourceReference[]) => void;
 };
 
 export const useExternalSourceStore = create<ExternalSourceState>()(
   (set, get) => ({
     sourcesByUrl: {},
-    getSource: (url) => get().sourcesByUrl[url],
+    getSource: (url) => get().sourcesByUrl[sourceKey(url)],
+    getDecisionSource: (ref) =>
+      Object.values(get().sourcesByUrl).find(
+        (source) => source.caseLawDecision?.decisionId === ref,
+      ),
     registerSources: (sources) =>
       set((state) => {
         const sourcesByUrl = { ...state.sourcesByUrl };
         for (const source of sources) {
-          const existing = sourcesByUrl[source.url];
-          sourcesByUrl[source.url] = {
+          const existing =
+            sourcesByUrl[sourceKey(source.url)] ??
+            (source.sourceUrl === undefined
+              ? undefined
+              : sourcesByUrl[sourceKey(source.sourceUrl)]);
+          const merged = {
             ...existing,
             ...source,
+            appUrl: source.appUrl ?? existing?.appUrl,
+            sourceUrl: source.sourceUrl ?? existing?.sourceUrl,
             businessRegistry:
               source.businessRegistry ?? existing?.businessRegistry,
             caseLawDecision:
               source.caseLawDecision ?? existing?.caseLawDecision,
           };
+          for (const url of [source.url, source.appUrl, source.sourceUrl]) {
+            if (url !== undefined) {
+              sourcesByUrl[sourceKey(url)] = merged;
+            }
+          }
         }
         return { sourcesByUrl };
       }),

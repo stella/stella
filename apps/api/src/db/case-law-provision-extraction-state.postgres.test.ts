@@ -10,9 +10,10 @@ import type { SQL } from "bun";
  */
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

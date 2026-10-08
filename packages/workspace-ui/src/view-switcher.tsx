@@ -2,15 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  attachClosestEdge,
-  extractClosestEdge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import {
   draggable,
   dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 
 import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
@@ -385,7 +383,9 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         value={view.id}
       >
         {renderIcon(view)}
-        <span className="max-w-36 truncate">{view.name}</span>
+        <span className="max-w-36 overflow-hidden text-ellipsis whitespace-pre">
+          {view.name}
+        </span>
       </TabsTab>
       {actions === null || actions === undefined ? null : (
         <div className="absolute inset-e-0 top-1/2 mt-1 -translate-y-1/2">

@@ -3,6 +3,8 @@
 import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+// parser-output-unchanged: imports the document AST from its package owner
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   DOCUMENT_FETCH_OUTCOME,
@@ -19,7 +21,6 @@ import {
   observeDocumentStageSafely,
 } from "@stll/legal-atlas/document-stage-observer";
 
-import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";

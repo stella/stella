@@ -405,3 +405,123 @@ test("batch reporting writes rows durably and observes an unexpected batch cause
     rmSync(dir, { recursive: true });
   }
 });
+
+const fencedRows = (stdout: string) => {
+  const match = /^```jsonl\n(?<body>(?:.*\n)*?)```\n$/u.exec(stdout);
+  if (match?.groups === undefined) {
+    throw new TypeError(`stdout is not one fenced JSON Lines block: ${stdout}`);
+  }
+  return match.groups["body"]
+    ?.split("\n")
+    .filter(Boolean)
+    .map((line): unknown => JSON.parse(line));
+};
+
+const fileRowsWithoutReason = (path: string) =>
+  readFileSync(path, "utf-8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const { reason: _reason, ...row }: Record<string, unknown> =
+        JSON.parse(line);
+      return row;
+    });
+
+test("prints every row to stdout in order, matching the results file without reasons", async () => {
+  const dir = temporaryDirectory();
+  const resultsPath = nodePath.join(dir, "results.jsonl");
+  const providerReason = "no usage_policy matches provider-ref-sample";
+  let stdout = "";
+  try {
+    const report = await runReplayReport({
+      ids: ["event-a", "event-b", "event-c"],
+      mode: "dry_run",
+      resultsPath,
+      writeStdout: (chunk) => {
+        stdout += chunk;
+      },
+      execution: {
+        type: "batch",
+        replayBatch: async (emitRow) => {
+          emitRow({
+            id: "event-a",
+            previousResult: "ignored",
+            kind: "applied",
+            reason: null,
+            mode: "dry_run",
+          });
+          emitRow({
+            id: "event-b",
+            previousResult: "ignored",
+            kind: "ignored",
+            reason: providerReason,
+            mode: "dry_run",
+          });
+          emitRow({
+            id: "event-c",
+            previousResult: "ignored",
+            kind: "related_receipts_unselected",
+            reason: "Select all related unresolved receipts",
+            unselectedEventIds: ["event-d"],
+            selectionStatus: "complete",
+            mode: "dry_run",
+          });
+        },
+      },
+    });
+
+    expect(report.rows).toHaveLength(3);
+    expect(fencedRows(stdout)).toEqual(fileRowsWithoutReason(resultsPath));
+    expect(fencedRows(stdout)).toHaveLength(3);
+    expect(readFileSync(resultsPath, "utf-8")).toContain(providerReason);
+    expect(stdout).not.toContain(providerReason);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test("closes the stdout block with the rows emitted before a batch failure", async () => {
+  const dir = temporaryDirectory();
+  const resultsPath = nodePath.join(dir, "results.jsonl");
+  let stdout = "";
+  try {
+    const failed = await runReplayReport({
+      ids: ["event-a", "event-b"],
+      mode: "apply",
+      resultsPath,
+      writeStdout: (chunk) => {
+        stdout += chunk;
+      },
+      observeUnexpectedFailure: async () => {},
+      execution: {
+        type: "batch",
+        replayBatch: async (emitRow) => {
+          emitRow({
+            id: "event-a",
+            previousResult: "ignored",
+            kind: "applied",
+            reason: null,
+            mode: "apply",
+          });
+          throw new Error("batch infrastructure detail");
+        },
+      },
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(failed).toBeInstanceOf(ReplayAttemptError);
+    expect(fencedRows(stdout)).toEqual([
+      {
+        id: "event-a",
+        previousResult: "ignored",
+        kind: "applied",
+        mode: "apply",
+      },
+    ]);
+    expect(stdout).not.toContain("batch infrastructure detail");
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});

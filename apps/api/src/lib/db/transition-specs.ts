@@ -1,18 +1,41 @@
 import {
   desktopEditSessions,
+  EU_COMPLETION_STATUSES,
+  euCompletionApprovals,
+  euCompletionControls,
+  euCompletionReceipts,
   pdfSigningSessions,
   workObligations,
+  sanctionsEditionFanouts,
+  sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
 import {
   FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
-import type { StatusTable } from "@/api/lib/db/status-tables.gen";
+import type {
+  STATUS_COLUMNS,
+  StatusTable,
+} from "@/api/lib/db/status-tables.gen";
 import {
+  defineFixedLifecycle,
   defineKeyedTransitions,
+  defineLifecycle,
   defineTransitions,
 } from "@/api/lib/db/transitions";
-import type { TransitionSpec } from "@/api/lib/db/transitions";
+import type {
+  ScopedTransitionDeclaration,
+  FixedLifecycleSpec,
+  LifecycleSpec,
+  TransitionSpec,
+} from "@/api/lib/db/transitions";
+import {
+  CONTACT_MONITORING_TRANSITIONS,
+  FIRM_MONITORING_TRANSITIONS,
+  MATCH_MEMBERSHIP_TRANSITIONS,
+  MATCH_REVIEW_TRANSITIONS,
+  SCREENING_COVERAGE_TRANSITIONS,
+} from "@/api/lib/lists/sanctions/monitoring-transition-specs";
 
 // Each table chooses an ownership category explicitly; new status tables must
 // choose a category or declare a managed spec before the total map compiles.
@@ -94,6 +117,115 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: [] },
 });
 
+export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineLifecycle({
+  table: sanctionsEditionFanouts,
+  key: "sourceId",
+  graphs: {
+    status: {
+      edges: { pending: ["complete"], complete: ["pending"] },
+      terminal: [],
+    },
+    freshnessStatus: {
+      edges: {
+        unknown: ["fresh", "unavailable"],
+        fresh: ["unavailable"],
+        unavailable: ["fresh"],
+      },
+      terminal: [],
+    },
+  },
+});
+
+export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(
+  {
+    table: sanctionsMonitoringBackfills,
+    key: "sourceId",
+    scope: ["organizationId"],
+    edges: { pending: ["complete"], complete: ["pending"] },
+    options: { terminal: [], fence: "generation" },
+  },
+);
+// Active receipts settle to any outcome; dry-run settles only fetched work.
+// Failed and mirror-repair receipts are readmitted; the rest are final.
+const EU_COMPLETION_SETTLEMENTS = EU_COMPLETION_STATUSES.filter(
+  (status): status is Exclude<typeof status, "dry-run"> => status !== "dry-run",
+);
+const EU_COMPLETION_RECEIPT_LIFECYCLE = defineLifecycle({
+  table: euCompletionReceipts,
+  key: "id",
+  graphs: {
+    status: {
+      edges: {
+        pending: EU_COMPLETION_SETTLEMENTS,
+        fetched: EU_COMPLETION_STATUSES,
+        "failed-backoff": EU_COMPLETION_SETTLEMENTS,
+        "publisher-refused": EU_COMPLETION_SETTLEMENTS,
+        "superseded-by-crawl": EU_COMPLETION_SETTLEMENTS,
+        failed: ["pending", "fetched", "withdrawn"],
+        "review-required": ["pending", "fetched"],
+        applied: [],
+        unchanged: [],
+        "dry-run": [],
+        "too-large": [],
+        "publisher-gone": [],
+        withdrawn: [],
+      },
+      terminal: [
+        "applied",
+        "unchanged",
+        "dry-run",
+        "too-large",
+        "publisher-gone",
+        "withdrawn",
+      ],
+    },
+    // The attempt lease is taken and released around every publisher read.
+    attemptState: {
+      edges: {
+        idle: ["picked-up", "repair"],
+        "picked-up": ["idle", "repair"],
+        repair: ["idle", "picked-up"],
+      },
+      terminal: [],
+    },
+  },
+});
+
+const EU_COMPLETION_CONTROL_LIFECYCLE = defineLifecycle({
+  table: euCompletionControls,
+  key: "key",
+  graphs: { state: { edges: { off: ["on"], on: ["off"] }, terminal: [] } },
+});
+
+// The approval copies its dry-run receipt's outcome as foreign-key proof.
+const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
+  table: euCompletionApprovals,
+  column: "proofStatus",
+  value: "dry-run",
+});
+
+type StatusColumns<TTable extends StatusTable> =
+  (typeof STATUS_COLUMNS)[TTable];
+
+// Each table's decision covers exactly its inventoried lifecycle columns.
+type TransitionDecision<TTable extends StatusTable> =
+  | { unmanaged: string }
+  | {
+      scoped: {
+        readonly [
+          TColumn in StatusColumns<TTable>[number]
+        ]: ScopedTransitionDeclaration & { readonly stateColumn: TColumn };
+      } & Readonly<Record<string, ScopedTransitionDeclaration>>;
+    }
+  | (StatusColumns<TTable> extends readonly [infer TColumn extends string]
+      ? ScopedTransitionDeclaration & { readonly stateColumn: TColumn }
+      : never)
+  | (StatusColumns<TTable> extends readonly ["status"] ? TransitionSpec : never)
+  | LifecycleSpec<StatusColumns<TTable>[number]>
+  | (StatusColumns<TTable> extends readonly [infer TColumn extends string]
+      ? FixedLifecycleSpec<TColumn>
+      : never);
+
 /** Existing domain owners remain explicit until their writers migrate. */
 export const TRANSITIONS = {
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
@@ -128,6 +260,7 @@ export const TRANSITIONS = {
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
   contactExtractionUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  contacts: CONTACT_MONITORING_TRANSITIONS,
   corpusIndexGenerations: { unmanaged: UNMANAGED_REASONS.projection },
   corpusIndexGroupEnrollments: { unmanaged: UNMANAGED_REASONS.projection },
   corpusIndexProjectionIntents: { unmanaged: UNMANAGED_REASONS.projection },
@@ -143,6 +276,9 @@ export const TRANSITIONS = {
   entities: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   entityDeletionCleanupRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   entityDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
+  euCompletionApprovals: EU_COMPLETION_APPROVAL_PROOF,
+  euCompletionControls: EU_COMPLETION_CONTROL_LIFECYCLE,
+  euCompletionReceipts: EU_COMPLETION_RECEIPT_LIFECYCLE,
   expenses: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   extractionRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
@@ -169,13 +305,21 @@ export const TRANSITIONS = {
   organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
-  sanctionsContactMatches: { unmanaged: UNMANAGED_REASONS.projection },
-  sanctionsContactScreenings: { unmanaged: UNMANAGED_REASONS.projection },
+  sanctionsContactMatches: {
+    scoped: {
+      state: MATCH_MEMBERSHIP_TRANSITIONS,
+      disposition: MATCH_REVIEW_TRANSITIONS,
+    },
+  },
+  sanctionsContactScreenings: SCREENING_COVERAGE_TRANSITIONS,
+  sanctionsEditionFanouts: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+  sanctionsMonitoringBackfills: SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -199,7 +343,9 @@ export const TRANSITIONS = {
   usageEntitlements: { unmanaged: UNMANAGED_REASONS.externalEntitlement },
   workObligations: WORK_OBLIGATION_TRANSITIONS,
   workspaces: { unmanaged: UNMANAGED_REASONS.userWorkflow },
-} as const satisfies Record<
-  StatusTable,
-  TransitionSpec | { unmanaged: string }
->;
+} as const satisfies {
+  [TTable in StatusTable]: TransitionDecision<TTable>;
+} & {
+  contacts: typeof CONTACT_MONITORING_TRANSITIONS;
+  organizationSettings: typeof FIRM_MONITORING_TRANSITIONS;
+};

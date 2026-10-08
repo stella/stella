@@ -7,6 +7,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { fetchSession } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
@@ -113,13 +114,9 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
   return useMutation({
     scope: { id: settingsMutationScopeId(options.invalidate) },
     mutationFn: async (variables: TVariables) => {
-      const organization =
-        await checkSettingsOrganization(activeOrganizationId);
-      // TanStack Query reads a failed write only from the rejection, so the
-      // typed error is handed over as one; the write is never sent.
-      return organization.isErr()
-        ? await Promise.reject(organization.error)
-        : await options.mutationFn(variables);
+      // A changed organization rejects before the write is sent.
+      readQueryResult(await checkSettingsOrganization(activeOrganizationId));
+      return await options.mutationFn(variables);
     },
     onSuccess: (data, variables) => {
       if (!invalidatesOnSettle) {

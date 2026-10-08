@@ -1,12 +1,24 @@
 import { panic } from "better-result";
 
+import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import {
   DECISION_TEXT_FIELD,
   TEXT_FIELD_TYPE,
   type ReadDecisionTextFields,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
+import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import {
+  CZ_CAPTION_FORMS,
+  SK_CAPTION_FORMS,
+  detectDecisionCaption,
+} from "@stll/legal-ast/decision-caption";
+import type {
+  CaptionForms,
+  DecisionCaption,
+} from "@stll/legal-ast/decision-caption";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import {
@@ -19,9 +31,37 @@ import type {
   ParagraphBlock,
   PublisherSummaryRole,
 } from "@stll/legal-ast/document-ast";
+import {
+  LINE_CONTINUATION_SEPARATOR,
+  planBlockLineWrap,
+} from "@stll/legal-ast/line-wrap";
+import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
+import { collapseSpacedLetters } from "@stll/text-normalize";
 
+import { buildFulltextParagraphBlocks } from "@/components/legal-reader/document-ast-text";
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { optionalArray } from "@/lib/arrays";
+
+/** Account for provision links displaced by any other kind of rendered link. */
+export const resolveDecisionLinkOverlaps = <
+  T extends { key: string; start: number; end: number },
+>(
+  anchors: readonly T[],
+) => {
+  const links = dropOverlappingSpans(anchors);
+  const retained = new Set(links);
+  const failures: ProvisionPlacementFailure[] = [];
+  for (const anchor of anchors) {
+    if (anchor.key.startsWith("provision:") && !retained.has(anchor)) {
+      failures.push({
+        id: anchor.key.slice("provision:".length),
+        reason: "span-overlap",
+      });
+    }
+  }
+  return { links, failures };
+};
 
 /**
  * The mark the court's own top matter carries: the court's chip where the
@@ -225,16 +265,13 @@ export const decisionDisplayReference = ({
 export const visibleDecisionBlocks = (
   ast: DocumentAst | null,
   caseNumberType: DecisionPrimaryReferenceType,
+  fulltext?: string | null,
 ): Block[] => {
-  if (ast === null) {
-    return [];
-  }
-
   const docketIsReferenceLine =
     caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const visible: Block[] = [];
   let inReasoning = false;
-  for (const block of ast.blocks) {
+  for (const block of optionalArray(ast?.blocks)) {
     if (
       (docketIsReferenceLine &&
         block.type === "paragraph" &&
@@ -243,9 +280,11 @@ export const visibleDecisionBlocks = (
     ) {
       continue;
     }
+    // A court that letter-spaces the heading ("O d ů v o d n ě n í :") opens
+    // its reasoning all the same.
     if (
       block.type === "heading" &&
-      /^Odůvodnění\s*:?$/iu.test(block.plainText)
+      /^Odůvodnění\s*:?$/iu.test(collapseSpacedLetters(block.plainText))
     ) {
       inReasoning = true;
     }
@@ -265,7 +304,10 @@ export const visibleDecisionBlocks = (
     }
     visible.push(block);
   }
-  return visible;
+  if (visible.length > 0 || !fulltext) {
+    return visible;
+  }
+  return buildFulltextParagraphBlocks(fulltext);
 };
 
 /** Search-piece ids for publisher text the reader renders from a field. */
@@ -487,4 +529,85 @@ export const footnoteParts = (blocks: readonly Block[]): FootnoteParts => {
     }
   }
   return { headIds, backJumpAnchorByLastId };
+};
+
+/** Paragraph blocks the reader draws as one paragraph, each keeping its anchor. */
+export type WrappedParagraphRun = {
+  blocks: [ParagraphBlock, ...ParagraphBlock[]];
+  /** `separators[i]` is drawn between `blocks[i]` and `blocks[i + 1]`. */
+  separators: string[];
+};
+
+export type WrappedParagraphRuns = {
+  byHeadId: ReadonlyMap<string, WrappedParagraphRun>;
+  /** Blocks drawn inside the run of an earlier block, not on their own. */
+  continuationIds: ReadonlySet<string>;
+};
+
+/**
+ * The runs of a hard-wrapped decision's line blocks that the reader joins
+ * back into paragraphs. Planned over the blocks in document order, so a
+ * block the top matter lifts out still breaks the runs around it; for a
+ * document that is not fixed-width wrapped there are none.
+ */
+export const wrappedParagraphRuns = (
+  blocks: readonly Block[],
+): WrappedParagraphRuns => {
+  const { continuations } = planBlockLineWrap(blocks);
+  const byHeadId = new Map<string, WrappedParagraphRun>();
+  const continuationIds = new Set<string>();
+  let run: WrappedParagraphRun | null = null;
+  for (const block of blocks) {
+    const continuation = continuations.get(block.id);
+    if (block.type !== "paragraph") {
+      run = null;
+      continue;
+    }
+    if (continuation === undefined || run === null) {
+      run = { blocks: [block], separators: [] };
+      continue;
+    }
+    if (run.blocks.length === 1) {
+      byHeadId.set(run.blocks[0].id, run);
+    }
+    run.blocks.push(block);
+    run.separators.push(LINE_CONTINUATION_SEPARATOR[continuation]);
+    continuationIds.add(block.id);
+  }
+  return { byHeadId, continuationIds };
+};
+
+/**
+ * Each jurisdiction's caption vocabulary, or `null` where its courts print
+ * no caption of that shape and a decision is drawn block by block as stored.
+ * Total, so a new jurisdiction cannot arrive without that decision.
+ */
+const CAPTION_FORMS_BY_JURISDICTION = {
+  AUT: null,
+  CZE: CZ_CAPTION_FORMS,
+  EU: null,
+  HUN: null,
+  POL: null,
+  SVK: SK_CAPTION_FORMS,
+  USA: null,
+} as const satisfies Record<CaseLawJurisdiction, CaptionForms | null>;
+
+/**
+ * The caption the body opens with, drawn as the centred header the court
+ * printed instead of as the run-on line it is stored as. A stored country no
+ * jurisdiction declares has no vocabulary to read a caption with; its blocks
+ * are drawn as stored, which loses nothing.
+ */
+export const decisionCaption = ({
+  blocks,
+  country,
+}: {
+  blocks: readonly Block[];
+  country: string;
+}): DecisionCaption | null => {
+  if (!isCaseLawJurisdiction(country)) {
+    return null;
+  }
+  const forms = CAPTION_FORMS_BY_JURISDICTION[country];
+  return forms === null ? null : detectDecisionCaption(blocks, forms);
 };

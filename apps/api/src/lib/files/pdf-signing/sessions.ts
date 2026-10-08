@@ -8,8 +8,9 @@
  * the same deep link cannot both win.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
+import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
 import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
@@ -27,10 +28,16 @@ import type {
   PdfSigningSessionCloseReason,
   PdfSigningStamp,
 } from "@/api/db/schema";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  createBackgroundAuditRecorder,
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transition } from "@/api/lib/db/transitions";
 import {
   createOpaqueToken,
   hashOpaqueToken,
@@ -598,3 +605,90 @@ export const resolvePdfSigningSessionStatus = ({
   finalizedVersionNumber,
   status: status === "open" && tokenExpiresAt <= now ? "expired" : status,
 });
+
+type RecordPdfSigningHandoffFailureOptions = {
+  handoffToken: string;
+  reason: DesktopHandoffFailureReason;
+  db: TokenScopedDatabase;
+  now: Date;
+};
+
+/** Resolve scope from the opaque token; failure writes cannot mint desktop credentials. */
+export const recordPdfSigningHandoffFailure = async ({
+  handoffToken,
+  reason,
+  db,
+  now,
+}: RecordPdfSigningHandoffFailureOptions): Promise<boolean> => {
+  if (!isPdfSigningTokenShape(handoffToken)) {
+    return false;
+  }
+  const tokenHash = hashPdfSigningToken(handoffToken);
+  const scoped = await tokenScope(
+    db,
+    sql`SELECT * FROM pdf_signing_handoff_scope(${tokenHash})`,
+  );
+  if (scoped === null) {
+    return false;
+  }
+  return scoped(async (tx) => {
+    const sessions = await tx
+      .select({
+        id: pdfSigningSessions.id,
+        workspaceId: pdfSigningSessions.workspaceId,
+        createdBy: pdfSigningSessions.createdBy,
+        organizationId: workspaces.organizationId,
+      })
+      .from(pdfSigningSessions)
+      .innerJoin(workspaces, eq(workspaces.id, pdfSigningSessions.workspaceId))
+      .where(
+        and(
+          eq(pdfSigningSessions.handoffTokenHash, tokenHash),
+          eq(pdfSigningSessions.status, "open"),
+          isNull(pdfSigningSessions.handoffConsumedAt),
+          gt(
+            pdfSigningSessions.handoffExpiresAt,
+            sql`${now.toISOString()}::timestamptz`,
+          ),
+        ),
+      )
+      .limit(1)
+      .for("update", { of: pdfSigningSessions });
+    const session = sessions.at(0);
+    if (!session) {
+      return false;
+    }
+    const recordAuditEvent = createBackgroundAuditRecorder({
+      organizationId: session.organizationId,
+      workspaceId: session.workspaceId,
+      userId: brandPersistedUserId(session.createdBy),
+      execution: {
+        performer: {
+          type: "service",
+          id: "desktop-handoff",
+          name: "Desktop handoff",
+        },
+        trigger: { type: "system", source: "desktop-handoff" },
+      },
+    });
+    const result = await transition({
+      tx,
+      spec: TRANSITIONS.pdfSigningSessions,
+      id: session.id,
+      options: {
+        from: ["open"],
+        to: "cancelled",
+        set: { closeReason: reason, closedAt: now },
+      },
+      recordTransitionAuditEvent: async (auditTx) =>
+        await recordAuditEvent(auditTx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+          resourceId: session.id,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { closeReason: reason },
+        }),
+    });
+    return result.type === "transitioned";
+  });
+};

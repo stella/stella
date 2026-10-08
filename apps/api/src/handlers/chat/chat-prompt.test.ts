@@ -1500,15 +1500,16 @@ describe("system prompt tool-reference guard", () => {
     }
   });
 
-  // The case-law tools hand the model a page URL beside the decisionId. A
-  // URL renders as an external page to preview; only the decisionId link
-  // opens the decision beside the chat, so every prompt has to say which.
-  test("every assembled prompt cites corpus decisions by decisionId, never by URL", () => {
+  test("every assembled prompt prefers corpus links and keeps publisher links secondary", () => {
     for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
       expect(prompt).toContain("DECISION CITATIONS");
       expect(prompt).toContain(`(${CHAT_DECISION_HREF_TEMPLATE})`);
+      expect(prompt).toContain("use the returned url as the primary citation");
       expect(prompt).toContain(
-        "Never link a stella decision by its appUrl or sourceUrl",
+        "Use source_url only as a secondary publisher source link",
+      );
+      expect(prompt).toContain(
+        "when the corpus does not hold the item, use the returned external url",
       );
       expect(prompt).toContain("say that the corpus returned none");
     }

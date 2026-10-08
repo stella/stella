@@ -40,6 +40,7 @@ export {
 } from "./model-rate";
 export type { ModelRate, ModelRateAmounts } from "./model-rate";
 export {
+  MODELS_DEV_RATE_CORRECTIONS,
   MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
   MODELS_DEV_RATE_SOURCE_ALIASES,
   RETAINED_MODELS_DEV_RATE_ENTRIES,
@@ -361,6 +362,7 @@ export const BYOK_MODEL_OPTIONS = {
     "openai.gpt-oss-20b-1:0",
   ],
   mistral: [
+    "mistral-large-4",
     "mistral-large-latest",
     "mistral-medium-latest",
     "mistral-small-latest",
@@ -392,7 +394,26 @@ export type ModelDisplayMetadata = {
   displayName: string;
   /** Brand mark to show. This may differ from the routing provider. */
   iconProvider: BYOKProvider;
+  /**
+   * A newer model of the same line, preferably on the same route. A superseded
+   * model stays selectable but is never recommended.
+   */
+  supersededBy?: string;
 };
+
+/**
+ * The chat model picker's Recommended section: a reviewed, curated list of
+ * the latest generation per maker. Benchmarks inform ordering and hints but
+ * never pick these. Every route to a listed model qualifies; a listed model
+ * must not be superseded (model-lineage.test.ts).
+ */
+export const RECOMMENDED_CHAT_MODELS = [
+  "claude-opus-5-5",
+  GPT_61_MODEL_IDS.sol.openai,
+  // GPT-6.1 has no fast tier yet; GPT-6 Luna is the newest one.
+  GPT_6_MODEL_IDS.luna.openai,
+  "gemini-3.8-flash",
+] as const satisfies readonly OfferedBYOKModelId[];
 
 /**
  * Presentation metadata for every offered model. Keeping this exhaustive beside
@@ -408,10 +429,12 @@ export const MODEL_DISPLAY_METADATA = {
   "gemini-3.7-flash": {
     displayName: "Gemini 3.7 Flash",
     iconProvider: "google",
+    supersededBy: "gemini-3.8-flash",
   },
   "gemini-3.6-flash": {
     displayName: "Gemini 3.6 Flash",
     iconProvider: "google",
+    supersededBy: "gemini-3.8-flash",
   },
   "gemini-3.5-flash-lite": {
     displayName: "Gemini 3.5 Flash Lite",
@@ -424,10 +447,12 @@ export const MODEL_DISPLAY_METADATA = {
   "gemini-3.5-flash": {
     displayName: "Gemini 3.5 Flash",
     iconProvider: "google",
+    supersededBy: "gemini-3.8-flash",
   },
   "gemini-3.1-flash-lite": {
     displayName: "Gemini 3.1 Flash Lite",
     iconProvider: "google",
+    supersededBy: "gemini-3.5-flash-lite",
   },
   "claude-sonnet-5-5": {
     displayName: "Claude Sonnet 5.5",
@@ -436,6 +461,7 @@ export const MODEL_DISPLAY_METADATA = {
   "claude-sonnet-5": {
     displayName: "Claude Sonnet 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-sonnet-5-5",
   },
   "claude-fable-5-1": {
     displayName: "Claude Fable 5.1",
@@ -444,6 +470,7 @@ export const MODEL_DISPLAY_METADATA = {
   "claude-fable-5": {
     displayName: "Claude Fable 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-fable-5-1",
   },
   "claude-opus-5-5": {
     displayName: "Claude Opus 5.5",
@@ -452,22 +479,27 @@ export const MODEL_DISPLAY_METADATA = {
   "claude-opus-5": {
     displayName: "Claude Opus 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "claude-opus-4-8": {
     displayName: "Claude Opus 4.8",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "claude-opus-4-7": {
     displayName: "Claude Opus 4.7",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "claude-sonnet-4-6": {
     displayName: "Claude Sonnet 4.6",
     iconProvider: "anthropic",
+    supersededBy: "claude-sonnet-5-5",
   },
   "claude-opus-4-6": {
     displayName: "Claude Opus 4.6",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "claude-haiku-4-5-20251001": {
     displayName: "Claude Haiku 4.5",
@@ -484,6 +516,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_6_MODEL_IDS.sol.openai]: {
     displayName: "GPT-6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.sol.openai,
   },
   [GPT_6_MODEL_IDS.luna.openai]: {
     displayName: "GPT-6 Luna",
@@ -494,6 +527,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.sol.openai]: {
     displayName: "GPT-5.6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.sol.openai,
   },
   [GPT_56_MODEL_IDS.terra.openai]: {
     displayName: "GPT-5.6 Terra",
@@ -502,9 +536,14 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.luna.openai]: {
     displayName: "GPT-5.6 Luna",
     iconProvider: "openai",
+    supersededBy: GPT_6_MODEL_IDS.luna.openai,
   },
   "gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
-  "gpt-5.4": { displayName: "GPT-5.4", iconProvider: "openai" },
+  "gpt-5.4": {
+    displayName: "GPT-5.4",
+    iconProvider: "openai",
+    supersededBy: "gpt-5.5",
+  },
   "gpt-5.4-mini": {
     displayName: "GPT-5.4 Mini",
     iconProvider: "openai",
@@ -513,7 +552,11 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-5.4 Nano",
     iconProvider: "openai",
   },
-  "gpt-5.2": { displayName: "GPT-5.2", iconProvider: "openai" },
+  "gpt-5.2": {
+    displayName: "GPT-5.2",
+    iconProvider: "openai",
+    supersededBy: "gpt-5.5",
+  },
   [GPT_61_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-6.1 Sol",
     iconProvider: "openai",
@@ -525,6 +568,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_6_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.sol.openrouter,
   },
   [GPT_6_MODEL_IDS.luna.openrouter]: {
     displayName: "GPT-6 Luna",
@@ -533,10 +577,12 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-5.6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.sol.openrouter,
   },
   [GPT_56_MODEL_IDS.luna.openrouter]: {
     displayName: "GPT-5.6 Luna",
     iconProvider: "openai",
+    supersededBy: GPT_6_MODEL_IDS.luna.openrouter,
   },
   [GPT_56_MODEL_IDS.terra.openrouter]: {
     displayName: "GPT-5.6 Terra",
@@ -549,10 +595,12 @@ export const MODEL_DISPLAY_METADATA = {
   "google/gemini-3.7-flash": {
     displayName: "Gemini 3.7 Flash",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.8-flash",
   },
   "google/gemini-3.6-flash": {
     displayName: "Gemini 3.6 Flash",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.8-flash",
   },
   "google/gemini-3.5-flash-lite": {
     displayName: "Gemini 3.5 Flash Lite",
@@ -565,10 +613,12 @@ export const MODEL_DISPLAY_METADATA = {
   "google/gemini-3.5-flash": {
     displayName: "Gemini 3.5 Flash",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.8-flash",
   },
   "google/gemini-3.1-flash-lite": {
     displayName: "Gemini 3.1 Flash Lite",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.5-flash-lite",
   },
   "anthropic/claude-sonnet-5.5": {
     displayName: "Claude Sonnet 5.5",
@@ -577,18 +627,22 @@ export const MODEL_DISPLAY_METADATA = {
   "anthropic/claude-sonnet-5": {
     displayName: "Claude Sonnet 5",
     iconProvider: "anthropic",
+    supersededBy: "anthropic/claude-sonnet-5.5",
   },
   "anthropic/claude-opus-5": {
     displayName: "Claude Opus 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "anthropic/claude-opus-4.8": {
     displayName: "Claude Opus 4.8",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "anthropic/claude-sonnet-4.6": {
     displayName: "Claude Sonnet 4.6",
     iconProvider: "anthropic",
+    supersededBy: "anthropic/claude-sonnet-5.5",
   },
   "openai/gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
   "openai/gpt-5.4-mini": {
@@ -598,6 +652,7 @@ export const MODEL_DISPLAY_METADATA = {
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
     displayName: "Claude Sonnet 4.5",
     iconProvider: "anthropic",
+    supersededBy: "claude-sonnet-5-5",
   },
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
     displayName: "Claude Haiku 4.5",
@@ -622,6 +677,10 @@ export const MODEL_DISPLAY_METADATA = {
   "openai.gpt-oss-20b-1:0": {
     displayName: "GPT OSS 20B",
     iconProvider: "openai",
+  },
+  "mistral-large-4": {
+    displayName: "Mistral Large 4",
+    iconProvider: "mistral",
   },
   "mistral-large-latest": {
     displayName: "Mistral Large",
@@ -1047,6 +1106,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "us.amazon.nova-micro-v1:0": "supported",
   "openai.gpt-oss-120b-1:0": "supported",
   "openai.gpt-oss-20b-1:0": "supported",
+  "mistral-large-4": "supported",
   "mistral-large-latest": "supported",
   "mistral-medium-latest": "supported",
   "mistral-small-latest": "supported",
@@ -1250,8 +1310,9 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-5-5": 1_000_000,
   "claude-fable-5": 200_000,
   "claude-fable-5-1": 1_000_000,
-  // Mistral: 128K across the offered text/vision models.
+  // Mistral: 128K across the offered text/vision models; Large 4 is 512K.
   "mistral-small-latest": 128_000,
+  "mistral-large-4": 524_288,
   "mistral-large-latest": 128_000,
   "mistral-medium-latest": 128_000,
   "mistral-medium-3-5": 128_000,

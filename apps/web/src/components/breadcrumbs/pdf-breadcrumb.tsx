@@ -15,12 +15,14 @@ import {
   resolveDocumentRenameSubmission,
   splitFileName,
 } from "@/components/breadcrumbs/pdf-breadcrumb.logic";
+import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import { useQueryView } from "@/lib/use-query-view";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 export const PdfBreadcrumb = () => {
@@ -44,11 +46,14 @@ export const PdfBreadcrumb = () => {
     pdfMode: undefined,
   };
   const fileMetadata = fileMetadataOptions({ workspaceId, fieldId });
-  const { data: fileName } = useQuery({
+  const fileQuery = useQuery({
     ...fileMetadata,
     enabled: pdfMatch !== undefined && fieldId.length > 0,
     select: (file) => file.fileName,
   });
+  const fileNameView = useQueryView(fileQuery);
+  const fileName =
+    fileNameView.type === "items" ? fileNameView.items : undefined;
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const renameEntity = useRenameEntity();
 
@@ -73,6 +78,10 @@ export const PdfBreadcrumb = () => {
     return null;
   }
 
+  if (fileNameView.type !== "items") {
+    return <BreadcrumbQueryContent view={fileNameView} />;
+  }
+
   // While the rename is in flight the crumb shows the submitted name and
   // offers no editor, so a second rename cannot race the first.
   const pendingName = renameEntity.isPending
@@ -92,13 +101,13 @@ export const PdfBreadcrumb = () => {
 
   return (
     <>
+      <BreadcrumbQueryContent view={fileNameView} />
       <BreadcrumbItem>
         {(() => {
           if (rename.state.mode === "edit") {
             return (
               <InlineEdit
                 inputAriaLabel={tCommon("documentName")}
-                inputClassName="h-5 w-48 text-xs"
                 onCancel={rename.cancel}
                 onChange={rename.setDraft}
                 onCommit={() => {
@@ -119,7 +128,10 @@ export const PdfBreadcrumb = () => {
           if (pendingName !== null) {
             return (
               <BreadcrumbPage>
-                <BidiText as="span" className="max-w-64 truncate">
+                <BidiText
+                  as="span"
+                  className="max-w-64 overflow-hidden text-ellipsis whitespace-pre"
+                >
                   {pendingName}
                 </BidiText>
               </BreadcrumbPage>
@@ -134,7 +146,7 @@ export const PdfBreadcrumb = () => {
                 explicitUndefined: true,
               }}
               activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-64 truncate"
+              className="hover:text-foreground max-w-64 overflow-hidden text-ellipsis whitespace-pre"
               params={{ workspaceId, viewId }}
               onDoubleClick={(event) => {
                 if (!isRenameable) {

@@ -1065,7 +1065,7 @@ describe("unconfigured worker lifecycle", () => {
       "const ocrConfigured = isLocalDocumentOcrConfigured()",
     );
     const consumerStart = queueSource.indexOf(
-      "const worker = new Worker<DocumentProcessingJobData>",
+      "const worker = new BullMqWorker<DocumentProcessingJobData>",
     );
     const readinessGuard = queueSource.indexOf(
       "if (ocrConfigured)",

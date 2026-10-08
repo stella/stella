@@ -1,37 +1,54 @@
-import type { CharSpan } from "@/lib/anonymize/pdf-coords";
+import { Result } from "better-result";
 
-import type {
-  EntityOverlay,
-  EntitySpan,
-  FileAnonymization,
-} from "./anonymization-types";
+import {
+  glyphBoxesByPage,
+  locateAnonymizationTerm,
+} from "@/lib/anonymize/pdf-anonymization-geometry";
+import type { PdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-geometry";
+
+import type { EntityOverlay, FileAnonymization } from "./anonymization-types";
+
+type LocateOverlayEntitiesOptions = {
+  extraction: PdfAnonymizationText;
+  term: string;
+  label: string;
+  allocateId: () => number;
+  /** `start:end` of occurrences already overlaid; extended in place. */
+  seenRanges: Set<string>;
+};
 
 /**
- * Map an entity's character offset range to the CharSpans
- * it overlaps, returning just the page index and clamped
- * offsets. No measurement; pure offset math.
+ * One overlay entity per new occurrence of `term`, drawn from the same glyph
+ * boxes the redacted export masks. Fails when any occurrence cannot be fully
+ * positioned, so the overlay never shows part of a term as covered.
  */
-export const getEntitySpans = ({
-  charSpans,
-  entityStart,
-  entityEnd,
-}: {
-  charSpans: CharSpan[];
-  entityStart: number;
-  entityEnd: number;
-}): EntitySpan[] => {
-  const result: EntitySpan[] = [];
-  for (const span of charSpans) {
-    if (span.end <= entityStart || span.start >= entityEnd) {
+export const locateOverlayEntities = ({
+  extraction,
+  term,
+  label,
+  allocateId,
+  seenRanges,
+}: LocateOverlayEntitiesOptions) => {
+  const located = locateAnonymizationTerm(extraction, term);
+  if (located.isErr()) {
+    return Result.err(located.error);
+  }
+  const entities: EntityOverlay[] = [];
+  for (const { start, end, glyphs } of located.value) {
+    const key = `${String(start)}:${String(end)}`;
+    if (seenRanges.has(key)) {
       continue;
     }
-    result.push({
-      start: Math.max(span.start, entityStart),
-      end: Math.min(span.end, entityEnd),
-      pageIndex: span.bbox.pageIndex,
+    seenRanges.add(key);
+    entities.push({
+      id: allocateId(),
+      label,
+      // The canonical term, so every occurrence counts under one entry.
+      text: term,
+      boxesByPage: glyphBoxesByPage(glyphs),
     });
   }
-  return result;
+  return Result.ok(entities);
 };
 
 export const buildPerPage = (
@@ -39,17 +56,12 @@ export const buildPerPage = (
 ): Map<number, EntityOverlay[]> => {
   const perPage = new Map<number, EntityOverlay[]>();
   for (const entity of entities) {
-    const seenPages = new Set<number>();
-    for (const span of entity.spans) {
-      if (seenPages.has(span.pageIndex)) {
-        continue;
-      }
-      seenPages.add(span.pageIndex);
-      const existing = perPage.get(span.pageIndex);
+    for (const pageIndex of entity.boxesByPage.keys()) {
+      const existing = perPage.get(pageIndex);
       if (existing) {
         existing.push(entity);
       } else {
-        perPage.set(span.pageIndex, [entity]);
+        perPage.set(pageIndex, [entity]);
       }
     }
   }

@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isActiveOrganizationMember } from "@/api/lib/auth";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -26,7 +27,7 @@ export const validateProviderBody = t.Object({
 });
 
 const config = {
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: validateProviderBody,
 } satisfies SessionHandlerConfig;
@@ -110,7 +111,12 @@ const validateProvider = createSafeSessionHandler(
 
     const result = yield* Result.await(
       Result.tryPromise({
-        try: async () => await probeProvider(body.provider, body.apiKey),
+        try: async () =>
+          await probeProvider({
+            apiKey: body.apiKey,
+            permit: grantThirdPartyOutboundPermit(),
+            provider: body.provider,
+          }),
         catch: (error: unknown) => {
           const raw = error instanceof Error ? error.message : "Unknown error";
           logger.warn("ai_config.provider_validation_unreachable", {

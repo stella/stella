@@ -7,12 +7,19 @@ name: Model Catalog Upstream Check
 # deprecated or gone upstream, committed rates and request capabilities
 # drift from live model metadata, or the committed Text Arena quality ratings
 # (Hugging Face lmarena-ai/leaderboard-dataset) drift or lose a mapped row.
+# Benchmark availability is inconclusive twice, then alerts on the third
+# consecutive scheduled run. A successful fetch resets the persisted streak.
 
 on:
   schedule:
     # 04:37 UTC daily (off-minute to avoid the :00 stampede)
     - cron: "37 4 * * *"
   workflow_dispatch:
+
+# Serialize scheduled state updates; a manual check cannot reset the streak.
+concurrency:
+  group: model-catalog-check
+  cancel-in-progress: false
 
 permissions: {}
 
@@ -22,16 +29,33 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
 
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -41,5 +65,51 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Restore scheduled benchmark state
+        id: benchmark-state
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p .benchmark-state
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v1&per_page=1" > .benchmark-state/artifacts.json
+          jq -e '(.artifacts | type) == "array"' .benchmark-state/artifacts.json > /dev/null
+          if [ "$(jq '.artifacts | length' .benchmark-state/artifacts.json)" = 0 ]; then
+            echo 'Starting scheduled benchmark state.'
+            exit 0
+          fi
+          artifact_id=$(jq -er '.artifacts[0].id | select(type == "number")' .benchmark-state/artifacts.json)
+          if [ "$(jq -r '.artifacts[0].expired' .benchmark-state/artifacts.json)" != false ]; then
+            echo 'Scheduled benchmark state expired; restore it before continuing.' >&2
+            exit 1
+          fi
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts/$artifact_id/zip" > .benchmark-state/state.zip
+          unzip -p .benchmark-state/state.zip state.json > .benchmark-state/state.json
+          test -s .benchmark-state/state.json
+
       - name: Discover models and validate IDs, rates, and capabilities
-        run: bun run check:model-catalog
+        run: |
+          bun packages/scripts/src/model-catalog-upstream.ts
+          bun packages/scripts/src/model-catalog-capabilities-gen.ts --check
+
+      - name: Validate benchmarks
+        id: benchmarks
+        if: ${{ !cancelled() && (github.event_name != 'schedule' || steps.benchmark-state.outcome == 'success') }}
+        env:
+          CHECK_EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$CHECK_EVENT" = schedule ]; then
+            bun packages/scripts/src/model-catalog-benchmarks-gen.ts --check --state-file .benchmark-state/state.json
+          else
+            bun packages/scripts/src/model-catalog-benchmarks-gen.ts --check
+          fi
+
+      - name: Save scheduled benchmark state
+        if: ${{ !cancelled() && github.event_name == 'schedule' && steps.benchmarks.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: model-catalog-benchmark-state-v1
+          path: .benchmark-state/state.json
+          if-no-files-found: error
+          retention-days: 90

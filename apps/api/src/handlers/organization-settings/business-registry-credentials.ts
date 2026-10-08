@@ -12,6 +12,7 @@ import type { BusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { businessRegistryCredentials } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   bindRegistryCredential,
   encryptRegistryCredential,
@@ -69,7 +70,7 @@ const CREDENTIAL_PROBE_QUERIES = {
 export const saveBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
     body: t.Object(
       {
@@ -111,6 +112,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
     );
     const probe = await executeRegistryLookup({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       handler: bindRegistryCredential(
         BUSINESS_REGISTRY_DISPATCH[body.registry],
         credential,
@@ -156,7 +158,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
 export const deleteBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
     query: t.Object({ registry: credentialRegistrySchema }),
   },

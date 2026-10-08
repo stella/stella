@@ -1,3 +1,11 @@
+import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
+
+export {
+  CI_GENERATED_OUTPUTS,
+  CI_GENERATED_FILES,
+  CI_GENERATION_COMMANDS,
+} from "../packages/scripts/src/generated-files";
+
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
@@ -69,7 +77,6 @@ export const GENERATORS = [
     outputs: [
       "packages/cli/capabilities/**",
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
-      "apps/api/src/mcp/generated/capability-feature-bindings.ts",
       "docs/capability-coverage.md",
     ],
     inputs: [
@@ -87,15 +94,12 @@ export const GENERATORS = [
     check: null,
     checkedBy: "Capability catalog drift guard",
     autofix: true,
-    after: [],
+    after: ["visual-sandbox-bundle"],
   },
   {
     id: "capability-runtime",
     outputKind: "derived",
-    outputs: [
-      "apps/api/src/mcp/generated/capability-catalog.ts",
-      "apps/api/src/mcp/generated/capability-dispatch.ts",
-    ],
+    outputs: CI_GENERATED_OUTPUTS.capabilityRuntime,
     inputs: [
       "packages/cli/capabilities/**",
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
@@ -127,6 +131,11 @@ export const GENERATORS = [
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
       "apps/api/scripts/export-mcp-tool-registry.ts",
+      "apps/api/src/lib/chat/projections.ts",
+      "apps/api/src/lib/chat/case-law-result-projections.ts",
+      "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "packages/api-contract/src/case-law-court-year.ts",
+      "packages/api-contract/src/mcp-tool-name.ts",
       ".oxfmtrc.json",
       "packages/cli/src/**",
       "packages/cli/package.json",
@@ -136,15 +145,12 @@ export const GENERATORS = [
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
-    after: ["capability-runtime"],
+    after: ["capability-runtime", "mcp-app-bundles"],
   },
   {
     id: "cli-runtime",
     outputKind: "derived",
-    outputs: [
-      "packages/cli/src/generated/route-map.ts",
-      "packages/cli/src/generated/tool-annotations.ts",
-    ],
+    outputs: CI_GENERATED_OUTPUTS.cliRuntime,
     inputs: [
       "packages/cli/package.json",
       "packages/cli/capabilities/**",
@@ -174,17 +180,48 @@ export const GENERATORS = [
   {
     id: "mcp-app-bundles",
     outputKind: "committed",
-    outputs: ["apps/api/src/mcp/apps/*/generated/app.html.txt"],
+    outputs: [
+      "apps/api/src/mcp/apps/*/generated/app.html.txt",
+      "apps/api/src/mcp/apps/shared/generated/*",
+    ],
     inputs: [
       "apps/api/src/mcp/apps/**",
       "apps/api/scripts/build-mcp-apps.ts",
+      "apps/api/scripts/lib/mcp-app-html-guard.ts",
+      "apps/api/src/mcp/app-contracts.ts",
+      "apps/api/src/lib/chat/projections.ts",
+      "apps/api/src/lib/chat/case-law-result-projections.ts",
+      "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "packages/api-contract/src/case-law-court-year.ts",
+      "apps/api/src/lib/chat/projection-fields.ts",
+      "apps/web/src/fonts.css",
+      "apps/web/public/fonts/**",
+      "packages/ui/**",
+      "packages/locales/**",
       "packages/api-contract/**",
       "packages/fetch/**",
       "bun.lock",
     ],
     write: ["bun", "--cwd=apps/api", "run", "build:mcp-apps"],
     check: null,
-    checkedBy: "MCP App bundle guard",
+    checkedBy: "MCP App bundle and shared assets guard",
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "visual-sandbox-bundle",
+    outputKind: "committed",
+    outputs: ["apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt"],
+    inputs: [
+      "apps/api/src/handlers/visual-sandbox/**",
+      "apps/api/scripts/build-visual-sandbox.ts",
+      "apps/api/scripts/visual-sandbox-build-options.ts",
+      "packages/api-contract/**",
+      "bun.lock",
+    ],
+    write: ["bun", "--cwd=apps/api", "run", "build:visual-sandbox"],
+    check: null,
+    checkedBy: "Visual sandbox document tests",
     autofix: true,
     after: [],
   },
@@ -279,12 +316,15 @@ export const GENERATORS = [
   {
     id: "route-tree",
     outputKind: "derived",
-    outputs: ["apps/web/src/routeTree.gen.ts"],
+    outputs: CI_GENERATED_OUTPUTS.routeTree,
     inputs: [
       "apps/web/src/routes/**",
       "apps/web/vite.config.ts",
       "apps/web/route-tree.config.ts",
       "apps/web/scripts/generate-route-tree.ts",
+      "packages/scripts/src/prepared-generated-sources.ts",
+      "scripts/generated-files.ts",
+      "packages/scripts/src/generated-files.ts",
       "apps/web/package.json",
       "bun.lock",
     ],
@@ -338,7 +378,7 @@ export const GENERATORS = [
   {
     id: "i18n-messages-web",
     outputKind: "committed",
-    outputs: ["apps/web/src/i18n/langs/messages.gen.ts"],
+    outputs: CI_GENERATED_OUTPUTS.webMessages,
     inputs: [
       "apps/web/src/i18n/langs/*.json",
       "packages/scripts/src/i18n-typegen.ts",
@@ -437,7 +477,7 @@ export const GENERATORS = [
   {
     id: "prepaint-locales",
     outputKind: "committed",
-    outputs: ["apps/web/public/prepaint-init.js"],
+    outputs: CI_GENERATED_OUTPUTS.prepaintLocale,
     blocks: [
       {
         path: "apps/web/public/prepaint-init.js",

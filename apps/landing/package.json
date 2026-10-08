@@ -21,7 +21,7 @@
   "dependencies": {
     "@astrojs/react": "^7.0.0",
     "@astrojs/sitemap": "^3.7.4",
-    "@astrojs/starlight": "^0.42.3",
+    "@astrojs/starlight": "^0.42.5",
     "@resvg/resvg-js": "^2.6.2",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
@@ -33,7 +33,7 @@
     "@stll/ui": "workspace:*",
     "@stll/workspace-ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^7.3.4",
+    "astro": "^7.3.5",
     "better-result": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",

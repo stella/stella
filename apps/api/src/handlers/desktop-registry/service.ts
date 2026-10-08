@@ -13,6 +13,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateLookupFormats } from "@/api/db/schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getOrganizationRegistryDispatch,
@@ -180,6 +181,7 @@ export const searchDesktopRegistry = async (
   }
   const lookup = await executeRegistryLookup({
     observer,
+    permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,
     query,
     limit: SEARCH_LIMIT,
@@ -216,6 +218,7 @@ export const searchDesktopRegistry = async (
         }
         const detail = await executeRegistryLookup({
           observer,
+          permit: grantThirdPartyOutboundPermit(),
           handler: configured.value,
           query: hit.id,
         });
@@ -377,6 +380,7 @@ export const formatDesktopRegistry = async (
   }
   const lookup = await executeRegistryLookup({
     observer,
+    permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,
     query: id,
   });

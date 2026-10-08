@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { isNonNullObject } from "@stll/template-conditions/path";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
@@ -76,9 +78,6 @@ type SearchPreviewChatRow = {
 
 type SearchPreviewChatRole = "assistant" | "system" | "user";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 const isSearchPreviewChatRole = (
   value: unknown,
 ): value is SearchPreviewChatRole =>
@@ -102,7 +101,7 @@ const extractChatPreviewTextParts = (content: unknown): string[] => {
     return textParts;
   }
   for (const sourceDocument of sourceDocuments) {
-    if (!isRecord(sourceDocument)) {
+    if (!isNonNullObject(sourceDocument)) {
       continue;
     }
     for (const value of [

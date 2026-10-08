@@ -6,6 +6,7 @@ import {
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
+import { validateFetchedToolsList } from "./registry-trust.js";
 import type {
   FlagSpec,
   LeafCommandSpec,
@@ -185,6 +186,11 @@ describe("generateRouteMap: discriminator split (S2)", () => {
       "--matter-number-padding",
       "--matter-number-pattern",
       "--prompt-caching-enabled",
+      "--time-edit-window-days",
+      "--time-locked-through-month",
+      "--time-minimum-unit-minutes",
+      "--time-narrative-required",
+      "--time-zone",
     ]);
     expect(settings?.flags.some((f) => f.required)).toBe(false);
   });
@@ -533,6 +539,56 @@ describe("generateRouteMap: Phase 4 domains (S1/S3)", () => {
 });
 
 describe("generateRouteMap: unknown fetched tools (S1 rule 5)", () => {
+  for (const [name, command] of [
+    ["skill__", ["skill--"]],
+    ["list__", ["list--"]],
+    ["skill_", ["skill-"]],
+    ["list_", ["list-"]],
+    ["skill__-foo", ["skill", "foo"]],
+    ["list_-foo", ["foo", "list"]],
+    ["skill__-", ["skill---"]],
+    ["list__-", ["list---"]],
+  ] as const) {
+    test(`an accepted separator suffix ${name} keeps a nonempty command path`, () => {
+      const listing = {
+        name,
+        description: "List documents",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies RegistryToolListing;
+      const trusted = validateFetchedToolsList(
+        JSON.stringify({ tools: [listing] }),
+      );
+      expect(trusted.ok).toBe(true);
+      if (!trusted.ok) {
+        return;
+      }
+      const node = generateRouteMap(trusted.listings, {});
+      const leaf = findLeaf(node, command);
+      expect(leaf?.toolName).toBe(name);
+      expect(leafPaths(node)).toEqual([command.join(" ")]);
+      expect(
+        leaf?.commandPath.every(
+          (segment) => segment.length > 0 && !segment.startsWith("-"),
+        ),
+      ).toBe(true);
+    });
+  }
+
+  for (const slug of ["compare-default", `compare-${"a".repeat(56)}`]) {
+    test(`a hyphenated skill ${slug} maps to usable command segments`, () => {
+      const listing = {
+        name: `skill__${slug}`,
+        description: "Compare documents",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies RegistryToolListing;
+      const node = generateRouteMap([listing], {});
+      const leaf = findLeaf(node, ["skill", slug]);
+      expect(leaf?.toolName).toBe(listing.name);
+      expect(leaf?.commandPath).toEqual(["skill", slug]);
+      expect(leafPaths(node)).toEqual([`skill ${slug}`]);
+    });
+  }
+
   test("a tool with no annotation gets a heuristic verb/domain command path", () => {
     const unknown: RegistryToolListing = {
       name: "list_widgets",

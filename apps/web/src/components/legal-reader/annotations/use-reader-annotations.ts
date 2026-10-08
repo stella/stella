@@ -389,7 +389,7 @@ export const useReaderAnnotations = (
           createGuestAnnotation({
             input,
             newId: uuidv7,
-            now: new Date(),
+            now: new Date(Temporal.Now.instant().epochMilliseconds),
             store: guestStore,
             target: targetKey,
           }),

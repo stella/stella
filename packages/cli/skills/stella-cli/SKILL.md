@@ -99,8 +99,9 @@ requires (request it at `stella auth login --scopes`).
 | capability | `stella capability invoke` | read |  |
 | capability | `stella capability list` | read | paginated |
 | case-law | `stella case-law citations` | read | paginated |
+| case-law | `stella case-law coverage` | read |  |
 | case-law | `stella case-law lookup` | read |  |
-| case-law | `stella case-law read` | read | paginated; per-entry cursor, no `--all` |
+| case-law | `stella case-law read` | read |  |
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
@@ -192,12 +193,14 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+- `stella case-law coverage`
+  - optional: --country
 - `stella case-law lookup`
   - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
-  - optional: --max-chars, --include (details|metadata|textFields|source|citations|outline)
+  - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law search`
   - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
@@ -312,7 +315,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --reassign-to
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
-  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text)
+  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
 - `stella playbook list`
   - optional: --playbook-id
 - `stella playbook run`
@@ -388,12 +391,12 @@ are omitted here. Input union keys are required unless marked `?`.
 The exit code lines up with the tool-error `code`: `validation_error` -> 2,
 `missing_scope` -> 3, `feature_disabled` -> 5, `not_found` -> 6,
 `confirmation_required` -> 7, and `rate_limited` / `upstream_unavailable` /
-`unknown_tool` / `internal_error` -> 4. A legacy server that tags only a bare `feature_disabled`
+`search_index_unavailable` / `unknown_tool` / `internal_error` -> 4. A legacy server that tags only a bare `feature_disabled`
 code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 403
+Beyond the curated commands above, the CLI generates 409
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

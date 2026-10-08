@@ -41,8 +41,6 @@ import type {
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
-import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
-import { getSpawnSubagentsCallStatus } from "@/components/chat/spawn-subagents-card.logic";
 import {
   describeSuggestChangesApplyOutcome,
   hasAutomaticApproval,
@@ -70,10 +68,13 @@ import {
   type BrowserApprovalDetail,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -468,13 +469,14 @@ export const ToolApprovalCard = ({
     isTurnActive,
     responded,
   });
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: externalMcpConnectorSlug !== null,
   });
-  const availableConnectors = mcpConnectorsData
-    ? mcpConnectorsData.connectors
-    : [];
+  const connectorsView = useQueryView(mcpConnectorsQuery);
+  // Connector reads only decorate sources with icons; the source and approval stay usable without them.
+  const availableConnectors =
+    connectorsView.type === "items" ? connectorsView.items.connectors : [];
   const mcpIconHref =
     externalMcpConnectorSlug === null
       ? undefined
@@ -721,12 +723,6 @@ const ToolApprovalSummary = ({
           query={part.input.query}
         />
       )}
-      {part.name === "spawn_subagents" && part.input !== undefined && (
-        <SpawnSubagentsSubtaskList
-          callStatus={getSpawnSubagentsCallStatus(part)}
-          subagents={part.input.subagents}
-        />
-      )}
       {name === BROWSER_CONTROL_TOOL_NAME && input !== undefined && (
         <BrowserControlInputSummary
           input={input}
@@ -758,7 +754,14 @@ type SummaryMatter = { color: string | null; id: string; name: string };
  */
 const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   const { activeOrganizationId } = useChatApproval();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const user = useMaybeAuthenticatedUser();
+  const { data } = useQuery({
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+    }),
+    enabled: user !== null,
+  });
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
     return byId;

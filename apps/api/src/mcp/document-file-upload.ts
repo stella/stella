@@ -24,6 +24,7 @@ import {
   internalFailureResult,
   nullAsAbsent,
   structuredErrorResult,
+  structuredEgressPlan,
   uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 
@@ -284,8 +285,19 @@ export const uploadRemoteDocumentVersion = async ({
     v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>
   >
 > => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return structuredErrorResult({
+      code: "permission_denied",
+      message:
+        "This tool reaches a third-party service and runs only as a direct tool call",
+      hint: "Call the tool directly instead of from a script.",
+    });
+  }
+
   const downloaded = await dependencies.download({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    permit,
     timeoutMs: 60_000,
     url: file.download_url,
   });
@@ -382,9 +394,8 @@ export const uploadRemoteDocumentVersion = async ({
       new Error("uploads.update returned an invalid entity-version result"),
     );
   }
-  return {
-    egress: "structured",
+  return structuredEgressPlan({
     payload: parsedFinalized.output,
     textFields: [],
-  };
+  });
 };

@@ -1,6 +1,11 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import * as v from "valibot";
+
+import {
+  spawnSubagentsInputSchema,
+  spawnSubagentsOutputSchema,
+  type SpawnSubagentsInput,
+} from "@stll/api-contract/spawn-subagents";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -24,6 +29,11 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  requireChatToolModelAdmission,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   getTanStackTextModelInfoForRole,
   isAllowedBYOKModelForRole,
@@ -47,8 +57,17 @@ export { SPAWN_SUBAGENTS_TOOL_NAME };
  */
 export const SUBAGENT_DELEGATION_DEPTH_CAP = 1;
 
-/** Upper bound on how many subtasks one `spawn_subagents` call may batch. */
-const MAX_SUBAGENTS_PER_CALL = 8;
+export const SUBAGENT_FAILED_MESSAGE = "The subagent run failed.";
+
+/**
+ * The tool-result text for a run that threw. A curated 4xx `HandlerError`
+ * names a refusal the parent model can act on; anything else may carry
+ * library or provider text, so it is reported with a fixed message.
+ */
+const subagentThrownErrorMessage = (error: unknown): string =>
+  HandlerError.is(error) && error.status < 500
+    ? error.message
+    : SUBAGENT_FAILED_MESSAGE;
 
 /** Step budget for each subagent's own nested agentic loop. */
 const SUBAGENT_MAX_STEPS = 25;
@@ -61,74 +80,7 @@ const SUBAGENT_MAX_STEPS = 25;
  */
 const SUBAGENT_FALLBACK_TIMEOUT_MS = 300_000;
 
-const spawnSubagentsInputSchema = v.strictObject({
-  subagents: v.pipe(
-    v.array(
-      v.strictObject({
-        task: v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(4000),
-          v.description("The subtask for this subagent to complete."),
-        ),
-        context: v.optional(
-          v.pipe(
-            v.string(),
-            v.maxLength(4000),
-            v.description("Optional background/context the subagent needs."),
-          ),
-        ),
-        expectedOutput: v.optional(
-          v.pipe(
-            v.string(),
-            v.maxLength(1000),
-            v.description(
-              "Optional description of the result shape you want back.",
-            ),
-          ),
-        ),
-        model: v.optional(
-          v.pipe(
-            v.string(),
-            v.description(
-              "Optional exact model id; omit to use the default fast tier.",
-            ),
-          ),
-        ),
-      }),
-    ),
-    v.minLength(1),
-    v.maxLength(MAX_SUBAGENTS_PER_CALL),
-    v.description(
-      "One or more independent subtasks to run in parallel on cheap subagents.",
-    ),
-  ),
-});
-
-// A discriminated union (not shared optional `result`/`error` fields):
-// exactly one of them is meaningful per status, and every producer
-// (`runOneSubagent` below) and consumer (`SpawnSubagentsCard` on the
-// frontend) already branches on `status` first.
-const spawnSubagentsResultSchema = v.variant("status", [
-  v.strictObject({
-    index: v.number(),
-    status: v.literal("completed"),
-    result: v.string(),
-  }),
-  v.strictObject({
-    index: v.number(),
-    status: v.literal("failed"),
-    error: v.string(),
-  }),
-]);
-
-const spawnSubagentsOutputSchema = v.strictObject({
-  results: v.array(spawnSubagentsResultSchema),
-});
-
-type SpawnSubagentsToolInput = v.InferOutput<typeof spawnSubagentsInputSchema>;
-
-type SubagentSpec = SpawnSubagentsToolInput["subagents"][number];
+type SubagentSpec = SpawnSubagentsInput["subagents"][number];
 
 type BuildSubagentSystemPromptOptions = {
   expectedOutput: string | undefined;
@@ -342,6 +294,8 @@ type CreateSpawnSubagentsToolProps = {
    * the caller drains the buffer after the run to surface proposed writes.
    */
   buildSubagentToolset: (proposalSink: SubagentProposalSink) => ChatToolMap;
+  /** The parent turn's admission: subagents are steps of the turn. */
+  modelAdmission: ModelDispatchAdmission | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -428,6 +382,7 @@ export const createSpawnSubagentsTool = (
           const tools = props.buildSubagentToolset(proposalBuffer.sink);
           try {
             const run = await dependencies.runSubagent({
+              admission: requireChatToolModelAdmission(props.modelAdmission),
               organizationId: props.organizationId,
               orgAIConfig: props.orgAIConfig,
               managedAIResidency: props.managedAIResidency,
@@ -491,7 +446,7 @@ export const createSpawnSubagentsTool = (
             return {
               index,
               status: "failed" as const,
-              error: error instanceof Error ? error.message : String(error),
+              error: subagentThrownErrorMessage(error),
             };
           }
         };

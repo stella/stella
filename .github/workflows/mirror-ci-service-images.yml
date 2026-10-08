@@ -1,0 +1,68 @@
+name: Mirror CI service images
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions: {}
+
+concurrency:
+  group: mirror-ci-service-images
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.repository == 'stella/stella'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+      - name: Validate image inventory
+        run: |
+          set -euo pipefail
+          bun test scripts/ci-service-images.test.ts
+          bun scripts/ci-service-images.ts
+      - name: Install registry copy tool
+        run: |
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/ci-mirror-bin" go install github.com/google/go-containerregistry/cmd/crane@v0.20.6
+          echo "$RUNNER_TEMP/ci-mirror-bin" >> "$GITHUB_PATH"
+      - name: Authenticate to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+          DOCKER_CONFIG: ${{ runner.temp }}/ci-mirror-auth
+        run: |
+          set -euo pipefail
+          mkdir -p "$DOCKER_CONFIG"
+          printf '%s' "$GHCR_TOKEN" | crane auth login ghcr.io --username "$GHCR_USER" --password-stdin
+      - name: Copy images and record digests
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/ci-mirror-auth
+        run: |
+          set -euo pipefail
+          bash scripts/mirror-ci-service-images.sh "$RUNNER_TEMP/ci-mirror-digests"
+      - name: Upload image digests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-service-image-digests
+          path: ${{ runner.temp }}/ci-mirror-digests/digests.tsv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove registry credentials
+        if: always()
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/ci-mirror-auth
+        run: rm -rf -- "$DOCKER_CONFIG"

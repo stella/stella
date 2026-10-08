@@ -1,10 +1,64 @@
 import { describe, expect, test } from "bun:test";
 
-import { UNKNOWN, definitelyFalse, evaluate } from "./github-expression";
+import {
+  UNKNOWN,
+  contextFromNested,
+  contextWithPlanOutputs,
+  definitelyFalse,
+  evaluate,
+} from "./github-expression";
 
 const none = { values: {} };
 
 describe("GitHub expression evaluation", () => {
+  test("nested contexts preserve projections, status functions and unknown paths", () => {
+    const context = contextFromNested({
+      github: {
+        event: {
+          pull_request: { labels: [{ name: "prove-fix" }, { name: "other" }] },
+        },
+      },
+      needs: { "ci-plan": { outputs: { trusted: "true" } } },
+      always: () => true,
+      cancelled: () => false,
+    });
+    expect(
+      evaluate(
+        "contains(github.event.pull_request.labels.*.name, 'prove-fix')",
+        context,
+      ),
+    ).toBe(true);
+    expect(
+      evaluate(
+        "needs.ci-plan.outputs.trusted == 'true' && always() && !cancelled()",
+        context,
+      ),
+    ).toBe(true);
+    expect(evaluate("github.event.pull_request.missing", context)).toBe(
+      UNKNOWN,
+    );
+    expect(
+      evaluate("github.event.pull_request.labels.*.missing", context),
+    ).toEqual([]);
+    expect(
+      evaluate(
+        "contains(github.event.pull_request.labels.*.name, 'prove-fix')",
+        contextFromNested({
+          github: { event: { pull_request: { labels: [] } } },
+        }),
+      ),
+    ).toBe(false);
+    expect(evaluate("github.event.pull_request.labels.name", context)).toBe(
+      UNKNOWN,
+    );
+    expect(
+      evaluate("github.event.pull_request.labels.name.name", context),
+    ).toBe(UNKNOWN);
+    expect(() => contextFromNested({ always: () => "yes" })).toThrow(
+      "Invalid GitHub status function result",
+    );
+  });
+
   test("unpinned context is unknown and follows three-valued logic", () => {
     expect(evaluate("github.ref", none)).toBe(UNKNOWN);
     expect(evaluate("github.ref == 'x'", none)).toBe(UNKNOWN);
@@ -73,4 +127,68 @@ describe("GitHub expression evaluation", () => {
     expect(() => evaluate("(a == b", none)).toThrow("expected )");
     expect(() => evaluate("a == b c", none)).toThrow("trailing tokens");
   });
+});
+
+const wrappedExpression = (expression: string) =>
+  ["$", "{{ ", expression, " }}"].join("");
+
+test("computed planner outputs derive from direct projections even when fixture pins disagree", () => {
+  const outputs = {
+    scope: wrappedExpression("steps.files.outputs.scope"),
+    computed: wrappedExpression("steps.files.outputs.scope == 'true'"),
+  };
+  for (const scope of ["true", "false"]) {
+    for (const pin of ["true", "false"]) {
+      const contexts = [
+        {
+          values: {
+            "needs.ci-plan.outputs.scope": scope,
+            "needs.ci-plan.outputs.computed": pin,
+          },
+        },
+        contextFromNested({
+          needs: { "ci-plan": { outputs: { scope, computed: pin } } },
+        }),
+      ];
+      for (const context of contexts) {
+        expect(
+          evaluate(
+            "needs.ci-plan.outputs.computed",
+            contextWithPlanOutputs({ context, outputs }),
+          ),
+        ).toBe(scope);
+      }
+    }
+  }
+});
+
+test("unresolved computed inputs stay unknown rather than accepting an all-planned fixture", () => {
+  const context = contextWithPlanOutputs({
+    context: { values: { "needs.ci-plan.outputs.computed": "true" } },
+    outputs: {
+      computed: wrappedExpression("steps.files.outputs.scope == 'true'"),
+    },
+  });
+  expect(evaluate("needs.ci-plan.outputs.computed", context)).toBe(UNKNOWN);
+  expect(evaluate("false && needs.ci-plan.outputs.computed", context)).toBe(
+    false,
+  );
+});
+
+test("a projected output with a literal default supplies computed inputs", () => {
+  const context = contextWithPlanOutputs({
+    context: {
+      values: {
+        "needs.ci-plan.outputs.queue_depth": "thin",
+        "needs.ci-plan.outputs.computed": "false",
+      },
+    },
+    outputs: {
+      queue_depth: wrappedExpression(
+        "steps.depth.outputs.queue_depth || 'full'",
+      ),
+      computed: wrappedExpression("steps.depth.outputs.queue_depth == 'thin'"),
+    },
+  });
+  expect(evaluate("needs.ci-plan.outputs.computed", context)).toBe("true");
 });

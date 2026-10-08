@@ -19,9 +19,7 @@ const UNKNOWN_COMPILER_OPTION_CODES: ReadonlySet<number> = new Set([
   5023, 5025,
 ]);
 
-export const isTsgoOnlyOptionDiagnostic = (
-  diagnostic: ts.Diagnostic,
-): boolean => {
+const isTsgoOnlyOptionDiagnostic = (diagnostic: ts.Diagnostic): boolean => {
   if (!UNKNOWN_COMPILER_OPTION_CODES.has(diagnostic.code)) {
     return false;
   }

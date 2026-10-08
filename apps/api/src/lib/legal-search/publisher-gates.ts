@@ -1,3 +1,4 @@
+// parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
 
 type PublisherGate = {
@@ -196,7 +197,7 @@ export const PUBLISHER_GATES = {
   /** publications.europa.eu, both the SPARQL endpoint and Cellar. */
   "cellar-eu": {
     publisher: "EU Publications Office",
-    intervalMs: POLITE_INTERVAL_MS,
+    intervalMs: 1000,
     hosts: ["publications.europa.eu"],
   },
 } as const satisfies Record<string, PublisherGate>;

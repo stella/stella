@@ -1,7 +1,7 @@
 import { and, asc, eq, gt, ilike, inArray, or, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -80,7 +80,7 @@ export const readOverviewActivityActorRows = async ({
 
 /** Names, emails and avatars for the actor ids of one activity page. */
 export const readActivityActorIdentities = async (
-  tx: Transaction,
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "selectDistinct">,
   actorIds: readonly string[],
 ) =>
   actorIds.length === 0

@@ -57,6 +57,7 @@ export type SafeIdType =
   | "contactImportRequest"
   | "contactRelationship"
   | "corpusIndexProjectionIntent"
+  | "hostedCheckoutClaim"
   | "usageAllocation"
   | "usageLaneCounter"
   | "usageSeatAssignment"

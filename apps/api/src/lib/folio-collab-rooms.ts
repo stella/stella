@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { roles } from "@stll/permissions";
+import { CLIENT_MATTER_ADMIN_ROLES, roles } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -386,7 +386,7 @@ export const canUseFolioCollabWorkspace = ({
   isMemberRole(organizationRole) &&
   (workspaceMemberId !== null ||
     (workspaceClientId !== null &&
-      (organizationRole === "owner" || organizationRole === "admin")));
+      CLIENT_MATTER_ADMIN_ROLES.some((role) => role === organizationRole)));
 
 export const decideFolioCollabRoomAuthorization = ({
   actualGeneration,

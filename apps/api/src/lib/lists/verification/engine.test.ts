@@ -4,12 +4,21 @@
  * once, and what still breaks them is never stored as a finding.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import * as v from "valibot";
+
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
+import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  FEATURE_REGISTRY,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import {
   gradeClaims,
@@ -17,9 +26,16 @@ import {
 } from "@/api/lib/lists/verification/claim-grade";
 import type { VerificationEvidenceFact } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
+import {
+  createVerificationCall,
+  ListVerificationAccessRevokedError,
+} from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
+import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type Captured = { tenantWorkspaceIds: readonly string[]; messages: unknown[] };
@@ -37,7 +53,25 @@ const safeDb: SafeDb = async () => {
   throw new Error("safeDb should not be called by this test");
 };
 
+const access = decideFeatureAccess({
+  registry: FEATURE_REGISTRY,
+  featureId: LIST_VERIFICATION_FEATURE_ID,
+  userId: "user-fixture",
+  grants: {
+    [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
+  },
+  organizationId,
+  user: { email: "fixture@example.test", emailVerified: true },
+  membership: true,
+});
+if (access.status !== "enabled") {
+  throw new Error("Fixture requires access");
+}
 const deps: VerificationModelDeps = {
+  admission: testModelAdmission(organizationId),
+  accessProof: access.proof,
+  refreshAccessProof: async () => access.proof,
+  checkRunBudget: async () => Result.ok(),
   organizationId,
   workspaceId,
   entityVersionId: toSafeId<"entityVersion">("version-fixture"),
@@ -513,4 +547,187 @@ describe("gradeClaims", () => {
       ungraded: 1,
     });
   });
+});
+
+test("each model request refreshes its access proof before dispatch", async () => {
+  let refreshCount = 0;
+  const call = createVerificationCall({
+    deps: {
+      ...deps,
+      refreshAccessProof: async () => {
+        refreshCount += 1;
+        return refreshCount === 1 ? access.proof : null;
+      },
+    },
+    feature: "verification-test",
+    system: "Fixture instruction",
+    shared: null,
+    outputSchema: v.object({ value: v.string() }),
+  });
+  answers.push({ value: "fixture" });
+  expect(await call.generate([])).toEqual(Result.ok({ value: "fixture" }));
+  const denied = await call.generate([]);
+  expect(Result.isError(denied) ? denied.error : null).toBeInstanceOf(
+    ListVerificationAccessRevokedError,
+  );
+  expect(refreshCount).toBe(2);
+  expect(captured).toHaveLength(1);
+});
+
+test("access removal after extraction blocks the later grading batch", async () => {
+  let currentProof: VerificationModelDeps["accessProof"] | null = access.proof;
+  const dispatched: string[] = [];
+  const currentDeps: VerificationModelDeps = {
+    ...deps,
+    refreshAccessProof: async () => currentProof,
+    generateObjectForRole: asTestRaw<typeof generateTanStackObjectForRole>(
+      async () => {
+        dispatched.push("extraction");
+        currentProof = null;
+        return {
+          claims: [
+            {
+              blockId: "b1",
+              quote: "I first met him on 9 March 2021",
+              type: "fact",
+              framing: "asserted",
+            },
+          ],
+        };
+      },
+    ),
+  };
+  const extracted = await extractClaims({ blocks: BLOCKS, deps: currentDeps });
+  expect(Result.isOk(extracted)).toBe(true);
+  if (Result.isError(extracted)) {
+    throw new TypeError("Expected extracted fixture claim");
+  }
+  expect(extracted.value).toHaveLength(1);
+  const graded = await gradeClaims({
+    claims: extracted.value.map((claim, position) => ({
+      key: String(position),
+      text: claim.text,
+      context: {
+        text:
+          BLOCKS.at(claim.blockIndex)?.text ??
+          panic("Expected extracted block"),
+        anchor: claim.anchor,
+      },
+    })),
+    facts: [fact(FACT_A, "The meeting took place on 9 March 2021")],
+    deps: currentDeps,
+  });
+  expect(Result.isError(graded) ? graded.error.cause : null).toBeInstanceOf(
+    ListVerificationAccessRevokedError,
+  );
+  expect(dispatched).toEqual(["extraction"]);
+});
+
+test("deployment disablement stops a later model request with a valid current proof", async () => {
+  const previousDeployment = env.FEATURE_LEGAL_LISTS;
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  const call = createVerificationCall({
+    deps,
+    feature: "verification-test",
+    system: "Fixture instruction",
+    shared: null,
+    outputSchema: v.object({ value: v.string() }),
+  });
+  try {
+    env.FEATURE_LEGAL_LISTS = true;
+    answers.push({ value: "fixture" });
+    expect(await call.generate([])).toEqual(Result.ok({ value: "fixture" }));
+    env.FEATURE_LEGAL_LISTS = false;
+    const denied = await call.generate([]);
+    expect(Result.isError(denied) ? denied.error : null).toBeInstanceOf(
+      ListVerificationAccessRevokedError,
+    );
+    expect(captured).toHaveLength(1);
+  } finally {
+    env.FEATURE_LEGAL_LISTS = previousDeployment;
+    restoreMode();
+  }
+});
+
+test("a retained proof requires current admission before model dispatch", async () => {
+  const call = createVerificationCall({
+    deps: { ...deps, refreshAccessProof: async () => null },
+    feature: "verification-test",
+    system: "Fixture instruction",
+    shared: null,
+    outputSchema: v.object({ value: v.string() }),
+  });
+  const denied = await call.generate([]);
+  expect(Result.isError(denied) ? denied.error : null).toBeInstanceOf(
+    ListVerificationAccessRevokedError,
+  );
+  expect(captured).toHaveLength(0);
+});
+
+test("model dispatch requires proofs bound to the requester and organization", async () => {
+  const other = decideFeatureAccess({
+    registry: FEATURE_REGISTRY,
+    grants: {
+      [LIST_VERIFICATION_FEATURE_ID]: [
+        { type: "organization", organizationId },
+      ],
+    },
+    featureId: LIST_VERIFICATION_FEATURE_ID,
+    organizationId,
+    userId: "another-user-fixture",
+    user: { email: "another@example.test", emailVerified: true },
+    membership: true,
+  });
+  if (other.status !== "enabled") {
+    throw new Error("Fixture requires access");
+  }
+  for (const accessProof of [access.proof, other.proof]) {
+    const call = createVerificationCall({
+      deps: {
+        ...deps,
+        accessProof,
+        refreshAccessProof: async () => other.proof,
+      },
+      feature: "verification-test",
+      system: "Fixture instruction",
+      shared: null,
+      outputSchema: v.object({ value: v.string() }),
+    });
+    const denied = await call.generate([]);
+    expect(Result.isError(denied) ? denied.error : null).toBeInstanceOf(
+      ListVerificationAccessRevokedError,
+    );
+  }
+  expect(captured).toHaveLength(0);
+});
+
+test("each model request rechecks its run budget before dispatch", async () => {
+  let checks = 0;
+  const capError = new ListVerificationRunCapError({
+    reason: "active",
+    message: "Verification limit reached",
+    hint: "Wait for an active run.",
+  });
+  const call = createVerificationCall({
+    deps: {
+      ...deps,
+      checkRunBudget: async () => {
+        checks += 1;
+        return checks === 1 ? Result.ok() : Result.err(capError);
+      },
+    },
+    feature: "verification-budget-test",
+    system: "Fixture instruction",
+    shared: null,
+    outputSchema: v.object({ value: v.string() }),
+  });
+  answers.push({ value: "fixture" });
+  expect(await call.generate([])).toEqual(Result.ok({ value: "fixture" }));
+  const refusal = await call.generate([]);
+  expect(Result.isError(refusal)).toBe(true);
+  if (Result.isError(refusal)) {
+    expect(refusal.error).toBe(capError);
+  }
+  expect(checks).toBe(2);
+  expect(captured).toHaveLength(1);
 });

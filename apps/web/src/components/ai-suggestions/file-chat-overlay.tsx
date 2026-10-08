@@ -22,11 +22,7 @@ import {
  */
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -80,6 +76,7 @@ import {
   FileChatEmptyPlaceholder,
   useFileChatPlaceholder,
 } from "@/components/ai-suggestions/file-chat-placeholder";
+import { FileChatTitleSlot } from "@/components/ai-suggestions/file-chat-title-slot";
 import {
   PENDING_REVIEW_CHOICE,
   resolveFileReviewSessionId,
@@ -87,11 +84,7 @@ import {
 import type { PendingReviewChoice } from "@/components/ai-suggestions/file-review-session";
 import { OVERLAY_THREAD_PRESENTATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import type { OverlayThreadPresentation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
-import {
-  ChatThreadCard,
-  FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS,
-  PromptBar,
-} from "@/components/ai-suggestions/host";
+import { ChatThreadCard, PromptBar } from "@/components/ai-suggestions/host";
 import {
   PENDING_REVIEW_PROMPT_STATUS,
   PendingReviewNewThreadPrompt,
@@ -157,7 +150,6 @@ import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.l
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
@@ -170,7 +162,6 @@ import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thre
 import {
   applyChatModelChange,
   chatThreadOptions,
-  chatThreadTitleOptions,
   fileChatThreadOptions,
   materializeFileChatThread,
 } from "@/features/chat/queries";
@@ -200,7 +191,6 @@ import {
   type ChatThreadId,
   type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
-import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOverlaySkillDocument } from "@/lib/prompts/chat-skill-availability.logic";
@@ -1028,7 +1018,6 @@ const useFileChatReviewState = ({
       : countPendingReviewSuggestions(state.sessions[reviewEntityId]),
   );
   return {
-    hasPendingReview: pendingReviewCount > 0,
     pendingReviewCount,
     reviewEntityId,
   };
@@ -1237,15 +1226,12 @@ const FileChatOverlayInner = ({
   const hasDocxEditSurface =
     (activeFile !== undefined || activeDraft !== undefined) &&
     docxEditorRef !== undefined;
-  // Whether the floating DOCX `ReviewBar` is showing for this entity — it
-  // renders while any suggestion is pending/applying (mirrors the bar's own
-  // `isPending` gate). When it is, the thread card lifts above the bar so the
-  // two floating surfaces never overlap.
-  const { hasPendingReview, pendingReviewCount, reviewEntityId } =
-    useFileChatReviewState({
-      activeDraft,
-      activeFile,
-    });
+  // The review pill and the thread card both dock in the composer column
+  // (DockedChatStack), so they stack without either measuring the other.
+  const { pendingReviewCount, reviewEntityId } = useFileChatReviewState({
+    activeDraft,
+    activeFile,
+  });
   const editModeOptionId = useChatEditModeStore((state) => state.optionId);
   const setEditModeOptionId = useChatEditModeStore(
     (state) => state.setOptionId,
@@ -1555,6 +1541,7 @@ const FileChatOverlayInner = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -2523,11 +2510,6 @@ const FileChatOverlayInner = ({
       >
         {threadCardAvailable && panelOpen && hasThreadContent && (
           <ChatThreadCard
-            bottomOffsetClass={
-              hasPendingReview
-                ? FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS
-                : undefined
-            }
             onCollapse={() => setPanelOpen(false)}
             scrollRef={threadScrollRef}
             titleSlot={
@@ -2556,8 +2538,11 @@ const FileChatOverlayInner = ({
               onLoadOlder={loadOlder}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
-              onRemoveQueuedMessage={removeQueuedMessage}
               onResend={resendLatestMessage}
+              queuedMessageActions={{
+                remove: removeQueuedMessage,
+                sendNow: sendQueuedMessageNow,
+              }}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
               showThinkingIndicator
@@ -2733,53 +2718,5 @@ const FileChatOverlayInner = ({
         />
       </ChatApprovalContext>
     </ChatMattersContext>
-  );
-};
-
-type FileChatTitleSlotProps = {
-  activeOrganizationId: string;
-  hasMessages: boolean;
-  threadRef: ChatThreadRef;
-  usedAnonymization: boolean;
-};
-
-// Title area of the floating thread card: resolves the persisted title with
-// the bounded by-id read (file threads are not guaranteed to be in the
-// grouped-threads window) and mounts the shared rename affordance on it.
-const FileChatTitleSlot = ({
-  activeOrganizationId,
-  hasMessages,
-  threadRef,
-  usedAnonymization,
-}: FileChatTitleSlotProps) => {
-  const { data: byIdTitle } = useQuery(
-    chatThreadTitleOptions({
-      activeOrganizationId,
-      // A message-less thread has no server row yet; issuing GET /title for
-      // it would produce an expected but noisy 404.
-      enabled: hasMessages,
-      key: {
-        threadId: threadRef.threadId,
-        workspaceId:
-          threadRef.scope === "workspace" ? threadRef.workspaceId : undefined,
-      },
-    }),
-  );
-  const title =
-    byIdTitle !== undefined && !isPlaceholderThreadTitle(byIdTitle)
-      ? byIdTitle
-      : "";
-
-  return (
-    <span className="flex min-w-0 items-center text-xs font-medium">
-      <ChatTitleRename
-        hasMessages={hasMessages}
-        inputClassName="w-44 text-xs"
-        ownsRenameCommand
-        threadRef={threadRef}
-        title={title}
-        usedAnonymization={usedAnonymization}
-      />
-    </span>
   );
 };

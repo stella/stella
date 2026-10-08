@@ -62,6 +62,7 @@ const batchDelete = createSafeHandler(
       "returned count is the only report of what happened.",
     permissions: { timeEntry: ["approve"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",

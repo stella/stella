@@ -221,9 +221,10 @@ const FeedbackReport = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
 
   if (submit.status === "success") {
     return <FeedbackReceipt onClose={onClose} response={submit.data} />;
@@ -231,6 +232,8 @@ const FeedbackReport = ({
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="gap-0"
       errors={formErrors}
       onSubmit={(event) => {

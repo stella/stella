@@ -21,6 +21,7 @@ import {
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import type { CatalogueBrowserFilterKind } from "@/routes/knowledge/-components/catalogue/catalogue-browser";
 
@@ -62,7 +63,7 @@ export function MemberToolsPage({
     permissions: { agentSkill: ["create"] },
     role,
   });
-  const canManageCustomTools = role === "admin" || role === "owner";
+  const canManageCustomTools = hasOrganizationManagementAccess(role);
 
   // OAuth completion lands in a popup tab/window; the popup
   // broadcasts via BroadcastChannel (falling back to opener

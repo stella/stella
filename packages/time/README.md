@@ -14,3 +14,7 @@ person: pass the user's or organization's IANA zone. The UTC day
 (`Temporal.Now.plainDateISO("UTC")`, `toISOString().slice(0, 10)`) is a
 different day for hours around local midnight, and the `calendar-day` lint rule
 rejects it as a user-facing day.
+
+`parseTimeZoneId(value)` reads a stored or requested zone into the
+`TimeZoneId` brand: the runtime tz database's spelling, or `null` for an
+unknown id or a fixed UTC offset (which never observes daylight saving time).

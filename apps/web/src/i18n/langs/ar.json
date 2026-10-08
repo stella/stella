@@ -54,6 +54,17 @@
       "polish": "تحسين الصياغة"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
+    "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
+    "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",
+    "runColumnPage": "تشغيل العمود (هذه الصفحة)",
+    "runPageRows": "تشغيل لـ {count, plural, zero {# صف في هذه الصفحة} one {# صف في هذه الصفحة} two {# صفين في هذه الصفحة} few {# صفوف في هذه الصفحة} many {# صفًا في هذه الصفحة} other {# صف في هذه الصفحة}}",
+    "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
+    "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
+    "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
   "appearance": {
     "calendar": "تقويم",
     "calendarGregorian": "الميلادي",
@@ -134,6 +145,7 @@
       "useBackupCode": "استخدام رمز احتياطي بدلاً من ذلك"
     },
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
+    "usePassword": "استخدام كلمة المرور بدلًا من ذلك",
     "weSentCodeTo": "أرسلنا رمزًا إلى <email>{emailAddress}</email>"
   },
   "avt": {
@@ -264,6 +276,7 @@
     "runs": {
       "back": "جميع المستندات",
       "errors": {
+        "accessRevoked": "توقف التحقق لأن الوصول غير متاح.",
         "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للتحقق من المستندات. تحقق من إعدادات الذكاء الاصطناعي للمؤسسة.",
         "enqueueFailed": "تعذّر بدء التحقق. حاول مرة أخرى.",
         "extractionFailed": "تعذّر استخراج الادعاءات الواردة في هذا المستند.",
@@ -336,6 +349,7 @@
     },
     "view": {
       "chooseList": "اختيار قائمة",
+      "createList": "إنشاء قائمة",
       "evidenceList": "الوقائع من",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
@@ -796,6 +810,34 @@
       "unavailable": "أرقام التغطية غير متاحة حاليًا."
     },
     "decisionNotFound": "لم يُعثر على القرار",
+    "decisionTypes": {
+      "administrative_decision": "قرار إداري",
+      "binding_excise_information": "معلومة ملزمة بشأن الضريبة الانتقائية",
+      "binding_rate_information": "معلومة ملزمة بشأن سعر ضريبة القيمة المضافة",
+      "court_direction": "توجيه إجرائي",
+      "decision": "قرار",
+      "finding": "حكم في الموضوع",
+      "general_tax_ruling": "تفسير ضريبي عام",
+      "individual_tax_ruling": "تفسير ضريبي فردي",
+      "judgment": "حكم",
+      "leave_refused": "رفض لعدم وجود مسألة قانونية جوهرية",
+      "merits_decision": "قرار في أصل النزاع",
+      "ministry_of_justice_decision": "قرار وزارة العدل",
+      "minutes_extract": "مستخرج من المحضر",
+      "opinion": "رأي",
+      "order": "أمر",
+      "other": "أخرى",
+      "payment_order": "أمر بالأداء",
+      "penal_order": "أمر جزائي",
+      "principle_decision": "قرار مبدئي",
+      "protective_opinion": "رأي وقائي",
+      "resolution": "قرار تفسيري",
+      "signalling_decision": "قرار تنبيه",
+      "statement_of_reasons": "تسبيب",
+      "tax_explanations": "إيضاحات ضريبية",
+      "top_up_tax_opinion": "رأي بشأن الضريبة التكميلية",
+      "uniformity_decision": "قرار توحيد الاجتهاد القضائي"
+    },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
       "remove": "إزالة عامل التصفية {filter}"
@@ -841,6 +883,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
@@ -865,7 +908,9 @@
       },
       "deleteColumnConfirm": "يحذف هذا السؤال وكل إجاباته لمؤسستك بأكملها، من كل بحث ولدى كل عضو. لإخفائه من هذا البحث فقط، استخدم «إزالة من هذا البحث».",
       "editQuestionHint": "يؤدي تغيير الصياغة أو نوع الإجابة أو خياراته إلى حذف الإجابات الحالية؛ شغّل العمود مجددًا بعد ذلك.",
+      "newQuestionColumn": "جديد",
       "nothingToRun": "كل خلية لديها إجابة بالفعل",
+      "questionAdded": "أُضيف «{question}» إلى الجدول",
       "questionPlaceholder": "مثلًا: هل اعتبرت المحكمة الفصل صحيحًا؟",
       "removeFromSearch": "إزالة من هذا البحث",
       "runAll": "الإجابة عن الكل",
@@ -917,6 +962,9 @@
     },
     "viewer": {
       "abstract": "الملخّص",
+      "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
+      "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
       "cites": "يستشهد بـ",
@@ -944,7 +992,8 @@
       "textNotYetAvailable": "لم تنشر المحكمة نص القرار، أو أنه غير متاح هنا بعد.",
       "textPending": "لا يزال جارٍ جلب نص الحكم",
       "textReadFailed": "تعذّر تحميل نص الحكم",
-      "textUnavailable": "لا يتوفر نص لهذا الحكم"
+      "textUnavailable": "لا يتوفر نص لهذا الحكم",
+      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)"
     }
   },
   "catalogue": {
@@ -1002,6 +1051,7 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
+    "activateGeneratedView": "التفاعل مع هذا العرض",
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1147,6 +1197,8 @@
     "forkedFromUnavailable": "تم إنشاؤها من دردشة لم تعد متاحة",
     "forkedThread": "من دردشة أخرى",
     "forkingThread": "جارٍ إنشاء دردشة جديدة…",
+    "generatedView": "عرض مُنشأ",
+    "generatedViewDrill": "ابحث عن القرارات باستخدام مرشح المحكمة {court} والسنة {year}.",
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
@@ -1278,6 +1330,7 @@
     "sendErrorQuotaExhausted": "نفدت حصة مزوّد الذكاء الاصطناعي. حاول مجدداً بعد دقيقة، أو تواصل مع مسؤول مساحة العمل.",
     "sendErrorStreamIncomplete": "انقطع ردّ الذكاء الاصطناعي قبل أن يكتمل. حاول مجدداً.",
     "sendPrompt": "إرسال الرسالة",
+    "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
     "skills": {
       "scope": {
@@ -1425,6 +1478,14 @@
       "sourceCode": "الشيفرة المصدرية",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "لم يكتمل رد في دردشة stella.",
+      "failedTitle": "فشل الرد",
+      "needsInputBody": "تنتظر دردشة موافقتك أو إجابتك.",
+      "needsInputTitle": "تحتاج stella إلى مدخلاتك",
+      "replyReadyBody": "أنهت stella الرد في الدردشة.",
+      "replyReadyTitle": "الرد جاهز"
     },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
@@ -1640,6 +1701,7 @@
     "deletedCount": "{count, plural, zero {تم حذف أي عنصر} one {تم حذف عنصر واحد} two {تم حذف عنصرين} few {تم حذف # عناصر} many {تم حذف # عنصرًا} other {تم حذف # عنصر}}",
     "description": "الوصف",
     "details": "التفاصيل",
+    "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
@@ -1775,6 +1837,8 @@
     "notes": "الملاحظات",
     "open": "فتح",
     "openInNewTab": "فتح في علامة تبويب جديدة",
+    "openInStella": "فتح في stella",
+    "openOriginalSource": "فتح المصدر الأصلي",
     "options": "الخيارات",
     "or": "أو",
     "organization": "المؤسسة",
@@ -1854,6 +1918,7 @@
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
+    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
     "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
@@ -1874,15 +1939,23 @@
     "zoomOut": "تصغير"
   },
   "consent": {
+    "actingAs": "سيعمل {clientName} بصفتك في {organizationName}",
     "allow": "السماح",
-    "appIdentity": "هوية التطبيق",
+    "canChange": "يمكنه التغيير",
+    "canRead": "يمكنه القراءة",
     "completeSetup": "إكمال الإعداد",
+    "connectTitle": "ربط {clientName} بـ stella",
+    "connectedTitle": "متصل بـ {clientName}",
+    "connectionDuration": "يظل متصلاً حتى تفصله من الإعدادات › الاتصالات",
     "defaultClientName": "تطبيق ما",
-    "description": "يريد {clientName} الوصول إلى مساحة عمل stella الخاصة بك",
+    "destinationDetails": "تفاصيل إعادة التوجيه",
     "error": "حدث خطأ ما. يُرجى المحاولة مرة أخرى.",
     "missingJurisdictions": "لم تُعدّ مؤسستك في stella ولاياتها القضائية للممارسة بعد. ستكون بعض الأدوات المراعية للولاية القضائية غير متاحة حتى تُكمل الإعداد.",
-    "permissions": "سيسمح هذا للتطبيق بـ:",
-    "redirectDestination": "وجهة إعادة التوجيه",
+    "otherPermissions": "أذونات أخرى",
+    "publishedBy": "نشره <host>{publisherHost}</host>",
+    "returnToAgent": "ارجع إلى وكيلك للمتابعة.",
+    "returnsLocally": "ستعود إلى {clientName} على هذا الكمبيوتر",
+    "returnsTo": "ستعود إلى {clientName}",
     "scopeAdminRead": "قراءة سجل تدقيق مؤسستك",
     "scopeAdminWrite": "إدارة أعضاء المؤسسة وإعداداتها",
     "scopeBillingWrite": "إنشاء إدخالات الوقت الخاصة بك وتعديلها وحذفها",
@@ -1903,8 +1976,11 @@
     "scopeSkills": "استخدام مهارات stella المحفوظة لديك",
     "scopeTemplates": "سرد قوالب مستنداتك وتعبئتها وإنشاؤها",
     "scopeTemplatesAnonymized": "سرد النسخ المُخفاة الهوية من قوالب مستنداتك وتعبئتها وإنشاؤها",
+    "signedInAs": "تم تسجيل الدخول باسم <email>{accountEmail}</email>",
     "title": "التفويض بالوصول",
-    "unverifiedApp": "تطبيق غير موثّق"
+    "unverifiedApp": "تطبيق غير موثّق",
+    "unverifiedExplanation": "لم تتحقق stella من الجهة التي تنشر هذا التطبيق.",
+    "useAnotherAccount": "استخدم حسابًا آخر"
   },
   "contacts": {
     "alsoPartyIn": "يظهر أيضاً كطرف في {count, plural, zero {# ملف قانوني آخر} one {ملف قانوني آخر واحد} two {ملفين قانونيين آخرين} few {# ملفات قانونية أخرى} many {# ملفًا قانونيًا آخر} other {# ملف قانوني آخر}}",
@@ -2294,7 +2370,10 @@
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",
       "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "filePropertyTypeImmutable": "لا يمكن تغيير نوع خاصية الملف. احتفظ بالنوع الحالي؛ وأنشئ خاصية مخصصة للقيم الأخرى.",
+      "fileSecurityRejected": "رفض فحص أمني الملف. أزِل المحتوى المُعلَّم ثم ارفع نسخة نظيفة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "hostedCheckoutOpen": "توجد عملية دفع مفتوحة بالفعل لهذه المؤسسة. أكملها، أو ابدأ عملية جديدة بعد انتهاء صلاحيتها.",
+      "hostedSubscriptionLive": "لدى هذه المؤسسة اشتراك بالفعل. غيّره من «إدارة الاستخدام المُستضاف».",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
@@ -2450,6 +2529,7 @@
     "current": "الحالي",
     "deleteVersion": "حذف الإصدار",
     "descriptionPlaceholder": "أضف ملاحظة حول هذا الإصدار...",
+    "displayFailed": "تعذّر عرض هذا الملف.",
     "downloadRedline": "تنزيل نسخة التتبّع",
     "dropToUploadVersion": "أفلِت للرفع كإصدار جديد",
     "editLatestVersionDescription": "هذا ليس الإصدار الحالي. لتعديله في المتصفح، اجعله أولاً أحدث إصدار، ثم ألغِ قفله للتعديل.",
@@ -3725,11 +3805,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "مسح السجل الأخير",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
-    "noRecentSearches": "لا توجد عمليات بحث بعد",
+    "noRecent": "لا يوجد نشاط حديث",
     "noSignals": "لا توجد إشارات بعد",
     "prompt": "عمّ تبحث؟",
+    "recent": "الأخيرة",
+    "recentCasesFilter": "الأحكام",
+    "recentSearchFilter": "عمليات البحث",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",
@@ -4303,6 +4387,11 @@
       "betaInbox": "صندوق الوارد والإشعارات",
       "betaInboxDescription": "إظهار صندوق الوارد وجرس الإشعارات",
       "betaTimeBillingDescription": "إظهار تتبع الوقت والفواتير والمصروفات",
+      "chatNotifications": "إشعارات الدردشة",
+      "chatNotificationsBlocked": "الإشعارات محظورة لـ stella في هذا المتصفح. اسمح بها من إعدادات الموقع في المتصفح.",
+      "chatNotificationsDescription": "تلقَّ إشعارًا من هذا المتصفح عند اكتمال رد في الدردشة بينما تعمل stella في الخلفية.",
+      "chatNotificationsToggle": "أعلمني عندما يكون الرد جاهزًا أو يحتاج إلى مدخلاتي",
+      "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",
@@ -4516,6 +4605,13 @@
         "narrativeRequired": "اشتراط بيان",
         "title": "سياسة تسجيل الوقت"
       },
+      "timeZone": {
+        "description": "تتبع الأشهر المقفلة وتواريخ الفواتير والأعمال المستحقة اليوم التقويمي في هذه المنطقة الزمنية. وإلى أن يتم اختيار منطقة، تُحدَّد وفق الولاية القضائية الرئيسية: Europe/Prague لتشيكيا وسلوفاكيا، وUTC في غير ذلك.",
+        "followJurisdiction": "اتباع الولاية القضائية الرئيسية",
+        "followingJurisdiction": "اتباع الولاية القضائية الرئيسية ({timeZone})",
+        "title": "المنطقة الزمنية",
+        "updated": "تم تحديث المنطقة الزمنية"
+      },
       "usage": "الاستخدام",
       "usageDescription": "حدود الاستخدام وحالة الاستحقاق لهذه المؤسسة",
       "usageEmptyDescription": "اضبط استحقاق استخدام لتفعيل ميزات الذكاء الاصطناعي المُقاسة لهذه المؤسسة.",
@@ -4614,6 +4710,7 @@
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
     "compareWithVersion": "المقارنة مع {version}",
+    "currentWording": "الصياغة الحالية",
     "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
     "diffInserted": "مُضاف:",
     "diffRemoved": "محذوف:",
@@ -4663,7 +4760,10 @@
       "unknown": "الحالة غير واضحة"
     },
     "title": "التشريعات",
-    "validity": "نافذ من {from} إلى {to}"
+    "validity": "نافذ من {from} إلى {to}",
+    "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "wordingValidFrom": "الصياغة النافذة منذ {date}",
+    "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
     "create": "إنشاء",
@@ -5400,6 +5500,7 @@
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "اربط stella desktop بحسابك",
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
         "authRequiredTitle": "انتهت صلاحية جلستك",
@@ -5422,6 +5523,17 @@
         "updateRequiredDescription": "يحتاج تطبيق stella لسطح المكتب إلى تحديث. سيتم تحديثه تلقائيًا عند انتهاء عمليات التحرير النشطة على سطح المكتب؛ حاول مرة أخرى بعد إعادة تشغيله.",
         "updateRequiredTitle": "تحديث تطبيق stella لسطح المكتب"
       },
+      "desktopGate": {
+        "alreadyInstalled": "هل هو مثبّت بالفعل؟ اربطه",
+        "connect": "ربط stella desktop",
+        "editNone": "نزّل stella desktop لتعديل هذا الملف",
+        "editOutdated": "حدّث stella desktop للتعديل",
+        "editReason": "يفتح التعديل على الحاسوب الملف في تطبيق على حاسوبك عبر stella desktop.",
+        "signCurrent": "التوقيع باستخدام stella desktop",
+        "signNone": "نزّل stella desktop لتوقيع ملف PDF هذا",
+        "signOutdated": "حدّث stella desktop للتوقيع",
+        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop."
+      },
       "downloadAs": "تنزيل بصيغة…",
       "downloadAsZip": "تنزيل بصيغة ZIP",
       "downloadExtractedText": "النص المستخرج (.txt)",
@@ -5435,7 +5547,6 @@
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
       "ocrQueued": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
       "pdfSigning": {
-        "action": "التوقيع في تطبيق سطح المكتب",
         "cancelledBaseVersionDescription": "تغيّر المستند أثناء التوقيع. افتح أحدث إصدار ووقّعه من جديد.",
         "cancelledCertificateDescription": "لا يمكن استخدام الشهادة المختارة للتوقيع. اختر شهادة تسمح بالتوقيع الرقمي.",
         "cancelledCertifiedDescription": "ملف PDF هذا مُصدَّق، ولا يسمح تصديقه بإضافة توقيعات أخرى.",
@@ -5963,7 +6074,6 @@
       "previewUnsupported": "المعاينة غير مدعومة لهذا النوع من المستندات.",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
       "referencesItself": "الخاصية تشير إلى نفسها عبر خصائص أخرى",
-      "rerunColumn": "إعادة تشغيل العمود",
       "resultType": "نوع النتيجة",
       "returnsLabel": "التنسيق",
       "scopeFile": "الملف الحالي",

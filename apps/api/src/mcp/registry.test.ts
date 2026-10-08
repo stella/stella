@@ -177,6 +177,7 @@ describe("MCP tool registry", () => {
       "search",
       "fetch",
       "search_case_law",
+      "case_law_coverage",
       "lookup_case_law",
       "read_case_law_decision",
       "read_case_law_citations",

@@ -10,7 +10,11 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import {
+  alias,
+  type PgAsyncDatabase,
+  type PgQueryResultHKT,
+} from "drizzle-orm/pg-core";
 
 import { isEntityKind } from "@stll/api-contract";
 import type {
@@ -19,7 +23,8 @@ import type {
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   auditActivityActionSql,
   auditLogs,
@@ -33,6 +38,7 @@ import {
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -490,27 +496,65 @@ export type MatterActivityPage = {
   nextCursor: string | null;
 };
 
+type ActivityReadTransaction = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "select" | "selectDistinct"
+> & { query: Pick<Transaction["query"], "workspaces"> };
+
 type ReadOverviewActivityPageOptions = {
   cursor: string | null;
   filters: MatterActivityFilters;
   limit: number;
   organizationId: SafeId<"organization">;
-  safeDb: SafeDb;
+  safeDb: <T>(
+    read: (tx: ActivityReadTransaction) => Promise<T>,
+  ) => Promise<Result<T, SafeDbError>>;
   workspaceId: SafeId<"workspace">;
 };
 
-export const readOverviewActivityPage = async ({
-  cursor: cursorValue,
+type ReadOverviewActivityExportOptions = Omit<
+  ReadOverviewActivityPageOptions,
+  "cursor" | "limit"
+> & { cap: number };
+
+type ReadOverviewActivityOptions = Omit<
+  ReadOverviewActivityPageOptions,
+  "cursor" | "limit"
+> & {
+  read:
+    | { type: "page"; cursor: string | null; limit: number }
+    | { type: "export"; cap: number };
+};
+
+const normalizeActivityReadWindow = (
+  read: ReadOverviewActivityOptions["read"],
+) => {
+  switch (read.type) {
+    case "page":
+      return {
+        limit: normalizeTenantPageLimit(read.limit),
+        cursorValue: read.cursor,
+      };
+    case "export":
+      return { limit: read.cap, cursorValue: null };
+    default: {
+      read satisfies never;
+      return panic("Unsupported activity read mode");
+    }
+  }
+};
+
+const readOverviewActivity = async ({
+  read,
   filters,
-  limit: requestedLimit,
   organizationId,
   safeDb,
   workspaceId,
-}: ReadOverviewActivityPageOptions): Promise<
+}: ReadOverviewActivityOptions): Promise<
   Result<MatterActivityPage, HandlerError | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const limit = normalizeTenantPageLimit(requestedLimit);
+    const { limit, cursorValue } = normalizeActivityReadWindow(read);
     const fromDate =
       filters.from === null ? null : timestampMicroseconds(filters.from);
     const toExclusiveDate =
@@ -616,7 +660,7 @@ export const readOverviewActivityPage = async ({
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const rows = await tx
+        const query = tx
           .select({
             action: sql<VisibleActivityAction>`${auditLogs.action}`,
             activityCategory: auditLogs.activityCategory,
@@ -656,8 +700,16 @@ export const readOverviewActivityPage = async ({
           })
           .from(auditLogs)
           .where(and(...conditions))
-          .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-          .limit(limit + 1);
+          .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id));
+
+        const bounded =
+          read.type === "export"
+            ? await readBounded(query, read.cap)
+            : { type: "complete" as const, rows: await query.limit(limit + 1) };
+        if (bounded.type === "overflow") {
+          return bounded;
+        }
+        const { rows } = bounded;
 
         const directEntityIds = rows
           .filter((row) => row.resourceType === AUDIT_RESOURCE_TYPE.ENTITY)
@@ -814,6 +866,7 @@ export const readOverviewActivityPage = async ({
         ];
         const actors = await readActivityActorIdentities(tx, actorIds);
         return {
+          type: "complete" as const,
           actors,
           compositeFieldVersions,
           entityRows,
@@ -825,6 +878,15 @@ export const readOverviewActivityPage = async ({
         };
       }),
     );
+
+    if (result.type === "overflow") {
+      return Result.err(
+        new HandlerError({
+          status: 413,
+          message: `The export exceeds ${result.cap} rows. Narrow the filters and try again.`,
+        }),
+      );
+    }
 
     const actorMap = new Map(
       result.actors.map((actor) => [
@@ -939,6 +1001,24 @@ export const readOverviewActivityPage = async ({
 
     return Result.ok(payload);
   });
+
+export const readOverviewActivityPage = async ({
+  cursor,
+  limit,
+  ...options
+}: ReadOverviewActivityPageOptions) =>
+  await readOverviewActivity({
+    ...options,
+    read: { type: "page", cursor, limit },
+  });
+
+export const readOverviewActivityExport = async ({
+  cap,
+  ...options
+}: ReadOverviewActivityExportOptions) =>
+  (
+    await readOverviewActivity({ ...options, read: { type: "export", cap } })
+  ).map((page) => page.items);
 
 type EntityRow = {
   file: EntityFile | null;

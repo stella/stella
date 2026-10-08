@@ -28,6 +28,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
   BotIcon,
   ChevronDownIcon,
@@ -1521,16 +1522,13 @@ const ActivityDetailsSheet = ({
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
-          <dl className="divide-y">
+          <DetailsGrid>
             {rows.map((row) => (
-              <div className="grid gap-1 py-3" key={row.label}>
-                <dt className="text-muted-foreground text-xs font-medium">
-                  {row.label}
-                </dt>
-                <dd className="min-w-0 text-sm wrap-break-word">{row.value}</dd>
-              </div>
+              <DetailsItem key={row.label} label={row.label}>
+                {row.value}
+              </DetailsItem>
             ))}
-          </dl>
+          </DetailsGrid>
         </SheetPanel>
         <SheetFooter>
           <SheetClose render={<Button variant="ghost" />}>

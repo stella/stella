@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
 import { timeEntryAmount, MoneyTotals } from "@stll/money";
-import { Temporal } from "@stll/time";
+import { Temporal, todayFor } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
@@ -15,6 +15,7 @@ import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/ex
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
+import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -26,11 +27,13 @@ export const exportPdfHandler = async ({
   workspaceId,
   organizationId,
   query,
+  at = Temporal.Now.instant(),
 }: TimeEntryExportHandlerProps) => {
   const conditions = timeEntryExportConditions({ workspaceId, query });
 
-  const rows = await scopedDb((tx) =>
-    tx
+  const { rows, timeZone } = await scopedDb(async (tx) => ({
+    timeZone: await readOrganizationTimeZone(tx, organizationId),
+    rows: await tx
       .select({
         id: timeEntries.id,
         activityGroup: timeEntries.activityGroup,
@@ -49,7 +52,7 @@ export const exportPdfHandler = async ({
       .where(and(...conditions))
       .orderBy(timeEntries.dateWorked)
       .limit(LIMITS.exportPdfRowLimit),
-  );
+  }));
 
   const userMap = await loadTimekeeperNames({
     scopedDb,
@@ -67,7 +70,7 @@ export const exportPdfHandler = async ({
     "TIMESHEET REPORT",
     "",
     `Period: ${dateRange}`,
-    `Generated: ${Temporal.Now.plainDateISO("UTC").toString()}`,
+    `Generated: ${todayFor(timeZone, at).toString()}`,
     `Entries: ${rows.length}`,
     "",
     "-".repeat(80),
@@ -231,6 +234,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Render a matter's client time entries as a PDF timesheet report: one block per " +
     "entry plus total hours and totals per currency. Filter by date-worked " +

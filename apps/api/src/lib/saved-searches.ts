@@ -4,6 +4,5 @@ export {
 } from "@stll/api-contract";
 export type {
   SavedSearchCriteria,
-  SavedSearchSort,
   SavedSearchTimeFilter,
 } from "@stll/api-contract";

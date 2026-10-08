@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 import fc from "fast-check";
@@ -6,11 +6,13 @@ import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { discoverHandler } from "@/api/handlers/templates/discover";
 import discoverEndpoint from "@/api/handlers/templates/discover";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -23,8 +25,10 @@ import type { TemplateData, FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -41,7 +45,32 @@ import {
   fillTemplateDocxStrict,
   discoverTemplateSource,
   clauseDirectiveRecoveryHint,
+  type AiFillAdmission,
+  type AiFillCollaborators,
 } from "./template-fill-service";
+import { runAdmittedAiFill } from "./template-fill-usage";
+
+/** An AI admission that admits every fill and builds its collaborators on
+ *  entry, as a caller already holding an admitted action does. */
+const admittedAiFill =
+  (
+    collaborators: () => AiFillCollaborators | Promise<AiFillCollaborators>,
+  ): AiFillAdmission<never> =>
+  async (fill) => ({
+    type: "admitted",
+    value: await fill(await collaborators()),
+  });
+
+/** {@link admittedAiFill}, recording each admission before it runs. */
+const countedAiFill =
+  (
+    onAdmission: () => void,
+    collaborators: () => AiFillCollaborators | Promise<AiFillCollaborators>,
+  ): AiFillAdmission<never> =>
+  async (fill) => {
+    onAdmission();
+    return await admittedAiFill(collaborators)(fill);
+  };
 
 // ── DOCX fixture helpers (mirrors patch-template.test.ts / templates.test.ts:
 // no shared fixture module exists yet, so every suite builds its own) ──────
@@ -209,6 +238,104 @@ const makeConfiguredDocx = async (fields: FieldMeta[]): Promise<ScannedFile> =>
     fields,
   );
 
+describe("AI fill admission lifetime", () => {
+  const aiField = {
+    path: "governing_law",
+    label: "Governing law",
+    inputType: "text",
+    aiPrompt: "The governing law most likely intended by the parties.",
+  } satisfies FieldMeta;
+
+  // An admitter whose slot is observable: held exactly while its run is
+  // pending, as the action-admission lease is.
+  const observedAdmitter = () => {
+    const slot: { status: "free" | "held" } = { status: "free" };
+    const admitModelAction: ModelActionAdmitter = async (run) => {
+      slot.status = "held";
+      const outcome = await Result.tryPromise({
+        try: async () =>
+          await run({
+            signal: new AbortController().signal,
+            admission: testModelAdmission(organizationId, "templates.fill"),
+          }),
+        catch: (cause: unknown) => cause,
+      });
+      slot.status = "free";
+      return outcome;
+    };
+    return { slot, admitModelAction };
+  };
+
+  const fillAdmitted = async ({
+    admitModelAction,
+    collaborators,
+  }: {
+    admitModelAction: ModelActionAdmitter;
+    collaborators: () => AiFillCollaborators;
+  }) =>
+    await fillTemplateDocx({
+      source: {
+        name: "NDA",
+        fileName: "nda.docx",
+        file: await makeConfiguredDocx([aiField]),
+      },
+      values: {},
+      scopedDb: stubScopedDb(),
+      organizationId,
+      thirdPartyOutboundPermit: undefined,
+      requiredFields: "enforce",
+      aiFill: async (fill) =>
+        await runAdmittedAiFill({
+          admitModelAction,
+          preflight: async () => await Promise.resolve(null),
+          collaborators,
+          fill,
+        }),
+    });
+
+  test("holds the admitted action until a blocked generation settles", async () => {
+    const { slot, admitModelAction } = observedAdmitter();
+    const generationStarted = Promise.withResolvers<undefined>();
+    const generation = Promise.withResolvers<undefined>();
+    const filling = fillAdmitted({
+      admitModelAction,
+      collaborators: () => ({
+        generateAiValue: async () => {
+          generationStarted.resolve(undefined);
+          await generation.promise;
+          return { type: "drafted", value: "Slovak" };
+        },
+      }),
+    });
+
+    await generationStarted.promise;
+    expect(slot.status).toBe("held");
+    generation.resolve(undefined);
+    const result = await filling;
+    expect(slot.status).toBe("free");
+    if (!("file" in result)) {
+      throw new Error("expected a filled document");
+    }
+    expect((await extractTexts(result.file)).join("")).toContain(
+      "Governed by Slovak law.",
+    );
+  });
+
+  test("a failure inside the admitted fill propagates as the fill's own", async () => {
+    const { admitModelAction } = observedAdmitter();
+    expect(
+      await rejectionOf(
+        fillAdmitted({
+          admitModelAction,
+          collaborators: () => {
+            throw new TypeError("collaborators unavailable");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "collaborators unavailable" });
+  });
+});
+
 describe("fillTemplateDocx required-field rejection", () => {
   test("rejects a fill omitting a required, non-AI-fillable field", async () => {
     const file = await makeConfiguredDocx([requiredTextField]);
@@ -218,6 +345,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -241,6 +369,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -255,6 +384,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "   " },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -280,6 +410,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -314,6 +445,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -334,6 +466,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -361,10 +494,11 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         generateAiValue: async () => ({ type: "drafted", value: "Slovak" }),
-      }),
+      })),
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -392,14 +526,15 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         generateAiValue: async () => ({
           type: "failed",
           reason: "truncated",
           message: "The model reached its output limit before finishing.",
         }),
-      }),
+      })),
     });
 
     if (!("file" in result)) {
@@ -433,8 +568,11 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({ adaptAiValue: async () => undefined }),
+      aiFill: admittedAiFill(async () => ({
+        adaptAiValue: async () => undefined,
+      })),
     });
 
     if (!("file" in result)) {
@@ -473,6 +611,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -492,9 +631,11 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: () =>
+      aiFill: admittedAiFill(() =>
         panic("deterministic fill resolved the AI collaborators"),
+      ),
     });
 
     if (!("file" in result)) {
@@ -512,6 +653,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -595,6 +737,7 @@ describe("fillStoredTemplateDocx use recording", () => {
         templateId: usedTemplateId,
         values: { governing_law: "Czech" },
         scopedDb,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         ...options,
       });
@@ -679,8 +822,9 @@ describe("fillTemplateDocx condition decisions", () => {
       values,
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({ decideAiCondition: decide }),
+      aiFill: admittedAiFill(async () => ({ decideAiCondition: decide })),
     });
     if (!("file" in result)) {
       throw new Error("expected a filled document");
@@ -806,9 +950,11 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () =>
+      aiFill: admittedAiFill(async () =>
         decideAiCondition === undefined ? {} : { decideAiCondition },
+      ),
     });
     if (!("file" in result)) {
       throw new Error("expected a filled document");
@@ -1132,6 +1278,7 @@ describe("linked clause directive filling", () => {
         values: { x },
         scopedDb: stubScopedDb(body),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
       });
@@ -1165,6 +1312,7 @@ const fillLinkedClause = async (
     },
     scopedDb: stubScopedDb(body),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
     values,
     useRecording: "caller",
@@ -1353,6 +1501,7 @@ describe("clause and template directive parity", () => {
       values: {},
       scopedDb: stubScopedDb(body),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
     });
@@ -1570,6 +1719,7 @@ test("strict fills discover condition and loop inputs in linked and adjusted cla
         override === undefined ? body : [{ text: "Stored" }],
       ),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       ...(override === undefined
@@ -1613,6 +1763,7 @@ test("clause resolution uses formula outputs and rule-backed named conditions", 
     values: { base: 10 },
     scopedDb: stubScopedDb(body),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
     useRecording: "caller",
   });
@@ -1631,6 +1782,7 @@ test("clause resolution uses formula outputs and rule-backed named conditions", 
     values: { base: 10 },
     scopedDb: stubScopedDb(namedBody),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
     useRecording: "caller",
   });
@@ -1931,6 +2083,7 @@ test("stored web discovery, description and effective fill declarations agree fo
       values: { party: "Acme" },
       scopedDb,
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
     });
@@ -1991,25 +2144,27 @@ test("clause AI declarations run usage admission and include linked content in g
     },
     values: { active: true },
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     scopedDb: stubScopedDb(body),
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable: async () => {
-      admissions++;
-      return null;
-    },
-    aiCollaborators: async () => ({
-      generateAiValue: async ({ documentText, values }) => {
-        expect(documentText).toContain("Payment is due within thirty days.");
-        expect(documentText).not.toContain("Inactive payment");
-        expect(documentText).not.toContain("{% if");
-        expect(documentText).not.toContain("{{ summary");
-        expect(values["@clause:Terms"]).toContain(
-          "Payment is due within thirty days.",
-        );
-        return { type: "drafted", value: "Thirty days" };
+    aiFill: countedAiFill(
+      () => {
+        admissions++;
       },
-    }),
+      async () => ({
+        generateAiValue: async ({ documentText, values }) => {
+          expect(documentText).toContain("Payment is due within thirty days.");
+          expect(documentText).not.toContain("Inactive payment");
+          expect(documentText).not.toContain("{% if");
+          expect(documentText).not.toContain("{{ summary");
+          expect(values["@clause:Terms"]).toContain(
+            "Payment is due within thirty days.",
+          );
+          return { type: "drafted", value: "Thirty days" };
+        },
+      }),
+    ),
   });
   expect(admissions).toBe(1);
   if ("usageRejection" in result) {
@@ -2064,19 +2219,21 @@ describe("clause fill boundaries", () => {
       values: {},
       scopedDb: stubScopedDb([{ text: "Stored" }]),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "allow-partial",
       useRecording: "caller",
       clauseOverrides: {
         "@clause:Terms": [clauseDirective("{% if enabled %}")],
       },
-      assertUsageAvailable: async () => {
-        usageCalls++;
-        return null;
-      },
-      aiCollaborators: async () => {
-        collaboratorCalls++;
-        return {};
-      },
+      aiFill: countedAiFill(
+        () => {
+          usageCalls++;
+        },
+        async () => {
+          collaboratorCalls++;
+          return {};
+        },
+      ),
     });
     expect(result).toMatchObject({
       storedTemplateError: { status: 422, code: "clause_directives_invalid" },
@@ -2099,6 +2256,7 @@ describe("clause fill boundaries", () => {
         values: {},
         scopedDb: stubScopedDb([{ text: "Buyer: {{ buyer }}" }]),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields,
         useRecording: "caller",
       });
@@ -2365,6 +2523,7 @@ describe("clause slot requiredness follows rendering", () => {
         values: {
           persons: [{ company: "0000123457" }, { company: "0000123458" }],
         },
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         lookupResolver: async ({ query }) => {
           queries.push(query);
           return {
@@ -2413,10 +2572,11 @@ describe("clause slot requiredness follows rendering", () => {
       },
       scopedDb: stubScopedDb(body),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       values: { persons: [{ name: "Ann" }, { name: "Bob", included: false }] },
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         generateAiValue: async ({ values }) => {
           const name = values["name"];
           if (typeof name !== "string") {
@@ -2433,7 +2593,7 @@ describe("clause slot requiredness follows rendering", () => {
           decisions.push(name);
           return { decidedBy: "generative_model", value: true };
         },
-      }),
+      })),
     });
     expect(result).toHaveProperty("file");
     expect(drafts).toEqual(["Ann", "Bob"]);
@@ -2503,6 +2663,7 @@ describe("clause slot requiredness follows rendering", () => {
           buyer: "0000123456",
           persons: [{ company: "0000123457" }, { company: "0000123458" }],
         },
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         lookupResolver: async ({ query }) => {
           queries.push(query);
           return {
@@ -2587,9 +2748,10 @@ describe("clause slot requiredness follows rendering", () => {
         values: { persons: [{ name: "Ann" }, { name: "Bob" }] },
         scopedDb: stubScopedDb(body),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
-        aiCollaborators: async () => ({
+        aiFill: admittedAiFill(async () => ({
           generateAiValue: async ({ values }) => {
             const name = values["name"];
             if (typeof name !== "string") {
@@ -2598,7 +2760,7 @@ describe("clause slot requiredness follows rendering", () => {
             names.push(name);
             return { type: "drafted", value: `For ${name}` };
           },
-        }),
+        })),
       });
       expect(names).toEqual(["Ann", "Bob"]);
       const text = (await filledTexts(result)).join("");
@@ -2769,14 +2931,15 @@ describe("clause slot requiredness follows rendering", () => {
       values,
       scopedDb: stubScopedDb(partyClause),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         decideAiCondition: async () => ({
           decidedBy: "generative_model",
           value: decided,
         }),
-      }),
+      })),
     });
   };
 
@@ -2822,12 +2985,13 @@ describe("clause slot requiredness follows rendering", () => {
       values: { show: true },
       scopedDb: stubScopedDb(partyClause),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiFill: admittedAiFill(async () => {
         collaboratorCalls += 1;
         return {};
-      },
+      }),
     });
     expect(result).toEqual(nameRejection("name"));
     expect(collaboratorCalls).toBe(0);
@@ -3008,6 +3172,7 @@ test("a clause body and the equivalent template body fill to the same text and r
             values,
             scopedDb: stubScopedDb(),
             organizationId,
+            thirdPartyOutboundPermit: undefined,
             requiredFields: "enforce",
             useRecording: "caller",
           }),
@@ -3044,6 +3209,7 @@ describe("template fields are required where they render", () => {
       values,
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
     });
@@ -3097,6 +3263,7 @@ describe("template fields are required where they render", () => {
         values,
         scopedDb: stubScopedDb(),
         organizationId,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
       });
@@ -3276,9 +3443,10 @@ describe("template fields are required where they render", () => {
       values,
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiFill: admittedAiFill(async () => {
         collaboratorCalls += 1;
         return {
           decideAiCondition: async () => ({
@@ -3286,7 +3454,7 @@ describe("template fields are required where they render", () => {
             value: decided,
           }),
         };
-      },
+      }),
     });
     return { result, collaboratorCalls };
   };
@@ -3336,12 +3504,13 @@ describe("template fields are required where they render", () => {
       values: { show: true },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiFill: admittedAiFill(async () => {
         collaboratorCalls += 1;
         return {};
-      },
+      }),
     });
     expect(result).toEqual(rejection("name"));
     expect(collaboratorCalls).toBe(0);
@@ -3471,15 +3640,16 @@ describe("clause slots the fill prunes", () => {
       values: {},
       scopedDb: stubScopedDb([{ text: "Stored" }]),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
       clauseOverrides: { "@clause:Terms": malformed },
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         decideAiCondition: async () => ({
           decidedBy: "generative_model",
           value: decided,
         }),
-      }),
+      })),
     });
 
   test("an invalid override behind an AI decision is judged by the decision", async () => {
@@ -3626,6 +3796,7 @@ test("template fills surface malformed paragraph markers as a typed refusal", as
     values: { name: "Ann" },
     scopedDb: stubScopedDb(),
     organizationId,
+    thirdPartyOutboundPermit: undefined,
     requiredFields: "enforce",
   });
   expect("storedTemplateError" in result).toBe(true);

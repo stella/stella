@@ -27,7 +27,7 @@
     "crossws": "^0.4.12",
     "ioredis": "~6.0.0",
     "valibot": "catalog:",
-    "yjs": "^13.6.32"
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@hocuspocus/provider": "^4.7.0",

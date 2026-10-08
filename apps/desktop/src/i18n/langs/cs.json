@@ -132,13 +132,21 @@
     "takeoverSubtitle": "Bude pokračovat od vašeho posledního uloženého kontrolního bodu.",
     "takeoverTitle": "{requester} chce převzít úpravy",
     "takeoverWindowTitle": "Žádost o převzetí",
-    "webOrigin": "Původ webu"
+    "webOrigin": "Původ webu",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Aktualizujte Stella Desktop a poté dokument znovu otevřete ze Stelly.",
+    "handoffAccountRequired": "Připojte Stella Desktop ke svému účtu a poté dokument znovu otevřete ze Stelly.",
+    "handoffFailed": "Dokument se nepodařilo otevřít",
+    "handoffUnavailable": "Dokument se nepodařilo otevřít. Začněte znovu ze Stelly.",
+    "handoffRetry": "Zkusit znovu",
+    "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte"
   },
   "settings": {
     "about": "O aplikaci",
     "accountLinked": "Účet propojen",
     "connectToStella": "Připojit ke stella web",
     "connectToStellaDescription": "Propojte tento počítač s aktuálním účtem stella bez otevírání dokumentu.",
+    "desktopBenefit": "Dokumenty Office a místní historie schránky",
     "disconnectAccount": "Odpojit účet",
     "errorDisconnectAccount": "Aplikaci stella desktop se nepodařilo odpojit váš účet.",
     "errorReadAccount": "Aplikaci stella desktop se nepodařilo ověřit připojení účtu.",

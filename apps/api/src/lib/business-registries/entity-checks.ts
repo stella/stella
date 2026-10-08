@@ -13,6 +13,7 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import type { CountryCode } from "@stll/country-codes";
 import { Temporal } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type {
@@ -65,12 +66,14 @@ export type CounterpartyCheckResult = EntityCheckResult | SanctionsCheckResult;
 
 export type RunEntityCheckSharedProps = {
   observer: RegistryRequestObservation;
+  /** Every check asks a third-party source: an official register or list. */
+  permit: ThirdPartyOutboundPermit;
   check: CounterpartyCheckKind;
   subject: CounterpartyCheckSubject;
   signal?: AbortSignal | undefined;
   runCheck?: typeof runEntityCheck | undefined;
   /** What the sanctions check reads: the lists, the register, the firm's jurisdictions. */
-  sanctions: Omit<SanctionsCheckDependencies, "observer"> & {
+  sanctions: Omit<SanctionsCheckDependencies, "observer" | "permit"> & {
     runSanctionsCheck?: typeof runSanctionsCheck | undefined;
   };
 };
@@ -293,6 +296,7 @@ const runRegisterCheck = async ({
  */
 export const runEntityCheckShared = async ({
   observer,
+  permit,
   check,
   subject,
   signal,
@@ -318,5 +322,8 @@ export const runEntityCheckShared = async ({
   }
   const { runSanctionsCheck: run = runSanctionsCheck, ...dependencies } =
     sanctions;
-  return await run({ subject, dependencies: { ...dependencies, observer } });
+  return await run({
+    subject,
+    dependencies: { ...dependencies, observer, permit },
+  });
 };

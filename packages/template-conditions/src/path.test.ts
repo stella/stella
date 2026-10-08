@@ -3,10 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { isNonNullObject, resolvePath } from "./path";
 
 describe("isNonNullObject", () => {
-  // Deliberately unlike the API's and business-registries' predicates of the
-  // same name, which reject arrays because they screen JSON payload shapes.
-  // Here the predicate gates a path walk, and a dotted path segment may be an
-  // array index, so an array has to read as walkable.
+  // A dotted path segment may be an array index, so arrays are walkable.
   test("accepts an array, because a path segment may index one", () => {
     expect(isNonNullObject([1, 2])).toBe(true);
   });

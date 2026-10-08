@@ -53,6 +53,8 @@
 //   - The function carries a `// audit: skip - <reason>` directive in its own
 //     body, with a reason of at least three words. The `audit-skip-directives`
 //     ratchet metric counts these directives so they can only shrink.
+//   - A justified directive immediately above a mutation expression marks
+//     that one call, including in an expression-bodied arrow.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type {
@@ -130,6 +132,7 @@ const MAX_RESOLVE_DEPTH = 4;
 
 const SKIP_DIRECTIVE = /audit:\s*skip\b(?<reason>.*)$/isu;
 const MIN_SKIP_REASON_WORDS = 3;
+const CALL_DIRECTIVE_GAP = /^\r?\n[\t ]*(?:await[\t ]+)?$/u;
 
 // Whether a comment is an `audit: skip - <reason>` directive with a reason of
 // at least three words.
@@ -377,7 +380,6 @@ type FunctionScope = {
   owner: string;
   mutationNodes: Mutation[];
   hasAuditCall: boolean;
-  hasSkipDirective: boolean;
   bodyRange: Range | null;
   childBodyRanges: Range[];
 };
@@ -391,6 +393,46 @@ const asRange = (value: unknown): Range | null => {
     return null;
   }
   return [start, end];
+};
+
+const hasBodySkipDirective = (
+  scope: FunctionScope,
+  ranges: readonly Range[],
+): boolean => {
+  if (scope.bodyRange === null) {
+    return false;
+  }
+  const [start, end] = scope.bodyRange;
+  return ranges.some(
+    ([commentStart]) =>
+      commentStart >= start &&
+      commentStart <= end &&
+      !scope.childBodyRanges.some(
+        ([childStart, childEnd]) =>
+          commentStart >= childStart && commentStart <= childEnd,
+      ),
+  );
+};
+
+type CallSkipDirectiveOptions = {
+  node: Ranged;
+  source: string;
+  ranges: readonly Range[];
+};
+
+const hasCallSkipDirective = ({
+  node,
+  source,
+  ranges,
+}: CallSkipDirectiveOptions): boolean => {
+  const range = asRange(node.range);
+  return (
+    range !== null &&
+    ranges.some(
+      ([, end]) =>
+        end < range[0] && CALL_DIRECTIVE_GAP.test(source.slice(end, range[0])),
+    )
+  );
 };
 
 type ReportOwnerArgs = {
@@ -517,9 +559,8 @@ export const createAuditOnMutationPlugin = (
           let systemFile = false;
           const isBudgeted = () => census || fileBudgets.size > 0;
           const unauditedByOwner = new Map<string, Mutation[]>();
-          // Justified `audit: skip - <reason>` comments, collected once per
-          // file; each marks only the innermost function whose own body holds
-          // it.
+          // Justified directives are collected once per file. Block bodies
+          // own their comments; an adjacent expression directive marks one call.
           const skipDirectiveRanges: Range[] = [];
 
           const currentScope = (): FunctionScope | null =>
@@ -528,49 +569,31 @@ export const createAuditOnMutationPlugin = (
           const pushScope = (node: unknown) => {
             const body =
               isAstNode(node) && isAstNode(node.body) ? node.body : null;
-            // An expression-bodied arrow owns a directive written between `=>`
-            // and its expression, so its whole span is the body.
-            const owner = body?.type === "BlockStatement" ? body : node;
-            const range = isAstNode(owner) ? asRange(owner.range) : null;
+            // Block-body directives retain their existing function scope;
+            // expression-body directives attach to the next mutation instead.
+            const range =
+              body?.type === "BlockStatement" ? asRange(body.range) : null;
+            const childRange = isAstNode(node) ? asRange(node.range) : null;
             const parentScope = currentScope();
-            if (parentScope && range !== null) {
-              parentScope.childBodyRanges.push(range);
+            if (parentScope && childRange !== null) {
+              parentScope.childBodyRanges.push(childRange);
             }
             scopes.push({
               owner: ownerName(node),
               mutationNodes: [],
               hasAuditCall: false,
-              hasSkipDirective: false,
               bodyRange: range,
               childBodyRanges: [],
             });
           };
 
-          const applySkipDirectives = () => {
-            const scope = currentScope();
-            if (!scope || !scope.bodyRange) {
-              return;
-            }
-            const [start, end] = scope.bodyRange;
-            scope.hasSkipDirective = skipDirectiveRanges.some(
-              ([commentStart]) =>
-                commentStart >= start &&
-                commentStart <= end &&
-                !scope.childBodyRanges.some(
-                  ([childStart, childEnd]) =>
-                    commentStart >= childStart && commentStart <= childEnd,
-                ),
-            );
-          };
-
           const popAndReport = () => {
-            applySkipDirectives();
             const scope = scopes.pop();
             if (
               !scope ||
               scope.mutationNodes.length === 0 ||
               scope.hasAuditCall ||
-              scope.hasSkipDirective
+              hasBodySkipDirective(scope, skipDirectiveRanges)
             ) {
               return;
             }
@@ -695,6 +718,15 @@ export const createAuditOnMutationPlugin = (
                 isDatabaseWriteCall(context, node) &&
                 !isPublicCorpusMutation({ context, node, tables })
               ) {
+                if (
+                  hasCallSkipDirective({
+                    node,
+                    source: context.sourceCode.text,
+                    ranges: skipDirectiveRanges,
+                  })
+                ) {
+                  return;
+                }
                 scope.mutationNodes.push({
                   node,
                   target: databaseWriteTarget(context, node),

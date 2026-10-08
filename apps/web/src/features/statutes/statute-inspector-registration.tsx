@@ -31,7 +31,10 @@ const StatuteRailIcon = ({
 
 const StatuteView = (props: InspectorViewRenderProps<StatuteViewPayload>) => (
   <Suspense fallback={<div className="bg-background flex-1" />}>
-    <LazyStatuteInspectorView {...props} />
+    <LazyStatuteInspectorView
+      {...props}
+      key={`${props.tab.id}:${props.tab.payload.findSessionId ?? props.tab.payload.searchQuery ?? ""}`}
+    />
   </Suspense>
 );
 

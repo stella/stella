@@ -4,7 +4,7 @@ import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
+import { Temporal, todayFor } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
@@ -37,6 +37,7 @@ import {
   timePolicyFormSchema,
   timePolicyPatch,
   type TimePolicy,
+  type TimePolicySettings,
 } from "@/routes/_protected.settings/-components/organization/time-policy.logic";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
@@ -72,21 +73,24 @@ export const TimePolicyCard = () => {
   }
   return (
     <TimePolicyForm
-      key={`${user.activeOrganizationId}:${String(query.data.timeMinimumUnitMinutes)}:${String(query.data.timeEditWindowDays)}:${String(query.data.timeLockedThroughMonth)}:${String(query.data.timeNarrativeRequired)}`}
+      key={`${user.activeOrganizationId}:${String(query.data.timeMinimumUnitMinutes)}:${String(query.data.timeEditWindowDays)}:${String(query.data.timeLockedThroughMonth)}:${String(query.data.timeNarrativeRequired)}:${query.data.timeZone}`}
       settings={query.data}
       canEdit={canEdit}
     />
   );
 };
 
-type TimePolicyFormProps = { settings: TimePolicy; canEdit: boolean };
+type TimePolicyFormProps = { settings: TimePolicySettings; canEdit: boolean };
 export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const id = useId();
   const user = useAuthenticatedUser();
   const queryClient = useQueryClient();
-  const today = Temporal.Now.plainDateISO("UTC");
+  // The server judges a lock month on the organization's day; so do the
+  // picker and the form, at one instant.
+  const at = Temporal.Now.instant();
+  const today = todayFor(settings.timeZone, at);
   const mutation = useSettingsMutation({
     mutationFn: async (next: TimePolicy) =>
       unwrapEden(
@@ -118,10 +122,14 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
           settings.timeLockedThroughMonth?.slice(0, 7) ?? "",
         timeNarrativeRequired: settings.timeNarrativeRequired,
       },
-      schema: timePolicyFormSchema(today, {
-        minimumUnit: t("settings.organization.timePolicy.invalidMinimumUnit"),
-        editWindow: t("settings.organization.timePolicy.invalidEditWindow"),
-        lockedMonth: t("settings.organization.timePolicy.invalidLockedMonth"),
+      schema: timePolicyFormSchema({
+        timeZone: settings.timeZone,
+        at,
+        messages: {
+          minimumUnit: t("settings.organization.timePolicy.invalidMinimumUnit"),
+          editWindow: t("settings.organization.timePolicy.invalidEditWindow"),
+          lockedMonth: t("settings.organization.timePolicy.invalidLockedMonth"),
+        },
       }),
       submitValues: "schema-output",
       onSubmit: ({ value }) => {

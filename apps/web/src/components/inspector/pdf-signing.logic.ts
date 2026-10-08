@@ -1,12 +1,62 @@
 /**
- * Pure decisions behind signing a PDF in the desktop app: what a polled
- * signing session means for the waiting toast, and when the browser stops
- * polling it.
+ * Pure decisions behind signing a PDF in the desktop app: which file can be
+ * signed, what a polled signing session means for the waiting toast, and when
+ * the browser stops polling it.
  */
 
 import { panic } from "better-result";
 
+import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
+
+import { PDF_MIME } from "@/lib/consts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+
+type ResolvePdfSignTargetOptions = {
+  canUpdateEntity: boolean;
+  entityId: string;
+  file:
+    | {
+        fieldId: string;
+        mimeType: string | null | undefined;
+        propertyId: string | null | undefined;
+      }
+    | null
+    | undefined;
+  /** Signing writes a new version of the property's current file. */
+  isCurrentVersion: boolean;
+  workspaceId: string;
+};
+
+/**
+ * The file a sign action targets, or `null` where signing does not apply.
+ * Every surface that offers signing (row menu, reader toolbar, inspector)
+ * asks this one question, so they cannot disagree about a file.
+ */
+export const resolvePdfSignTarget = ({
+  canUpdateEntity,
+  entityId,
+  file,
+  isCurrentVersion,
+  workspaceId,
+}: ResolvePdfSignTargetOptions) => {
+  if (
+    !canUpdateEntity ||
+    !isCurrentVersion ||
+    file === null ||
+    file === undefined ||
+    file.mimeType !== PDF_MIME ||
+    file.propertyId === null ||
+    file.propertyId === undefined
+  ) {
+    return null;
+  }
+  return {
+    entityId,
+    fieldId: file.fieldId,
+    propertyId: file.propertyId,
+    workspaceId,
+  };
+};
 
 /** Poll cadence while the desktop app holds the signing dialog open. */
 export const PDF_SIGNING_POLL_INTERVAL_MS = 2000;
@@ -19,6 +69,7 @@ export const PDF_SIGNING_POLL_INTERVAL_MS = 2000;
 const PDF_SIGNING_FALLBACK_WATCH_MS = 2 * 60 * 1000;
 
 export type PdfSigningCloseReason =
+  | DesktopHandoffFailureReason
   | "base_version_diverged"
   | "certificate_rejected"
   | "certificate_revoked"

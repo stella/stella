@@ -4,7 +4,7 @@ import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-import * as schema from "@/api/db/schema";
+import { schema } from "@/api/lib/db/public-corpus-audit/schema-catalog";
 import {
   CORPUS_ATTESTATION_PATH,
   CORPUS_REPOSITORY_ROOT,

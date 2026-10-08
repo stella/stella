@@ -34,8 +34,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -51,7 +52,6 @@ jobs:
       - name: Build production web
         env:
           VITE_FEATURE_INBOX: "true"
-          VITE_FEATURE_TIME_BILLING: "true"
           VITE_PUBLIC_LAW_ENABLED: "true"
           VITE_PUBLIC_TOOLS_ENABLED: "true"
           VITE_WORKFLOWS_ENABLED: "true"
@@ -141,8 +141,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -182,8 +183,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -288,8 +290,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -310,8 +313,8 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-        # The runner discovers every suite that declares the Postgres gate, so
-        # adding a gated test cannot silently omit it from this workflow.
+        # Includes the full 20k/10k sanctions volume benchmark; required service
+        # CI selects its bounded correctness slice through the same runner.
         run: bun run test:postgres
 
   # BullMQ-backed API suites that gate on STELLA_RUN_VALKEY_TESTS=true and a
@@ -341,8 +344,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -374,8 +378,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -442,7 +447,7 @@ jobs:
           echo "candidate=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 

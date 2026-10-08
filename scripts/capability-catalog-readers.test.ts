@@ -18,6 +18,9 @@ const runtimeAggregateOwners = new Set([
   "apps/api/src/mcp/cursor-envelope-bounds.test.ts",
   // Generation, formatting, graph analysis and cache declarations own outputs.
   "scripts/generated-files.ts",
+  "packages/scripts/src/generated-files.ts",
+  // Exercises runtime generation in a packaged checkout.
+  "packages/scripts/src/prepared-generated-sources.test.ts",
   ".oxfmtrc.json",
   "knip.json",
   "turbo.json",

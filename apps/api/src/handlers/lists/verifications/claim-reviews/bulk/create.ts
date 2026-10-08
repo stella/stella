@@ -5,12 +5,11 @@
  */
 
 import { Result, panic } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
   legalListClaimReviewEvents,
-  legalListClaims,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -19,10 +18,12 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contract";
 import {
   readClaimReviews,
+  readClaimsForBulkReview,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
 import {
@@ -42,6 +43,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Mark the routine claims among `claimIds` reviewed in one action. A claim " +
     "is routine when its verdict is not a conflict and no fact it rests on " +
@@ -86,26 +88,12 @@ const createBulkClaimReviews = createSafeHandler(
         if (run === undefined) {
           return { type: "not-found" } as const;
         }
-        // Id order is the lock order every caller shares, so two overlapping
-        // bulk accepts cannot deadlock.
-        const claims = await tx
-          .select({
-            id: legalListClaims.id,
-            state: legalListClaims.state,
-            refs: legalListClaims.refs,
-            recordConflict: legalListClaims.recordConflict,
-          })
-          .from(legalListClaims)
-          .where(
-            and(
-              eq(legalListClaims.workspaceId, workspaceId),
-              eq(legalListClaims.runId, runId),
-              inArray(legalListClaims.id, claimIds),
-            ),
-          )
-          .orderBy(asc(legalListClaims.id))
-          .limit(claimIds.length)
-          .for("update");
+        const claims = await readClaimsForBulkReview({
+          tx,
+          workspaceId,
+          runId,
+          claimIds,
+        });
         if (claims.length !== claimIds.length) {
           return { type: "not-found" } as const;
         }

@@ -44,6 +44,9 @@ import path from "node:path";
 import { compareCodeUnit } from "../packages/collation/src/collation";
 import { isChangesetEntry } from "./changeset-guard";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [".changeset/*.md"];
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_PACKAGE_NAME = "@stll/cli";
 const CLI_DIRECTORY = "packages/cli";
@@ -632,7 +635,14 @@ const main = (args: readonly string[]): number => {
   const version = versionArg ?? readVersionFile(REPO_ROOT);
 
   if (base !== null) {
-    const previous = run(["git", "show", `${base}:${VERSION_FILE}`], REPO_ROOT);
+    // CI may fetch a newer base than the merge checkout was built from.
+    const mergeBase = run(["git", "merge-base", base, "HEAD"], REPO_ROOT);
+    const previous = mergeBase.ok
+      ? run(
+          ["git", "show", `${mergeBase.stdout.trim()}:${VERSION_FILE}`],
+          REPO_ROOT,
+        )
+      : mergeBase;
     if (previous.ok && previous.stdout.trim() === version) {
       return report({
         status: "not-a-release",

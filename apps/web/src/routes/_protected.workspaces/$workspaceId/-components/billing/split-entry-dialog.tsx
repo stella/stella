@@ -3,7 +3,12 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Dialog, DialogFooter, DialogPopup } from "@stll/ui/dialog";
+import {
+  DialogFormState,
+  Dialog,
+  DialogFooter,
+  DialogPopup,
+} from "@stll/ui/dialog";
 import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -37,10 +42,11 @@ export const SplitEntryDialog = ({
   const t = useTranslations();
   const splitMutation = useSplitTimeEntry();
 
-  const [splits, setSplits] = useState([
+  const [splits, setSplits] = useState(() => [
     { key: ++splitKeyCounter, matterId: "", percentage: 50 },
     { key: ++splitKeyCounter, matterId: "", percentage: 50 },
   ]);
+  const [initialSplits] = useState(splits);
 
   const totalPercentage = splits.reduce((sum, s) => sum + s.percentage, 0);
 
@@ -104,6 +110,15 @@ export const SplitEntryDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="max-w-md">
+        <DialogFormState
+          dirty={
+            splits.length !== 2 ||
+            splits.some(
+              (split) => split.matterId !== "" || split.percentage !== 50,
+            )
+          }
+          onDiscard={() => setSplits(initialSplits)}
+        />
         <div className="flex flex-col gap-4 p-4">
           <h3 className="text-sm font-medium">
             {t("billing.split.splitEntry")}

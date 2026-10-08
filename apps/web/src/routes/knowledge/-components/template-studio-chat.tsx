@@ -82,6 +82,7 @@ import type {
   PersistedChatMessage,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "@/features/chat/chat-query-contract";
@@ -154,19 +155,22 @@ type TemplateStudioChatProps = {
   awaitView: () => Promise<EditorView | null>;
 };
 
+// The thread card docks in the composer's column; the stack ties them.
 export const TemplateStudioChat = (props: TemplateStudioChatProps) => (
-  <Suspense
-    fallback={
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-      >
-        <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-      </div>
-    }
-  >
-    <ResolvedTemplateStudioChat {...props} />
-  </Suspense>
+  <DockedChatStackProvider>
+    <Suspense
+      fallback={
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+        >
+          <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
+        </div>
+      }
+    >
+      <ResolvedTemplateStudioChat {...props} />
+    </Suspense>
+  </DockedChatStackProvider>
 );
 
 /**
@@ -651,6 +655,7 @@ const TemplateStudioChatInner = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -1337,8 +1342,11 @@ const TemplateStudioChatInner = ({
               onCreateDocumentResolve={handleCreateDocumentResolve}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
-              onRemoveQueuedMessage={removeQueuedMessage}
               onResend={resendLatestMessage}
+              queuedMessageActions={{
+                remove: removeQueuedMessage,
+                sendNow: sendQueuedMessageNow,
+              }}
               queuedMessages={queuedMessages}
               showThinkingIndicator
               showToolCallDetails={showToolCallDetails}

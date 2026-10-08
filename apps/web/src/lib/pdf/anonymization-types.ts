@@ -1,21 +1,16 @@
-import type { CharSpan } from "@/lib/anonymize/pdf-coords";
-
-export type EntitySpan = {
-  start: number;
-  end: number;
-  pageIndex: number;
-};
+import type { PdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-geometry";
+import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 
 export type EntityOverlay = {
   id: number;
   label: string;
   text: string;
-  spans: EntitySpan[];
+  /** The occurrence's glyph boxes in PDF user space, merged per run. */
+  boxesByPage: ReadonlyMap<number, readonly PDFSearchBox[]>;
 };
 
 export type FileAnonymization = {
   entities: EntityOverlay[];
   perPage: Map<number, EntityOverlay[]>;
-  extractedText: string;
-  charSpans: CharSpan[];
+  extraction: PdfAnonymizationText;
 };

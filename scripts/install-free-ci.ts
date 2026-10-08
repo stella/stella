@@ -27,14 +27,20 @@
  * package.json script's commands; there, any program besides Bun and a few
  * shell builtins may come from the install. Whatever the walk cannot follow
  * (a computed path, an unknown flag, Bun handed to another program) is
- * unclassified, and the test fails on it. Out of scope: commands that a shell
- * script or a Bun script starts itself.
+ * unclassified, and the test fails on it. Literal Bun subprocess arrays that
+ * launch installed CLIs are checked too. Other subprocess commands remain
+ * outside this import walk.
  *
  * Needs no dependency install: node builtins and Bun APIs only.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+
+import {
+  mergeWorkflowParallelProofs,
+  synchronizeWorkflowBackgroundSteps,
+} from "./workflow-steps";
 
 export type Classification =
   /** Files Bun loads: a script, test files and preloads. */
@@ -64,8 +70,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 // ---------------------------------------------------------------------------
 // Shell lexing
 
+/** A heredoc's body, filled in once the lexer reads past the command's line. */
+type Heredoc = { delimiter: string; stripTabs: boolean; body: string };
+
 export type ShellEvent =
-  | { readonly type: "command"; readonly words: readonly string[] }
+  | {
+      readonly type: "command";
+      readonly words: readonly string[];
+      /** The heredoc on the command's standard input, if any. */
+      readonly stdin?: { readonly body: string };
+    }
   | { readonly type: "subshell-start" }
   | { readonly type: "subshell-end" }
   | { readonly type: "control-flow" }
@@ -98,6 +112,7 @@ type AppendShellCommandOptions = {
   words: string[];
   commandStart: number;
   controlFlow: boolean;
+  stdin: Heredoc | undefined;
 };
 
 const appendShellCommand = ({
@@ -105,13 +120,18 @@ const appendShellCommand = ({
   words,
   commandStart,
   controlFlow,
+  stdin,
 }: AppendShellCommandOptions) => {
   if (controlFlow || SHELL_CONTROL_FLOW.has(words[0] ?? "")) {
     // Precede substitutions too: they belong to this command's branch.
     events.splice(commandStart, 0, { type: "control-flow" });
   }
   if (words.length > 0) {
-    events.push({ type: "command", words });
+    events.push(
+      stdin === undefined
+        ? { type: "command", words }
+        : { type: "command", words, stdin },
+    );
   }
 };
 
@@ -140,7 +160,30 @@ const parameterEnd = (source: string, index: number): number | undefined => {
 type SkipHeredocBodiesOptions = {
   source: string;
   index: number;
-  pendingHeredocs: { delimiter: string; stripTabs: boolean }[];
+  pendingHeredocs: Heredoc[];
+};
+
+/** A heredoc on stdin, `null` for another stdin source, `undefined` for neither. */
+type Redirected = Heredoc | null | undefined;
+
+const nextStdin = (
+  current: Heredoc | undefined,
+  redirected: Redirected,
+): Heredoc | undefined =>
+  redirected === undefined ? current : (redirected ?? undefined);
+
+/** Queues the body a `<<` or `<<-` operator introduces; `null` otherwise. */
+const queueHeredoc = (
+  operator: string,
+  delimiter: string,
+  pending: Heredoc[],
+): Heredoc | null => {
+  if (operator !== "<<" && operator !== "<<-") {
+    return null;
+  }
+  const heredoc = { body: "", delimiter, stripTabs: operator === "<<-" };
+  pending.push(heredoc);
+  return heredoc;
 };
 
 const skipHeredocBodies = ({
@@ -149,29 +192,119 @@ const skipHeredocBodies = ({
   pendingHeredocs,
 }: SkipHeredocBodiesOptions): number => {
   let index = start;
-  for (const { delimiter, stripTabs } of pendingHeredocs.splice(0)) {
+  for (const heredoc of pendingHeredocs.splice(0)) {
+    const lines: string[] = [];
     while (index < source.length) {
       const end = source.indexOf("\n", index);
-      const line = source.slice(index, end === -1 ? source.length : end);
+      const raw = source.slice(index, end === -1 ? source.length : end);
+      const line = heredoc.stripTabs ? raw.replace(/^\t+/u, "") : raw;
       index = end === -1 ? source.length : end + 1;
-      if ((stripTabs ? line.replace(/^\t+/u, "") : line) === delimiter) {
+      if (line === heredoc.delimiter) {
         break;
       }
+      lines.push(line);
     }
+    heredoc.body = lines.join("\n");
   }
   return index;
+};
+
+const readSingleQuoted = (source: string, start: number) => {
+  const end = source.indexOf("'", start + 1);
+  return {
+    text: end === -1 ? "" : source.slice(start + 1, end),
+    index: end === -1 ? source.length : end + 1,
+    failure: end === -1 ? "unterminated single quote" : undefined,
+  };
+};
+
+const readAnsiQuoted = (source: string, start: number) => {
+  let text = "";
+  let index = start + 2;
+  let failure: string | undefined;
+  while (index < source.length && source[index] !== "'") {
+    const character = source[index] ?? "";
+    if (character !== "\\") {
+      text += character;
+      index += 1;
+      continue;
+    }
+    const escape = source[index + 1] ?? "";
+    const octal = /^[0-7]{1,3}/u.exec(source.slice(index + 1))?.[0];
+    const hex =
+      escape === "x"
+        ? /^[0-9a-f]{1,2}/iu.exec(source.slice(index + 2))?.[0]
+        : undefined;
+    const numeric = octal ?? hex;
+    if (numeric !== undefined) {
+      text += String.fromCodePoint(
+        (octal === undefined
+          ? Number.parseInt(numeric, 16)
+          : Number.parseInt(numeric, 8)) % 256,
+      );
+      index += numeric.length + (octal === undefined ? 2 : 1);
+      continue;
+    }
+    switch (escape) {
+      case "a":
+        text += "\u0007";
+        break;
+      case "b":
+        text += "\b";
+        break;
+      case "e":
+      case "E":
+        text += "\u001b";
+        break;
+      case "f":
+        text += "\f";
+        break;
+      case "n":
+        text += "\n";
+        break;
+      case "r":
+        text += "\r";
+        break;
+      case "t":
+        text += "\t";
+        break;
+      case "v":
+        text += "\v";
+        break;
+      case "'":
+      case '"':
+      case "\\":
+        text += escape;
+        break;
+      case "u":
+      case "U":
+      case "c":
+        failure ??= `unsupported ANSI-C escape \\${escape}`;
+        break;
+      default:
+        text += `\\${escape}`;
+    }
+    index += 2;
+  }
+  if (source[index] !== "'") {
+    failure ??= "unterminated ANSI-C quote";
+  }
+  index += 1;
+  // Shell words cannot contain NUL; the rest of this quoted segment is discarded.
+  return { text: text.split("\0").at(0) ?? "", index, failure };
 };
 
 /**
  * Splits shell source into simple commands, in execution order. Quotes are
  * removed; a command substitution (`$(…)`, backticks) or subshell becomes
  * its own subshell-delimited commands, ahead of the command that uses it.
- * Comments and heredoc bodies are skipped. It is not a full shell parser: an
+ * Comments are skipped; a heredoc on a command's standard input becomes its
+ * `stdin`, and other heredoc bodies are skipped. It is not a full shell parser: an
  * unterminated quote or substitution yields an `unparsed` event.
  */
 export const lexShell = (source: string): ShellEvent[] => {
   const events: ShellEvent[] = [];
-  const pendingHeredocs: { delimiter: string; stripTabs: boolean }[] = [];
+  const pendingHeredocs: Heredoc[] = [];
   let index = 0;
   let failure: string | undefined;
 
@@ -239,14 +372,14 @@ export const lexShell = (source: string): ShellEvent[] => {
       if (character === "\\") {
         text += next === "\n" ? "" : next;
         index += 2;
-      } else if (character === "'") {
-        const end = source.indexOf("'", index + 1);
-        if (end === -1) {
-          failure ??= "unterminated single quote";
-          break;
-        }
-        text += source.slice(index + 1, end);
-        index = end + 1;
+      } else if (character === "'" || (character === "$" && next === "'")) {
+        const quoted = (character === "$" ? readAnsiQuoted : readSingleQuoted)(
+          source,
+          index,
+        );
+        text += quoted.text;
+        index = quoted.index;
+        failure ??= quoted.failure;
       } else if (character === '"') {
         text += readDoubleQuoted();
       } else if (character === "$" && next === "(") {
@@ -272,33 +405,30 @@ export const lexShell = (source: string): ShellEvent[] => {
     return consumed ? text : undefined;
   };
 
-  const readRedirection = (words: string[], adjacent: boolean): void => {
+  /** Reads one redirection; returns stdin's new source (see `nextStdin`). */
+  const readRedirection = (words: string[], adjacent: boolean): Redirected => {
     // A file-descriptor prefix (`2>&1`) belongs to the redirection.
-    if (adjacent && /^\d+$/u.test(words.at(-1) ?? "")) {
-      words.pop();
-    }
+    const descriptor =
+      adjacent && /^\d+$/u.test(words.at(-1) ?? "") ? words.pop() : undefined;
     const operator =
       /^(?:<<<|<<-|<<|>>|>&|<&|>\||[<>])/u.exec(source.slice(index))?.[0] ?? "";
     index += operator.length;
+    const readsStdin = operator.startsWith("<") && (descriptor ?? "0") === "0";
     while (isBlank(source[index] ?? "")) {
       index += 1;
     }
     if (source[index] === "(") {
       // Process substitution, `<(…)`: the caller reads it as a subshell.
-      return;
+      return readsStdin ? null : undefined;
     }
-    const target = readWord() ?? "";
-    if (operator === "<<" || operator === "<<-") {
-      pendingHeredocs.push({
-        delimiter: target,
-        stripTabs: operator === "<<-",
-      });
-    }
+    const heredoc = queueHeredoc(operator, readWord() ?? "", pendingHeredocs);
+    return readsStdin ? heredoc : undefined;
   };
 
   const readList = (closing: ")" | "`" | "}" | undefined): void => {
     let commandStart = events.length;
     let words: string[] = [];
+    let stdin: Heredoc | undefined;
     let wordEnd = -1;
     let compoundStart: number | undefined;
     const flush = (controlFlow = false) => {
@@ -307,9 +437,11 @@ export const lexShell = (source: string): ShellEvent[] => {
         words,
         commandStart: compoundStart ?? commandStart,
         controlFlow,
+        stdin,
       });
       compoundStart = undefined;
       words = [];
+      stdin = undefined;
       commandStart = events.length;
     };
     while (index < source.length) {
@@ -361,7 +493,7 @@ export const lexShell = (source: string): ShellEvent[] => {
         flush();
         index += 1;
       } else if (character === "<" || character === ">") {
-        readRedirection(words, wordEnd === index);
+        stdin = nextStdin(stdin, readRedirection(words, wordEnd === index));
       } else {
         const word = readWord();
         if (word !== undefined) {
@@ -592,8 +724,10 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
   return joined === "." ? "" : joined;
 };
 
+const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
-const programWords = (words: readonly string[]): readonly string[] => {
+export const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
   for (;;) {
     const first = rest.at(0);
@@ -607,6 +741,46 @@ const programWords = (words: readonly string[]): readonly string[] => {
       while (rest.at(0)?.startsWith("-") === true) {
         rest = rest.slice(1);
       }
+    } else if (first === "timeout") {
+      rest = rest.slice(1);
+      while (rest.at(0)?.startsWith("-") === true) {
+        const option = rest.at(0);
+        if (option === "--") {
+          rest = rest.slice(1);
+          break;
+        }
+        if (["-k", "--kill-after", "-s", "--signal"].includes(option ?? "")) {
+          if (
+            ["-k", "--kill-after"].includes(option ?? "") &&
+            !TIMEOUT_DURATION.test(rest.at(1) ?? "")
+          ) {
+            return words;
+          }
+          rest = rest.slice(2);
+        } else if (
+          ["--preserve-status", "--foreground", "--verbose", "-v"].includes(
+            option ?? "",
+          ) ||
+          /^(?:--(?:kill-after|signal)=|-[ks].+)/u.test(option ?? "")
+        ) {
+          if (
+            /^(?:--kill-after=|-k.)/u.test(option ?? "") &&
+            !TIMEOUT_DURATION.test(
+              (option ?? "").replace(/^(?:--kill-after=|-k)/u, ""),
+            )
+          ) {
+            return words;
+          }
+          rest = rest.slice(1);
+        } else {
+          // --help/--version can exit successfully without running the child.
+          return words;
+        }
+      }
+      if (!TIMEOUT_DURATION.test(rest.at(0) ?? "")) {
+        return words;
+      }
+      rest = rest.slice(1); // Duration precedes the wrapped command.
     } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
       rest = rest.slice(2);
     } else {
@@ -839,6 +1013,8 @@ type BunFlagsOptions = {
   readonly args: readonly string[];
   readonly context: ClassifyContext;
   readonly cwd: string;
+  /** The heredoc body on the command's standard input, if any. */
+  readonly stdin: string | undefined;
 };
 
 type BunFlags =
@@ -855,7 +1031,12 @@ type BunFlags =
   | { readonly type: "classified"; readonly classification: Classification };
 
 /** Reads the flags before Bun's subcommand, script or file. */
-const parseBunFlags = ({ args, context, cwd }: BunFlagsOptions): BunFlags => {
+const parseBunFlags = ({
+  args,
+  context,
+  cwd,
+  stdin,
+}: BunFlagsOptions): BunFlags => {
   const classified = (classification: Classification): BunFlags => ({
     classification,
     type: "classified",
@@ -873,6 +1054,17 @@ const parseBunFlags = ({ args, context, cwd }: BunFlagsOptions): BunFlags => {
     }
     if (!arg.startsWith("-")) {
       break;
+    }
+    if (arg === "-") {
+      // `bun -` runs code from standard input: check it like `bun -e`.
+      if (stdin === undefined) {
+        return classified(unclassified("reads code from a non-heredoc stdin"));
+      }
+      return classified(
+        preloads.length > 0
+          ? unclassified("evaluates code with a preload")
+          : { code: stdin, cwd: dir, type: "eval" },
+      );
     }
     const [flag = "", inline] = arg.split(/[=](.*)/su);
     if (BUN_SWITCHES.has(flag)) {
@@ -963,6 +1155,8 @@ type ClassifyBunOptions = {
   readonly context: ClassifyContext;
   readonly cwd: string;
   readonly words: readonly string[];
+  /** The heredoc body on the command's standard input, if any. */
+  readonly stdin: string | undefined;
 };
 
 /** Classifies one `bun`, `bunx` or `npx` command run in `cwd`. */
@@ -970,6 +1164,7 @@ const classifyBun = ({
   context,
   cwd,
   words,
+  stdin,
 }: ClassifyBunOptions): Expansion[] => {
   const command = words.join(" ");
   const single = (classification: Classification): Expansion[] => [
@@ -985,7 +1180,7 @@ const classifyBun = ({
   if (program !== "bun") {
     return single({ type: "fetch" });
   }
-  const flags = parseBunFlags({ args, context, cwd });
+  const flags = parseBunFlags({ args, context, cwd, stdin });
   if (flags.type === "classified") {
     return single(flags.classification);
   }
@@ -1023,6 +1218,16 @@ const classifyBun = ({
       root: context.root,
       target: subcommand,
     });
+    if (file.type !== "invalid" && file.path === "scripts/ci-install.ts") {
+      return [
+        ...single({
+          cwd: dir,
+          entries: [...preloads, file.path],
+          type: "files",
+        }),
+        ...single(classifyInstall({ args: rest.slice(1), dir })),
+      ];
+    }
     return single(
       file.type === "invalid"
         ? unclassified(file.reason)
@@ -1167,6 +1372,7 @@ const walkCommands = ({
           for (const expansion of classifyBun({
             context,
             cwd: current,
+            stdin: event.stdin?.body,
             words,
           })) {
             const { classification } = expansion;
@@ -1258,25 +1464,209 @@ const stepTitle = (step: Record<string, unknown>, position: number): string => {
 };
 
 type WalkStepsOptions = {
+  readonly cancelled?: ReadonlySet<string>;
   readonly context: ClassifyContext;
   readonly defaults: StepDefaults;
   readonly initial: readonly InstallRecord[];
   readonly job: string;
   readonly prefix: string;
+  readonly pending?: Map<string, InstallRecord[]>;
   readonly steps: readonly unknown[];
 };
 
 type WalkStepsResult = {
   readonly installs: readonly InstallRecord[];
   readonly invocations: readonly InstallFreeInvocation[];
+  readonly pending: ReadonlyMap<string, readonly InstallRecord[]>;
 };
 
-const walkSteps = ({
+type WalkParallelStepsOptions = {
+  readonly cancelled: ReadonlySet<string>;
+  readonly context: ClassifyContext;
+  readonly defaults: StepDefaults;
+  readonly initial: readonly InstallRecord[];
+  readonly job: string;
+  readonly prefix: string;
+  readonly pending: Map<string, InstallRecord[]>;
+  readonly siblings: readonly unknown[];
+};
+
+type WalkParallelStepsResult = {
+  readonly installs: readonly InstallRecord[];
+  readonly invocations: readonly InstallFreeInvocation[];
+};
+
+const walkParallelSteps = ({
+  cancelled,
   context,
   defaults,
   initial,
   job,
   prefix,
+  pending,
+  siblings,
+}: WalkParallelStepsOptions): WalkParallelStepsResult => {
+  const invocations: InstallFreeInvocation[] = [];
+  const additions = mergeWorkflowParallelProofs({
+    steps: siblings,
+    installs: initial,
+    pending,
+    cancelled,
+    walk: ({
+      step,
+      installs,
+      pending: branchPending,
+      cancelled: branchCancelled,
+    }) => {
+      const branch = walkSteps({
+        cancelled: branchCancelled,
+        context,
+        defaults,
+        initial: installs,
+        job,
+        pending: branchPending,
+        prefix,
+        steps: [step],
+      });
+      invocations.push(...branch.invocations);
+      return branch.installs;
+    },
+  });
+  return { installs: additions, invocations };
+};
+
+type WalkWorkflowStepOptions = {
+  readonly context: ClassifyContext;
+  readonly defaults: StepDefaults;
+  readonly job: string;
+  readonly prefix: string;
+  readonly position: number;
+  readonly step: Record<string, unknown>;
+  readonly installs: InstallRecord[];
+  readonly pending: Map<string, InstallRecord[]>;
+};
+
+const walkWorkflowStep = ({
+  context,
+  defaults,
+  job,
+  prefix,
+  position,
+  step,
+  installs,
+  pending,
+}: WalkWorkflowStepOptions): InstallFreeInvocation[] => {
+  const invocations: InstallFreeInvocation[] = [];
+  const run = step["run"];
+  const uses = step["uses"];
+  const label = `${prefix}${stepTitle(step, position)}`;
+  const condition = conditionOperands(step["if"]);
+  const stepInstalls: InstallRecord[] = [];
+  const installStart = installs.length;
+  const covered = new Set(
+    installs
+      .filter((install) =>
+        impliesCondition({ install: install.condition, step: condition }),
+      )
+      .map((install) => install.dir),
+  );
+  if (typeof run === "string") {
+    const shell = step["shell"] ?? defaults.shell ?? "bash";
+    if (typeof shell !== "string" || !POSIX_SHELL.test(shell)) {
+      if (!covered.has("") && /\b(?:bunx?|npx)\b/u.test(run)) {
+        invocations.push({
+          classification: unclassified(
+            `runs Bun under ${typeof shell === "string" ? shell : JSON.stringify(shell)}`,
+          ),
+          command: run.trim(),
+          job,
+          step: label,
+        });
+      }
+      return invocations;
+    }
+    const result = walkCommands({
+      context,
+      cwd: stepCwd(step["working-directory"] ?? defaults.workingDirectory),
+      events: lexShell(run),
+      installed: covered,
+      mode: "step",
+    });
+    for (const { classification, command } of result.expansions) {
+      invocations.push({ classification, command, job, step: label });
+    }
+    for (const dir of result.installs) {
+      stepInstalls.push({ condition, dir });
+    }
+  } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
+    const actionFile = ["action.yml", "action.yaml"]
+      .map((name) => path.posix.join(uses, name))
+      .find((file) => existsSync(path.join(context.root, file)));
+    if (actionFile === undefined) {
+      invocations.push({
+        classification: unclassified(`${uses} has no action.yml`),
+        command: "",
+        job,
+        step: label,
+      });
+      return invocations;
+    }
+    const action = readYaml({ file: actionFile, root: context.root });
+    const runs = isRecord(action) ? action["runs"] : undefined;
+    if (!isRecord(runs) || runs["using"] !== "composite") {
+      return invocations;
+    }
+    const inner = walkSteps({
+      context,
+      defaults: { shell: undefined, workingDirectory: undefined },
+      initial: [...covered].map((dir) => ({ condition: [], dir })),
+      job,
+      prefix: `${label} › `,
+      steps: Array.isArray(runs["steps"]) ? runs["steps"] : [],
+    });
+    invocations.push(...inner.invocations);
+    for (const install of inner.installs) {
+      if (install.condition.length === 0 && !covered.has(install.dir)) {
+        stepInstalls.push({ condition, dir: install.dir });
+      }
+    }
+  }
+  if (
+    step["continue-on-error"] === undefined ||
+    step["continue-on-error"] === false
+  ) {
+    installs.push(...stepInstalls);
+  }
+  if (typeof step["id"] === "string") {
+    for (const { dir } of stepInstalls) {
+      installs.push({
+        condition: [`steps.${step["id"]}.outcome == 'success'`],
+        dir,
+      });
+    }
+  }
+  if (step["background"] === true) {
+    const added = installs.splice(installStart);
+    if (typeof step["id"] === "string") {
+      const records = pending.get(step["id"]);
+      if (records === undefined) {
+        pending.set(step["id"], added);
+      } else {
+        records.push(...added);
+      }
+    }
+  }
+  return invocations;
+};
+
+const walkSteps = ({
+  cancelled = new Set<string>(),
+  context,
+  defaults,
+  initial,
+  job,
+  prefix,
+  pending = new Map(),
   steps,
 }: WalkStepsOptions): WalkStepsResult => {
   const invocations: InstallFreeInvocation[] = [];
@@ -1285,100 +1675,52 @@ const walkSteps = ({
     if (!isRecord(step)) {
       continue;
     }
-    const run = step["run"];
-    const uses = step["uses"];
-    const label = `${prefix}${stepTitle(step, position)}`;
-    const condition = conditionOperands(step["if"]);
-    const stepInstalls: InstallRecord[] = [];
-    const covered = new Set(
-      installs
-        .filter((install) =>
-          impliesCondition({ install: install.condition, step: condition }),
-        )
-        .map((install) => install.dir),
-    );
-    if (typeof run === "string") {
-      const shell = step["shell"] ?? defaults.shell ?? "bash";
-      if (typeof shell !== "string" || !POSIX_SHELL.test(shell)) {
-        if (!covered.has("") && /\b(?:bunx?|npx)\b/u.test(run)) {
-          invocations.push({
-            classification: unclassified(
-              `runs Bun under ${typeof shell === "string" ? shell : JSON.stringify(shell)}`,
-            ),
-            command: run.trim(),
-            job,
-            step: label,
-          });
-        }
-        continue;
-      }
-      const result = walkCommands({
-        context,
-        cwd: stepCwd(step["working-directory"] ?? defaults.workingDirectory),
-        events: lexShell(run),
-        installed: covered,
-        mode: "step",
-      });
-      for (const { classification, command } of result.expansions) {
-        invocations.push({ classification, command, job, step: label });
-      }
-      for (const dir of result.installs) {
-        stepInstalls.push({ condition, dir });
-      }
-    } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
-      const actionFile = ["action.yml", "action.yaml"]
-        .map((name) => path.posix.join(uses, name))
-        .find((file) => existsSync(path.join(context.root, file)));
-      if (actionFile === undefined) {
+    const completed = synchronizeWorkflowBackgroundSteps(step, pending);
+    if (completed !== undefined) {
+      installs.push(...completed);
+      continue;
+    }
+    if ("parallel" in step) {
+      if (
+        Object.keys(step).some((key) => key !== "parallel") ||
+        !Array.isArray(step["parallel"])
+      ) {
         invocations.push({
-          classification: unclassified(`${uses} has no action.yml`),
+          classification: unclassified("malformed parallel workflow step"),
           command: "",
           job,
-          step: label,
+          step: `${prefix}step ${position + 1}`,
         });
         continue;
       }
-      const action = readYaml({ file: actionFile, root: context.root });
-      const runs = isRecord(action) ? action["runs"] : undefined;
-      if (!isRecord(runs) || runs["using"] !== "composite") {
-        continue;
-      }
-      const inner = walkSteps({
+      const parallel = walkParallelSteps({
+        cancelled,
         context,
-        defaults: { shell: undefined, workingDirectory: undefined },
-        initial: [...covered].map((dir) => ({ condition: [], dir })),
+        defaults,
+        initial: installs,
         job,
-        prefix: `${label} › `,
-        steps: Array.isArray(runs["steps"]) ? runs["steps"] : [],
+        prefix,
+        pending,
+        siblings: step["parallel"],
       });
-      invocations.push(...inner.invocations);
-      // Only an unconditional install inside the action is sure to run.
-      for (const install of inner.installs) {
-        if (install.condition.length === 0 && !covered.has(install.dir)) {
-          stepInstalls.push({ condition, dir: install.dir });
-        }
-      }
+      invocations.push(...parallel.invocations);
+      installs.push(...parallel.installs);
+      continue;
     }
-    // A failed optional install leaves later workflow steps executable.
-    // Expressions may permit failure too, so only literal false is trusted.
-    if (
-      step["continue-on-error"] === undefined ||
-      step["continue-on-error"] === false
-    ) {
-      installs.push(...stepInstalls);
-    }
-    // Outcome reflects failure before continue-on-error is applied; conclusion
-    // does not. Only commands already proved to install on every path qualify.
-    if (typeof step["id"] === "string") {
-      for (const { dir } of stepInstalls) {
-        installs.push({
-          condition: [`steps.${step["id"]}.outcome == 'success'`],
-          dir,
-        });
-      }
-    }
+    invocations.push(
+      ...walkWorkflowStep({
+        context,
+        defaults,
+        job,
+        prefix,
+        position,
+        step,
+        installs,
+        pending,
+      }),
+    );
   }
-  return { installs, invocations };
+  return { installs, invocations, pending };
 };
 
 const runDefaults = (owner: unknown): Record<string, unknown> => {
@@ -1490,6 +1832,77 @@ const resolveRelative = ({
   );
 };
 
+/** Skip quoted fixture source and comments before inspecting executable calls. */
+const installedBunSubprocesses = (source: string): string[] => {
+  const tokens = [
+    ...source.matchAll(
+      /\/\*[\s\S]*?\*\/|\/\/[^\n]*|`(?:\\[\s\S]|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_$][\w$]*|[^\s]/gu,
+    ),
+  ]
+    .map(([token]) => token)
+    .filter((token) => !token.startsWith("//") && !token.startsWith("/*"));
+  const packages: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      tokens[index] !== "Bun" ||
+      tokens[index + 1] !== "." ||
+      !["spawn", "spawnSync"].includes(tokens[index + 2] ?? "") ||
+      tokens[index + 3] !== "(" ||
+      tokens[index + 4] !== "["
+    ) {
+      continue;
+    }
+    let cursor = index + 5;
+    const literal = (token: string | undefined) => {
+      if (token === undefined || !["'", '"', "`"].includes(token.charAt(0))) {
+        return undefined;
+      }
+      // Command names and flags need no escape sequences; reject computed forms.
+      if (
+        token.includes("\\") ||
+        (token.startsWith("`") && token.includes("${"))
+      ) {
+        return undefined;
+      }
+      return token.slice(1, -1);
+    };
+    if (
+      tokens[cursor] === "process" &&
+      tokens[cursor + 1] === "." &&
+      tokens[cursor + 2] === "execPath"
+    ) {
+      cursor += 3;
+    } else if (literal(tokens[cursor]) === "bun") {
+      cursor += 1;
+    } else {
+      continue;
+    }
+    const args: string[] = [];
+    while (tokens[cursor] === ",") {
+      const value = literal(tokens[cursor + 1]);
+      if (value === undefined) {
+        break;
+      }
+      args.push(value);
+      cursor += 2;
+    }
+    const command = args.filter((arg) => arg !== "--bun");
+    const name = command.at(0) === "run" ? command.at(1) : command.at(0);
+    if (
+      name !== undefined &&
+      !name.startsWith("-") &&
+      !name.includes("/") &&
+      !SOURCE_FILE.test(name) &&
+      !BUN_BUILTIN_SUBCOMMANDS.has(name) &&
+      !INSTALL_SUBCOMMANDS.has(name) &&
+      name !== "test"
+    ) {
+      packages.push(name);
+    }
+  }
+  return packages;
+};
+
 type ImportClosureOptions = {
   readonly root: string;
   /** Repo-relative files Bun loads. */
@@ -1519,6 +1932,9 @@ export const importProblems = ({
     readonly source: string;
   };
   const scan = ({ from, label, loader, source }: ScanOptions) => {
+    for (const binary of installedBunSubprocesses(source)) {
+      problems.push(`${label} launches installed Bun CLI ${binary}`);
+    }
     const transpiler = new Bun.Transpiler({ loader });
     for (const { path: specifier } of transpiler.scanImports(source)) {
       if (!specifier.startsWith(".")) {

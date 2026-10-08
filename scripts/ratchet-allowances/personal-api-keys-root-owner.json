@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
+  "delta": 1,
+  "reason": "The auth table denies application-role access; this declared lifecycle owner performs bounded organization/owner-scoped credential mutations and policy reads, revalidates locked membership and audits in the same transaction. No raw owner connection is exported."
+}

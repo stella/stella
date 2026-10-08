@@ -25,6 +25,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   description: "List synthetic billing-code merge probes.",
   permissions: { workspace: ["read"] },
+  featureAccess: { type: "required", featureId: "time-billing" },
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -67,10 +68,12 @@ test.skipIf(!process.env["CI"])(
     const temporary = mkdtempSync(path.join(tmpdir(), "stella-shard-merge-"));
     const checkout = path.join(temporary, "checkout");
     const run = async (command: string[], cwd = checkout) => {
+      const env = { ...process.env };
+      delete env["CI_GENERATED_SOURCES_MANIFEST"];
       const child = Bun.spawn(command, {
         cwd,
         env: {
-          ...process.env,
+          ...env,
           GIT_CONFIG_NOSYSTEM: "1",
           GIT_CONFIG_GLOBAL: "/dev/null",
         },
@@ -136,6 +139,18 @@ test.skipIf(!process.env["CI"])(
         const dispatch = `${DISPATCH_DIRECTORY}/${capabilityId(probe)}.ts`;
         expect(existsSync(path.join(checkout, catalog))).toBe(true);
         expect(existsSync(path.join(checkout, dispatch))).toBe(true);
+        expect(
+          JSON.parse(readFileSync(path.join(checkout, catalog), "utf-8")),
+        ).toMatchObject({
+          featureId: "time-billing",
+          featureAccess: "required",
+        });
+        const generatedDispatch = readFileSync(
+          path.join(checkout, dispatch),
+          "utf-8",
+        );
+        expect(generatedDispatch).toContain('featureId: "time-billing"');
+        expect(generatedDispatch).toContain('featureAccess: "required"');
         await succeed([
           "git",
           "add",
@@ -223,5 +238,7 @@ test.skipIf(!process.env["CI"])(
       rmSync(temporary, { recursive: true, force: true });
     }
   },
-  600_000,
+  // Ten exports took 36-49 s in CI. The budget fails a several-fold slowdown
+  // of the exporter instead of letting it lengthen every queue entry.
+  180_000,
 );

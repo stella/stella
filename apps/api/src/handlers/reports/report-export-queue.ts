@@ -13,7 +13,6 @@ import { panic, Result } from "better-result";
  * onto the `report_exports` row (`status: "failed"` + `error`) so the job is
  * never silently stuck and the status endpoint can surface it.
  */
-import { Worker } from "bullmq";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { reportExports } from "@/api/db/schema";
@@ -35,7 +34,9 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -52,6 +53,8 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { REPORT_EXPORT_QUEUE_NAME } from "@/api/lib/report-export-enqueue";
 import type { ReportExportJobData } from "@/api/lib/report-export-enqueue";
@@ -70,6 +73,7 @@ import {
   fillDiagnosticsOf,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
+  AiFillAdmission,
   AiFillCollaborators,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
@@ -102,10 +106,21 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
     storeClass: "durable-coordination",
   });
 
-  const worker = new Worker<ReportExportJobData>(
+  const worker = new BullMqWorker<ReportExportJobData>(
     REPORT_EXPORT_QUEUE_NAME,
     async (job) => {
-      await processReportExportJob(job.data);
+      const actor = brandActor(job.data);
+      // The export's period action was drawn when it was queued; the job
+      // takes a background slot. Its steps bound their own time.
+      await runBackgroundJob({
+        actionKind: "report-export.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        job,
+        signal: new AbortController().signal,
+        run: async (signal, admission) =>
+          await processReportExport(actor, { ...job.data, admission, signal }),
+      });
     },
     { connection: workerConnection, concurrency: WORKER_CONCURRENCY },
   );
@@ -209,15 +224,13 @@ const notifyStatus = async (actor: ExportActor) =>
     workspaceId: actor.workspaceId,
   });
 
-const processReportExportJob = async (
-  data: ReportExportJobData,
-): Promise<void> => {
-  await processReportExport(brandActor(data), data);
-};
-
 export const processReportExport = async (
   actor: ExportActor,
-  data: Pick<ReportExportJobData, "aiNarrative" | "format">,
+  data: Pick<ReportExportJobData, "aiNarrative" | "format"> & {
+    admission: ModelDispatchAdmission;
+    /** The job's execution signal; aborts when its background lease is lost. */
+    signal: AbortSignal;
+  },
 ): Promise<void> => {
   const { exportId } = actor;
 
@@ -253,6 +266,8 @@ export const processReportExport = async (
     try: async () =>
       await runExport({
         actor,
+        admission: data.admission,
+        signal: data.signal,
         row,
         format: data.format,
         aiNarrative: data.aiNarrative ?? true,
@@ -339,11 +354,15 @@ export const buildReportDelivery = async ({
 
 const runExport = async ({
   actor,
+  admission,
+  signal,
   row,
   format,
   aiNarrative,
 }: {
   actor: ExportActor;
+  admission: ModelDispatchAdmission;
+  signal: AbortSignal;
   row: ExportRow;
   format: ReportExportFormat;
   aiNarrative: boolean;
@@ -401,7 +420,12 @@ const runExport = async ({
   const generators =
     orgAIConfigResult.value === null
       ? {}
-      : buildReportAiGenerators({ actor, ...orgAIConfigResult.value });
+      : buildReportAiGenerators({
+          actor,
+          admission,
+          signal,
+          ...orgAIConfigResult.value,
+        });
   const filled = await fillReport({
     actor,
     templateRef: row.templateRef,
@@ -629,29 +653,37 @@ const renderSpecReport = async ({
   aiNarrative: boolean;
   linkBase: ReportLinkBase | undefined;
 }): Promise<FillReportResult> => {
+  const render = async (
+    generateAiValue: AiFillCollaborators["generateAiValue"],
+  ) =>
+    await renderReportSpec({
+      spec: builtin.spec,
+      report,
+      prompts: builtin.prompts,
+      generateAiValue,
+      aiNarrative,
+      linkBase,
+    });
+  // A spec report renders its narrative directly rather than through the fill
+  // service, so it runs its own AI admission, and only when a narrative
+  // section can actually call the generator.
+  const { aiFill } = generators;
+  let rendered: Awaited<ReturnType<typeof render>>;
   if (
     aiNarrative &&
-    generators.assertUsageAvailable &&
+    aiFill !== undefined &&
     hasNarrativeSection(builtin.spec.sections)
   ) {
-    const usageRejection = await generators.assertUsageAvailable();
-    if (usageRejection !== null) {
-      return { usageRejection };
+    const admitted = await aiFill(
+      async ({ generateAiValue }) => await render(generateAiValue),
+    );
+    if (admitted.type === "refused") {
+      return { usageRejection: admitted.rejection };
     }
+    rendered = admitted.value;
+  } else {
+    rendered = await render(undefined);
   }
-  // A spec report renders its narrative directly rather than through the fill
-  // service, so it resolves the collaborators itself — and only when the
-  // narrative is actually requested.
-  const rendered = await renderReportSpec({
-    spec: builtin.spec,
-    report,
-    prompts: builtin.prompts,
-    generateAiValue: aiNarrative
-      ? (await generators.aiCollaborators?.())?.generateAiValue
-      : undefined,
-    aiNarrative,
-    linkBase,
-  });
   if (Result.isError(rendered)) {
     return { error: rendered.error.message };
   }
@@ -662,22 +694,23 @@ const renderSpecReport = async ({
   };
 };
 
-/** The AI hooks passed into the fill pipeline; both are optional so a
+/** The AI admission passed into the fill pipeline; optional so a
  *  deterministic export can pass `{}`. */
 type ReportAiGenerators = {
-  aiCollaborators?:
-    | (() => AiFillCollaborators | Promise<AiFillCollaborators>)
-    | undefined;
-  assertUsageAvailable?: (() => Promise<unknown>) | undefined;
+  aiFill?: AiFillAdmission<unknown> | undefined;
 };
 
 /** Build the metered AI generators + usage preflight for a narrative export. */
 const buildReportAiGenerators = ({
   actor,
+  admission,
+  signal,
   orgAIConfig,
   managedAIResidency,
 }: {
   actor: ExportActor;
+  admission: ModelDispatchAdmission;
+  signal: AbortSignal;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
 }): ReportAiGenerators => {
@@ -712,6 +745,8 @@ const buildReportAiGenerators = ({
       : undefined;
 
   const shared = {
+    admission,
+    operationSignal: signal,
     orgAIConfig,
     managedAIResidency,
     organizationId: actor.organizationId,
@@ -724,14 +759,26 @@ const buildReportAiGenerators = ({
     tenantWorkspaceIds: [actor.workspaceId],
   };
   return {
-    // The fill service builds these only when the manifest declares an AI
-    // field, so a deterministic export never reaches the model layer.
-    aiCollaborators: () => ({
-      generateAiValue: buildAiFieldGenerator(shared),
-      decideAiCondition: buildAiConditionDecider(shared),
-      adaptAiValue: buildAiOccurrenceAdapter(shared),
-    }),
-    assertUsageAvailable,
+    // The fill service runs this only when the manifest declares an AI field,
+    // so a deterministic export never reaches the model layer. The job's
+    // background admission already holds the whole export.
+    aiFill: async (fill) => {
+      const usageRejection =
+        assertUsageAvailable === undefined
+          ? null
+          : await assertUsageAvailable();
+      if (usageRejection !== null) {
+        return { type: "refused", rejection: usageRejection };
+      }
+      return {
+        type: "admitted",
+        value: await fill({
+          generateAiValue: buildAiFieldGenerator(shared),
+          decideAiCondition: buildAiConditionDecider(shared),
+          adaptAiValue: buildAiOccurrenceAdapter(shared),
+        }),
+      };
+    },
   };
 };
 
@@ -755,6 +802,7 @@ const fillReportDocx = async ({
         values,
         scopedDb: actor.writeDb,
         organizationId: actor.organizationId,
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         // The export records use when it completes, not when the fill does.
         useRecording: "caller",
@@ -789,6 +837,7 @@ const fillReportDocx = async ({
       values,
       scopedDb: actor.writeDb,
       organizationId: actor.organizationId,
+      thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
       requiredFields: "enforce",
       ...generators,
     }),

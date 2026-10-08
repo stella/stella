@@ -13,6 +13,11 @@ on:
 
 permissions: {}
 
+# Long-running property combinations retain cleanup time inside each job.
+env:
+  API_TEST_CHILD_TIMEOUT_MS: "1200000"
+  API_TEST_RUNNER_DEADLINE_MS: "2100000"
+
 jobs:
   # The chat-turn combinations' all-triples cover: every combination of the
   # values of any three dimensions, every night, split into SHARDS jobs.
@@ -34,8 +39,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -82,8 +88,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -132,8 +139,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -167,8 +175,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -216,8 +225,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install pinned dependencies

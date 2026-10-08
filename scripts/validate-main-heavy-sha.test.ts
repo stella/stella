@@ -111,7 +111,9 @@ test("dispatch SHA validation accepts only existing commits already on main", ()
 test("main SHA checks finish before any checkout in the validation job", () => {
   const names = validationSteps.map(({ name }) => name);
   expect(names).toEqual([
+    "Check release candidate",
     "Validate merge queue depth",
+    "Select untested heavy SHA",
     "Validate SHA format",
     "Fetch main history",
     "Verify main ancestry",

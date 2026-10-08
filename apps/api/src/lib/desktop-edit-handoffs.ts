@@ -1,5 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+
+import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
 
 import { member } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
@@ -11,10 +13,17 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import {
+  createBackgroundAuditRecorder,
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { hashDesktopEditHandoffToken } from "@/api/lib/desktop-edit-sessions";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { recordPdfSigningHandoffFailure } from "@/api/lib/files/pdf-signing/sessions";
+import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
 
 export type ConsumedDesktopEditHandoff = {
   apiBaseUrl: string;
@@ -75,6 +84,7 @@ export const consumeDesktopEditHandoff = async ({
           where ${workspaces.id} = ${desktopEditHandoffs.workspaceId}
             and ${workspaces.organizationId} = ${identity.organizationId})`,
         isNull(desktopEditHandoffs.consumedAt),
+        isNull(desktopEditHandoffs.failedAt),
         gt(
           desktopEditHandoffs.expiresAt,
           sql`${now.toISOString()}::timestamptz`,
@@ -105,6 +115,7 @@ export const consumeDesktopEditHandoff = async ({
       and(
         eq(desktopEditHandoffs.tokenHash, tokenHash),
         isNull(desktopEditHandoffs.consumedAt),
+        isNull(desktopEditHandoffs.failedAt),
         gt(
           desktopEditHandoffs.expiresAt,
           sql`${now.toISOString()}::timestamptz`,
@@ -219,3 +230,88 @@ export const createDesktopEditHandoffSafeDb = ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 }): SafeDb => createSafeDb(rlsDb, [workspaceId], organizationId, userId);
+
+type RecordDesktopHandoffFailureOptions = {
+  kind: "desktop_edit" | "pdf_signing";
+  handoffToken: string;
+  reason: DesktopHandoffFailureReason;
+  db?: Pick<typeof rootDb, "transaction">;
+  now?: Date;
+};
+
+/** A handoff token authorizes only a terminal acknowledgement, never document access. */
+export const recordDesktopHandoffFailure = async ({
+  kind,
+  handoffToken,
+  reason,
+  db = rootDb,
+  now = new Date(),
+}: RecordDesktopHandoffFailureOptions): Promise<boolean> => {
+  if (kind === "pdf_signing") {
+    return recordPdfSigningHandoffFailure({
+      handoffToken,
+      reason,
+      db: tokenScopedDatabase,
+      now,
+    });
+  }
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(desktopEditHandoffs)
+      .set({ failedAt: now, failureReason: reason })
+      .where(
+        and(
+          eq(
+            desktopEditHandoffs.tokenHash,
+            hashDesktopEditHandoffToken(handoffToken),
+          ),
+          isNull(desktopEditHandoffs.consumedAt),
+          isNull(desktopEditHandoffs.openedAt),
+          isNull(desktopEditHandoffs.failedAt),
+          gt(
+            desktopEditHandoffs.expiresAt,
+            sql`${now.toISOString()}::timestamptz`,
+          ),
+        ),
+      )
+      .returning({
+        id: desktopEditHandoffs.id,
+        workspaceId: desktopEditHandoffs.workspaceId,
+        createdBy: desktopEditHandoffs.createdBy,
+      });
+    const handoff = rows.at(0);
+    if (!handoff) {
+      return false;
+    }
+    const workspacesForAudit = await tx
+      .select({ organizationId: workspaces.organizationId })
+      .from(workspaces)
+      .where(eq(workspaces.id, handoff.workspaceId))
+      .limit(1);
+    const workspace = workspacesForAudit.at(0);
+    if (!workspace) {
+      return panic("Desktop handoff workspace must exist");
+    }
+    const recordAuditEvent = createBackgroundAuditRecorder({
+      organizationId: workspace.organizationId,
+      workspaceId: handoff.workspaceId,
+      userId: handoff.createdBy,
+      execution: {
+        performer: {
+          type: "service",
+          id: "desktop-handoff",
+          name: "Desktop handoff",
+        },
+        trigger: { type: "system", source: "desktop-handoff" },
+      },
+    });
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+      resourceId: handoff.id,
+      changes: { failureReason: { old: null, new: reason } },
+      metadata: { kind: "handoff" },
+    });
+    return true;
+  });
+};

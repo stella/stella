@@ -16,7 +16,9 @@ import { PG_ERROR } from "@/api/lib/pg-error";
  * transaction. Handlers receive this capability from auth and must not import
  * the owner-level database handle.
  */
-export type ScopedDb = <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
+export type ScopedDb<TTransaction = Transaction> = <T>(
+  fn: (tx: TTransaction) => Promise<T>,
+) => Promise<T>;
 
 /** Corpus operations can bound schema-lane waits; createIngestionDb honors these budgets. */
 export type IngestionScopedDb = <T>(
@@ -40,8 +42,8 @@ export const defaultDatabaseRetry: SafeDbRetryConfig = {
   },
 };
 
-export type SafeDb = <T>(
-  fn: (tx: Transaction) => Promise<T>,
+export type SafeDb<TTransaction = Transaction> = <T>(
+  fn: (tx: TTransaction) => Promise<T>,
   retry?: SafeDbRetryConfig,
 ) => Promise<Result<T, SafeDbError>>;
 

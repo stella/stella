@@ -7,6 +7,7 @@ import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference"
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
+import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   decisionCitationPageQuery,
   decisionCitationSummaryQuery,
@@ -17,10 +18,9 @@ import {
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import {
-  candidateDecisionRowsQuery,
-  caseLawSearchRowFilters,
+  candidateDecisionRowsStatement,
   decisionIdsByIdentityQuery,
-  pageDecisionRowsQuery,
+  pageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
 import {
   getShardConditions,
@@ -41,7 +41,7 @@ import {
   sitemapRefreshPageSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
-import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";
+import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
 import {
   pendingDocumentPresenceQuery,
   remainingDocumentCandidateQuery,
@@ -316,11 +316,8 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      candidateDecisionRowsQuery(tx, {
-        filters: caseLawSearchRowFilters(
-          { country: sampleCountry },
-          QUERY_PLAN_SAMPLE.caseLaw.generation,
-        ),
+      candidateDecisionRowsStatement(tx, {
+        body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
       }),
@@ -336,7 +333,7 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      rehydrateCorpusIndexProviderCandidatesQuery(tx, {
+      rehydrateCorpusIndexProviderCandidatesStatement(tx, {
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
       }),
@@ -353,11 +350,8 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      pageDecisionRowsQuery(tx, {
-        filters: caseLawSearchRowFilters(
-          { country: sampleCountry },
-          QUERY_PLAN_SAMPLE.caseLaw.generation,
-        ),
+      pageDecisionRowsStatement(tx, {
+        body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
       }),
@@ -407,10 +401,24 @@ export const QUERY_PLAN_REGISTRY = [
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         tx,
-      }),
+      }).summary,
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.citation-summary"],
+  },
+  {
+    id: "case-law.top-citing-decisions",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationSummaryQuery({
+        currentYear: 2026,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        tx,
+      }).topCiting(CITATION_DIGEST_TOP_CITING),
+    seed: "case-law",
+    planMode: "covering-index",
+    contract: planContracts["case-law.top-citing-decisions"],
   },
   {
     id: "legislation.list",

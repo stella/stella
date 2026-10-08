@@ -1,6 +1,6 @@
 {
   "name": "@stll/cli",
-  "version": "3.8.4",
+  "version": "3.8.7",
   "description": "Stella command-line client",
   "keywords": [
     "cli",
@@ -51,11 +51,11 @@
     "lint": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/cli",
     "lint:fix": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/cli",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "codegen:runtime": "bun run src/codegen.ts --runtime-only",
+    "codegen:runtime": "bun ../scripts/src/prepare-cli-runtime.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.2.0",
     "@stll/stable-stringify": "workspace:^",
     "@stricli/core": "^1.3.0",
     "better-result": "catalog:",

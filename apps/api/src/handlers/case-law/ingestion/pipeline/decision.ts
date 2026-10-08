@@ -35,8 +35,8 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
-import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
+import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import {
   CONTENTION_RECONCILIATION,
   DECISION_REFRESH,
@@ -135,6 +135,7 @@ const settleRowWriteStatus = async ({
  */
 const runDecisionAttempt = async ({
   metadataUrlSchema,
+  statedEcliIdentity,
   input,
   judges,
   sourceId,
@@ -165,6 +166,7 @@ const runDecisionAttempt = async ({
       await resolveDecisionIdentityTx(tx, {
         ...observation,
         sourceId,
+        statedEcliIdentity,
         proposedDecisionId,
       }),
   );
@@ -368,14 +370,17 @@ export const processDecision = async (
     judges = CASE_LAW_JUDGE_DEPENDENCIES,
     ...options
   }: ProcessDecisionOptions,
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+  resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     options.scopedDb,
   ),
 ): Promise<ProcessResult> => {
-  const metadataUrlSchema = await resolveMetadataUrlSchema(options.sourceId);
+  const { metadataUrlSchema, statedEcliIdentity } = await resolveSourceContract(
+    options.sourceId,
+  );
   return await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
+    statedEcliIdentity,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
     corpus,

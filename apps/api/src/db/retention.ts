@@ -3,6 +3,10 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  desktop_presence: {
+    boundedBy:
+      "One observation per account, organization and installation, overwritten by heartbeats and cascade-deleted with the account or organization.",
+  },
   task_assignees: {
     boundedBy:
       "Unique task and user assignments, cascade-deleted with either parent.",
@@ -95,6 +99,10 @@ export const TABLE_RETENTION = {
   },
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
+  },
+  hosted_checkout_claims: {
+    boundedBy:
+      "At most one claim per organization, taken over in place once expired and deleted with its owner.",
   },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",

@@ -15,6 +15,7 @@ import {
   projectFeatureCommands,
 } from "./feature-command-projection.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
+import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import {
   CACHE_SCHEMA_VERSION,
@@ -32,20 +33,25 @@ import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RouteNode } from "./route-types.js";
 
 const ORIGIN = "https://feature-projection.example";
-const TEST_FEATURE = "fixture-feature";
-const CAPABILITY = "usage.entitlement.get";
-const TOOL = "get_usage";
+const FEATURE = "list-verification";
+
+test("generated views have no CLI discovery entry", () => {
+  const generatedViewToolName = "show_visual";
+  expect(Object.hasOwn(generatedToolAnnotations, generatedViewToolName)).toBe(
+    false,
+  );
+  expect(JSON.stringify(generatedRouteMap)).not.toContain(
+    generatedViewToolName,
+  );
+});
+const CAPABILITY = "lists.verifications.get";
+// List verification uses capability adapters; the curated tool exercises time billing.
+const TOOL = "list_time_entries";
 const catalog = loadBakedCapabilityCatalog();
 if (catalog === null || !catalog.some((entry) => entry.id === CAPABILITY)) {
   throw new Error("Real catalog fixture is incomplete");
 }
-const entries = structuredClone(catalog);
-for (const entry of entries) {
-  if (entry.id === CAPABILITY) {
-    entry.featureId = TEST_FEATURE;
-    entry.featureAccess = "required";
-  }
-}
+const entries = catalog;
 const rawSnapshot: unknown = await Bun.file(
   new URL("generated/registry-snapshot.json", import.meta.url),
 ).json();
@@ -53,20 +59,8 @@ const baked = validateFetchedToolsList(JSON.stringify(rawSnapshot));
 if (!baked.ok || !baked.listings.some((listing) => listing.name === TOOL)) {
   throw new Error("Real tool fixture is incomplete");
 }
-const listings = structuredClone(baked.listings);
-for (const listing of listings) {
-  if (listing.name === TOOL) {
-    listing.featureId = TEST_FEATURE;
-  }
-}
-const toolAnnotation = generatedToolAnnotations[TOOL];
-if (toolAnnotation === undefined) {
-  throw new Error("Real tool annotation is missing");
-}
-const annotations = {
-  ...generatedToolAnnotations,
-  [TOOL]: { ...toolAnnotation, featureId: TEST_FEATURE },
-};
+const listings = baked.listings;
+const annotations = generatedToolAnnotations;
 const tree = buildCliRouteTree({ listings, entries, annotations }).tree;
 const enabled = { capabilities: [CAPABILITY], tools: [TOOL] };
 const hidden = { capabilities: [], tools: [] };
@@ -98,6 +92,7 @@ const leafIds = (node: RouteNode): string[] => {
     }
   }
 };
+
 const invokeHelp = async (commandTree: RouteNode, argv: string[]) => {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -126,19 +121,25 @@ const invokeHelp = async (commandTree: RouteNode, argv: string[]) => {
 const body = (snapshot: typeof enabled | undefined) =>
   JSON.stringify({
     result: {
-      tools: listings
-        .filter(
-          (listing) =>
-            listing.featureId === undefined ||
-            snapshot?.tools.includes(listing.name),
-        )
-        .map(({ featureId, ...listing }) => ({
-          name: listing.name,
-          description: listing.description,
-          inputSchema: listing.inputSchema,
-          annotations: listing.annotations,
-          _meta: featureId === undefined ? undefined : { featureId },
-        })),
+      tools: listings.flatMap((listing) => {
+        const featureId =
+          annotations[listing.name]?.featureId ?? listing.featureId;
+        if (
+          featureId !== undefined &&
+          !snapshot?.tools.includes(listing.name)
+        ) {
+          return [];
+        }
+        return [
+          {
+            name: listing.name,
+            description: listing.description,
+            inputSchema: listing.inputSchema,
+            annotations: listing.annotations,
+            _meta: featureId === undefined ? undefined : { featureId },
+          },
+        ];
+      }),
       ...(snapshot === undefined ? {} : { _meta: { featureAccess: snapshot } }),
     },
   });
@@ -146,8 +147,12 @@ const body = (snapshot: typeof enabled | undefined) =>
 test("the real catalog parser and route generator preserve feature ownership", () => {
   const parsed = parseCapabilityCatalog(entries);
   expect(parsed?.find((entry) => entry.id === CAPABILITY)?.featureId).toBe(
-    TEST_FEATURE,
+    FEATURE,
   );
+  expect(parsed?.find((entry) => entry.id === CAPABILITY)?.featureAccess).toBe(
+    "required",
+  );
+  expect(annotations[TOOL]?.featureId).toBe("time-billing");
   expect(hasFeatureCommands(tree)).toBe(true);
   expect(leafIds(tree)).toContain(CAPABILITY);
   expect(leafIds(tree)).toContain(TOOL);
@@ -201,14 +206,14 @@ for (const featureAccess of [undefined, hidden]) {
     expect(ids).not.toContain(CAPABILITY);
     expect(ids).not.toContain(TOOL);
     expect(ids).toContain("list_matters");
-    const help = await invokeHelp(projected, ["capability", "usage", "--help"]);
-    expect(help.stdout).not.toContain("entitlement-get");
+    const help = await invokeHelp(projected, ["capability", "lists", "--help"]);
+    expect(help.stdout).not.toContain("verifications-get");
     const suggestion = await invokeHelp(projected, [
       "capability",
-      "usage",
-      "entitlement-gte",
+      "lists",
+      "verifications-gte",
     ]);
-    expect(suggestion.stderr).not.toContain("entitlement-get");
+    expect(suggestion.stderr).not.toContain("verifications-get");
     const output: string[] = [];
     const writer = spyOn(process.stdout, "write").mockImplementation(
       (chunk) => {
@@ -239,8 +244,8 @@ test("an enabled current snapshot permits the real commands and their help", asy
   expect(leafIds(projected)).toContain(CAPABILITY);
   expect(leafIds(projected)).toContain(TOOL);
   expect(
-    (await invokeHelp(projected, ["capability", "usage", "--help"])).stdout,
-  ).toContain("entitlement-get");
+    (await invokeHelp(projected, ["capability", "lists", "--help"])).stdout,
+  ).toContain("verifications-get");
 });
 
 test("only a current authenticated response enables feature commands over the cache", async () => {

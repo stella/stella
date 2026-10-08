@@ -4,12 +4,16 @@ import { expect, test } from "bun:test";
 import { Readable } from "node:stream";
 
 import { hasAlignedAuthentication } from "@/api/lib/email/inbound/authentication";
+import { InboundPersistenceError } from "@/api/lib/email/inbound/ingest";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
+  createSesS3ObjectDeleter,
   createSesS3ObjectReader,
   readSesInboundDelivery,
+  receiveAndDeleteSesInboundMail,
   receiveSesInboundMail,
 } from "@/api/lib/email/inbound/ses";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
 const event = {
   notificationType: "Received",
@@ -35,6 +39,157 @@ const event = {
 const raw = new TextEncoder().encode(
   "From: member@example.com\r\nAuthentication-Results: forged.test; dmarc=pass\r\n\r\nBody",
 );
+
+test.each([
+  "filed",
+  "rejected",
+  "persistence-failed",
+  "delete-failed",
+] as const)(
+  "raw mail deletion follows the durable %s outcome",
+  async (mode) => {
+    const storage = startFakeS3();
+    const bucket = "inbound-bucket";
+    const key = "mail/delivery-1";
+    const client = new S3Client({
+      region: "eu-west-1",
+      endpoint: storage.endpoint,
+      forcePathStyle: true,
+      credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      maxAttempts: 1,
+    });
+    storage.put(bucket, key, raw);
+    if (mode === "delete-failed") {
+      storage.failNext({
+        method: "DELETE",
+        key,
+        status: 403,
+        code: "AccessDenied",
+      });
+    }
+    let persisted = 0;
+    try {
+      const result = await receiveAndDeleteSesInboundMail({
+        event: {
+          ...event,
+          receipt: {
+            ...event.receipt,
+            recipients: [`${"a".repeat(64)}@inbound.example.com`],
+          },
+        },
+        bucket,
+        keyPrefix: "mail/",
+        inboundDomain: "inbound.example.com",
+        readObject: createSesS3ObjectReader({ client, bucket }),
+        deleteObject: createSesS3ObjectDeleter({ client, bucket }),
+        persist: async ({ delivery }) => {
+          expect(delivery.status).toBe("candidate");
+          // The original remains available while filing is in flight.
+          expect(storage.objects.has(`${bucket}/${key}`)).toBe(true);
+          persisted += 1;
+          switch (mode) {
+            case "persistence-failed":
+              return Result.err(
+                new InboundPersistenceError({
+                  message: "Injected filing failure",
+                }),
+              );
+            case "rejected":
+              return Result.ok({
+                status: "dropped",
+                reason: "unauthorized_sender",
+              });
+            case "filed":
+            case "delete-failed":
+              return Result.ok({
+                status: "filed",
+                correspondenceId: "correspondence-1",
+              });
+            default:
+              mode satisfies never;
+              return Result.err(
+                new InboundPersistenceError({
+                  message: "Unhandled test outcome",
+                }),
+              );
+          }
+        },
+      });
+      expect(persisted).toBe(1);
+      expect(result.isOk()).toBe(mode === "filed" || mode === "rejected");
+      expect(storage.objects.has(`${bucket}/${key}`)).toBe(
+        mode === "persistence-failed" || mode === "delete-failed",
+      );
+      if (mode === "persistence-failed") {
+        expect(storage.requests.some(({ method }) => method === "DELETE")).toBe(
+          false,
+        );
+      }
+      if (mode === "delete-failed" && result.isErr()) {
+        expect(result.error.reason).toBe("object-delete-failed");
+      }
+    } finally {
+      client.destroy();
+      storage.stop();
+    }
+  },
+);
+
+test("only a missing source object is acknowledged as already completed", async () => {
+  const storage = startFakeS3();
+  const client = new S3Client({
+    region: "eu-west-1",
+    endpoint: storage.endpoint,
+    forcePathStyle: true,
+    credentials: { accessKeyId: "test", secretAccessKey: "test" },
+    maxAttempts: 1,
+  });
+  try {
+    let persisted = 0;
+    const receive = async () =>
+      await receiveAndDeleteSesInboundMail({
+        event,
+        bucket: "inbound-bucket",
+        keyPrefix: "mail/",
+        inboundDomain: "inbound.example.com",
+        readObject: createSesS3ObjectReader({
+          client,
+          bucket: "inbound-bucket",
+        }),
+        deleteObject: createSesS3ObjectDeleter({
+          client,
+          bucket: "inbound-bucket",
+        }),
+        persist: async () => {
+          persisted += 1;
+          return Result.ok({
+            status: "filed",
+            correspondenceId: "correspondence-1",
+          });
+        },
+      });
+    expect((await receive()).unwrap()).toEqual([
+      { status: "already_completed" },
+    ]);
+    storage.failNext({
+      method: "GET",
+      key: "mail/delivery-1",
+      status: 403,
+      code: "AccessDenied",
+    });
+    const unavailable = await receive();
+    expect(unavailable.isErr() && unavailable.error.reason).toBe(
+      "object-unavailable",
+    );
+    expect(persisted).toBe(0);
+    expect(storage.requests.some(({ method }) => method === "DELETE")).toBe(
+      false,
+    );
+  } finally {
+    client.destroy();
+    storage.stop();
+  }
+});
 const read = async (input: unknown) =>
   await readSesInboundDelivery({
     event: input,
@@ -222,9 +377,10 @@ test.each(["declared", "streamed"] as const)(
           return Result.ok({ status: "dropped", reason: "message_too_large" });
         },
       });
-      expect(result.isOk() && result.value).toEqual([
+      expect(result.isOk() && result.value.deliveries).toEqual([
         { status: "dropped", reason: "message_too_large" },
       ]);
+      expect(result.isOk() && result.value.objectKey).toBe("mail/delivery-1");
       expect(drops).toBe(1);
       expect(emitted).toBeLessThan(40);
       expect(body.destroyed).toBe(true);

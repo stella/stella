@@ -30,7 +30,6 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   CONDITION_DECISION_ID,
@@ -50,9 +49,11 @@ import type {
 } from "@/api/lib/docx/resolve-ai-fields";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   abortControllerFromSignal,
   collectTanStackTextRun,
+  generateTanStackChatObject,
   mergeGenerationOptions,
   resolveTanStackTextModel,
   systemPromptsPatch,
@@ -60,7 +61,6 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextRun } from "@/api/lib/tanstack-ai-generate";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
-import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import { decide } from "@/api/lib/workflow/decisions/decide";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -199,6 +199,7 @@ type FieldChatInput = {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   prompt: string;
   skillTools: ChatToolMap | undefined;
   system: string | undefined;
@@ -223,6 +224,7 @@ const resolveFieldChat = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   prompt,
   resolveTextModel,
   system,
@@ -244,6 +246,7 @@ const resolveFieldChat = async ({
     orgAIConfig,
     managedAIResidency,
     organizationId,
+    admission,
   }),
   system:
     system === undefined
@@ -257,6 +260,7 @@ const generateFieldText = async (
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await collectTanStackTextRun({
+    admission: input.admission,
     model,
     adapter: textAdapterWithNormalizedStops(model),
     messages,
@@ -289,10 +293,12 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
 ): Promise<v.InferOutput<TSchema>> => {
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
-  const output = await generateChatObject({
+  return await generateTanStackChatObject({
+    admission: input.admission,
+    model,
     adapter: model.adapter,
     messages,
-    outputSchema: toTanStackValibotSchema(input.outputSchema),
+    outputSchema: input.outputSchema,
     abortController,
     ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
@@ -312,7 +318,6 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
         }
       : {}),
   });
-  return v.parse(input.outputSchema, output);
 };
 
 // Loading the caller's skill catalog failed before any model call, so it is a
@@ -326,6 +331,7 @@ export const buildAiFieldGenerator = ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   tenantWorkspaceIds,
   skillContext,
   aiAnalytics,
@@ -335,6 +341,7 @@ export const buildAiFieldGenerator = ({
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** When present, prompts that reference a skill get load-skill tools. */
@@ -382,6 +389,7 @@ export const buildAiFieldGenerator = ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
 ${itemSection}${documentSection}
 Known details (JSON):
@@ -447,6 +455,7 @@ export const buildAiConditionDecider = ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   tenantWorkspaceIds,
   skillContext,
   aiAnalytics,
@@ -457,6 +466,7 @@ export const buildAiConditionDecider = ({
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** When present, prompts that reference a skill get load-skill tools. */
@@ -524,6 +534,7 @@ export const buildAiConditionDecider = ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         outputMode: "generative",
         outputSchema: conditionDecisionSchema,
         prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
@@ -625,6 +636,7 @@ export const buildAiOccurrenceAdapter = ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   tenantWorkspaceIds,
   documentLanguages = [],
   skillContext,
@@ -635,6 +647,7 @@ export const buildAiOccurrenceAdapter = ({
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** Template-level BCP-47 tags (primary first); when present the model
@@ -678,6 +691,7 @@ export const buildAiOccurrenceAdapter = ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         outputSchema: occurrenceRenderingsSchema,
         prompt: buildAdaptPrompt(input, documentLanguages),
         skillTools,

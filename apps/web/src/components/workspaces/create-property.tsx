@@ -5,10 +5,12 @@ import type { Editor } from "@tiptap/react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
+import { stableStringify } from "@stll/stable-stringify";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogPopup,
@@ -472,6 +474,16 @@ const PropertyComposerBody = ({
     initialScopeDocType,
   );
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [initialDraft] = useState(() => ({
+    contentType,
+    name,
+    prompt,
+    textareaMentions,
+    selectedFileIds,
+    options,
+    fallback,
+    scopeDocType,
+  }));
 
   const trimmedName = name.trim();
   const promptText = promptFromHtml(prompt);
@@ -689,6 +701,30 @@ const PropertyComposerBody = ({
 
   return (
     <>
+      <DialogFormState
+        dirty={
+          stableStringify({
+            contentType,
+            name,
+            prompt,
+            textareaMentions,
+            selectedFileIds,
+            options,
+            fallback,
+            scopeDocType,
+          }) !== stableStringify(initialDraft)
+        }
+        onDiscard={() => {
+          setContentType(initialDraft.contentType);
+          setName(initialDraft.name);
+          setPrompt(initialDraft.prompt);
+          setTextareaMentions(initialDraft.textareaMentions);
+          setSelectedFileIds(initialDraft.selectedFileIds);
+          setOptions(initialDraft.options);
+          setFallback(initialDraft.fallback);
+          setScopeDocType(initialDraft.scopeDocType);
+        }}
+      />
       <DialogTitle className="sr-only">
         {isEditMode
           ? t("workspaces.properties.editColumn")

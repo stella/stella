@@ -12,6 +12,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -1449,6 +1450,7 @@ export const TemplateForm = ({
     ...initialValues,
   });
   const [values, setValues] = useState<FormValues>(seedValues);
+  const [initialFormValues] = useState(seedValues);
   // The decision model is asked about a settled form, not every keystroke:
   // this snapshot trails the live values, and the query keyed on it aborts a
   // superseded request through the signal its queryFn consumed.
@@ -2323,6 +2325,18 @@ export const TemplateForm = ({
 
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+      <DialogFormState
+        dirty={
+          JSON.stringify({ values, clauseOverrides }) !==
+          JSON.stringify({ values: initialFormValues, clauseOverrides: {} })
+        }
+        onDiscard={() => {
+          setValues(initialFormValues);
+          setClauseOverrides({});
+          setTouched({});
+          setErrors({});
+        }}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl p-6">
           {/* Transient (upload) fill shows the form header + "upload different";
@@ -2558,6 +2572,10 @@ export const TemplateForm = ({
           so its buttons cannot implicitly submit it. */}
       <Dialog onOpenChange={setMatterDialogOpen} open={matterDialogOpen}>
         <DialogPopup className="max-w-lg">
+          <DialogFormState
+            dirty={matterTarget !== null}
+            onDiscard={() => setMatterTarget(null)}
+          />
           <DialogHeader>
             <DialogTitle>{t("templates.moveToMatter")}</DialogTitle>
           </DialogHeader>

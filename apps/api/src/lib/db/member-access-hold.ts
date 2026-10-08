@@ -1,10 +1,11 @@
 import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 
+import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { CLIENT_MATTER_ADMIN_ROLES } from "@/api/lib/member-roles";
 
 type HoldMemberAccessOptions = {
   organizationId: SafeId<"organization">;

@@ -1,5 +1,6 @@
 mod account;
 mod app_lifecycle;
+mod app_window;
 mod autostart;
 mod bridge;
 mod clipboard;
@@ -17,12 +18,14 @@ mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
+mod handoff;
 mod http_client;
 mod i18n;
 mod keychain;
 mod logging;
 mod marker_file;
 mod pdf_signing;
+mod presence;
 mod registry;
 mod relaunch;
 mod session_manager;
@@ -358,6 +361,8 @@ pub fn run() {
         }
       }
 
+      presence::start(handle.clone());
+
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 
@@ -449,14 +454,10 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
     return;
   }
 
-  let builder = tauri::WebviewWindowBuilder::new(
-    handle,
-    "main",
-    tauri::WebviewUrl::App("index.html".into()),
-  )
-  .title("stella desktop")
-  .inner_size(480.0, 460.0)
-  .resizable(false);
+  let builder = crate::app_window::builder(handle, "main", "index.html")
+    .title("stella desktop")
+    .inner_size(480.0, 460.0)
+    .resizable(false);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,

@@ -2,22 +2,43 @@ import { Result } from "better-result";
 import { and, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { todayFor } from "@stll/time";
+import { Temporal, todayFor } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { WORK_OBLIGATION_STATUS, workObligations } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { entityQueryScopeCondition } from "@/api/lib/entities/query-scope";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
+import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+
+type ResolveWorkAsOfOptions = {
+  asOf: string | undefined;
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  at?: Temporal.Instant;
+};
 
 /**
  * The civil date "due" is measured against: the caller's `asOf` when given
- * (their own calendar day), else the server's UTC day. `hard_deadline_date`
- * and `due_date` are dates without a time zone, so every reader of "due
- * today" resolves the day here.
+ * (their own calendar day), else the organization's day in its time zone.
+ * `hard_deadline_date` and `due_date` are dates without a time zone, so every
+ * reader of "due today" resolves the day here. The zone is read only when the
+ * caller sends no `asOf`.
  */
-export const resolveWorkAsOf = (asOf: string | undefined): string =>
-  asOf ?? todayFor("UTC").toString();
+export const resolveWorkAsOf = async ({
+  asOf,
+  safeDb,
+  organizationId,
+  at = Temporal.Now.instant(),
+}: ResolveWorkAsOfOptions): Promise<Result<string, SafeDbError>> => {
+  if (asOf !== undefined) {
+    return Result.ok(asOf);
+  }
+  const zone = await safeDb(
+    async (tx) => await readOrganizationTimeZone(tx, organizationId),
+  );
+  return zone.map((timeZone) => todayFor(timeZone, at).toString());
+};
 
 const OPEN_WORK_OBLIGATION_STATUSES = [
   WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,

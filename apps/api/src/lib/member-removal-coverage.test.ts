@@ -104,6 +104,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "entities.metadata",
   "entity_versions.source",
   "entity_views.layout",
+  "eu_completion_approvals.reviewed_counts",
+  "eu_completion_controls.batch",
+  "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
   "flow_definitions.steps",
@@ -190,7 +193,11 @@ const RETAINED_MEMBER_COLUMNS = {
     "Assignment suggestions; accepting a suggestion validates current membership.",
   "sanctions_contact_matches.reviewed_by":
     "Screening review attribution; current membership gates review actions.",
+  "sanctions_screening_events.reviewer_id":
+    "Screening decision history; attribution grants no membership or review authority.",
   "audit_logs.user_id": "Audit performer history.",
+  "feature_enrolments.user_id":
+    "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
@@ -272,6 +279,12 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "entity_views.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "eu_completion_approvals.approved_by":
+    "Corpus-completion operator attribution as free text; no user id and no matter membership.",
+  "eu_completion_approvals.supervised_by":
+    "Corpus-completion operator attribution as free text; no user id and no matter membership.",
+  "eu_completion_controls.changed_by":
+    "Corpus-completion operator attribution as free text; no user id and no matter membership.",
   "expenses.user_id":
     "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
   "extraction_runs.requested_by":
@@ -308,6 +321,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_verification_read_receipts.user_id":
+    "Read-audit dedupe receipt; retained with the run, cascades on user deletion, and grants no membership.",
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
@@ -434,6 +449,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "desktop_presence.user_id":
+    "Organization-scoped presence; the person stays an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

@@ -167,6 +167,7 @@ const BENCH_TEXT_FIELDS = {
 const BENCH_DECISION = {
   caseNumber: "Pl. ÚS 20/21",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  country: "CZE",
   court: "Ústavní soud",
   courtAbbreviation: null,
   courtTier: "other",
@@ -231,10 +232,9 @@ const BenchPane = ({ width }: { width: number }) => (
             />
           </div>
           <DecisionText
-            activeMatchIndex={-1}
+            surface="development"
             decision={BENCH_DECISION}
             decisionId={BENCH_DECISION.id}
-            searchQuery=""
           />
         </main>
       </ScrollArea>

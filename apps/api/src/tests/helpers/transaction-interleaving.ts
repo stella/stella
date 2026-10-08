@@ -142,7 +142,8 @@ export const withInterleaving = async <State>({
         const blocked: InterleavingToken[] = [];
         const outcomes = new Map<Actor, TransactionOutcome>();
         const controller = new AbortController();
-        const activePids = new Set<number>();
+        // Backends running a caller step: the only statements cancellation targets.
+        const stepPids = new Set<number>();
         const stepTasks: Promise<unknown>[] = [];
         const timeout = Promise.withResolvers<never>();
         const timer = setTimeout(() => {
@@ -155,6 +156,17 @@ export const withInterleaving = async <State>({
         const bounded = async <T>(work: PromiseLike<T>) =>
           Promise.race([work, timeout.promise]);
         let stopped = false;
+        // A cancel that reaches a backend while it runs COMMIT or ROLLBACK
+        // aborts that statement and leaves the caller's connection in a failed
+        // transaction block. Cancels therefore target only running steps, and
+        // once aborted, actors end their transactions only after every cancel
+        // has been sent; an idle backend then discards the cancel.
+        const cancellationSent = Promise.withResolvers<undefined>();
+        const afterCancellation = async () => {
+          if (controller.signal.aborted) {
+            await cancellationSent.promise;
+          }
+        };
         for (const token of schedule) {
           gates.set(token, Promise.withResolvers<undefined>());
         }
@@ -175,25 +187,32 @@ export const withInterleaving = async <State>({
                   .from(sql`(SELECT 1) AS identity`);
                 const session =
                   identity.at(0) ?? panic("Transaction identity missing");
-                activePids.add(session.pid);
                 ready[actor].resolve(session);
                 for (const step of participant.steps) {
                   const token: InterleavingToken = `${actor}.${step.name}`;
                   await (gates.get(token) ?? panic("Step gate missing"))
                     .promise;
+                  await afterCancellation();
                   if (stopped) {
                     throw new InterleavingTimeout({
                       message: "Interleaving exceeded its deadline",
                     });
                   }
-                  const stepTask = step.run(tx, controller.signal);
-                  stepTasks.push(stepTask);
-                  await stepTask;
+                  stepPids.add(session.pid);
+                  try {
+                    const stepTask = step.run(tx, controller.signal);
+                    stepTasks.push(stepTask);
+                    await stepTask;
+                  } finally {
+                    await afterCancellation();
+                    stepPids.delete(session.pid);
+                  }
                   completed.add(token);
                 }
                 await (
                   gates.get(`${actor}.commit`) ?? panic("Commit gate missing")
                 ).promise;
+                await afterCancellation();
                 if (stopped) {
                   throw new InterleavingTimeout({
                     message: "Interleaving exceeded its deadline",
@@ -304,10 +323,12 @@ export const withInterleaving = async <State>({
           try {
             await withTimeout(
               async () => {
-                if (!outcomes.get("a") || !outcomes.get("b")) {
-                  for (const pid of activePids) {
+                try {
+                  for (const pid of stepPids) {
                     await observer.sql`SELECT pg_cancel_backend(${pid})`;
                   }
+                } finally {
+                  cancellationSent.resolve(undefined);
                 }
                 // The schedule deadline has expired; cleanup has its own budget.
                 await Promise.allSettled([...stepTasks, ...tasks]);

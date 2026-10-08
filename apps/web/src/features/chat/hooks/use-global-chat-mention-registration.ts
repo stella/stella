@@ -1,7 +1,10 @@
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
-import { useChatEditorExtensions } from "@/components/chat-editor-provider";
+import {
+  CHAT_MENTION_SOURCE_LABELS,
+  useChatEditorExtensions,
+} from "@/components/chat-editor-provider";
 import type {
   ChatMentionOption,
   MentionCategory,
@@ -89,6 +92,7 @@ export const useGlobalChatMentionRegistration = () => {
       mentionSources: [
         {
           id: GLOBAL_CHAT_MENTION_EXTENSION_ID,
+          labelKey: CHAT_MENTION_SOURCE_LABELS.context,
           getItems: async () =>
             await mentionProviders.getItems(GLOBAL_CHAT_MENTION_CATEGORIES),
           searchItems:

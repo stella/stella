@@ -132,13 +132,21 @@
     "takeoverSubtitle": "Redagavimas bus tęsiamas nuo paskutinio išsaugoto kontrolinio taško.",
     "takeoverTitle": "{requester} nori perimti redagavimą",
     "takeoverWindowTitle": "Perėmimo prašymas",
-    "webOrigin": "Žiniatinklio kilmė"
+    "webOrigin": "Žiniatinklio kilmė",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Atnaujinkite Stella Desktop, tada vėl atverkite dokumentą iš Stella.",
+    "handoffAccountRequired": "Susiekite Stella Desktop su savo paskyra, tada vėl atverkite dokumentą iš Stella.",
+    "handoffFailed": "Nepavyko atverti dokumento",
+    "handoffUnavailable": "Nepavyko atverti dokumento. Pradėkite iš naujo iš Stella.",
+    "handoffRetry": "Bandyti dar kartą",
+    "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte"
   },
   "settings": {
     "about": "Apie",
     "accountLinked": "Paskyra susieta",
     "connectToStella": "Prisijungti prie stella web",
     "connectToStellaDescription": "Susiekite šį kompiuterį su dabartine stella paskyra neatidarydami dokumento.",
+    "desktopBenefit": "Office failai ir vietinė iškarpinės istorija",
     "disconnectAccount": "Atsieti paskyrą",
     "errorDisconnectAccount": "stella desktop nepavyko atsieti jūsų paskyros.",
     "errorReadAccount": "stella desktop nepavyko patikrinti paskyros ryšio.",

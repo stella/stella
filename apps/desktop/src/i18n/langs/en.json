@@ -132,13 +132,21 @@
     "takeoverSubtitle": "They'll continue from your latest saved checkpoint.",
     "takeoverTitle": "{requester} wants to take over editing",
     "takeoverWindowTitle": "Takeover request",
-    "webOrigin": "Web origin"
+    "webOrigin": "Web origin",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Update Stella Desktop, then open the document again from Stella.",
+    "handoffAccountRequired": "Connect Stella Desktop to your account, then open the document again from Stella.",
+    "handoffFailed": "Could not open the document",
+    "handoffUnavailable": "Could not open the document. Start again from Stella.",
+    "handoffRetry": "Retry",
+    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard"
   },
   "settings": {
     "about": "About",
     "accountLinked": "Account linked",
     "connectToStella": "Connect to stella web",
     "connectToStellaDescription": "Link this computer to your current stella account without opening a document.",
+    "desktopBenefit": "Office files and local clipboard history",
     "disconnectAccount": "Disconnect account",
     "errorDisconnectAccount": "stella desktop could not disconnect your account.",
     "errorReadAccount": "stella desktop could not check your account connection.",

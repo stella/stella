@@ -132,13 +132,21 @@
     "takeoverSubtitle": "La modification reprendra à votre dernier point de contrôle enregistré.",
     "takeoverTitle": "{requester} souhaite reprendre la modification",
     "takeoverWindowTitle": "Demande de reprise",
-    "webOrigin": "Origine web"
+    "webOrigin": "Origine web",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Mettez à jour Stella Desktop, puis ouvrez à nouveau le document depuis Stella.",
+    "handoffAccountRequired": "Connectez Stella Desktop à votre compte, puis ouvrez à nouveau le document depuis Stella.",
+    "handoffFailed": "Impossible d’ouvrir le document",
+    "handoffUnavailable": "Impossible d’ouvrir le document. Recommencez depuis Stella.",
+    "handoffRetry": "Réessayer",
+    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner"
   },
   "settings": {
     "about": "À propos",
     "accountLinked": "Compte associé",
     "connectToStella": "Se connecter à stella web",
     "connectToStellaDescription": "Associez cet ordinateur à votre compte stella actuel sans ouvrir de document.",
+    "desktopBenefit": "Fichiers Office et historique local du presse-papiers",
     "disconnectAccount": "Déconnecter le compte",
     "errorDisconnectAccount": "stella desktop n’a pas pu déconnecter votre compte.",
     "errorReadAccount": "stella desktop n’a pas pu vérifier la connexion de votre compte.",

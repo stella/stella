@@ -8,6 +8,7 @@ import {
   resolveUiLocale,
 } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
+import { DialogProvider } from "@stll/ui/dialog";
 
 import en from "./langs/en.json";
 
@@ -86,7 +87,7 @@ const catalogueModules = {
   () => Promise<CatalogueModule>
 >;
 
-export const detectedLanguage = detectLanguage();
+const detectedLanguage = detectLanguage();
 
 const storedLanguage = (): SupportedLanguage | null => {
   try {
@@ -171,6 +172,13 @@ export const DesktopIntlProvider = ({
     messages={messages}
     timeZone={resolvedTimeZone}
   >
-    {children}
+    <DialogProvider
+      labels={{
+        close: messages.dialog.close,
+        unsavedChanges: messages.dialog.unsavedChangesEscape,
+      }}
+    >
+      {children}
+    </DialogProvider>
   </IntlProvider>
 );

@@ -89,6 +89,7 @@ describe("root route registrations", () => {
       "multipartFormParser",
       "myTimeEntriesRoute",
       "notificationsRoute",
+      "operatorRoute",
       "smokeRoute",
       "timeApprovalQueueRoute",
       "timeTimersRoute",

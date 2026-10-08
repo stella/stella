@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -17,6 +18,7 @@ import {
   invoiceLines,
   timeEntries,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -58,6 +60,31 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
   await db.insert(workspaces).values(
     testWorkspaceIds.map((id) => ({
       id,
@@ -120,6 +147,8 @@ const summary = async () => {
     createTestHandlerContext<Parameters<typeof getSummary.handler>[0]>({
       workspaceId,
       safeDb: safeDb(),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
     }),
   );
   if (!("summary" in response)) {
@@ -164,6 +193,8 @@ test("missing billing arrangements preserve the existing hourly default without 
     createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
       workspaceId,
       safeDb: safeDb(),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
     }),
   );
   expect(result).toEqual({ arrangement: null });
@@ -271,6 +302,8 @@ test("another organization cannot read or replace an arrangement under a foreign
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
         workspaceId,
         safeDb: foreign,
+        session: { activeOrganizationId: ids.orgB },
+        user: { id: ids.userA1 },
       }),
     ),
   ).toEqual({ arrangement: null });
@@ -292,6 +325,8 @@ test("another organization cannot read or replace an arrangement under a foreign
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
         workspaceId,
         safeDb: safeDb(),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userAdmin },
       }),
     ),
   ).toMatchObject({ arrangement: capped });
@@ -515,7 +550,12 @@ test("GET configuration can be resent unchanged and stale revisions are refused"
   await set(capped);
   const context = createTestHandlerContext<
     Parameters<typeof getArrangement.handler>[0]
-  >({ workspaceId, safeDb: safeDb() });
+  >({
+    workspaceId,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userAdmin },
+    safeDb: safeDb(),
+  });
   const response = await getArrangement.handler(context);
   if (!("arrangement" in response)) {
     panic("Billing arrangement request was refused");

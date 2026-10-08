@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -346,6 +347,9 @@ test("citing decisions order by decision date, newest first", async () => {
   ]);
   expect(page.items.at(0)?.decisionDate).toBe("2025-01-01");
   expect(page.items.at(0)?.citationAuthority).toBe(1);
+  expect(page.items.map((item) => item.versionBasis)).toEqual(
+    page.items.map(() => ({ type: "inferred", kind: "decision_date" })),
+  );
   expect(page.items.map((item) => item.decisionId)).not.toContain(
     closedDecisionId,
   );
@@ -510,4 +514,104 @@ test("citing decisions refuse a request that names neither key or both", async (
     code: 400,
     response: { message: "Name exactly one of work or eli" },
   });
+});
+
+test("both provision reads preserve applied statements independently of the decision-date candidate", async () => {
+  const id = createSafeId<"caseLawDecision">();
+  const work = "777/2020 Sb.";
+  await db.insert(caseLawDecisions).values(
+    decisionRow({
+      id,
+      caseNumber: "temporal",
+      citationAuthority: 1,
+      decisionDate: "2020-01-01",
+      sourceId: openSourceId,
+    }),
+  );
+  try {
+    await db.insert(caseLawProvisionCitations).values([
+      {
+        ...provisionRow({
+          anchor: "par_1",
+          decisionDate: "2020-01-01",
+          decisionId: id,
+          spanStart: 1,
+          workIdentifier: work,
+        }),
+        versionValidFrom: "2020-01-01",
+        appliedVersionBasis: "not_stated",
+      },
+      {
+        ...provisionRow({
+          anchor: "par_2",
+          decisionDate: "2020-01-01",
+          decisionId: id,
+          spanStart: 20,
+          workIdentifier: work,
+        }),
+        versionValidFrom: "2020-01-01",
+        appliedVersionBasis: "stated_date",
+        appliedVersionDate: "2013-12-31",
+        appliedVersionDateRelation: "until",
+        versionEvidenceStart: 30,
+        versionEvidenceEnd: 70,
+        versionEvidenceKind: "stated_date",
+      },
+      {
+        ...provisionRow({
+          anchor: "par_3",
+          decisionDate: "2020-01-01",
+          decisionId: id,
+          spanStart: 80,
+          workIdentifier: work,
+        }),
+        versionValidFrom: "2020-01-01",
+        appliedVersionBasis: "stated_version",
+        appliedVersionAmendmentWorkIdentifier: "303/2013 Sb.",
+        versionEvidenceStart: 90,
+        versionEvidenceEnd: 130,
+        versionEvidenceKind: "stated_version",
+      },
+    ]);
+    const outgoing = await withSubject(
+      id,
+      async (subject) =>
+        await listDecisionProvisionsHandler({ subject, query: { limit: 10 } }),
+    );
+    if (!("items" in outgoing)) {
+      panic("Expected a provision page");
+    }
+    const incoming = await citingDecisions({ limit: 10, work });
+    expect(outgoing.items.map(({ versionBasis }) => versionBasis)).toEqual([
+      { type: "not_stated" },
+      {
+        type: "stated_date",
+        date: "2013-12-31",
+        relation: "until",
+        expression: null,
+        evidence: { kind: "stated_date", start: 30, end: 70 },
+      },
+      {
+        type: "stated_version",
+        amendmentWorkIdentifier: "303/2013 Sb.",
+        expression: null,
+        evidence: { kind: "stated_version", start: 90, end: 130 },
+      },
+    ]);
+    expect(
+      incoming.items.map(({ versionBasis }) => versionBasis).toReversed(),
+    ).toEqual(outgoing.items.map(({ versionBasis }) => versionBasis));
+    expect(
+      outgoing.items.map(({ versionValidFrom }) => versionValidFrom),
+    ).toEqual([null, null, null]);
+    for (const item of [...outgoing.items, ...incoming.items]) {
+      expect(item.inferredVersionCandidate).toEqual({
+        type: "inferred",
+        kind: "decision_date",
+        versionValidFrom: "2020-01-01",
+      });
+    }
+  } finally {
+    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, id));
+  }
 });

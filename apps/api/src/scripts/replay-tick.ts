@@ -36,6 +36,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/replay-failure";
 import {
   enterCaseLawMaintenanceLane,
+  createCaseLawMaintenanceCleanupHandles,
   type CaseLawRootHandle,
   type CaseLawScriptHandles,
 } from "@/api/lib/case-law/maintenance-lane";
@@ -131,44 +132,14 @@ export const readReplayGate = async ({
 const CLEANUP_TIMEOUT_MS = 30_000;
 const REPLAY_QUERY_TIMEOUT_MS = 5000;
 
-/** Cleanup retries the schema lane outside transactions on its own connection. */
-const cleanupReplayTransaction: CaseLawRootHandle["transaction"] = async (
-  work,
-) => {
-  const [{ withLongRunningConnection }, { runUnderCorpusSchemaLane }] =
-    await Promise.all([
-      import("@/api/db/long-running-connection"),
-      import("@/api/db/corpus-schema-lane"),
-    ]);
-  const signal = AbortSignal.timeout(CLEANUP_TIMEOUT_MS);
-  return await withLongRunningConnection(
-    {
-      statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
-      lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
-      signal,
-    },
-    async ({ db }) =>
-      await runUnderCorpusSchemaLane({
-        database: db,
-        laneWaitMs: CLEANUP_TIMEOUT_MS,
-        sleep: async (milliseconds) =>
-          await sleep(milliseconds, undefined, { signal }),
-        work: async (tx) => {
-          signal.throwIfAborted();
-          return await work(tx);
-        },
-      }),
-  );
-};
+const loadReplayCleanupHandles = async () =>
+  await createCaseLawMaintenanceCleanupHandles({
+    timeoutMs: CLEANUP_TIMEOUT_MS,
+    queryTimeoutMs: REPLAY_QUERY_TIMEOUT_MS,
+  });
 
-const releaseReplayDb: ScopedDb = async (work) => {
-  const { createIngestionDb, markRlsDatabase } =
-    await import("@/api/db/scoped");
-  return await createIngestionDb(
-    markRlsDatabase({ transaction: cleanupReplayTransaction }),
-    { laneWaitMs: CLEANUP_TIMEOUT_MS },
-  )(work);
-};
+const releaseReplayDb: ScopedDb = async (work) =>
+  await (await loadReplayCleanupHandles()).ingestionDb(work);
 
 const loadReplayTickRuntime = async () => {
   const [
@@ -202,17 +173,9 @@ const loadReplayTickRuntime = async () => {
 const createReplayCleanupStore = async () => {
   const { createBackgroundReplayStore } =
     await import("@/api/handlers/case-law/ingestion/background-replay-store");
-  const cleanupRootDb: CaseLawRootHandle = {
-    transaction: cleanupReplayTransaction,
-    execute: async <TRow extends Record<string, unknown>>(
-      query: SQLWrapper | string,
-    ) =>
-      await cleanupReplayTransaction(
-        async (tx) => await tx.execute<TRow>(query),
-      ),
-  };
+  const { rootDb } = await loadReplayCleanupHandles();
   return createBackgroundReplayStore({
-    db: cleanupRootDb,
+    db: rootDb,
     now,
   });
 };

@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -67,6 +68,11 @@ test("web sources generate once across compiler tasks and restore until source i
         workspaces: ["apps/*"],
       }),
     );
+    symlinkSync(
+      path.join(root, "node_modules"),
+      path.join(directory, "node_modules"),
+      "dir",
+    );
     write(
       "apps/web/package.json",
       JSON.stringify({
@@ -83,10 +89,40 @@ test("web sources generate once across compiler tasks and restore until source i
         },
       }),
     );
-    write("apps/api/package.json", JSON.stringify({ name: "@stll/api" }));
+    write(
+      "apps/api/package.json",
+      JSON.stringify({
+        name: "@stll/api",
+        scripts: {
+          "generate:capability-runtime":
+            "bun scripts/generate-capability-runtime.ts",
+        },
+      }),
+    );
+    const apiTask = tasks["@stll/api#generate:capability-runtime"];
+    if (
+      !isRecord(apiTask) ||
+      !Array.isArray(apiTask["outputs"]) ||
+      !apiTask["outputs"].every((output) => typeof output === "string")
+    ) {
+      panic("Missing API runtime producer outputs");
+    }
+    write(
+      "apps/api/scripts/generate-capability-runtime.ts",
+      [
+        "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
+        "import path from 'node:path';",
+        `for (const output of ${JSON.stringify(apiTask["outputs"])}) { mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, 'generated API bytes'); }`,
+        "appendFileSync('../../runs.log', 'api-runtime\\n');",
+      ].join("\n"),
+    );
     write(
       ".gitignore",
-      ".turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\nruns.log\ntask-hash\n",
+      `node_modules/\n.turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\nruns.log\ntask-hash\n${apiTask[
+        "outputs"
+      ]
+        .map((output) => `apps/api/${output}\n`)
+        .join("")}`,
     );
     write("apps/api/src/contract.ts", "export type Contract = string;\n");
     write("apps/web/src/routes/index.tsx", "export const route = '/';\n");
@@ -112,6 +148,7 @@ test("web sources generate once across compiler tasks and restore until source i
       "turbo.json",
       JSON.stringify({
         tasks: {
+          "@stll/api#generate:capability-runtime": apiTask,
           "@stll/web#generate:api-types": tasks["@stll/web#generate:api-types"],
           "@stll/web#generate:route-tree":
             tasks["@stll/web#generate:route-tree"],
@@ -146,7 +183,7 @@ test("web sources generate once across compiler tasks and restore until source i
     ];
     run([...command.slice(0, 2), ...consumers, ...command.slice(3)]);
     const executions = readFileSync(path.join(directory, "runs.log"), "utf-8");
-    expect(executions.trim().split("\n")).toHaveLength(2);
+    expect(executions.trim().split("\n")).toHaveLength(3);
     expect(readFileSync(path.join(directory, "task-hash"), "utf-8")).toMatch(
       /^[a-f0-9]+$/u,
     );
@@ -182,7 +219,7 @@ test("web sources generate once across compiler tasks and restore until source i
       readFileSync(path.join(directory, "runs.log"), "utf-8")
         .split("\n")
         .filter(Boolean),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     write(
       "apps/web/src/routes/index.tsx",
       "export const route = '/changed';\n",
@@ -192,7 +229,7 @@ test("web sources generate once across compiler tasks and restore until source i
       readFileSync(path.join(directory, "runs.log"), "utf-8")
         .trim()
         .split("\n"),
-    ).toHaveLength(5);
+    ).toHaveLength(6);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

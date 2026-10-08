@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
 
 import {
   matchesMatterReferencePattern,
@@ -18,6 +18,7 @@ export type MatterNumberHintProps = InlineProps | PopoverProps;
 
 export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const t = useTranslations();
+  const now = useNow();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: settings } = useQuery(
     organizationSettingsOptions({
@@ -33,7 +34,7 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const { matterNumberPattern: pattern, matterNumberPadding: padding } =
     settings;
   const example = renderMatterReference({
-    now: new Date(),
+    now,
     padding,
     pattern,
     seq: 1,

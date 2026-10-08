@@ -327,6 +327,19 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("no reviewed failure context key is one the logger drops", async () => {
+    const { FAILURE_CONTEXT_KEYS } =
+      await import("@/api/lib/observability/observe-failure");
+    const { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } =
+      await import("@/api/lib/observability/log-attribute-policy");
+
+    expect(
+      FAILURE_CONTEXT_KEYS.filter((key) =>
+        SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key),
+      ),
+    ).toEqual([]);
+  });
+
   test("module mocks do not start dropping more of the real module's exports", () => {
     // A PARTIAL module mock (one export overridden, the rest dropped) removes
     // the other exports for every file sharing the process, so a file that

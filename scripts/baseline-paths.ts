@@ -17,8 +17,6 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
-  /** scripts/check-oxlint-rule-coverage.ts */
-  oxlintRuleCoverage: "scripts/oxlint-rule-coverage-baseline.json",
   /** scripts/check-oxlint-effective-config.ts */
   oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */
@@ -37,6 +35,8 @@ export const BASELINE_PATHS = {
   failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
+  /** scripts/transfer-read-guard.ts */
+  transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
   /** scripts/sql-perf-baseline.ts */

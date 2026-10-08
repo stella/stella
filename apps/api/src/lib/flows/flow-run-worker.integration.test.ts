@@ -13,7 +13,7 @@
  * creation — is the real production code.
  */
 
-import { Result } from "better-result";
+import { Panic, Result, UnhandledException } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -22,12 +22,14 @@ import {
   expect,
   mock,
   setDefaultTimeout,
+  setSystemTime,
   test,
 } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
+import { parseTimeZoneId } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -38,6 +40,7 @@ import {
   flowDefinitions,
   flowRunSteps,
   notifications,
+  organizationSettings,
   properties,
   WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
@@ -83,6 +86,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -171,12 +175,17 @@ const createEntity: typeof createEntityFromBuffer = async (input) =>
     dependencies: createEntityDependencies,
   });
 
+// The test model ignores which organization admitted it.
+const TEST_FLOW_MODEL_ADMISSION =
+  testModelAdmission(mintAuthProviderId<"organization">());
+
 const executeFlowStepWithTestModel = async (
   job: Parameters<typeof executeFlowStep>[0],
   signal: AbortSignal,
 ) =>
   await executeFlowStep(job, signal, {
     generateTextForRole: generateTextForTest,
+    admission: TEST_FLOW_MODEL_ADMISSION,
     database: flowDatabase,
     makeScopedDb,
     makeSafeDb,
@@ -252,6 +261,8 @@ const CREATE_DOCUMENT_STEP: FlowStep = {
   name: "Create document",
   documentTitle: "Flow Test Memo",
 };
+
+const SENTINEL_FOREIGN_TEXT = "foreign exception text must not be persisted";
 
 describe("flow run worker pipeline (ai -> review-gate -> create-document)", () => {
   let organizationId: SafeId<"organization">;
@@ -386,6 +397,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         { runId, stepIndex: 0 },
         new AbortController().signal,
         {
+          admission: testModelAdmission(organizationId),
           database: flowDatabase,
           makeScopedDb,
           makeSafeDb,
@@ -737,6 +749,37 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     },
   );
 
+  test("a review gate's task is due on the organization's day", async () => {
+    // 12:00 UTC on 10 June is already 02:00 on 11 June in UTC+14.
+    const timeZone = parseTimeZoneId("Pacific/Kiritimati");
+    await testDb
+      .insert(organizationSettings)
+      .values({
+        id: createSafeId<"organizationSettings">(),
+        organizationId,
+        timeZone,
+      })
+      .onConflictDoUpdate({
+        target: organizationSettings.organizationId,
+        set: { timeZone },
+      });
+    setSystemTime(new Date("2026-06-10T12:00:00.000Z"));
+    try {
+      const { taskEntityId } = await createWaitingGate(true);
+      const obligation = await testDb.query.workObligations.findFirst({
+        where: { entityId: { eq: taskEntityId } },
+        columns: { workingTargetDate: true },
+      });
+      expect(obligation?.workingTargetDate).toBe("2026-06-11");
+    } finally {
+      setSystemTime();
+      await testDb
+        .update(organizationSettings)
+        .set({ timeZone: null })
+        .where(eq(organizationSettings.organizationId, organizationId));
+    }
+  });
+
   test("deleting a review task leaves its waiting gate decidable from the run panel", async () => {
     const { runId, taskEntityId, safeDb } = await createWaitingGate(true);
     await testDb.delete(entities).where(eq(entities.id, taskEntityId));
@@ -996,6 +1039,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
               },
             )
           : executeFlowStep(job, new AbortController().signal, {
+              admission: testModelAdmission(organizationId),
               database: flowDatabase,
               makeScopedDb: gatedMakeScopedDb,
               makeSafeDb,
@@ -1086,6 +1130,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       { runId, stepIndex: 0 },
       new AbortController().signal,
       {
+        admission: testModelAdmission(organizationId),
         database: flowDatabase,
         makeScopedDb,
         makeSafeDb,
@@ -1866,6 +1911,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         const model = instanceWireErrorModel(cassette.model);
         const failure = await Result.tryPromise(async () =>
           executeFlowStep(job, new AbortController().signal, {
+            admission: testModelAdmission(organizationId),
             database: flowDatabase,
             makeScopedDb,
             makeSafeDb,
@@ -2047,5 +2093,63 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       },
     });
     expect(broadcasts).toEqual([workspaceId]);
+  });
+
+  test.each([
+    ["Panic", new Panic({ message: SENTINEL_FOREIGN_TEXT })],
+    [
+      "UnhandledException",
+      new UnhandledException({ cause: SENTINEL_FOREIGN_TEXT }),
+    ],
+  ])("stores a safe fallback for %s worker errors", async (_name, error) => {
+    expect(error.message).toContain(SENTINEL_FOREIGN_TEXT);
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Worker error flow",
+      steps: [AI_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "manual", userId },
+      inputEntityIds: [],
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const { runId } = started.value;
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
+
+    await failFlowRunFromWorker({ runId, stepIndex: 0 }, error, {
+      database:
+        asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
+          testDb,
+        ),
+      makeScopedDb,
+      broadcastUpdate,
+    });
+
+    const run = await testDb.query.flowRuns.findFirst({
+      where: { id: { eq: runId } },
+      columns: { error: true, status: true },
+    });
+    const step = await testDb.query.flowRunSteps.findFirst({
+      where: { runId: { eq: runId }, index: { eq: 0 } },
+      columns: { error: true, status: true },
+    });
+    expect(run).toEqual({ status: "failed", error: "Flow step failed" });
+    expect(step).toEqual({ status: "failed", error: "Flow step failed" });
+    expect(JSON.stringify({ run, step })).not.toContain(SENTINEL_FOREIGN_TEXT);
   });
 });

@@ -1,0 +1,2529 @@
+[
+  {
+    "file": "apps/api/src/agent-auth/id-jag.ts",
+    "function": "module/httpsOnlyFetch",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/bilingual-translations/read-run.ts",
+    "function": "module/readBilingualRun/createSafeHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/citation-graph.ts",
+    "function": "module/decisionCitationSummaryQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/citation-graph.ts",
+    "function": "module/decisionCitationSummaryQuery/candidatesFor",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/citation-graph.ts",
+    "function": "module/listLeadingCitationsHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/coverage.ts",
+    "function": "module/readCaseLawCoverageSourcesQuery/definePublicLawSharedQuery[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
+    "function": "module/reparseNss",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
+    "function": "module/reparseNss",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/get.ts",
+    "function": "module/listDecisionJudges",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/lookup-by-identity.ts",
+    "function": "module/lookupDecisionsByIdentity",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/search.ts",
+    "function": "module/decisionIdsByIdentityQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/sitemap.ts",
+    "function": "module/listSitemapShardsHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/sitemap.ts",
+    "function": "module/readSitemapDecisionAlternates",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/sitemap.ts",
+    "function": "module/sitemapShardDecisionsQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/slug-backfill.ts",
+    "function": "module/backfillCaseLawSlugs",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
+    "function": "module/createNalusFetch/request",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
+    "function": "module/createNalusFetch/request",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/fetchFormex",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/fetchFormex",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/fetchNotice",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/fetchNotice",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/getTotalCount",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/getTotalCount",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/queryDecisions",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/queryDecisions",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/readDocumentResponse",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+    "function": "module/readDocumentResponse",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+    "function": "module/fetchDocument",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+    "function": "module/fetchDocument",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+    "function": "module/search",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+    "function": "module/search",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
+    "function": "module/createPagePaginatedFetch",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
+    "function": "module/createPagePaginatedFetch/readPage",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
+    "function": "module/fetchDetail",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
+    "function": "module/fetchDetail",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
+    "function": "module/getTotalCount",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
+    "function": "module/getTotalCount",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
+    "function": "module/listPlCourtsDayPage",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
+    "function": "module/listPlCourtsDayPage",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
+    "function": "module/receive",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
+    "function": "module/receive",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kis.ts",
+    "function": "module/fetchEureka",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kis.ts",
+    "function": "module/fetchEureka",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts",
+    "function": "module/request",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts",
+    "function": "module/request",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+    "function": "module/locateShard",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+    "function": "module/locateShard",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+    "function": "module/readRepositoryRange",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+    "function": "module/readRepositoryRange",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
+    "function": "module/requestProxy",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
+    "function": "module/requestProxy",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts",
+    "function": "module/requestTk",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts",
+    "function": "module/requestTk",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
+    "function": "module/fetchBody",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
+    "function": "module/fetchBody",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
+    "function": "module/search",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
+    "function": "module/search",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts",
+    "function": "module/request",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts",
+    "function": "module/request",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-collections.ts",
+    "function": "module/requestIssue",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
+    "function": "module/recordFixture",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
+    "function": "module/recordFixture",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
+    "function": "module/resolveDecisionIdentityTx",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts",
+    "function": "module/selectStaleShortSlices",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
+    "function": "module/readSourceReportedTotals",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
+    "function": "module/refreshNextSourceStoredTotal",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts",
+    "function": "module/selectRulingsUnder",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts",
+    "function": "module/selectSupplementsUnder",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
+    "function": "module/courtSiteFetch",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/matter-links/list.ts",
+    "function": "module/listMatterLinksHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/research/column-access.ts",
+    "function": "module/selectColumns",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/catalogue/list.ts",
+    "function": "module/listCatalogue/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/chat/chat-prompt.ts",
+    "function": "module/buildActiveDecisionSection",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/chat/chat-prompt.ts",
+    "function": "module/buildActiveStatuteSection",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/chat/chat-prompt.ts",
+    "function": "module/loadWorkspacePromptData",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/chat/memory-context.ts",
+    "function": "module/buildMemoryPromptParts",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/chat/skill-availability/list.ts",
+    "function": "module/createListUnavailableChatSkills",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/chat/threads/delete.ts",
+    "function": "module/deleteThread/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/clauses/export.ts",
+    "function": "module/exportHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/clauses/rewrite.ts",
+    "function": "module/rewriteClause/createSafeRootHandler[1]",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/contacts/get.ts",
+    "function": "module/readContactById/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/contacts/search.ts",
+    "function": "module/searchContacts/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/desktop-registry/service.ts",
+    "function": "module/loadFormats",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/document-reviews/export-run.ts",
+    "function": "module/exportDocumentReviewRun/createSafeHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/document-types/list.ts",
+    "function": "module/listDocumentTypes/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/delete.ts",
+    "function": "module/deleteEntitiesHandler",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    "function": "module/loadRoomContributors",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-property-facets.ts",
+    "function": "module/readPropertyFacets/createSafeHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/versions/delete.ts",
+    "function": "module/deleteEntityVersionHandler",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/versions/list.ts",
+    "function": "module/readVersionsHandler",
+    "kind": "fixed-page-size",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/zip/download.ts",
+    "function": "module/downloadZipHandler/fetchFile",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/zip/download.ts",
+    "function": "module/downloadZipHandler/fetchFile",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/entity-views/create.ts",
+    "function": "module/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entity-views/list.ts",
+    "function": "module/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/entity-views/reorder.ts",
+    "function": "module/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/external-preview/preview.ts",
+    "function": "module/fetchPreviewUrl",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/external-preview/preview.ts",
+    "function": "module/validatePreviewUrl",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/files/get.ts",
+    "function": "module/fetchStoredFileResponse",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Move the stored-PDF fetch to the @stll/fetch idle policy so forwarded document bodies can outlive the header wait."
+  },
+  {
+    "file": "apps/api/src/handlers/files/get.ts",
+    "function": "module/stampedDownloadHandler",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Move the stamped-download source fetch to the @stll/fetch idle policy before reading the full PDF for stamping."
+  },
+  {
+    "file": "apps/api/src/handlers/files/get.ts",
+    "function": "module/stampedDownloadHandler",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Move the stamped-download source fetch to the @stll/fetch idle policy before reading the full PDF for stamping."
+  },
+  {
+    "file": "apps/api/src/handlers/flows/run-read.ts",
+    "function": "module/getFlowRunHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
+    "function": "module/replayReceiptInTx",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Related-receipt overflow probe: reads MAX_RELATED_RECEIPTS + 1 and reports selectionStatus \"truncated\" with the first MAX ids; migrate when readBounded can return the kept rows on overflow."
+  },
+  {
+    "file": "apps/api/src/handlers/invoices/invoice-lines.ts",
+    "function": "module/materialiseAttachedEntryLines/unlinedExpenses",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/invoices/invoice-lines.ts",
+    "function": "module/materialiseAttachedEntryLines/unlinedTimeEntries",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/legislation/facets.ts",
+    "function": "module/buildLegislationFacetsQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/legislation/shelf.ts",
+    "function": "module/readLegislationShelf",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/legislation/sitemap.ts",
+    "function": "module/statuteSitemapIndexQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/legislation/sitemap.ts",
+    "function": "module/statuteSitemapShardQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/lists/generation-candidates/list.ts",
+    "function": "module/readGenerationCandidates/createSafeHandler[1]",
+    "kind": "fixed-page-size",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/lists/items/list.ts",
+    "function": "module/readListItems/createSafeHandler[1]",
+    "kind": "fixed-page-size",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/icons.ts",
+    "function": "module/discoverMcpIconUrl",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/icons.ts",
+    "function": "module/discoverMcpIconUrl",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/list-connections.ts",
+    "function": "module/listMcpConnections/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/list-connectors.ts",
+    "function": "module/listMcpConnectors/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/probe.ts",
+    "function": "module/probeMcpServer",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/list.ts",
+    "function": "module/listAllowedSenders/createSafeRootHandler[1]",
+    "kind": "fixed-page-size",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/add.ts",
+    "function": "module/addAllowedSenderMatter/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/search/ai.ts",
+    "function": "module/summarizeSearchResults",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
+    "function": "module/fetchAccountLabel",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
+    "function": "module/fetchAccountLabel",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
+    "function": "module/listDriveRootChildren",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
+    "function": "module/listDriveRootChildren",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+    "function": "module/requestToken",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+    "function": "module/requestToken",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/skills/commands/list.ts",
+    "function": "module/listSkillCommands/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/skills/comments/list.ts",
+    "function": "module/listSkillComments/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/skills/get.ts",
+    "function": "module/getSkill/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/skills/proposals/from-comments/create.ts",
+    "function": "module/createProposalFromComments/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/skills/proposals/from-comments/create.ts",
+    "function": "module/createProposalFromComments/createSafeRootHandler[1]",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/handlers/skills/proposals/list.ts",
+    "function": "module/listSkillProposals/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/skills/revisions/list.ts",
+    "function": "module/listSkillRevisions/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/templates/lookup-formats/list.ts",
+    "function": "module/listLookupFormats/createSafeRootHandler[1]",
+    "kind": "fixed-page-size",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/templates/prefill.ts",
+    "function": "module/prefillTemplate/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/csv/export.ts",
+    "function": "module/exportCsvHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Use readBounded with LIMITS.exportRowLimit and refuse overflow before constructing the CSV; the matter time-entry cap exceeds this export budget."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/ledes/export.ts",
+    "function": "module/exportLedesHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Use readBounded with LIMITS.exportRowLimit and refuse overflow before computing invoice totals and constructing LEDES lines."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/pdf/export.ts",
+    "function": "module/exportPdfHandler",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/suggestions/load.ts",
+    "function": "module/loadTimeSuggestions",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/summary/get.ts",
+    "function": "module/readTimeEntrySummary/createSafeHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/usage/list-seat-assignments.ts",
+    "function": "module/listSeatAssignments/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/view-templates/list.ts",
+    "function": "module/listViewTemplates/createSafeHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/views/list.ts",
+    "function": "module/readViews/createSafeHandler[1]",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/correspondence/get.ts",
+    "function": "module/getCorrespondence/createSafeHandler[1]",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/member-previews/list.ts",
+    "function": "module/listWorkspaceMemberPreviews/createSafeRootHandler[1]",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/members/remove.ts",
+    "function": "module/readMemberWorkToUnassign",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-search-preview.query.ts",
+    "function": "module/readSearchPreviewHandler",
+    "kind": "constant-limit",
+    "count": 3,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/account-deletion-effect-store.ts",
+    "function": "module/listRecoverableAccountDeletionEffectRequestIds",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/account-deletion-effect-store.ts",
+    "function": "module/synchronizeParentProjection",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/account-deletion-steps.ts",
+    "function": "module/selectActiveTaskAssignments",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/agent-skills/skills.ts",
+    "function": "module/findInstalledSkills",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/agent-skills/skills.ts",
+    "function": "module/listAvailableChatSkillMetadata",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/agent-skills/skills.ts",
+    "function": "module/resolveInstalledActiveSkill",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/ai-provider-probe.ts",
+    "function": "module/probeAzureFoundry",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/ai-provider-probe.ts",
+    "function": "module/probeHuggingFace",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/ai-provider-probe.ts",
+    "function": "module/probeProvider",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/auth.ts",
+    "function": "module/resolveWorkspaceRealtimeAudience",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/bilingual/run-queue.ts",
+    "function": "module/loadRows",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/billing/invoice-arrangements.ts",
+    "function": "module/checkInvoiceBillingArrangement",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/billing/rates.ts",
+    "function": "module/resolveRatesInTransaction",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/billing/time-entry-running.ts",
+    "function": "module/guardRunningTimeEntries",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/buffer-intent-reconciliation.ts",
+    "function": "module/reserveObjectCleanupIntents",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/case-law/language-alternates.ts",
+    "function": "module/listPublicDecisionLanguageAlternates",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/chat/managed-provider-checks.ts",
+    "function": "module/startManagedProviderChecks",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/chat/openrouter-credential.ts",
+    "function": "module/callback",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/chat/openrouter-credential.ts",
+    "function": "module/callback",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/chat/provider-data-policy.ts",
+    "function": "module/fetchManagedOpenRouterCompletion",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/chat/provider-data-policy.ts",
+    "function": "module/fetchManagedOpenRouterCompletion",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/chat/run-log.ts",
+    "function": "module/createRunLogReader",
+    "kind": "fixed-page-size",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/chat/run-log.ts",
+    "function": "module/sweepClosedChatRunLogs",
+    "kind": "constant-limit",
+    "count": 3,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "function": "module/persistMissingNativeExtractionRuns",
+    "kind": "constant-limit",
+    "count": 3,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "function": "module/recoverDocumentDeadlineScoutDispatches",
+    "kind": "constant-limit",
+    "count": 3,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "function": "module/recoverFailedOcrSearchIndexes",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "function": "module/recoverMissingNativeExtractionRuns",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "function": "module/recoverRetryableOcrFailures",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "function": "module/recoverStaleDocumentProcessingRuns",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-review/decision-carry-over.ts",
+    "function": "module/carryOverDecisions",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-review/read-run-detail.ts",
+    "function": "module/readDocumentReviewRunDetail",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-review/review-suggestion-staging.ts",
+    "function": "module/stageReviewFixSuggestions",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/document-translation/run-queue.ts",
+    "function": "module/reconcileDocumentTranslationRuns",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/email/correspondence/offboarding.ts",
+    "function": "module/clearCorrespondenceAssignmentsForOffboarding/clearAssignmentBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/email/correspondence/offboarding.ts",
+    "function": "module/eraseCorrespondenceActorDisplays/eraseFilerBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/email/correspondence/offboarding.ts",
+    "function": "module/eraseCorrespondenceActorDisplays/eraseSenderBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
+    "function": "module/listRecoverableEntityDeletionEffectRequestIds",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
+    "function": "module/synchronizeParentProjection",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/files/gotenberg.ts",
+    "function": "module/chromiumHtmlToPdf",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/files/gotenberg.ts",
+    "function": "module/chromiumHtmlToPdf",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/files/gotenberg.ts",
+    "function": "module/convertToPdf",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/files/gotenberg.ts",
+    "function": "module/convertToPdf",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/files/office-evidence.ts",
+    "function": "module/selectEvidenceVersionRows",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/files/pdf-signing/pki-fetch.ts",
+    "function": "module/safePkiFetch",
+    "kind": "numeric-timeout",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/files/pdf-signing/pki-fetch.ts",
+    "function": "module/safePkiFetch",
+    "kind": "total-timeout-body",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/flows/flow-executor.ts",
+    "function": "module/readPriorAiMarkdown",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/flows/flow-executor.ts",
+    "function": "module/readRunProgress",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts",
+    "function": "module/maybeStartUploadTriggeredFlows",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/health/probe-document-converter.ts",
+    "function": "module/probeDocumentConverter",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/hosted-usage-provider/client.ts",
+    "function": "module/postProviderJson",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
+    "function": "module/readServingCorpusIndexGenerationTx",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
+    "function": "module/setServingCorpusIndexGenerationTx",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts",
+    "function": "module/advanceCorpusProjectionErasuresTx",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/legislation-window-gap.ts",
+    "function": "module/selectInconsistentWindowVersions",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/legislation-work-names.ts",
+    "function": "module/citedKeysQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/legislation-work-names.ts",
+    "function": "module/ownNameVersionsQuery",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/legislation-work-names.ts",
+    "function": "module/readNamedLegislationWorks",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts",
+    "function": "module/loadSoftLawAttempts",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts",
+    "function": "module/loadSoftLawCollisions",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/lists/sanctions/monitoring-diff.ts",
+    "function": "module/commitSanctionsMonitoringBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
+    "function": "module/fetchBytes",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
+    "function": "module/fetchBytes",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
+    "function": "module/fetchStream",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
+    "function": "module/fetchStream",
+    "kind": "total-timeout-body",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/lists/verification/evidence.ts",
+    "function": "module/readVerificationEvidence",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/lists/verification/read-run.ts",
+    "function": "module/readVerificationRun",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/matter-reference.ts",
+    "function": "module/allocateMatterReference",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/mcp-upstream/connections.ts",
+    "function": "module/createSafeMcpFetch",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/mcp-upstream/connections.ts",
+    "function": "module/createSafeMcpFetch",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/mcp-upstream/connections.ts",
+    "function": "module/loadActiveMcpConnectionsForUser",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/mcp-upstream/oauth.ts",
+    "function": "module/fetchJson",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/mcp-upstream/oauth.ts",
+    "function": "module/fetchJson",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/cancelMemberDesktopSessions",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/cancelMemberFlowRuns",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberContactAssignments",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberObligationOwners",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberTaskAssignments",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/clearMemberTimeEntryApprovals",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "function": "module/closeMemberExchanges",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
+  },
+  {
+    "file": "apps/api/src/lib/memory/compaction-transcript.ts",
+    "function": "module/loadCompactionTranscript",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/notifications.ts",
+    "function": "module/resolveMentionTargets",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/oauth-connections.ts",
+    "function": "module/listOAuthConnectionsForUser",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/report-export-notification-recovery.ts",
+    "function": "module/listPendingReportExportNotifications",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/report-export-recovery.ts",
+    "function": "module/recoverStuckReportExports",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/s3-presign.ts",
+    "function": "module/putPresignedUpload",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/s3.ts",
+    "function": "module/fetchCredentialJson",
+    "kind": "total-timeout-body",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/s3.ts",
+    "function": "module/fetchImdsCredentials",
+    "kind": "total-timeout-body",
+    "count": 6,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/s3.ts",
+    "function": "module/fetchObject",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/s3.ts",
+    "function": "module/readCorpusS3Range",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts",
+    "function": "module/backfillCaseLawRedactionTombstones",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts",
+    "function": "module/createReapOwnerlessChatTurnsTask",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts",
+    "function": "module/expireDesktopEditSessions",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/infosoud.ts",
+    "function": "module/loadNextTrackedCaseBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/memory-curator.ts",
+    "function": "module/sweepLifecyclePhase",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts",
+    "function": "module/claimCleanupBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+    "function": "module/backfillWorkObligations",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/scouts/document-review.ts",
+    "function": "module/emitDocumentReviewSignal",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/search/pg-fts-provider.ts",
+    "function": "module/rebuildIndex",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/subprocess.ts",
+    "function": "module/spawnBinaryWorker",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/subprocess.ts",
+    "function": "module/spawnWorker",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/usage/assignment-capacity.ts",
+    "function": "module/trimAssignmentsToCapacity",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Capacity trimming offsets retained assignments; prove the assignment table cap covers every excess row before deleting the selected rows."
+  },
+  {
+    "file": "apps/api/src/lib/usage/policy-catalog.ts",
+    "function": "module/readUsagePolicyCatalog",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/web-search/jina.ts",
+    "function": "module/createJinaFetcher",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/web-search/jina.ts",
+    "function": "module/createJinaFetcher",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/web-search/jina.ts",
+    "function": "module/validateJinaKey",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/web-search/tavily.ts",
+    "function": "module/createTavilyProvider",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/web-search/tavily.ts",
+    "function": "module/createTavilyProvider",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/web-search/tavily.ts",
+    "function": "module/validateTavilyKey",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/work-obligations/legacy-work-obligation.ts",
+    "function": "module/ensureLegacyWorkObligation",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/workflow-target-queries.ts",
+    "function": "module/fetchFullWorkflowTargetBatch",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/lib/workflow/decisions/system-one.ts",
+    "function": "module/createSystemOneClient/send",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/lib/workflow/route-playbooks.ts",
+    "function": "module/resolveApplicablePlaybooks",
+    "kind": "constant-limit",
+    "count": 2,
+    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/mcp/apps/document-upload/app.ts",
+    "function": "module/uploadSelectedFile",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/mcp/apps/file-comparison/app.ts",
+    "function": "module/putFile",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
+    "function": "module/microsoftJwksFetch",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
+    "function": "module/microsoftJwksFetch",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/citation-probe.ts",
+    "function": "module/readObject",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/citation-probe.ts",
+    "function": "module/resolveCredentials",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/citation-probe.ts",
+    "function": "module/resolveCredentials",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/eu-ecj-formex-refresh.ts",
+    "function": "module/runEcjFormexRefresh",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/fetch-ocr-models.ts",
+    "function": "module/download",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/fetch-ocr-models.ts",
+    "function": "module/download",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/post-deploy-response-policy.ts",
+    "function": "module/deploymentFetch",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/subset-stamp-fonts.ts",
+    "function": "module/download",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/api/src/scripts/subset-stamp-fonts.ts",
+    "function": "module/download",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/collab/src/server.ts",
+    "function": "module/postJson",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/landing/src/components/react/DocxEditorTool.tsx",
+    "function": "module/DocxEditorTool/load",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/landing/src/components/react/EditorLiveDemo.tsx",
+    "function": "module/EditorLiveDemo/load",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/landing/src/lib/animated-gradient.ts",
+    "function": "module/initializeGradient",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts",
+    "function": "module/streamReviewProposal",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts",
+    "function": "module/streamReviewProposal",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/api-version-mismatch-refresh.tsx",
+    "function": "module/useAvailableServerVersion",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/api-version-mismatch-refresh.tsx",
+    "function": "module/useAvailableServerVersion",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/auth/sign-in-panel.tsx",
+    "function": "module/signUpWithSelfhostBootstrap",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/auth/sign-in-panel.tsx",
+    "function": "module/signUpWithSelfhostBootstrap",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts",
+    "function": "module/useAutocompleteStream/fireRequest",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/chat/message-export-menu.tsx",
+    "function": "module/MessageExportMenu/handleExport",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/chat/message-export-menu.tsx",
+    "function": "module/MessageExportMenu/handleExport",
+    "kind": "total-timeout-body",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/dev/autocomplete-playground.tsx",
+    "function": "module/startStream",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/docx/use-edit-session.ts",
+    "function": "module/useEditSession/open",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/docx/use-edit-session.ts",
+    "function": "module/useEditSession/open",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
+    "function": "module/fetchSeedDocumentBuffer",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
+    "function": "module/fetchSeedDocumentBuffer",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
+    "function": "module/postFolioCollabJson",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
+    "function": "module/postFolioCollabJson",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/external-reference-panel.tsx",
+    "function": "module/useExternalPdfBuffer",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/external-reference-panel.tsx",
+    "function": "module/useExternalPdfBuffer",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/file-download-service.ts",
+    "function": "module/downloadTabFile",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/file-download-service.ts",
+    "function": "module/downloadTabFile",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/file-download-service.ts",
+    "function": "module/fetchBuiltFile",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/file-download-service.ts",
+    "function": "module/fetchBuiltFile",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/review-export-menu.tsx",
+    "function": "module/ReviewExportMenu/handleInternalExport",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/inspector/review-export-menu.tsx",
+    "function": "module/ReviewExportMenu/handleInternalExport",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/pdf/peek/peek-pdf-print.ts",
+    "function": "module/fetchPrintPdf",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/pdf/peek/peek-pdf-print.ts",
+    "function": "module/fetchPrintPdf",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/selfhost-update-banner.tsx",
+    "function": "module/SelfhostUpdateBanner",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/selfhost-update-banner.tsx",
+    "function": "module/SelfhostUpdateBanner",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/workspaces/request-manual-ocr.ts",
+    "function": "module/requestManualOcr",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/workspaces/request-manual-ocr.ts",
+    "function": "module/requestManualOcr",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/workspaces/row-actions.tsx",
+    "function": "module/downloadEntityAsZip",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/workspaces/row-actions.tsx",
+    "function": "module/downloadEntityAsZip",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/workspaces/row-actions.tsx",
+    "function": "module/downloadOcrExport",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/components/workspaces/row-actions.tsx",
+    "function": "module/downloadOcrExport",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
+    "function": "module/decisionAnalysisOptions",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
+    "function": "module/decisionAnalysisOptions",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/features/chat/chat-fetch.ts",
+    "function": "module/chatFetchClient/assign[0]",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
+    "function": "module/AddSkillForm/resolveLatestCommit",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
+    "function": "module/AddSkillForm/resolveLatestCommit",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/auth-client.ts",
+    "function": "module/customFetchImpl",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/dev-otp.ts",
+    "function": "module/fetchDevOtp",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/dev-otp.ts",
+    "function": "module/fetchDevOtp",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/queries.ts",
+    "function": "module/emailAttachmentPreviewOptions",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/queries.ts",
+    "function": "module/emailAttachmentPreviewOptions",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/queries.ts",
+    "function": "module/readDocumentProperties",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/queries.ts",
+    "function": "module/readDocumentProperties",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/queries.ts",
+    "function": "module/saveEmailAttachment",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/queries.ts",
+    "function": "module/saveEmailAttachment",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/queries.ts",
+    "function": "module/updateDocumentProperty",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/storage-fetch.ts",
+    "function": "module/fetchStorageArrayBuffer",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/storage-fetch.ts",
+    "function": "module/fetchStorageArrayBuffer",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/files/upload-entity-version.ts",
+    "function": "module/uploadEntityVersion",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/knowledge/queries.ts",
+    "function": "module/templateDocxBufferOptions",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/knowledge/queries.ts",
+    "function": "module/templateDocxBufferOptions",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/public-law-sitemap.ts",
+    "function": "module/fetchPublicSitemapDecisions",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/public-law-sitemap.ts",
+    "function": "module/fetchPublicSitemapShards",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/public-tools-github-content.ts",
+    "function": "module/loadRawSkill",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/public-tools-github-content.ts",
+    "function": "module/loadRawSkill",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/workspace-sse.ts",
+    "function": "module/probeWorkspaceStreamAccess",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
+    "function": "module/uploadPreparedFileEntity",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
+    "function": "module/uploadPreparedFileEntity",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/workspaces/time-entries-api.ts",
+    "function": "module/requestTimeEntries",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/lib/workspaces/time-entries-api.ts",
+    "function": "module/requestTimeEntries",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
+    "function": "module/useProcuracaoExtraction/extractFile",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
+    "function": "module/useProcuracaoExtraction/extractFile",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx",
+    "function": "module/ActivityExportMenu/exportActivity",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    "function": "module/InvoicePdfDownloadButton",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    "function": "module/InvoicePdfDownloadButton",
+    "kind": "total-timeout-body",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
+    "function": "module/TableExportMenu/handleExport",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
+    "function": "module/TableExportMenu/handleExport",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/routes/agent-claim.tsx",
+    "function": "module/confirmAgentClaim",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/agent-engine/src/bun-docker/api.ts",
+    "function": "module/send",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/agent-engine/src/bun-docker/api.ts",
+    "function": "module/startExecStream",
+    "kind": "total-timeout-body",
+    "count": 2,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/boe/src/client.ts",
+    "function": "module/boeFetch",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/cli/src/auth/oauth-client-registration.ts",
+    "function": "module/registerLoopbackClient",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/cli/src/auth/oauth-metadata.ts",
+    "function": "module/fetchCandidate",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/cli/src/auth/token-exchange.ts",
+    "function": "module/redeemAuthorizationCode",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/cli/src/auth/token-exchange.ts",
+    "function": "module/refreshAccessToken",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/cli/src/cli-release-channel.ts",
+    "function": "module/fetchLatestCliVersion",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/cli/src/compatibility.ts",
+    "function": "module/checkServerCompatibility",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/auth-md-spec-drift.ts",
+    "function": "module/fetchText",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/dev-runner.ts",
+    "function": "module/isHealthyApiPort",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/dev-runner.ts",
+    "function": "module/waitForHttpReadiness/pollUntilReady",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/model-catalog-capabilities-gen.ts",
+    "function": "module/loadOpenRouterDefaults",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/model-catalog-capabilities-gen.ts",
+    "function": "module/loadUpstream",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/model-catalog-rates-gen.ts",
+    "function": "module/loadModelsDev",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "packages/scripts/src/model-catalog-upstream.ts",
+    "function": "module/fetchJson",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  }
+]

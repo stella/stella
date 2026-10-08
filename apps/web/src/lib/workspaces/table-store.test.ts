@@ -1,6 +1,18 @@
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import type { UnavailableWorkspaceView } from "@stll/api-contract";
+
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import {
+  releaseUserStorage,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
+import type { WorkspaceView } from "@/lib/types";
+import {
+  selectAvailableWorkspaceView,
+  selectAvailableWorkspaceViews,
+} from "@/lib/workspaces/queries/views.logic";
 import {
   readPersistedTableState,
   TABLE_STORE_VERSION,
@@ -60,7 +72,11 @@ const fakeLocalStorage: Storage = {
     stored.set(key, value);
   },
 };
-globalThis.localStorage = fakeLocalStorage;
+Object.defineProperty(globalThis, "localStorage", {
+  value: fakeLocalStorage,
+  configurable: true,
+  writable: true,
+});
 
 const {
   EMPTY_TABLE_VIEW_RECORDS,
@@ -78,7 +94,9 @@ const findOf = ({ workspaceId, viewId }: typeof v1) =>
 test("the persisted key is written at the current version", () => {
   useTableStore.getState().setColumnSizing(v1, { col_a: 120 });
 
-  expect(readPersistedTableState(stored.get("stella:table") ?? null)).toEqual({
+  expect(
+    readPersistedTableState(stored.get(userStorageKey("stella:table")) ?? null),
+  ).toEqual({
     state: {
       columnSizing: { "ws-1": { v1: { col_a: 120 } } },
       contentMode: {},
@@ -291,7 +309,7 @@ describe("reconciling the store against a matter's views", () => {
     useTableStore.getState().reconcileViews("ws-9", []);
 
     expect(useTableStore.getState()).toBe(before);
-    expect(stored.has("stella:table")).toBe(false);
+    expect(stored.has(userStorageKey("stella:table"))).toBe(false);
   });
 
   test("dropping a matter removes its records and keeps the others", () => {
@@ -332,6 +350,59 @@ describe("reconciling the store against a matter's views", () => {
     }
   });
 
+  test("unavailable identities reconcile the raw cache while usable view selection excludes them", async () => {
+    seedEveryRecord([v1, v2, otherMatter]);
+    const unavailable = {
+      id: "v1",
+      layout: { type: "avt" },
+      eligibility: "unavailable",
+    } satisfies UnavailableWorkspaceView;
+    const ordinary = {
+      id: "v2",
+      version: 1,
+      name: "View",
+      position: 1,
+      createdAt: "2026-10-02T00:00:00.000Z",
+      layout: {
+        type: "filesystem",
+        version: 1,
+        filters: [],
+        sorts: [],
+        hiddenProperties: [],
+        calculations: [],
+      },
+    } satisfies WorkspaceView;
+    const queryClient = new QueryClient();
+    installTableStoreReconcile(queryClient);
+    const queryKey = ["views", "ws-1", "en"];
+    const selected = await queryClient.query({
+      queryFn: () => [unavailable, ordinary],
+      queryKey,
+      select: selectAvailableWorkspaceViews,
+    });
+    expect(selected).toEqual([ordinary]);
+    expect(
+      selectAvailableWorkspaceView([unavailable, ordinary], unavailable.id),
+    ).toBe(ordinary);
+    expect(
+      selectAvailableWorkspaceView([unavailable], unavailable.id),
+    ).toBeUndefined();
+    expect(selected.some((view) => view.id === unavailable.id)).toBe(false);
+    expect(queryClient.getQueryCache().find({ queryKey })?.state.data).toEqual([
+      unavailable,
+      ordinary,
+    ]);
+    for (const key of TABLE_VIEW_RECORD_KEYS) {
+      expect(Object.keys(useTableStore.getState()[key]["ws-1"] ?? {})).toEqual([
+        "v1",
+        "v2",
+      ]);
+      expect(Object.keys(useTableStore.getState()[key]["ws-2"] ?? {})).toEqual([
+        "v1",
+      ]);
+    }
+  });
+
   // An optimistic view edit writes back whatever that locale entry already
   // held, which can predate a view created in another locale.
   test("ignores a manual cache write, which is no proof a view was deleted", () => {
@@ -358,4 +429,27 @@ describe("reconciling the store against a matter's views", () => {
       "ws-2": { v1: { col_a: 300 } },
     });
   });
+});
+
+test("table settings follow accounts without overwriting their saved state", () => {
+  const queryClient = new QueryClient();
+  const areas = () => ({ local: fakeLocalStorage, session: null });
+  const unsubscribe = installUserScopedStorage(queryClient, areas);
+  queryClient.setQueryData(["session"], { user: { id: "user-a" } });
+  useTableStore.getState().setColumnSizing(v1, { col_a: 120 });
+  const accountBKey = userStorageKey("stella:table", {
+    kind: "user",
+    userId: "user-b",
+  });
+  const accountB = JSON.stringify(V1_PAYLOAD);
+  stored.set(accountBKey, accountB);
+  queryClient.setQueryData(["session"], { user: { id: "user-b" } });
+  expect(useTableStore.getState().columnSizing).toEqual(
+    V1_PAYLOAD.state.columnSizing,
+  );
+  expect(stored.get(accountBKey)).toBe(accountB);
+  releaseUserStorage(areas());
+  expect(useTableStore.getState().columnSizing).toEqual({});
+  expect(useTableStore.getState().selectedEntities).toEqual({});
+  unsubscribe();
 });

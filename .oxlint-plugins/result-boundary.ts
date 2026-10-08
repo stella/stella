@@ -53,14 +53,30 @@
 //     try: () => riskyCall(),
 //     catch: (cause) => mapError(cause),
 //   });
+//
+// `no-rejected-result-error` flags `Promise.reject(<value>.error)`: a rejection
+// built from a Result's error is a throw by another name. A TanStack query or
+// mutation function unwraps the Result with `readQueryResult` (a boundary
+// module); other code returns the Result. A rejection built from a call, such
+// as `Promise.reject(toClientError(result.error))`, is not matched.
+//
+// Flagged:
+//   await Promise.reject(result.error);
+//   return ok ? value : await Promise.reject(result?.error);
+//
+// Allowed:
+//   return readQueryResult(result);
+//   return result;
 
 import { eslintCompatPlugin, type Scope } from "@oxlint/plugins";
 
-import type { ImportedFromOptions, ScopeContext } from "./utils.ts";
+import type { AstNode, ImportedFromOptions, ScopeContext } from "./utils.ts";
 import {
   isAstNode,
+  isIdentifier,
   isIdentifierReference,
   isImportedFrom,
+  memberPropertyName,
   resolveVariable,
 } from "./utils.ts";
 
@@ -107,6 +123,21 @@ const isRethrowOfCatchBinding = (
   return current === variable.scope;
 };
 
+const isMemberNamed = (node: unknown, name: string): node is AstNode =>
+  isAstNode(node) &&
+  node.type === "MemberExpression" &&
+  memberPropertyName(node) === name;
+
+const isPromiseReject = (callee: unknown): boolean =>
+  isMemberNamed(callee, "reject") && isIdentifier(callee.object, "Promise");
+
+// `result.error`, `result?.error` or `result["error"]`.
+const isErrorRead = (node: unknown): boolean =>
+  isMemberNamed(
+    isAstNode(node) && node.type === "ChainExpression" ? node.expression : node,
+    "error",
+  );
+
 export default eslintCompatPlugin({
   meta: { name: "result-boundary" },
   rules: {
@@ -135,6 +166,33 @@ export default eslintCompatPlugin({
               return;
             }
             context.report({ node, messageId: "noThrowOutsideBoundary" });
+          },
+        };
+      },
+    },
+    "no-rejected-result-error": {
+      meta: {
+        type: "problem",
+        messages: {
+          noRejectedResultError:
+            "Unwrap the Result with `readQueryResult(result)` " +
+            "(apps/web/src/lib/errors/query-result.ts) in a TanStack query " +
+            "or mutation function, or return the Result; rejecting with " +
+            "`result.error` throws outside the better-result boundary.",
+        },
+      },
+      createOnce(context) {
+        return {
+          CallExpression(node: unknown) {
+            if (
+              !isAstNode(node) ||
+              !isPromiseReject(node.callee) ||
+              !Array.isArray(node.arguments) ||
+              !isErrorRead(node.arguments.at(0))
+            ) {
+              return;
+            }
+            context.report({ node, messageId: "noRejectedResultError" });
           },
         };
       },

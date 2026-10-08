@@ -9,6 +9,7 @@ import {
   resolveEmailProvider,
 } from "@/api/env-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+import { logger } from "@/api/lib/observability/logger";
 import {
   isLocalDevOpen,
   runtimeMode,
@@ -33,6 +34,13 @@ const envApi = createEnv({
   emptyStringAsUndefined: true,
   runtimeEnv: apiRuntimeEnv.runtimeEnv,
 });
+
+if (envApi.API_FEATURE_ACCESS_GRANTS.unknownGrantCount > 0) {
+  logger.error("feature_access.unknown_grant", {
+    "feature_access.unknown_grant_count":
+      envApi.API_FEATURE_ACCESS_GRANTS.unknownGrantCount,
+  });
+}
 
 const emailProvider = resolveEmailProvider(envApi);
 const invariantViolation = envApiInvariantViolation({
@@ -59,6 +67,7 @@ if (
 const validatedEnv = {
   ...envDocumentProcessingWorker,
   ...envApi,
+  API_FEATURE_ACCESS_GRANTS: envApi.API_FEATURE_ACCESS_GRANTS.grants,
   EMAIL_PROVIDER: emailProvider,
 };
 

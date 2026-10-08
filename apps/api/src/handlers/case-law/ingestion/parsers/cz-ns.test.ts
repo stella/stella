@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import {
   blocksToPlainText,
   extractNsMetadata,
@@ -582,6 +583,48 @@ describe("parseNsDecisionHtml", () => {
           b.type === "heading" && "role" in b && b.role === "decision-title",
       );
       expect(titles.length).toBeGreaterThan(0);
+      // The court's name before the case number is kept, not dropped.
+      expect(documentAst.blocks.slice(0, 3).map((b) => b.plainText)).toEqual([
+        "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY",
+        "29 Odo 975/2006",
+        "U S N E S E N Í",
+      ]);
+    });
+
+    // An older print page prints each caption line in its own run, and the
+    // parser merges them: the title is every capital after the case number,
+    // not the tail after the first capital standing before a space.
+    test("keeps a whole run-on caption title", () => {
+      const html = `<html><body>
+        <table id="box-table-a"><tbody>
+          <tr><td>Soud:</td><td>NS</td></tr>
+        </tbody></table>
+        <br><p><br>
+        <font face="Arial CE">21 Cdo 4994/2007</font><br>
+        <br>
+        <font face="Arial CE">ČESKÁ REPUBLIKA </font><br>
+        <br>
+        <font face="Arial CE">ROZSUDEK</font><br>
+        <br>
+        <font face="Arial CE">JMÉNEM REPUBLIKY</font><br>
+        <br>
+        <font face="Arial CE">Nejvyšší soud České republiky rozhodl v senátě takto:</font><br>
+        </p>
+      </body></html>`;
+
+      const { documentAst, fulltext } = parseNsDecisionHtml(baseInput(html));
+
+      const [caseNumber, title] = documentAst.blocks;
+      expect(caseNumber).toMatchObject({
+        plainText: "21 Cdo 4994/2007",
+        role: "case-number",
+        type: "paragraph",
+      });
+      expect(title).toMatchObject({ role: "decision-title", type: "heading" });
+      expect(title?.plainText.replaceAll(/\s+/gu, " ")).toBe(
+        "ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY",
+      );
+      expect(fulltext).toContain("ČESKÁ REPUBLIKA");
     });
   });
 });

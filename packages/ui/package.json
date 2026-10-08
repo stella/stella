@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.42.0",
+  "version": "0.43.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -30,6 +30,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./toolbar-icon-action": "./src/components/toolbar-icon-action.tsx",
     "./view-toolbar": "./src/components/view-toolbar.tsx",
     "./accordion": "./src/components/accordion.tsx",
     "./application-rail": "./src/components/application-rail.tsx",
@@ -52,6 +53,7 @@
     "./calendar": "./src/calendar/index.ts",
     "./data-table": "./src/data-table/index.ts",
     "./date-picker-popover": "./src/components/date-picker-popover.tsx",
+    "./details-grid": "./src/components/details-grid.tsx",
     "./destructive-action-confirmation": "./src/components/destructive-action-confirmation.tsx",
     "./destructive-confirm-dialog": "./src/components/destructive-confirm-dialog.tsx",
     "./dialog": "./src/components/dialog.tsx",
@@ -62,6 +64,7 @@
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
     "./input": "./src/components/input.tsx",
+    "./inline-rename": "./src/components/inline-rename.tsx",
     "./input-group": "./src/components/input-group.tsx",
     "./initials": "./src/lib/initials.ts",
     "./input-otp": "./src/components/input-otp.tsx",
@@ -94,6 +97,7 @@
     "./file-input": "./src/components/file-input.tsx",
     "./segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./select": "./src/components/select.tsx",
+    "./split-button": "./src/components/split-button.tsx",
     "./separator": "./src/components/separator.tsx",
     "./sheet": "./src/components/sheet.tsx",
     "./sidebar": "./src/components/sidebar.tsx",
@@ -206,8 +210,8 @@
     "temporal-polyfill": "catalog:"
   },
   "devDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "catalog:",
     "@playwright/test": "^1.63.0",
     "@stll/typescript-config": "workspace:*",
@@ -223,8 +227,8 @@
     "vite": "catalog:"
   },
   "peerDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "^1.7.0",
     "@tanstack/react-virtual": "^3.14.13",
     "@types/react": ">=19",

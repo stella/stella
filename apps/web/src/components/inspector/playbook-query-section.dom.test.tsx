@@ -15,7 +15,17 @@ const { IntlProvider } = await import("use-intl");
 const { useQueryView } = await import("@/lib/use-query-view");
 const { PlaybookQuerySection } = await import("./playbook-query-section");
 
-afterEach(cleanup);
+const disposers = new Set<() => Promise<void>>();
+
+afterEach(async () => {
+  for (const dispose of disposers) {
+    await dispose();
+  }
+  disposers.clear();
+  await act(async () => {
+    cleanup();
+  });
+});
 afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
@@ -32,7 +42,7 @@ for (const queryKey of [
   describe(`${JSON.stringify(queryKey)} query region`, () => {
     const mount = () => {
       const client = new QueryClient({
-        defaultOptions: { queries: { retry: false } },
+        defaultOptions: { queries: { retry: false, gcTime: Infinity } },
       });
       const requests: ReturnType<
         typeof Promise.withResolvers<readonly string[]>
@@ -84,11 +94,25 @@ for (const queryKey of [
           }
         });
       };
-      return { client, requests, settle, ui };
+      const dispose = async () => {
+        await act(async () => {
+          ui.unmount();
+          await client.cancelQueries();
+          for (const request of requests) {
+            request.resolve([]);
+          }
+          await Promise.allSettled(
+            requests.map(async ({ promise }) => promise),
+          );
+          client.clear();
+        });
+      };
+      disposers.add(dispose);
+      return { client, requests, settle, ui, dispose };
     };
 
     test("initial failure exposes retry instead of empty content and retry restores the answer", async () => {
-      const { client, requests, settle, ui } = mount();
+      const { requests, settle, ui } = mount();
       expect(ui.getByText("Loading")).toBeDefined();
       await settle("error");
       await waitFor(() => expect(ui.getByRole("alert")).toBeDefined());
@@ -102,45 +126,91 @@ for (const queryKey of [
         ),
       );
       expect(ui.queryByRole("alert")).toBeNull();
-      client.clear();
     });
 
     test("a successful zero-item answer renders the empty state", async () => {
-      const { client, settle, ui } = mount();
+      const { settle, ui } = mount();
       await settle([]);
       await waitFor(() => expect(ui.getByText("Empty answer")).toBeDefined());
       expect(ui.queryByRole("alert")).toBeNull();
-      client.clear();
     });
 
-    test("failed refetch preserves both zero-item and populated answers with a retry notice", async () => {
-      for (const answer of [[], ["Cached answer"]]) {
+    for (const answer of [[], ["Cached answer"]]) {
+      test(`failed refetch preserves ${answer.length} cached items with a retry notice`, async () => {
         const { client, requests, settle, ui } = mount();
         await settle(answer);
-        await waitFor(() => expect(ui.queryByText("Loading")).toBeNull());
-        let refresh: Promise<void> | undefined;
-        await act(async () => {
-          refresh = client.refetchQueries();
+        await waitFor(() => {
+          if (answer.length === 0) {
+            expect(ui.getByText("Empty answer")).toBeDefined();
+          } else {
+            expect(ui.getByTestId("answer").textContent).toBe(
+              JSON.stringify(answer),
+            );
+          }
         });
+        const refresh = client.refetchQueries();
         await waitFor(() => expect(requests.length).toBe(2));
         await settle("error");
         await refresh;
-        await waitFor(() => expect(ui.getByRole("alert")).toBeDefined());
-        expect(ui.getByTestId("answer").textContent).toBe(
-          JSON.stringify(answer),
-        );
+        await waitFor(() => {
+          expect(ui.getByRole("alert")).toBeDefined();
+          expect(ui.getByTestId("answer").textContent).toBe(
+            JSON.stringify(answer),
+          );
+        });
         fireEvent.click(
           ui.getByRole("button", { name: messages.common.retry }),
         );
         await waitFor(() => expect(requests.length).toBe(3));
         await settle(["Updated answer"]);
-        await waitFor(() => expect(ui.queryByRole("alert")).toBeNull());
-        expect(ui.getByTestId("answer").textContent).toContain(
-          "Updated answer",
+        await waitFor(() =>
+          expect(ui.getByTestId("answer").textContent).toBe(
+            JSON.stringify(["Updated answer"]),
+          ),
         );
-        ui.unmount();
-        client.clear();
-      }
-    });
+        expect(ui.queryByRole("alert")).toBeNull();
+      });
+    }
+
+    for (const { name, start, expectedRequests } of [
+      {
+        name: "initial",
+        expectedRequests: 1,
+        start: async () => {},
+      },
+      {
+        name: "refetch",
+        expectedRequests: 2,
+        start: async ({ client, settle, ui }: ReturnType<typeof mount>) => {
+          await settle(["Cached answer"]);
+          await waitFor(() => expect(ui.getByTestId("answer")).toBeDefined());
+          void client.refetchQueries();
+        },
+      },
+      {
+        name: "retry",
+        expectedRequests: 2,
+        start: async ({ settle, ui }: ReturnType<typeof mount>) => {
+          await settle("error");
+          await waitFor(() => expect(ui.getByRole("alert")).toBeDefined());
+          fireEvent.click(
+            ui.getByRole("button", { name: messages.common.retry }),
+          );
+        },
+      },
+    ]) {
+      test(`disposing during ${name} settles the transport and removes the query`, async () => {
+        const region = mount();
+        const { client, requests, ui, dispose } = region;
+        await start(region);
+        await waitFor(() => expect(requests.length).toBe(expectedRequests));
+        const pending = requests.at(-1);
+        expect(pending).toBeDefined();
+        await dispose();
+        expect(client.getQueryCache().getAll()).toHaveLength(0);
+        expect(await pending?.promise).toEqual([]);
+        expect(ui.container.childElementCount).toBe(0);
+      });
+    }
   });
 }

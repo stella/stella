@@ -10,6 +10,8 @@ import {
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { PassThrough, type Readable } from "node:stream";
+import { json } from "node:stream/consumers";
 import * as v from "valibot";
 
 import { down } from "./agent-session";
@@ -25,28 +27,51 @@ import { devStatePath } from "./dev-runtime";
 const fixture = new URL("fixtures/dev-process-tree.ts", import.meta.url)
   .pathname;
 const readySchema = v.object({ pid: v.number(), port: v.number() });
+const readTreeReady = async (stream: Readable) =>
+  v.parse(readySchema, await json(stream));
+
 const startTree = async (rootDir: string, termMode: "ignore" | "exit") => {
-  const readyPath = path.join(rootDir, "ready.json");
-  const child = spawnDevProcess({
-    rootDir,
-    cmd: [process.execPath, fixture, "leader", readyPath, termMode],
-    cwd: rootDir,
-    env: process.env,
-    label: "test service",
-    stdin: "ignore",
-  }).unwrap("The real process-tree fixture must start successfully");
-  const deadline = performance.now() + 3000;
-  while (!existsSync(readyPath)) {
-    if (performance.now() > deadline) {
-      throw new Error("Process tree did not become ready");
-    }
-    await Bun.sleep(10);
+  const readyPath = path.join(rootDir, "ready.sock");
+  const {
+    promise: ready,
+    resolve: resolveReady,
+    reject: rejectReady,
+  } = Promise.withResolvers<v.InferOutput<typeof readySchema>>();
+  const server = createServer((socket) => {
+    void readTreeReady(socket).then(resolveReady, rejectReady);
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(readyPath, resolve);
+  });
+  server.on("error", rejectReady);
+  try {
+    const child = spawnDevProcess({
+      rootDir,
+      cmd: [process.execPath, fixture, "leader", readyPath, termMode],
+      cwd: rootDir,
+      env: process.env,
+      label: "test service",
+      stdin: "ignore",
+    }).unwrap("The real process-tree fixture must start successfully");
+    return { child, ...(await ready) };
+  } finally {
+    server.close();
   }
-  return {
-    child,
-    ...v.parse(readySchema, JSON.parse(readFileSync(readyPath, "utf-8"))),
-  };
 };
+
+test("process-tree readiness waits for the complete message", async () => {
+  const stream = new PassThrough();
+  const ready = readTreeReady(stream);
+  stream.write('{"pid":123,');
+  const pending = Symbol("pending readiness");
+  expect(await Promise.race([ready, Promise.resolve(pending)])).toBe(pending);
+  stream.write('"port":456}');
+  expect(await Promise.race([ready, Promise.resolve(pending)])).toBe(pending);
+  stream.end();
+  expect(await ready).toEqual({ pid: 123, port: 456 });
+});
+
 const liveMembers = (pgid: number) => {
   const result = Bun.spawnSync(["ps", "-axo", "pid=,pgid=,stat="], {
     stdout: "pipe",

@@ -834,8 +834,8 @@ type Messages = {
           "title": "Chat and knowledge tools";
         };
         "4": {
-          "body": "A desktop app acts as a local bridge for editing Office documents from stella.";
-          "title": "Desktop bridge";
+          "body": "Opens Office documents from stella in your local apps and saves edits back, and keeps a clipboard history that stays on your device.";
+          "title": "Desktop app";
         };
         "5": {
           "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.";

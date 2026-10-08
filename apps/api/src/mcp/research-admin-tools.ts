@@ -1,15 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  BOE_SEARCH_PAGE_LIMITS,
-  findRelatedLaws,
-  getConsolidatedLaw,
-  getLawStructure,
-  getLawTextBlock,
-  RELATION_TYPES,
-  searchConsolidatedLegislation,
-} from "@stll/boe";
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
 import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema";
@@ -23,14 +16,16 @@ import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-s
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import {
-  type AssertNoExtraFields,
-  type MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
-  type MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
-  type MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
+  MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
+  MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
   MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
+import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedUserId,
@@ -38,10 +33,12 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -53,6 +50,7 @@ import {
   nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
+  legalCitationLinkFields,
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -239,6 +237,7 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       resourceType: v.string(),
       resourceId: v.string(),
       changes: v.unknown(),
+      changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
   ),
   limit: v.pipe(v.number(), v.integer()),
@@ -468,7 +467,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: true,
   },
   description:
-    "Search and read Spanish consolidated legislation from the BOE. In " +
+    "Search and read Spanish consolidated legislation from the BOE. Search hits return the publisher link as primary `url`. In " +
     "search mode, pass query (free text) and/or filters (title, " +
     "department_code, legal_range_code, matter_code, date_from/date_to as " +
     "YYYYMMDD); at least one filter is required. In read mode, pass law_id " +
@@ -490,12 +489,13 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
   scope: "stella:read",
 });
 
-const handleSearchBoeLegislationTool: TypedMcpToolHandler<
+const handleSearchBoeLegislationTool = withThirdPartyOutbound<
   v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
-> = async ({ args, context }) => {
+>(async ({ args, context, permit }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
+  const boe = boeClient(permit);
 
   const parsed = v.safeParse(searchBoeLegislationArgsSchema, args);
   if (!parsed.success) {
@@ -511,10 +511,9 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
       const blockId = input.block_id;
       const block = await Result.tryPromise({
         try: async () =>
-          await (context.testDependencies?.getLawTextBlock ?? getLawTextBlock)(
-            lawId,
-            blockId,
-          ),
+          await (
+            context.testDependencies?.getLawTextBlock ?? boe.getLawTextBlock
+          )(lawId, blockId),
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
@@ -526,7 +525,7 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
     if (input.relation_type !== undefined) {
       const relationType = input.relation_type;
       const related = await Result.tryPromise({
-        try: async () => await findRelatedLaws(lawId, relationType),
+        try: async () => await boe.findRelatedLaws(lawId, relationType),
         catch: mapBoeError,
       });
       if (Result.isError(related)) {
@@ -541,11 +540,11 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
     const detail = await Result.tryPromise({
       try: async () => {
         const [law, structure] = await Promise.all([
-          getConsolidatedLaw(lawId, {
+          boe.getConsolidatedLaw(lawId, {
             metadata: true,
             ...(includeFullText ? { fullText: true } : {}),
           }),
-          getLawStructure(lawId),
+          boe.getLawStructure(lawId),
         ]);
         return { law, structure };
       },
@@ -566,7 +565,7 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
     try: async () =>
       await (
         context.testDependencies?.searchConsolidatedLegislation ??
-        searchConsolidatedLegislation
+        boe.searchConsolidatedLegislation
       )({
         ...(input.query === undefined ? {} : { text: input.query }),
         ...(input.title === undefined ? {} : { title: input.title }),
@@ -591,15 +590,27 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  // Passthrough: the output is public BOE statutory data and the query is
-  // caller-supplied, so no tenant-authored text needs redaction. Forwarded
-  // verbatim, so the projection tie is on the BOE client's return type.
-  type SearchLegislationPayload = AssertNoExtraFields<
-    typeof result.value,
-    v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
-  >;
-  return toolDataResult(result.value satisfies SearchLegislationPayload);
-};
+  // Publisher search has no held corpus identity. Its existing source URL
+  // remains primary through the same citation resolver as corpus reads.
+  const { data, ...envelope } = result.value;
+  const payload = {
+    ...envelope,
+    ...(data === undefined
+      ? {}
+      : {
+          data: data.map((item) => {
+            const { url } = legalCitationLinkFields({
+              appUrl: null,
+              sourceUrl: item.url_html_consolidada ?? item.url_eli ?? null,
+            });
+            return { ...item, url };
+          }),
+        }),
+  };
+  return toolDataResult(
+    projectionPayload(SEARCH_BOE_LEGISLATION_PROJECTION, payload),
+  );
+});
 
 // --- list_audit_log -----------------------------------------------------
 
@@ -657,6 +668,8 @@ const handleListAuditLogTool: McpToolHandler<
     queryAuditLogPage({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
+      userId: context.userId,
+      featureAccessSnapshot: context.featureAccessSnapshot,
       recordAuditEvent: context.recordAuditEvent,
       query: filter,
     }),
@@ -664,19 +677,22 @@ const handleListAuditLogTool: McpToolHandler<
   if (Result.isError(page)) {
     return internalFailureResult(page.error);
   }
-  return toolDataResult({
-    ...page.value,
-    items: page.value.items.map((item) => ({
-      id: item.id,
-      createdAt: item.createdAt.toISOString(),
-      userId: item.userId,
-      actor: item.actor,
-      action: item.action,
-      resourceType: item.resourceType,
-      resourceId: item.resourceId,
-      changes: item.changes,
-    })),
-  });
+  return toolDataResult(
+    projectionPayload(LIST_AUDIT_LOG_OUTPUT_SCHEMA, {
+      ...page.value,
+      items: page.value.items.map((item) => ({
+        id: item.id,
+        createdAt: item.createdAt.toISOString(),
+        userId: item.userId,
+        actor: item.actor,
+        action: item.action,
+        resourceType: item.resourceType,
+        resourceId: item.resourceId,
+        changes: item.changes,
+        changesStatus: item.changesStatus,
+      })),
+    }),
+  );
 };
 
 // --- manage_organization ------------------------------------------------
@@ -731,16 +747,14 @@ const manageOrganizationArgsSchema = nullAsAbsent(
       prompt_caching_enabled: v.optional(
         v.pipe(
           v.boolean(),
-          v.description(
-            "Toggle AI prompt caching for the organization (update_org_settings)",
-          ),
+          v.description("Toggle AI prompt caching (update_org_settings)"),
         ),
       ),
       document_processing_mode: v.optional(
         v.pipe(
           v.picklist(DOCUMENT_PROCESSING_MODES),
           v.description(
-            "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+            "Set automatic PDF searchable-text extraction (update_org_settings)",
           ),
         ),
       ),
@@ -778,6 +792,21 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.boolean(),
           v.description(
             "Require a narrative on time entries (update_org_settings)",
+          ),
+        ),
+      ),
+      time_zone: v.optional(
+        v.pipe(
+          v.nullable(
+            v.pipe(
+              v.string(),
+              v.nonEmpty(),
+              v.maxLength(TIME_ZONE_ID_MAX_LENGTH),
+            ),
+          ),
+          v.description(
+            "IANA time zone, e.g. Europe/Prague; null follows the primary " +
+              "practice jurisdiction",
           ),
         ),
       ),
@@ -832,6 +861,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["time_edit_window_days"],
         ["time_locked_through_month"],
         ["time_narrative_required"],
+        ["time_zone"],
       ],
       (i) =>
         i.action === "update_org_settings" ||
@@ -842,7 +872,8 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           i.time_minimum_unit_minutes === undefined &&
           i.time_edit_window_days === undefined &&
           i.time_locked_through_month === undefined &&
-          i.time_narrative_required === undefined),
+          i.time_narrative_required === undefined &&
+          i.time_zone === undefined),
       "Settings fields apply only to update_org_settings",
     ),
     // matter_id/user_id are meaningless for an org-settings update.
@@ -865,6 +896,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["time_edit_window_days"],
         ["time_locked_through_month"],
         ["time_narrative_required"],
+        ["time_zone"],
       ],
       (i) =>
         i.action !== "update_org_settings" ||
@@ -875,7 +907,8 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.time_minimum_unit_minutes !== undefined ||
         i.time_edit_window_days !== undefined ||
         i.time_locked_through_month !== undefined ||
-        i.time_narrative_required !== undefined,
+        i.time_narrative_required !== undefined ||
+        i.time_zone !== undefined,
       "Provide at least one setting to change for update_org_settings",
     ),
     // The matter-number pattern and padding are a unit (mirrors the backing).
@@ -893,9 +926,8 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   description:
     "Manage organization members and non-secret settings. Member actions " +
-    "require matter_id and user_id. update_org_settings controls matter " +
-    "numbering, prompt caching, document processing, and time policy. Manage provider " +
-    "secrets in the dashboard.",
+    "require matter_id and user_id; the other fields apply to " +
+    "update_org_settings. Manage provider secrets in the dashboard.",
   inputSchema: manageOrganizationArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
@@ -910,7 +942,7 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
-  accountAccess: "standard",
+  accountAccess: "account-control",
   permissions: selectOperationByValue<(typeof MANAGE_ORG_ACTIONS)[number]>(
     "action",
     {
@@ -946,7 +978,11 @@ const handleAddMember = async ({
   context: McpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<
+    v.InferInput<typeof MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION>
+  >
+> => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -969,9 +1005,11 @@ const handleAddMember = async ({
   if (Result.isError(added)) {
     return internalFailureResult(added.error);
   }
-  return toolDataResult({
-    memberId: added.value.id,
-  } satisfies v.InferInput<typeof MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION, {
+      memberId: added.value.id,
+    }),
+  );
 };
 
 const handleRemoveMember = async ({
@@ -984,7 +1022,11 @@ const handleRemoveMember = async ({
   requestedWorkspaceId: string;
   userId: string;
   reassignTo?: string | undefined;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<
+    v.InferInput<typeof MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION>
+  >
+> => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -1009,12 +1051,12 @@ const handleRemoveMember = async ({
   if (Result.isError(removed)) {
     return internalFailureResult(removed.error);
   }
-  return toolDataResult({
-    removed: true,
-    id: removed.value.id,
-  } satisfies v.InferInput<
-    typeof MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION
-  >);
+  return toolDataResult(
+    projectionPayload(MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION, {
+      removed: true,
+      id: removed.value.id,
+    }),
+  );
 };
 
 const handleManageOrganizationTool: TypedMcpToolHandler<
@@ -1079,18 +1121,15 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         ...(input.time_narrative_required === undefined
           ? {}
           : { timeNarrativeRequired: input.time_narrative_required }),
+        ...(input.time_zone === undefined ? {} : { timeZone: input.time_zone }),
       },
     }),
   );
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  type ManageOrganizationSettingsPayload = AssertNoExtraFields<
-    typeof updated.value,
-    v.InferInput<typeof MANAGE_ORGANIZATION_SETTINGS_PROJECTION>
-  >;
   return toolDataResult(
-    updated.value satisfies ManageOrganizationSettingsPayload,
+    projectionPayload(MANAGE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),
   );
 };
 

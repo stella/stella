@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -225,6 +226,16 @@ const LoadedStyleSetEditor = ({
 
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+      <DialogFormState
+        dirty={
+          name !== initialName ||
+          JSON.stringify(settings) !== JSON.stringify(initialSettings)
+        }
+        onDiscard={() => {
+          setName(initialName);
+          setSettings(initialSettings);
+        }}
+      />
       <DialogHeader className="border-b pe-14">
         <DialogTitle>
           {saveTarget.type === "stella"

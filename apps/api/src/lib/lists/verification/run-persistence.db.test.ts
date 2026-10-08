@@ -1,8 +1,12 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { organization } from "@/api/db/auth-schema";
 import {
+  auditLogs,
+  entities,
   legalListClaims,
   legalListVerificationBlocks,
   legalListVerificationRuns,
@@ -10,7 +14,10 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
-import { completeVerificationRun } from "@/api/lib/lists/verification/run-persistence";
+import {
+  completeVerificationRun,
+  failVerificationRun,
+} from "@/api/lib/lists/verification/run-persistence";
 import {
   createScopedQuery,
   getTestDb,
@@ -37,11 +44,15 @@ beforeAll(async () => {
     name: "Verification persistence matter",
     reference: Bun.randomUUIDv7().slice(0, 8),
   });
+  const documentId1 = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb
+    .insert(entities)
+    .values({ id: documentId1, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: runId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: documentId1,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: "a".repeat(64),
@@ -113,6 +124,10 @@ test("completion pins source text and claims once", async () => {
             eq(legalListVerificationBlocks.runId, runId),
           ),
         ),
+      audits: await tx
+        .select({ metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, runId)),
       claims: await tx
         .select({ id: legalListClaims.id })
         .from(legalListClaims)
@@ -132,6 +147,17 @@ test("completion pins source text and claims once", async () => {
     }),
   ]);
   expect(stored.claims).toEqual([{ id: claimId }]);
+  expect(stored.audits).toEqual([
+    {
+      metadata: {
+        runId,
+        status: "completed",
+        errorCode: null,
+        blockCount: blocks.length,
+        claimCount: claims.length,
+      },
+    },
+  ]);
   const detail = await scopedQuery(
     [workspaceId],
     organizationId,
@@ -150,11 +176,15 @@ test("completion pins source text and claims once", async () => {
 
 test("completion keeps source text when no claims are found", async () => {
   const emptyRunId = createSafeId<"legalListVerificationRun">();
+  const documentId2 = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb
+    .insert(entities)
+    .values({ id: documentId2, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: emptyRunId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: documentId2,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: "b".repeat(64),
@@ -198,6 +228,92 @@ test("completion keeps source text when no claims are found", async () => {
       kind: "docx-block",
       pageNumber: null,
       text: "The full paragraph.",
+    },
+  ]);
+});
+
+test("failed transitions audit only the changed row and roll back with it", async () => {
+  const failedRunId = createSafeId<"legalListVerificationRun">();
+  const documentId3 = createSafeId<"entity">();
+  await testDb
+    .insert(entities)
+    .values({ id: documentId3, workspaceId, name: "Verification document" });
+  await testDb.insert(legalListVerificationRuns).values({
+    id: failedRunId,
+    organizationId,
+    workspaceId,
+    entityId: documentId3,
+    fileFieldId: createSafeId<"field">(),
+    entityVersionId: createSafeId<"entityVersion">(),
+    contentSha256: "c".repeat(64),
+    evidence: { listId: createSafeId<"legalList">(), facts: [] },
+    status: "queued",
+    pipelineVersion: 2,
+  });
+  const scoped = createScopedQuery(testDb);
+  expect(
+    await rejectionOf(
+      scoped([workspaceId], organizationId, async (tx) => {
+        await failVerificationRun({
+          tx,
+          run: { id: failedRunId, organizationId, workspaceId },
+          errorCode: "access_revoked",
+        });
+        throw new Error("Rollback fixture");
+      }),
+    ),
+  ).toMatchObject({ message: "Rollback fixture" });
+  expect(
+    (
+      await testDb
+        .select({ status: legalListVerificationRuns.status })
+        .from(legalListVerificationRuns)
+        .where(eq(legalListVerificationRuns.id, failedRunId))
+    ).at(0)?.status,
+  ).toBe("queued");
+  expect(
+    await testDb
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, failedRunId)),
+  ).toHaveLength(0);
+  await scoped([workspaceId], organizationId, async (tx) => {
+    expect(
+      await failVerificationRun({
+        tx,
+        run: { id: failedRunId, organizationId, workspaceId },
+        errorCode: "access_revoked",
+      }),
+    ).toBe(true);
+    expect(
+      await failVerificationRun({
+        tx,
+        run: { id: failedRunId, organizationId, workspaceId },
+        errorCode: "internal",
+      }),
+    ).toBe(false);
+    await completeVerificationRun({
+      tx,
+      runId: failedRunId,
+      workspaceId,
+      blocks: [],
+      claims: [],
+    });
+  });
+  expect(
+    await testDb
+      .select({ metadata: auditLogs.metadata })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, failedRunId)),
+  ).toEqual([
+    {
+      metadata: {
+        runId: failedRunId,
+        status: "failed",
+        errorCode: "access_revoked",
+        blockCount: 0,
+        claimCount: 0,
+      },
     },
   ]);
 });

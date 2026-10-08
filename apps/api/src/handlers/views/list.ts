@@ -4,6 +4,12 @@ import { eq } from "drizzle-orm";
 import { workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+  projectViewEligibility,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
 import {
@@ -19,7 +25,9 @@ const config = {
     "creation time. Default view names come back localized for the request's " +
     "language, and references to deleted columns are stripped out of the " +
     "layouts. A pure read: default views are seeded when the matter is " +
-    "created, so listing never mints one.",
+    "created, so listing never mints one. Unavailable layouts return only " +
+    "their identity, layout type, and eligibility.",
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -68,46 +76,67 @@ const toViewResponse = (
 // by listing them.
 const readViews = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, request }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    request,
+    featureAccessSnapshot,
+    session,
+    user,
+  }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const lang = extractLangFromRequest(request);
-    const views = yield* Result.await(
+    const storedViews = yield* Result.await(
       safeDb((tx) =>
         tx
           .select()
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId))
           .orderBy(workspaceViews.position)
-          // Must return every view: the web client treats absence from
-          // this list as deletion and drops that view's per-view state
-          // (`lib/workspaces/table-store.ts`, `installTableStoreReconcile`).
-          // Never filter or paginate here.
           .limit(LIMITS.viewsCount),
       ),
     );
+
+    // Clients reconcile an absent identity as a deletion; retain unavailable rows.
+    const views = storedViews;
 
     if (views.length === 0) {
       return Result.ok([]);
     }
 
-    // Clean stale property references from layouts before returning.
-    const properties = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.properties.findMany({
-          where: { workspaceId: { eq: workspaceId } },
-          columns: { id: true },
-          limit: LIMITS.propertiesCount,
-        }),
-      ),
-    );
+    // Unavailable layouts retain only identity and do not need property cleanup.
+    const properties = views.some((view) =>
+      isAvtLayoutVisible(view.layout, avtAccessStatus),
+    )
+      ? yield* Result.await(
+          safeDb((tx) =>
+            tx.query.properties.findMany({
+              where: { workspaceId: { eq: workspaceId } },
+              columns: { id: true },
+              limit: LIMITS.propertiesCount,
+            }),
+          ),
+        )
+      : [];
 
     const propertyIds = properties.map((p) => p.id);
 
     return Result.ok(
-      views.map((view) => {
-        const layout = parseViewLayoutSafe(view.layout);
-        cleanStalePropertyIds(layout, propertyIds);
-        return toViewResponse(view, lang, layout);
-      }),
+      views.map((view) =>
+        projectViewEligibility({
+          view,
+          accessStatus: avtAccessStatus,
+          projectAvailable: (availableView) => {
+            const layout = parseViewLayoutSafe(availableView.layout);
+            cleanStalePropertyIds(layout, propertyIds);
+            return toViewResponse(availableView, lang, layout);
+          },
+        }),
+      ),
     );
   },
 );

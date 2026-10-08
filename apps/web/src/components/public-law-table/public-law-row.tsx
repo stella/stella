@@ -12,10 +12,7 @@ import type React from "react";
 import { useCallback, useRef } from "react";
 
 import { flexRender } from "@tanstack/react-table";
-import {
-  row_getCanSelect,
-  row_getIsSelected,
-} from "@tanstack/react-table/static-functions";
+import { row_getCanSelect } from "@tanstack/react-table/static-functions";
 
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -86,6 +83,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
   rowLabel,
   table,
 }: PublicLawRowProps<TRow>) => {
+  const selected = table.state.rowSelection[row.id] === true;
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
@@ -126,7 +124,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
   return (
     <WorkspaceGridRow
       aria-rowindex={index + 2}
-      aria-selected={row_getIsSelected(row)}
+      aria-selected={selected}
       className={cn(
         "cursor-pointer transition-opacity duration-150",
         // The compact height is a floor, not a ceiling. The density clamps
@@ -137,7 +135,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
       )}
       data-active={isActive || undefined}
       data-index={index}
-      data-state={row_getIsSelected(row) ? "selected" : undefined}
+      data-state={selected ? "selected" : undefined}
       onClick={containedEventHandler(handleClick)}
       onKeyDown={handleKeyDown}
       ref={setRowRef}
@@ -145,6 +143,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
     >
       <PublicLawRowCells
         contentMode={contentMode}
+        selected={selected}
         selectCell={
           row_getCanSelect(row) ? (
             <SelectRowContent
@@ -165,12 +164,12 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
       <RowEndFillerCell
         addPropertyColumn={addPropertyColumn}
         renderColumns={renderColumns}
-        selected={row_getIsSelected(row)}
+        selected={selected}
       />
       <AddPropertyCell
         cell={addPropertyCell}
         columnIndex={renderColumns.length + 1}
-        selected={row_getIsSelected(row)}
+        selected={selected}
       />
     </WorkspaceGridRow>
   );
@@ -178,10 +177,12 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
 
 const PublicLawRowCells = <TRow extends PublicLawRowData>({
   contentMode,
+  selected,
   selectCell,
   visibleCells,
 }: {
   contentMode: TableRowRenderInput<TRow>["contentMode"];
+  selected: boolean;
   selectCell: React.ReactElement;
   visibleCells: TableCell<TRow>[];
 }) =>
@@ -204,7 +205,7 @@ const PublicLawRowCells = <TRow extends PublicLawRowData>({
           cell.column.getIsResizing() &&
             "after:bg-info after:pointer-events-none after:absolute after:end-0 after:top-0 after:bottom-0 after:z-50 after:w-px",
         )}
-        data-state={row_getIsSelected(cell.row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={cell.id}
         style={{
           gridColumn: cellIndex + 1,

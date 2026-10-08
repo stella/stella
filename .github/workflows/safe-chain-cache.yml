@@ -3,6 +3,9 @@ name: Warm Safe Chain cache
 on:
   push:
     branches: [main]
+    paths:
+      - .github/actions/safe-chain/**
+      - .github/workflows/safe-chain-cache.yml
   schedule:
     - cron: "23 4 * * *"
   workflow_dispatch:
@@ -11,8 +14,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: safe-chain-cache-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   warm:

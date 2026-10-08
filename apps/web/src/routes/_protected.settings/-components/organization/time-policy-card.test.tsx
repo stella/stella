@@ -1,15 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
+
+import { parseTimeZoneId } from "@stll/time";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
-import type { TimePolicy } from "./time-policy.logic";
+import type { TimePolicySettings } from "./time-policy.logic";
 
 beforeAll(() => {
   process.env["VITE_API_URL"] ??= "https://api.example.test";
@@ -31,7 +34,8 @@ const SETTINGS = {
   timeEditWindowDays: 7,
   timeLockedThroughMonth: "2020-01-31",
   timeNarrativeRequired: true,
-} satisfies TimePolicy;
+  timeZone: parseTimeZoneId("Europe/Prague") ?? panic("Prague is unknown"),
+} satisfies TimePolicySettings;
 
 const catalogs = { en, ar };
 const ROLES = ["owner", "admin", "member", "intern", "external"] as const;

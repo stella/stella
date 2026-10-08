@@ -2,16 +2,6 @@ name: Record network baseline
 
 # Main owns recordings. PR checks never write the shared JSON.
 on:
-  push:
-    branches: [main]
-    paths:
-      - apps/web/**
-      - apps/api/**
-      - packages/**
-      - .github/actions/**
-      - .github/workflows/network-baseline-*.yml
-      - scripts/network-baseline-scope.ts
-      - bun.lock
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
@@ -30,7 +20,7 @@ permissions: {}
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -43,7 +33,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -80,7 +72,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -139,3 +133,11 @@ jobs:
             apps/web/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  deliver:
+    needs: record
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/network-baseline-deliver.yml

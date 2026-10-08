@@ -32,6 +32,11 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
+import {
+  PROVISION_VERSION_COLUMNS,
+  projectProvisionVersion,
+} from "./version-response";
+
 export const listDecisionProvisionsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
@@ -81,6 +86,7 @@ const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
 };
 
 const LEGACY_CITATION_FIELDS = {
+  // Drizzle detects absent left-join rows from the first column; keep it non-null.
   jurisdiction: caseLawProvisionCitations.jurisdiction,
   workIdentifier: caseLawProvisionCitations.workIdentifier,
   workNumber: caseLawProvisionCitations.workNumber,
@@ -102,6 +108,7 @@ const LEGACY_CITATION_FIELDS = {
   spanStart: caseLawProvisionCitations.spanStart,
   spanEnd: caseLawProvisionCitations.spanEnd,
   confidence: caseLawProvisionCitations.confidence,
+  ...PROVISION_VERSION_COLUMNS,
 };
 
 const SPAN_CITATION_FIELDS = {
@@ -157,7 +164,7 @@ const provisionPage = ({
   publishedProjectionDigest,
 }: ProvisionPageOptions) => ({
   ...createCursorPage({
-    rows,
+    rows: rows.map(projectProvisionVersion),
     limit,
     cursorForItem: (item) =>
       encodePaginationCursor([generation, item.spanStart, item.anchor]),

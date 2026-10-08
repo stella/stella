@@ -40,8 +40,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       # No install is needed. --lockfile-only and --ignore-scripts keep the
@@ -173,6 +174,21 @@ jobs:
       ids: ${{ steps.scope.outputs.ids }}
       allowed: ${{ steps.scope.outputs.allowed }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       # Fetch paths before checking out pull request code. Only the planner
       # files are needed in this job; generators run in the later job.
       - name: Fetch changed paths
@@ -183,7 +199,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
+          bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
 
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -192,12 +208,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: |
             /scripts/
+            /packages/scripts/src/generated-files.ts
             /package.json
           sparse-checkout-cone-mode: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Check planner availability
@@ -205,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/check-autofix-test-durations.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi
@@ -266,10 +284,12 @@ jobs:
             exit 1
           fi
           git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"
+          git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Align Tauri counterparts
@@ -307,11 +327,35 @@ jobs:
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
         run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
 
+      - name: Add missing API test weights
+        id: weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          while IFS= read -r -d '' path; do
+            if [[ "$path" == apps/api/*.test.ts || "$path" == apps/api/*.test.tsx ]]; then
+              missing+=("${path#apps/api/}")
+            fi
+          done < "$RUNNER_TEMP/autofix-added-paths"
+          if (( ${#missing[@]} > 0 )); then
+            bun apps/api/scripts/refresh-test-durations.ts --add-missing "${missing[@]}"
+            echo "allowed=apps/api/scripts/test-durations.json" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Fix changed files
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          changed=()
+          while IFS= read -r -d '' path; do
+            changed+=("$path")
+          done < "$RUNNER_TEMP/autofix-changed-paths"
+          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
+          protected=()
+          while IFS= read -r pattern; do
+            protected+=("$pattern")
+          done < "$RUNNER_TEMP/autofix-protected-paths"
           format_paths=()
           lint_paths=()
           for path in "${changed[@]}"; do
@@ -320,6 +364,16 @@ jobs:
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue
             fi
+            # The append-only weight fixer owns this output's bytes.
+            [[ "$path" != apps/api/scripts/test-durations.json ]] || continue
+            protected_path=false
+            for pattern in "${protected[@]}"; do
+              if [[ "$path" == $pattern ]]; then
+                protected_path=true
+                break
+              fi
+            done
+            [[ "$protected_path" == false ]] || continue
             format_paths+=("./$path")
             if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
               lint_paths+=("./$path")
@@ -327,9 +381,13 @@ jobs:
           done
 
           if (( ${#lint_paths[@]} > 0 )); then
+            # Type-aware fixes need the complete generated type graph. set -e
+            # aborts on preparation or compiler errors before any fixer runs.
+            bun scripts/ci-generated-sources.ts prepare
+            bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
             # --fix applies safe fixes only. CI's lint job reports anything left.
             lint_status=0
-            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "${lint_paths[@]}" || lint_status=$?
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
               exit "$lint_status"
             fi
@@ -345,6 +403,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
+          WEIGHTS_ALLOWED: ${{ steps.weights.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -361,10 +420,33 @@ jobs:
             exit 1
           fi
 
-          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          # No changed-path or generator grant can authorize decision records.
+          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
+          protected=()
+          while IFS= read -r pattern; do
+            protected+=("$pattern")
+          done < "$RUNNER_TEMP/autofix-protected-paths"
+          protected_specs=()
+          for pattern in "${protected[@]}"; do
+            protected_specs+=(":(glob)$pattern")
+          done
+          if ! git diff --quiet "$HEAD_SHA" -- "${protected_specs[@]}" || [[ -n "$(git ls-files --others --exclude-standard -- "${protected_specs[@]}")" ]]; then
+            echo "::error::Autofix cannot modify baselines, ledgers, waivers, allowances or changesets."
+            exit 1
+          fi
+
+          changed=()
+          while IFS= read -r -d '' path; do
+            changed+=("$path")
+          done < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
+          # Validate independently of every changed-path and output grant.
+          bun scripts/check-autofix-test-durations.ts --base "$BASE_SHA" --head "$HEAD_SHA"
           excludes=()
+          if [[ "$WEIGHTS_ALLOWED" == apps/api/scripts/test-durations.json ]]; then
+            excludes+=(":(exclude,literal)apps/api/scripts/test-durations.json")
+          fi
           for path in "${changed[@]}"; do
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue

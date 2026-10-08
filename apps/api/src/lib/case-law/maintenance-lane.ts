@@ -24,7 +24,7 @@ import { panic, Result } from "better-result";
  * Both return the same shape, so a script with a plan mode and an apply mode
  * picks its door after parsing arguments and runs one body against either.
  *
- * This is a different lock from `lockCitationGraph` in the resolver. That one
+ * This is a different lock from the citation-graph transaction owner. That one
  * is transaction-scoped and serializes the standing walk's batches against
  * ingestion; this one is session-scoped and serializes whole operator runs
  * against each other. A pass that also writes the graph still takes the graph
@@ -38,6 +38,7 @@ import { panic, Result } from "better-result";
 import { SQL } from "bun";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { Temporal } from "@stll/time";
 
@@ -207,6 +208,53 @@ export const holdCaseLawMaintenanceLane = async ({
       }
       await lock.end();
     },
+  };
+};
+
+type MaintenanceCleanupOptions = {
+  timeoutMs: number;
+  queryTimeoutMs: number;
+};
+
+/** Recovery outlives a cancelled job and retries schema admission on fresh sessions. */
+export const createCaseLawMaintenanceCleanupHandles = async ({
+  timeoutMs,
+  queryTimeoutMs,
+}: MaintenanceCleanupOptions): Promise<CaseLawScriptHandles> => {
+  const [
+    { withLongRunningConnection },
+    { createIngestionDb, markRlsDatabase },
+  ] = await Promise.all([
+    import("@/api/db/long-running-connection"),
+    import("@/api/db/scoped"),
+  ]);
+  const transaction: CaseLawRootHandle["transaction"] = async (work) => {
+    const signal = AbortSignal.timeout(timeoutMs);
+    return await withLongRunningConnection(
+      { statementTimeout: queryTimeoutMs, lockTimeout: queryTimeoutMs, signal },
+      async ({ db }) =>
+        await runUnderCorpusSchemaLane({
+          database: db,
+          laneWaitMs: timeoutMs,
+          sleep: async (milliseconds) =>
+            await sleep(milliseconds, undefined, { signal }),
+          work: async (tx) => {
+            signal.throwIfAborted();
+            return await work(tx);
+          },
+        }),
+    );
+  };
+  return {
+    rootDb: {
+      transaction,
+      execute: async <TRow extends Record<string, unknown>>(
+        query: SQLWrapper | string,
+      ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+    },
+    ingestionDb: createIngestionDb(markRlsDatabase({ transaction }), {
+      laneWaitMs: timeoutMs,
+    }),
   };
 };
 

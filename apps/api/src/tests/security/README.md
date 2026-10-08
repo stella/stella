@@ -7,20 +7,16 @@ catch regressions that could violate SOC 2 Type II controls
 
 ## What is tested
 
-### `exempt-route-guards.test.ts`
+### `raw-route-census.test.ts`
 
-Every handler route file is covered by the `require-safe-route-handlers`
-oxlint rule except the ~17 listed in its `oxlint.config.ts` override
-(public/protocol/auth/dev/SSE surfaces that do not fit the safe-handler
-config shape). This test is the independent check for exactly that
-exempt set, which the live lint rule cannot see:
-
-- Compares the oxlint override's file list against a checked-in expected
-  list, so the exemption cannot grow silently.
-- Scans each exempt file for mutation endpoints (`.post`/`.put`/`.patch`/
-  `.delete` with a string-literal path) and requires each one to be a
-  reviewed, checked-in allowlist entry. A staleness check ensures
-  allowlist entries still correspond to real endpoints.
+Runtime census over every route mounted on the composed API. The safe
+handler factories record each handler's declared `accountAccess`; a route
+whose handler came from no factory (Better Auth, MCP transports, probes,
+token and webhook routes, SSE streams, local development) must appear in a
+reviewed map with its demo-account class (`sessionless`, `sandbox`,
+`local-development`) and a reason. A new raw route, wherever it is mounted
+and however its lint exemption was granted, fails the census until it is
+classified; an entry whose route is gone fails it too.
 
 ### `write-handler-permission-coverage.test.ts`
 

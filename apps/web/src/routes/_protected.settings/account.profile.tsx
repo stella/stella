@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/destructive-action-confirmation";
 import {
   Dialog,
+  DialogFormState,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -69,6 +70,7 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
+import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -580,6 +582,8 @@ function ProfilePageBody() {
 
       <LocalePreferences />
 
+      <ChatNotificationsCard />
+
       <TwoFactorCard />
 
       <SessionsCard />
@@ -624,6 +628,13 @@ function ProfilePageBody() {
         }}
       >
         <DialogPopup>
+          <DialogFormState
+            dirty={otpCode !== "" || Object.keys(reassignments).length > 0}
+            onDiscard={() => {
+              setOtpCode("");
+              setReassignments({});
+            }}
+          />
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>{dialogDescription}</DialogDescription>

@@ -33,6 +33,7 @@ export const Route = createFileRoute("/law/$country/statutes/$slug/v/$version")(
 
 function PublicStatuteVersionRoute() {
   const { statute, versions, windowGap, work } = Route.useLoaderData();
+  const searchQuery = Route.useSearch({ select: (search) => search.q });
   const requestedJump = Route.useSearch({ select: (search) => search.jump });
   const compare = Route.useSearch({ select: (search) => search.compare });
   const provision = Route.useSearch({ select: (search) => search.provision });
@@ -42,6 +43,8 @@ function PublicStatuteVersionRoute() {
     <PublicStatuteViewer
       comparison={{ compare, provision, show }}
       asOf={undefined}
+      key={`${statute?.id ?? work.id}:${searchQuery ?? ""}`}
+      searchQuery={searchQuery}
       requestedJump={requestedJump}
       statute={statute}
       versions={versions}

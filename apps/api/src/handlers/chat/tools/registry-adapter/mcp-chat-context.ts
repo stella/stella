@@ -65,7 +65,7 @@ export type ChatRegistryContextDeps = {
     | undefined;
 };
 
-// oxlint-disable-next-line promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
+// oxlint-disable-next-line typescript/promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
 const NO_OP_AUDIT_RECORDER: AuditRecorder = () => Promise.resolve();
 
 const deriveWorkspaceStatusMap = ({
@@ -134,6 +134,10 @@ export const buildMcpContextFromChat = (
     recordAuditEvent: deps.recordAuditEvent ?? NO_OP_AUDIT_RECORDER,
     safeDb: deps.safeDb,
     scopedDb: deps.scopedDb,
+    // Chat reaches third-party services only through its native tools. A
+    // registry handler run from a chat script, which has no outbound approval,
+    // or as a projected write holds no permit, so it cannot send to one.
+    thirdPartyOutboundPermit: undefined,
     userId: deps.userId,
     userEmail: deps.userEmail,
   };

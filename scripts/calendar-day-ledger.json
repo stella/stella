@@ -25,21 +25,6 @@
     "reason": "Sitemap lastmod is a W3C date of a stored UTC timestamp for crawlers, not a day shown to a user."
   },
   {
-    "id": "no-utc-user-day::apps/api/src/handlers/organization-settings/update.ts::updateOrganizationSettingsHandler::Temporal.Now.plainDateISO(\"UTC\")",
-    "count": 1,
-    "reason": "Time-billing owns: the lock-month check must use the organization's zone, and no organization zone is stored on the server; moves together with the web lock-month form."
-  },
-  {
-    "id": "no-utc-user-day::apps/api/src/handlers/time-entries/ledes/export.ts::exportLedesHandler::toISOString().split(\"T\")[0]",
-    "count": 1,
-    "reason": "Time-billing owns: the LEDES invoice date should be the organization's day; the export request carries no zone and none is stored."
-  },
-  {
-    "id": "no-utc-user-day::apps/api/src/handlers/time-entries/pdf/export.ts::exportPdfHandler::Temporal.Now.plainDateISO(\"UTC\")",
-    "count": 1,
-    "reason": "Time-billing owns: the PDF 'Generated' date should be the requester's day; the export request carries no zone and none is stored."
-  },
-  {
     "id": "no-utc-user-day::apps/api/src/lib/date-format.ts::formatDateInTimeZone::toISOString().slice(0, 10)",
     "count": 1,
     "reason": "Fallback when the requested IANA zone is unknown to Intl: the UTC day is the only defined day left; the happy path formats in the caller's zone."
@@ -50,29 +35,14 @@
     "reason": "Corpus validation ceiling for publisher decision dates (today plus a margin of days); a source calendar bound, not a user's day."
   },
   {
-    "id": "no-utc-user-day::apps/api/src/lib/flows/flow-executor.ts::raiseReviewTask::Temporal.Now.instant().toString().slice(0, 10)",
-    "count": 1,
-    "reason": "Flows own: a review gate's working target is the run's UTC day because flow runs carry no zone; move to the definition's zone once one is stored."
-  },
-  {
     "id": "no-utc-user-day::apps/api/src/lib/infosoud/result.ts::toInfoSoudDisplayValue::toISOString().slice(0, 10)",
     "count": 1,
     "reason": "Publisher calendar: renders a court-registry date stored at UTC midnight back to its civil date; the value is a date, not now."
   },
   {
-    "id": "no-utc-user-day::apps/api/src/lib/scouts/work-attention.logic.ts::workAttentionToday::todayFor(\"UTC\")",
-    "count": 1,
-    "reason": "No user or organization zone is stored on the server and the scout has no viewer; matches the My Work default day so both agree. Moves to the organization zone once one exists."
-  },
-  {
     "id": "no-utc-user-day::apps/api/src/lib/usage/usage-ledger.ts::resolvePeriod::Temporal.Now.zonedDateTimeISO(\"UTC\")",
     "count": 1,
     "reason": "Billing period of system calls without an entitlement is a UTC calendar month by definition, matching the provider's period boundaries; not a user's day."
-  },
-  {
-    "id": "no-utc-user-day::apps/api/src/lib/work-obligations/at-risk.ts::resolveWorkAsOf::todayFor(\"UTC\")",
-    "count": 1,
-    "reason": "Default only when the caller sends no asOf (the web sends the viewer's day for the inbox count and views; API, MCP and CLI callers may omit it); no organization zone is stored on the server to default to."
   },
   {
     "id": "no-utc-user-day::apps/web/src/lib/decision-date.ts::decisionDateToIso::toISOString().slice(0, 10)",
@@ -83,11 +53,6 @@
     "id": "no-utc-user-day::apps/web/src/lib/public-law-seo.ts::dateToIsoDate::toISOString().slice(0, 10)",
     "count": 1,
     "reason": "SEO metadata: converts a stored UTC-midnight decision date to its civil date for structured data; the value is a date, not now."
-  },
-  {
-    "id": "no-utc-user-day::apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.tsx::TimePolicyForm::Temporal.Now.plainDateISO(\"UTC\")",
-    "count": 1,
-    "reason": "Time-billing owns: the closable lock months must match the server's lock-month check, which reads the UTC day until an organization zone is stored; the pair moves together."
   },
   {
     "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/action-cost-retention.ts::drainActionCosts::new Date()",
@@ -173,21 +138,6 @@
     "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/hosted-usage-webhook-retention.ts::redact::new Date()",
     "count": 1,
     "reason": "Elapsed-time window (lease, staleness or retention cutoff) measured from now; no calendar day is involved, so a late tick only widens the window."
-  },
-  {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/infosoud.ts::markTrackedCaseFailed::new Date()",
-    "count": 1,
-    "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
-  },
-  {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/infosoud.ts::markTrackedCaseSynced::new Date()",
-    "count": 1,
-    "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
-  },
-  {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/infosoud.ts::syncInfoSoudTrackedCases::new Date()",
-    "count": 1,
-    "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
   },
   {
     "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts::createLegislationExpressionIdBackfill::Temporal.Now.instant()",

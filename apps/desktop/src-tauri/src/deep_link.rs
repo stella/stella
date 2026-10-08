@@ -9,7 +9,6 @@ use crate::session_manager::{SessionManager, download_file_standalone};
 use crate::types::{ErrorResponse, OpenFileRequest, is_safe_session_id};
 use crate::updater;
 
-const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(10);
 const SELF_HOST_CONNECT_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
 const HANDOFF_TOKEN_LENGTH: usize = 64;
@@ -394,6 +393,7 @@ async fn confirm_and_trust_self_host(
 }
 
 pub(crate) enum ConnectionConfirmation<'a> {
+  HandoffError(&'a crate::handoff::Failure),
   SelfHost {
     web_origin: &'a str,
     api_base_url: &'a str,
@@ -430,6 +430,22 @@ pub(crate) async fn show_connection_confirmation(
   // with the origins, so it renders in the language the rest of the app runs
   // in.
   let (details, title_key) = match confirmation {
+    ConnectionConfirmation::HandoffError(failure) => {
+      let detail = match failure {
+        crate::handoff::Failure::Retryable(message)
+        | crate::handoff::Failure::Terminal(message) => message.as_str(),
+        _ => "",
+      };
+      (
+        format!(
+          "mode=handoff&message={}&action={}&detail={}",
+          percent_encode(crate::i18n::t(failure.message_key())),
+          percent_encode(failure.action_key().map(crate::i18n::t).unwrap_or("")),
+          percent_encode(detail)
+        ),
+        "dialog.handoffWindowTitle",
+      )
+    }
     ConnectionConfirmation::SelfHost {
       web_origin,
       api_base_url,
@@ -460,10 +476,10 @@ pub(crate) async fn show_connection_confirmation(
     percent_encode(crate::i18n::text_direction()),
   );
 
-  let builder = tauri::WebviewWindowBuilder::new(
+  let builder = crate::app_window::builder(
     app_handle,
     "selfhost-connect-dialog",
-    tauri::WebviewUrl::App(format!("selfhost-connect-dialog.html#{hash}").into()),
+    format!("selfhost-connect-dialog.html#{hash}"),
   )
   .title(crate::i18n::t(title_key))
   .inner_size(420.0, 320.0)
@@ -535,12 +551,6 @@ fn percent_encode(value: &str) -> String {
   encoded
 }
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RedeemDesktopEditHandoffRequest<'a> {
-  handoff_token: &'a str,
-}
-
 #[derive(serde::Deserialize)]
 struct RedeemedDesktopEditHandoff {
   identity: crate::types::DesktopAccountIdentity,
@@ -560,39 +570,6 @@ pub(crate) fn ensure_handoff_identity(
     );
   }
   Ok(())
-}
-
-async fn redeem_desktop_edit_handoff(
-  client: &crate::http_client::DesktopHttpClient,
-  api_base_url: &str,
-  handoff_token: &str,
-  credential_key: &str,
-) -> Result<RedeemedDesktopEditHandoff, String> {
-  let url = format!("{api_base_url}/v1/desktop-edit-handoffs/redeem");
-  let response = client
-    .post(url)
-    .bearer_auth(credential_key)
-    .json(&RedeemDesktopEditHandoffRequest { handoff_token })
-    .timeout(REDEEM_TIMEOUT)
-    .send()
-    .await
-    .map_err(|e| format!("stella desktop could not redeem the edit handoff: {e}"))?;
-
-  if !response.status().is_success() {
-    let status = response.status();
-    let message = response
-      .json::<ErrorResponse>()
-      .await
-      .ok()
-      .and_then(|body| body.message)
-      .unwrap_or_else(|| format!("Desktop edit handoff was rejected ({status})."));
-    return Err(message);
-  }
-
-  response
-    .json::<RedeemedDesktopEditHandoff>()
-    .await
-    .map_err(|e| format!("stella desktop could not read the edit handoff: {e}"))
 }
 
 #[derive(serde::Serialize)]
@@ -682,25 +659,25 @@ async fn redeem_and_open_desktop_edit(
   api_base_url: String,
   handoff_token: String,
 ) -> Result<(), String> {
-  let account = linked_handoff_account(&app_handle, &api_base_url).await?;
   let http_client = {
     let mgr = manager.lock().await;
     mgr.http_client().clone()
   };
-  // The handoff token travels in the request body; a redirect would replay it
-  // to another origin, so handoff requests never follow one.
+  // Acknowledgements also carry the token and must never follow redirects.
   let handoff_client =
     crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
       redirect: reqwest::redirect::Policy::none(),
       timeout: None,
     })
-    .map_err(|e| format!("stella desktop could not start the handoff client: {e}"))?;
-
-  let redeemed = redeem_desktop_edit_handoff(
-    &handoff_client,
-    &api_base_url,
-    &handoff_token,
-    &account.credential.key,
+    .map_err(|error| error.to_string())?;
+  let (redeemed, account) = crate::handoff::redeem::<RedeemedDesktopEditHandoff>(
+    crate::handoff::RedeemOptions {
+      manager: &manager,
+      app: &app_handle,
+      target: crate::handoff::Target::DesktopEdit,
+      api_base_url: &api_base_url,
+      token: &handoff_token,
+    },
   )
   .await?;
   ensure_handoff_identity(&redeemed.identity, &account.identity)?;

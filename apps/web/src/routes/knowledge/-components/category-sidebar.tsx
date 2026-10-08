@@ -17,6 +17,7 @@ import { ContextMenu } from "@stll/ui/context-menu";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -124,7 +125,7 @@ export const useCategoryOps = ({
 /** Granular gating, resolved by the caller. Kept separate (not one "canManage"
  *  flag) so a role with, say, create+update but not delete still sees the
  *  affordances it is entitled to. */
-export type CategoryPermissions = {
+type CategoryPermissions = {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
@@ -146,7 +147,7 @@ export type CategoryLabels = {
   namePlaceholder: string;
 };
 
-export type CategoryMobileExtraFilter = {
+type CategoryMobileExtraFilter = {
   id: string;
   label: string;
   active: boolean;
@@ -157,7 +158,7 @@ export type CategoryMobileExtraFilter = {
 /** Drag-and-drop wiring, supplied only by features that support reassigning a
  *  dragged item onto a category (Templates). When omitted, no drop targets
  *  render (Clauses). */
-export type CategoryDragAndDrop = {
+type CategoryDragAndDrop = {
   mime: string;
   onAssign: (itemId: string, categoryId: string | null) => void | Promise<void>;
 };
@@ -719,6 +720,12 @@ const CategoryFormDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-sm">
+      <DialogFormState
+        dirty={name !== (initial?.name ?? "")}
+        onDiscard={() => {
+          setName(initial?.name ?? "");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? labels.editCategory : labels.createCategory}

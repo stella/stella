@@ -7,13 +7,17 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { isReadRefusal } from "@/api/lib/errors/read-outcome";
+import {
+  isReadRefusal,
+  readOutcomeOfStatus,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
   PUBLISHER_BODY_MAX_BYTES,
   readBodyText,
+  readGatedResponseText,
   readPublisher,
   readPublisherBytes,
   readPublisherText,
@@ -29,11 +33,11 @@ afterEach(() => {
 const URL_UNDER_TEST = "https://publisher.invalid/document/1";
 
 const init = (
-  overrides: Partial<PublisherReadInit> = {},
+  overrides: Partial<Omit<PublisherReadInit, "timeout" | "timeoutMs">> = {},
 ): PublisherReadInit => ({
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeout: { type: "idle", ms: 1000 },
   ...overrides,
 });
 
@@ -419,4 +423,39 @@ test("no publisher status other than 404 and 410 reads as an absence, and only 4
     ),
     { numRuns: 200 },
   );
+});
+
+describe("gate refusal results", () => {
+  for (const status of [401, 403, 451]) {
+    for (const scope of ["document", "part", "source"] as const) {
+      test(`HTTP ${status} thrown by a gate retains ${scope} scope`, async () => {
+        const outcome = readOutcomeOfStatus(status, scope, "60");
+        if (outcome.type !== "refused") {
+          panic("Expected refusal fixture");
+        }
+        const error = unreadPublisherError({
+          outcome,
+          message: "Gate refused",
+          adapterKey: ADAPTER_KEYS.CZ_US,
+          cursor: null,
+        });
+        const request = async (): Promise<Response> => {
+          throw error;
+        };
+        const options = { request, signal: undefined, refusalScope: scope };
+        if (scope === "source") {
+          expect(await rejectionOf(readGatedResponseText(options))).toBe(error);
+        } else {
+          expect(await readGatedResponseText(options)).toEqual(outcome);
+          const controller = new AbortController();
+          controller.abort();
+          expect(
+            await rejectionOf(
+              readGatedResponseText({ ...options, signal: controller.signal }),
+            ),
+          ).toBe(error);
+        }
+      });
+    }
+  }
 });

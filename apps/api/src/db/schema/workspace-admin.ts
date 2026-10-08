@@ -1,10 +1,12 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import type { TimeZoneId } from "@stll/time";
 
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
 } from "@/api/lib/chat/ai-data-policy";
 import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
+import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
 
 import {
   bytea,
@@ -173,6 +175,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .unique()
       .references(() => organization.id, { onDelete: "cascade" }),
+    personalApiKeyPolicy: p
+      .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
+      .notNull()
+      .default("enabled"),
     sanctionsMonitoringMode: p
       .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
       .notNull()
@@ -198,6 +204,14 @@ export const organizationSettings = p.pgTable(
       .boolean("time_narrative_required")
       .notNull()
       .default(DEFAULT_TIME_NARRATIVE_REQUIRED),
+    /**
+     * IANA zone whose calendar decides the organization's "today" (lock
+     * months, invoice dates, due work). Null means the default derived from
+     * the primary practice jurisdiction at read time; see
+     * `lib/organization-time-zone.ts`. Written only through
+     * `parseTimeZoneId`.
+     */
+    timeZone: p.text("time_zone").$type<TimeZoneId>(),
     documentStampEnabled: p
       .boolean("document_stamp_enabled")
       .notNull()
@@ -308,6 +322,13 @@ export const organizationSettings = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "organization_settings_personal_api_key_policy_check",
+      sql`${table.personalApiKeyPolicy} IN (${sql.join(
+        PERSONAL_API_KEY_POLICIES.map((policy) => sql.raw(`'${policy}'`)),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "organization_settings_managed_ai_residency_check",
       sql`${table.managedAIResidency} IN (${sql.join(

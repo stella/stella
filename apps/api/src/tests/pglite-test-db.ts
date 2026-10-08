@@ -18,6 +18,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteDecisionAliases,
+  installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
@@ -30,12 +31,14 @@ import {
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPgliteWorkspaceContactCapacity,
+  installPgliteListVerificationBudgets,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
   readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
+  installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
@@ -213,6 +216,8 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "checkpoint_observation_order",
   "ingestion_lease_token",
   "ingestion_lease_expires_at",
+  "ingestion_lease_purpose",
+  "decision_merge_epoch",
   "reported_total",
   "reported_total_as_of",
   "reported_total_origin",
@@ -411,8 +416,14 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   // Global sanctions lists are readable by requests and writable by ingestion.
   `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts",
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    FROM stella
+  `,
+  `
     GRANT SELECT, INSERT, UPDATE ON TABLE
-      "sanctions_sources", "sanctions_editions"
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts"
     TO stella_ingestion
   `,
   `
@@ -660,9 +671,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteWorkspaceContactCapacity(db);
+  await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
@@ -672,6 +685,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
 
   return client;

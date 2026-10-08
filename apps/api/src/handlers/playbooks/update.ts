@@ -7,6 +7,7 @@ import {
 import { updatePlaybookDefinitionHandler } from "@/api/handlers/playbooks/update-shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 
 const config = {
   description:
@@ -29,7 +30,9 @@ const updatePlaybookDefinition = createSafeRootHandler(
   config,
   async function* ({
     safeDb,
+    scopedDb,
     session,
+    user,
     params,
     body,
     recordAuditEvent,
@@ -43,6 +46,12 @@ const updatePlaybookDefinition = createSafeRootHandler(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
     return yield* updatePlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId: session.activeOrganizationId,
       accessibleWorkspaceIds,

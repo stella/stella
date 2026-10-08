@@ -1,14 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  parseDocumentAst,
+  omitDerivablePlainText,
+} from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
 import {
   readServedDecisionAst,
   transientDecisionAstProjection,
 } from "@/api/handlers/case-law/decisions/served-ast";
-import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import { createSafeId } from "@/api/lib/branded-types";
 
 const ast = (text: string): DocumentAst => ({

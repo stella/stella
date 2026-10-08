@@ -1,16 +1,26 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
+import {
+  DECISION_DATE_VERSION_BASIS,
+  provisionVersionAsOf,
+} from "@stll/api-contract/provision-version-basis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
 import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
+import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallback-legal-anchors";
+import { provisionOccurrenceContexts } from "@/features/case-law/provision-anchors";
 import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
+import { resolveProvisionDocument } from "@/features/case-law/provision-placement";
 import {
+  allowsLegacyProvisionFallback,
   citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
   statuteByCitedWork,
@@ -24,6 +34,7 @@ import {
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
+import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
@@ -39,7 +50,10 @@ type UseDecisionProvisionAnchorsOptions = {
   /** The citing court's jurisdiction; null while the decision is loading. */
   country: string | null;
   decisionDate: string | null;
+  court: string | null;
+  caseNumber: string | null;
   decisionId: SafeId<"caseLawDecision">;
+  surface: DecisionReaderSurface;
 };
 
 /**
@@ -79,7 +93,9 @@ type WorkKey = { asOf: string; eli: string; jurisdiction: string };
  * one the grouping accumulates into, so references seen after the work was
  * collected are in it too.
  */
-type LinkedWork = WorkKey & { rows: { versionValidFrom: string | null }[] };
+type LinkedWork = WorkKey & {
+  rows: Parameters<typeof provisionVersionAsOf>[0][];
+};
 
 const workKeyOf = ({
   eli,
@@ -95,8 +111,11 @@ const workKeyOf = ({
 export const useDecisionProvisionAnchors = ({
   blocks,
   country,
+  court,
+  caseNumber,
   decisionDate,
   decisionId,
+  surface,
 }: UseDecisionProvisionAnchorsOptions): DecisionProvisionAnchor[] => {
   const renderPart = useProvisionPartRenderer();
   const { data } = useQuery(decisionProvisionsForLinkingOptions(decisionId));
@@ -112,7 +131,7 @@ export const useDecisionProvisionAnchors = ({
 
   const grammar = useCitingProvisionCitationGrammar(country);
   const fallbackReferences =
-    grammar === null
+    grammar === null || !allowsLegacyProvisionFallback(data)
       ? []
       : locateAbbreviatedProvisionCitations(blocks, grammar);
   const works: LinkedWork[] = [];
@@ -130,7 +149,7 @@ export const useDecisionProvisionAnchors = ({
       rowsByWork.set(key, workRows);
     }
     workRows.push(row);
-    const asOf = row.versionValidFrom ?? decisionAsOf;
+    const asOf = provisionVersionAsOf(row, decisionAsOf);
     if (asOf === null) {
       continue;
     }
@@ -155,7 +174,10 @@ export const useDecisionProvisionAnchors = ({
     });
     const existing = works.find((work) => workKeyOf(work) === key);
     if (existing !== undefined) {
-      existing.rows.push({ versionValidFrom: decisionAsOf });
+      existing.rows.push({
+        versionBasis: DECISION_DATE_VERSION_BASIS,
+        versionValidFrom: decisionAsOf,
+      });
       continue;
     }
     seen.add(key);
@@ -163,7 +185,12 @@ export const useDecisionProvisionAnchors = ({
       asOf: decisionAsOf,
       eli: reference.abbreviation.eli,
       jurisdiction: reference.jurisdiction,
-      rows: [{ versionValidFrom: decisionAsOf }],
+      rows: [
+        {
+          versionBasis: DECISION_DATE_VERSION_BASIS,
+          versionValidFrom: decisionAsOf,
+        },
+      ],
     });
   }
 
@@ -173,7 +200,9 @@ export const useDecisionProvisionAnchors = ({
     country: work.jurisdiction,
     eli: work.eli,
   }));
-  const { data: resolved } = useQuery(statutesResolveOptions(citedWorks));
+  const { data: resolved, isPending: statutesPending } = useQuery(
+    statutesResolveOptions(citedWorks),
+  );
   const resolvedByCitedWork = statuteByCitedWork(resolved);
   const statuteByWork = new Map<string, ResolvedCitedStatute>();
   for (const [index, work] of works.entries()) {
@@ -195,7 +224,10 @@ export const useDecisionProvisionAnchors = ({
     const statute = statuteByWork.get(key);
     if (
       statute === undefined ||
-      !referencesOutsideVersion(statute, work.rows)
+      !referencesOutsideVersion(statute, {
+        decisionAsOf,
+        references: work.rows,
+      })
     ) {
       continue;
     }
@@ -217,27 +249,51 @@ export const useDecisionProvisionAnchors = ({
     }
   }
 
+  const occurrences = provisionOccurrenceContexts(
+    rows.map((row) => ({
+      id: `${row.anchor}-${String(row.spanStart)}`,
+      reference: row,
+      sentenceText: row.sentenceText,
+      spanStart: row.spanStart,
+    })),
+  );
   const anchors: DecisionProvisionAnchor[] = [];
+  const failures: ProvisionPlacementFailure[] = [];
+  if (data !== undefined && data.nextCursor !== null) {
+    failures.push({ id: "linking-page-limit", reason: "page-limit-reached" });
+  }
   for (const row of rows) {
-    if (row.workEli === null) {
-      continue;
-    }
-    const key = workKeyOf({ eli: row.workEli, jurisdiction: row.jurisdiction });
+    const id = `${row.anchor}-${String(row.spanStart)}`;
+    const key = workKeyOf({
+      eli: row.workEli ?? "",
+      jurisdiction: row.jurisdiction,
+    });
     const statute = statuteByWork.get(key);
-    if (statute === undefined) {
-      continue;
+    const versionIndex = versionedWorks.findIndex((work) => work.key === key);
+    const versionQuery =
+      versionIndex === -1 ? undefined : versions.at(versionIndex);
+    const placement = resolveProvisionDocument({
+      row,
+      asOf: provisionVersionAsOf(row, decisionAsOf),
+      statute,
+      versions: optionalArray(versionsByWork.get(key)),
+      statuteState: statutesPending ? "loading" : "settled",
+      versionsState: versionQuery?.isPending === true ? "loading" : "settled",
+    });
+    switch (placement.status) {
+      case "pending":
+        continue;
+      case "unplaced":
+        failures.push({ id, reason: placement.reason });
+        continue;
+      case "placed":
+        break;
+      default: {
+        placement satisfies never;
+        panic("Unknown provision placement outcome");
+      }
     }
-    const document =
-      row.versionValidFrom === null ||
-      versionCoversDate(statute, row.versionValidFrom)
-        ? statute
-        : pickVersionAt(
-            optionalArray(versionsByWork.get(key)),
-            row.versionValidFrom,
-          );
-    if (document === null) {
-      continue;
-    }
+    const document = placement.document;
     // A seed only: one when this reader never had reason to read the list.
     // The provision view reads it itself and counts from there.
     const versionCount = versionsByWork.get(key)?.length ?? 1;
@@ -246,7 +302,8 @@ export const useDecisionProvisionAnchors = ({
     const preview =
       row.previewKey === null ? undefined : previewByKey.get(row.previewKey);
     anchors.push({
-      id: `${row.anchor}-${String(row.spanStart)}`,
+      id,
+      occurrence: occurrences.get(id),
       reference: row,
       sentenceText: row.sentenceText,
       spanStart: row.spanStart,
@@ -260,10 +317,14 @@ export const useDecisionProvisionAnchors = ({
         },
         preview: preview?.documentId === document.id ? preview : null,
         payload: {
+          decisionContext:
+            court === null || caseNumber === null
+              ? undefined
+              : { court, caseNumber, appliedDocumentId: document.id },
           anchorId: provisionHeadingAnchor(row.anchor),
           highlightAnchorId: row.anchor,
           documentId: document.id,
-          eli: row.workEli,
+          eli: row.workEli ?? panic("Placed provision has no work ELI"),
           jurisdiction: row.jurisdiction,
           provisionLabel: formatProvisionReference(row, renderPart),
           statuteTitle: document.title,
@@ -309,6 +370,10 @@ export const useDecisionProvisionAnchors = ({
           versionValidFrom: document.versionValidFrom,
         },
         payload: {
+          decisionContext:
+            court === null || caseNumber === null
+              ? undefined
+              : { court, caseNumber, appliedDocumentId: document.id },
           anchorId: provisionHeadingAnchor(reference.anchor),
           highlightAnchorId: reference.anchor,
           documentId: document.id,
@@ -327,5 +392,6 @@ export const useDecisionProvisionAnchors = ({
     });
   }
 
+  useProvisionPlacementTelemetry({ decisionId, failures, surface });
   return anchors;
 };

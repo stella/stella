@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -272,6 +273,20 @@ export const LinkClauseDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="sm:max-w-lg">
+        <DialogFormState
+          dirty={
+            selectedClauseId !== null ||
+            selectedVariantId !== null ||
+            slotValue !== null ||
+            customSlotName !== ""
+          }
+          onDiscard={() => {
+            setSelectedClauseId(null);
+            setSelectedVariantId(null);
+            setSlotValue(null);
+            setCustomSlotName("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("clauses.linkClause")}</DialogTitle>
         </DialogHeader>

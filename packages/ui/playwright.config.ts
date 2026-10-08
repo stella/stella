@@ -1,6 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
+  reporter: process.env["CI"]
+    ? [
+        ["dot"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   testDir: "./src",
   testMatch: "**/*.playwright.spec.ts",
   fullyParallel: true,

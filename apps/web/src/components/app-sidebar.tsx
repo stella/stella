@@ -9,10 +9,6 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -46,7 +42,7 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import {
   Menu,
@@ -61,6 +57,7 @@ import { cn } from "@stll/ui/utils";
 
 import {
   matterActivityIsKnownEmpty,
+  matterActivityItemVisible,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -133,6 +130,10 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
@@ -144,6 +145,7 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
+import { useQueryView } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
@@ -217,22 +219,33 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isError: workspacesFailed,
     isFetching: workspacesFetching,
     refetch: refetchWorkspaces,
-  } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
-  const { data: inboxCount } = useChromeQuery({
+  } = useChromeQuery(
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
+  );
+  const inboxQuery = useChromeQuery({
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
   });
-  const openInboxCount = inboxCount?.count ?? 0;
+  const inboxView = useQueryView(inboxQuery);
+  // This badge decorates an always-available inbox link; hide it when the count cannot be read.
+  const openInboxCount = inboxView.type === "items" ? inboxView.items.count : 0;
   const mounted = useHasMounted();
-  const { data: groupedChatThreadPages } = useInfiniteQuery({
+  const groupedThreadsQuery = useInfiniteQuery({
     ...groupedChatThreadsOptions({
       activeOrganizationId: user.activeOrganizationId,
       userId: user.id,
     }),
     enabled: mounted,
   });
+  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  // Thread activity only orders the matter shortcuts; the matter list remains independently available.
   const groupedChatThreads = mergeGroupedChatThreadPages(
-    groupedChatThreadPages?.pages,
+    groupedThreadsView.type === "items"
+      ? groupedThreadsView.items.pages
+      : undefined,
   );
   const chatActivityByWorkspaceId = new Map(
     groupedChatThreads.workspaces.flatMap((workspace) => {
@@ -1148,7 +1161,10 @@ const MatterItem = ({
   );
   const activityIsKnownEmpty = matterActivityIsKnownEmpty({
     isInvalidated: activityIsInvalidated,
-    pages: cachedActivity?.pages,
+    pages: cachedActivity?.pages.map((page) => ({
+      ...page,
+      items: page.items.filter(matterActivityItemVisible),
+    })),
     status: activityStatus,
   });
   const hasExpandableContent = !activityIsKnownEmpty || showTimesheetLink;
@@ -1300,22 +1316,13 @@ const MatterItem = ({
             className="size-4 shrink-0"
             matter={{ id: ws.id, color: ws.color }}
           />
-          <Input
-            autoFocus
-            className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-            onBlur={() => {
+          <InlineRenameInput
+            className="text-sm"
+            onCommit={() => {
               detached(rename.commit(), "app-sidebar.commit");
             }}
-            onChange={(e) => rename.setDraft(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-              if (e.key === "Escape") {
-                rename.cancel();
-                e.currentTarget.blur();
-              }
-            }}
+            onValueChange={rename.setDraft}
+            onCancel={rename.cancel}
             value={rename.state.draft}
           />
         </div>
@@ -1422,7 +1429,10 @@ const MatterItem = ({
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText as="span" className="truncate">
+              <BidiText
+                as="span"
+                className="overflow-hidden text-ellipsis whitespace-pre"
+              >
                 {ws.name}
               </BidiText>
               <Tooltip
@@ -1574,7 +1584,8 @@ const MatterActivityList = ({
     }),
     enabled: mounted,
   });
-  const items = data ? data.pages.flatMap((page) => page.items) : [];
+  const activityItems = data?.pages.flatMap((page) => page.items) ?? [];
+  const items = activityItems.filter(matterActivityItemVisible);
 
   const openEntity = async ({
     entityKind,

@@ -12,8 +12,10 @@ import JSZip from "jszip";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
+import type { TemplateStructureError } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -276,6 +278,11 @@ const createContext = ({
     loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
     loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
   },
+});
+
+const createOutboundContext = (): McpRequestContext => ({
+  ...createContext(),
+  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
 });
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1113,6 +1120,51 @@ describe("MCP template tools", () => {
       expect(result.isError).not.toBe(true);
       expect(parseToolPayload(result)).toMatchObject({
         clauseWarnings: [warning],
+      });
+    },
+  );
+
+  test.each(["text", "docx"])(
+    "fill_template reports a structure error inside a clause body in %s output",
+    async (output_mode) => {
+      const structureError = {
+        message: "Missing closing directive",
+        paragraphIndex: 2,
+        directive: "#if notice",
+        source: "clause",
+        clause: {
+          slotKey: "@clause:Terms",
+          resolution: "pinned",
+          version: 3,
+          id: "00000000-0000-4000-8000-000000000001",
+          name: "Terms",
+        },
+      } satisfies Required<TemplateStructureError>;
+      fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+        conditionDecisions: [],
+        templateName: "Terms",
+        fileName: "terms.docx",
+        file: await makeDocxFile(["Terms"]),
+        text: "Terms",
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+        clauseWarnings: [],
+        aiFieldErrors: [],
+        structureErrors: [structureError],
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          template_id: TEMPLATE_ID,
+          values: {},
+          output_mode,
+          completion_mode: "allow_partial",
+        },
+        context: createContext(),
+        toolName: "fill_template",
+      });
+      expect(result.isError).not.toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        structureErrors: [structureError],
       });
     },
   );
@@ -3132,7 +3184,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
-      context: createContext(),
+      context: createOutboundContext(),
       toolName: "create_template",
     });
 
@@ -3164,6 +3216,18 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("create_template stops before a host-file download without a permit", async () => {
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)["code"]).toBe("permission_denied");
+    expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
+  });
+
   test("create_template rejects host-file bytes that are not a DOCX", async () => {
     safeOutboundFetchBytesMock.mockResolvedValue(
       hostFileResponse(new TextEncoder().encode("not a docx")),
@@ -3171,7 +3235,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
-      context: createContext(),
+      context: createOutboundContext(),
       toolName: "create_template",
     });
 
@@ -3194,7 +3258,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
-      context: createContext(),
+      context: createOutboundContext(),
       toolName: "create_template",
     });
 
@@ -3326,7 +3390,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
-      context: createContext(),
+      context: createOutboundContext(),
       toolName: "create_template",
     });
 
@@ -4598,7 +4662,7 @@ describe("MCP template tools", () => {
         docx_base64: Buffer.from("not a docx").toString("base64"),
         file: HOST_FILE_REFERENCE,
       },
-      context: createContext(),
+      context: createOutboundContext(),
       toolName: "create_template",
     });
 

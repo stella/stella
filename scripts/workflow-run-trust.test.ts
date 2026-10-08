@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { Script } from "node:vm";
 
 import { definitelyFalse } from "./github-expression";
+import {
+  MAIN_ONLY_BUN_CACHE_SAVE,
+  usesDefaultCacheScope,
+  workflowCacheProblems,
+} from "./workflow-cache-policy.ts";
 
 // A workflow_run workflow runs in the default branch's context, with its
 // secrets and cache scope, for any completed run of a workflow with the
@@ -13,8 +19,13 @@ import { definitelyFalse } from "./github-expression";
 // it when that job was skipped.
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
-/** workflow_run workflows today. Fewer means the scan broke. */
-const MINIMUM_WORKFLOW_RUN_WORKFLOWS = 5;
+// Pin the current scan so missing or newly added entry points need review.
+const WORKFLOW_RUN_WORKFLOWS = [
+  "cla.yml",
+  "publish-npm.yml",
+  "release-desktop.yml",
+  "scheduled-run-alerts.yml",
+] as const;
 
 // A source check holds when the job's condition is false, whatever every
 // other value is, as soon as ONE of these three facts about the triggering run
@@ -72,86 +83,6 @@ const runsAfterSkippedGate = (condition: string, gatedNeeds: string[]) =>
 
 /** Status functions that run a job even when a job it needs was skipped. */
 const RUNS_AFTER_SKIP = /\b(always|failure|cancelled)\(\)/u;
-
-// Release and deploy jobs restore caches from the default branch's scope.
-// pull_request runs save only to their own pull request's scope, but
-// pull_request_target and workflow_run runs save to the default branch's
-// scope: a fork can influence the first, and the second runs release and
-// signing jobs. So none of their jobs may save to or restore from any cache,
-// and a reusable workflow they call must be one reviewed for that.
-const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
-const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@aff5017c264acce5a2bcdf15876da08835e6de70":
-    "title, label, size and assignee actions only; no cache",
-  "stella/.github/.github/workflows/npm-independent-release.yml@28f9f43d5c1e820500f8526a5527465bcbcdf425":
-    "checkout, artifact download, setup-node without a cache input and the hardened publish action; no cache",
-};
-
-/** Why a step can save to the Actions cache, or null when it cannot. */
-const cacheSave = (step: Record<string, unknown>): string | null => {
-  const uses = typeof step["uses"] === "string" ? step["uses"] : "";
-  const inputs = isRecord(step["with"]) ? step["with"] : {};
-  if (uses === "") {
-    return null;
-  }
-  if (uses.startsWith("./")) {
-    return `local action ${uses} is not reviewed for cache use`;
-  }
-  if (/^actions\/cache(\/save)?@/u.test(uses)) {
-    return `${uses} saves a cache`;
-  }
-  if (/setup-bun-cached@|^Swatinem\/rust-cache@/u.test(uses)) {
-    return `${uses} saves a cache`;
-  }
-  if (uses.startsWith("oven-sh/setup-bun@") && inputs["no-cache"] !== true) {
-    return `${uses} caches the Bun binary unless no-cache is true`;
-  }
-  const setupGo = uses.startsWith("actions/setup-go@");
-  if (setupGo && inputs["cache"] !== false) {
-    return `${uses} caches by default unless cache is false`;
-  }
-  if (
-    /^actions\/setup-[a-z]+@/u.test(uses) &&
-    !setupGo &&
-    inputs["cache"] !== undefined &&
-    inputs["cache"] !== false &&
-    inputs["cache"] !== ""
-  ) {
-    return `${uses} saves a cache through its cache input`;
-  }
-  return null;
-};
-
-/** Why a job of a fork-influenced default-branch workflow could seed a cache. */
-const cacheSaveProblems = (workflow: unknown): string[] => {
-  if (
-    !isRecord(workflow) ||
-    !triggers(workflow["on"]).some((event) =>
-      DEFAULT_SCOPE_EVENTS.includes(event),
-    )
-  ) {
-    return [];
-  }
-  const jobs = isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
-  return Object.entries(jobs).flatMap(([name, job]) => {
-    if (!isRecord(job)) {
-      return [];
-    }
-    const reusable = typeof job["uses"] === "string" ? job["uses"] : null;
-    if (reusable !== null) {
-      return reusable in REVIEWED_REUSABLE_WORKFLOWS
-        ? []
-        : [
-            `job '${name}' calls ${reusable}, which is not reviewed for cache use`,
-          ];
-    }
-    const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
-    return steps.flatMap((step) => {
-      const reason = isRecord(step) ? cacheSave(step) : null;
-      return reason === null ? [] : [`job '${name}': ${reason}`];
-    });
-  });
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -265,13 +196,83 @@ const GATE = [
 describe("workflow_run trust", () => {
   test("every workflow_run workflow checks where its triggering run came from", () => {
     const workflows = workflowRunWorkflows();
-    expect(workflows.length).toBeGreaterThanOrEqual(
-      MINIMUM_WORKFLOW_RUN_WORKFLOWS,
-    );
+    expect(workflows.map(({ file }) => file).toSorted()).toEqual([
+      ...WORKFLOW_RUN_WORKFLOWS,
+    ]);
     const problems = workflows.flatMap(({ file, workflow }) =>
       trustProblems(workflow).map((problem) => `${file}: ${problem}`),
     );
     expect(problems).toEqual([]);
+  });
+
+  test("reusable network delivery trusts only the main recorder caller", () => {
+    const workflows = allWorkflows();
+    const delivery = workflows.find(
+      ({ file }) => file === "network-baseline-deliver.yml",
+    )?.workflow;
+    const recording = workflows.find(
+      ({ file }) => file === "network-baseline-record.yml",
+    )?.workflow;
+    if (
+      !isRecord(delivery) ||
+      !isRecord(delivery["jobs"]) ||
+      !isRecord(recording) ||
+      !isRecord(recording["jobs"])
+    ) {
+      expect.unreachable("network baseline workflows require jobs");
+    }
+    expect(triggers(delivery["on"])).toEqual(["workflow_call"]);
+    expect(recording["jobs"]["deliver"]).toMatchObject({
+      uses: "./.github/workflows/network-baseline-deliver.yml",
+      needs: "record",
+    });
+    const job = delivery["jobs"]["deliver"];
+    if (!isRecord(job) || typeof job["if"] !== "string") {
+      expect.unreachable("reusable delivery requires a caller condition");
+    }
+    const condition = new Script(`Boolean(${job["if"]})`);
+    for (const ref of [
+      "refs/heads/main",
+      "refs/heads/feature",
+      "refs/pull/42/merge",
+    ]) {
+      for (const workflow_ref of [
+        "owner/repo/.github/workflows/network-baseline-record.yml@refs/heads/main",
+        "owner/repo/.github/workflows/ci.yml@refs/heads/main",
+        "owner/repo/.github/workflows/network-baseline-record.yml@refs/heads/feature",
+        "fork/repo/.github/workflows/network-baseline-record.yml@refs/heads/main",
+      ]) {
+        for (const event_name of [
+          "schedule",
+          "workflow_dispatch",
+          "pull_request",
+          "pull_request_target",
+          "workflow_run",
+          "push",
+        ]) {
+          const permitted =
+            ref === "refs/heads/main" &&
+            workflow_ref ===
+              "owner/repo/.github/workflows/network-baseline-record.yml@refs/heads/main" &&
+            (event_name === "schedule" || event_name === "workflow_dispatch");
+          expect(
+            condition.runInNewContext({
+              github: {
+                ref,
+                workflow_ref,
+                event_name,
+                repository: "owner/repo",
+              },
+              format: (pattern: string, repository: string) =>
+                pattern.replace("{0}", () => repository),
+              fromJSON: JSON.parse,
+              contains: (values: unknown[], value: unknown) =>
+                values.includes(value),
+            }),
+          ).toBe(permitted);
+        }
+      }
+    }
   });
 
   test("rejects a job that trusts the run's name and conclusion alone", () => {
@@ -389,19 +390,18 @@ describe("workflow_run trust", () => {
   });
 
   test("no pull_request_target or workflow_run job uses a cache", () => {
-    const workflows = allWorkflows().filter(
-      ({ workflow }) =>
-        isRecord(workflow) &&
-        triggers(workflow["on"]).some((event) =>
-          DEFAULT_SCOPE_EVENTS.includes(event),
-        ),
+    const workflows = allWorkflows().filter(({ workflow }) =>
+      usesDefaultCacheScope(workflow),
     );
-    // cla.yml, pr-lint.yml and the workflow_run workflows today.
-    expect(workflows.length).toBeGreaterThanOrEqual(
-      MINIMUM_WORKFLOW_RUN_WORKFLOWS + 1,
+    expect(workflows.map(({ file }) => file).toSorted()).toEqual(
+      [
+        ...WORKFLOW_RUN_WORKFLOWS,
+        "network-baseline-request.yml",
+        "pr-lint.yml",
+      ].toSorted(),
     );
     const problems = workflows.flatMap(({ file, workflow }) =>
-      cacheSaveProblems(workflow).map((problem) => `${file}: ${problem}`),
+      workflowCacheProblems(workflow).map((problem) => `${file}: ${problem}`),
     );
     expect(problems).toEqual([]);
   });
@@ -422,13 +422,13 @@ describe("workflow_run trust", () => {
         on: ["pull_request_target"],
         jobs: { a: { steps: [step] } },
       };
-      expect(cacheSaveProblems(workflow), step.uses).toHaveLength(1);
+      expect(workflowCacheProblems(workflow), step.uses).toHaveLength(1);
     }
     const unreviewed = {
       on: { pull_request_target: {} },
       jobs: { a: { uses: "someone/repo/.github/workflows/x.yml@abc" } },
     };
-    expect(cacheSaveProblems(unreviewed)).toHaveLength(1);
+    expect(workflowCacheProblems(unreviewed)).toHaveLength(1);
   });
 
   test("accepts steps that cannot save to a cache", () => {
@@ -447,9 +447,9 @@ describe("workflow_run trust", () => {
         },
       },
     };
-    expect(cacheSaveProblems(workflow)).toEqual([]);
+    expect(workflowCacheProblems(workflow)).toEqual([]);
     expect(
-      cacheSaveProblems({
+      workflowCacheProblems({
         on: ["pull_request"],
         jobs: { a: { steps: [{ uses: "actions/cache@abc" }] } },
       }),
@@ -459,4 +459,91 @@ describe("workflow_run trust", () => {
   test("ignores workflows without a workflow_run trigger", () => {
     expect(trustProblems({ on: ["push"], jobs: { a: {} } })).toEqual([]);
   });
+});
+
+test("publishing tokens and their artifact chain reject cached Bun setup", () => {
+  const rawSetup = {
+    uses: "oven-sh/setup-bun@fixture",
+    with: { "bun-version-file": "package.json" },
+  };
+  const cachedSetup = {
+    ...rawSetup,
+    uses: "stella/.github/actions/setup-bun-cached@fixture",
+    with: { ...rawSetup.with, save: MAIN_ONLY_BUN_CACHE_SAVE },
+  };
+  for (const permission of ["contents", "packages", "id-token"]) {
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [cachedSetup],
+          },
+        },
+      }),
+    ).toHaveLength(1);
+    expect(
+      workflowCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [rawSetup],
+          },
+        },
+      }),
+    ).toEqual([]);
+  }
+  expect(
+    workflowCacheProblems({
+      permissions: "write-all",
+      jobs: { publish: { steps: [cachedSetup] } },
+    }),
+  ).toHaveLength(1);
+  expect(
+    workflowCacheProblems({
+      permissions: { contents: "write" },
+      jobs: {
+        ordinary: { permissions: { contents: "read" }, steps: [cachedSetup] },
+      },
+    }),
+  ).toEqual([]);
+  for (const needs of ["verify", ["verify"]]) {
+    const workflow = {
+      jobs: {
+        build: {
+          steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+        },
+        verify: { needs: "build", steps: [] },
+        publish: { permissions: { "id-token": "write" }, needs, steps: [] },
+        ordinary: { steps: [cachedSetup] },
+      },
+    };
+    expect(workflowCacheProblems(workflow)).toHaveLength(1);
+    workflow.jobs.build.steps[0] = rawSetup;
+    expect(workflowCacheProblems(workflow)).toEqual([]);
+  }
+  const consumers = {
+    jobs: {
+      build: {
+        permissions: { contents: "write" },
+        steps: [rawSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      externalPublish: {
+        steps: [cachedSetup, { uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  expect(workflowCacheProblems(consumers)).toHaveLength(1);
+  const artifacts = {
+    jobs: {
+      build: {
+        steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      publish: {
+        permissions: { packages: "write" },
+        steps: [{ uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  expect(workflowCacheProblems(artifacts)).toHaveLength(1);
 });

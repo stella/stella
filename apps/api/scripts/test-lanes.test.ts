@@ -45,10 +45,20 @@ test("a serial measurement sweep reports every file even after a failure", async
 const controlledRun = () => {
   const started: string[] = [];
   const running = new Map<string, TestBatchKind>();
+  const laneByBatch = new Map<string, number>();
+  const runningLanes = new Set<number>();
   const settlers = new Map<string, (exitCode: number) => void>();
   let maxConcurrent = 0;
   let maxConcurrentHeavy = 0;
-  const runBatch = async ({ kind, name }: FakeBatch): Promise<number> => {
+  const runBatch = async (
+    { kind, name }: FakeBatch,
+    lane: number,
+  ): Promise<number> => {
+    expect(Number.isSafeInteger(lane)).toBe(true);
+    expect(lane).toBeGreaterThan(0);
+    expect(runningLanes.has(lane)).toBe(false);
+    runningLanes.add(lane);
+    laneByBatch.set(name, lane);
     started.push(name);
     running.set(name, kind);
     maxConcurrent = Math.max(maxConcurrent, running.size);
@@ -60,6 +70,7 @@ const controlledRun = () => {
       settlers.set(name, resolve);
     });
     running.delete(name);
+    runningLanes.delete(lane);
     return exitCode;
   };
   const settle = async (name: string, exitCode = 0) => {
@@ -80,6 +91,7 @@ const controlledRun = () => {
       return maxConcurrentHeavy;
     },
     runBatch,
+    laneByBatch,
     settle,
     started,
   };
@@ -199,6 +211,9 @@ describe("runInLanes", () => {
 
     expect((await done).map(({ exitCode }) => exitCode)).toEqual([0, 0, 0, 0]);
     expect(run.maxConcurrent).toBe(2);
+    expect(run.laneByBatch.get("a")).not.toBe(run.laneByBatch.get("b"));
+    expect(run.laneByBatch.get("c")).toBe(run.laneByBatch.get("b"));
+    expect(run.laneByBatch.get("d")).toBe(run.laneByBatch.get("a"));
   });
 
   test("runs one heavy batch at a time and lets other batches pass a waiting one", async () => {

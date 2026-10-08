@@ -15,6 +15,7 @@ import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -26,6 +27,10 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  requireChatToolModelAdmission,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { recordTemplateExecution } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
@@ -94,6 +99,8 @@ export const FILL_TEMPLATE_DESCRIPTION =
   "with real values; ask the user to review those.";
 
 type CreateTemplateToolsArgs = {
+  /** The turn's admission; the nested AI-field steps are steps of the turn. */
+  modelAdmission: ModelDispatchAdmission | undefined;
   scopedDb: ScopedDb;
   /** Org-scoped DB used to meter the nested AI-field generation steps. */
   safeDb: SafeDb;
@@ -166,6 +173,7 @@ const buildTemplateAiAnalytics = ({
  * `createTemplateAuthoringTools`.
  */
 export const createTemplateTools = ({
+  modelAdmission,
   scopedDb,
   safeDb,
   organizationId,
@@ -186,6 +194,7 @@ export const createTemplateTools = ({
   // not bound to a matter (see buildTemplateAiAnalytics below).
   const aiCollaborators = (unrestoredFields: Set<string>) => {
     const shared = {
+      admission: requireChatToolModelAdmission(modelAdmission),
       orgAIConfig: orgAIConfig ?? null,
       managedAIResidency,
       organizationId,
@@ -283,9 +292,14 @@ export const createTemplateTools = ({
         values,
         scopedDb,
         organizationId,
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         useRecording: "caller",
-        aiCollaborators: () => aiCollaborators(unrestoredFields),
+        // The turn's admission already holds this tool call's model work.
+        aiFill: async (fill) => ({
+          type: "admitted",
+          value: await fill(aiCollaborators(unrestoredFields)),
+        }),
       });
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
@@ -348,6 +362,8 @@ export const createTemplateTools = ({
 };
 
 type CreateTemplateAuthoringToolsArgs = {
+  /** The turn's admission; the suggestion request is a step of the turn. */
+  modelAdmission: ModelDispatchAdmission | undefined;
   /** Org-scoped DB used to meter the AI suggestion step. */
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -405,6 +421,7 @@ const restoreSuggestion = (
 };
 
 export const createTemplateAuthoringTools = ({
+  modelAdmission,
   safeDb,
   organizationId,
   userId,
@@ -482,6 +499,7 @@ export const createTemplateAuthoringTools = ({
       // names, quota details) that must not reach the model verbatim.
       try {
         const suggestions = await dependencies.suggestTemplateFields({
+          admission: requireChatToolModelAdmission(modelAdmission),
           documentText: documentText.value,
           instructions:
             instructions === null ? undefined : preparedInstructions.value,

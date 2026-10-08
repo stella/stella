@@ -5,7 +5,10 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { receiveSesInboundMail } from "@/api/lib/email/inbound/runtime";
-import { createSesS3ObjectReader } from "@/api/lib/email/inbound/ses";
+import {
+  createSesS3ObjectReader,
+  createSesS3ObjectDeleter,
+} from "@/api/lib/email/inbound/ses";
 import { drainInboundMailQueue } from "@/api/lib/email/inbound/sqs";
 import { getFreshAbortableS3 } from "@/api/lib/s3";
 import {
@@ -45,8 +48,13 @@ export const receiveInboundMail: SchedulerTask = async ({
       config satisfies never;
       return panic("Unhandled inbound mail receiving configuration");
   }
+  const objectClient = await getFreshAbortableS3();
   const readObject = createSesS3ObjectReader({
-    client: await getFreshAbortableS3(),
+    client: objectClient,
+    bucket: config.bucket,
+  });
+  const deleteObject = createSesS3ObjectDeleter({
+    client: objectClient,
     bucket: config.bucket,
   });
   const drained = await drainInboundMailQueue({
@@ -61,6 +69,7 @@ export const receiveInboundMail: SchedulerTask = async ({
         bucket: config.bucket,
         keyPrefix: config.keyPrefix,
         readObject,
+        deleteObject,
         inboundDomain: config.inboundDomain,
       }),
   });

@@ -1,5 +1,5 @@
 import { useDeferredValue, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -20,9 +20,11 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { resolveMatterColor } from "@/lib/matter-colors";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 /**
@@ -150,6 +152,56 @@ export const ChatMatterPickerPending = () => (
   </div>
 );
 
+type MatterPickerSearchProps = {
+  search: string;
+  onChange: (search: string) => void;
+  searchRef: RefObject<HTMLInputElement | null>;
+};
+
+const MatterPickerSearch = ({
+  search,
+  onChange,
+  searchRef,
+}: MatterPickerSearchProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-col gap-1.5 border-b px-2 pt-1.5 pb-2">
+      <p className="text-foreground text-sm font-semibold">
+        {t("inspector.matterPicker.title")}
+      </p>
+      <p className="text-muted-foreground text-xs leading-snug text-pretty">
+        {t("inspector.matterPicker.description")}
+      </p>
+      <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background relative flex items-center gap-1.5 rounded-md border px-1.5 focus-within:ring-2">
+        <SearchIcon
+          aria-hidden="true"
+          className="text-muted-foreground size-3.5 shrink-0"
+        />
+        <input
+          className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-sm outline-none"
+          dir={contentDir(search)}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            // base-ui's Menu listens for keystrokes (typeahead
+            // jumps to items, arrows move focus, etc.) which
+            // hijacks the user's typing in this search input.
+            // Stop every non-closing key so typed characters
+            // actually land here, but keep Escape so the menu
+            // can still be dismissed from inside the field.
+            if (e.key !== "Escape") {
+              e.stopPropagation();
+            }
+          }}
+          placeholder={t("inspector.matterPicker.searchPlaceholder")}
+          ref={searchRef}
+          type="text"
+          value={search}
+        />
+      </div>
+    </div>
+  );
+};
+
 export const ChatMatterPicker = ({
   matterIds,
   onChange,
@@ -164,9 +216,19 @@ export const ChatMatterPicker = ({
   // Cache hit thanks to chat-mention-providers and the app sidebar
   // — the navigation list is already in flight on any workspace
   // page.
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
-  const workspaces = data?.workspaces;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const workspacesView = useQueryView(
+    useQuery(
+      workspacesNavigationOptions({
+        organizationId: activeOrganizationId,
+        userId,
+      }),
+    ),
+  );
+  const workspaces =
+    workspacesView.type === "items"
+      ? workspacesView.items.workspaces
+      : undefined;
 
   const personalLabel = t("workspaces.parties.personalLabel");
   const matters: Matter[] = workspaces
@@ -255,6 +317,12 @@ export const ChatMatterPicker = ({
   const allSelected = matters.length > 0 && selected.length === matters.length;
   const selectedIdSet = new Set(matterIds);
   const triggerLabel = (() => {
+    if (workspacesView.type === "error") {
+      return t("common.somethingWentWrong");
+    }
+    if (workspacesView.type === "pending") {
+      return t("common.loading");
+    }
     if (selected.length === 0) {
       return t("inspector.matterPicker.noMatter");
     }
@@ -322,59 +390,35 @@ export const ChatMatterPicker = ({
             : triggerLabel
         }
       >
-        <MatterPickerTriggerContent
-          allSelected={allSelected}
-          extra={
-            extraCount > 0 ? (
-              <span
-                className="bg-muted text-foreground text-3xs rounded-sm px-1 font-medium tabular-nums"
-                style={extraCountStyle}
-              >
-                +{format.number(extraCount)}
-              </span>
-            ) : null
-          }
-          selectedMatter={selected.at(0)}
-          status="ready"
-          triggerLabel={triggerLabel}
-        />
+        {workspacesView.type === "pending" ? (
+          <MatterPickerTriggerContent status="pending" />
+        ) : (
+          <MatterPickerTriggerContent
+            allSelected={allSelected}
+            extra={
+              extraCount > 0 ? (
+                <span
+                  className="bg-muted text-foreground text-3xs rounded-sm px-1 font-medium tabular-nums"
+                  style={extraCountStyle}
+                >
+                  +{format.number(extraCount)}
+                </span>
+              ) : null
+            }
+            selectedMatter={selected.at(0)}
+            status="ready"
+            triggerLabel={triggerLabel}
+          />
+        )}
       </MenuTrigger>
       <MenuPopup align="start" className="w-72" sideOffset={6}>
-        <div className="flex flex-col gap-1.5 border-b px-2 pt-1.5 pb-2">
-          <p className="text-foreground text-sm font-semibold">
-            {t("inspector.matterPicker.title")}
-          </p>
-          <p className="text-muted-foreground text-xs leading-snug text-pretty">
-            {t("inspector.matterPicker.description")}
-          </p>
-          <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background relative flex items-center gap-1.5 rounded-md border px-1.5 focus-within:ring-2">
-            <SearchIcon
-              aria-hidden="true"
-              className="text-muted-foreground size-3.5 shrink-0"
-            />
-            <input
-              className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-sm outline-none"
-              dir={contentDir(search)}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => {
-                // base-ui's Menu listens for keystrokes (typeahead
-                // jumps to items, arrows move focus, etc.) which
-                // hijacks the user's typing in this search input.
-                // Stop every non-closing key so typed characters
-                // actually land here, but keep Escape so the menu
-                // can still be dismissed from inside the field.
-                if (e.key !== "Escape") {
-                  e.stopPropagation();
-                }
-              }}
-              placeholder={t("inspector.matterPicker.searchPlaceholder")}
-              ref={searchRef}
-              type="text"
-              value={search}
-            />
-          </div>
-        </div>
+        <MatterPickerSearch
+          search={search}
+          onChange={setSearch}
+          searchRef={searchRef}
+        />
         <div className="flex flex-col py-1">
+          <QueryViewFeedback view={workspacesView} />
           {/* "All matters" sits above the per-matter rows so users
               can scope the chat to the whole org in one click —
               and so chats opened outside any specific matter
@@ -404,14 +448,19 @@ export const ChatMatterPicker = ({
             </MenuCheckboxItem>
           )}
           {(() => {
-            if (workspaces === undefined) {
-              return (
-                <div className="text-muted-foreground p-3 text-center text-xs">
-                  {t("common.loading")}
-                </div>
-              );
+            if (
+              workspacesView.type === "pending" ||
+              workspacesView.type === "error"
+            ) {
+              return null;
             }
             if (groups.length === 0) {
+              if (
+                workspacesView.type === "items" &&
+                workspacesView.refetchError !== undefined
+              ) {
+                return null;
+              }
               return (
                 <div className="text-muted-foreground p-3 text-center text-xs">
                   {search.length > 0
@@ -434,10 +483,7 @@ export const ChatMatterPicker = ({
                   return (
                     <MenuCheckboxItem
                       checked={isOn}
-                      className={cn(
-                        TRUNCATING_ITEM_CLASS,
-                        "min-h-11 sm:min-h-11",
-                      )}
+                      className={TRUNCATING_ITEM_CLASS}
                       closeOnClick={false}
                       key={m.id}
                       onClick={() => toggle(m.id)}

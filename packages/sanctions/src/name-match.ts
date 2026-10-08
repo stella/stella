@@ -82,13 +82,49 @@ type Vocabulary = {
   /** Per string, its length in code points and its number of distinct bigrams. */
   lengths: number[];
   gramCounts: number[];
-  characterCounts: Map<string, number>[];
+  /** Alternating Unicode code point and count pairs, one compact histogram per spelling. */
+  characterCounts: Uint32Array[];
   ids: Map<string, number>;
   bigrams: Map<string, number[]>;
   /** Aliases that contain the string as a token. */
   postings: number[][];
   /** Aliases in which two adjacent tokens join into the string. */
   joinPostings: number[][];
+  /** Reused by synchronous lookups; generations make clearing proportional to touched ids. */
+  lookupScratch?: LookupScratch;
+};
+
+type LookupScratch = {
+  counts: Uint32Array;
+  generations: Uint32Array;
+  generation: number;
+  touched: number[];
+  candidates: number[];
+  queryCounts: Map<number, number>;
+};
+
+const MAX_LOOKUP_GENERATION = 0xff_ff_ff_ff;
+
+const nextLookupScratch = (vocabulary: Vocabulary): LookupScratch => {
+  let scratch = vocabulary.lookupScratch;
+  if (scratch === undefined) {
+    scratch = {
+      counts: new Uint32Array(vocabulary.strings.length),
+      generations: new Uint32Array(vocabulary.strings.length),
+      generation: 0,
+      touched: [],
+      candidates: [],
+      queryCounts: new Map(),
+    };
+    vocabulary.lookupScratch = scratch;
+  }
+  if (scratch.generation >= MAX_LOOKUP_GENERATION) {
+    scratch.generations.fill(0);
+    scratch.generation = 1;
+  } else {
+    scratch.generation += 1;
+  }
+  return scratch;
 };
 
 type IndexedAlias = {
@@ -144,12 +180,30 @@ const bigrams = (text: string): Set<string> => {
 
 const gramKey = (length: number, gram: string) => `${length}:${gram}`;
 
-const characterCounts = (text: string): Map<string, number> => {
-  const counts = new Map<string, number>();
+const characterHistogram = (
+  text: string,
+  counts = new Map<number, number>(),
+): Map<number, number> => {
+  counts.clear();
   for (const character of text) {
-    counts.set(character, (counts.get(character) ?? 0) + 1);
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) {
+      panic("Missing code point in character histogram");
+    }
+    counts.set(codePoint, (counts.get(codePoint) ?? 0) + 1);
   }
   return counts;
+};
+
+const compactCharacterCounts = (text: string): Uint32Array => {
+  const sortedCounts = [...characterHistogram(text)].toSorted(
+    ([left], [right]) => left - right,
+  );
+  const pairs: number[] = [];
+  for (const [codePoint, count] of sortedCounts) {
+    pairs.push(codePoint, count);
+  }
+  return Uint32Array.from(pairs);
 };
 
 const intern = (vocabulary: Vocabulary, text: string): number => {
@@ -163,7 +217,7 @@ const intern = (vocabulary: Vocabulary, text: string): number => {
   vocabulary.strings.push(text);
   vocabulary.lengths.push(length);
   vocabulary.gramCounts.push(grams.size);
-  vocabulary.characterCounts.push(characterCounts(text));
+  vocabulary.characterCounts.push(compactCharacterCounts(text));
   vocabulary.ids.set(text, id);
   vocabulary.postings.push([]);
   vocabulary.joinPostings.push([]);
@@ -188,8 +242,15 @@ const post = (lists: number[][], ids: readonly number[], alias: number) => {
 export const buildNameIndex = (
   entries: readonly SanctionsEntry[],
 ): NameIndex => {
+  const canShareVocabularies = entries.every(({ names, entityType }) =>
+    names.every(({ name }) =>
+      nameReading(name, entityType).tokens.every(
+        ({ raw, folded }) => raw === folded,
+      ),
+    ),
+  );
   const folded = emptyVocabulary();
-  const raw = emptyVocabulary();
+  const raw = canShareVocabularies ? folded : emptyVocabulary();
   const aliases: IndexedAlias[] = [];
   const entryCounts = new Map<number, number>();
 
@@ -242,17 +303,21 @@ export const buildNameIndex = (
       };
       byKey.set(key, alias);
       post(folded.postings, alias.folded, aliases.length);
-      post(raw.postings, alias.raw, aliases.length);
+      if (raw !== folded) {
+        post(raw.postings, alias.raw, aliases.length);
+      }
       post(
         folded.joinPostings,
         alias.joins.map((join) => join.folded),
         aliases.length,
       );
-      post(
-        raw.joinPostings,
-        alias.joins.map((join) => join.raw),
-        aliases.length,
-      );
+      if (raw !== folded) {
+        post(
+          raw.joinPostings,
+          alias.joins.map((join) => join.raw),
+          aliases.length,
+        );
+      }
       for (const id of alias.folded) {
         entryTokens.add(id);
       }
@@ -286,9 +351,33 @@ export const buildNameIndex = (
  * string within budget k shares at least max(bigrams) - 3k of them.
  */
 type CharacterDistanceOptions = {
-  query: ReadonlyMap<string, number>;
-  candidate: ReadonlyMap<string, number>;
+  query: ReadonlyMap<number, number>;
+  candidate: Uint32Array;
   lengthDifference: number;
+};
+
+const indexedCharacterCount = (
+  counts: Uint32Array,
+  codePoint: number,
+): number => {
+  let lower = 0;
+  let upper = counts.length / 2;
+  while (lower < upper) {
+    const middle = Math.floor((lower + upper) / 2);
+    const indexedCodePoint =
+      counts.at(middle * 2) ?? panic("Missing indexed character code point");
+    if (indexedCodePoint === codePoint) {
+      return (
+        counts.at(middle * 2 + 1) ?? panic("Missing indexed character count")
+      );
+    }
+    if (indexedCodePoint < codePoint) {
+      lower = middle + 1;
+    } else {
+      upper = middle;
+    }
+  }
+  return 0;
 };
 
 // Transpositions preserve counts; other edits repair at most one deficit per side.
@@ -298,8 +387,8 @@ const characterDistanceLowerBound = ({
   lengthDifference,
 }: CharacterDistanceOptions): number => {
   let missing = 0;
-  for (const [character, count] of query) {
-    missing += Math.max(0, count - (candidate.get(character) ?? 0));
+  for (const [codePoint, count] of query) {
+    missing += Math.max(0, count - indexedCharacterCount(candidate, codePoint));
   }
   return Math.max(missing, lengthDifference + missing);
 };
@@ -328,23 +417,27 @@ const similarStrings = ({
     return similar;
   }
   const grams = bigrams(text);
-  const counts = characterCounts(text);
-  const shared = new Map<number, number>();
-  const touched: number[] = [];
+  const scratch = nextLookupScratch(vocabulary);
+  const counts = characterHistogram(text, scratch.queryCounts);
+  const generation = scratch.generation;
+  const { counts: sharedCounts, generations, touched, candidates } = scratch;
+  touched.length = 0;
+  candidates.length = 0;
   for (let other = length - budget; other <= length + budget; other += 1) {
     for (const gram of grams) {
       for (const id of vocabulary.bigrams.get(gramKey(other, gram)) ?? []) {
         if (!spendScreeningWork(work)) {
           return similar;
         }
-        if (!shared.has(id)) {
+        if (generations[id] !== generation) {
+          generations[id] = generation;
+          sharedCounts[id] = 0;
           touched.push(id);
         }
-        shared.set(id, (shared.get(id) ?? 0) + 1);
+        sharedCounts[id] = (sharedCounts[id] ?? 0) + 1;
       }
     }
   }
-  const candidates: number[] = [];
   for (const id of touched) {
     if (!spendScreeningWork(work)) {
       return similar;
@@ -355,7 +448,7 @@ const similarStrings = ({
       id === exact ||
       pairBudget === 0 ||
       Math.abs(candidateLength - length) > pairBudget ||
-      (shared.get(id) ?? 0) <
+      (sharedCounts[id] ?? 0) <
         Math.max(grams.size, vocabulary.gramCounts[id] ?? 0) - 3 * pairBudget
     ) {
       continue;
@@ -384,16 +477,21 @@ const similarStrings = ({
   }
   candidates.sort(
     (left, right) =>
-      (shared.get(right) ?? 0) /
+      (sharedCounts[right] ?? 0) /
         Math.max(grams.size, vocabulary.gramCounts[right] ?? 0) -
-        (shared.get(left) ?? 0) /
+        (sharedCounts[left] ?? 0) /
           Math.max(grams.size, vocabulary.gramCounts[left] ?? 0) ||
       left - right,
   );
   if (candidates.length > MAX_FUZZY_STRINGS) {
     work.selection = "partial";
   }
-  for (const id of candidates.slice(0, MAX_FUZZY_STRINGS)) {
+  for (
+    let index = 0;
+    index < Math.min(candidates.length, MAX_FUZZY_STRINGS);
+    index += 1
+  ) {
+    const id = candidates.at(index) ?? panic("Missing fuzzy candidate");
     const candidateLength = vocabulary.lengths[id] ?? 0;
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (!spendScreeningWork(work, length * candidateLength)) {
@@ -442,6 +540,9 @@ const unit = ({
   });
   if (screeningWorkExhausted(work)) {
     return undefined;
+  }
+  if (index.raw === index.folded && token.raw === token.folded) {
+    return { positions, folded, raw: folded };
   }
   const raw = similarStrings({ vocabulary: index.raw, text: token.raw, work });
   if (screeningWorkExhausted(work)) {

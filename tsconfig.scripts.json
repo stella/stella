@@ -19,5 +19,6 @@
   },
   // "types" is the shared ambient-module root (asset imports like *.docx and
   // *.wasm) that the same schema-import graph also reaches.
-  "include": ["scripts/**/*.ts", "types"]
+  "include": ["scripts/**/*.ts", "types"],
+  "exclude": ["scripts/browser"]
 }

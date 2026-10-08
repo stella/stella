@@ -62,26 +62,8 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import {
-  atFindokFixture,
-  atRisFixture,
-  czNsFixture,
-  czNssFixture,
-  czRegionalFixture,
-  czUsFixture,
-  euEcjFixture,
-  huBhgyFixture,
+  CASE_LAW_CONFORMANCE_FIXTURES,
   plCourtsFixture,
-  plKioFixture,
-  plKisFixture,
-  plNsaFixture,
-  plNcourtFixture,
-  plSnFixture,
-  plTkFixture,
-  plUodoFixture,
-  plUokikFixture,
-  skCourtsFixture,
-  skUsFixture,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   isClassifiedMetadataKey,
@@ -92,57 +74,11 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 
-import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
-import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
-
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
-
-// ── Coverage declaration ─────────────────────────────────
-
-/**
- * What this suite drives each adapter with. Total over the registry, so a
- * source registered without a fixture to read its own envelope back through
- * does not compile.
- */
-const ADAPTER_INVENTORY_COVERAGE = {
-  [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
-  [ADAPTER_KEYS.CZ_NS]: czNsFixture,
-  [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
-  [ADAPTER_KEYS.CZ_US]: czUsFixture,
-  [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
-  [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
-  [ADAPTER_KEYS.SK_US]: skUsFixture,
-  [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
-  [ADAPTER_KEYS.PL_SN]: plSnFixture,
-  [ADAPTER_KEYS.PL_KIO]: plKioFixture,
-  [ADAPTER_KEYS.PL_TK]: plTkFixture,
-  [ADAPTER_KEYS.PL_NSA]: plNsaFixture,
-  [ADAPTER_KEYS.PL_NCOURT]: plNcourtFixture,
-  [ADAPTER_KEYS.AT_COURTS]: () => atRisFixture(ADAPTER_KEYS.AT_COURTS),
-  [ADAPTER_KEYS.AT_VFGH]: () => atRisFixture(ADAPTER_KEYS.AT_VFGH),
-  [ADAPTER_KEYS.AT_VWGH]: () => atRisFixture(ADAPTER_KEYS.AT_VWGH),
-  [ADAPTER_KEYS.AT_BVWG]: () => atRisFixture(ADAPTER_KEYS.AT_BVWG),
-  [ADAPTER_KEYS.AT_LVWG]: () => atRisFixture(ADAPTER_KEYS.AT_LVWG),
-  [ADAPTER_KEYS.AT_ASYLGH]: () => atRisFixture(ADAPTER_KEYS.AT_ASYLGH),
-  [ADAPTER_KEYS.AT_UBAS]: () => atRisFixture(ADAPTER_KEYS.AT_UBAS),
-  [ADAPTER_KEYS.AT_UVS]: () => atRisFixture(ADAPTER_KEYS.AT_UVS),
-  [ADAPTER_KEYS.AT_VERG]: () => atRisFixture(ADAPTER_KEYS.AT_VERG),
-  [ADAPTER_KEYS.AT_UMSE]: () => atRisFixture(ADAPTER_KEYS.AT_UMSE),
-  [ADAPTER_KEYS.AT_BKS]: () => atRisFixture(ADAPTER_KEYS.AT_BKS),
-  [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
-  [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
-  [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
-  [ADAPTER_KEYS.PL_KIS]: plKisFixture,
-  [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
-  [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
-} as const satisfies Record<
-  SourceRegistrationKey,
-  () => EnrolledAdapterFixture
->;
 
 const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
   ({ source }) => source.key,
@@ -154,10 +90,10 @@ const adapterFor = (key: SourceRegistrationKey) =>
 
 /** The registry and the fixture census must agree even after runtime widening. */
 const plainTextFixtureFor = (key: SourceRegistrationKey) => {
-  if (!Object.hasOwn(ADAPTER_INVENTORY_COVERAGE, key)) {
+  if (!Object.hasOwn(CASE_LAW_CONFORMANCE_FIXTURES, key)) {
     return panic(`Missing plain-text adapter census fixture: ${key}`);
   }
-  return ADAPTER_INVENTORY_COVERAGE[key];
+  return CASE_LAW_CONFORMANCE_FIXTURES[key];
 };
 
 test("the plain-text census rejects an unaccounted adapter", () => {
@@ -431,7 +367,8 @@ describe("the display-text census classifies exactly the metadata adapters emit"
     const emitted = new Set<string>();
     for (const key of DECLARED_ADAPTER_KEYS) {
       // Fixtures stub the global fetch, so they build one at a time.
-      const decision = await ADAPTER_INVENTORY_COVERAGE[key]().buildDecision();
+      const decision =
+        await CASE_LAW_CONFORMANCE_FIXTURES[key]().buildDecision();
       globalThis.fetch = originalFetch;
       for (const metadataKey of Object.keys(decision.metadata)) {
         emitted.add(metadataKey);

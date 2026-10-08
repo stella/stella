@@ -17,6 +17,7 @@ import { replaceOutputMarkers } from "@stll/template-conditions";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getOrganizationRegistryAvailability,
@@ -47,6 +48,7 @@ import {
 } from "@/api/lib/docx/extract-text";
 import {
   createDispatchLookupResolver,
+  type LookupOutcome,
   type LookupResolver,
 } from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
@@ -521,15 +523,6 @@ export const describeStoredTemplate = async ({
   };
 };
 
-/**
- * Usage preflight hook invoked once the manifest is read and the template is
- * known to declare AI fields, before any model call runs. Returns a rejection
- * marker (an over-quota / no-entitlement signal the caller maps to its HTTP
- * response) or `null` to proceed. Lets a caller gate AI quota on a model call
- * actually running without re-reading the template manifest itself.
- */
-type FillUsagePreflight<TRejection> = () => Promise<TRejection | null>;
-
 /** The model-backed collaborators a manifest's AI fields need: a generator for
  *  AI-fillable fields (`aiPrompt`), a decider for AI-decided boolean fields (a
  *  boolean field with an `aiPrompt`), and a per-occurrence adapter for
@@ -542,20 +535,29 @@ export type AiFillCollaborators = {
 };
 
 /**
- * Builds {@link AiFillCollaborators}, invoked once and only when the manifest
- * declares an AI-drafted or AI-adapted field. Deferred because building them
- * costs the caller an org AI config read and a metered analytics trace: a
- * deterministic fill must pay neither.
+ * Runs the fill's model work inside its admitted action: refuses before any
+ * model call (an over-quota / no-entitlement marker the caller maps to its
+ * response), or runs `fill` with the collaborators and holds the action until
+ * `fill` settles. Invoked once, only when the manifest declares an AI-drafted
+ * or AI-adapted field, so a deterministic fill pays no config read, metered
+ * trace or admission. Scoping the work in a callback keeps the admission's
+ * lifetime covering every model call the fill makes.
  */
-type AiFillCollaboratorProvider = () =>
-  | AiFillCollaborators
-  | Promise<AiFillCollaborators>;
+export type AiFillAdmission<TRejection> = <T>(
+  fill: (collaborators: AiFillCollaborators) => Promise<T>,
+) => Promise<
+  { type: "refused"; rejection: TRejection } | { type: "admitted"; value: T }
+>;
 
 type FillServiceOptions<TRejection = never> = {
   templateId: SafeId<"template">;
   values: FillValues;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /** Lookup fields ask a business register, a third-party service. Without a
+   *  permit, a lookup field fails the fill naming the field. Mandatory so each
+   *  boundary names its stance. */
+  thirdPartyOutboundPermit: ThirdPartyOutboundPermit | undefined;
   /** Whether a required, user-entered field left absent or empty rejects the
    *  fill. `"enforce"` is the contract for every real fill; `"allow-partial"`
    *  is the live preview's deliberate exception (see
@@ -566,15 +568,13 @@ type FillServiceOptions<TRejection = never> = {
    *  key matches a discovered slot, the override body is inserted for that slot
    *  instead of the linked clause's resolved body (mirrors fill-by-id). */
   clauseOverrides?: Record<string, ClauseBody> | undefined;
-  /** Deferred builder for the AI collaborators; omitted by a caller that never
-   *  drafts (the fill then leaves AI fields unresolved). */
-  aiCollaborators?: AiFillCollaboratorProvider | undefined;
+  /** Admits and supplies the AI collaborators; omitted by a caller that never
+   *  drafts (the fill then leaves AI fields unresolved). A refusal aborts the
+   *  fill with a `{ usageRejection }` result the caller surfaces as its own
+   *  response, before lookups or any model call. */
+  aiFill?: AiFillAdmission<TRejection> | undefined;
   /** Registry transport seam; ordinary callers use the organization's dispatch. */
   lookupResolver?: LookupResolver | undefined;
-  /** Optional usage preflight run only when the manifest declares AI fields,
-   *  before any model call. A non-null return aborts the fill with a
-   *  `{ usageRejection }` result the caller surfaces as its own response. */
-  assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
   /** A caller that records the fill itself (document persistence, or an agent
    *  tool returning the text) defers use-count recording into its own atomic
    *  transaction. Other fill callers retain the after-fill default. */
@@ -671,6 +671,48 @@ export type FilledDocx = {
    *  never carried. */
   conditionDecisions: ResolvedAiCondition[];
   clauseWarnings: ClauseDirectiveWarning[];
+};
+
+/** A fill without a permit cannot ask a register for a lookup field. */
+const LOOKUP_WITHOUT_PERMIT: LookupOutcome = {
+  type: "error",
+  message: "Registry lookups are not available for this fill",
+};
+
+const lookupsWithoutPermit: LookupResolver = async () =>
+  await Promise.resolve(LOOKUP_WITHOUT_PERMIT);
+
+type FillLookupResolverOptions = {
+  permit: ThirdPartyOutboundPermit | undefined;
+  lookupResolver: LookupResolver | undefined;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+};
+
+/** Without a permit no resolver reaches a register, injected or dispatched. */
+const fillLookupResolver = async ({
+  permit,
+  lookupResolver,
+  scopedDb,
+  organizationId,
+}: FillLookupResolverOptions) => {
+  if (permit === undefined) {
+    return lookupsWithoutPermit;
+  }
+  return (
+    lookupResolver ??
+    createDispatchLookupResolver({
+      observer: actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      ),
+      permit,
+      dispatch: await getOrganizationRegistryDispatch({
+        scopedDb,
+        organizationId,
+      }),
+    })
+  );
 };
 
 type FillDocxOptions<TRejection = never> = Omit<
@@ -1534,17 +1576,13 @@ const templateFillInputContract = ({
   });
 };
 
-type PrepareFillAdmissionOptions<TRejection> = Pick<
-  FillDocxWithPolicyOptions<TRejection>,
-  | "values"
-  | "requiredFields"
-  | "unusedValuePolicy"
-  | "assertUsageAvailable"
-  | "aiCollaborators"
+type PrepareFillAdmissionOptions = Pick<
+  FillDocxWithPolicyOptions,
+  "values" | "requiredFields" | "unusedValuePolicy"
 > &
   Awaited<ReturnType<typeof discoverTemplateSource>> & { file: ScannedFile };
 
-const prepareFillAdmission = async <TRejection>({
+const prepareFillAdmission = async ({
   values,
   requiredFields,
   unusedValuePolicy,
@@ -1554,9 +1592,7 @@ const prepareFillAdmission = async <TRejection>({
   bodies,
   clauses,
   file,
-  assertUsageAvailable,
-  aiCollaborators,
-}: PrepareFillAdmissionOptions<TRejection>) => {
+}: PrepareFillAdmissionOptions) => {
   const namedConditions = manifestNamedConditions(manifest);
   const requiredGate = requiredFieldsGate({
     manifest,
@@ -1637,25 +1673,15 @@ const prepareFillAdmission = async <TRejection>({
     };
   }
 
-  // Gate AI preflight and collaborators on declared model work: deterministic
-  // fills spend neither quota nor config reads, and refusals precede lookups.
+  // Gate AI admission on declared model work: deterministic fills spend
+  // neither quota nor config reads.
   const hasAiFields = manifest.fields.some(
     (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
   );
-  if (assertUsageAvailable && hasAiFields) {
-    const usageRejection = await assertUsageAvailable();
-    if (usageRejection !== null) {
-      return { type: "refused" as const, rejection: { usageRejection } };
-    }
-  }
-  const { generateAiValue, decideAiCondition, adaptAiValue } =
-    aiCollaborators && hasAiFields ? await aiCollaborators() : {};
 
   return {
     type: "prepared" as const,
-    generateAiValue,
-    decideAiCondition,
-    adaptAiValue,
+    hasAiFields,
     namedConditions,
     requiredGate,
     invalidOverrides,
@@ -1716,6 +1742,37 @@ const settleRenderedFill = async ({
   };
 };
 
+type FillWithinAiAdmissionOptions<TRejection> = {
+  hasAiFields: boolean;
+  aiFill: AiFillAdmission<TRejection> | undefined;
+  completeFill: (
+    collaborators: AiFillCollaborators,
+  ) => Promise<FilledDocx | FillRejection<TRejection>>;
+};
+
+/** Runs the fill inside its AI admission only when it declares model work. */
+const fillWithinAiAdmission = async <TRejection>({
+  hasAiFields,
+  aiFill,
+  completeFill,
+}: FillWithinAiAdmissionOptions<TRejection>): Promise<
+  FilledDocx | FillRejection<TRejection>
+> => {
+  if (!hasAiFields || aiFill === undefined) {
+    return await completeFill({});
+  }
+  const admitted = await aiFill(completeFill);
+  switch (admitted.type) {
+    case "refused":
+      return { usageRejection: admitted.rejection };
+    case "admitted":
+      return admitted.value;
+    default:
+      admitted satisfies never;
+      return panic("Unhandled AI fill admission");
+  }
+};
+
 /**
  * Shared fill recipe over an already-loaded DOCX: discover linked content,
  * gate required fields, run manifest fill steps (lookups, composites, formulas,
@@ -1728,11 +1785,11 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   values,
   scopedDb,
   organizationId,
+  thirdPartyOutboundPermit,
   requiredFields,
   clauseOverrides,
-  aiCollaborators,
+  aiFill,
   lookupResolver,
-  assertUsageAvailable,
   useRecording = "after-fill",
   workspaceId,
   unusedValuePolicy,
@@ -1748,8 +1805,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       clauseOverrides,
     });
   const input = await prepareFillAdmission({
-    assertUsageAvailable,
-    aiCollaborators,
     values,
     requiredFields,
     unusedValuePolicy,
@@ -1770,166 +1825,169 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       return panic("Unhandled prepared template input");
   }
   const {
+    hasAiFields,
     namedConditions,
     requiredGate,
     invalidOverrides,
     earlyRendering,
     strictInputPlaceholders,
+  } = input;
+
+  // Everything that may call a model runs inside `aiFill`, so the admitted
+  // action is held until the last model call settles. A refusal still
+  // precedes lookups.
+  const completeFill = async ({
     generateAiValue,
     decideAiCondition,
     adaptAiValue,
-  } = input;
-
-  let record: FillValues = { ...values };
-  const resolveLookup =
-    lookupResolver ??
-    createDispatchLookupResolver({
-      observer: actionRequestObserver(
-        organizationId,
-        ACTION_COST_CALL_KIND.registryRequest,
-      ),
-      dispatch: await getOrganizationRegistryDispatch({
-        scopedDb,
-        organizationId,
-      }),
+  }: AiFillCollaborators): Promise<FilledDocx | FillRejection<TRejection>> => {
+    let record: FillValues = { ...values };
+    const resolveLookup = await fillLookupResolver({
+      permit: thirdPartyOutboundPermit,
+      lookupResolver,
+      scopedDb,
+      organizationId,
     });
 
-  const drafting = await draftDocumentValues({
-    file: source.file,
-    manifest,
-    bodies,
-    record,
-    discovered,
-    resolveLookup,
-    scopedDb,
-    organizationId,
-    workspaceId,
-    generateAiValue,
-    decideAiCondition,
-  });
-  if (drafting.type === "fields-refused") {
-    return { error: drafting.error };
-  }
-  if (drafting.type === "refused") {
-    return {
-      error: drafting.error.message,
-      storedTemplateError: drafting.error,
-    };
-  }
-  record = drafting.values;
-  const { conditionDecisions } = drafting;
-  // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
-  // the stub stays in `record` so uncovered occurrences still get the
-  // plain global substitution below.
-  const adapted = await adaptAiFields({
-    file: source.file,
-    fields: manifest.fields,
-    values: record,
-    adapt: adaptAiValue,
-  });
-  const { file: fillSource, adaptedPaths } = adapted;
-  const aiFieldErrors = [...drafting.aiFieldErrors, ...adapted.failures];
-
-  const optionalDefaults = applyOmittedOptionalPlaceholderDefaults({
-    fields: manifest.fields,
-    placeholderPaths: arrayOrEmpty(strictInputPlaceholders),
-    values: record,
-  });
-  record = optionalDefaults.values;
-
-  if (!isTemplateData(record)) {
-    return {
-      error:
-        "Values must be strings, numbers, booleans, arrays, or nested objects.",
-    };
-  }
-
-  const prepared = await prepareClauseOccurrences({
-    file: fillSource,
-    record,
-    discovered,
-    manifest,
-    namedConditions,
-    resolveLookup,
-    bindingContext: drafting.bindingContext,
-    generateAiValue,
-    decideAiCondition,
-    documentText: drafting.grounding,
-  });
-  if (prepared.type === "refused") {
-    return prepared.rejection;
-  }
-  aiFieldErrors.push(...prepared.aiFieldErrors);
-  conditionDecisions.push(...prepared.conditionDecisions);
-
-  const settled = await settleRenderedFill({
-    file: fillSource,
-    discovered,
-    values: record,
-    bodies,
-    namedConditions,
-    occurrenceValues: prepared.occurrenceValues,
-    earlyRendering,
-    requiredGate,
-    invalidOverrides,
-  });
-  switch (settled.type) {
-    case "refused":
-      return settled.rejection;
-    case "rendered":
-      break;
-    default:
-      settled satisfies never;
-      return panic("Unhandled rendered fill settlement");
-  }
-  const { renderedSlots } = settled;
-
-  const rendered = await fillWithClauseSlots({
-    file: fillSource,
-    occurrenceValues: prepared.occurrenceValues,
-    slots,
-    bodies,
-    clauses,
-    record,
-    namedConditions,
-    renderedSlots,
-  });
-  if (Result.isError(rendered)) {
-    return {
-      error: rendered.error.message,
-      storedTemplateError: rendered.error,
-    };
-  }
-  const { result } = rendered.value;
-  const clauseWarnings = [
-    ...settled.clauseWarnings,
-    ...rendered.value.clauseWarnings,
-  ];
-
-  if (templateId !== undefined && useRecording === "after-fill") {
-    await scopedDb(async (tx) => {
-      await recordTemplateUse({ tx, templateId });
+    const drafting = await draftDocumentValues({
+      file: source.file,
+      manifest,
+      bodies,
+      record,
+      discovered,
+      resolveLookup,
+      scopedDb,
+      organizationId,
+      workspaceId,
+      generateAiValue,
+      decideAiCondition,
     });
-  }
+    if (drafting.type === "fields-refused") {
+      return { error: drafting.error };
+    }
+    if (drafting.type === "refused") {
+      return {
+        error: drafting.error.message,
+        storedTemplateError: drafting.error,
+      };
+    }
+    record = drafting.values;
+    const { conditionDecisions } = drafting;
+    // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
+    // the stub stays in `record` so uncovered occurrences still get the
+    // plain global substitution below.
+    const adapted = await adaptAiFields({
+      file: source.file,
+      fields: manifest.fields,
+      values: record,
+      adapt: adaptAiValue,
+    });
+    const { file: fillSource, adaptedPaths } = adapted;
+    const aiFieldErrors = [...drafting.aiFieldErrors, ...adapted.failures];
 
-  return {
-    templateName: source.name,
-    fileName: source.fileName,
-    file: result.file,
-    unmatchedPlaceholders: result.unmatchedPlaceholders,
-    unusedValues: unusedFilledValues({
-      unusedValues: result.unusedValues,
+    const optionalDefaults = applyOmittedOptionalPlaceholderDefaults({
+      fields: manifest.fields,
+      placeholderPaths: arrayOrEmpty(strictInputPlaceholders),
+      values: record,
+    });
+    record = optionalDefaults.values;
+
+    if (!isTemplateData(record)) {
+      return {
+        error:
+          "Values must be strings, numbers, booleans, arrays, or nested objects.",
+      };
+    }
+
+    const prepared = await prepareClauseOccurrences({
+      file: fillSource,
+      record,
+      discovered,
+      manifest,
+      namedConditions,
+      resolveLookup,
+      bindingContext: drafting.bindingContext,
+      generateAiValue,
+      decideAiCondition,
+      documentText: drafting.grounding,
+    });
+    if (prepared.type === "refused") {
+      return prepared.rejection;
+    }
+    aiFieldErrors.push(...prepared.aiFieldErrors);
+    conditionDecisions.push(...prepared.conditionDecisions);
+
+    const settled = await settleRenderedFill({
+      file: fillSource,
+      discovered,
+      values: record,
+      bodies,
+      namedConditions,
+      occurrenceValues: prepared.occurrenceValues,
+      earlyRendering,
+      requiredGate,
+      invalidOverrides,
+    });
+    switch (settled.type) {
+      case "refused":
+        return settled.rejection;
+      case "rendered":
+        break;
+      default:
+        settled satisfies never;
+        return panic("Unhandled rendered fill settlement");
+    }
+    const { renderedSlots } = settled;
+
+    const rendered = await fillWithClauseSlots({
+      file: fillSource,
+      occurrenceValues: prepared.occurrenceValues,
       slots,
       bodies,
-      adaptedPaths,
-      defaultedPaths: optionalDefaults.defaultedPaths,
-      clauseFieldPaths: discovered.clauseFieldPaths,
-    }),
-    structureErrors: result.structureErrors,
-    aiFieldErrors,
-    conditionDecisions,
-    clauseWarnings,
+      clauses,
+      record,
+      namedConditions,
+      renderedSlots,
+    });
+    if (Result.isError(rendered)) {
+      return {
+        error: rendered.error.message,
+        storedTemplateError: rendered.error,
+      };
+    }
+    const { result } = rendered.value;
+    const clauseWarnings = [
+      ...settled.clauseWarnings,
+      ...rendered.value.clauseWarnings,
+    ];
+
+    if (templateId !== undefined && useRecording === "after-fill") {
+      await scopedDb(async (tx) => {
+        await recordTemplateUse({ tx, templateId });
+      });
+    }
+
+    return {
+      templateName: source.name,
+      fileName: source.fileName,
+      file: result.file,
+      unmatchedPlaceholders: result.unmatchedPlaceholders,
+      unusedValues: unusedFilledValues({
+        unusedValues: result.unusedValues,
+        slots,
+        bodies,
+        adaptedPaths,
+        defaultedPaths: optionalDefaults.defaultedPaths,
+        clauseFieldPaths: discovered.clauseFieldPaths,
+      }),
+      structureErrors: result.structureErrors,
+      aiFieldErrors,
+      conditionDecisions,
+      clauseWarnings,
+    };
   };
+
+  return await fillWithinAiAdmission({ hasAiFields, aiFill, completeFill });
 };
 
 export const fillTemplateDocx = async <TRejection = never>(
@@ -2104,8 +2162,8 @@ export const fillStoredTemplate = async (
 ): Promise<FillTemplateResult> => {
   const filled = await fillStoredTemplateDocx(options);
   if ("usageRejection" in filled) {
-    // Unreachable: this caller does not pass `assertUsageAvailable`, so the
-    // service never returns a usage rejection (TRejection is `never`).
+    // Unreachable: TRejection is `never` here, so no `aiFill` this caller
+    // passes can refuse, and the service never returns a usage rejection.
     panic("fillStoredTemplate received an unexpected usage rejection");
   }
   if ("requiredFieldsRejection" in filled) {

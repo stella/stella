@@ -832,6 +832,7 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       },
       scopedDb,
       organizationId: ids.orgA,
+      thirdPartyOutboundPermit: undefined,
       values: {},
       requiredFields: "enforce",
       useRecording: "caller",

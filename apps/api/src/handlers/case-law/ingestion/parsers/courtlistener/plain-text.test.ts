@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { type Block, plainTextOf } from "@/api/handlers/case-law/document-ast";
+import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { composeCourtListenerText } from "./compose";
 import { createTextBudget, type FormatParse } from "./outcome";
@@ -228,7 +228,6 @@ describe("recorded unmarked opinions", () => {
         boundaries: "unproven",
       })),
     );
-    expect(outcome.principal.singleOpinionBody).toBe(false);
   });
 
   // Opinion 11209260 (South Carolina district court) is plain text only, a

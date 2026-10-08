@@ -7,9 +7,10 @@ import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
   TEXT_FIELD_TYPE,
-  type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -18,7 +19,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -62,12 +62,12 @@ import {
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
-  hashContent,
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   TEXT_ABSENCE_REASON,
@@ -77,6 +77,7 @@ import {
   sourceTextField,
   splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
 import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
@@ -529,6 +530,15 @@ const CZ_NSS_CASE_REFERENCE_MAX_LENGTH = 100;
 const CZ_NSS_DECISION_TYPE_MAX_LENGTH = 50;
 
 /**
+ * A type the page states, or nothing when the field holds a docket number:
+ * some rows carry a reference where the type belongs, and storing it made a
+ * case number a decision type. Applied to the listing cell and the detail
+ * field alike, since either may win.
+ */
+const statedDecisionType = (value: string | undefined): string | undefined =>
+  value === undefined || isDocketShapedDecisionType(value) ? undefined : value;
+
+/**
  * Parse result rows from the search response HTML.
  *
  * The 2025 redesign renders results as one <tbody> block per decision. The
@@ -600,7 +610,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
       decisionTypeCell !== undefined &&
       decisionTypeCell.length > 2 &&
       decisionTypeCell.length < CZ_NSS_DECISION_TYPE_MAX_LENGTH
-        ? decisionTypeCell
+        ? statedDecisionType(decisionTypeCell)
         : undefined;
 
     rows.push({
@@ -634,11 +644,17 @@ type DecisionContent = {
 /**
  * The pages fetched for one decision, as the stored raw names them. A row
  * written before the envelope holds the document alone, as bare HTML.
+ *
+ * The listing is the results-table row the crawl read the decision from: the
+ * docket with its sheet, and the date, type and outcome the detail page may
+ * not state. It is stored so the fingerprint covers every input the row is
+ * built from.
  */
 const CZ_NSS_RAW_PART = {
   DOCUMENT: "document",
   DETAIL: "detail",
   TEXT: "text",
+  LISTING: "listing",
 } as const;
 
 type CzNssRawPart = (typeof CZ_NSS_RAW_PART)[keyof typeof CZ_NSS_RAW_PART];
@@ -693,64 +709,6 @@ const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set([
 
 const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
-
-type CzNssSourceHashOptions = {
-  caseNumber: string;
-  sheetNumber: string | undefined;
-  decisionDate: string | undefined;
-  decisionType: string | undefined;
-  legalSentence: TextField;
-};
-
-/**
- * Stable source-side fields shared by a crawl and a stored-raw replay.
- *
- * The sheet is one of them, and has to be: the refresh check skips a row whose
- * source hash did not move, so a row stored before the sheet was read would
- * see its listing state one and still be skipped, and the sheet would never
- * land. A row gains a sheet exactly when this hash moves.
- *
- * Both halves are normalized to the tight form before hashing, so the same
- * decision hashes the same however it reached us: through a listing that
- * prints `10 A 46/2015-66`, through a legacy row whose case number still
- * carries ` - 66`, or through a court that re-spaces its own citations.
- * Spacing is typography, not a document changing, and a hash that tracked it
- * would rewrite rows for it and would leave crawl and replay disagreeing.
- *
- * The headnote is here for the same reason as the sheet, and its timing is
- * why: the court writes it when it selects an already published decision for
- * its collection, and edits it afterwards. Left out, a row stored before that
- * would be skipped as unchanged for good. It is appended only where the court
- * states text or a typed absence other than not_published. A genuinely missing
- * headnote keeps its existing hash; a placeholder changes it so refresh writes
- * the distinction. Crawl and replay hash the same classified value.
- */
-const czNssSourceHash = ({
-  caseNumber,
-  sheetNumber,
-  decisionDate,
-  decisionType,
-  legalSentence,
-}: CzNssSourceHashOptions): string => {
-  const { caseNumber: docket, sheetNumber: carried } =
-    splitCaseReference(caseNumber);
-  const sheet = sheetNumber ?? carried;
-  const reference = sheet === undefined ? docket : `${docket}-${sheet}`;
-  const base = `${reference}|${decisionDate ?? ""}|${decisionType ?? ""}`;
-  switch (legalSentence.type) {
-    case TEXT_FIELD_TYPE.PRESENT:
-      return hashContent(JSON.stringify([base, legalSentence]));
-    case TEXT_FIELD_TYPE.ABSENT:
-      return hashContent(
-        legalSentence.reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
-          ? base
-          : JSON.stringify([base, legalSentence]),
-      );
-    default:
-      legalSentence satisfies never;
-      return panic(`Unhandled NSS sentence: ${String(legalSentence)}`);
-  }
-};
 
 /**
  * A read that established nothing about a document the portal lists: refused
@@ -1410,10 +1368,9 @@ export const parseCzNssDetailMetadata = (
   judge: extractDivText({ html, divId: "soudcezpravodaj" }),
   senate: extractDivText({ html, divId: "soudsenat" }),
   legalArea: extractDivText({ html, divId: "oblastupravy" }),
-  decisionType: extractDivText({
-    html,
-    divId: "druhdokumentuavyrokrozhodnuti",
-  }),
+  decisionType: statedDecisionType(
+    extractDivText({ html, divId: "druhdokumentuavyrokrozhodnuti" }),
+  ),
   decisionDate: extractDivText({ html, divId: "datumvydanirozhodnuti" }),
   outcome: extractDivText({ html, divId: "vyrokrozhodnuti" }),
   caseType: extractDivText({ html, divId: "typrizeni" }),
@@ -1543,6 +1500,30 @@ const fetchDetailMetadata = async (
   return { type: "fetched", detail: parsed.value, html };
 };
 
+/**
+ * The listing row as stored, with its fields in one fixed order. A row the
+ * reconciliation parked comes back from JSONB with its keys reordered, and the
+ * same row must store the same bytes whichever path built it.
+ */
+const storedListingRow = ({
+  caseNumber,
+  publishedCaseNumber,
+  decisionDate,
+  decisionType,
+  outcome,
+  documentUrl,
+  documentId,
+}: ParsedRow): string =>
+  JSON.stringify({
+    caseNumber,
+    publishedCaseNumber,
+    decisionDate,
+    decisionType,
+    outcome,
+    documentUrl,
+    documentId,
+  } satisfies Record<keyof ParsedRow, unknown>);
+
 type RowToResultOptions = {
   row: ParsedRow;
   content: DecisionContent;
@@ -1622,7 +1603,9 @@ const rowToResult = ({
       ? {}
       : { [CZ_NSS_RAW_PART.TEXT]: content.fallbackText }),
     ...(detailHtml === null ? {} : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
+    [CZ_NSS_RAW_PART.LISTING]: storedListingRow(row),
   };
+  const sourceRaw = encodeSourceRawEnvelope(rawParts);
 
   return plainTextIngestionResult({
     caseNumber: row.caseNumber,
@@ -1668,28 +1651,15 @@ const rowToResult = ({
       // The listing states an outcome for rows whose detail page does not.
       outcome: detail.outcome ?? row.outcome,
     }),
-    // Fulltext is parser output, not publisher identity. Keeping it out makes
-    // crawl and replay converge on the same source hash after parser changes.
-    rawHash: czNssSourceHash({
-      caseNumber: row.caseNumber,
-      sheetNumber,
-      decisionDate,
-      decisionType,
-      legalSentence: legalSentenceField,
-    }),
+    rawHash: sourceFingerprint({ sourceRaw }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
     // Every response fetched for this decision, not just the one the parser
     // reads: the headnote and the rest of the portal's metadata are on the
     // detail page, so a row that stored the document alone could never recover
-    // a field read later without going back to the court. A row the portal
-    // served nothing for still states no raw.
-    ...(Object.keys(rawParts).length === 0
-      ? {}
-      : {
-          sourceRaw: encodeSourceRawEnvelope(rawParts),
-          sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-        }),
+    // a field read later without going back to the court.
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
 };
 
@@ -1855,7 +1825,9 @@ const reparseStoredRaw = (
       : parseCzNssDetailMetadata(storedDetailHtml);
   const sourceUrl = stored.sourceUrl ?? undefined;
   const decisionDate = stored.decisionDate ?? undefined;
-  const decisionType = stored.decisionType ?? undefined;
+  // Re-read through the same guard, so a replay clears a docket number an
+  // earlier parse stored as the type.
+  const decisionType = statedDecisionType(stored.decisionType ?? undefined);
   const ecli = stored.ecli ?? undefined;
   const rebuilt =
     storedDocument === null
@@ -1946,17 +1918,9 @@ const reparseStoredRaw = (
         sheetNumber,
         publishedCaseNumber,
       }),
-      // The sentence this replay writes, not the one the row arrived with: a
-      // row whose detail page was stored before anything read the headnote
-      // gains it here, and a hash still taken from the old metadata would make
-      // the crawl read the replayed row as changed on its next pass.
-      rawHash: czNssSourceHash({
-        caseNumber: stored.caseNumber,
-        sheetNumber,
-        decisionDate,
-        decisionType,
-        legalSentence: legalSentenceField,
-      }),
+      // Over the payload the replay keeps, so a row the crawl stored replays
+      // to the hash the crawl gave it.
+      rawHash: sourceFingerprint({ sourceRaw: raw }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
       documentAst: rebuilt.documentAst,
       // The payload verbatim, in the shape it was stored in: a replay re-reads
@@ -2346,10 +2310,11 @@ type BuildCzNssDecisionOptions = {
  * The row the listing alone describes, for a document that was not read.
  *
  * Marked `isListingOnly`, which keeps it off every public surface and out of
- * what the reconciliation counts as held. Its hash is its own, distinct from
- * the one the same document hashes to once read, so the full row replaces it
- * when the document is read. Where a read failed or was refused, the row
- * states that outcome, typed, under `metadata.readOutcome`.
+ * what the reconciliation counts as held. Its stored raw holds no readable
+ * document, which every read row's does, so its hash differs from the one the
+ * same document hashes to once read and the full row replaces it. Where a read
+ * failed or was refused, the row states that outcome, typed, under
+ * `metadata.readOutcome`.
  */
 const listingOnlyDecision = (
   decision: IngestionResult,
@@ -2358,7 +2323,6 @@ const listingOnlyDecision = (
   plainTextIngestionResult({
     ...decision,
     isListingOnly: true,
-    rawHash: hashContent(`${decision.rawHash}|listing-only`),
     ...(readOutcome === null
       ? {}
       : {
@@ -2778,10 +2742,7 @@ const CZ_NSS_SOURCE_SURFACES = {
     "search-form": excludedSourceSurface(
       "the search form, which states no field of any decision and is read only for the tokens the result postback needs",
     ),
-    listing: backlogSurface(
-      ADAPTER_KEYS.CZ_NSS,
-      "the result row the crawl reads from the search postback is not kept beside the decision it names",
-    ),
+    listing: storedSourceSurface(CZ_NSS_RAW_PART.LISTING),
     detail: storedSourceSurface(CZ_NSS_RAW_PART.DETAIL),
     document: storedSourceSurface(CZ_NSS_RAW_PART.DOCUMENT),
     text: backlogSurface(

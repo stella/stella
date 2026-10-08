@@ -18,15 +18,17 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { legalListVerificationRuns, workspaceMembers } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import * as documentText from "@/api/lib/lists/verification/document-text";
 import { processListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -36,6 +38,8 @@ import {
 setDefaultTimeout(120_000);
 
 const { testDb, ids } = await getRlsFixture();
+const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
+const previousDeployment = env.FEATURE_LEGAL_LISTS;
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
 
 const originalOrganizationMember = (
@@ -81,6 +85,14 @@ const readRun = async () =>
   ).at(0);
 
 beforeEach(async () => {
+  env.FEATURE_LEGAL_LISTS = true;
+  env.API_FEATURE_ACCESS_GRANTS = {
+    "list-verification": [{ type: "organization", organizationId: ids.orgA }],
+  };
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
   readSpy.mockReset();
   readSpy.mockImplementation(async () => ({ type: "no-text" }));
   await testDb.insert(legalListVerificationRuns).values({
@@ -117,14 +129,25 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  env.API_FEATURE_ACCESS_GRANTS = previousGrants;
+  env.FEATURE_LEGAL_LISTS = previousDeployment;
   readSpy.mockRestore();
   await releaseRlsFixture();
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processListVerificationRun(actor);
+  await processListVerificationRun({
+    actor,
+    admission: testModelAdmission(actor.organizationId),
+    data: {
+      runId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+    },
+  });
   const run = await readRun();
-  expect(run).toMatchObject({ status: "failed", errorCode: "pin_unresolved" });
+  expect(run).toMatchObject({ status: "failed", errorCode: "access_revoked" });
   expect(run?.finishedAt).not.toBeNull();
   expect(readSpy).not.toHaveBeenCalled();
 };
@@ -143,7 +166,16 @@ describe("list verification run", () => {
   });
 
   test("a run reads its pinned document while its requester keeps access", async () => {
-    await processListVerificationRun(actor);
+    await processListVerificationRun({
+      actor,
+      admission: testModelAdmission(actor.organizationId),
+      data: {
+        runId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+      },
+    });
     expect(await readRun()).toMatchObject({
       status: "failed",
       errorCode: "no_text",

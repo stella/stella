@@ -220,6 +220,7 @@ const ExternalPdfPreview = ({
   return (
     <MeasuredPdfProvider
       active
+      surface="external-reference-pdf"
       fallback={fallback}
       fieldId={fileId}
       initialScaleOffset={0}

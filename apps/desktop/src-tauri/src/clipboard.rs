@@ -32,6 +32,7 @@ use crate::{
     ClipboardImageValidationError, ClipboardStore,
   },
   clipboard_welcome::{ClipboardWelcome, ClipboardWelcomeStatus},
+  clipboard_window::ClipboardCaller,
   config::APP_DATA_DIR_NAME,
   desktop_telemetry::{
     DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
@@ -1402,7 +1403,7 @@ impl ClipboardManager {
     };
   }
 
-  pub fn snapshot(&self) -> ClipboardSnapshot {
+  pub fn snapshot(&self, _caller: &ClipboardCaller) -> ClipboardSnapshot {
     let mut source_app_visuals = self
       .source_app_visuals
       .values()
@@ -1780,7 +1781,11 @@ impl ClipboardManager {
     self.items.iter().find(|item| item.id() == id).cloned()
   }
 
-  pub fn item_for_webview(&self, id: &str) -> Option<ClipboardItem> {
+  pub fn item_for_webview(
+    &self,
+    id: &str,
+    _caller: &ClipboardCaller,
+  ) -> Option<ClipboardItem> {
     self
       .items
       .iter()
@@ -1858,7 +1863,11 @@ impl ClipboardManager {
     })
   }
 
-  pub(crate) fn image_preview(&self, id: &str) -> Result<ClipboardImageRead, String> {
+  pub(crate) fn image_preview(
+    &self,
+    id: &str,
+    _caller: &ClipboardCaller,
+  ) -> Result<ClipboardImageRead, String> {
     let item = self
       .items
       .iter()
@@ -4528,7 +4537,13 @@ mod tests {
 
     assert!(manager.exclude_source_app(&item_id).unwrap());
     assert!(!manager.exclude_source_app(&item_id).unwrap());
-    assert_eq!(manager.snapshot().source_app_exclusions.len(), 1);
+    assert_eq!(
+      manager
+        .snapshot(&ClipboardCaller::for_test())
+        .source_app_exclusions
+        .len(),
+      1
+    );
     assert_eq!(
       manager
         .capture(source_text_capture(
@@ -4551,7 +4566,13 @@ mod tests {
     );
 
     manager.clear().unwrap();
-    assert_eq!(manager.snapshot().source_app_exclusions.len(), 1);
+    assert_eq!(
+      manager
+        .snapshot(&ClipboardCaller::for_test())
+        .source_app_exclusions
+        .len(),
+      1
+    );
     assert!(
       manager
         .remove_source_app_exclusion("COM.EXAMPLE.EDITOR")
@@ -4720,7 +4741,7 @@ mod tests {
       manager.source_app_visual(&item).unwrap().key,
       "com.google.Chrome"
     );
-    let snapshot = manager.snapshot();
+    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
     assert_eq!(snapshot.source_app_visuals.len(), 1);
     assert_eq!(
       snapshot.items[0]
@@ -4742,7 +4763,7 @@ mod tests {
       icon_data_url: Some("data:image/png;base64,REVG".to_string()),
       key: "https://example.org".to_string(),
     }));
-    let snapshot = manager.snapshot();
+    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
     assert_eq!(
       snapshot.items[0]
         .source_app()
@@ -4982,7 +5003,9 @@ mod tests {
 
     let read = {
       let manager = state.lock().unwrap();
-      manager.image_preview("image").unwrap()
+      manager
+        .image_preview("image", &ClipboardCaller::for_test())
+        .unwrap()
     };
 
     assert!(state.try_lock().is_ok());
@@ -5186,7 +5209,7 @@ mod tests {
       BTreeSet::from([blob_id.clone()])
     );
     assert_eq!(
-      manager.snapshot().persistence,
+      manager.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
       }
@@ -5212,7 +5235,7 @@ mod tests {
         .is_empty()
     );
     assert_eq!(
-      restarted.snapshot().persistence,
+      restarted.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::Idle,
       }
@@ -5417,7 +5440,7 @@ mod tests {
         .is_err()
     );
     assert_eq!(
-      manager.snapshot().persistence,
+      manager.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
       }
@@ -5437,7 +5460,7 @@ mod tests {
 
     assert!(manager.prune_expired(Utc::now()).unwrap());
     assert_eq!(
-      manager.snapshot().persistence,
+      manager.snapshot(&ClipboardCaller::for_test()).persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::Idle,
       }
@@ -6002,7 +6025,7 @@ mod tests {
       state: Some(state),
     });
 
-    let snapshot = restarted.snapshot();
+    let snapshot = restarted.snapshot(&ClipboardCaller::for_test());
     assert_eq!(snapshot.source_app_visuals.len(), 1);
     assert_eq!(snapshot.source_app_visuals[0].key, "com.example.editor");
     assert_eq!(
@@ -6547,7 +6570,7 @@ mod tests {
         .is_err()
     );
 
-    let snapshot = manager.snapshot();
+    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
     assert_eq!(snapshot.group_limit, MAX_GROUPS);
     let snapshot_json = serde_json::to_value(snapshot).unwrap();
     assert_eq!(snapshot_json["groupLimit"], MAX_GROUPS);
@@ -6755,7 +6778,10 @@ mod tests {
     assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
     let persisted = serde_json::to_value(&manager.items[0]).unwrap();
     assert_eq!(persisted["rtf"], WORD_RTF);
-    assert_eq!(manager.snapshot().items[0].rtf(), None);
+    assert_eq!(
+      manager.snapshot(&ClipboardCaller::for_test()).items[0].rtf(),
+      None
+    );
     let item_id = manager.items[0].id().to_string();
     assert_eq!(manager.item(&item_id).unwrap().for_webview().rtf(), None);
   }

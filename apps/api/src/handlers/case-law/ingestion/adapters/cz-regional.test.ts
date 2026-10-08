@@ -43,7 +43,6 @@ import type {
   CzRegionalApiItem,
   CzRegionalBuildResult,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   isReadRefusal,
@@ -64,10 +63,7 @@ import {
   type ReadFault,
   type ReadRefusalFault,
 } from "@/api/tests/helpers/read-fault-drivers";
-import {
-  installRecordingAnalytics,
-  installRecordingLogger,
-} from "@/api/tests/helpers/recording-telemetry";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PublisherPageError } from "./publisher-page";
@@ -361,49 +357,27 @@ describe("what the publisher states reaches the row", () => {
   });
 });
 
-describe("a document the parser cannot read", () => {
-  // A text run carrying markup nested deeper than the validator's recursive
-  // text walk reaches: the structured parse fails while the publisher's own
-  // plain-text rendering is still there.
+describe("a text run with deeply nested markup", () => {
+  // Deeper than any recursive tree walk reaches: the validator reads the
+  // reference text iteratively, so the structured parse holds.
   const NESTING = 20_000;
-  const unreadableText = `${"<span>".repeat(NESTING)}Soud rozhodl${"</span>".repeat(NESTING)}`;
+  const nestedText = `${"<span>".repeat(NESTING)}Soud rozhodl${"</span>".repeat(NESTING)}`;
 
-  test("keeps the publisher's plain text and reports the parse", async () => {
+  test("keeps the structured document and reports no parse failure", async () => {
     const verdict = [
       {
-        texts: [{ text: unreadableText, anonStyle: "NONE" }],
+        texts: [{ text: nestedText, anonStyle: "NONE" }],
         styleLocalId: 1,
         tableCellInfo: null,
       },
     ];
-    expect(() =>
-      parseRegionalDecision({
-        caseNumber: "18 C 130/2024",
-        ecli: undefined,
-        court: "Okresní soud",
-        decisionDate: undefined,
-        decisionType: "rozsudek",
-        sourceUrl: undefined,
-        header: [],
-        verdict,
-        justification: [],
-        information: [],
-        styles: [],
-        verdictText: "Soud rozhodl",
-        justificationText: "",
-      }),
-    ).toThrow(RangeError);
-
     const payload: unknown = JSON.parse(await readFixture(DISTRICT_DOCUMENT));
     const document = readCzRegionalDocument(
       JSON.stringify({ ...(isRecord(payload) ? payload : {}), verdict }),
     );
     expect(document.parsed).not.toBeNull();
-    const verdictText = document.parsed?.verdictText ?? "";
-    expect(verdictText.length).toBeGreaterThan(0);
 
     const logs = installRecordingLogger();
-    const analytics = installRecordingAnalytics();
     try {
       const built = assembleCzRegionalDecision({
         item: await itemByDocket(LISTING, DISTRICT_DOCKET),
@@ -412,27 +386,22 @@ describe("a document the parser cannot read", () => {
       });
 
       expect(built.type).toBe("built");
-      expect(built.type === "built" ? built.decision.fulltext : "").toContain(
-        verdictText.trim(),
-      );
+      // The verdict heading is synthesized by the structured parse only; the
+      // plain-text fallback carries no headings.
+      expect(
+        JSON.stringify(
+          built.type === "built" ? built.decision.documentAst : null,
+        ),
+      ).toContain("takto:");
       expect(
         logs
           .at("ERROR")
           .filter(
             (record) =>
               record.message === "case_law.ingestion.document_parse_failed",
-          )
-          .map((record) => record.attributes),
-      ).toEqual([
-        expect.objectContaining({
-          adapterKey: "cz-regional",
-          documentId: "18 C 130/2024",
-          "error.type": "RangeError",
-        }),
-      ]);
-      expect(analytics.exceptions()).toHaveLength(1);
+          ),
+      ).toEqual([]);
     } finally {
-      analytics.restore();
       logs.restore();
     }
   });
@@ -488,6 +457,38 @@ describe("the decision type is the publisher's enum in the local language", () =
         built.type === "built" ? built.decision.documentAst : null,
       ),
     ).toContain("TRESTNÍ PŘÍKAZ");
+  });
+
+  const storedType = async (type: string) => {
+    const built = assembleCzRegionalDecision({
+      item: await itemByDocket(LISTING, APPELLATE_DOCKET),
+      document: readCzRegionalDocument(
+        await documentWithMetadata(APPELLATE_DOCUMENT, { type }),
+      ),
+      chain: null,
+    });
+    return built.type === "built" ? built.decision.decisionType : "unbuilt";
+  };
+
+  // The API spells the ministry's members both ways; production holds
+  // `ministery_of_justice_order` and `ministry_of_justice_resolution` alike.
+  test("every Ministry of Justice member, in either spelling, is stored in Czech", async () => {
+    for (const [instrument, czech] of [
+      ["DECISION", "rozhodnutí ministerstva spravedlnosti"],
+      ["ORDER", "příkaz ministerstva spravedlnosti"],
+      ["RESOLUTION", "usnesení ministerstva spravedlnosti"],
+    ] as const) {
+      for (const spelling of ["MINISTRY", "MINISTERY"]) {
+        expect(await storedType(`${spelling}_OF_JUSTICE_${instrument}`)).toBe(
+          czech,
+        );
+      }
+    }
+  });
+
+  test("the API's not-stated member stores no type rather than the word none", async () => {
+    expect(await storedType("NONE")).toBeUndefined();
+    expect(await storedType("JUDGEMENT")).toBe("rozsudek");
   });
 });
 

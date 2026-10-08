@@ -19,6 +19,7 @@ import {
 } from "@stll/ui/combobox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -408,6 +409,20 @@ const CreateMatterDialogBody = ({
 
   return (
     <DialogPopup className="max-w-md">
+      <DialogFormState
+        dirty={
+          name !== "" ||
+          ownerType !== "client" ||
+          selectedClient?.id !== draftClient?.id ||
+          selectedMemberUserIds.length > 0
+        }
+        onDiscard={() => {
+          setName("");
+          setOwnerType("client");
+          setSelectedClient(draftClient);
+          setSelectedMemberUserIds([]);
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{t("common.newMatter")}</DialogTitle>
       </DialogHeader>

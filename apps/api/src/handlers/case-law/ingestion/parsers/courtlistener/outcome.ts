@@ -10,7 +10,8 @@
 
 import type { AnyNode } from "domhandler";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { UnitPosition } from "./opinion-class";
 
@@ -68,8 +69,6 @@ export type TextUnit = {
    */
   readonly boundaries: "markup" | "layout";
   readonly blocks: readonly Block[];
-  /** The block that is the unit's root `ORDER` title, when it opens with one. */
-  readonly orderTitleBlockId: string | null;
 };
 
 /** Counts a reader of the parse can check against the source. */

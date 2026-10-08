@@ -486,7 +486,7 @@ const makeTtyContext = ({
   const context: Context = {
     // SAFETY: runLeafCommand only reads stdin/stdout/stderr/exitCode off the
     // process; the PassThrough streams satisfy that structural slice.
-    // oxlint-disable-next-line no-unsafe-type-assertion -- test double for the process slice runLeafCommand reads
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double for the process slice runLeafCommand reads
     process: proc as unknown as NodeJS.Process,
     configDir: "/tmp/stella-test",
     serverUrl,

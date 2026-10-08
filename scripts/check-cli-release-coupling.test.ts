@@ -575,3 +575,45 @@ test("release contract reads committed data without installed dependencies or de
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("an advancing base does not turn an unchanged PR into a release", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-release-base-"));
+  try {
+    copyNoInstallFiles(root);
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+      expect(result.status).toBe(0);
+      return result.stdout.trim();
+    };
+    git("init");
+    git("config", "user.name", "Release fixture");
+    git("config", "user.email", "fixture@example.test");
+    git("config", "commit.gpgsign", "false");
+    writeFileSync(path.join(root, "VERSION"), "0.9.47\n");
+    git("add", ".");
+    git("commit", "-m", "fixture base");
+    const base = git("rev-parse", "HEAD");
+    writeFileSync(path.join(root, "VERSION"), "0.9.48\n");
+    git("add", "VERSION");
+    git("commit", "-m", "fixture release");
+    git("branch", "advanced-base");
+    git("checkout", "--detach", base);
+    writeFileSync(path.join(root, "feature.txt"), "feature\n");
+    git("add", "feature.txt");
+    git("commit", "-m", "fixture feature");
+    const result = Bun.spawnSync(
+      [process.execPath, SCRIPT, "--base", "advanced-base"],
+      {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain(
+      "VERSION unchanged against advanced-base",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

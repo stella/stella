@@ -14,7 +14,9 @@ import {
   createSafeDb,
   createScopedDb,
 } from "@/api/db/scoped";
+import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
+import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type {
   readGatedDecisionWithDocument,
   readsSharedPublicLawCorpus,
@@ -53,6 +55,9 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -150,12 +155,14 @@ export type McpRequestContext = {
     loadLatestApprovedVersion?: typeof loadLatestApprovedVersion;
     createPlaybookTableRuns?: typeof createPlaybookTableRuns;
     createTimeEntryHandler?: typeof createTimeEntryHandler;
+    readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
+    readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
     lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;
@@ -277,6 +284,14 @@ export type McpRequestContext = {
    */
   request?: Request;
   recordAuditEvent: AuditRecorder;
+  /**
+   * Authority to reach a third-party service (a public register, the BOE API,
+   * a court publisher). An MCP transport request holds one: the caller invoked
+   * the tool directly. The chat script runner's context never does, so a read
+   * a script calls cannot send to a third party; a handler that needs one is
+   * declared with `withThirdPartyOutbound`.
+   */
+  thirdPartyOutboundPermit?: ThirdPartyOutboundPermit | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
@@ -354,11 +369,13 @@ export const resolveMcpSessionContext = async (
     request,
     resolveAuthorization = resolveCredentialMemberAuthorization,
     checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOrganization = checkReviewAccountOrganization,
   }: {
     clientIp?: string | null;
     request: Request;
     resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
     checkAccountOperation?: typeof checkDemoAccountOperation;
+    checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },
 ): Promise<McpRequestContext> => {
   const { organizationId, userId } = brandActorSessionIdentity({
@@ -376,10 +393,19 @@ export const resolveMcpSessionContext = async (
     });
   }
 
+  // A restricted account is refused its operation here, and an account bound
+  // to one organization opens no other, whatever grant or membership the
+  // credential was issued under.
   const accountOperation = checkAccountOperation(authorization.email);
-  if (Result.isError(accountOperation)) {
+  const accountAccess = Result.isError(accountOperation)
+    ? accountOperation
+    : checkAccountOrganization({
+        email: authorization.email,
+        organizationId,
+      });
+  if (Result.isError(accountAccess)) {
     throw new McpOrganizationAccessError({
-      message: accountOperation.error.message,
+      message: accountAccess.error.message,
     });
   }
 
@@ -519,7 +545,8 @@ export const resolveMcpSessionContext = async (
     clientIp,
     createOperationDatabaseScope,
     featureAccessSnapshot,
-    ...(session.credential?.type === "machine_api_key"
+    ...(session.credential?.type === "machine_api_key" ||
+    session.credential?.type === "personal_api_key"
       ? { credentialPermissions: session.credential.permissions }
       : {}),
     // An agent run has no person at the tool boundary to confirm a call.
@@ -541,6 +568,9 @@ export const resolveMcpSessionContext = async (
     }),
     pinServerValidatedWorkspaceId:
       requestDatabaseScope.pinServerValidatedWorkspaceId,
+    // The MCP caller invokes each tool directly, so the request may reach the
+    // third-party services its tools front.
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     safeDb: requestDatabaseScope.safeDb,
     scopedDb: requestDatabaseScope.scopedDb,
     userId,

@@ -1,4 +1,8 @@
-import type { CharSpan } from "@/lib/anonymize/pdf-coords";
+import { panic } from "better-result";
+
+import type { EntityOverlay } from "@/lib/pdf/anonymization-types";
+import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
+import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 
 export type OverlayRect = {
   left: number;
@@ -18,103 +22,38 @@ export const getOverlayRectKey = ({
 }: OverlayRectKeyInput): string =>
   `${entityId}:${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
 
-type SpanSlice = {
-  spanIndex: number;
-  localStart: number;
-  localEnd: number;
+type ProjectOverlayRectsOptions = {
+  entities: readonly EntityOverlay[];
+  pageIndex: number;
+  viewport: Pick<PageViewport, "convertToViewportPoint">;
 };
 
 /**
- * Map an entity's [start, end) offset range to the
- * CharSpan indices and local character offsets within
- * each overlapping span. Pure function; no DOM needed.
+ * The overlay rectangles of a page at its current viewport. They are the
+ * entities' glyph boxes, the ones the redacted export masks, projected the
+ * way search highlights are; nothing is measured from the rendered text
+ * layer, so what the overlay covers cannot drift from what the export hides.
  */
-export const mapEntityToSpanSlices = ({
-  pageSpans,
-  entityStart,
-  entityEnd,
-}: {
-  pageSpans: readonly CharSpan[];
-  entityStart: number;
-  entityEnd: number;
-}): SpanSlice[] => {
-  const slices: SpanSlice[] = [];
-
-  for (let i = 0; i < pageSpans.length; i++) {
-    const span = pageSpans[i];
-    if (span === undefined) {
+export const projectOverlayRects = ({
+  entities,
+  pageIndex,
+  viewport,
+}: ProjectOverlayRectsOptions): Map<number, OverlayRect[]> => {
+  const rects = new Map<number, OverlayRect[]>();
+  for (const entity of entities) {
+    const boxes = entity.boxesByPage.get(pageIndex);
+    if (boxes === undefined) {
       continue;
     }
-    if (span.end <= entityStart || span.start >= entityEnd) {
-      continue;
+    const projected: OverlayRect[] = [];
+    for (const box of boxes) {
+      const rect = toPDFSearchViewportBox(box, viewport);
+      if (rect === null) {
+        return panic("A page viewport returned a non-numeric point");
+      }
+      projected.push(rect);
     }
-
-    const localStart = Math.max(0, entityStart - span.start);
-    const localEnd = Math.min(span.text.length, entityEnd - span.start);
-
-    if (localEnd > localStart) {
-      slices.push({
-        spanIndex: i,
-        localStart,
-        localEnd,
-      });
-    }
+    rects.set(entity.id, projected);
   }
-
-  return slices;
-};
-
-/**
- * Merge rects on the same visual line into single
- * rectangles. Two rects are on the same line if their
- * `top` values are within half the rect height.
- */
-export const mergeAdjacentRects = (
-  rects: readonly OverlayRect[],
-): OverlayRect[] => {
-  if (rects.length <= 1) {
-    return [...rects];
-  }
-
-  const sorted = rects.toSorted((a, b) => {
-    const lineThreshold = Math.max(a.height, b.height) * 0.5;
-    if (Math.abs(a.top - b.top) > lineThreshold) {
-      return a.top - b.top;
-    }
-    return a.left - b.left;
-  });
-
-  const first = sorted[0];
-  if (first === undefined) {
-    return [];
-  }
-  const merged: OverlayRect[] = [{ ...first }];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i];
-    const prev = merged.at(-1);
-
-    if (current === undefined || prev === undefined) {
-      continue;
-    }
-
-    const sameLine =
-      Math.abs(current.top - prev.top) <=
-      Math.max(current.height, prev.height) * 0.5;
-    const prevRight = prev.left + prev.width;
-    // Tolerance proportional to font size to bridge
-    // word gaps from pdfjs multi-span text layout.
-    const gapTolerance = Math.max(current.height, prev.height) * 0.5;
-    const adjacent = current.left <= prevRight + gapTolerance;
-
-    if (sameLine && adjacent) {
-      const newRight = Math.max(prevRight, current.left + current.width);
-      prev.width = newRight - prev.left;
-      prev.height = Math.max(prev.height, current.height);
-    } else {
-      merged.push({ ...current });
-    }
-  }
-
-  return merged;
+  return rects;
 };

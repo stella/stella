@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-const runSeed = async (seeds: string) => {
+const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
   const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-cli-"));
   const resultsPath = nodePath.join(dir, "results.jsonl");
   const child = Bun.spawn(
@@ -13,6 +13,7 @@ const runSeed = async (seeds: string) => {
       new URL("seed-usage-policies.ts", import.meta.url).pathname,
       "--results",
       resultsPath,
+      ...extraArgs,
     ],
     {
       env: {
@@ -49,14 +50,18 @@ const runSeed = async (seeds: string) => {
   return { exitCode, stdout, stderr, report };
 };
 
-test("empty usage policy configuration exits without database access", async () => {
+// Empty seeds still retire an active free policy, so they need the database.
+test("empty usage policy configuration fails when the database is unreachable", async () => {
   const result = await runSeed("[]");
   expect(result).toEqual({
-    exitCode: 0,
-    stdout: expect.stringContaining("usage policies: seeded=0 hidden=0\n"),
+    exitCode: 1,
+    stdout: expect.stringContaining("```jsonl\n\n```"),
     report: "",
-    stderr: "",
+    stderr: expect.stringContaining(
+      "Usage policy seed failed; check configuration, results path and database access.\n",
+    ),
   });
+  expect(result.stdout).not.toContain("usage policies: seeded=");
 });
 
 test.each([
@@ -86,28 +91,36 @@ test.each([
   },
 );
 
-test("database failure writes a redacted failed row and exits non-zero", async () => {
-  const result = await runSeed(
-    JSON.stringify([
-      {
-        key: "sample-policy",
-        displayName: "Private display",
-        monthlyUsageUnits: 1,
-        hostedPolicyRef: "private-ref",
-      },
-    ]),
-  );
-  expect(result.exitCode).toBe(1);
-  expect(JSON.parse(result.report)).toEqual({
-    policyKey: "sample-policy",
-    outcome: "failed",
-    reason: expect.any(String),
-  });
-  expect(result.stdout).toContain(result.report.trim());
-  expect(`${result.stdout}${result.stderr}${result.report}`).not.toContain(
-    "private-ref",
-  );
-  expect(`${result.stdout}${result.stderr}${result.report}`).not.toContain(
-    "Private display",
-  );
-});
+test.each([
+  { args: [], mode: "apply" },
+  { args: ["--dry-run"], mode: "dry_run" },
+])(
+  "database failure writes a redacted failed row and exits non-zero ($mode)",
+  async ({ args, mode }) => {
+    const result = await runSeed(
+      JSON.stringify([
+        {
+          key: "sample-policy",
+          displayName: "Private display",
+          monthlyUsageUnits: 1,
+          hostedPolicyRef: "private-ref",
+        },
+      ]),
+      args,
+    );
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.report)).toEqual({
+      policyKey: "sample-policy",
+      mode,
+      outcome: "failed",
+      reason: expect.any(String),
+    });
+    expect(result.stdout).toContain(result.report.trim());
+    expect(`${result.stdout}${result.stderr}${result.report}`).not.toContain(
+      "private-ref",
+    );
+    expect(`${result.stdout}${result.stderr}${result.report}`).not.toContain(
+      "Private display",
+    );
+  },
+);

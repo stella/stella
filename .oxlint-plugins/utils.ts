@@ -6,6 +6,11 @@
 
 import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
 
+import { isDatabaseHandleName, MUTATION_METHODS } from "./database-access.ts";
+import { canonicalModuleId } from "./module-id.ts";
+
+export { canonicalModuleId, exactModuleId } from "./module-id.ts";
+
 export type AstNode = Ranged & { type: string } & Record<string, unknown>;
 
 export type FilenameContext = {
@@ -748,43 +753,6 @@ export const resolveImportedExpression = (
   return null;
 };
 
-// Canonical module identity, so `./escape-like`, `../lib/escape-like.ts` and
-// `@/api/lib/escape-like` compare equal: relative specifiers resolve against
-// the importing file, the app path aliases expand to their source roots, and
-// extensions and a trailing `/index` drop. Bare package specifiers pass
-// through unchanged.
-export const exactModuleId = (
-  specifier: string,
-  importerRepoPath: string,
-): string => {
-  let resolved = specifier;
-  if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    const segments = importerRepoPath.split("/").slice(0, -1);
-    for (const segment of specifier.split("/")) {
-      if (segment === "..") {
-        segments.pop();
-      } else if (segment !== ".") {
-        segments.push(segment);
-      }
-    }
-    resolved = segments.join("/");
-  } else if (specifier.startsWith("@/api/")) {
-    resolved = `apps/api/src/${specifier.slice("@/api/".length)}`;
-  } else if (specifier.startsWith("@/")) {
-    const app = /^apps\/(?<app>[^/]+)\//u.exec(importerRepoPath)?.groups?.app;
-    if (app !== undefined) {
-      resolved = `apps/${app}/src/${specifier.slice("@/".length)}`;
-    }
-  }
-  return resolved.replace(/\.[cm]?[jt]sx?$/u, "");
-};
-
-export const canonicalModuleId = (
-  specifier: string,
-  importerRepoPath: string,
-): string =>
-  exactModuleId(specifier, importerRepoPath).replace(/\/index$/u, "");
-
 // A module an import may come from: a bare package specifier or a repository
 // path without extension (`apps/api/src/lib/escape-like`), or a predicate over
 // the canonical id.
@@ -871,18 +839,6 @@ type DatabaseWriteContext = ImportedFromOptions["context"];
 
 // Guards the identifier-to-initializer walk against cycles.
 const MAX_SQL_RESOLVE_DEPTH = 4;
-
-const MUTATION_METHODS: ReadonlySet<string> = new Set([
-  "insert",
-  "update",
-  "delete",
-]);
-
-const isDatabaseHandleName = (name: string): boolean =>
-  name === "tx" ||
-  name === "db" ||
-  name === "trx" ||
-  /[a-z](?:Tx|Db)$/u.test(name);
 
 const GET_DB_CALL = /^get[A-Za-z]*Db$/u;
 const TRANSACTION_TYPE = /(?:^|[a-z])(?:Transaction|Tx)$|^(?:Db|DbOrTx)$/u;

@@ -1,10 +1,16 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  avtLayoutVisibilityCondition,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -26,6 +32,7 @@ export const workspaceNavigationCursor = createTimestampIdCursorCodec({
 });
 
 const config = {
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   permissions: {
     workspace: ["read"],
   },
@@ -51,7 +58,18 @@ const config = {
 
 const readWorkspaceNavigation = createSafeRootHandler(
   config,
-  async function* ({ query, safeDb, session }) {
+  async function* ({ query, safeDb, session, user, featureAccessSnapshot }) {
+    if (featureAccessSnapshot === undefined) {
+      return panic(
+        "Authenticated navigation requires a feature access snapshot",
+      );
+    }
+    const avtAvailable =
+      avtViewAccessStatus({
+        snapshot: featureAccessSnapshot,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }) === "available";
     const statusScope =
       query.statusScope ?? WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE;
     const limit = normalizeTenantPageLimit(
@@ -93,6 +111,7 @@ const readWorkspaceNavigation = createSafeRootHandler(
               select ${workspaceViews.id}
               from ${workspaceViews}
               where ${workspaceViews.workspaceId} = ${workspaces.id}
+              and ${avtLayoutVisibilityCondition(workspaceViews.layout, avtAvailable ? "available" : "unavailable")}
               order by ${workspaceViews.position}, ${workspaceViews.id}
               limit 1
             )`.as("default_view_id"),
@@ -144,6 +163,12 @@ const readWorkspaceNavigation = createSafeRootHandler(
     );
 
     return Result.ok({
+      features: {
+        timeBilling: isFeatureEnabled(featureAccessSnapshot, "time-billing", {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      },
       items,
       limit: page.limit,
       nextCursor: page.nextCursor,

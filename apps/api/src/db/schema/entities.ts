@@ -1,4 +1,5 @@
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
@@ -616,6 +617,10 @@ export const desktopEditHandoffs = p.pgTable(
     forceTakeover: p.boolean("force_takeover").notNull().default(false),
     expiresAt: timestamptz("expires_at").notNull(),
     consumedAt: timestamptz("consumed_at"),
+    failedAt: timestamptz("failed_at"),
+    failureReason: p.text("failure_reason", {
+      enum: DESKTOP_HANDOFF_FAILURE_REASONS,
+    }),
     desktopSessionId: safeUuid<"desktopEditSession">("desktop_session_id"),
     openedAt: timestamptz("opened_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -625,6 +630,10 @@ export const desktopEditHandoffs = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.check(
+      "desktop_edit_handoffs_failure_check",
+      sql`(${table.failedAt} is null and ${table.failureReason} is null) or (${table.failedAt} is not null and ${table.consumedAt} is null and ${table.openedAt} is null and ${table.failureReason} is not null and ${table.failureReason} in (${sql.raw(DESKTOP_HANDOFF_FAILURE_REASONS.map((reason) => `'${reason}'`).join(", "))}))`,
+    ),
     p.index("desktop_edit_handoffs_workspace_id_idx").on(table.workspaceId),
     p.index("desktop_edit_handoffs_expires_at_idx").on(table.expiresAt),
     p

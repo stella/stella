@@ -3,43 +3,48 @@ import type { ReactElement, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
+import type { DecisionCaption } from "@stll/legal-ast/decision-caption";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  hasBlockInlines,
+  parseDocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
 import {
   annotationTextAnchors,
-  buildAnnotationAnchors,
   renderLinkAnnotations,
 } from "@/components/legal-reader/annotations/annotation-anchors";
 import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import { ExternalCitationLink } from "@/components/legal-reader/citation-link";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
-import { CitedProvisionLink } from "@/components/legal-reader/cited-provision-link";
+import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
+import {
+  CitedProvisionExpansion,
+  CitedProvisionLink,
+} from "@/components/legal-reader/cited-provision-link";
 import { CitedStatuteLink } from "@/components/legal-reader/cited-statute-link";
 import {
   BlockRenderer,
+  DecisionCaptionHeader,
   FulltextFallback,
   HighlightedText,
   InlineContent,
-  buildDocumentAstSearchPieces,
-  buildFulltextSearchPieces,
-  firstMatchIndexInPassage,
+  WrappedParagraphRun,
+  inlinesToPlainText,
   rangesForPiece,
 } from "@/components/legal-reader/document-ast-text";
 import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
+import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
 import {
   holdLanding,
   readerBlockByAnchor,
 } from "@/components/legal-reader/reader-landing";
-import type {
-  SearchMatchRange,
-  SearchPiece,
-} from "@/components/legal-reader/reader-search";
-import { buildSearchResults } from "@/components/legal-reader/reader-search";
+import type { SearchMatchRange } from "@/components/legal-reader/reader-search";
 import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { decisionReferenceTintClassName } from "@/features/case-law/citation-treatment";
@@ -51,26 +56,33 @@ import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
   courtHeadnoteOrigin,
+  decisionCaption,
   decisionDisplayReference,
   decisionTopMatter,
   editorialSupplementBlocks,
   footnoteParts,
+  resolveDecisionLinkOverlaps,
   topMatterBlocks,
   visibleDecisionBlocks,
+  wrappedParagraphRuns,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import type {
   DecisionTopMatter,
   FootnoteParts,
   TopMatterSource,
+  WrappedParagraphRuns,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { HeadnoteBlock } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { dissentingJudges } from "@/features/case-law/decision-judges";
+import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
+import type { ProvisionAnchorSpan } from "@/features/case-law/provision-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
@@ -81,6 +93,7 @@ type Decision = Pick<
   | keyof DecisionDocumentState
   | "caseNumber"
   | "caseNumberType"
+  | "country"
   | "court"
   | "courtAbbreviation"
   | "courtTier"
@@ -94,7 +107,7 @@ type Decision = Pick<
 >;
 
 type DecisionTextProps = {
-  activeMatchIndex: number;
+  surface: DecisionReaderSurface;
   /**
    * The model's headnote and abstract, drawn in the top matter under the
    * court's own. A node rather than the analysis itself: the order the two
@@ -113,10 +126,10 @@ type DecisionTextProps = {
    * headnote instead of inheriting the last reader's fold.
    */
   decisionId: string;
+  isHydrated?: boolean | undefined;
   /**
    * The block the reader was sent to, from a results row or a citation. It
-   * keeps a marker while the reader is on it, and the find lands on its first
-   * match rather than on the document's first.
+   * keeps a marker while the reader is on it.
    */
   landingAnchorId?: string | undefined;
   /**
@@ -127,10 +140,9 @@ type DecisionTextProps = {
    */
   notesByAnchorId?: ReadonlyMap<string, ReactNode> | undefined;
   onAnnotationActivate?: ((annotationId: string) => void) | undefined;
-  onMatchCountChange?: ((count: number) => void) | undefined;
   /** Applied provisions whose statute is held, for inline links. */
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
-  searchQuery: string;
+  expandProvisions?: boolean | undefined;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
   /** Work citations, including references with no provision locator. */
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
@@ -138,6 +150,7 @@ type DecisionTextProps = {
 
 /** No match is the find's own: nothing carries the active mark. */
 const NO_ACTIVE_MATCH = -1;
+const NO_SEARCH_RANGES: Record<string, SearchMatchRange[]> = {};
 
 const DECISION_REFERENCE_ID = "decision-reference";
 
@@ -431,7 +444,7 @@ const DecisionTopMatterSections = ({
   return (
     // The text is read like the decision it belongs to: the article's serif,
     // size and line-height, inherited. Only the labels are chrome.
-    <div className="bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4">
+    <ReaderInsetBox className="mb-8">
       {legalSentence !== null && (
         <HeadnoteBlock
           defaultOpen
@@ -471,7 +484,7 @@ const DecisionTopMatterSections = ({
         </HeadnoteBlock>
       )}
       {aiHeadnotes}
-    </div>
+    </ReaderInsetBox>
   );
 };
 
@@ -512,21 +525,27 @@ const splitAroundLinks = (
  * decision citation and a provision reference cannot share characters in
  * honest text, so whichever starts first simply wins.
  */
+type DecisionTextAnchorPlacements = {
+  anchorsByPieceId: Record<string, TextAnchor[]>;
+  failures: ProvisionPlacementFailure[];
+  provisionsByAnchorId: Map<string, ReactNode>;
+};
+
 const buildAnchorsByPieceId = ({
   annotations,
   blocks,
   citations,
-  provisions,
+  provisionSpans,
   statutes,
 }: {
   annotations: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
-  provisions: readonly DecisionProvisionAnchor[];
+  provisionSpans: Record<string, ProvisionAnchorSpan<CitedProvisionTarget>[]>;
   statutes: readonly DecisionStatuteCitationAnchor[];
-}): Record<string, TextAnchor[]> => {
+}): DecisionTextAnchorPlacements => {
+  const failures: ProvisionPlacementFailure[] = [];
   const citationSpans = locateCitationSpans({ blocks, citations });
-  const provisionSpans = locateProvisionAnchors({ blocks, provisions });
   const statuteSpans = new Map<string, DecisionStatuteCitationAnchor[]>();
   for (const statute of statutes) {
     const spans = statuteSpans.get(statute.blockId);
@@ -681,15 +700,52 @@ const buildAnchorsByPieceId = ({
     // Links stay interactive, and every mark crossing them is painted inside
     // their text. The mark's remaining pieces continue on either side, so a
     // citation can never cut a white hole through a highlighted passage.
-    const links = dropOverlappingSpans(
+    const disposition = resolveDecisionLinkOverlaps(
       anchors.filter((anchor) => !anchor.key.startsWith("annotation:")),
     );
+    const { links } = disposition;
+    failures.push(...disposition.failures);
     const marks = anchors
       .filter((anchor) => anchor.key.startsWith("annotation:"))
       .flatMap((mark) => splitAroundLinks(mark, links));
     anchorsByPieceId[blockId] = dropOverlappingSpans([...links, ...marks]);
   }
-  return anchorsByPieceId;
+  const provisionsByAnchorId = new Map<string, ReactNode>();
+  for (const block of blocks) {
+    if (!hasBlockInlines(block)) {
+      continue;
+    }
+    const acceptedKeys = new Set(
+      optionalArray(anchorsByPieceId[block.id]).map(
+        ({ key, start, end }) => `${key}:${String(start)}:${String(end)}`,
+      ),
+    );
+    const spans = optionalArray(provisionSpans[block.id])
+      .filter((span) =>
+        acceptedKeys.has(
+          `provision:${span.source.id}:${String(span.start)}:${String(span.end)}`,
+        ),
+      )
+      .toSorted((left, right) => left.start - right.start);
+    if (spans.length === 0) {
+      continue;
+    }
+    provisionsByAnchorId.set(
+      block.anchorId,
+      spans.map((span) => (
+        <CitedProvisionExpansion
+          key={`${span.source.id}:${String(span.start)}`}
+          label={inlinesToPlainText(block.inlines).slice(span.start, span.end)}
+          provision={span.source.target}
+          version={{
+            type: "consolidation",
+            validFrom: span.source.target.document.versionValidFrom,
+          }}
+        />
+      )),
+    );
+  }
+  return { anchorsByPieceId, provisionsByAnchorId, failures };
 };
 
 /**
@@ -705,18 +761,22 @@ const renderBlocksWithHoldingZone = ({
   anchorsByPieceId,
   apparatusLabel,
   blocks,
+  caption,
   dissent,
   footnotes,
   landingAnchorId,
   notesByAnchorId,
   rangesByPieceId,
   sectionMap,
+  wrappedRuns,
 }: {
   activeMatchIndex: number;
   anchorsByPieceId: Record<string, TextAnchor[]>;
   /** Translated label for the folded reporter-apparatus disclosure. */
   apparatusLabel: string;
   blocks: Block[];
+  /** The caption the body opens with, where its blocks store it run on. */
+  caption: DecisionCaption | null;
   /**
    * The separate opinion's byline and the block it is drawn above. Both or
    * neither: a byline with nobody to name, and names with no separate
@@ -729,6 +789,8 @@ const renderBlocksWithHoldingZone = ({
   notesByAnchorId: ReadonlyMap<string, ReactNode> | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
+  /** Line blocks of a hard-wrapped source, drawn as their paragraphs. */
+  wrappedRuns: WrappedParagraphRuns;
 }): ReactNode[] => {
   const result: ReactNode[] = [];
 
@@ -738,6 +800,11 @@ const renderBlocksWithHoldingZone = ({
   const apparatusIds = apparatusBlockIds(blocks);
 
   const { headIds: footnoteHeadIds, backJumpAnchorByLastId } = footnotes;
+
+  const captionBlockIds = new Set(
+    caption?.blocks.map((captionBlock) => captionBlock.block.id),
+  );
+  const captionHeadId = caption?.blocks[0].block.id;
 
   // Group consecutive blocks by heading ID for continuous lines.
   // Same category but different heading = separate groups.
@@ -786,21 +853,60 @@ const renderBlocksWithHoldingZone = ({
           apparatusIds,
           apparatusLabel,
           (block) => {
+            // Drawn inside the caption header or the run of an earlier block.
+            if (
+              (captionBlockIds.has(block.id) && block.id !== captionHeadId) ||
+              wrappedRuns.continuationIds.has(block.id)
+            ) {
+              return null;
+            }
+            const run = wrappedRuns.byHeadId.get(block.id);
+            const drawnBlocks =
+              caption !== null && block.id === captionHeadId
+                ? caption.blocks.map((captionBlock) => captionBlock.block)
+                : (run?.blocks ?? [block]);
             // One renderer for every block: a footnote can carry any role,
             // holding included, so its grouping travels with it either way.
-            const rendered = (
-              <BlockRenderer
-                activeMatchIndex={activeMatchIndex}
-                anchorsByPieceId={anchorsByPieceId}
-                block={block}
-                key={block.id}
-                landing={block.anchorId === landingAnchorId}
-                noteBackJumpTo={backJumpAnchorByLastId.get(block.id)}
-                noteHead={footnoteHeadIds.has(block.id)}
-                rangesByPieceId={rangesByPieceId}
-                variant="case-law"
-              />
-            );
+            const rendered = (() => {
+              if (caption !== null && block.id === captionHeadId) {
+                return (
+                  <DecisionCaptionHeader
+                    activeMatchIndex={activeMatchIndex}
+                    anchorsByPieceId={anchorsByPieceId}
+                    caption={caption}
+                    key={block.id}
+                    landingAnchorId={landingAnchorId}
+                    rangesByPieceId={rangesByPieceId}
+                  />
+                );
+              }
+              if (run !== undefined) {
+                return (
+                  <WrappedParagraphRun
+                    activeMatchIndex={activeMatchIndex}
+                    anchorsByPieceId={anchorsByPieceId}
+                    blocks={run.blocks}
+                    key={block.id}
+                    landingAnchorId={landingAnchorId}
+                    rangesByPieceId={rangesByPieceId}
+                    separators={run.separators}
+                  />
+                );
+              }
+              return (
+                <BlockRenderer
+                  activeMatchIndex={activeMatchIndex}
+                  anchorsByPieceId={anchorsByPieceId}
+                  block={block}
+                  key={block.id}
+                  landing={block.anchorId === landingAnchorId}
+                  noteBackJumpTo={backJumpAnchorByLastId.get(block.id)}
+                  noteHead={footnoteHeadIds.has(block.id)}
+                  rangesByPieceId={rangesByPieceId}
+                  variant="case-law"
+                />
+              );
+            })();
             const body = isHoldingBlock(block) ? (
               <div className="font-[520]" key={block.id}>
                 {rendered}
@@ -808,12 +914,18 @@ const renderBlocksWithHoldingZone = ({
             ) : (
               rendered
             );
-            const notes = notesByAnchorId?.get(block.anchorId);
+            // The notes of every block drawn here follow it, in block order.
+            const notes = drawnBlocks.flatMap(({ anchorId }) => {
+              const note = notesByAnchorId?.get(anchorId);
+              return note === undefined
+                ? []
+                : [<Fragment key={anchorId}>{note}</Fragment>];
+            });
             const byline =
               dissent !== null && dissent.blockId === block.id
                 ? dissent.byline
                 : null;
-            if (notes === undefined && byline === null) {
+            if (notes.length === 0 && byline === null) {
               return body;
             }
             return (
@@ -839,33 +951,34 @@ const NO_STATUTE_CITATION_ANCHORS: readonly DecisionStatuteCitationAnchor[] =
   [];
 
 export const DecisionText = ({
-  activeMatchIndex,
   aiHeadnotes = null,
   annotationAnchors = NO_ANNOTATION_ANCHORS,
   citationAnchors = NO_CITATION_ANCHORS,
   decision,
   decisionId,
+  isHydrated,
   landingAnchorId,
   notesByAnchorId,
+  expandProvisions = false,
   onAnnotationActivate,
-  onMatchCountChange,
   provisionAnchors = NO_PROVISION_ANCHORS,
-  searchQuery,
   sectionMap,
   statuteCitationAnchors = NO_STATUTE_CITATION_ANCHORS,
+  surface,
 }: DecisionTextProps) => {
   const t = useTranslations();
 
   const ast = parseDocumentAst(decision.documentAst);
   const visibleBlocks = visibleDecisionBlocks(ast, decision.caseNumberType);
+  const wrappedRuns = wrappedParagraphRuns(visibleBlocks);
   const topMatter = decisionTopMatter({
     blocks: visibleBlocks,
     textFields: decision.textFields,
   });
   const courtOrigin = courtHeadnoteOrigin(decision);
   // The document renders what the top matter did not take. Anchors still come
-  // from every visible block, wherever it ends up drawn; match numbering,
-  // note grouping and the landing passage follow the order the page renders,
+  // from every visible block, wherever it ends up drawn; note grouping and
+  // the landing passage follow the order the page renders,
   // which is the top matter first.
   const bodyBlocks = visibleBlocks.filter(
     (block) => !topMatter.liftedBlockIds.has(block.id),
@@ -875,11 +988,16 @@ export const DecisionText = ({
     ...bodyBlocks,
   ] satisfies Block[];
   const footnotes = footnoteParts(renderedBlocks);
+  const caption = decisionCaption({
+    blocks: bodyBlocks,
+    country: decision.country,
+  });
   const articleRef = useRef<HTMLElement>(null);
   // Inline links come from prefetches that do not block the route, so the
   // server pass and the client's hydration pass may not agree on them. The
   // text hydrates bare and the links are laid over it right after.
-  const hydrated = useHydrated();
+  const environmentHydrated = useHydrated();
+  const hydrated = isHydrated ?? environmentHydrated;
 
   const displayRef = decisionDisplayReference({
     ast,
@@ -887,104 +1005,21 @@ export const DecisionText = ({
     caseNumberType: decision.caseNumberType,
   });
 
-  const hasRenderableBody =
-    visibleBlocks.length > 0 ||
-    (decision.fulltext !== null && decision.fulltext !== "");
-
-  const searchPieces: SearchPiece[] = (() => {
-    // A match needs something on screen to scroll to, so each piece is
-    // indexed exactly where its own element renders. The reference line
-    // belongs to the body; the supplement is published separately from the
-    // text and stands even where the text did not resolve.
-    const pieces: SearchPiece[] = hasRenderableBody
-      ? [
-          {
-            id: DECISION_REFERENCE_ID,
-            text: `${decision.court}, ${displayRef}`,
-          },
-        ]
-      : [];
-
-    // Section by section, then the document: `buildSearchResults` numbers the
-    // matches in piece order, and a find that walks the page backwards is the
-    // bug that order prevents. A field the top matter does not render is not
-    // indexed at all — a match in text drawn nowhere has nothing to scroll to.
-    for (const source of [topMatter.legalSentence, topMatter.abstract]) {
-      if (source === null) {
-        continue;
-      }
-      if (source.type === "text") {
-        pieces.push({ id: source.pieceId, text: source.text });
-        continue;
-      }
-      pieces.push(...buildDocumentAstSearchPieces(source.blocks));
-    }
-
-    if (visibleBlocks.length > 0) {
-      pieces.push(...buildDocumentAstSearchPieces(bodyBlocks));
-    } else if (decision.fulltext) {
-      pieces.push(...buildFulltextSearchPieces(decision.fulltext));
-    }
-
-    return pieces;
-  })();
-
-  const searchResults = buildSearchResults({
-    pieces: searchPieces,
-    query: searchQuery,
-  });
-
-  // Where the reader is sent: the landing passage's own first match while
-  // they are still on it, the find's position once they move. The two can
-  // never disagree, because the caller drops the landing the moment the
-  // reader jumps anywhere else.
-  //
-  // A landing passage the query does not reach activates nothing rather than
-  // falling back to the find's position. The anchor a question's source chip
-  // carries was chosen by the answer, not by the query, so the query may well
-  // match somewhere else entirely; pulling the reader there would answer a
-  // question they did not ask.
-  const landingMatchIndex =
-    landingAnchorId === undefined
-      ? null
-      : firstMatchIndexInPassage({
-          anchorId: landingAnchorId,
-          blocks: renderedBlocks,
-          rangesByPieceId: searchResults.rangesByPieceId,
-        });
-  const shownMatchIndex =
-    landingAnchorId === undefined
-      ? activeMatchIndex
-      : (landingMatchIndex ?? NO_ACTIVE_MATCH);
-
-  useExternalSyncEffect(() => {
-    onMatchCountChange?.(searchResults.matchCount);
-  }, [onMatchCountChange, searchResults.matchCount]);
-
   useExternalSyncEffect(() => {
     const article = articleRef.current;
     if (!article) {
       return undefined;
     }
 
-    // The match wins where there is one; a landing passage the query does not
-    // reach is still where the reader asked to be.
-    const match =
-      shownMatchIndex === NO_ACTIVE_MATCH
-        ? null
-        : article.querySelector<HTMLElement>(
-            `[data-reader-match-index="${String(shownMatchIndex)}"]`,
-          );
     const target =
-      match ??
-      (landingAnchorId === undefined
+      landingAnchorId === undefined
         ? null
-        : readerBlockByAnchor(article, landingAnchorId));
+        : readerBlockByAnchor(article, landingAnchorId);
     if (!target) {
       return undefined;
     }
 
-    // A match inside the folded reporter apparatus is invisible while its
+    // A landing inside the folded reporter apparatus is invisible while its
     // <details> stays closed, and scrolling to a hidden descendant reveals
     // nothing: open every enclosing disclosure first.
     for (
@@ -995,19 +1030,8 @@ export const DecisionText = ({
       disclosure.open = true;
     }
 
-    // Stepping between matches is a move the reader makes, so it glides.
-    // Landing is arrival: the passage may be screens away while the page is
-    // still settling, and an animation over that distance is a wait.
-    if (landingAnchorId === undefined) {
-      target.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "nearest",
-      });
-      return undefined;
-    }
     return holdLanding({ article, target });
-  }, [landingAnchorId, searchQuery, searchResults.matchCount, shownMatchIndex]);
+  }, [landingAnchorId]);
 
   // A separate opinion is bylined where the court's own text does not say
   // whose it is: the names come from the read, the place from the AST, and
@@ -1024,13 +1048,41 @@ export const DecisionText = ({
 
   // Inline links for every visible block, wherever it is drawn: the top
   // matter and the document below share one map.
-  const anchorsByPieceId = buildAnchorsByPieceId({
-    annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
-    blocks: visibleBlocks,
-    citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
+  const placementBlocks = visibleDecisionBlocks(
+    ast,
+    decision.caseNumberType,
+    decision.fulltext,
+  );
+  const provisionPlacement = locateProvisionAnchors({
+    blocks: placementBlocks,
     provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
+  });
+  const textPlacements = buildAnchorsByPieceId({
+    annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
+    blocks: placementBlocks,
+    citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
+    provisionSpans: provisionPlacement.anchorsByPieceId,
     statutes: hydrated ? statuteCitationAnchors : NO_STATUTE_CITATION_ANCHORS,
   });
+  const { anchorsByPieceId, provisionsByAnchorId } = textPlacements;
+  useProvisionPlacementTelemetry({
+    decisionId,
+    failures: [...provisionPlacement.failures, ...textPlacements.failures],
+    surface,
+  });
+
+  const supplementsByAnchorId = new Map(notesByAnchorId);
+  if (expandProvisions) {
+    for (const [anchorId, cards] of provisionsByAnchorId) {
+      supplementsByAnchorId.set(
+        anchorId,
+        <>
+          {cards}
+          {notesByAnchorId?.get(anchorId)}
+        </>,
+      );
+    }
+  }
 
   // One return, so the attribution line cannot be forgotten on the branch
   // somebody adds next: it is required wherever a decision is rendered,
@@ -1064,15 +1116,12 @@ export const DecisionText = ({
             </div>
           )}
           <DecisionReference
-            activeMatchIndex={shownMatchIndex}
-            ranges={rangesForPiece(
-              searchResults.rangesByPieceId,
-              DECISION_REFERENCE_ID,
-            )}
+            activeMatchIndex={NO_ACTIVE_MATCH}
+            ranges={[]}
             text={`${decision.court}, ${displayRef}`}
           />
           <DecisionTopMatterSections
-            activeMatchIndex={shownMatchIndex}
+            activeMatchIndex={NO_ACTIVE_MATCH}
             aiHeadnotes={aiHeadnotes}
             anchorsByPieceId={anchorsByPieceId}
             courtOrigin={courtOrigin}
@@ -1081,21 +1130,23 @@ export const DecisionText = ({
             }
             footnotes={footnotes}
             key={decisionId}
-            notesByAnchorId={notesByAnchorId}
-            rangesByPieceId={searchResults.rangesByPieceId}
+            notesByAnchorId={supplementsByAnchorId}
+            rangesByPieceId={NO_SEARCH_RANGES}
             topMatter={topMatter}
           />
           {renderBlocksWithHoldingZone({
-            activeMatchIndex: shownMatchIndex,
+            activeMatchIndex: NO_ACTIVE_MATCH,
             apparatusLabel: t("caseLaw.reader.headMatter"),
             anchorsByPieceId,
             blocks: bodyBlocks,
+            caption,
             dissent,
             footnotes,
             landingAnchorId,
-            notesByAnchorId,
-            rangesByPieceId: searchResults.rangesByPieceId,
+            notesByAnchorId: supplementsByAnchorId,
+            rangesByPieceId: NO_SEARCH_RANGES,
             sectionMap,
+            wrappedRuns,
           })}
         </article>
       );
@@ -1114,15 +1165,12 @@ export const DecisionText = ({
           }}
         >
           <DecisionReference
-            activeMatchIndex={shownMatchIndex}
-            ranges={rangesForPiece(
-              searchResults.rangesByPieceId,
-              DECISION_REFERENCE_ID,
-            )}
+            activeMatchIndex={NO_ACTIVE_MATCH}
+            ranges={[]}
             text={`${decision.court}, ${displayRef}`}
           />
           <DecisionTopMatterSections
-            activeMatchIndex={shownMatchIndex}
+            activeMatchIndex={NO_ACTIVE_MATCH}
             aiHeadnotes={aiHeadnotes}
             anchorsByPieceId={anchorsByPieceId}
             courtOrigin={courtOrigin}
@@ -1131,16 +1179,15 @@ export const DecisionText = ({
             }
             footnotes={footnotes}
             key={decisionId}
-            notesByAnchorId={notesByAnchorId}
-            rangesByPieceId={searchResults.rangesByPieceId}
+            notesByAnchorId={supplementsByAnchorId}
+            rangesByPieceId={NO_SEARCH_RANGES}
             topMatter={topMatter}
           />
           <FulltextFallback
-            activeMatchIndex={shownMatchIndex}
-            anchorsByPieceId={buildAnnotationAnchors(
-              hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
-            )}
-            rangesByPieceId={searchResults.rangesByPieceId}
+            activeMatchIndex={NO_ACTIVE_MATCH}
+            anchorsByPieceId={anchorsByPieceId}
+            notesByAnchorId={supplementsByAnchorId}
+            rangesByPieceId={NO_SEARCH_RANGES}
             text={decision.fulltext}
           />
         </article>
@@ -1164,7 +1211,7 @@ export const DecisionText = ({
         }}
       >
         <DecisionTopMatterSections
-          activeMatchIndex={shownMatchIndex}
+          activeMatchIndex={NO_ACTIVE_MATCH}
           aiHeadnotes={aiHeadnotes}
           anchorsByPieceId={anchorsByPieceId}
           courtOrigin={courtOrigin}
@@ -1173,8 +1220,8 @@ export const DecisionText = ({
           }
           footnotes={footnotes}
           key={decisionId}
-          notesByAnchorId={notesByAnchorId}
-          rangesByPieceId={searchResults.rangesByPieceId}
+          notesByAnchorId={supplementsByAnchorId}
+          rangesByPieceId={NO_SEARCH_RANGES}
           topMatter={topMatter}
         />
         <DecisionBodyUnavailable
@@ -1185,12 +1232,17 @@ export const DecisionText = ({
     );
   })();
 
-  // A note whose paragraph the flow above did not draw — a decision that only
-  // resolved to fulltext, or an anchor the text no longer carries — follows
-  // the text rather than going with its anchor. Counted over the blocks the
-  // page renders, top matter included, so a note on a lifted headnote draws
-  // under it instead of at the end.
-  const drawnAnchorIds = new Set(renderedBlocks.map((block) => block.anchorId));
+  // A note whose paragraph the flow above did not draw (an anchor the text no
+  // longer carries, or a document anchor on a decision that only resolved to
+  // fulltext) follows the text rather than going with its anchor. Counted
+  // over the blocks the page renders, top matter and fulltext paragraphs
+  // included, so a note on a lifted headnote draws under it instead of at the
+  // end.
+  const drawnBlocks =
+    visibleBlocks.length === 0 && decision.fulltext
+      ? [...renderedBlocks, ...placementBlocks]
+      : renderedBlocks;
+  const drawnAnchorIds = new Set(drawnBlocks.map((block) => block.anchorId));
   const trailingNotes =
     notesByAnchorId === undefined
       ? []

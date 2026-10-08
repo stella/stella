@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
@@ -6,8 +7,12 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import englishMessages from "@/i18n/langs/en.json";
+import { browserStorage } from "@/lib/account/browser-storage";
 
 import type { FileTab } from "./inspector-store-types";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
 
 const NativeBroadcastChannel = globalThis.BroadcastChannel;
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -257,7 +262,7 @@ afterEach(async () => {
   publishedText = "Server text";
   storageFails = false;
   useInspectorTabsStore.setState({ tabs: [], activeId: null });
-  window.localStorage.clear();
+  localArea().clear();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;

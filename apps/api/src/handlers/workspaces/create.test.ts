@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { member } from "@/api/db/auth-schema";
+import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -27,6 +28,11 @@ const createContext = ({
     route: "/v1/workspaces",
     safeDb,
     scopedDb,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_test123",
+      userId: "user_test123",
+      decisions: new Map(),
+    }),
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     session: {

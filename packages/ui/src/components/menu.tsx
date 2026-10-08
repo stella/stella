@@ -88,7 +88,7 @@ const MenuItem = ({
 }) => (
   <MenuPrimitive.Item
     className={cn(
-      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[variant=destructive]:text-destructive-foreground flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 data-inset:ps-8 sm:min-h-7 sm:text-sm [&>svg]:pointer-events-none [&>svg]:-mx-0.5 [&>svg]:shrink-0 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4.5 sm:[&>svg:not([class*='size-'])]:size-4",
+      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[variant=destructive]:text-destructive-foreground flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 data-inset:ps-8 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&>svg]:pointer-events-none [&>svg]:-mx-0.5 [&>svg]:shrink-0 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4.5 sm:[&>svg:not([class*='size-'])]:size-4",
       className,
     )}
     data-inset={inset}
@@ -110,7 +110,7 @@ const MenuCheckboxItem = ({
   <MenuPrimitive.CheckboxItem
     checked={checked}
     className={cn(
-      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground grid min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 ps-2 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground grid min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 ps-2 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
       variant === "switch"
         ? "grid-cols-[1fr_auto] gap-4 pe-1.5"
         : "grid-cols-[1rem_minmax(0,1fr)] pe-4",
@@ -167,7 +167,7 @@ const MenuRadioItem = ({
 }) => (
   <MenuPrimitive.RadioItem
     className={cn(
-      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
       indicator === "check"
         ? "grid grid-cols-[1rem_minmax(0,1fr)] ps-2 pe-4"
         : "flex px-2",
@@ -256,7 +256,7 @@ const MenuSubTrigger = ({
 }) => (
   <MenuPrimitive.SubmenuTrigger
     className={cn(
-      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-popup-open:bg-accent data-popup-open:text-accent-foreground flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-inset:ps-8 sm:min-h-7 sm:text-sm [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-popup-open:bg-accent data-popup-open:text-accent-foreground flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-inset:ps-8 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
       className,
     )}
     data-inset={inset}

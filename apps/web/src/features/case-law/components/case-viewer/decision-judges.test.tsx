@@ -86,10 +86,11 @@ const render = (node: ReactNode): string =>
 const renderDecision = (judges: readonly DecisionJudge[]): string =>
   render(
     <DecisionText
-      activeMatchIndex={-1}
+      surface="development"
       decision={{
         caseNumber: "Pl. ÚS 1/2026",
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
         court: "Ústavní soud",
         courtAbbreviation: null,
         courtTier: "constitutional",
@@ -110,7 +111,6 @@ const renderDecision = (judges: readonly DecisionJudge[]): string =>
         },
       }}
       decisionId="dec-1"
-      searchQuery=""
     />,
   );
 

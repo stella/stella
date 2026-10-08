@@ -11,7 +11,6 @@ import { Result } from "better-result";
  * One-shot semantics: `attempts: 1`. A retry would re-run metered model calls;
  * an abandoned run is flipped to `failed` by the reconciler instead.
  */
-import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
@@ -42,7 +41,7 @@ import type { StoredRow } from "@/api/lib/bilingual/operations";
 import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -63,6 +62,8 @@ import {
 } from "@/api/lib/queue-reconcile-scan";
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -236,10 +237,21 @@ export const reconcileQueuedBilingualRuns = async ({
 };
 
 export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
-  const worker = new Worker<BilingualRunJobData>(
+  const worker = new BullMqWorker<BilingualRunJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processBilingualRunJob(job.data);
+      const actor = brandActor(job.data);
+      // The run's period action was drawn when it was queued; the job takes
+      // a background slot. The run bounds its own time.
+      await runBackgroundJob({
+        actionKind: "bilingual.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processBilingualRun(actor, admission),
+      });
     },
     {
       connection: createBullMqConnection({
@@ -349,19 +361,16 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
   return claimed ?? null;
 };
 
-const processBilingualRunJob = async (
-  data: BilingualRunJobData,
+export const processBilingualRun = async (
+  actor: RunActor,
+  admission: ModelDispatchAdmission,
 ): Promise<void> => {
-  await processBilingualRun(brandActor(data));
-};
-
-export const processBilingualRun = async (actor: RunActor): Promise<void> => {
   const claimed = await claimRun(actor);
   if (claimed === null) {
     return;
   }
   const outcome = await Result.tryPromise({
-    try: async () => await executeRun(actor, claimed),
+    try: async () => await executeRun({ actor, admission, run: claimed }),
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
@@ -406,10 +415,15 @@ const loadRows = async (actor: RunActor): Promise<StoredRow[]> => {
 const needsTranslation = (row: StoredRow): boolean =>
   row.disposition !== BILINGUAL_ROW_DISPOSITION.KEEP;
 
-const executeRun = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<BilingualRunErrorCode | null> => {
+const executeRun = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<BilingualRunErrorCode | null> => {
   const loaded = await loadEntityVersionDocxBuffer({
     safeDb: actor.inputSafeDb,
     organizationId: actor.organizationId,
@@ -441,6 +455,7 @@ const executeRun = async (
 
   const rows = await loadRows(actor);
   const context: BilingualAIDocumentContext = {
+    admission,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig: config.value.orgAIConfig,

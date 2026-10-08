@@ -5,6 +5,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -47,12 +48,13 @@ type FillProps = {
 /** Serialize a preflight `HandlerError` to the same JSON body the framework
  *  preflight returns (message plus the 402 usage detail), for this route's
  *  raw-Response download path. */
-const usageRejectionResponse = (
-  error: HandlerError<402 | 403 | 500>,
-): Response =>
+const usageRejectionResponse = (error: HandlerError): Response =>
   new Response(
     JSON.stringify({
+      ...(error.code ? { code: error.code } : {}),
       message: error.message,
+      ...(error.hint ? { hint: error.hint } : {}),
+      ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
       ...(error.usage
         ? {
             reason: error.usage.reason,
@@ -136,6 +138,7 @@ export const fillHandler = async ({
     values: parsed,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     // A required, user-entered field left absent or empty must never download
     // as an invented value or a raw `{{marker}}`.
     requiredFields: "enforce",

@@ -55,6 +55,9 @@
         margin-bottom: 18px;
         text-align: center;
       }
+      [hidden] {
+        display: none !important;
+      }
       .details {
         background: #2c2c2e;
         border: 1px solid #3a3a3c;
@@ -161,6 +164,7 @@
       const strings = JSON.parse(params.get("strings") || "{}");
       const webOrigin = params.get("webOrigin") || "";
       const apiBaseUrl = params.get("apiBaseUrl") || "";
+      const handoffMode = params.get("mode") === "handoff";
       const accountMode = params.get("mode") === "account";
 
       document.documentElement.lang = params.get("lang") || "en";
@@ -194,6 +198,17 @@
       document.getElementById("apiBaseUrl").textContent = accountMode
         ? params.get("organizationName")
         : apiBaseUrl;
+
+      if (handoffMode) {
+        document.title = strings.handoffWindowTitle;
+        document.getElementById("title").textContent = params.get("message");
+        document.getElementById("subtitle").textContent = params.get("detail");
+        document.querySelector(".details").hidden = true;
+        document.getElementById("cancelBtn").textContent = strings.close;
+        const action = params.get("action");
+        document.getElementById("connectBtn").hidden = !action;
+        document.getElementById("connectBtn").textContent = action;
+      }
 
       function respond(approved) {
         if (window.__TAURI_INTERNALS__) {

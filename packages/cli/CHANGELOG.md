@@ -1,5 +1,51 @@
 # @stll/cli
 
+## 3.8.7
+
+### Patch Changes
+
+- [#4964](https://github.com/stella/stella/pull/4964) [`a1addd5`](https://github.com/stella/stella/commit/a1addd5caa08e9cad28f8a01eff4c5b2d4b87d05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe declared feature policies and deployment availability in organization settings discovery.
+
+- [#4967](https://github.com/stella/stella/pull/4967) [`f62530a`](https://github.com/stella/stella/commit/f62530ac6f23d64d278a8fc5c0274b5fdcc78e09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add case-law coverage by jurisdiction, including decision counts, year ranges, and court breakdowns.
+
+- [#4928](https://github.com/stella/stella/pull/4928) [`4660ced`](https://github.com/stella/stella/commit/4660cedc64ff0536880021c2c32c0a5593633b1e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_case_law_decision` accepts `max_chars` with several decision ids and sizes each decision's text window, up to 40000 characters per call.
+
+- [#4960](https://github.com/stella/stella/pull/4960) [`030eee4`](https://github.com/stella/stella/commit/030eee4ec058b43524c2437d6df279cbd8fb6103) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_case_law_decision` returns a compact decision paged by number (`page`, `full`, `text_version`; no `cursor`), a `query` paragraph search and a citation summary instead of raw citation rows.
+
+- [#4945](https://github.com/stella/stella/pull/4945) [`1cee7f1`](https://github.com/stella/stella/commit/1cee7f1c030d24400c3f7fc4923ed73534199507) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Report a read without text as a typed `textUnavailable` outcome instead of printing empty text, and explain missing dependencies when run from source.
+
+- [#5027](https://github.com/stella/stella/pull/5027) [`74fbe1e`](https://github.com/stella/stella/commit/74fbe1e06594b4e5c5c1fde709a91b163898a873) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include bounded court and year aggregates in first-page case-law search facets, with distinct-decision estimates and explicit unavailable citation and treatment signals.
+
+- [#5006](https://github.com/stella/stella/pull/5006) [`7bb8e47`](https://github.com/stella/stella/commit/7bb8e47bc85fad689ff939399eb5f553e65b1f54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Identifier lookups include the court abbreviation.
+
+- [#4946](https://github.com/stella/stella/pull/4946) [`5c2d90a`](https://github.com/stella/stella/commit/5c2d90a30721990ed5b1f35b1e32e6f6cea6c0cb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve primary legal citation URLs and secondary publisher source URLs in JSON and JSONL text-window output.
+
+- [#4944](https://github.com/stella/stella/pull/4944) [`2e95315`](https://github.com/stella/stella/commit/2e95315d1f5bfb00c9d264d6e4b4ea1cfcb406d0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare feature availability and conditional inputs in the CLI capability catalogue.
+
+- [#4230](https://github.com/stella/stella/pull/4230) [`6d7ecc4`](https://github.com/stella/stella/commit/6d7ecc44ed1ef8529ab2d6cc32c680d041305717) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose sanctions monitoring decisions and review history in the CLI contract.
+
+- [#5092](https://github.com/stella/stella/pull/5092) [`9096352`](https://github.com/stella/stella/commit/90963528d565c41246fadbdb86ef8f6e380d454b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Search tools report `search_index_unavailable` (exit code 4, retryable) when the search index cannot be reached.
+
+- [#5078](https://github.com/stella/stella/pull/5078) [`f5a9992`](https://github.com/stella/stella/commit/f5a999246636b22dd3175aa8fe5544be3bf004a3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept namespaced skill tool names through a shared server and CLI naming contract, and generate command paths without leading separators.
+
+- [#5031](https://github.com/stella/stella/pull/5031) [`66d626e`](https://github.com/stella/stella/commit/66d626e3b37a44e4dc6cf81d649f806a89c74dd4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the generated command contract.
+
+- [#4881](https://github.com/stella/stella/pull/4881) [`1aa2abd`](https://github.com/stella/stella/commit/1aa2abd44a372fdb56e3e3e0b8d7a28d3200bf9a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Respect per-user feature enrolment when discovering and invoking capabilities.
+
+## 3.8.6
+
+### Patch Changes
+
+- [#4833](https://github.com/stella/stella/pull/4833) [`77d7e1b`](https://github.com/stella/stella/commit/77d7e1b1fc217617d9bd396b2fdd487322eb2ba0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the MCP client dependency.
+
+## 3.8.5
+
+### Patch Changes
+
+- [#4760](https://github.com/stella/stella/pull/4760) [`c17c9b8`](https://github.com/stella/stella/commit/c17c9b88822a27615a99baa589dd54d66ef4b666) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the time-policy settings as `organization update-settings` flags.
+
+- [#4760](https://github.com/stella/stella/pull/4760) [`c17c9b8`](https://github.com/stella/stella/commit/c17c9b88822a27615a99baa589dd54d66ef4b666) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the organization time zone to the settings capabilities and an `organization update-settings --time-zone` flag.
+
 ## 3.8.4
 
 ### Patch Changes

@@ -9,7 +9,7 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import type { receiveSesInboundMail } from "@/api/lib/email/inbound/ses";
+import type { receiveAndDeleteSesInboundMail } from "@/api/lib/email/inbound/ses";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type { logger as appLogger } from "@/api/lib/observability/logger";
 
@@ -136,7 +136,7 @@ export const parseInboundQueueMessage = ({
   }
 };
 
-type ReceiveResult = Awaited<ReturnType<typeof receiveSesInboundMail>>;
+type ReceiveResult = Awaited<ReturnType<typeof receiveAndDeleteSesInboundMail>>;
 
 class InboundQueueReceiveError extends TaggedError("InboundQueueReceiveError")<{
   message: string;
@@ -146,6 +146,7 @@ class InboundQueueReceiveError extends TaggedError("InboundQueueReceiveError")<{
 type InboundQueueDrainCounts = {
   filed: number;
   duplicate: number;
+  alreadyCompleted: number;
   dropped: number;
   setup: number;
   retry: number;
@@ -169,7 +170,8 @@ type DrainInboundMailQueueOptions = {
 
 /**
  * A message is deleted only after a terminal outcome: filed, duplicate,
- * dropped (its drop log committed) or a setup notice. Anything else stays
+ * dropped (its drop log committed), a prior raw deletion, or a setup notice.
+ * Anything else stays
  * on the queue; its visibility timeout re-offers it and the queue's redrive
  * policy moves it to the dead-letter queue after the receive limit.
  */
@@ -186,6 +188,7 @@ export const drainInboundMailQueue = async ({
   const counts: InboundQueueDrainCounts = {
     filed: 0,
     duplicate: 0,
+    alreadyCompleted: 0,
     dropped: 0,
     setup: 0,
     retry: 0,
@@ -280,7 +283,7 @@ export const drainInboundMailQueue = async ({
       });
       return;
     }
-    // One outcome per resolved recipient address; every one is terminal.
+    // Outcomes are terminal: recipient filing/drop, or a prior raw deletion.
     for (const delivery of outcome.value) {
       switch (delivery.status) {
         case "filed":
@@ -288,6 +291,9 @@ export const drainInboundMailQueue = async ({
           break;
         case "duplicate":
           counts.duplicate += 1;
+          break;
+        case "already_completed":
+          counts.alreadyCompleted += 1;
           break;
         case "dropped":
           counts.dropped += 1;

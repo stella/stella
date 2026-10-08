@@ -145,13 +145,17 @@ const InviteMemberForm = ({
           title: t("success.invitationSent"),
           type: "success",
         });
+        formApi.reset();
         setIsOpen(false);
         onInvited?.();
       },
     }),
   );
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <Dialog
@@ -171,6 +175,8 @@ const InviteMemberForm = ({
       </DialogTrigger>
       <DialogPopup>
         <Form
+          dirty={dirty}
+          onDiscard={() => form.reset()}
           className="gap-0"
           errors={formErrors}
           onSubmit={(e) => {

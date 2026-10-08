@@ -324,3 +324,39 @@ test("a row shown whole is as tall as what it holds", async ({ page }) => {
     )
     .toBe("row is as tall as what it holds");
 });
+
+test("the whole selection cell toggles without opening a result and supports Shift and Space", async ({
+  page,
+}) => {
+  const rows = page.locator(BODY_ROW);
+  const first = rows.filter({
+    has: page.locator('[data-slot="table-selection-cell"][aria-label="1"]'),
+  });
+  const firstSelection = first.locator('[data-slot="table-selection-cell"]');
+  await expect(firstSelection).toHaveAttribute("aria-checked", "false");
+
+  // The corner is outside the centred checkbox indicator.
+  await firstSelection.click({ position: { x: 3, y: 3 } });
+  await expect(first).toHaveAttribute("aria-selected", "true");
+  await expect(first).not.toHaveAttribute("data-active", "true");
+
+  const third = rows.filter({
+    has: page.locator('[data-slot="table-selection-cell"][aria-label="3"]'),
+  });
+  await third.locator('[data-slot="table-selection-cell"]').click({
+    position: { x: 3, y: 3 },
+    modifiers: ["Shift"],
+  });
+  await expect(page.locator(`${BODY_ROW}[aria-selected="true"]`)).toHaveCount(
+    3,
+  );
+  await expect(page.locator(`${BODY_ROW}[data-active="true"]`)).toHaveCount(0);
+
+  await firstSelection.focus();
+  await firstSelection.press("Space");
+  await expect(firstSelection).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator(`${BODY_ROW}[data-active="true"]`)).toHaveCount(0);
+  await firstSelection.press("Space");
+  await expect(firstSelection).toHaveAttribute("aria-checked", "true");
+  await expect(firstSelection).toHaveCSS("cursor", "pointer");
+});

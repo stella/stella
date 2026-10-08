@@ -11,7 +11,14 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -28,7 +35,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -62,6 +68,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  presentTextField,
+  splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -188,8 +196,7 @@ const textChangingAdapter = stubAdapter((stored) => ({
     court: stored.court,
     country: "EU",
     language: stored.language,
-    metadata: stored.metadata,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    ...splitStoredDecisionTextMetadata(stored.metadata),
     rawHash: "hash-from-the-new-parser",
     fulltext: NEW_PARSER_TEXT,
     documentAst: EMPTY_AST,
@@ -415,8 +422,7 @@ test("a restructure the flattened text does not show is still applied", async ()
       court: stored.court,
       country: "EU",
       language: stored.language,
-      metadata: stored.metadata,
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      ...splitStoredDecisionTextMetadata(stored.metadata),
       rawHash: "hash-that-does-not-move",
       fulltext: RESTRUCTURED_TEXT,
       sections: STORED_SECTIONS,
@@ -813,6 +819,152 @@ const replayConvergenceFixture = async (text: string) => {
     });
   return { sourceId, id, result, sanitized, payload, replay };
 };
+
+test.each(TEXT_ABSENCE_REASONS)(
+  "explicit %s absence writes survive a partial replay and resume at a fixed point",
+  async (reason) => {
+    const fixture = await replayConvergenceFixture("Unchanged body text.");
+    const secondId = createSafeId<"caseLawDecision">();
+    const legacyMetadata = {
+      celex: "62026CJ0010",
+      ...(reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
+        ? {}
+        : {
+            [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+              { field: "abstract", reason },
+              { field: "legalSentence", reason },
+              { field: "summary", reason },
+            ],
+          }),
+    };
+    await db
+      .update(caseLawDecisions)
+      .set({
+        metadata: legacyMetadata,
+        sourceHash: "before-explicit-absence",
+        parserVersion: 3,
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+      })
+      .where(eq(caseLawDecisions.id, fixture.id));
+    await db.insert(caseLawDecisions).values({
+      id: secondId,
+      sourceId: fixture.sourceId,
+      caseNumber: "C-11/26",
+      court: fixture.result.court,
+      country: fixture.result.country,
+      language: fixture.result.language,
+      metadata: legacyMetadata,
+      sourceHash: "before-explicit-absence",
+      parserVersion: 3,
+      sourceRawS3Key: "case-law/raw/legacy/second",
+      sourceRawContentType: "application/xhtml+xml",
+      createdAt: new Date("2026-01-02T00:00:00Z"),
+    });
+    const textFields = {
+      ...absentDecisionTextFields(reason),
+      headnote: presentTextField("Published headnote"),
+    };
+    const expectedMetadata = {
+      ...legacyMetadata,
+      headnote: "Published headnote",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        { field: "abstract", reason },
+        { field: "legalSentence", reason },
+        { field: "summary", reason },
+      ],
+    };
+    const adapter = stubAdapter((stored) => ({
+      type: "parsed",
+      result: plainTextIngestionResult({
+        ...fixture.result,
+        caseNumber: stored.caseNumber,
+        textFields,
+        rawHash: "after-explicit-absence",
+      }),
+    }));
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: fixture.sourceId,
+    });
+    if (lease === null) {
+      throw new TypeError("Expected the source ingestion lease to be free");
+    }
+    const readMetadata = async () =>
+      await db
+        .select({
+          id: caseLawDecisions.id,
+          metadata: caseLawDecisions.metadata,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, fixture.sourceId))
+        .orderBy(caseLawDecisions.createdAt, caseLawDecisions.id);
+    const options = {
+      adapter,
+      scopedDb,
+      sourceId: fixture.sourceId,
+      sourceLease: lease,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 1,
+    } as const satisfies Omit<ReplayCaseLawSourceOptions, "readStoredRaw">;
+    const failed = await replayCaseLawSource({
+      ...options,
+      readStoredRaw: async (key) => {
+        if (key === "case-law/raw/legacy/second") {
+          throw new TypeError("Injected second payload read failure");
+        }
+        return new TextEncoder().encode(STORED_PAYLOAD);
+      },
+    });
+    if (failed.type !== "ran") {
+      throw new TypeError("Expected replay to run");
+    }
+    expect(failed.report.visited).toBe(1);
+    expect(failed.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+    expect(failed.report.haltReason).toContain(
+      "Injected second payload read failure",
+    );
+    expect(failed.report.resumeAfter).toBe(fixture.id);
+    expect(await readMetadata()).toEqual([
+      { id: fixture.id, metadata: expectedMetadata },
+      { id: secondId, metadata: legacyMetadata },
+    ]);
+
+    const resumed = await replayCaseLawSource({
+      ...options,
+      after: failed.report.resumeAfter,
+      readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+    });
+    if (resumed.type !== "ran") {
+      throw new TypeError("Expected resumed replay to run");
+    }
+    expect(resumed.report.visited).toBe(1);
+    expect(resumed.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+    expect(resumed.report.haltReason).toBeNull();
+    expect(resumed.report.resumeAfter).toBe(secondId);
+    const complete = [
+      { id: fixture.id, metadata: expectedMetadata },
+      { id: secondId, metadata: expectedMetadata },
+    ];
+    expect(await readMetadata()).toEqual(complete);
+
+    const repeated = await replayCaseLawSource({
+      ...options,
+      readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+    });
+    if (repeated.type !== "ran") {
+      throw new TypeError("Expected repeated replay to run");
+    }
+    expect(repeated.report.visited).toBe(2);
+    expect(repeated.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(2);
+    expect(repeated.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+    expect(repeated.report.haltReason).toBeNull();
+    expect(await readMetadata()).toEqual(complete);
+    await lease.release();
+  },
+);
 
 test("replay persists a newly derived reasons role and converges without changing the stated type", async () => {
   const fixture = await replayConvergenceFixture("Unchanged reasons text.");

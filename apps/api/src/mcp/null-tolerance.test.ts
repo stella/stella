@@ -4,6 +4,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 /**
@@ -60,6 +61,10 @@ const createContext = (): McpRequestContext => {
   const set = new Set(workspaceIds);
   const safeDb = toSafeDbMock(emptyScopedDb);
   return {
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    }),
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet: set,
     accessibleWorkspaceStatusById: new Map(

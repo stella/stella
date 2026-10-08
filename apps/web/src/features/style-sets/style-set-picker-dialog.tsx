@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -94,6 +95,13 @@ const StyleSetPickerDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-lg">
+      <DialogFormState
+        dirty={name !== initialName || selection.type !== "stella"}
+        onDiscard={() => {
+          setName(initialName);
+          setSelection({ type: "stella" });
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>

@@ -44,6 +44,7 @@ const splitEntry = createSafeHandler(
       "written-off entry, and a duration too short to divide, are refused.",
     permissions: { timeEntry: ["approve"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",

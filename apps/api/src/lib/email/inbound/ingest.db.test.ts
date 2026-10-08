@@ -319,7 +319,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await drops()).toHaveLength(0);
       for (let replay = 0; replay < 2; replay += 1) {
         const result = await receiveSesInboundMail(options);
-        expect(result.isOk() && result.value).toEqual([
+        expect(result.isOk() && result.value.deliveries).toEqual([
           { status: "dropped", reason: "message_too_large" },
         ]);
       }
@@ -340,7 +340,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
         },
       });
-      expect(unknown.isOk() && unknown.value).toEqual([
+      expect(unknown.isOk() && unknown.value.deliveries).toEqual([
         { status: "dropped", reason: "unknown_recipient" },
       ]);
       expect(await drops()).toHaveLength(1);
@@ -354,7 +354,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
         },
       });
-      expect(other.isOk() && other.value).toEqual([
+      expect(other.isOk() && other.value.deliveries).toEqual([
         { status: "dropped", reason: "message_too_large" },
       ]);
       expect((await drops()).map((row) => row.workspaceId).toSorted()).toEqual(

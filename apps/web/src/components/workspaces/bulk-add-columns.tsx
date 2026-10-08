@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -22,6 +15,7 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -37,17 +31,22 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import Tooltip from "@/components/tooltip";
 import {
+  columnDialogCopy,
+  columnDialogLimitReached,
+  columnDraftsChanged,
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
   settleColumnWrites,
 } from "@/components/workspaces/bulk-add-columns.logic";
-import type { Draft } from "@/components/workspaces/bulk-add-columns.logic";
+import type {
+  ColumnDialogMode,
+  Draft,
+} from "@/components/workspaces/bulk-add-columns.logic";
 import { usePropertiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import {
@@ -76,7 +75,6 @@ import {
 } from "@/features/case-law/research/queries";
 import { questionEditDiscardsAnswers } from "@/features/case-law/research/question-columns.logic";
 import type {
-  QuestionColumn,
   QuestionColumnInput,
   QuestionSuggestionScope,
 } from "@/features/case-law/research/question-columns.logic";
@@ -144,11 +142,10 @@ type AddColumnsTarget =
   | {
       kind: "organisation";
       /**
-       * The question being reworded, when the dialog was opened from a
-       * column's own menu. One card then, seeded from the question, saved back
-       * over it — the composer is the same one a new question is written in.
+       * Editing seeds one card from the column and saves over it; adding
+       * composes new questions in the same form.
        */
-      editing?: QuestionColumn | undefined;
+      mode: ColumnDialogMode;
       /** The search the questions are asked of; grounds the suggestion. */
       suggestion: QuestionSuggestionScope;
       /**
@@ -171,17 +168,8 @@ export const BulkAddColumns = ({
   open,
   onOpenChange,
 }: BulkAddColumnsProps) => {
-  const t = useTranslations();
   const isLimitReached = useAddColumnsLimit(target);
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [flashClose, setFlashClose] = useState(false);
-  const dirtyRef = useRef(false);
-  // Set to true by the X button click handler immediately before
-  // it triggers onOpenChange(false). The dirty guard sees this flag,
-  // resets it, and lets the close through — Esc / backdrop clicks
-  // never set it, so they still get the flash treatment.
-  const explicitCloseRef = useRef(false);
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dialogOpen = open ?? uncontrolledOpen;
   const setDialogOpen = (next: boolean) => {
     onOpenChange?.(next);
@@ -190,56 +178,17 @@ export const BulkAddColumns = ({
     }
   };
 
-  const triggerFlash = useCallback(() => {
-    if (flashTimerRef.current !== null) {
-      clearTimeout(flashTimerRef.current);
-    }
-    setFlashClose(true);
-    flashTimerRef.current = setTimeout(() => {
-      setFlashClose(false);
-      flashTimerRef.current = null;
-    }, 700);
-  }, []);
-
   if (isLimitReached) {
     return null;
   }
 
   return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && dirtyRef.current && !explicitCloseRef.current) {
-          triggerFlash();
-          return;
-        }
-        explicitCloseRef.current = false;
-        setDialogOpen(nextOpen);
-      }}
-      open={dialogOpen}
-    >
+    <Dialog onOpenChange={setDialogOpen} open={dialogOpen}>
       <BulkTrigger triggerVariant={triggerVariant} />
-      <DialogPopup className="sm:max-w-[640px]" showCloseButton={false}>
-        <DialogClose
-          aria-label={t("common.close")}
-          className={cn(
-            "absolute end-2 top-2 z-10 transition-transform duration-200",
-            flashClose &&
-              "bg-muted ring-foreground-strong-muted scale-125 ring-2",
-          )}
-          onClick={() => {
-            explicitCloseRef.current = true;
-          }}
-          render={<Button size="icon" variant="ghost" />}
-        >
-          <XIcon />
-        </DialogClose>
+      <DialogPopup className="sm:max-w-[640px]">
         {dialogOpen && (
           <Suspense fallback={<BulkBodyFallback />}>
-            <BulkBody
-              dirtyRef={dirtyRef}
-              onClose={() => setDialogOpen(false)}
-              target={target}
-            />
+            <BulkBody onClose={() => setDialogOpen(false)} target={target} />
           </Suspense>
         )}
       </DialogPopup>
@@ -332,15 +281,13 @@ const BulkBodyFallback = () => (
 type BulkBodyProps = {
   target: AddColumnsTarget;
   onClose: () => void;
-  dirtyRef: React.RefObject<boolean>;
 };
 
-const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
+const BulkBody = ({ target, onClose }: BulkBodyProps) => {
   if (target.kind === "organisation") {
     return (
       <QuestionColumnsBody
-        dirtyRef={dirtyRef}
-        {...(target.editing === undefined ? {} : { editing: target.editing })}
+        mode={target.mode}
         onClose={onClose}
         {...(target.onCreated === undefined
           ? {}
@@ -350,11 +297,7 @@ const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
     );
   }
   return (
-    <PropertyColumnsBody
-      dirtyRef={dirtyRef}
-      onClose={onClose}
-      workspaceId={target.workspaceId}
-    />
+    <PropertyColumnsBody onClose={onClose} workspaceId={target.workspaceId} />
   );
 };
 
@@ -372,7 +315,7 @@ const useAddColumnsLimit = (target: AddColumnsTarget): boolean => {
 
   return target.kind === "workspace"
     ? workspaceLimitReached
-    : organisationLimitReached;
+    : columnDialogLimitReached(target.mode, organisationLimitReached);
 };
 
 type DraftHandlers = {
@@ -383,9 +326,10 @@ type DraftHandlers = {
 
 /** The drafts a reader is composing, and what they may do to one. */
 const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
-  const [drafts, setDrafts] = useState<Draft[]>(() => [
+  const [initialDrafts] = useState<Draft[]>(() => [
     seed ?? makeEmptyDraft(0, defaultFileIds),
   ]);
+  const [drafts, setDrafts] = useState(initialDrafts);
   const nextId = useNextId(drafts.length);
 
   const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
@@ -408,13 +352,7 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
     () => drafts.filter((d) => d.name.trim().length > 0),
     [drafts],
   );
-  const isDirty = useMemo(
-    () =>
-      drafts.some(
-        (d) => d.name.trim().length > 0 || d.prompt.trim().length > 0,
-      ),
-    [drafts],
-  );
+  const isDirty = columnDraftsChanged(drafts, initialDrafts);
 
   const handlersFor = (draft: Draft): DraftHandlers => ({
     canRemove: drafts.length > 1,
@@ -427,9 +365,11 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
 
 type BulkColumnsFormProps = React.PropsWithChildren<{
   canSubmit: boolean;
+  mode: ColumnDialogMode;
   /** The matter's document-type gate; the organization's columns have none. */
   footerExtra?: React.ReactNode;
   isPending: boolean;
+  dirty: boolean;
   /** Omitted while one existing column is being reworded. */
   onAddDraft?: (() => void) | undefined;
   onSubmit: () => void;
@@ -438,19 +378,23 @@ type BulkColumnsFormProps = React.PropsWithChildren<{
 /** The dialog's chrome: the title, the drafts, the gate and the two buttons. */
 const BulkColumnsForm = ({
   canSubmit,
+  dirty,
   children,
   footerExtra,
   isPending,
+  mode,
   onAddDraft,
   onSubmit,
 }: BulkColumnsFormProps) => {
   const t = useTranslations();
+  const copy = columnDialogCopy(mode);
 
   return (
     <>
+      <DialogFormState dirty={dirty} />
       <header className="flex items-center gap-2 px-5 pt-4 pb-3">
         <DialogTitle className="flex-1 text-base leading-tight font-semibold">
-          {t("workspaces.properties.bulk.title")}
+          {t(copy.title)}
         </DialogTitle>
       </header>
 
@@ -482,7 +426,7 @@ const BulkColumnsForm = ({
             onClick={onSubmit}
             size="sm"
           >
-            {t("workspaces.properties.bulk.title")}
+            {t(copy.primary)}
           </Button>
         </div>
       </DialogFooter>
@@ -529,13 +473,11 @@ const useColumnsSubmit = (onClose: () => void) => {
 
 type ColumnsBodyProps = {
   onClose: () => void;
-  dirtyRef: React.RefObject<boolean>;
 };
 
 const PropertyColumnsBody = ({
   workspaceId,
   onClose,
-  dirtyRef,
 }: ColumnsBodyProps & { workspaceId: string }) => {
   const t = useTranslations();
   const submit = useColumnsSubmit(onClose);
@@ -585,13 +527,6 @@ const PropertyColumnsBody = ({
   const canSubmit =
     validDrafts.length > 0 && withinDependencyCap && !batch.isPending;
 
-  // The dialog's onOpenChange close guard reads dirtiness off the
-  // parent-owned ref at close time; mirror it after commit so the
-  // compiler can model this component.
-  useLayoutEffect(() => {
-    dirtyRef.current = isDirty;
-  });
-
   const handleSubmit = async () => {
     if (!canSubmit) {
       return;
@@ -639,6 +574,7 @@ const PropertyColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      dirty={isDirty || scopeDocType !== null}
       canSubmit={canSubmit}
       footerExtra={
         classifier && docTypeOptions.length > 0 ? (
@@ -672,6 +608,7 @@ const PropertyColumnsBody = ({
           </div>
         ) : undefined
       }
+      mode={{ type: "add" }}
       isPending={batch.isPending}
       onAddDraft={addDraft}
       onSubmit={() => {
@@ -704,13 +641,12 @@ const NO_DEFAULT_FILE_IDS: string[] = [];
  * kind of answer, and a select's options.
  */
 const QuestionColumnsBody = ({
-  editing,
+  mode,
   onClose,
   onCreated,
-  dirtyRef,
   suggestion,
 }: ColumnsBodyProps & {
-  editing?: QuestionColumn | undefined;
+  mode: ColumnDialogMode;
   onCreated?: ((columnIds: readonly string[]) => void) | undefined;
   suggestion: QuestionSuggestionScope;
 }) => {
@@ -720,7 +656,7 @@ const QuestionColumnsBody = ({
   const { addDraft, drafts, handlersFor, isDirty, validDrafts } =
     useColumnDrafts(
       NO_DEFAULT_FILE_IDS,
-      editing === undefined ? undefined : questionDraft(editing),
+      mode.type === "edit" ? questionDraft(mode.column) : undefined,
     );
 
   const save = useMutation({
@@ -733,8 +669,8 @@ const QuestionColumnsBody = ({
       // read back before the failure is reported.
       const settled = await settleColumnWrites({
         writes: inputs.map((input, index) => async () => {
-          if (editing !== undefined) {
-            await updateQuestionColumn({ ...input, columnId: editing.id });
+          if (mode.type === "edit") {
+            await updateQuestionColumn({ ...input, columnId: mode.column.id });
             return;
           }
           createdIds[index] = (await createQuestionColumn(input)).id;
@@ -755,19 +691,15 @@ const QuestionColumnsBody = ({
   });
   const canSubmit = validDrafts.length > 0 && !save.isPending;
 
-  useLayoutEffect(() => {
-    dirtyRef.current = isDirty;
-  });
-
   const inputs = validDrafts.map((draft) => ({
     question: draft.name.trim(),
     content: questionColumnContent(draft),
   }));
   const firstInput = inputs.at(0);
   const discardsAnswers =
-    editing !== undefined &&
+    mode.type === "edit" &&
     firstInput !== undefined &&
-    questionEditDiscardsAnswers({ draft: firstInput, stored: editing });
+    questionEditDiscardsAnswers({ draft: firstInput, stored: mode.column });
 
   const handleSubmit = async () => {
     if (!canSubmit) {
@@ -781,6 +713,7 @@ const QuestionColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      dirty={isDirty}
       canSubmit={canSubmit}
       {...(discardsAnswers
         ? {
@@ -791,8 +724,9 @@ const QuestionColumnsBody = ({
             ),
           }
         : {})}
+      mode={mode}
       isPending={save.isPending}
-      {...(editing === undefined ? { onAddDraft: addDraft } : {})}
+      {...(mode.type === "add" ? { onAddDraft: addDraft } : {})}
       onSubmit={() => {
         detached(handleSubmit(), "bulk-add-columns.submit");
       }}

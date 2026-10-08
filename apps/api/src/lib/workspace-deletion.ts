@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+
 import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -15,10 +17,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
-import {
-  CLIENT_MATTER_ADMIN_ROLES,
-  isMemberRole,
-} from "@/api/lib/member-roles";
+import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";

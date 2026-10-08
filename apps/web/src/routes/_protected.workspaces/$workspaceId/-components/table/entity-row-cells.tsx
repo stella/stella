@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type React from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { flexRender } from "@tanstack/react-table";
 import {
@@ -55,6 +54,7 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
@@ -190,6 +190,7 @@ export const DraggableRow = ({
   onStopEditing,
   onToggleExpandedCell,
 }: DraggableRowProps) => {
+  const selected = table.state.rowSelection[row.id] === true;
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
@@ -427,6 +428,7 @@ export const DraggableRow = ({
         renderColumns={renderColumns}
         row={row}
         selectCellWithActions={selectCellWithActions}
+        selected={selected}
         visibleCells={visibleCells}
       />
     );
@@ -436,7 +438,7 @@ export const DraggableRow = ({
     <>
       <WorkspaceGridRow
         aria-rowindex={index + 2}
-        aria-selected={row_getIsSelected(row)}
+        aria-selected={selected}
         className={cn(
           "transition-opacity duration-150",
           contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
@@ -447,7 +449,7 @@ export const DraggableRow = ({
         data-active={activeRow || undefined}
         data-drop-target={isDropTarget || undefined}
         data-index={index}
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={row.id}
         onClick={containedEventHandler(handleRowClick)}
         onContextMenu={containedEventHandler(handleContextMenu)}
@@ -459,17 +461,18 @@ export const DraggableRow = ({
           hasExpandedCell={isFocusedExpansionRow}
           onCellClick={handleCellClick}
           selectCellWithActions={selectCellWithActions}
+          selected={selected}
           visibleCells={visibleCells}
         />
         <RowEndFillerCell
           addPropertyColumn={addPropertyColumn}
           renderColumns={renderColumns}
-          selected={row_getIsSelected(row)}
+          selected={selected}
         />
         <AddPropertyCell
           cell={addPropertyCell}
           columnIndex={renderColumns.length + 1}
-          selected={row_getIsSelected(row)}
+          selected={selected}
         />
       </WorkspaceGridRow>
       {pendingDrop && <VersionOrNewFileDialog {...pendingDrop} />}
@@ -492,6 +495,7 @@ type FolderTableRowProps = {
   renderColumns: TableColumn[];
   row: TableRow;
   selectCellWithActions: React.ReactNode;
+  selected: boolean;
   visibleCells: TableCell[];
 };
 
@@ -510,6 +514,7 @@ const FolderTableRow = ({
   renderColumns,
   row,
   selectCellWithActions,
+  selected,
   visibleCells,
 }: FolderTableRowProps) => {
   const selectCell = visibleCells[0];
@@ -521,7 +526,7 @@ const FolderTableRow = ({
   return (
     <WorkspaceGridRow
       aria-rowindex={index + 2}
-      aria-selected={row_getIsSelected(row)}
+      aria-selected={selected}
       className={cn(
         "transition-opacity duration-150",
         TOOLBAR_ROW_HEIGHT,
@@ -529,7 +534,7 @@ const FolderTableRow = ({
       )}
       data-active={entity.entityId === activeEntityId || undefined}
       data-index={index}
-      data-state={row_getIsSelected(row) ? "selected" : undefined}
+      data-state={selected ? "selected" : undefined}
       key={row.id}
       onContextMenu={containedEventHandler(onRowContextMenu)}
       ref={ref}
@@ -539,7 +544,7 @@ const FolderTableRow = ({
         className={cn(
           isPinnedBoundaryColumn(selectCell.column) && "border-e-0",
         )}
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={selectCell.id}
         style={{
           gridColumn: 1,
@@ -555,7 +560,7 @@ const FolderTableRow = ({
           "cursor-pointer",
           isPinnedBoundaryColumn(nameCell.column) && "border-e-0",
         )}
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={nameCell.id}
         onClick={() => row.toggleExpanded()}
         style={{
@@ -577,14 +582,14 @@ const FolderTableRow = ({
       <WorkspaceGridCell
         aria-colindex={3}
         className="cursor-pointer border-e-0"
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         onClick={() => row.toggleExpanded()}
         style={{ gridColumn: addPropertyCell ? "3 / -2" : "3 / -1" }}
       />
       <AddPropertyCell
         cell={addPropertyCell}
         columnIndex={renderColumns.length + 1}
-        selected={row_getIsSelected(row)}
+        selected={selected}
       />
     </WorkspaceGridRow>
   );
@@ -600,6 +605,7 @@ type DataRowCellsProps = {
     canExpandCell: boolean,
   ) => void;
   selectCellWithActions: React.ReactNode;
+  selected: boolean;
   visibleCells: TableCell[];
 };
 
@@ -609,6 +615,7 @@ const DataRowCells = ({
   hasExpandedCell,
   onCellClick,
   selectCellWithActions,
+  selected,
   visibleCells,
 }: DataRowCellsProps) =>
   visibleCells.map((cell, cellIndex) => {
@@ -646,7 +653,7 @@ const DataRowCells = ({
             "after:bg-info after:pointer-events-none after:absolute after:end-0 after:top-0 after:bottom-0 after:z-50 after:w-px",
         )}
         data-expanded-cell={isExpandedCell || undefined}
-        data-state={row_getIsSelected(cell.row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         data-table-property-id={canFlagCell ? cell.column.id : undefined}
         key={cell.id}
         onClick={(event) => onCellClick(event, cell.column.id, canExpandCell)}
@@ -743,7 +750,6 @@ const FolderCell = ({
       />
       {isEditing ? (
         <InlineEdit
-          inputClassName="w-48"
           onCancel={() => {
             onStopEditing();
             setEditValue(name);
@@ -754,7 +760,7 @@ const FolderCell = ({
         />
       ) : (
         <button
-          className="truncate text-start text-sm"
+          className="overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
           dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();

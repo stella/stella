@@ -4,6 +4,8 @@ import { Result, panic } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import {
@@ -11,7 +13,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -54,7 +55,6 @@ import {
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
-  hashContent,
   isNullishArrayOf,
   isNullishString,
   isNullishValue,
@@ -63,6 +63,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   TEXT_ABSENCE_REASON,
@@ -122,10 +123,14 @@ const CZ_NS_LANGUAGE = "cs";
  */
 const CZ_NS_PUBLISHER_COURT = "Nejvyšší soud";
 
-/** The two pages fetched for one decision, as the stored raw names them. */
+/**
+ * What was read for one decision, as the stored raw names it: the two pages,
+ * and the listing row that states the dockets the publisher settles in it.
+ */
 const CZ_NS_RAW_PART = {
   DETAIL: "detail",
   PRINT: "print",
+  LISTING: "listing",
 } as const;
 
 type CzNsRawPart = (typeof CZ_NS_RAW_PART)[keyof typeof CZ_NS_RAW_PART];
@@ -610,6 +615,22 @@ type CzNsBuildResult =
       read: UnreadPublisherOutcome;
     };
 
+/**
+ * The listing row as stored, with its fields in one fixed order. A row the
+ * reconciliation parked comes back from JSONB with its keys reordered, and the
+ * same row must store the same bytes whichever path built it.
+ */
+const storedListingRow = ({
+  unid,
+  caseNumber,
+  additionalCaseNumbers,
+}: CzNsListingRow): string =>
+  JSON.stringify({
+    unid,
+    caseNumber,
+    additionalCaseNumbers,
+  } satisfies Record<keyof CzNsListingRow, unknown>);
+
 type BuildCzNsDecisionFromPagesOptions = {
   row: CzNsListingRow;
   webHtml: string;
@@ -640,19 +661,17 @@ const buildCzNsDecisionFromPages = ({
   const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
   const meta = parseDetailPage(webHtml);
-  const summary =
-    meta["legalSentence"] === undefined && meta["abstract"] === undefined
-      ? ""
-      : `|${meta["legalSentence"] ?? ""}|${meta["abstract"] ?? ""}`;
   const publishedOnWeb =
     meta["publishedOnWeb"] === undefined
       ? undefined
       : parseCeDate(meta["publishedOnWeb"]);
-  // The refresh gate compares only this hash before deciding whether to
-  // project identifiers and metadata again. Keep the complete ordered docket
-  // set in it, so an alias-only publisher edit cannot be mistaken for the
-  // same observation.
-  const raw = `${JSON.stringify(caseNumbers)}|${meta["ecli"] ?? ""}|${meta["court"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
+  // The listing row is stored with the pages so the fingerprint covers the
+  // dockets too: an alias-only publisher edit is a changed observation.
+  const sourceRaw = encodeSourceRawEnvelope({
+    [CZ_NS_RAW_PART.DETAIL]: webHtml,
+    [CZ_NS_RAW_PART.PRINT]: printHtml,
+    [CZ_NS_RAW_PART.LISTING]: storedListingRow(row),
+  });
 
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext = meta["fulltext"];
@@ -733,13 +752,10 @@ const buildCzNsDecisionFromPages = ({
       additionalCaseNumbers:
         additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
     }),
-    rawHash: hashContent(raw),
+    rawHash: sourceFingerprint({ sourceRaw }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
     documentAst,
-    sourceRaw: encodeSourceRawEnvelope({
-      [CZ_NS_RAW_PART.DETAIL]: webHtml,
-      [CZ_NS_RAW_PART.PRINT]: printHtml,
-    }),
+    sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
 };
@@ -959,6 +975,9 @@ const reparseStoredRaw = (
     type: "parsed",
     result: {
       ...result,
+      // Over the payload the replay keeps, so a row the crawl stored replays
+      // to the hash the crawl gave it.
+      rawHash: sourceFingerprint({ sourceRaw: raw }),
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? undefined,
     },
@@ -1325,10 +1344,7 @@ const SOURCE_SURFACES = [
 
 const CZ_NS_SOURCE_SURFACES = {
   surfaces: {
-    listing: backlogSurface(
-      ADAPTER_KEYS.CZ_NS,
-      "the listing row the crawl walks for identities is not kept beside the decision it names",
-    ),
+    listing: storedSourceSurface(CZ_NS_RAW_PART.LISTING),
     "slice-listing": backlogSurface(
       ADAPTER_KEYS.CZ_NS,
       "the publication-day listing is the only page stating the attachment identifiers, and the crawl walks the identifier-ordered view instead",

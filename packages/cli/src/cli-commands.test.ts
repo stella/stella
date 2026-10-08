@@ -3,6 +3,7 @@
 // endpoint. `Bun.spawn` (async) is used, not `spawnSync`, so the in-process
 // `Bun.serve` can answer requests concurrently. No real network origin is hit.
 
+import { panic } from "better-result";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -10,9 +11,51 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
+import { validateFetchedToolsList } from "./registry-trust.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
+const FETCH_PRELOAD = path.join(
+  import.meta.dirname,
+  "../tests/cli-command-fetch.ts",
+);
+const registry = validateFetchedToolsList(
+  await Bun.file(
+    new URL("generated/registry-snapshot.json", import.meta.url),
+  ).text(),
+);
+if (!registry.ok) {
+  panic(`Invalid committed command-test registry: ${registry.violation}`);
+}
+const catalog = loadBakedCapabilityCatalog();
+if (catalog === null) {
+  panic("Invalid committed command-test capability catalog");
+}
+// Command-behaviour tests exercise an admitted principal. Build its discovery
+// response from the shipped contract so new feature-owned commands cannot drift.
+const registryResult = {
+  tools: registry.listings.map((listing) => {
+    const featureId = generatedToolAnnotations[listing.name]?.featureId;
+    return {
+      ...listing,
+      ...(featureId === undefined ? {} : { _meta: { featureId } }),
+    };
+  }),
+  _meta: {
+    featureAccess: {
+      tools: registry.listings.flatMap((listing) =>
+        generatedToolAnnotations[listing.name]?.featureId === undefined
+          ? []
+          : [listing.name],
+      ),
+      capabilities: catalog.flatMap((entry) =>
+        entry.featureId === undefined ? [] : [entry.id],
+      ),
+    },
+  },
+};
 
 // These tests start a fresh Bun process for each real CLI invocation. Startup
 // can exceed Bun's 5-second default while the repository suite is contended.
@@ -64,6 +107,9 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
       const lifecycle = respondToMcpLifecycle(body);
       if (lifecycle !== null) {
         return lifecycle;
+      }
+      if (body.method === "tools/list") {
+        return Response.json({ jsonrpc: "2.0", id: 1, result: registryResult });
       }
       const index = requests.length;
       requests.push(body);
@@ -171,10 +217,12 @@ const runCli = async ({
   }
 
   const proc = Bun.spawn({
-    cmd: ["bun", CLI_ENTRYPOINT, ...args],
+    cmd: ["bun", "--preload", FETCH_PRELOAD, CLI_ENTRYPOINT, ...args],
     env: {
       ...process.env,
       XDG_CONFIG_HOME: configHome,
+      XDG_CACHE_HOME: path.join(configHome, "cache"),
+      STELLA_API_KEY: undefined,
       STELLA_SERVER_URL: serverUrlEnv ?? url,
     },
     stdin: stdin === undefined ? "ignore" : "pipe",
@@ -665,6 +713,145 @@ describe("windowed text (S4)", () => {
     });
   });
 
+  for (const format of ["json", "jsonl"] as const) {
+    for (const held of [true, false]) {
+      test(`--all ${format} preserves ${held ? "held" : "external"} legal citation links from the first window`, async () => {
+        const source = "https://publisher.example/act/89-2012";
+        const links = held
+          ? {
+              url: "https://app.example/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+              source_url: source,
+            }
+          : { url: source };
+        const server = startMockServer((_body, index) => ({
+          toolPayload:
+            index === 0
+              ? {
+                  nextCursor: "w2",
+                  statute: { text: "FIRST ", truncated: true, ...links },
+                }
+              : {
+                  nextCursor: null,
+                  statute: { text: "SECOND", truncated: false },
+                },
+        }));
+        try {
+          const result = await runCli({
+            args: [
+              "legislation",
+              "read",
+              "--eli",
+              "/eli/cz/sb/2012/89",
+              "--all",
+              "--output",
+              format,
+            ],
+            url: server.url,
+            token: READ,
+          });
+          expect(result.exitCode).toBe(0);
+          expect(JSON.parse(result.stdout)).toEqual({
+            text: "FIRST SECOND",
+            ...links,
+          });
+          expect(server.requests).toHaveLength(2);
+          expect(server.requests.at(1)?.params.arguments).toMatchObject({
+            cursor: "w2",
+          });
+        } finally {
+          server.stop();
+        }
+      });
+    }
+  }
+  test("a read the server states has no text exits 0 with a typed field, not empty text", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: null,
+        statute: {
+          eli: "/eli/cz/sb/2012/89",
+          text: null,
+          textWithheldReason: "The source licence does not permit it.",
+        },
+      },
+    }));
+    const result = await runCli({
+      args: ["legislation", "read", "--eli", "/eli/cz/sb/2012/89", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.ok);
+    expect(JSON.parse(result.stdout)).toEqual({
+      text: null,
+      textUnavailable: { reason: "no_text", textPath: "statute.text" },
+      response: {
+        nextCursor: null,
+        statute: {
+          eli: "/eli/cz/sb/2012/89",
+          text: null,
+          textWithheldReason: "The source licence does not permit it.",
+        },
+      },
+    });
+    expect(result.stderr).toContain("No text");
+  });
+
+  test("a response without the text the command reads fails loudly instead of printing empty text", async () => {
+    // A command built for one response shape reading another: here a batch
+    // envelope answering a single-text leaf, the shape that printed
+    // `{"text":""}` with exit 0 before. The response is kept, not dropped.
+    const items = [
+      {
+        decisionId: "00000000-0000-4000-8000-000000000001",
+        status: "found",
+        decision: { text: "THE DECISION BODY" },
+      },
+    ];
+    const server = startMockServer(() => ({ toolPayload: { items } }));
+    const result = await runCli({
+      args: ["document", "content", "--entity-id", "e1", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.unexpected);
+    expect(JSON.parse(result.stdout)).toEqual({
+      text: null,
+      textUnavailable: { reason: "not_in_response", textPath: "text" },
+      response: { items },
+    });
+    expect(result.stderr).toContain("npm i -g @stll/cli");
+  });
+
+  test("--all stops at a first window without text and types it", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: "w2",
+        statute: { text: null, textWithheldReason: "withheld" },
+      },
+    }));
+    const result = await runCli({
+      args: [
+        "legislation",
+        "read",
+        "--eli",
+        "/eli/cz/sb/2012/89",
+        "--all",
+        "--json",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.ok);
+    expect(server.requests).toHaveLength(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      text: null,
+      textUnavailable: { reason: "no_text", textPath: "statute.text" },
+    });
+  });
+
   test("a case-law decision read renders one entry per requested id", async () => {
     // Not a windowed-text leaf: the read answers per entry, so both the text
     // and its continuation cursor are per entry and there is no one window to
@@ -697,17 +884,19 @@ describe("windowed text (S4)", () => {
         "00000000-0000-4000-8000-000000000001",
         "--decision-ids",
         "00000000-0000-4000-8000-000000000002",
+        "--json",
       ],
       url: server.url,
       token: READ,
     });
     server.stop();
     expect(result.exitCode).toBe(0);
+    const printed = JSON.parse(result.stdout);
     expect(
-      JSON.parse(result.stdout).items.map(
-        (item: { status: string }) => item.status,
-      ),
+      printed.items.map((item: { status: string }) => item.status),
     ).toEqual(["found", "not_found"]);
+    expect(printed.items.at(0).decision.text).toBe("THE DECISION BODY");
+    expect(printed).not.toHaveProperty("text");
     expect(server.requests.at(0)?.params.arguments).toMatchObject({
       decision_ids: [
         "00000000-0000-4000-8000-000000000001",
@@ -716,11 +905,9 @@ describe("windowed text (S4)", () => {
     });
   });
 
-  test("a per-entry cursor leaf does not offer --all", async () => {
-    // The follow loop advances one top-level cursor. This payload carries a
-    // continuation per entry, so following nothing would print the first
-    // window as though it were the whole decision; the flag is absent rather
-    // than quietly truncating.
+  test("a decision read pages by number, so it offers neither --cursor nor --all", async () => {
+    // Each decision of a batch is paged with `--page`; there is no cursor for
+    // the follow loop to advance.
     const server = startMockServer(() => ({ toolPayload: { items: [] } }));
     const result = await runCli({
       args: [
@@ -741,8 +928,8 @@ describe("windowed text (S4)", () => {
     server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests).toHaveLength(0);
-    // The cursor itself stays: one decision's text is continued by hand.
-    expect(help.stdout).toContain("--cursor");
+    expect(help.stdout).toContain("--page");
+    expect(help.stdout).not.toContain("--cursor");
     expect(help.stdout).not.toContain("--all");
   });
 });

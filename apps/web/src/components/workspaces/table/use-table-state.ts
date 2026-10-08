@@ -31,6 +31,9 @@ import {
   getPersistedColumnPinning,
   getPersistedHiddenColumnIds,
 } from "@/components/workspaces/table/use-table-state.logic";
+import { useStorageOwner } from "@/lib/account/use-owner-scoped-state";
+import { isCurrentStorageOwner } from "@/lib/account/user-scoped-storage";
+import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import type { TableColumnLayout } from "@/lib/workspaces/column-layout";
 
 const COLUMN_SIZING_DEBOUNCE_MS = 100;
@@ -51,6 +54,7 @@ export type TableColumnSizingLayout = {
  * this width is answering a question nobody is asking any more.
  */
 type PendingColumnSizing = {
+  owner: StorageOwner;
   over: ColumnSizingState;
   sizing: ColumnSizingState;
 };
@@ -78,12 +82,19 @@ export type UseTableStateProps = {
   sorting: TableSortingLayout | null;
 };
 
+type PublishColumnSizingOptions = {
+  publish: (sizing: ColumnSizingState) => void;
+  sizing: ColumnSizingState;
+  owner: StorageOwner;
+};
+
 export const useTableState = ({
   columnLayout,
   columnSizing: storedColumnSizing,
   rowSelection,
   sorting,
 }: UseTableStateProps) => {
+  const owner = useStorageOwner();
   // Resizing publishes on every pointer move; the pending width keeps the drag
   // at frame rate and the store hears the settled one. Everything else is read
   // straight off the store on every render, and so is this the moment the
@@ -93,25 +104,39 @@ export const useTableState = ({
   const [pendingColumnSizing, setPendingColumnSizing] =
     useState<PendingColumnSizing | null>(null);
   const columnSizing: ColumnSizingState =
-    pendingColumnSizing !== null &&
+    pendingColumnSizing?.owner === owner &&
     pendingColumnSizing.over === storedColumnSizing.sizing
       ? pendingColumnSizing.sizing
       : storedColumnSizing.sizing;
 
   // The listener travels with the width rather than being closed over, so a
-  // publish that lands after the reader has moved on still reaches the store
-  // the drag was made against instead of writing those widths into the next.
+  // publish within the same account reaches the view the drag was made against.
+  // An account transition expires the pending publish.
   const publishColumnSizing = useDebouncedCallback(
-    (publish: (sizing: ColumnSizingState) => void, sizing: ColumnSizingState) =>
-      publish(sizing),
+    ({ publish, sizing, owner: pendingOwner }: PublishColumnSizingOptions) => {
+      if (isCurrentStorageOwner(pendingOwner)) {
+        publish(sizing);
+      }
+    },
     COLUMN_SIZING_DEBOUNCE_MS,
   );
 
   const onColumnSizingChange: OnChangeFn<ColumnSizingState> = (updater) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const data =
       typeof updater === "function" ? updater(columnSizing) : updater;
-    setPendingColumnSizing({ over: storedColumnSizing.sizing, sizing: data });
-    publishColumnSizing(storedColumnSizing.onChange, data);
+    setPendingColumnSizing({
+      owner,
+      over: storedColumnSizing.sizing,
+      sizing: data,
+    });
+    publishColumnSizing({
+      publish: storedColumnSizing.onChange,
+      sizing: data,
+      owner,
+    });
   };
 
   const columnPinning: ColumnPinningState = createColumnPinningState(
@@ -119,6 +144,9 @@ export const useTableState = ({
   );
 
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const data =
       typeof updater === "function" ? updater(columnPinning) : updater;
     columnLayout.onChange({ pinned: getPersistedColumnPinning(data) });
@@ -129,6 +157,9 @@ export const useTableState = ({
   );
 
   const onColumnOrderChange: OnChangeFn<ColumnOrderState> = (updater) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const data = typeof updater === "function" ? updater(columnOrder) : updater;
     columnLayout.onChange({ order: getPersistedColumnOrder(data) });
   };
@@ -140,6 +171,9 @@ export const useTableState = ({
   const onColumnVisibilityChange: OnChangeFn<ColumnVisibilityState> = (
     updater,
   ) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const data =
       typeof updater === "function" ? updater(columnVisibility) : updater;
 
@@ -150,6 +184,9 @@ export const useTableState = ({
     sorting === null
       ? undefined
       : (updater) => {
+          if (!isCurrentStorageOwner(owner)) {
+            return;
+          }
           sorting.onChange(
             typeof updater === "function" ? updater(sorting.sorts) : updater,
           );
@@ -169,7 +206,11 @@ export const useTableState = ({
       onColumnOrderChange,
       onColumnPinningChange,
       onColumnVisibilityChange,
-      onRowSelectionChange: rowSelection.onChange,
+      onRowSelectionChange: (updater: Updater<RowSelectionState>) => {
+        if (isCurrentStorageOwner(owner)) {
+          rowSelection.onChange(updater);
+        }
+      },
       ...(onSortingChange === undefined ? {} : { onSortingChange }),
     },
   };

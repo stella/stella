@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -167,21 +168,6 @@ export const AIUnavailableDialogTrigger = () => {
 };
 
 /**
- * Whether AI features are available right now: either the org has
- * BYOK or the instance has provisioned keys.
- */
-export function useAIAvailable(): boolean {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data, isError } = useChromeQuery(
-    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-  );
-  if (isError || data === undefined) {
-    return false;
-  }
-  return data.available;
-}
-
-/**
  * Gate AI routes when the instance has no provisioned keys and
  * the org has not supplied their own. Send-time surfaces should
  * use `useAIKeyGate()` so every AI action opens the same dialog.
@@ -267,6 +253,13 @@ export const AIKeyRequiredDialog = ({
     createDefaultRoleModels,
   );
 
+  const [initialProviders, setInitialProviders] = useState(
+    DEFAULT_PROVIDER_DRAFTS,
+  );
+  const [initialRoleModels, setInitialRoleModels] = useState(
+    createDefaultRoleModels,
+  );
+
   // Re-syncs the provider/role-model form drafts from `config` when the
   // dialog opens (or when `configured` flips while it's open), deliberately
   // ignoring later `config` refetches so user edits survive. Storing
@@ -289,6 +282,13 @@ export const AIKeyRequiredDialog = ({
         ).slice(0, 1);
         const providerValues = getProviderValues(nextProviders);
         setProviders(nextProviders);
+        setInitialProviders(nextProviders);
+        setInitialRoleModels(
+          roleModelsFromOverrideModels({
+            overrideModels: config.overrideModels,
+            providers: providerValues,
+          }),
+        );
         setRoleModels(
           roleModelsFromOverrideModels({
             overrideModels: config.overrideModels,
@@ -298,6 +298,10 @@ export const AIKeyRequiredDialog = ({
       } else {
         const nextProviders = DEFAULT_PROVIDER_DRAFTS;
         setProviders(nextProviders);
+        setInitialProviders(nextProviders);
+        setInitialRoleModels(
+          createDefaultRoleModels(getProviderValues(nextProviders)),
+        );
         setRoleModels(
           createDefaultRoleModels(getProviderValues(nextProviders)),
         );
@@ -379,6 +383,16 @@ export const AIKeyRequiredDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="max-h-[calc(100dvh-2rem)] overflow-hidden sm:max-w-3xl">
+        <DialogFormState
+          dirty={
+            JSON.stringify(providers) !== JSON.stringify(initialProviders) ||
+            JSON.stringify(roleModels) !== JSON.stringify(initialRoleModels)
+          }
+          onDiscard={() => {
+            setProviders(initialProviders);
+            setRoleModels(initialRoleModels);
+          }}
+        />
         <DialogHeader className="p-4 pb-2">
           <DialogTitle>{t("ai.keyRequired.title")}</DialogTitle>
           <DialogDescription>

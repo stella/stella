@@ -4,6 +4,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  DESKTOP_HANDOFF_FAILURE,
+  type DesktopHandoffFailureReason,
+} from "@stll/api-contract/desktop-handoff";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
@@ -19,6 +23,7 @@ import {
   pdfSigningStartErrorCode,
   type PdfSigningStartErrorCode,
 } from "@/components/inspector/pdf-signing.logic";
+import { desktopHandoffFailureToastOptions } from "@/features/desktop/desktop-handoff-failure-toast";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
@@ -73,7 +78,10 @@ const CLOSE_REASON_KEYS = {
   user_cancelled: "workspaces.files.pdfSigning.cancelledUserDescription",
   would_break_signatures:
     "workspaces.files.pdfSigning.cancelledWouldBreakSignaturesDescription",
-} as const satisfies Record<PdfSigningCloseReason, TranslationKey>;
+} as const satisfies Record<
+  Exclude<PdfSigningCloseReason, DesktopHandoffFailureReason>,
+  TranslationKey
+>;
 
 /**
  * Sign one PDF in the desktop app, optionally with a visible stamp: mint a
@@ -152,6 +160,27 @@ export const useDesktopPdfSign = (target: PdfSignableFile) => {
     const outcome = watched.value;
     switch (outcome.type) {
       case "cancelled": {
+        if (
+          outcome.closeReason === DESKTOP_HANDOFF_FAILURE.updateRequired ||
+          outcome.closeReason === DESKTOP_HANDOFF_FAILURE.accountRequired
+        ) {
+          const options = desktopHandoffFailureToastOptions(
+            outcome.closeReason,
+            {
+              accountRequiredTitle: t(
+                "workspaces.files.desktopEdit.accountRequiredTitle",
+              ),
+              updateRequiredTitle: t(
+                "workspaces.files.desktopEdit.updateRequiredTitle",
+              ),
+            },
+          );
+          notifyUserError(undefined, options.title, {
+            toastId,
+            description: options.description,
+          });
+          return;
+        }
         const descriptionKey =
           outcome.closeReason === null
             ? "workspaces.files.pdfSigning.cancelledDescription"

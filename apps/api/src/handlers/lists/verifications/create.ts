@@ -5,11 +5,11 @@
  */
 
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListVerificationRuns } from "@/api/db/schema";
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
@@ -20,14 +20,13 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
-import {
-  VERIFICATION_PIPELINE_VERSION,
-  VERIFICATION_RUN_ACTIVE_STATUSES,
-} from "@/api/lib/lists/verification/contract";
 import { readVerificationEvidence } from "@/api/lib/lists/verification/evidence";
 import { VERIFICATION_MODEL_ROLE } from "@/api/lib/lists/verification/model-call";
+import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import { enqueueListVerificationRun } from "@/api/lib/lists/verification/run-queue";
+import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -41,6 +40,8 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  // The run is queued here; its worker takes a background slot.
+  actionAdmission: { type: "handler", actionKind: "list-verification.start" },
   description:
     "Start checking one document (DOCX, PDF, or a file with a PDF " +
     "rendition) against the facts of one list. Every claim the document " +
@@ -51,6 +52,7 @@ const config = {
   permissions: { workspace: ["read"], entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -86,7 +88,7 @@ const createVerification = createSafeHandler(
     user,
     workspaceId,
   }) {
-    const accessError = memberAIAccessError(orgAIConfigStatus);
+    const accessError = orgAIConfigStatusError(orgAIConfigStatus);
     if (accessError) {
       return Result.err(accessError);
     }
@@ -191,45 +193,20 @@ const createVerification = createSafeHandler(
     }
 
     const runId = createSafeId<"legalListVerificationRun">();
-    const inserted = yield* Result.await(
-      safeDb(async (tx) => {
-        // One unfinished verification per document. The insert defers to the
-        // partial unique index, so a concurrent start loses cleanly instead of
-        // surfacing a unique violation.
-        const created = await tx
-          .insert(legalListVerificationRuns)
-          .values({
-            id: runId,
-            organizationId,
-            workspaceId,
-            entityId,
-            fileFieldId,
-            entityVersionId: version.id,
-            contentSha256: file.sha256Hex,
-            evidence: evidence.evidence,
-            status: "queued",
-            pipelineVersion: VERIFICATION_PIPELINE_VERSION,
-            requestedBy: user.id,
-          })
-          .onConflictDoNothing({
-            target: [
-              legalListVerificationRuns.workspaceId,
-              legalListVerificationRuns.entityId,
-              legalListVerificationRuns.fileFieldId,
-            ],
-            // Literals, not parameters: Postgres matches this against the
-            // partial index's predicate when it plans the statement.
-            where: sql`${legalListVerificationRuns.status} IN (${sql.join(
-              VERIFICATION_RUN_ACTIVE_STATUSES.map((status) =>
-                sql.raw(`'${status}'`),
-              ),
-              sql`, `,
-            )})`,
-          })
-          .returning({ id: legalListVerificationRuns.id });
-        if (created.length === 0) {
-          return false;
-        }
+    const inserted = await startVerificationRun({
+      safeDb,
+      run: {
+        id: runId,
+        organizationId,
+        workspaceId,
+        entityId,
+        fileFieldId,
+        entityVersionId: version.id,
+        contentSha256: file.sha256Hex,
+        evidence: evidence.evidence,
+        requestedBy: user.id,
+      },
+      recordAuditEvent: async (tx) =>
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.EXECUTE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
@@ -238,14 +215,21 @@ const createVerification = createSafeHandler(
             listId,
             entityId,
             fileFieldId,
-            documentName: target.entity?.name ?? null,
             factCount: evidence.evidence.facts.length,
           },
-        });
-        return true;
-      }),
+        }),
+    });
+    const created = yield* inserted.mapError((error) =>
+      ListVerificationRunCapError.is(error)
+        ? new HandlerError({
+            status: 429,
+            message: error.message,
+            hint: error.hint,
+            retryable: true,
+          })
+        : error,
     );
-    if (!inserted) {
+    if (!created) {
       return Result.err(
         new HandlerError({
           status: 409,

@@ -4,6 +4,7 @@ import { readdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 
 import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 
 export const generateCapabilityRuntime = async (
   root = new URL("../../../", import.meta.url),
@@ -63,9 +64,17 @@ export const generateCapabilityRuntime = async (
     }
     return [[entry.id, entry.featureId]];
   });
+  // Emit the repository formatter's shape (one entry per line) directly: the
+  // API image builds this file without the repository's scripts.
+  const bindingEntries = features
+    .map(
+      ([id, featureId]) =>
+        `  [${JSON.stringify(id)}, ${JSON.stringify(featureId)}],\n`,
+    )
+    .join("");
   await writeFile(
     new URL("capability-feature-bindings.ts", directory),
-    `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${features.length === 0 ? "" : JSON.stringify(features)});\n`,
+    `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${features.length === 0 ? "" : `[\n${bindingEntries}]`});\n`,
   );
   const dispatchImports = ids
     .map(
@@ -75,10 +84,13 @@ export const generateCapabilityRuntime = async (
     .join("\n");
   await writeFile(
     new URL("capability-dispatch.ts", directory),
-    `${header}${dispatchImports}\n\nexport type CapabilityDispatchEntry = { load: () => Promise<Record<string, unknown>>; exportName?: string };\nexport const CAPABILITY_DISPATCH = {${ids.map((_id, index) => `...dispatch${index}`).join(",")}} as const satisfies Record<string, CapabilityDispatchEntry>;\n`,
+    `${header}${dispatchImports}\n\nexport type CapabilityDispatchEntry = { load: () => Promise<Record<string, unknown>>; exportName?: string; featureId?: string; featureAccess?: "required" | "conditional" };\nexport const CAPABILITY_DISPATCH = {${ids.map((_id, index) => `...dispatch${index}`).join(",")}} as const satisfies Record<string, CapabilityDispatchEntry>;\n`,
   );
 };
 
-if (import.meta.main) {
+if (
+  import.meta.main &&
+  !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+) {
   await generateCapabilityRuntime();
 }

@@ -14,10 +14,10 @@ import { inArray } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
-import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import {

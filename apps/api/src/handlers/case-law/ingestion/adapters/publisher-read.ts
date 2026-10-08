@@ -1,4 +1,4 @@
-// parser-output-unchanged: a publisher behind its own gate reads through the same typed outcome, and an unread outcome names its refusal; a successful read returns the same response.
+// parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**
  * The typed way a case-law adapter reads its publisher.
  *
@@ -40,6 +40,7 @@ import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
+  isReadRefusal,
   readAbsent,
   readOutcomeOfStatus,
   readPresent,
@@ -75,10 +76,22 @@ const readStep = async <T>(
   }
   const { error } = result;
   rethrowCycleStop(error, signal);
+  if (
+    error instanceof AdapterFetchError &&
+    isReadRefusal(error.cause) &&
+    error.cause.scope !== "source"
+  ) {
+    return Result.err(error.cause);
+  }
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
-export type PublisherReadInit = Omit<PublisherFetchInit, "refusalMode"> & {
+// parser-output-unchanged: a type-only change to the read options; no parsed record changes.
+/**
+ * An intersection, not `Omit`: `Omit` over the timeout union collapses it, and
+ * the intersection narrows `refusalMode` all the same.
+ */
+export type PublisherReadInit = PublisherFetchInit & {
   /** "stop-refusal" for a session workflow; a 429 ends the cycle either way. */
   refusalMode?: "stop-refusal" | undefined;
   /** What a 401, 403 or 451 answer withholds; "document" when omitted. */

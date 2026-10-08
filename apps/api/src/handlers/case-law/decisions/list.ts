@@ -24,6 +24,7 @@ import {
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
+import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import {
@@ -152,7 +153,9 @@ const decisionFilterConditions = (
     conditions.push(sql`${decision.decisionDate} <= ${query.dateTo}`);
   }
   if (query.decisionType) {
-    conditions.push(eq(decision.decisionType, query.decisionType));
+    conditions.push(
+      decisionTypeFilterSql(decision.decisionType, query.decisionType),
+    );
   }
   if (query.sourceId) {
     conditions.push(eq(decision.sourceId, query.sourceId));

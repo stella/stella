@@ -27,6 +27,7 @@ import {
 } from "@stll/ui/combobox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -576,7 +577,7 @@ const ClauseLeaveDialog = ({
   );
 };
 
-export const ClauseHeader = ({
+const ClauseHeader = ({
   detail,
   clauseId,
   categories,
@@ -736,8 +737,7 @@ export const ClauseHeader = ({
     <div className="flex items-center gap-2">
       {editingTitle && canEdit ? (
         <InlineEdit
-          className="flex-1"
-          inputClassName="flex-1 text-base"
+          className="min-w-0 flex-1 text-lg font-semibold"
           onCancel={() => {
             setTitleDraft(detail.title);
             setEditingTitle(false);
@@ -750,7 +750,7 @@ export const ClauseHeader = ({
         />
       ) : (
         <button
-          className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
+          className="flex-1 overflow-hidden text-start text-lg font-semibold text-ellipsis whitespace-pre disabled:cursor-default"
           dir="auto"
           disabled={!canEdit}
           onClick={() => {
@@ -1536,6 +1536,16 @@ const VariantFormDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-md">
+      <DialogFormState
+        dirty={
+          label !== (variant?.label ?? "") ||
+          bodyText !== (variant ? variantBodyToText(variant.body) : "")
+        }
+        onDiscard={() => {
+          setLabel(variant?.label ?? "");
+          setBodyText(variant ? variantBodyToText(variant.body) : "");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? t("clauses.editVariant") : t("clauses.addVariant")}
@@ -1584,7 +1594,7 @@ const VariantFormDialogBody = ({
 
 // ── History Tab ──────────────────────────────────────
 
-export const HistoryTab = ({
+const HistoryTab = ({
   clauseId,
   currentBody,
   versions,

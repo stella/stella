@@ -36,22 +36,15 @@ const UseBeforeDefineReport = v.object({
   diagnostics: v.array(v.object({ code: v.string(), message: v.string() })),
 });
 
-const TDZ_FIXTURE = [
-  "export const early = late;",
-  "const late = 1;",
-  "export const made = new Widget();",
-  "class Widget {}",
-  "export const run = () => helper();",
-  "function helper() {",
-  "  return 1;",
-  "}",
-].join("\n");
-
-test("no-use-before-define reports temporal dead zone reads, not hoisted function calls", async () => {
+/** The repository's no-use-before-define findings for one source file. */
+const useBeforeDefineFindings = async (
+  fileName: string,
+  lines: readonly string[],
+): Promise<string[]> => {
   const directory = await mkdtemp(path.join(tmpdir(), "stella-oxlint-tdz-"));
   try {
     const configPath = path.join(directory, "oxlint.config.ts");
-    const input = path.join(directory, "input.ts");
+    const input = path.join(directory, fileName);
     await Bun.write(
       configPath,
       `export default ${JSON.stringify({
@@ -59,27 +52,58 @@ test("no-use-before-define reports temporal dead zone reads, not hoisted functio
         rules: { [USE_BEFORE_DEFINE]: config.rules[USE_BEFORE_DEFINE] },
       })};`,
     );
-    await Bun.write(input, TDZ_FIXTURE);
+    await Bun.write(input, lines.join("\n"));
     const lint = Bun.spawn(
       ["bun", "--bun", "oxlint", "-c", configPath, "--format", "json", input],
       { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
     );
-    const [stdout, exitCode] = await Promise.all([
+    const [stdout] = await Promise.all([
       new Response(lint.stdout).text(),
       lint.exited,
     ]);
-
-    expect(exitCode).toBe(1);
-    expect(
-      v
-        .parse(UseBeforeDefineReport, JSON.parse(stdout))
-        .diagnostics.map(({ code, message }) => `${code}: ${message}`)
-        .toSorted(),
-    ).toEqual([
-      "eslint(no-use-before-define): 'Widget' was used before it was defined.",
-      "eslint(no-use-before-define): 'late' was used before it was defined.",
-    ]);
+    return v
+      .parse(UseBeforeDefineReport, JSON.parse(stdout))
+      .diagnostics.map(({ code, message }) => `${code}: ${message}`)
+      .toSorted();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+};
+
+test("no-use-before-define reports temporal dead zone reads, not hoisted function calls", async () => {
+  const findings = await useBeforeDefineFindings("input.ts", [
+    "export const early = late;",
+    "const late = 1;",
+    "export const made = new Widget();",
+    "class Widget {}",
+    "export const run = () => helper();",
+    "function helper() {",
+    "  return 1;",
+    "}",
+  ]);
+
+  expect(findings).toEqual([
+    "eslint(no-use-before-define): 'Widget' was used before it was defined.",
+    "eslint(no-use-before-define): 'late' was used before it was defined.",
+  ]);
+});
+
+// The React convention (.ai/shared/modules/react.md) puts the root component
+// first: helpers below it pass, whether function declarations (hoisted) or
+// `const` arrows read only when the component renders.
+test("a helper below the root component passes as a function declaration or a const arrow", async () => {
+  const findings = await useBeforeDefineFindings("card.tsx", [
+    "export const Card = ({ title }: { title: string }) => (",
+    "  <section>",
+    "    <Heading text={title} />",
+    "    {formatCount(2)}",
+    "  </section>",
+    ");",
+    "function Heading({ text }: { text: string }) {",
+    "  return <h2>{text}</h2>;",
+    "}",
+    "const formatCount = (count: number) => String(count);",
+  ]);
+
+  expect(findings).toEqual([]);
 });

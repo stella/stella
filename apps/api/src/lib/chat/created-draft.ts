@@ -1,5 +1,4 @@
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+import { isNonNullObject } from "@stll/template-conditions/path";
 
 export type SavedGeneratedDocumentDraft = {
   entityId: string;
@@ -25,7 +24,7 @@ const toSavedGeneratedDocumentDraft = (
   value: unknown,
 ): SavedGeneratedDocumentDraft | null => {
   if (
-    !isRecord(value) ||
+    !isNonNullObject(value) ||
     value["success"] !== true ||
     typeof value["entityId"] !== "string" ||
     typeof value["entityRef"] !== "string" ||
@@ -61,7 +60,7 @@ export const getGeneratedDocumentDraftState = ({
   toolCallId: string;
 }): GeneratedDocumentDraftState => {
   if (
-    !isRecord(persistedContent) ||
+    !isNonNullObject(persistedContent) ||
     (persistedContent["version"] !== 2 && persistedContent["version"] !== 3) ||
     !Array.isArray(persistedContent["data"])
   ) {
@@ -70,7 +69,7 @@ export const getGeneratedDocumentDraftState = ({
   const persistenceVersion = persistedContent["version"];
   for (const [partIndex, part] of persistedContent["data"].entries()) {
     if (
-      !isRecord(part) ||
+      !isNonNullObject(part) ||
       part["type"] !== "tool-call" ||
       part["name"] !== "create-document" ||
       part["id"] !== toolCallId ||
@@ -80,7 +79,7 @@ export const getGeneratedDocumentDraftState = ({
     }
     const storedOutput = part["output"];
     const output =
-      persistenceVersion === 3 && isRecord(storedOutput)
+      persistenceVersion === 3 && isNonNullObject(storedOutput)
         ? storedOutput["value"]
         : storedOutput;
     const saved = toSavedGeneratedDocumentDraft(output);
@@ -88,7 +87,7 @@ export const getGeneratedDocumentDraftState = ({
       return { output: saved, status: "saved" };
     }
     if (
-      isRecord(output) &&
+      isNonNullObject(output) &&
       output["success"] === true &&
       output["destination"] === "draft" &&
       output["fileName"] === fileName

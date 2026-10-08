@@ -132,13 +132,21 @@
     "takeoverSubtitle": "A edição continuará a partir do seu último ponto de controle salvo.",
     "takeoverTitle": "{requester} quer assumir a edição",
     "takeoverWindowTitle": "Solicitação de transferência",
-    "webOrigin": "Origem web"
+    "webOrigin": "Origem web",
+    "handoffWindowTitle": "Stella Desktop",
+    "handoffUpdateRequired": "Atualize o Stella Desktop e abra o documento novamente pelo Stella.",
+    "handoffAccountRequired": "Conecte o Stella Desktop à sua conta e abra o documento novamente pelo Stella.",
+    "handoffFailed": "Não foi possível abrir o documento",
+    "handoffUnavailable": "Não foi possível abrir o documento. Comece novamente pelo Stella.",
+    "handoffRetry": "Tentar novamente",
+    "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las"
   },
   "settings": {
     "about": "Sobre",
     "accountLinked": "Conta vinculada",
     "connectToStella": "Conectar à stella web",
     "connectToStellaDescription": "Vincule este computador à sua conta atual da stella sem abrir um documento.",
+    "desktopBenefit": "Arquivos do Office e histórico local da área de transferência",
     "disconnectAccount": "Desconectar conta",
     "errorDisconnectAccount": "O stella desktop não conseguiu desconectar sua conta.",
     "errorReadAccount": "O stella desktop não conseguiu verificar a conexão da sua conta.",

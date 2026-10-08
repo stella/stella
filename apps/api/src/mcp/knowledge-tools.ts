@@ -26,14 +26,13 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
-  type LIST_CLAUSES_DETAIL_PROJECTION,
-  type LIST_CLAUSES_LIST_PROJECTION,
+  LIST_CLAUSES_DETAIL_PROJECTION,
+  LIST_CLAUSES_LIST_PROJECTION,
   LIST_CLAUSES_PROJECTION,
-  type LIST_CLAUSES_VERSION_PROJECTION,
-  type LIST_PLAYBOOKS_DETAIL_PROJECTION,
-  type LIST_PLAYBOOKS_LIST_PROJECTION,
+  LIST_CLAUSES_VERSION_PROJECTION,
+  LIST_PLAYBOOKS_DETAIL_PROJECTION,
+  LIST_PLAYBOOKS_LIST_PROJECTION,
   LIST_PLAYBOOKS_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
@@ -57,6 +56,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedClauseCategoryId,
   brandPersistedClauseId,
@@ -102,6 +103,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -112,6 +114,7 @@ import {
   internalFailureResult,
   MCP_INTERNAL_ERROR_HINT,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -716,7 +719,9 @@ const readClauseDetail = async ({
   clauseId: SafeId<"clause">;
   context: McpRequestContext;
   versionId: string | undefined;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_CLAUSES_PROJECTION>>
+> => {
   const organizationId = context.organizationId;
 
   if (versionId !== undefined) {
@@ -759,7 +764,10 @@ const readClauseDetail = async ({
       ],
       { version },
     );
-    return { egress: "structured", payload: { version }, textFields } as const;
+    return structuredEgressPlan({
+      payload: projectionPayload(LIST_CLAUSES_VERSION_PROJECTION, { version }),
+      textFields,
+    });
   }
 
   const result = await Result.gen(() =>
@@ -840,7 +848,10 @@ const readClauseDetail = async ({
       ),
     );
   }
-  return { egress: "structured", payload: { clause }, textFields } as const;
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_CLAUSES_DETAIL_PROJECTION, { clause }),
+    textFields,
+  });
 };
 
 const handleListClausesTool: TypedMcpToolHandler<
@@ -917,11 +928,11 @@ const handleListClausesTool: TypedMcpToolHandler<
         )
       : undefined;
 
-  const payload = {
+  const payload = projectionPayload(LIST_CLAUSES_LIST_PROJECTION, {
     clauses,
     ...(categories ? { categories } : {}),
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_CLAUSES_LIST_PROJECTION>;
+  });
   const textFields = [
     ...runTextFieldSpecs(clauseListTextFieldSpecs(organizationId), payload),
     ...(categories
@@ -931,7 +942,7 @@ const handleListClausesTool: TypedMcpToolHandler<
       : []),
   ];
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // --- save_clause --------------------------------------------------------
@@ -1265,9 +1276,11 @@ const handleSaveClauseTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      clauseId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_CLAUSE_PROJECTION, {
+        clauseId: created.value.id,
+      }),
+    );
   }
 
   // Update branch. Bind clauseId in the narrowed scope: inside the closure below
@@ -1313,9 +1326,11 @@ const handleSaveClauseTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return toolDataResult({
-    clauseId: updated.value.id,
-  } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_CLAUSE_PROJECTION, {
+      clauseId: updated.value.id,
+    }),
+  );
 };
 
 // --- delete_clause ------------------------------------------------------
@@ -1358,9 +1373,11 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- list_playbooks -----------------------------------------------------
@@ -1404,7 +1421,9 @@ const readPlaybookDetail = async ({
 }: {
   context: McpRequestContext;
   playbookId: SafeId<"playbookDefinition">;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_PLAYBOOKS_PROJECTION>>
+> => {
   const organizationId = context.organizationId;
   const result = await Result.gen(() =>
     getPlaybookDefinitionHandler({
@@ -1448,15 +1467,10 @@ const readPlaybookDetail = async ({
   // `playbook` is forwarded verbatim, so a bare `satisfies` gets no
   // excess-property check below the top level: a field added to
   // `positionSchema` would typecheck here and fail the strict parse in chat.
-  type ListPlaybooksDetailPayload = AssertNoExtraFields<
-    { playbook: typeof playbook },
-    v.InferInput<typeof LIST_PLAYBOOKS_DETAIL_PROJECTION>
-  >;
-  return {
-    egress: "structured",
-    payload: { playbook } satisfies ListPlaybooksDetailPayload,
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_PLAYBOOKS_DETAIL_PROJECTION, { playbook }),
     textFields,
-  } as const;
+  });
 };
 
 const handleListPlaybooksTool: TypedMcpToolHandler<
@@ -1495,16 +1509,16 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
   }
   const items = listed.value.items;
 
-  const payload = {
+  const payload = projectionPayload(LIST_PLAYBOOKS_LIST_PROJECTION, {
     items,
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_PLAYBOOKS_LIST_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     playbookListTextFieldSpecs(organizationId),
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // --- save_playbook ------------------------------------------------------
@@ -1792,6 +1806,15 @@ const readSavePlaybookSources = async ({
   );
 };
 
+/** A playbook save's ask derivations, admitted inside the tool call's action. */
+const playbookDerivationAdmitter = (context: McpRequestContext) =>
+  createModelActionAdmitter({
+    organizationId: context.organizationId,
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "playbooks.derive-ask",
+  });
+
 const handleSavePlaybookTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>
 > = async ({ args, context }) => {
@@ -1801,7 +1824,6 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   }
   const input = parsed.output;
   const organizationId = context.organizationId;
-  const mintId = () => Bun.randomUUIDv7();
   // A call that only renames, rescopes, or removes names no positions.
   const positions = input.positions ?? NO_POSITION_INPUTS;
   const reader = { organizationId, userId: context.userId };
@@ -1809,7 +1831,6 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
       context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
 
-  // Create branch.
   if (input.playbook_id === undefined) {
     if (!hasEffectiveAuthority(context, { playbook: ["create"] })) {
       return errorResult("Forbidden");
@@ -1839,27 +1860,20 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       positions,
       removeSourceIds: NO_SOURCE_IDS,
       readableSources: readableSources.value,
-      mintId,
+      mintId: () => Bun.randomUUIDv7(),
     });
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const {
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      managedAIResidency,
-    } = await loadOrgSettings();
+    const orgSettings = await loadOrgSettings();
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
+        admitModelAction: playbookDerivationAdmitter(context),
         safeDb: context.safeDb,
         organizationId,
         accessibleWorkspaceIds: context.accessibleWorkspaceIds,
-        orgAIConfig,
-        orgAIConfigStatus,
-        promptCachingEnabled,
-        managedAIResidency,
+        ...orgSettings,
         recordAuditEvent: context.recordAuditEvent,
         body: {
           name,
@@ -1887,17 +1901,17 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (Result.isError(stored)) {
       return internalFailureResult(stored.error);
     }
-    return toolDataResult({
+    const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
       playbookId: created.value.id,
       updatedAt: stored.value.updatedAt,
       positionCount: merged.items.length,
       positions: merged.written,
       removed: [],
       issues: toSavePlaybookIssues(merged.issues),
-    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+    });
+    return toolDataResult(payload);
   }
 
-  // Update branch: read, merge, then replace through the shared update path.
   if (!hasEffectiveAuthority(context, { playbook: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -1925,7 +1939,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     positions,
     removeSourceIds: input.remove_source_ids ?? NO_SOURCE_IDS,
     readableSources: readableSources.value,
-    mintId,
+    mintId: () => Bun.randomUUIDv7(),
   });
   const changesDefinition =
     input.name !== undefined ||
@@ -1954,32 +1968,26 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     deepEquals(scope, stored.value.scope) &&
     deepEquals(merged.items, stored.value.positions.items)
   ) {
-    return toolDataResult({
+    const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
       playbookId,
       updatedAt: stored.value.updatedAt,
       positionCount: merged.items.length,
       positions: [],
       removed: [],
       issues: toSavePlaybookIssues(merged.issues),
-    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+    });
+    return toolDataResult(payload);
   }
 
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = await loadOrgSettings();
+  const orgSettings = await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
+      admitModelAction: playbookDerivationAdmitter(context),
       safeDb: context.safeDb,
       organizationId,
       accessibleWorkspaceIds: context.accessibleWorkspaceIds,
       playbookId,
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      managedAIResidency,
+      ...orgSettings,
       recordAuditEvent: context.recordAuditEvent,
       body: {
         name,
@@ -1995,14 +2003,15 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return savePlaybookFailureResult(updated.error);
   }
-  return toolDataResult({
+  const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
     playbookId,
     updatedAt: updated.value.updatedAt,
     positionCount: merged.items.length,
     positions: merged.written,
     removed: merged.removedSourceIds.map((sourceId) => ({ sourceId })),
     issues: toSavePlaybookIssues(merged.issues),
-  } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+  });
+  return toolDataResult(payload);
 };
 
 // --- run_playbook -------------------------------------------------------
@@ -2105,9 +2114,9 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
-    return toolDataResult({ runPropertyCount: 0 } satisfies v.InferInput<
-      typeof RUN_PLAYBOOK_PROJECTION
-    >);
+    return toolDataResult(
+      projectionPayload(RUN_PLAYBOOK_PROJECTION, { runPropertyCount: 0 }),
+    );
   }
 
   const started = await Result.tryPromise({
@@ -2136,9 +2145,11 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     return workflowStartFailureResult();
   }
 
-  return toolDataResult({
-    runPropertyCount: outcome.materializedPropertyIds.length,
-  } satisfies v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(RUN_PLAYBOOK_PROJECTION, {
+      runPropertyCount: outcome.materializedPropertyIds.length,
+    }),
+  );
 };
 
 export const KNOWLEDGE_TOOL_DEFINITIONS = [

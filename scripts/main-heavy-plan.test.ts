@@ -3,10 +3,16 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
+import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import {
+  contextFromNested,
+  contextWithPlanOutputs,
+  evaluate as evaluateExpression,
+  UNKNOWN,
+} from "./github-expression";
+import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const source = readFileSync(
@@ -15,6 +21,8 @@ const source = readFileSync(
 );
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
+  uses: v.optional(v.string()),
+  with: v.optional(v.record(v.string(), v.unknown())),
   run: v.optional(v.string()),
   env: v.optional(v.record(v.string(), v.string())),
 });
@@ -23,12 +31,18 @@ const workflowSchema = v.object({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      outputs: v.optional(v.record(v.string(), v.string())),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(v.array(stepSchema)),
     }),
   ),
 });
 const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+const planOutputs = v.parse(
+  v.record(v.string(), v.string()),
+  workflow.jobs["ci-plan"]?.outputs,
+);
+const THIN_JOBS = thinJobs(workflow);
 const heavy = mainHeavyJobs(workflow);
 const outcome = workflow.jobs["ci-result"]?.steps?.find(
   ({ name }) => name === "Evaluate CI outcome",
@@ -47,18 +61,27 @@ const expectedHeavy = Object.keys(scopes).filter(
 const ciNeeds = v.parse(v.array(v.string()), workflow.jobs["ci-result"]?.needs);
 
 const selected = (condition: string, context: object) => {
-  const expression = condition.replaceAll(
-    /needs\.([\w-]+)/gu,
-    (_, job: string) => `needs[${JSON.stringify(job)}]`,
+  const result = evaluateExpression(
+    condition,
+    contextWithPlanOutputs({
+      context: contextFromNested(context),
+      outputs: planOutputs,
+    }),
   );
-  return new Script(`Boolean(${expression})`).runInNewContext(context);
+  if (result === UNKNOWN) {
+    panic(`Unresolved heavy-plan expression: ${condition}`);
+  }
+  return Boolean(result);
 };
 const context = (
   event: string,
   heavyOnly: boolean,
   plan: Record<string, string>,
 ) => ({
-  github: { event_name: event, event: { pull_request: { draft: false } } },
+  github: {
+    event_name: event,
+    event: { pull_request: { draft: false, labels: [] } },
+  },
   inputs: { heavy_only: heavyOnly },
   needs: Object.fromEntries(
     ciNeeds.map((job) => [
@@ -68,7 +91,15 @@ const context = (
           heavyOnly && THIN_JOBS.some((thin) => thin === job)
             ? "skipped"
             : "success",
-        outputs: job === "ci-plan" ? plan : {},
+        outputs:
+          job === "ci-plan"
+            ? {
+                run_required: "true",
+                coverage_profile: "normal-v1",
+                queue_required_jobs: "[]",
+                ...plan,
+              }
+            : {},
       },
     ]),
   ),
@@ -88,7 +119,11 @@ const allPlanned = Object.fromEntries(
 const heavyPlan = {
   ...allPlanned,
   trusted: "true",
+  coverage_profile: "normal-v1",
+  pilot_fast_jobs: "[]",
+  queue_required_jobs: "[]",
   suite_depth: "full",
+  queue_depth: "full",
   fix_tests_on_base_required: "false",
 };
 
@@ -135,6 +170,49 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
 });
 
+test("production web artifacts have at most one selected producer", () => {
+  const producers = Object.entries(workflow.jobs).filter(([, body]) =>
+    body.steps?.some(
+      (step) =>
+        step.uses?.startsWith("actions/upload-artifact@") &&
+        step.with?.["name"] === "e2e-web-build",
+    ),
+  );
+  expect(producers.map(([job]) => job).toSorted()).toEqual([
+    "heavy-web-build",
+    "web-build",
+  ]);
+  for (const event of ["pull_request", "merge_group", ...heavyEvents]) {
+    for (const heavyOnly of [false, true]) {
+      for (const required of ["true", "false"]) {
+        for (const queueDepth of ["full", "thin"]) {
+          const value = context(event, heavyOnly, {
+            ...heavyPlan,
+            queue_depth: queueDepth,
+            web_build_required: required,
+            heavy_web_build_required: heavyOnly ? required : "false",
+          });
+          const active = producers
+            .filter(([, body]) => selected(body.if ?? "true", value))
+            .map(([job]) => job);
+          expect(
+            active.length,
+            `${event}/${heavyOnly}/${required}/${queueDepth}`,
+          ).toBeLessThanOrEqual(1);
+          if (
+            event === "workflow_dispatch" &&
+            heavyOnly &&
+            required === "true" &&
+            queueDepth === "full"
+          ) {
+            expect(active).toEqual(["heavy-web-build"]);
+          }
+        }
+      }
+    }
+  }
+});
+
 test("main heavy runs execute the release compiler exactly when VERSION is planned", () => {
   for (const event of heavyEvents) {
     for (const required of ["true", "false"]) {
@@ -148,6 +226,23 @@ test("main heavy runs execute the release compiler exactly when VERSION is plann
         ),
         `${event}/${required}`,
       ).toBe(required === "true");
+    }
+  }
+});
+
+test("completed-depth reuse skips every nonstructural main heavy job", () => {
+  for (const event of heavyEvents) {
+    const reused = context(event, true, {
+      ...heavyPlan,
+      run_required: "false",
+    });
+    for (const [job, body] of Object.entries(workflow.jobs)) {
+      if (job === "ci-plan" || job === "ci-result") {
+        continue;
+      }
+      expect(selected(body.if ?? "true", reused), `${event}/${job}`).toBe(
+        false,
+      );
     }
   }
 });
@@ -178,7 +273,7 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
   );
 });
 
-test("original PR and merge-group job predicates keep their behavior", () => {
+test("heavy event policies exclude pull requests and preserve existing full certification", () => {
   const base = Bun.spawnSync(["git", "merge-base", "origin/main", "HEAD"], {
     cwd: root,
   });
@@ -205,19 +300,42 @@ test("original PR and merge-group job predicates keep their behavior", () => {
         );
         plan["trusted"] = "true";
         plan["suite_depth"] = depth;
+        plan["queue_depth"] = "full";
         plan["heavy_web_build_required"] = "false";
-        // Only the heavy-only gating must leave ordinary runs unchanged; other
-        // predicates, and jobs later removed, belong to their own changes.
+        // Queue policies intentionally remove PR execution. Existing non-PR
+        // certification stays unchanged except for the added queue route smoke.
         for (const [job, body] of Object.entries(original.jobs)) {
           const current = workflow.jobs[job]?.if;
           if (current?.includes("inputs.heavy_only") !== true) {
             continue;
           }
           compared += 1;
+          let expected = selected(
+            body.if ?? "true",
+            context(event, false, plan),
+          );
+          const queueJob = Object.entries(eventPolicies.jobs).some(
+            ([key, policy]) =>
+              key === `ci.yml/${job}` &&
+              (policy === "queue" || policy === "main"),
+          );
+          if (event === "pull_request" && queueJob) {
+            expected = false;
+          }
+          if (
+            current.includes(
+              "needs.ci-plan.outputs.package_checks_required == 'true'",
+            )
+          ) {
+            expected = expected && required === "true";
+          }
+          if (job === "route-smoke" && event === "merge_group") {
+            expected = required === "true";
+          }
           expect(
             selected(current, context(event, false, plan)),
             `${event}/${depth}/${required}/${job}`,
-          ).toBe(selected(body.if ?? "true", context(event, false, plan)));
+          ).toBe(expected);
         }
         expect(
           selected(
@@ -352,6 +470,7 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
           HEAVY_ONLY: "true",
           SUITE_DEPTH: "full",
           GITHUB_OUTPUT: output,
+          RUNNER_TEMP: directory,
         },
       });
       expect(run.exitCode, run.stderr.toString()).toBe(0);

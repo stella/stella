@@ -7,6 +7,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -189,14 +190,14 @@ describe("buildChatCodeMode", () => {
   });
 
   test("refuses to re-execute a call that already failed with a server defect", async () => {
-    // Doctored row: `reference` holds a raw UUID the ref map never mediates,
-    // so the projection's UUID backstop fails the call as a server defect
-    // (same trip wire as run-registry-tool.test.ts's fail-closed case).
+    // Doctored row: the declared `reference` string is null, so the
+    // projection's strict parse fails the call as a server defect (same trip
+    // wire as run-registry-tool.test.ts's fail-closed case).
     const rows = [
       {
         id: WS_UUID,
         name: "Acme",
-        reference: "4e919658-a448-5354-8e3a-e99911214d2c",
+        reference: null,
         status: "active",
         lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -230,16 +231,15 @@ describe("buildChatCodeMode", () => {
 
     // The defect is reported once, by the run that actually executed; the
     // memoized refusal reports nothing new.
-    expect(
-      analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
+    const exceptions = analytics.exceptions().map((event) => event.properties);
+    expect(exceptions).toMatchObject([
       {
         "error.class": "ChatToolError",
-        path: "matters[].reference",
         source: "run-registry-tool",
         toolName: "list_matters",
       },
     ]);
+    expect(JSON.stringify(exceptions)).toContain("matters[].reference");
   });
 
   test("does not memoize non-defect failures: a corrected call still runs", async () => {
@@ -492,8 +492,13 @@ describe("the chat read script policy", () => {
   );
 
   test("the script catalog follows each read's declared policy", () => {
+    // Without a caller, enrolment-gated reads stay hidden.
     const scriptReads = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
-      ([name, policy]) => (policy === "script" ? [name] : []),
+      ([name, policy]) =>
+        policy === "script" &&
+        getStaticMcpToolDefinition(name)?.featureId === undefined
+          ? [name]
+          : [],
     );
     expect(directOnly).toEqual([
       "search_boe_legislation",

@@ -54,6 +54,17 @@
       "polish": "Polish the writing"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
+    "refusedBudget": "Not run: answer budget unavailable",
+    "rerunAllPage": "Rerun all (this page)",
+    "rerunColumnPage": "Rerun column (this page)",
+    "runColumnPage": "Run column (this page)",
+    "runPageRows": "Run for {count, plural, one {# row on this page} other {# rows on this page}}",
+    "runRemainingPage": "Run remaining (this page)",
+    "runSelectedRows": "Run for {count, plural, one {# selected row} other {# selected rows}}",
+    "selectedRun": "Run AI columns for {count, plural, one {# row} other {# rows}}"
+  },
   "appearance": {
     "calendar": "Calendar",
     "calendarGregorian": "Gregorian",
@@ -134,6 +145,7 @@
       "useBackupCode": "Use a backup code instead"
     },
     "useDifferentEmail": "Use a different email",
+    "usePassword": "Use a password instead",
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>"
   },
   "avt": {
@@ -264,6 +276,7 @@
     "runs": {
       "back": "All documents",
       "errors": {
+        "accessRevoked": "Verification stopped because access is unavailable.",
         "aiUnavailable": "No AI model is available to verify documents. Check the organization's AI settings.",
         "enqueueFailed": "The verification could not be started. Try again.",
         "extractionFailed": "The claims in this document could not be extracted.",
@@ -336,6 +349,7 @@
     },
     "view": {
       "chooseList": "Choose a list",
+      "createList": "Create a list",
       "evidenceList": "Facts from",
       "noLists": "This matter has no lists",
       "pickList": "Choose the list whose facts this matter's documents are checked against."
@@ -796,6 +810,34 @@
       "unavailable": "Coverage figures are unavailable right now."
     },
     "decisionNotFound": "Decision not found",
+    "decisionTypes": {
+      "administrative_decision": "Administrative decision",
+      "binding_excise_information": "Binding excise information",
+      "binding_rate_information": "Binding VAT rate information",
+      "court_direction": "Procedural direction",
+      "decision": "Decision",
+      "finding": "Finding",
+      "general_tax_ruling": "General tax ruling",
+      "individual_tax_ruling": "Individual tax ruling",
+      "judgment": "Judgment",
+      "leave_refused": "Rejected for lack of a significant point of law",
+      "merits_decision": "Decision on the merits",
+      "ministry_of_justice_decision": "Decision of the Ministry of Justice",
+      "minutes_extract": "Extract from the minutes",
+      "opinion": "Opinion",
+      "order": "Order",
+      "other": "Other",
+      "payment_order": "Payment order",
+      "penal_order": "Penal order",
+      "principle_decision": "Decision of principle",
+      "protective_opinion": "Protective opinion",
+      "resolution": "Resolution",
+      "signalling_decision": "Signalling decision",
+      "statement_of_reasons": "Statement of reasons",
+      "tax_explanations": "Tax explanations",
+      "top_up_tax_opinion": "Top-up tax opinion",
+      "uniformity_decision": "Uniformity decision"
+    },
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
     "filters": {
       "remove": "Remove filter {filter}"
@@ -841,6 +883,7 @@
       "subsection": "para. {value}"
     },
     "reader": {
+      "expandProvisions": "Expand provisions",
       "headMatter": "Head matter",
       "sourceAttribution": "The source data is freely available at <link>{source}</link>."
     },
@@ -865,7 +908,9 @@
       },
       "deleteColumnConfirm": "This deletes the question and all its answers for your whole organization, from every search and for every member. To take it off this search only, use “Remove from this search”.",
       "editQuestionHint": "Changing the wording, the answer type or its options discards the current answers; run the column again afterwards.",
+      "newQuestionColumn": "New",
       "nothingToRun": "Every cell already has an answer",
+      "questionAdded": "Added “{question}” to the table",
       "questionPlaceholder": "e.g. Did the court find the termination valid?",
       "removeFromSearch": "Remove from this search",
       "runAll": "Answer all",
@@ -917,6 +962,9 @@
     },
     "viewer": {
       "abstract": "Abstract",
+      "appliedVersionNotStated": "Applied version not stated",
+      "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}",
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.",
       "citedBy": "Cited by",
       "cites": "Cites",
@@ -944,7 +992,8 @@
       "textNotYetAvailable": "The court has not published the decision text, or it is not available here yet.",
       "textPending": "The decision text is still being retrieved",
       "textReadFailed": "The decision text could not be loaded",
-      "textUnavailable": "No text is available for this decision"
+      "textUnavailable": "No text is available for this decision",
+      "versionAtDecisionDateInferred": "Version at decision date (inferred)"
     }
   },
   "catalogue": {
@@ -1002,6 +1051,7 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "activateGeneratedView": "Interact with this view",
     "aiPrompt": "AI message composer",
     "aiThread": "AI conversation",
     "analyzingSources": "Analyzing sources",
@@ -1147,6 +1197,8 @@
     "forkedFromUnavailable": "Created from a chat that is no longer available",
     "forkedThread": "From another chat",
     "forkingThread": "Creating a new chat…",
+    "generatedView": "Generated view",
+    "generatedViewDrill": "Search decisions with court filter {court} and year {year}.",
     "greeting": "What would you like to work on?",
     "greetingSubtitle": "Start with a matter, document, or plain question.",
     "hideThread": "Hide conversation",
@@ -1278,6 +1330,7 @@
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.",
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
     "sendPrompt": "Send message",
+    "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",
     "skills": {
       "scope": {
@@ -1425,6 +1478,14 @@
       "sourceCode": "Source code",
       "toggleDetails": "Toggle details",
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "A chat reply in stella did not finish.",
+      "failedTitle": "Reply failed",
+      "needsInputBody": "A chat is waiting for your approval or answer.",
+      "needsInputTitle": "stella needs your input",
+      "replyReadyBody": "stella finished answering in your chat.",
+      "replyReadyTitle": "Reply ready"
     },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
@@ -1640,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted",
     "description": "Description",
     "details": "Details",
+    "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled",
     "disconnect": "Disconnect",
     "dismiss": "Dismiss",
     "displayName": "Display name",
@@ -1775,6 +1837,8 @@
     "notes": "Notes",
     "open": "Open",
     "openInNewTab": "Open in new tab",
+    "openInStella": "Open in stella",
+    "openOriginalSource": "Open original source",
     "options": "Options",
     "or": "Or",
     "organization": "Organization",
@@ -1854,6 +1918,7 @@
     "unexpectedError": "An unexpected error occurred. Please contact support.",
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
+    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?",
     "unverified": "Unverified",
     "unverifiedCitationHint": "This quote could not be matched to the source document.",
@@ -1874,15 +1939,23 @@
     "zoomOut": "Zoom out"
   },
   "consent": {
+    "actingAs": "{clientName} will work as you in {organizationName}",
     "allow": "Allow",
-    "appIdentity": "App identity",
+    "canChange": "Can change",
+    "canRead": "Can read",
     "completeSetup": "Complete setup",
+    "connectTitle": "Connect {clientName} to stella",
+    "connectedTitle": "Connected to {clientName}",
+    "connectionDuration": "Stays connected until you disconnect it in Settings › Connections",
     "defaultClientName": "An application",
-    "description": "{clientName} wants to access your stella workspace",
+    "destinationDetails": "Redirect details",
     "error": "Something went wrong. Please try again.",
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.",
-    "permissions": "This will allow the application to:",
-    "redirectDestination": "Redirect destination",
+    "otherPermissions": "Other permissions",
+    "publishedBy": "Published by <host>{publisherHost}</host>",
+    "returnToAgent": "Return to your agent to continue.",
+    "returnsLocally": "Returns you to {clientName} on this computer",
+    "returnsTo": "Returns you to {clientName}",
     "scopeAdminRead": "Read your organization's audit log",
     "scopeAdminWrite": "Manage organization members and settings",
     "scopeBillingWrite": "Create, edit, and delete your time entries",
@@ -1903,8 +1976,11 @@
     "scopeSkills": "Use your saved stella skills",
     "scopeTemplates": "List, fill, and create your document templates",
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates",
+    "signedInAs": "Signed in as <email>{accountEmail}</email>",
     "title": "Authorize access",
-    "unverifiedApp": "Unverified app"
+    "unverifiedApp": "Unverified app",
+    "unverifiedExplanation": "stella has not verified who publishes this app.",
+    "useAnotherAccount": "Use another account"
   },
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}",
@@ -2294,7 +2370,10 @@
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.",
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.",
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+      "fileSecurityRejected": "The file was rejected by a security check. Remove the flagged content and upload a cleaned copy.",
       "forbidden": "You do not have permission to do this.",
+      "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.",
+      "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.",
       "internalServerError": "The server could not complete the action. Please try again.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
@@ -2450,6 +2529,7 @@
     "current": "Current",
     "deleteVersion": "Delete version",
     "descriptionPlaceholder": "Add a note about this version...",
+    "displayFailed": "This file couldn't be displayed.",
     "downloadRedline": "Download redline",
     "dropToUploadVersion": "Drop to upload as new version",
     "editLatestVersionDescription": "This is not the current version. To edit it in the browser, first make it the latest version, then unlock it for editing.",
@@ -3725,11 +3805,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Clear recent",
     "enteringIntoForce": "Entering into force",
     "inForceFrom": "In force from {date}",
-    "noRecentSearches": "No searches yet",
+    "noRecent": "No recent activity",
     "noSignals": "No signals yet",
     "prompt": "What are you looking for?",
+    "recent": "Recent",
+    "recentCasesFilter": "Cases",
+    "recentSearchFilter": "Searches",
     "recentlyInForce": "Recently in force",
     "searchLabel": "Search the legal database",
     "searchPlaceholder": "Case number, act number, ECLI or keywords",
@@ -4303,6 +4387,11 @@
       "betaInbox": "Inbox & notifications",
       "betaInboxDescription": "Show the Inbox and the notification bell",
       "betaTimeBillingDescription": "Show time tracking, invoices, and expenses",
+      "chatNotifications": "Chat notifications",
+      "chatNotificationsBlocked": "Notifications are blocked for stella in this browser. Allow them in the browser’s site settings.",
+      "chatNotificationsDescription": "Get a notification from this browser when a chat reply finishes while stella is in the background.",
+      "chatNotificationsToggle": "Notify me when a reply is ready or needs my input",
+      "chatNotificationsUnsupported": "This browser does not support notifications.",
       "confirmDelete": "Confirm delete account",
       "dangerZone": "Danger zone",
       "dangerZoneDescription": "Permanently delete your account access and private account data.",
@@ -4516,6 +4605,13 @@
         "narrativeRequired": "Require a narrative",
         "title": "Time policy"
       },
+      "timeZone": {
+        "description": "Locked months, invoice dates and due work follow the calendar day in this time zone. Until one is chosen, it follows the primary jurisdiction: Europe/Prague for Czechia and Slovakia, UTC otherwise.",
+        "followJurisdiction": "Follow the primary jurisdiction",
+        "followingJurisdiction": "Follow the primary jurisdiction ({timeZone})",
+        "title": "Time zone",
+        "updated": "Time zone updated"
+      },
       "usage": "Usage",
       "usageDescription": "Usage limits and entitlement state for this organisation",
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.",
@@ -4614,6 +4710,7 @@
     "compareVersionMissing": "The version to compare with is not in this act's history.",
     "compareWholeAct": "Compare the whole act",
     "compareWithVersion": "Compare with {version}",
+    "currentWording": "Current wording",
     "description": "Public database of consolidated statutes, indexable by act and version.",
     "diffInserted": "Inserted:",
     "diffRemoved": "Deleted:",
@@ -4663,7 +4760,10 @@
       "unknown": "Status unclear"
     },
     "title": "Statutes",
-    "validity": "Valid from {from} to {to}"
+    "validity": "Valid from {from} to {to}",
+    "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "wordingValidFrom": "Wording in force since {date}",
+    "wordingVersionUnknown": "Wording version date unavailable"
   },
   "styleSets": {
     "create": "Create",
@@ -5400,6 +5500,7 @@
         "unknownLocation": "Template location: an address stella cannot verify"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Connect stella desktop to your account",
         "action": "Edit in desktop",
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
         "authRequiredTitle": "Your session expired",
@@ -5422,6 +5523,17 @@
         "updateRequiredDescription": "stella desktop needs an update. It will update automatically when active desktop edits are finished; try again after it restarts.",
         "updateRequiredTitle": "Update stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Already installed? Connect it",
+        "connect": "Connect stella desktop",
+        "editNone": "Download stella desktop to edit this file",
+        "editOutdated": "Update stella desktop to edit",
+        "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.",
+        "signCurrent": "Sign with stella desktop",
+        "signNone": "Download stella desktop to sign this PDF",
+        "signOutdated": "Update stella desktop to sign",
+        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop."
+      },
       "downloadAs": "Download as…",
       "downloadAsZip": "Download as ZIP",
       "downloadExtractedText": "Extracted text (.txt)",
@@ -5435,7 +5547,6 @@
       "ocrQueueFailed": "Couldn't queue text recognition",
       "ocrQueued": "Text recognition queued for the next OCR batch",
       "pdfSigning": {
-        "action": "Sign with desktop app",
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.",
         "cancelledCertificateDescription": "The selected certificate cannot be used for signing. Choose one that allows digital signatures.",
         "cancelledCertifiedDescription": "This PDF is certified, and its certification does not allow further signatures.",
@@ -5963,7 +6074,6 @@
       "previewUnsupported": "Preview unsupported for this document type.",
       "readingFrom": "AI reads from",
       "referencesItself": "Property references itself through other properties",
-      "rerunColumn": "Rerun column",
       "resultType": "Result type",
       "returnsLabel": "Format",
       "scopeFile": "Current file",

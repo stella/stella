@@ -8,10 +8,9 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
-import { Input } from "@stll/ui/input";
-import { cn } from "@stll/ui/utils";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 
-import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { MatterIcon } from "@/components/matter-icon";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import Tooltip from "@/components/tooltip";
@@ -24,15 +23,11 @@ import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-c
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
 import { useConfigStore } from "@/stores/config-store";
-
-const breadcrumbInputClassName =
-  "border-input bg-background text-foreground inline-flex rounded-md border text-sm shadow-xs/5 has-focus-visible:border-ring";
-
-const matterNameInputClassName = `${breadcrumbInputClassName} font-semibold`;
 
 type ReferenceConfirmation =
   | { status: "closed" }
@@ -52,7 +47,10 @@ export const WorkspaceBreadcrumb = ({
     shouldThrow: false,
   });
   const [refInputEl, setRefInputEl] = useState<HTMLInputElement | null>(null);
-  const { data: workspace } = useQuery(workspaceOptions(workspaceId));
+  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
+  const workspaceView = useQueryView(workspaceQuery);
+  const cachedWorkspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
   const referenceConflictMessage = useReferenceConflictMessage();
@@ -60,7 +58,7 @@ export const WorkspaceBreadcrumb = ({
     useState<ReferenceConfirmation>({ status: "closed" });
 
   const nameRename = useInlineRename({
-    initial: workspace?.name ?? "",
+    initial: cachedWorkspace?.name ?? "",
     onCommit: (value) => {
       updateWorkspace.mutate({
         workspaceId,
@@ -70,15 +68,15 @@ export const WorkspaceBreadcrumb = ({
   });
 
   const refRename = useInlineRename({
-    initial: workspace?.reference ?? "",
+    initial: cachedWorkspace?.reference ?? "",
     onCommit: (value, { setError }) => {
-      if (!workspace) {
+      if (!cachedWorkspace) {
         return;
       }
       const edit = resolveReferenceEdit({
-        currentReference: workspace.reference,
+        currentReference: cachedWorkspace.reference,
         nextReference: value,
-        stampedVersionCount: workspace.stampedVersionCount,
+        stampedVersionCount: cachedWorkspace.stampedVersionCount,
       });
       switch (edit.type) {
         case "discard":
@@ -157,13 +155,10 @@ export const WorkspaceBreadcrumb = ({
     );
   };
 
-  if (!workspace) {
-    return (
-      <BreadcrumbLink to="/workspaces/$workspaceId">
-        {workspaceId}
-      </BreadcrumbLink>
-    );
+  if (workspaceView.type !== "items") {
+    return <BreadcrumbQueryContent view={workspaceView} />;
   }
+  const workspace = workspaceView.items;
 
   const displayName = workspace.name;
 
@@ -249,27 +244,17 @@ export const WorkspaceBreadcrumb = ({
   const referenceSegment = (() => {
     if (isEditingRef) {
       return (
-        <Input
-          className={cn(breadcrumbInputClassName, "w-28")}
-          onBlur={() => {
+        <InlineRenameInput
+          className="text-sm"
+          onCommit={() => {
             detached(refRename.commit(), "workspace-breadcrumb.commit");
           }}
-          onChange={(e) => refRename.setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              detached(refRename.commit(), "workspace-breadcrumb.commit");
-            }
-            if (e.key === "Escape") {
-              refRename.cancel();
-            }
-          }}
+          onValueChange={refRename.setDraft}
+          onCancel={refRename.cancel}
           placeholder={t("workspaces.referencePlaceholder")}
           ref={(el) => {
             setRefInputEl(el);
-            el?.focus();
           }}
-          size="sm"
-          unstyled
           value={refDraft}
         />
       );
@@ -277,7 +262,7 @@ export const WorkspaceBreadcrumb = ({
     if (workspace.reference) {
       return (
         <button
-          className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm"
+          className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm whitespace-pre"
           onClick={() => refRename.startEditing(workspace.reference)}
           type="button"
         >
@@ -312,6 +297,7 @@ export const WorkspaceBreadcrumb = ({
   if (!match) {
     return (
       <>
+        <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
           {(() => {
@@ -327,28 +313,17 @@ export const WorkspaceBreadcrumb = ({
                       matter={{ id: workspaceId, color: workspace.color }}
                     />
                   </MatterColorContextPicker>
-                  <Input
-                    className={cn(matterNameInputClassName, "w-fit")}
+                  <InlineRenameInput
+                    className="text-sm font-semibold"
                     disabled={updateWorkspace.isPending}
-                    onBlur={() => {
+                    onCommit={() => {
                       detached(
                         nameRename.commit(),
                         "workspace-breadcrumb.commit",
                       );
                     }}
-                    onChange={(e) => nameRename.setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.currentTarget.blur();
-                      }
-                      if (e.key === "Escape") {
-                        nameRename.cancel();
-                        e.currentTarget.blur();
-                      }
-                    }}
-                    autoFocus
-                    size="sm"
-                    unstyled
+                    onValueChange={nameRename.setDraft}
+                    onCancel={nameRename.cancel}
                     value={nameValue}
                   />
                 </>
@@ -384,12 +359,15 @@ export const WorkspaceBreadcrumb = ({
                   title={displayName}
                   to="/workspaces/$workspaceId"
                 >
-                  <BidiText as="span" className="truncate">
+                  <BidiText
+                    as="span"
+                    className="overflow-hidden text-ellipsis whitespace-pre"
+                  >
                     {displayName}
                   </BidiText>
                   {workspace.reference && !isEditingRef ? (
                     <span
-                      className="text-foreground-muted shrink-0 text-sm"
+                      className="text-foreground-muted shrink-0 text-sm whitespace-pre"
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -414,28 +392,18 @@ export const WorkspaceBreadcrumb = ({
   if (isEditing) {
     return (
       <>
+        <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
           {colorPicker}
-          <Input
-            className={cn(matterNameInputClassName, "w-fit")}
+          <InlineRenameInput
+            className="text-sm font-semibold"
             disabled={updateWorkspace.isPending}
-            onBlur={() => {
+            onCommit={() => {
               detached(nameRename.commit(), "workspace-breadcrumb.commit");
             }}
-            onChange={(e) => nameRename.setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-              if (e.key === "Escape") {
-                nameRename.cancel();
-                e.currentTarget.blur();
-              }
-            }}
-            autoFocus
-            size="sm"
-            unstyled
+            onValueChange={nameRename.setDraft}
+            onCancel={nameRename.cancel}
             value={nameValue}
           />
           {referenceSegment}
@@ -448,13 +416,14 @@ export const WorkspaceBreadcrumb = ({
 
   return (
     <>
+      <BreadcrumbQueryContent view={workspaceView} />
       {clientSegment}
       <BreadcrumbItem className="shrink-0">
         {colorPicker}
         <Link
           activeOptions={{ exact: true, includeSearch: false }}
           activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground max-w-80 truncate font-semibold"
+          className="hover:text-foreground max-w-80 overflow-hidden font-semibold text-ellipsis whitespace-pre"
           dir="auto"
           onClick={() => {
             startEditingName();

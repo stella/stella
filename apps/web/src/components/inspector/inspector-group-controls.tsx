@@ -9,6 +9,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -50,8 +51,13 @@ export type InspectorGroupPresentation = {
 
 export const useInspectorGroups = () => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const { data } = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
   const state = useInspectorTabsStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -190,6 +196,19 @@ export const InspectorGroupEditor = ({
       }}
     >
       <DialogPopup finalFocus={returnFocus}>
+        <DialogFormState
+          dirty={
+            name !== (target.type === "edit" ? target.name : "") ||
+            color !==
+              (target.type === "edit" ? target.color : MATTER_SWATCHES[0])
+          }
+          onDiscard={() => {
+            setName(target.type === "edit" ? target.name : "");
+            setColor(
+              target.type === "edit" ? target.color : MATTER_SWATCHES[0],
+            );
+          }}
+        />
         <form
           onSubmit={(event) => {
             event.preventDefault();

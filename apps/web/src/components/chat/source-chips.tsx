@@ -6,15 +6,13 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { ExternalLinkIcon } from "@stll/ui/icons";
+import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
-import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import {
-  type CaseLawDecisionSourceReference,
-  useExternalSourceStore,
-} from "@/components/chat/external-source-store";
+import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import { LegalCitationLink } from "@/components/chat/legal-citation-link";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import type {
   ExternalSourceEntry,
@@ -25,13 +23,12 @@ import {
   collectSourceDocuments,
   dedupeExternalSources,
 } from "@/components/chat/source-chips.logic";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { ReferenceIcon } from "@/components/references/reference-chip";
-import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 
 type SourceChipsProps = {
@@ -83,13 +80,14 @@ export const SourceChips = ({
   const hasMcpExternalSources = uniqueExternalSources.some(
     (source) => source.connectorSlug !== undefined,
   );
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: hasMcpExternalSources,
   });
-  const availableConnectors = mcpConnectorsData
-    ? mcpConnectorsData.connectors
-    : [];
+  const connectorsView = useQueryView(mcpConnectorsQuery);
+  // Connector reads only decorate sources with icons; the source and approval stay usable without them.
+  const availableConnectors =
+    connectorsView.type === "items" ? connectorsView.items.connectors : [];
   const uniqueExternalSourcesWithIcons = uniqueExternalSources.map((source) => {
     if (source.connectorSlug === undefined) {
       return source;
@@ -116,22 +114,29 @@ export const SourceChips = ({
   }
 
   return (
-    <div className="flex max-w-full [scrollbar-width:none] flex-nowrap gap-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
-      {uniqueSources.map((part) => (
-        <SourceChip
-          key={`${messageId}-source-${part.id ?? part.data.entityId}`}
-          sourceDocument={part.data}
-          workspaceId={workspaceId}
-        />
-      ))}
-      {uniqueExternalSourcesWithIcons.map((source) => (
-        <ExternalSourceChip
-          key={`${messageId}-external-source-${source.url}`}
-          source={source}
-          workspaceId={workspaceId ?? null}
-        />
-      ))}
-    </div>
+    <>
+      <Separator
+        className="self-stretch"
+        data-chat-answer-citations-divider
+        orientation="vertical"
+      />
+      <div className="contents" data-chat-answer-citations>
+        {uniqueSources.map((part) => (
+          <SourceChip
+            key={`${messageId}-source-${part.id ?? part.data.entityId}`}
+            sourceDocument={part.data}
+            workspaceId={workspaceId}
+          />
+        ))}
+        {uniqueExternalSourcesWithIcons.map((source) => (
+          <PublisherSourceChip
+            key={`${messageId}-external-source-${source.url}`}
+            source={source}
+            workspaceId={workspaceId ?? null}
+          />
+        ))}
+      </div>
+    </>
   );
 };
 
@@ -165,6 +170,8 @@ const collectSourceChipEntries = ({
       externalSources.push({
         ...source,
         caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
+        appUrl: mcpToolInfo ? undefined : source.appUrl,
+        sourceUrl: mcpToolInfo ? undefined : source.sourceUrl,
         connectorSlug: source.connectorSlug ?? mcpToolInfo?.connectorSlug,
         sourceToolName: source.sourceToolName ?? mcpToolInfo?.sourceToolName,
       });
@@ -212,55 +219,6 @@ const SourceIcon = ({
   />
 );
 
-const CaseLawDecisionSourceChip = ({
-  decision,
-}: {
-  decision: CaseLawDecisionSourceReference;
-}) => {
-  const { open } = useOpenDecisionTab();
-  return (
-    <button
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs",
-        "hover:bg-muted cursor-pointer",
-      )}
-      onClick={() =>
-        detached(
-          openCaseLawDecision({ type: "ref", ref: decision.decisionId }, open),
-          "source-chips.open-case-law-decision",
-        )
-      }
-      type="button"
-    >
-      <ReferenceIcon
-        reference={{
-          type: "decision",
-          locator: { type: "ref", ref: decision.decisionId },
-          anchorId: null,
-          label: decision.caseNumber,
-        }}
-      />
-      <BidiText as="span" className="max-w-[20ch] truncate">
-        {decision.caseNumber}
-      </BidiText>
-    </button>
-  );
-};
-
-const ExternalSourceChip = ({
-  source,
-  workspaceId,
-}: {
-  source: ExternalSourceEntry;
-  workspaceId: string | null;
-}) => {
-  if (source.caseLawDecision) {
-    return <CaseLawDecisionSourceChip decision={source.caseLawDecision} />;
-  }
-  return <PublisherSourceChip source={source} workspaceId={workspaceId} />;
-};
-
 const PublisherSourceChip = ({
   source,
   workspaceId,
@@ -273,41 +231,24 @@ const PublisherSourceChip = ({
   // requests to every cited host.
   const [faviconRequested, setFaviconRequested] = useState(false);
   const revealFavicon = () => setFaviconRequested(true);
-  const handleClick = () => {
-    useInspectorTabsStore.getState().openExternal({
-      connectorSlug: source.connectorSlug,
-      iconHref: source.iconHref,
-      label: source.title,
-      provider: source.provider,
-      snippet: source.snippet,
-      sourceToolName: source.sourceToolName,
-      text: source.text,
-      url: source.url,
-      workspaceId,
-    });
-  };
-
   return (
-    <button
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs",
-        "hover:bg-muted cursor-pointer",
-      )}
-      onClick={handleClick}
+    <LegalCitationLink
+      appearance="tray"
+      externalIcon={
+        <ExternalSourceIcon
+          iconHref={source.iconHref}
+          loaded={faviconRequested}
+          url={source.sourceUrl ?? source.url}
+        />
+      }
+      interactive
       onFocus={revealFavicon}
       onMouseEnter={revealFavicon}
-      type="button"
+      source={source}
+      workspaceId={workspaceId}
     >
-      <ExternalSourceIcon
-        iconHref={source.iconHref}
-        loaded={faviconRequested}
-        url={source.url}
-      />
-      <BidiText as="span" className="max-w-[20ch] truncate">
-        {source.title}
-      </BidiText>
-    </button>
+      {source.title}
+    </LegalCitationLink>
   );
 };
 
@@ -421,7 +362,7 @@ const SourceChip = ({
   return (
     <button
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-md border",
+        "inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border",
         "bg-muted/50 px-1.5 py-0.5 text-xs",
         resolvedWorkspaceId
           ? "hover:bg-muted cursor-pointer"
@@ -434,7 +375,7 @@ const SourceChip = ({
         sourceDocument={sourceDocument}
         workspaceId={resolvedWorkspaceId}
       />
-      <BidiText as="span" className="max-w-[20ch] truncate">
+      <BidiText as="span" className="max-w-full min-w-0 truncate">
         {sourceDocument.title}
       </BidiText>
     </button>

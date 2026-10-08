@@ -3,10 +3,12 @@ import { Result } from "better-result";
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { authorizeDesktopHandoff } from "@/api/lib/business-registries/desktop/handoff-auth";
+import type { DesktopHandoffAuthorizationDependencies } from "@/api/lib/business-registries/desktop/handoff-auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { redeemPdfSigningHandoff } from "@/api/lib/files/pdf-signing/sessions";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
+import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
 
 const stripTrailingSlashes = (value: string) => {
@@ -23,18 +25,37 @@ const config = {
   body: permissiveBodySchema({ keys: ["handoffToken"] }),
 } satisfies TokenHandlerConfig;
 
-const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
-  config,
-  async function* ({ body, request }) {
-    const identity = yield* Result.await(authorizeDesktopAccount(request));
+export type RedeemPdfSigningHandoffDependencies =
+  DesktopHandoffAuthorizationDependencies & {
+    redemptionDatabase?: TokenScopedDatabase;
+  };
+
+export const createRedeemPdfSigningHandoffEndpoint = (
+  dependencies?: RedeemPdfSigningHandoffDependencies,
+) =>
+  createSafeTokenHandler(config, async function* ({ body, request }) {
     const handoffToken = body?.handoffToken;
+    const identity = yield* Result.await(
+      authorizeDesktopHandoff(
+        {
+          request,
+          handoffToken,
+          kind: "pdf_signing",
+        },
+        dependencies,
+      ),
+    );
     const redeemed = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           typeof handoffToken === "string"
-            ? await redeemPdfSigningHandoff(handoffToken, tokenScopedDatabase, {
-                identity,
-              })
+            ? await redeemPdfSigningHandoff(
+                handoffToken,
+                dependencies?.redemptionDatabase ?? tokenScopedDatabase,
+                {
+                  identity,
+                },
+              )
             : null,
         catch: (cause) =>
           new HandlerError({
@@ -70,7 +91,6 @@ const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
       versionNumber: redeemed.versionNumber,
       workspaceName: redeemed.workspaceName,
     });
-  },
-);
+  });
 
-export default redeemPdfSigningHandoffEndpoint;
+export default createRedeemPdfSigningHandoffEndpoint();

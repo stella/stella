@@ -5,13 +5,16 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_ABSENCE_FIELD_KEYS,
   TEXT_ABSENCE_REASON,
+  TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
 
 import {
   decisionHasLegalSentenceSql,
   decisionSearchCategorySql,
 } from "@/api/lib/case-law/decision-search-metadata-sql";
+import { readStoredDecisionTextAbsence } from "@/api/lib/case-law/decision-text";
 import {
   storedDecisionTextAbsenceEntriesSql,
   storedDecisionTextAbsenceValidSql,
@@ -132,6 +135,29 @@ test("legal sentence presence follows stored absence validation and field semant
     { present: false, absence_valid: false },
     { present: false, absence_valid: false },
   ]);
+});
+
+test("SQL and the reader accept every contracted field and absence reason", async () => {
+  const metadata = DECISION_ABSENCE_FIELD_KEYS.flatMap((field) =>
+    TEXT_ABSENCE_REASONS.map((reason) => ({
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [{ field, reason }],
+    })),
+  );
+  const entries = storedDecisionTextAbsenceEntriesSql(sql`metadata`);
+  const compiled = dialect.sqlToQuery(sql`
+    SELECT ${storedDecisionTextAbsenceValidSql(sql`metadata`, entries)} AS valid
+      FROM jsonb_array_elements(${JSON.stringify(metadata)}::text::jsonb) AS samples(metadata)
+  `);
+  const result = await client.query<{ valid: boolean }>(
+    compiled.sql,
+    compiled.params,
+  );
+  expect(result.rows).toEqual(
+    metadata.map((stored) => ({
+      valid: readStoredDecisionTextAbsence(stored).type === "valid",
+    })),
+  );
+  expect(result.rows.every(({ valid }) => valid)).toBe(true);
 });
 
 test("categories preserve exact bounded strings and exclude structured metadata", async () => {

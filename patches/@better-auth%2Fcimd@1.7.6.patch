@@ -1,0 +1,159 @@
+diff --git a/dist/node.d.mts b/dist/node.d.mts
+index 83a470f6577a0cbe1b61bd2a4b48d4b27a0aab6c..1be790848fffbed9a6a4d2e07e2c67dd4b727904 100644
+--- a/dist/node.d.mts
++++ b/dist/node.d.mts
+@@ -5,8 +5,9 @@ import { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
+  * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
+  * connection pinning.
+  *
+- * Every DNS answer must be public-routable. The selected answer is pinned for
+- * the connection while the original hostname remains the HTTP Host, TLS SNI,
++ * Every DNS answer must be public-routable. Each answer is tried with a
++ * bounded connection timeout and pinned for the connection while the original
++ * hostname remains the HTTP Host, TLS SNI,
+  * and certificate-verification identity. Redirect responses are returned to
+  * the caller and are never followed.
+  */
+diff --git a/dist/node.mjs b/dist/node.mjs
+index 59a82ecde72c618c5afedc4ff9d7ce8e88f47b33..ac05da7409bdd8880bdb02b2f359fb5c98b8353a 100644
+--- a/dist/node.mjs
++++ b/dist/node.mjs
+@@ -4,6 +4,7 @@ import { request } from "node:https";
+ import { isIP } from "node:net";
+ import { Readable } from "node:stream";
+ //#region src/node.ts
++const CONNECT_TIMEOUT_MS = 1000;
+ const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([
+ 	204,
+ 	205,
+@@ -19,8 +20,9 @@ function responseHeaders(headers) {
+ * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
+ * connection pinning.
+ *
+-* Every DNS answer must be public-routable. The selected answer is pinned for
+-* the connection while the original hostname remains the HTTP Host, TLS SNI,
++* Every DNS answer must be public-routable. Each answer is tried with a
++* bounded connection timeout and pinned for the connection while the original
++* hostname remains the HTTP Host, TLS SNI,
+ * and certificate-verification identity. Redirect responses are returned to
+ * the caller and are never followed.
+ */
+@@ -29,48 +31,83 @@ const fetchClientMetadataResource = async (input, init) => {
+ 	const url = new URL(webRequest.url);
+ 	if (url.protocol !== "https:") throw new TypeError("CIMD Node transport requires an HTTPS URL");
+ 	if (webRequest.method !== "GET" && webRequest.method !== "HEAD") throw new TypeError("CIMD Node transport supports only GET and HEAD");
+-	const addresses = await lookup(url.hostname, {
+-		all: true,
+-		verbatim: true
++	const signal = init?.signal ?? (input instanceof Request ? input.signal : webRequest.signal);
++	signal?.throwIfAborted();
++	const addresses = await new Promise((resolve, reject) => {
++		const abort = () => reject(signal.reason);
++		signal?.addEventListener("abort", abort, { once: true });
++		lookup(url.hostname, { all: true, verbatim: true }).then((addresses) => {
++			signal?.removeEventListener("abort", abort);
++			resolve(addresses);
++		}, (error) => {
++			signal?.removeEventListener("abort", abort);
++			reject(error);
++		});
+ 	});
++	signal?.throwIfAborted();
+ 	if (addresses.length === 0) throw new TypeError("metadata hostname returned no DNS addresses");
+ 	for (const result of addresses) if (!isPublicRoutableHost(result.address)) throw new TypeError("metadata hostname must resolve only to public-routable addresses");
+-	const pinnedAddress = addresses[0];
++	// Alternate families, retaining the resolver's preferred family and order.
++	const preferredFamily = addresses[0].family;
++	const preferred = addresses.filter((address) => address.family === preferredFamily);
++	const alternate = addresses.filter((address) => address.family !== preferredFamily);
++	const candidates = [];
++	for (let i = 0; i < Math.max(preferred.length, alternate.length); i++) {
++		if (preferred[i]) candidates.push(preferred[i]);
++		if (alternate[i]) candidates.push(alternate[i]);
++	}
+ 	const headers = Object.fromEntries(webRequest.headers.entries());
+ 	headers.host = url.host;
+-	const signal = init?.signal ?? (input instanceof Request ? input.signal : webRequest.signal);
+ 	return new Promise((resolve, reject) => {
+-		const request$1 = request(url, {
+-			agent: false,
+-			headers,
+-			method: webRequest.method,
+-			servername: isIP(url.hostname.replace(/^\[|\]$/g, "")) === 0 ? url.hostname : void 0,
+-			signal,
+-			/**
+-			* Node requests all lookup results when automatic address-family
+-			* selection is enabled. The callback must receive an address array for
+-			* `all: true`, and the legacy address and family arguments otherwise.
+-			* Both forms return only the previously validated address to preserve
+-			* connection pinning.
+-			*
+-			* @see https://nodejs.org/api/net.html#socketconnectoptions-connectlistener
+-			* @see https://nodejs.org/api/dns.html#dnslookuphostname-options-callback
+-			*/
+-			lookup: (_hostname, options, callback) => {
+-				if (options.all) callback(null, [pinnedAddress]);
+-				else callback(null, pinnedAddress.address, pinnedAddress.family);
++		let nextAddress = 0;
++		const attempt = () => {
++			if (signal?.aborted) {
++				reject(signal.reason);
++				return;
+ 			}
+-		}, (response) => {
+-			const status = response.statusCode ?? 500;
+-			const body = webRequest.method === "HEAD" || BODY_FORBIDDEN_RESPONSE_STATUSES.has(status) ? null : Readable.toWeb(response);
+-			resolve(new Response(body, {
+-				headers: responseHeaders(response.headers),
+-				status,
+-				statusText: response.statusMessage
+-			}));
+-		});
+-		request$1.once("error", reject);
+-		request$1.end();
++			const pinnedAddress = candidates[nextAddress++];
++			let connected = false;
++			const request$1 = request(url, {
++				agent: false,
++				headers,
++				method: webRequest.method,
++				servername: isIP(url.hostname.replace(/^\[|\]$/g, "")) === 0 ? url.hostname : void 0,
++				signal,
++				// Both lookup forms expose only this previously vetted candidate.
++				lookup: (_hostname, options, callback) => {
++					if (options.all) callback(null, [pinnedAddress]);
++					else callback(null, pinnedAddress.address, pinnedAddress.family);
++				}
++			}, (response) => {
++				connected = true;
++				clearTimeout(connectTimeout);
++				const status = response.statusCode ?? 500;
++				const body = webRequest.method === "HEAD" || BODY_FORBIDDEN_RESPONSE_STATUSES.has(status) ? null : Readable.toWeb(response);
++				resolve(new Response(body, {
++					headers: responseHeaders(response.headers),
++					status,
++					statusText: response.statusMessage
++				}));
++			});
++			// Bound TCP and TLS setup without imposing a new response/body budget.
++			const connectTimeout = setTimeout(() => {
++				request$1.destroy(new TypeError("metadata connection attempt timed out"));
++			}, CONNECT_TIMEOUT_MS);
++			request$1.once("socket", (socket) => {
++				socket.once("secureConnect", () => {
++					connected = true;
++					clearTimeout(connectTimeout);
++				});
++			});
++			request$1.once("error", (error) => {
++				clearTimeout(connectTimeout);
++				if (signal?.aborted) reject(signal.reason);
++				else if (connected || nextAddress === candidates.length) reject(error);
++				else attempt();
++			});
++			request$1.end();
++		};
++		attempt();
+ 	});
+ };
+ //#endregion

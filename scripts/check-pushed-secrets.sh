@@ -72,6 +72,79 @@ if ! git log --remerge-diff -n 0 HEAD >/dev/null 2>&1; then
   exit 1
 fi
 
+# A resolvable range can still fail to print its patches (a blob a partial
+# clone must fetch lazily, and the fetch fails); the scanner then reads no
+# commits and exits 0, so every patch must be readable before the scan.
 for range in "${ranges[@]}"; do
-  gitleaks git --redact --no-banner --no-color --log-opts="--remerge-diff ${range}" .
+  read -r -a revisions <<<"${range}"
+  if ! git log -p --remerge-diff "${revisions[@]}" >/dev/null 2>&1; then
+    echo "error: cannot read the patches of pushed commit range ${range}; secret scanning refused." >&2
+    exit 1
+  fi
+done
+
+# Every changed commit must be read by the scanner. It counts a commit whose
+# patch changes text lines in a file the commit keeps (not deleted); the scan
+# passes only when its reported count covers the same count of the range.
+# Merge commits are scanned one at a time after the rest of the range.
+scanner_log="$(mktemp)"
+merge_patch="$(mktemp)"
+merge_errors="$(mktemp)"
+trap 'rm -f "${scanner_log}" "${merge_patch}" "${merge_errors}"' EXIT
+
+count_changed_commits() {
+  awk '
+    /^\001/ { counted = 0; next }
+    /^diff --git / { deleted = 0; next }
+    /^deleted file mode / { deleted = 1; next }
+    /^@@ / && !deleted && !counted { commits++; counted = 1 }
+    END { print commits + 0 }
+  '
+}
+
+# Runs the scanner over Git history and checks it read `expected` commits.
+scan_history() {
+  local log_opts="$1" expected="$2" label="$3" status=0 scanned
+  gitleaks git --redact --no-banner --no-color --log-opts="${log_opts}" . 2>"${scanner_log}" || status=$?
+  cat "${scanner_log}" >&2
+  if [[ ${status} -ne 0 ]]; then
+    exit "${status}"
+  fi
+  scanned="$(sed -n 's/.* \([0-9][0-9]*\) commits scanned.*/\1/p' "${scanner_log}" | tail -n 1)"
+  if [[ -z "${scanned}" ]]; then
+    echo "error: the scanner did not report how many commits of ${label} it read; secret scanning refused." >&2
+    exit 1
+  fi
+  if ((scanned < expected)); then
+    echo "error: the scanner read ${scanned} of ${expected} changed commits in ${label}; secret scanning refused." >&2
+    exit 1
+  fi
+}
+
+for range in "${ranges[@]}"; do
+  read -r -a revisions <<<"${range}"
+  expected="$(
+    git log -p --no-merges --no-ext-diff --no-color --format=%x01 "${revisions[@]}" |
+      count_changed_commits
+  )"
+  scan_history "--no-merges ${range}" "${expected}" "${range}"
+
+  # A merge's remerge-diff is what it adds beyond Git's automatic merge: a
+  # conflict resolution or any other edit made while merging. Git still exits
+  # 0 when it cannot read a blob that diff needs (a partial clone whose lazy
+  # fetch fails), and the scanner then reads nothing, so any error falls back
+  # to the merge's full diff against its first parent.
+  merges="$(git rev-list --merges "${revisions[@]}")"
+  while read -r merge; do
+    [[ -n "${merge}" ]] || continue
+    merge_diff="--remerge-diff"
+    if ! git show -p --remerge-diff --no-ext-diff --no-color --format=%x01 "${merge}" \
+      >"${merge_patch}" 2>"${merge_errors}" || [[ -s "${merge_errors}" ]]; then
+      echo "secrets: cannot replay merge ${merge}; scanning its diff against the first parent." >&2
+      merge_diff="--diff-merges=first-parent"
+      git show -p --diff-merges=first-parent --no-ext-diff --no-color --format=%x01 "${merge}" >"${merge_patch}"
+    fi
+    expected="$(count_changed_commits <"${merge_patch}")"
+    scan_history "${merge_diff} -n 1 ${merge}" "${expected}" "merge ${merge}"
+  done <<<"${merges}"
 done

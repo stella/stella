@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DialogFormState } from "@stll/ui/dialog";
 import {
   Frame,
   FrameDescription,
@@ -217,25 +218,31 @@ export const OTPPanel = ({
   });
 
   const panel = (
-    <OTPPanelContent
-      email={email}
-      isOtpComplete={isOtpComplete}
-      isOtpPulsing={isOtpPulsing}
-      isBare={surface === "bare"}
-      onOtpChange={setOtp}
-      onResend={() => resendOtp.mutate()}
-      onSubmit={(code = otp) => {
-        if (code.length !== OTP_LENGTH) {
-          pulseOtp();
-          return;
-        }
-        verifyOtp.mutate({ email, otp: code });
-      }}
-      onUseDifferentEmail={handleUseDifferentEmail}
-      otp={otp}
-      resendPending={resendOtp.isPending}
-      verifyPending={verifyOtp.isPending}
-    />
+    <>
+      <DialogFormState
+        dirty={otp !== (initialOtp ?? "")}
+        onDiscard={() => setOtp(initialOtp ?? "")}
+      />
+      <OTPPanelContent
+        email={email}
+        isOtpComplete={isOtpComplete}
+        isOtpPulsing={isOtpPulsing}
+        isBare={surface === "bare"}
+        onOtpChange={setOtp}
+        onResend={() => resendOtp.mutate()}
+        onSubmit={(code = otp) => {
+          if (code.length !== OTP_LENGTH) {
+            pulseOtp();
+            return;
+          }
+          verifyOtp.mutate({ email, otp: code });
+        }}
+        onUseDifferentEmail={handleUseDifferentEmail}
+        otp={otp}
+        resendPending={resendOtp.isPending}
+        verifyPending={verifyOtp.isPending}
+      />
+    </>
   );
 
   if (surface === "bare") {
@@ -245,7 +252,7 @@ export const OTPPanel = ({
   return <Frame className={cn("w-full max-w-md", className)}>{panel}</Frame>;
 };
 
-const OTPPanelContent = ({
+export const OTPPanelContent = ({
   email,
   isOtpComplete,
   isOtpPulsing,
@@ -339,10 +346,14 @@ const OTPPanelContent = ({
           size="sm"
           variant="link"
         >
-          {t.rich("auth.resendCode", {
-            email: renderEmail,
-            emailAddress: email,
-          })}
+          {/* One inline run: as separate flex items, the button's gap would
+              stack on the space before the email. */}
+          <span>
+            {t.rich("auth.resendCode", {
+              email: renderEmail,
+              emailAddress: email,
+            })}
+          </span>
         </Button>
       </div>
     </>

@@ -142,12 +142,33 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
+# Restricted review account commands: `provision` creates the account, its
+# organization and owner membership; `set-password` reads the password from
+# standard input.
+#   ["bun", "/app/review-account.js", "provision"]
+#   ["bun", "/app/review-account.js", "set-password"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/review-account.js \
+    apps/api/src/scripts/review-account.ts
 # One bounded, load-aware background replay tick; enrolment is reviewed in code.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/replay-tick.js \
     apps/api/src/scripts/replay-tick.ts
+# Bounded EU completion ticks and operator controls.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/eu-completion-tick.js \
+    apps/api/src/scripts/eu-completion-tick.ts
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/eu-completion-control.js \
+    apps/api/src/scripts/eu-completion-control.ts
 # Case-law erasure and raw-storage operator passes. They delete from the
 # documents bucket, so they run inside the API task, whose role may:
 #   ["bun", "/app/redact-case-law-decision.js", "<decision id>"]
@@ -220,12 +241,22 @@ RUN bun build \
 # Reviewed citation polarities: stores them and applies them to the current
 # citation rows. Needs the API env (database) and runs inside the API task;
 # reports without writing until `--apply`:
-#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json", "--apply"]
+#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
+#    "--results", "/tmp/results.jsonl", "--apply"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/apply-reviewed-citation-labels.js \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts
+# Corpus generation registry: status, register, and the serving flip, which
+# checks the target's indexes on the search endpoint first. Needs the API env
+# (database, search endpoint); reports without writing until `--apply`:
+#   ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/corpus-generation.js \
+    apps/api/src/scripts/corpus-generation.ts
 # Read-only snippet comparison over the serving corpus index. Reads its query
 # set from a JSON file, so the committed sample ships next to the bundle:
 #   ["bun", "/app/corpus-snippet-compare.js",
@@ -349,8 +380,8 @@ ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
 ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 ENV NODE_ENV=production
 ENV REQUIRE_PERSONAL_AI_KEY=true
-ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
-ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
+ENV STELLA_WORKER_DIR=/app/runtime/workers
+ENV STELLA_OCR_PDF_FONT_PATH=/app/runtime/fonts/CabinetGrotesk-Regular.otf
 ENV STELLA_YARA_RULES_DIR=/app/yara
 ENV DOCUMENT_OCR_MODEL_DIR=/app/ocr-models
 ENV TEMPLATE_PACKS_CONTENT_DIR=/app/template-packs-content
@@ -368,6 +399,9 @@ COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
 COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
+COPY --chown=stella:stella --from=builder /app/review-account.js /app/review-account.js
+COPY --chown=stella:stella --from=builder /app/eu-completion-tick.js /app/eu-completion-tick.js
+COPY --chown=stella:stella --from=builder /app/eu-completion-control.js /app/eu-completion-control.js
 COPY --chown=stella:stella --from=builder /app/redact-case-law-decision.js /app/redact-case-law-decision.js
 COPY --chown=stella:stella --from=builder /app/case-law-raw-layout.js /app/case-law-raw-layout.js
 COPY --chown=stella:stella --from=builder /app/complete-sk-us-raw.js /app/complete-sk-us-raw.js
@@ -378,6 +412,7 @@ COPY --chown=stella:stella --from=builder /app/repair-publisher-absent-text.js /
 COPY --chown=stella:stella --from=builder /app/repair-cz-ns-court.js /app/repair-cz-ns-court.js
 COPY --chown=stella:stella --from=builder /app/classify-citations.js /app/classify-citations.js
 COPY --chown=stella:stella --from=builder /app/apply-reviewed-citation-labels.js /app/apply-reviewed-citation-labels.js
+COPY --chown=stella:stella --from=builder /app/corpus-generation.js /app/corpus-generation.js
 COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/corpus-snippet-compare.js
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
@@ -389,17 +424,16 @@ COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-e
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/apps/api/src/db/migrate.js
 # The bundled entrypoint reads migration SQL from this external folder.
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
-RUN mkdir -p '/$bunfs/root'
-COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
+COPY --chown=stella:stella --from=builder /app/runtime-workers /app/runtime/workers
 # ONNX Runtime is the one native exception: its binding dynamically links a
 # sibling shared library, so Bun cannot embed it as one standalone asset. The
 # bundled worker resolves this package-owned directory as `../bin`; the image
 # smoke executes a real model so a broken native closure fails the build.
-COPY --chown=stella:stella --from=builder /app/runtime-onnx/bin /\$bunfs/root/bin
+COPY --chown=stella:stella --from=builder /app/runtime-onnx/bin /app/runtime/bin
 COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
-    /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
+    /app/runtime/fonts/CabinetGrotesk-Regular.otf
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /app/yara
 # Bundled template packs: the manifest is compiled into the binary, the DOCX
 # bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.

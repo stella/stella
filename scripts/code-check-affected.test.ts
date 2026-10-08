@@ -296,7 +296,11 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
-    expect(commands).toContainEqual(["bun", "run", "generate"]);
+    expect(commands).toContainEqual([
+      "bun",
+      "scripts/ci-generated-sources.ts",
+      "prepare",
+    ]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
@@ -372,6 +376,19 @@ describe("affected code-check planning", () => {
       });
     },
   );
+
+  test("a bounded-read owner change invalidates all lint and its owning typecheck", () => {
+    const planned = plan(["apps/api/src/lib/db/read-bounded.ts"], ["apps/api"]);
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(planned.typecheck).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
 
   test("the shared tooling config invalidates only workspace lint", () => {
     expect(plan(["tsconfig.tooling.json"], [])).toEqual({
@@ -637,6 +654,7 @@ describe("full and affected code-check parity", () => {
       path.join(directory, "git"),
       `#!/usr/bin/env bun
 import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
+if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(0);
 if (process.argv[2] === "merge-base") {
   process.stderr.write("fatal: injected failure\\n");
   process.exit(128);

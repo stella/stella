@@ -1,5 +1,5 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.7.5";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.6";
 
 export const AUTH_SESSION_STARTUP_HEADER = "x-stella-session-startup";
 

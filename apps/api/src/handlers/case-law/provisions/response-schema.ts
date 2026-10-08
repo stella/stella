@@ -2,6 +2,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
+import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
@@ -15,6 +16,37 @@ import {
   boundedString,
   nullableBoundedString,
 } from "@/api/lib/search/response-text-bounds";
+
+const evidenceFields = { start: t.Number(), end: t.Number() };
+const expression = t.Union([
+  t.Object({ date: boundedString(128), eli: boundedString(2048) }),
+  t.Null(),
+]);
+const versionBasisSchema = t.Union([
+  t.Object({ type: t.Literal("inferred"), kind: t.Literal("decision_date") }),
+  t.Object({ type: t.Literal("not_stated") }),
+  t.Object({
+    type: t.Literal("stated_date"),
+    date: boundedString(128),
+    relation: t.UnionEnum(STATED_DATE_RELATIONS),
+    expression,
+    evidence: t.Object({ ...evidenceFields, kind: t.Literal("stated_date") }),
+  }),
+  t.Object({
+    type: t.Literal("stated_version"),
+    amendmentWorkIdentifier: boundedString(1024),
+    expression,
+    evidence: t.Object({
+      ...evidenceFields,
+      kind: t.Literal("stated_version"),
+    }),
+  }),
+]);
+const inferredVersionCandidateSchema = t.Object({
+  type: t.Literal("inferred"),
+  kind: t.Literal("decision_date"),
+  versionValidFrom: nullableBoundedString(128),
+});
 
 const nullableNumber = t.Union([t.Number(), t.Null()]);
 const date = nullableBoundedString(128);
@@ -50,6 +82,8 @@ const citationFields = {
   openEnded: t.Boolean(),
   anchor: boundedString(1024),
   versionValidFrom: date,
+  versionBasis: versionBasisSchema,
+  inferredVersionCandidate: inferredVersionCandidateSchema,
   sentenceText: boundedString(16_384),
   spanStart: t.Number(),
   spanEnd: t.Number(),
@@ -140,6 +174,9 @@ export const citingDecisionsSuccessResponseSchema = t.Object({
       country: boundedString(12),
       language: boundedString(32),
       decisionDate: date,
+      versionBasis: versionBasisSchema,
+      versionValidFrom: date,
+      inferredVersionCandidate: inferredVersionCandidateSchema,
       citationAuthority: t.Number(),
       sentenceText: nullableBoundedString(16_384),
       spanStart: t.Number(),

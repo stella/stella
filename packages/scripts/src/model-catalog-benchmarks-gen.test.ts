@@ -1,5 +1,13 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import {
+  MODEL_BENCHMARK_RATINGS,
+  MODEL_BENCHMARK_PUBLISH_DATE,
+} from "@stll/ai-catalog/benchmarks";
 
 import {
   buildBenchmarkSnapshot,
@@ -142,5 +150,239 @@ describe("benchmark snapshot", () => {
       "+ added",
       "- dropped",
     ]);
+  });
+});
+
+describe("benchmark check availability", () => {
+  const directories: string[] = [];
+  afterEach(async () => {
+    for (const directory of directories.splice(0)) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  const setup = async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "benchmark-check-"));
+    directories.push(directory);
+    const preload = path.join(directory, "fetch.ts");
+    const responseFile = path.join(directory, "response.json");
+    const stateFile = path.join(directory, "state.json");
+    await Bun.write(
+      preload,
+      `
+      const fixture = await Bun.file(${JSON.stringify(responseFile)}).json();
+      if (fixture.slow) {
+        const schedule = globalThis.setTimeout;
+        globalThis.setTimeout = (callback, delay, ...args) => {
+          if (delay !== 30_000) throw new Error("Unexpected transfer deadline");
+          return schedule(callback, 0, ...args);
+        };
+      }
+      globalThis.fetch = async (url) => {
+        if (fixture.modelsDevUnavailable && String(url).includes("models.dev")) return new Response("unavailable", { status: 503 });
+        if (fixture.network) throw new TypeError("network unavailable");
+        const offset = Number(new URL(url).searchParams.get("offset"));
+        if (offset > 0 && fixture.nextStatus) return new Response("unavailable", { status: fixture.nextStatus });
+        if (fixture.slow) return new Response(new ReadableStream(), { status: 200 });
+        const text = (fixture.rawBody ?? JSON.stringify(fixture.body)) + (fixture.oversized ? " ".repeat(2 * 1024 * 1024) : "");
+        return new Response(text, { status: fixture.status });
+      };
+    `,
+    );
+    const run = async (
+      fixture: unknown,
+      script = "model-catalog-benchmarks-gen.ts",
+    ) => {
+      await Bun.write(responseFile, JSON.stringify(fixture));
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          "--preload",
+          preload,
+          path.join(import.meta.dir, script),
+          "--check",
+          "--state-file",
+          stateFile,
+        ],
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      return { exitCode, output: stdout + stderr };
+    };
+    return { run, stateFile };
+  };
+
+  test("persists two inconclusive passes and alerts from the third run onward", async () => {
+    const { run, stateFile } = await setup();
+    for (const count of [1, 2, 3, 4]) {
+      const checked = await run({ status: 503 });
+      expect(checked.exitCode).toBe(count < 3 ? 0 : 1);
+      expect(checked.output).toContain('"status":"inconclusive"');
+      expect(checked.output).toContain('"httpStatus":503');
+      expect(checked.output).toContain('"pageOffset":0');
+      expect(await Bun.file(stateFile).json()).toMatchObject({
+        consecutiveInconclusive: count,
+        lastOutcome: { status: "inconclusive", httpStatus: 503, pageOffset: 0 },
+      });
+      if (count >= 3) {
+        expect(checked.output).toContain(`${count} consecutive scheduled runs`);
+      }
+    }
+  });
+
+  test.each([
+    { network: true },
+    { status: 200, body: { rows: "malformed" } },
+    { status: 200, rawBody: "not JSON" },
+    { status: 200, body: { num_rows_total: 2, rows: [] } },
+  ])(
+    "reports unavailable transport and malformed pages as inconclusive: %j",
+    async (fixture) => {
+      const { run } = await setup();
+      const checked = await run(fixture);
+      expect(checked.exitCode).toBe(0);
+      expect(checked.output).toContain('"status":"inconclusive"');
+      expect(checked.output).toContain('"pageOffset":0');
+      expect(checked.output).toContain('"reason":');
+    },
+  );
+
+  test("reports the failed page offset", async () => {
+    const { run } = await setup();
+    const checked = await run({
+      status: 200,
+      body: { rows: [upstreamRow()], num_rows_total: 2 },
+      nextStatus: 502,
+    });
+    expect(checked.exitCode).toBe(0);
+    expect(checked.output).toContain('"httpStatus":502');
+    expect(checked.output).toContain('"pageOffset":1');
+  });
+
+  const currentPage = () => ({
+    num_rows_total: Object.keys(MODEL_BENCHMARK_RATINGS).length,
+    rows: Object.entries(MODEL_BENCHMARK_RATINGS).map(([modelName, rating]) =>
+      upstreamRow({
+        model_name: modelName,
+        leaderboard_publish_date: MODEL_BENCHMARK_PUBLISH_DATE,
+        rating: rating.rating,
+        rating_lower: rating.ratingLower,
+        rating_upper: rating.ratingUpper,
+        rank: rating.rank,
+        vote_count: rating.voteCount,
+      }),
+    ),
+  });
+
+  test.each([
+    { oversized: true, reason: "exceeds" },
+    { slow: true, reason: "Fetch timed out" },
+  ])(
+    "reports bounded transfer failures as inconclusive: %j",
+    async (fixture) => {
+      const { run, stateFile } = await setup();
+      const checked = await run({
+        ...fixture,
+        status: 200,
+        body: currentPage(),
+      });
+      expect(checked.exitCode).toBe(0);
+      expect(checked.output).toContain('"status":"inconclusive"');
+      expect(checked.output).toContain('"httpStatus":200');
+      expect(checked.output).toContain('"pageOffset":0');
+      expect(checked.output).toContain(fixture.reason);
+      expect(await Bun.file(stateFile).json()).toMatchObject({
+        consecutiveInconclusive: 1,
+        lastOutcome: { status: "inconclusive", httpStatus: 200, pageOffset: 0 },
+      });
+    },
+  );
+
+  test("a successful fetch resets the counter, including a hard snapshot failure", async () => {
+    const { run, stateFile } = await setup();
+    await run({ status: 503 });
+    await run({ status: 503 });
+    const checked = await run({ status: 200, body: currentPage() });
+    expect(checked.exitCode).toBe(0);
+    expect(await Bun.file(stateFile).json()).toMatchObject({
+      consecutiveInconclusive: 0,
+    });
+    await run({ status: 503 });
+    const missing = await run({
+      status: 200,
+      body: { num_rows_total: 1, rows: [upstreamRow()] },
+    });
+    expect(missing.exitCode).toBe(1);
+    expect(missing.output).toContain(
+      "Referenced source ids are not ranked upstream",
+    );
+    expect(await Bun.file(stateFile).json()).toMatchObject({
+      consecutiveInconclusive: 0,
+    });
+    expect((await run({ status: 503 })).exitCode).toBe(0);
+  });
+
+  test("invalid persisted state fails rather than resetting the counter", async () => {
+    const { run, stateFile } = await setup();
+    await Bun.write(stateFile, '{"consecutiveInconclusive":-1}');
+    const checked = await run({ status: 503 });
+    expect(checked.exitCode).toBe(1);
+    expect(checked.output).toContain("Invalid benchmark check state");
+  });
+
+  test("ID checks still fail immediately", async () => {
+    const { run } = await setup();
+    const checked = await run(
+      { status: 200, body: { data: [] }, modelsDevUnavailable: true },
+      "model-catalog-upstream.ts",
+    );
+    expect(checked.exitCode).toBe(1);
+    expect(checked.output).toContain("[MISSING]");
+    expect(checked.output).toContain("model catalog issue(s)");
+  });
+
+  test("capability checks still fail immediately", async () => {
+    const { run } = await setup();
+    const checked = await run(
+      { status: 200, body: { data: [] } },
+      "model-catalog-capabilities-gen.ts",
+    );
+    expect(checked.exitCode).toBe(1);
+    expect(checked.output).toContain("absent from models.dev");
+  });
+
+  test("rate checks still fail immediately", async () => {
+    const { run } = await setup();
+    const checked = await run({ status: 503 }, "model-catalog-rates-gen.ts");
+    expect(checked.exitCode).toBe(1);
+    expect(checked.output).toContain("models.dev responded 503");
+  });
+
+  test("snapshot drift fails and resets the availability streak", async () => {
+    const { run, stateFile } = await setup();
+    await run({ status: 503 });
+    const page = currentPage();
+    const checked = await run({
+      status: 200,
+      body: {
+        num_rows_total: page.num_rows_total,
+        rows: page.rows.map(({ row, ...entry }) => ({
+          ...entry,
+          row: { ...row, rank: row.rank + 1 },
+        })),
+      },
+    });
+    expect(checked.exitCode).toBe(1);
+    expect(checked.output).toContain("benchmarks.gen.ts is stale");
+    expect(await Bun.file(stateFile).json()).toMatchObject({
+      consecutiveInconclusive: 0,
+    });
   });
 });

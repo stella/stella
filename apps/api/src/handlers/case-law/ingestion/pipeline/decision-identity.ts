@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -13,6 +13,9 @@ import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/c
 import {
   DECISION_DATE_OUT_OF_BOUNDS,
   DECISION_DOCKET_NOT_CANONICAL,
+  DECISION_ECLI_IDENTITY_AMBIGUOUS,
+  DECISION_REKEYED_BY_ECLI,
+  ECLI_IDENTITY_ADOPTABLE_ROWS,
   MAX_LOGGED_DECISION_DATE_LENGTH,
   MAX_LEGACY_DOCKET_CANDIDATES,
   MAX_LOGGED_DOCKET_LENGTH,
@@ -23,6 +26,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import {
+  STATED_ECLI_IDENTITY,
+  type StatedEcliIdentity,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
 import {
   observedDocketOf,
@@ -212,6 +219,167 @@ const IDENTITY_EXTRAS = {
   hasStoredDocument: rowHoldsDocumentFor,
 };
 
+/**
+ * What the source's stated ECLI said about an observation no publisher id
+ * resolved. `adopted` names the id the matched row was stored under.
+ */
+export type EcliIdentityMatch =
+  | { type: "not-applicable" }
+  | { type: "unmatched" }
+  | {
+      type: "adopted";
+      sourceDocumentId: string;
+      previousSourceDocumentId: string;
+    }
+  | { type: "ambiguous"; sourceDocumentId: string };
+
+type EcliIdentityCandidates =
+  | { type: "none" }
+  | { type: "one"; decisionId: SafeId<"caseLawDecision"> }
+  | { type: "several" };
+
+type FindEcliIdentityCandidatesOptions = Pick<
+  ObservedDecision,
+  "exactSourceIdentityCandidates" | "observed"
+> & { sourceId: SafeId<"caseLawSource"> };
+
+/**
+ * The keyed row of this source that states the observation's ECLI, docket,
+ * date and language under another publisher id, locked, so a concurrent
+ * re-key of the same row waits and reads it again. A second such row is read
+ * only to tell that the ECLI does not settle the observation.
+ *
+ * The ECLI is compared as stored: the row's value and the observation's both
+ * come out of the same sanitization, so one decision spells it alike, and the
+ * equality reads `case_law_decisions_ecli_idx`.
+ */
+const findEcliIdentityCandidatesTx = async (
+  tx: Transaction,
+  {
+    exactSourceIdentityCandidates,
+    observed: { caseNumber, decisionDate, ecli, language },
+    sourceId,
+  }: FindEcliIdentityCandidatesOptions,
+): Promise<EcliIdentityCandidates> => {
+  if (ecli === undefined || decisionDate === undefined) {
+    return { type: "none" };
+  }
+  const rows = await tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.ecli, ecli),
+        eq(caseLawDecisions.sourceId, sourceId),
+        eq(caseLawDecisions.caseNumber, caseNumber),
+        eq(caseLawDecisions.decisionDate, decisionDate),
+        eq(caseLawDecisions.language, language),
+        isNotNull(caseLawDecisions.sourceDocumentId),
+        notInArray(
+          caseLawDecisions.sourceDocumentId,
+          exactSourceIdentityCandidates,
+        ),
+      ),
+    )
+    .orderBy(caseLawDecisions.id)
+    .for("update")
+    .limit(ECLI_IDENTITY_ADOPTABLE_ROWS + 1);
+  if (rows.length > ECLI_IDENTITY_ADOPTABLE_ROWS) {
+    return { type: "several" };
+  }
+  const row = rows.at(0);
+  return row === undefined
+    ? { type: "none" }
+    : { type: "one", decisionId: row.id };
+};
+
+const findIdentityRowTx = async (
+  tx: Transaction,
+  decisionId: SafeId<"caseLawDecision">,
+) =>
+  await tx.query.caseLawDecisions.findFirst({
+    where: { id: { eq: decisionId } },
+    columns: IDENTITY_COLUMNS,
+    extras: IDENTITY_EXTRAS,
+  });
+
+type IdentityRow = NonNullable<Awaited<ReturnType<typeof findIdentityRowTx>>>;
+
+type SettleEcliIdentityOptions = FindEcliIdentityCandidatesOptions & {
+  /** The row a publisher id resolved, if any. */
+  resolved: IdentityRow | undefined;
+  claimedDecisionId: SafeId<"caseLawDecision"> | undefined;
+  statedEcliIdentity: StatedEcliIdentity;
+};
+
+/**
+ * The stored decision an observation no publisher id resolved still is, by
+ * the ECLI its source states.
+ *
+ * A publisher can reissue a decision under a new document id and withdraw
+ * the old one. Where the source's ECLI names one decision, the row stored
+ * under the old id is that decision: one candidate is adopted, two are a
+ * conflict this observation cannot settle, so neither is touched.
+ */
+const settleEcliIdentityTx = async (
+  tx: Transaction,
+  {
+    resolved,
+    claimedDecisionId,
+    statedEcliIdentity,
+    ...candidateOptions
+  }: SettleEcliIdentityOptions,
+) => {
+  const { sourceDocumentId } = candidateOptions.observed;
+  if (
+    resolved !== undefined ||
+    claimedDecisionId !== undefined ||
+    !sourceDocumentId ||
+    statedEcliIdentity !== STATED_ECLI_IDENTITY.DECISION
+  ) {
+    return {
+      existing: resolved,
+      ecliIdentity: { type: "not-applicable" } satisfies EcliIdentityMatch,
+    };
+  }
+  const candidates = await findEcliIdentityCandidatesTx(tx, candidateOptions);
+  switch (candidates.type) {
+    case "none":
+      return {
+        existing: undefined,
+        ecliIdentity: { type: "unmatched" } satisfies EcliIdentityMatch,
+      };
+    case "several":
+      return {
+        existing: undefined,
+        ecliIdentity: {
+          type: "ambiguous",
+          sourceDocumentId,
+        } satisfies EcliIdentityMatch,
+      };
+    case "one":
+      break;
+    default:
+      candidates satisfies never;
+      return panic(`Unhandled ECLI candidates: ${String(candidates)}`);
+  }
+  const adopted = await findIdentityRowTx(tx, candidates.decisionId);
+  const previousSourceDocumentId = adopted?.sourceDocumentId ?? undefined;
+  if (adopted === undefined || previousSourceDocumentId === undefined) {
+    // The candidate read above is locked and keyed; losing either is not a
+    // state this transaction can reach.
+    return panic("ECLI identity candidate lost its publisher id");
+  }
+  return {
+    existing: adopted,
+    ecliIdentity: {
+      type: "adopted",
+      sourceDocumentId,
+      previousSourceDocumentId,
+    } satisfies EcliIdentityMatch,
+  };
+};
+
 type FindExistingDecisionOptions = Pick<
   ObservedDecision,
   | "exactSourceIdentityCandidates"
@@ -220,6 +388,7 @@ type FindExistingDecisionOptions = Pick<
   | "repairSourceIdentityCandidates"
 > & {
   sourceId: SafeId<"caseLawSource">;
+  statedEcliIdentity: StatedEcliIdentity;
   /** The decision the exact publisher identities are reserved for, if any. */
   exactClaimedDecisionId: SafeId<"caseLawDecision"> | undefined;
   /** The one decision the repair-only identities are reserved for, if any. */
@@ -238,6 +407,7 @@ const findExistingDecisionTx = async (
     observed,
     repairSourceIdentityCandidates,
     sourceId,
+    statedEcliIdentity,
     exactClaimedDecisionId: reservedExactClaimedDecisionId,
     repairClaimedDecisionId,
   }: FindExistingDecisionOptions,
@@ -412,16 +582,21 @@ const findExistingDecisionTx = async (
       observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
     return ecliMatches || sourceUrlMatches;
   };
-  const existing =
-    identified ?? repairIdentified ?? legacyCandidates.find(legacyMatches);
-  return {
+  const { existing, ecliIdentity } = await settleEcliIdentityTx(tx, {
+    resolved:
+      identified ?? repairIdentified ?? legacyCandidates.find(legacyMatches),
     claimedDecisionId,
-    existing,
-  };
+    exactSourceIdentityCandidates,
+    observed,
+    sourceId,
+    statedEcliIdentity,
+  });
+  return { claimedDecisionId, existing, ecliIdentity };
 };
 
 type ResolveDecisionIdentityOptions = ObservedDecision & {
   sourceId: SafeId<"caseLawSource">;
+  statedEcliIdentity: StatedEcliIdentity;
   /** The id a decision nothing stored yet is inserted under. */
   proposedDecisionId: SafeId<"caseLawDecision">;
 };
@@ -444,6 +619,7 @@ export const resolveDecisionIdentityTx = async (
     repairSourceIdentityCandidates,
     sourceIdentityCandidates,
     sourceId,
+    statedEcliIdentity,
     proposedDecisionId,
   }: ResolveDecisionIdentityOptions,
 ) => {
@@ -503,20 +679,23 @@ export const resolveDecisionIdentityTx = async (
     repairClaimedDecisionIds.length === 1
       ? repairClaimedDecisionIds.at(0)
       : undefined;
-  const { claimedDecisionId, existing } = await findExistingDecisionTx(tx, {
-    exactSourceIdentityCandidates,
-    legacyCaseNumbers,
-    observed,
-    repairSourceIdentityCandidates,
-    sourceId,
-    exactClaimedDecisionId,
-    repairClaimedDecisionId,
-  });
+  const { claimedDecisionId, existing, ecliIdentity } =
+    await findExistingDecisionTx(tx, {
+      exactSourceIdentityCandidates,
+      legacyCaseNumbers,
+      observed,
+      repairSourceIdentityCandidates,
+      sourceId,
+      statedEcliIdentity,
+      exactClaimedDecisionId,
+      repairClaimedDecisionId,
+    });
   const decisionId = claimedDecisionId ?? existing?.id ?? proposedDecisionId;
   const existingIdentity = existing?.sourceDocumentId ?? undefined;
   const incomingSupersedesExisting =
     observed.sourceDocumentId !== undefined &&
-    (existing?.sourceDocumentId === null ||
+    (ecliIdentity.type === "adopted" ||
+      existing?.sourceDocumentId === null ||
       existing?.sourceDocumentId === observed.sourceDocumentId ||
       (existingIdentity !== undefined &&
         (observed.sourceDocumentIdAliases?.includes(existingIdentity) ===
@@ -554,6 +733,32 @@ export const resolveDecisionIdentityTx = async (
     // Adoption proves this digest's owner; retain it for inverse fallback replay.
     identitiesToReserve.push(existingIdentity);
   }
+  switch (ecliIdentity.type) {
+    case "adopted":
+      // The withdrawn id stays reserved for this decision, so a stale listing
+      // that still names it resolves here instead of inserting it again; the
+      // reservation rows are the record of the re-key.
+      identitiesToReserve.push(ecliIdentity.previousSourceDocumentId);
+      logger.info(DECISION_REKEYED_BY_ECLI, {
+        sourceId,
+        decisionId,
+        previousSourceDocumentId: ecliIdentity.previousSourceDocumentId,
+        sourceDocumentId: ecliIdentity.sourceDocumentId,
+      });
+      break;
+    case "ambiguous":
+      logger.warn(DECISION_ECLI_IDENTITY_AMBIGUOUS, {
+        sourceId,
+        sourceDocumentId: ecliIdentity.sourceDocumentId,
+      });
+      break;
+    case "not-applicable":
+    case "unmatched":
+      break;
+    default:
+      ecliIdentity satisfies never;
+      return panic(`Unhandled ECLI identity match: ${String(ecliIdentity)}`);
+  }
   if (identitiesToReserve.length > 0) {
     // audit: skip — background publisher-identity ownership; public data
     await tx
@@ -578,7 +783,13 @@ export const resolveDecisionIdentityTx = async (
     observation: observed,
   });
 
-  return { existing, decisionId, persistedSourceDocumentId, composition };
+  return {
+    existing,
+    decisionId,
+    persistedSourceDocumentId,
+    composition,
+    ecliIdentity,
+  };
 };
 
 /** Which decision an observation writes, as identity resolution decided. */

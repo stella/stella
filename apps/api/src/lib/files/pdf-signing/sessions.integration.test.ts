@@ -8,9 +8,11 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+
+import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
 import type { rootDb, Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions, pdfSigningSessions } from "@/api/db/schema";
 import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -32,6 +34,7 @@ import {
   lockedCreatorAccess,
   openPdfSigningSession,
   redeemPdfSigningHandoff,
+  recordPdfSigningHandoffFailure,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -108,10 +111,26 @@ const seedHandoff = async ({
 
 /** The application role on the test database, as the token paths use it. */
 const testTokenDb = (): TokenScopedDatabase => ({
-  scoped: ({ organizationId, userId, workspaceIds }) =>
-    asTestRaw<ScopedDb>(
-      createScopedDb(testDb, workspaceIds, organizationId, userId),
-    ),
+  scoped:
+    ({ organizationId, userId, workspaceIds }) =>
+    async <T>(callback: (tx: Transaction) => Promise<T>) =>
+      createScopedDb(
+        testDb,
+        workspaceIds,
+        organizationId,
+        userId,
+      )(async (tx) => {
+        // Transition statements use Bun SQL's array result; PGlite wraps those rows.
+        const bunRowsTx = new Proxy(tx, {
+          get(target, key, receiver) {
+            if (key === "execute") {
+              return async (query: SQL) => (await tx.execute(query)).rows;
+            }
+            return Reflect.get(target, key, receiver);
+          },
+        });
+        return callback(asTestRaw<Transaction>(bunRowsTx));
+      }),
   tenantless: asTestRaw<TokenScopedDatabase["tenantless"]>(
     createTenantlessDb(testDb),
   ),
@@ -1039,3 +1058,91 @@ describe("pdf signing token scopes", () => {
     expect(rows).toEqual([]);
   });
 });
+
+test("PDF handoff failure acknowledges only its live unconsumed token", async () => {
+  const now = new Date();
+  const mine = await seedHandoff({
+    handoffExpiresAt: new Date(now.getTime() + MINUTE_MS),
+  });
+  const theirs = await seedHandoff({
+    tenant: "b",
+    handoffExpiresAt: new Date(now.getTime() + MINUTE_MS),
+  });
+  const acknowledge = async (token: string) =>
+    recordPdfSigningHandoffFailure({
+      handoffToken: token,
+      reason: DESKTOP_HANDOFF_FAILURE.accountRequired,
+      db: tokenDb,
+      now,
+    });
+  expect(await acknowledge(mine.handoffToken)).toBe(true);
+  expect(await acknowledge(mine.handoffToken)).toBe(false);
+  expect(await acknowledge(createPdfSigningToken())).toBe(false);
+  const rows = await testDb
+    .select({
+      id: pdfSigningSessions.id,
+      status: pdfSigningSessions.status,
+      closeReason: pdfSigningSessions.closeReason,
+      closedAt: pdfSigningSessions.closedAt,
+    })
+    .from(pdfSigningSessions)
+    .where(inArray(pdfSigningSessions.id, [mine.sessionId, theirs.sessionId]));
+  expect(rows.find((row) => row.id === mine.sessionId)).toEqual({
+    id: mine.sessionId,
+    status: "cancelled",
+    closeReason: DESKTOP_HANDOFF_FAILURE.accountRequired,
+    closedAt: now,
+  });
+  expect(rows.find((row) => row.id === theirs.sessionId)?.status).toBe("open");
+  expect(
+    await redeemPdfSigningHandoff(mine.handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    }),
+  ).toBeNull();
+  const expired = await seedHandoff({ handoffExpiresAt: now });
+  expect(await acknowledge(expired.handoffToken)).toBe(false);
+  const consumed = await seedHandoff();
+  expect(
+    await redeemPdfSigningHandoff(consumed.handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    }),
+  ).not.toBeNull();
+  expect(await acknowledge(consumed.handoffToken)).toBe(false);
+});
+
+test.each(["failure", "redemption"] as const)(
+  "PDF handoff keeps the first terminal outcome: %s",
+  async (first) => {
+    const { handoffToken, sessionId } = await seedHandoff();
+    const now = new Date();
+    const fail = async () =>
+      await recordPdfSigningHandoffFailure({
+        handoffToken,
+        reason: DESKTOP_HANDOFF_FAILURE.updateRequired,
+        db: tokenDb,
+        now,
+      });
+    const redeem = async () =>
+      await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+        identity: { userId: ids.userA1, organizationId: ids.orgA },
+      });
+    if (first === "failure") {
+      expect(await fail()).toBe(true);
+      expect(await redeem()).toBeNull();
+    } else {
+      expect(await redeem()).not.toBeNull();
+      expect(await fail()).toBe(false);
+    }
+    const rows = await testDb
+      .select({
+        consumedAt: pdfSigningSessions.handoffConsumedAt,
+        status: pdfSigningSessions.status,
+        closedAt: pdfSigningSessions.closedAt,
+      })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    expect(rows.at(0)?.status).toBe(first === "failure" ? "cancelled" : "open");
+    expect(rows.at(0)?.consumedAt === null).toBe(first === "failure");
+    expect(rows.at(0)?.closedAt).toEqual(first === "failure" ? now : null);
+  },
+);

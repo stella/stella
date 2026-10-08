@@ -7,6 +7,7 @@ import type {
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { StatedEcliIdentity } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
@@ -80,6 +81,27 @@ export const DECISION_DOCKET_NOT_CANONICAL =
 
 export const MAX_LOGGED_DOCKET_LENGTH = 128;
 
+/**
+ * A stored decision a publisher reissued under a new document id, recognised
+ * by its stated ECLI, docket, date and language: the row now carries the new
+ * id, and the old one stays reserved for it.
+ */
+export const DECISION_REKEYED_BY_ECLI = "case_law.ingestion.decision_rekeyed";
+
+/**
+ * More than one stored decision of the source matches the observation's ECLI,
+ * docket, date and language, so none is adopted and the observation is stored
+ * as a decision of its own.
+ */
+export const DECISION_ECLI_IDENTITY_AMBIGUOUS =
+  "case_law.ingestion.decision_ecli_identity_ambiguous";
+
+/**
+ * Stored rows an ECLI can name and still be adopted: one. The lookup reads one
+ * more as a sentinel, since a second row is a conflict, not an answer.
+ */
+export const ECLI_IDENTITY_ADOPTABLE_ROWS = 1;
+
 export const DECISION_REFRESH = {
   /**
    * Skip a decision whose source hash and metadata are unchanged: a crawl
@@ -103,6 +125,7 @@ export type ProcessDecisionAttemptOptions = {
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
+  statedEcliIdentity: StatedEcliIdentity;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
@@ -134,6 +157,7 @@ export type ProcessDecisionOptions = Omit<
   | "judges"
   | "refresh"
   | "metadataUrlSchema"
+  | "statedEcliIdentity"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;

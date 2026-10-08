@@ -1,8 +1,11 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: [cz-regional] rawHash comes from the sourceFingerprint owner, equal to the previous envelope hash for a source that stores no objects.
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -12,7 +15,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -59,7 +61,6 @@ import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
-  hashContent,
   isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
@@ -69,6 +70,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import {
@@ -223,6 +225,21 @@ const COURT_NOT_STATED = "(nezadán)";
 const COURT_CODE_NONE = "NONE";
 
 /**
+ * The Ministry of Justice's own decisions, under both spellings the API uses:
+ * it states `MINISTERY_OF_JUSTICE_*` and `MINISTRY_OF_JUSTICE_*` alike, so
+ * each instrument is named once and keyed under both.
+ */
+const ministryOfJusticeMembers = (
+  czechByInstrument: Readonly<Record<string, string>>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(czechByInstrument).flatMap(([instrument, czech]) => [
+      [`MINISTRY_OF_JUSTICE_${instrument}`, czech],
+      [`MINISTERY_OF_JUSTICE_${instrument}`, czech],
+    ]),
+  );
+
+/**
  * The decision types this API accepts, in the publisher's own Czech.
  *
  * `ORDER_T` is the value the API answers to; a plain `ORDER` is rejected with
@@ -238,13 +255,21 @@ const DECISION_TYPE_MAP: Readonly<Record<string, string>> = {
   JUDGEMENT: "rozsudek",
   RESOLUTION: "usnesení",
   ORDER_T: "trestní příkaz",
+  ...ministryOfJusticeMembers({
+    DECISION: "rozhodnutí ministerstva spravedlnosti",
+    ORDER: "příkaz ministerstva spravedlnosti",
+    RESOLUTION: "usnesení ministerstva spravedlnosti",
+  }),
 };
+
+/** The member the API states for a document whose type it did not record. */
+const DECISION_TYPE_NOT_STATED = "NONE";
 
 const mapDecisionType = (
   type: string | undefined,
   caseNumber: string,
 ): string | undefined => {
-  if (!type) {
+  if (!type || type === DECISION_TYPE_NOT_STATED) {
     return undefined;
   }
   const mapped = DECISION_TYPE_MAP[type];
@@ -1264,7 +1289,7 @@ export const assembleCzRegionalDecision = ({
               [CZ_REGIONAL_AFFECTING_DOCS_METADATA_KEY]: chain.entries,
             }),
       }),
-      rawHash: hashContent(sourceRaw),
+      rawHash: sourceFingerprint({ sourceRaw }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL],
       documentAst: parsed?.documentAst ?? EMPTY_AST,
       sourceRaw,
@@ -1296,7 +1321,7 @@ const buildCzRegionalListingFallback = (
       // An unreadable link cannot establish that the publisher has no document.
       isListingOnly: true,
       sourceRaw,
-      rawHash: hashContent(sourceRaw),
+      rawHash: sourceFingerprint({ sourceRaw }),
     },
   };
 };

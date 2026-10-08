@@ -65,9 +65,15 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/.oxlint-plugins/**",
   "$TURBO_ROOT$/scripts/oxlint-presets/**",
   "$TURBO_ROOT$/scripts/ownership.ts",
+  "$TURBO_ROOT$/scripts/sha256-owners.ts",
+  "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
   "$TURBO_ROOT$/scripts/parse-memo.ts",
+  "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+  "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
@@ -881,9 +887,7 @@ export const scopedCommands = (
   }
   if (plan.rootLintPaths.length > 0) {
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
-      commands.push(["bun", "run", "generate"]);
-      commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
-      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
+      commands.push(["bun", "scripts/ci-generated-sources.ts", "prepare"]);
     }
     commands.push([
       "bun",

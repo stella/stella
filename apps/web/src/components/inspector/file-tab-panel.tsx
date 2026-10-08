@@ -51,12 +51,14 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MarkdownDraftActions } from "@/components/inspector/markdown-file-viewer";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { useDocxEditorBindings } from "@/components/inspector/use-docx-editor-bindings";
 import { useEmailAttachmentSelection } from "@/components/inspector/use-email-attachment-selection";
 import { useFileTabEntity } from "@/components/inspector/use-file-tab-entity";
 import { useMarkdownFileDraft } from "@/components/inspector/use-markdown-file-draft";
 import { PeekSuspenseFallback } from "@/components/pdf/peek/peek-pdf-viewer";
 import { env } from "@/env";
+import { PDF_MIME } from "@/lib/consts";
 import type { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -171,13 +173,15 @@ const getFileTabEditorState = ({
     isCollaboratingNativeDocx,
     isEditingNativeDocx,
     isMetadataLaneExpanded: (tab.metadataLane ?? "closed") === "expanded",
-    pdfSignTarget:
-      canUpdateEntity &&
-      isPdfDisplay &&
-      filePropertyId !== undefined &&
-      isCurrentFileField
-        ? { propertyId: filePropertyId }
+    pdfSignTarget: resolvePdfSignTarget({
+      canUpdateEntity,
+      entityId: tab.entityId,
+      file: isPdfDisplay
+        ? { fieldId: tab.id, mimeType: PDF_MIME, propertyId: filePropertyId }
         : null,
+      isCurrentVersion: isCurrentFileField,
+      workspaceId: tab.workspaceId,
+    }),
   };
 };
 
@@ -716,6 +720,7 @@ const FileTabMeasurementBoundary = ({
         fieldId={fieldId}
         initialScaleOffset={scaleOffset}
         onError={onError}
+        surface="inspector-pdf"
       >
         {children}
       </MeasuredPdfProvider>

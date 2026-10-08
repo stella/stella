@@ -19,6 +19,7 @@ import {
   surfaceToolVocabulary,
   unlistedToolNamesIn,
 } from "@/api/mcp/surface-tool-mentions";
+import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { namedToolNames, scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import * as toolUtils from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -146,6 +147,7 @@ describe("prose scoping", () => {
     expect(scoped.status === "error" && scoped.error).toEqual({
       type: "structured",
       code: "internal_error",
+      [MCP_INTERNAL_TOOL_FAILURE]: true,
       message: "Tool execution failed",
       hint: "This is a server-side failure; changing the arguments will not fix it. Tell the human this step failed on the server, then continue without it.",
     });
@@ -161,6 +163,7 @@ describe("prose scoping", () => {
     expect(scoped.status === "error" && scoped.error).toEqual({
       type: "structured",
       code: "internal_error",
+      [MCP_INTERNAL_TOOL_FAILURE]: true,
       message: "Tool execution failed",
     });
   });

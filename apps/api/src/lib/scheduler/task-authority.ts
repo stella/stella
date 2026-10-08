@@ -219,9 +219,21 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "organization-access-state-reconcile.ts",
     "Records organization access state.",
   ),
+  "reviewOrganization.reset": platform(
+    "review-organization-reset.ts",
+    "Resets the configured restricted review organization; each run first proves its only member is the configured review account.",
+  ),
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
+  ),
+  "sanctions.backfillMonitoring": platform(
+    "sanctions-monitoring-backfill.ts",
+    "Refreshes organization-scoped contact coverage after sanctions source changes.",
+  ),
+  "sanctions.drainMonitoring": platform(
+    "sanctions-monitoring.ts",
+    "Processes organization-scoped contact screening marks without a member run.",
   ),
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",

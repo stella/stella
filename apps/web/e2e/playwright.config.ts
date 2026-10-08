@@ -32,7 +32,19 @@ export default defineConfig({
   // Retries hide flakes; fix them in code instead.
   retries: 0,
   reporter: IS_CI
-    ? [["blob", { outputDir: E2E_BLOB_OUTPUT_DIR }], ["github"], ["list"]]
+    ? [
+        ["blob", { outputDir: E2E_BLOB_OUTPUT_DIR }],
+        ["github"],
+        ["list"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
     : [["list"], ["html", { open: "never" }]],
   // Cold Vite + folio editor compile on a fresh CI runner can use 25-30s
   // before the first locator runs, leaving no headroom for in-spec

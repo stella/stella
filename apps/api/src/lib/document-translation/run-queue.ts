@@ -1,5 +1,4 @@
 import { Result, panic } from "better-result";
-import { Worker } from "bullmq";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -44,7 +43,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
@@ -110,6 +109,8 @@ import {
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -376,10 +377,15 @@ const loadPinnedSource = async (
     : Result.ok(bytes.value);
 };
 
-const createAIContext = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<Result<BilingualAIContext, HandlerError>> => {
+const createAIContext = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<Result<BilingualAIContext, HandlerError>> => {
   const settings = await actor.writeDb(
     async (tx) => await loadOrgAISettings(tx, actor),
   );
@@ -389,6 +395,7 @@ const createAIContext = async (
   const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
     settings.value;
   return Result.ok({
+    admission,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig,
@@ -992,10 +999,15 @@ const translateBilingualWithAI = async (
   });
 };
 
-const executeRun = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<DocumentTranslationRunErrorCode | null> => {
+const executeRun = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<DocumentTranslationRunErrorCode | null> => {
   const loaded = await loadPinnedSource(actor, run);
   if (Result.isError(loaded)) {
     return loaded.error;
@@ -1073,7 +1085,7 @@ const executeRun = async (
   } else {
     const context = Result.flatten(
       await Result.tryPromise({
-        try: async () => await createAIContext(actor, run),
+        try: async () => await createAIContext({ actor, admission, run }),
         catch: (cause) => cause,
       }),
     );
@@ -1238,14 +1250,9 @@ const executeRun = async (
   return null;
 };
 
-const processRunJob = async (
-  data: DocumentTranslationRunJobData,
-): Promise<void> => {
-  await processDocumentTranslationRun(brandActor(data));
-};
-
 export const processDocumentTranslationRun = async (
   actor: RunActor,
+  admission: ModelDispatchAdmission,
 ): Promise<void> => {
   const run = await claimRun(actor);
   if (run === null) {
@@ -1258,7 +1265,7 @@ export const processDocumentTranslationRun = async (
     return;
   }
   const result = await Result.tryPromise({
-    try: async () => await executeRun(actor, run),
+    try: async () => await executeRun({ actor, admission, run }),
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
@@ -1344,9 +1351,22 @@ export const reconcileDocumentTranslationRuns = async (
 export const initDocumentTranslationRunWorker = ({
   db,
 }: BullMqWorkerContext) => {
-  const worker = new Worker<DocumentTranslationRunJobData>(
+  const worker = new BullMqWorker<DocumentTranslationRunJobData>(
     QUEUE_NAME,
-    async (job) => await processRunJob(job.data),
+    async (job) => {
+      const actor = brandActor(job.data);
+      // The run's period action was drawn when it was queued; the job takes
+      // a background slot. The run bounds its own time.
+      await runBackgroundJob({
+        actionKind: "document-translation.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processDocumentTranslationRun(actor, admission),
+      });
+    },
     {
       connection: createBullMqConnection({
         storeClass: "durable-coordination",

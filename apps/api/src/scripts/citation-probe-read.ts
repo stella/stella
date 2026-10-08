@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
-import { parseUsableDocumentAst } from "@/api/lib/case-law/document-ast";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
+import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 export class CitationProbeS3ReadError extends TaggedError(
   "CitationProbeS3ReadError",

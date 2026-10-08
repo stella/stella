@@ -1,0 +1,87 @@
+diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
+--- a/dist/authorize-CLuqtSXQ.mjs
++++ b/dist/authorize-CLuqtSXQ.mjs
+@@ -5438,14 +5438,29 @@
+ 	const hasFragment = requested.includes("#");
+ 	const hasUserinfo = requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
+ 	if (hasFragment || hasUserinfo) return;
+-	const requestedWithoutPort = stripLoopbackRedirectPort(requested);
++	const requestedLoopback = canonicalNativeLoopbackRedirect(requested);
+ 	return registered.find((url) => {
+ 		if (url === requested) return true;
+-		if (!requestedWithoutPort) return false;
+-		return stripLoopbackRedirectPort(url) === requestedWithoutPort;
++		if (!requestedLoopback) return false;
++		return canonicalNativeLoopbackRedirect(url) === requestedLoopback;
+ 	});
+ }
+ /**
++* RFC 8252 sections 7.3 and 8.3: a native client's loopback redirect may use
++* any port, and the loopback IP literals `127.0.0.1` and `[::1]` are one
++* interface the client binds on whichever IP version is available. `localhost`
++* (not recommended by section 8.3) keeps port-only matching.
++* Returns the redirect with port, and an IP-literal loopback host, folded to
++* one form, or undefined when the URI is not an http loopback redirect.
++*/
++function canonicalNativeLoopbackRedirect(uri) {
++	const withoutPort = stripLoopbackRedirectPort(uri);
++	if (!withoutPort) return;
++	const match = /^http:\/\/(?:127\.0\.0\.1|\[::1\])(?=[/?#]|$)/u.exec(withoutPort);
++	if (!match) return withoutPort;
++	return `http://loopback-ip${withoutPort.slice(match[0].length)}`;
++}
++/**
+ * Loads the client, verifies it's enabled, and returns the requested
+ * redirect_uri when it matches a registered entry. Returns null whenever the
+ * RP cannot be safely reached, so callers can fall back to the server error
+diff --git a/dist/introspect-CbYi2MJT.mjs b/dist/introspect-CbYi2MJT.mjs
+index c8d635e57ca4cd3fe8f7cbfd5c769d61b7e96874..61814b7418ca78b61433eee5766e1a138e0fe12c 100644
+--- a/dist/introspect-CbYi2MJT.mjs
++++ b/dist/introspect-CbYi2MJT.mjs
+@@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
+ 	const inputs = collectResourceInputs(opts);
+ 	if (inputs.length === 0) return;
+ 	const mode = opts.resourceSeedMode ?? "insertOnly";
++	if (mode === "none") return;
+ 	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
+ 	for (const rawInput of inputs) {
+ 		const check = await checkIdentifier(opts, rawInput.identifier);
+@@ -1088,7 +1089,15 @@ const clientRegistrationRequestSchema = z.object({
+ 	client_name: z.string().refine((value) => value.trim().length > 0, "client_name cannot be empty").optional(),
+ 	client_uri: z.string().optional(),
+ 	logo_uri: z.string().optional(),
+-	contacts: z.array(z.string().min(1)).min(1).optional(),
++	/**
++	 * RFC 7591 §2 makes `contacts` optional, so an empty array states nothing
++	 * that an absent member does not already state. Rejecting it fails the
++	 * registration of clients that always send the key, before authorization can
++	 * start. The empty array therefore normalizes to absent; a non-empty array
++	 * keeps its per-element validation and every other registration check is
++	 * untouched.
++	 */
++	contacts: z.array(z.string().min(1)).optional().transform((value) => value?.length ? value : void 0),
+ 	tos_uri: z.string().optional(),
+ 	policy_uri: z.string().optional(),
+ 	software_id: z.string().optional(),
+diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
+index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..131bb887b6fe106aaf3c1ca0987be91764bb7d64 100644
+--- a/dist/oauth-1Ud-hvZY.d.mts
++++ b/dist/oauth-1Ud-hvZY.d.mts
+@@ -1118,6 +1118,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+   /**
+    * Controls whether boot-time `resources` config overwrites DB-edited rows.
+    *
++   * - `"none"`: never seeds resources at runtime. Use when committed migrations
++   *   provision and validate every configured resource before application boot.
+    * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
+    *   not already present. Existing rows are untouched — admin edits via CRUD
+    *   are never reverted on restart.
+@@ -1131,7 +1133,7 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+    *
+    * @default "insertOnly"
+    */
+-  resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
++  resourceSeedMode?: "none" | "insertOnly" | "merge" | "overwrite";
+   /**
+    * Opt-in cache membership for resources by `identifier`. Mirrors the
+    * {@link OAuthOptions.cachedTrustedClients} pattern.

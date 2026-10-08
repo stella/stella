@@ -1,17 +1,18 @@
+import { Result } from "better-result";
 /**
  * `prepare_file_comparison_from_links`: stage two DOCX files for
  * `compare_documents` by downloading them server-side from HTTPS links, so no
  * bytes pass through the model. It reserves the same slots and writes the same
  * rows as `prepare_file_comparison`; only who fetches the bytes differs.
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { probeEncryptedOoxml } from "@/api/lib/files/encrypted-ooxml";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { presignUploadUrl, putPresignedUpload } from "@/api/lib/s3-presign";
 import {
   parseSafeOutboundUrl,
@@ -31,6 +32,7 @@ import type {
   PrepareFileComparisonDependencies,
   ReservedUpload,
 } from "@/api/mcp/file-comparison-prepare-tool";
+import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   InternalToolErrorResult,
   TypedMcpToolHandler,
@@ -232,10 +234,12 @@ type LinkedFile = {
 const resolveLinkedFile = async ({
   dependencies,
   file,
+  permit,
   side,
 }: {
   dependencies: PrepareFileComparisonFromLinksDependencies;
   file: LinkedFileInput;
+  permit: ThirdPartyOutboundPermit;
   side: ComparisonSide;
 }): Promise<Result<LinkedFile, InternalToolErrorResult>> => {
   // The one reader of what the server may fetch decides the link, so a
@@ -254,6 +258,7 @@ const resolveLinkedFile = async ({
 
   const downloaded = await dependencies.download({
     maxBytes: FILE_COMPARISON_MAX_BYTES,
+    permit,
     timeoutMs: TRANSFER_TIMEOUT_MS,
     url: link.value,
   });
@@ -330,12 +335,15 @@ const transferFailure = (side: ComparisonSide): InternalToolErrorResult =>
     retryable: true,
   });
 
-export const handlePrepareFileComparisonFromLinksTool = async (
-  {
-    args,
-    context,
-  }: { args: Record<string, unknown>; context: McpRequestContext },
-  dependencies: PrepareFileComparisonFromLinksDependencies = DEFAULT_PREPARE_FILE_COMPARISON_FROM_LINKS_DEPENDENCIES,
+type PrepareFileComparisonFromLinksCall = {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+  permit: ThirdPartyOutboundPermit;
+};
+
+const runPrepareFileComparisonFromLinksTool = async (
+  { args, context, permit }: PrepareFileComparisonFromLinksCall,
+  dependencies: PrepareFileComparisonFromLinksDependencies,
 ): Promise<TypedMcpToolResponse<PrepareFileComparisonFromLinksOutput>> => {
   const parsed = v.safeParse(
     PREPARE_FILE_COMPARISON_FROM_LINKS_INPUT_SCHEMA,
@@ -351,8 +359,13 @@ export const handlePrepareFileComparisonFromLinksTool = async (
   }
 
   const [base, target] = await Promise.all([
-    resolveLinkedFile({ dependencies, file: input.base, side: "base" }),
-    resolveLinkedFile({ dependencies, file: input.target, side: "target" }),
+    resolveLinkedFile({ dependencies, file: input.base, permit, side: "base" }),
+    resolveLinkedFile({
+      dependencies,
+      file: input.target,
+      permit,
+      side: "target",
+    }),
   ]);
   if (Result.isError(base)) {
     return base.error;
@@ -388,27 +401,36 @@ export const handlePrepareFileComparisonFromLinksTool = async (
     return transferFailure("target");
   }
 
-  return toolDataResult({
-    base: {
-      uploadId: reserved.value.base.id,
-      name: reserved.value.base.declaredName,
-      size: reserved.value.base.declaredSize,
-    },
-    target: {
-      uploadId: reserved.value.target.id,
-      name: reserved.value.target.declaredName,
-      size: reserved.value.target.declaredSize,
-    },
-    next: {
-      tool: FILE_COMPARISON_TRANSPORT.compareToolName,
-      source: {
-        type: "uploads",
-        base_upload_id: reserved.value.base.id,
-        target_upload_id: reserved.value.target.id,
+  return toolDataResult(
+    projectionPayload(PREPARE_FILE_COMPARISON_FROM_LINKS_OUTPUT_SCHEMA, {
+      base: {
+        uploadId: reserved.value.base.id,
+        name: reserved.value.base.declaredName,
+        size: reserved.value.base.declaredSize,
       },
-    },
-  });
+      target: {
+        uploadId: reserved.value.target.id,
+        name: reserved.value.target.declaredName,
+        size: reserved.value.target.declaredSize,
+      },
+      next: {
+        tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+        source: {
+          type: "uploads",
+          base_upload_id: reserved.value.base.id,
+          target_upload_id: reserved.value.target.id,
+        },
+      },
+    }),
+  );
 };
+
+export const handlePrepareFileComparisonFromLinksTool = withThirdPartyOutbound(
+  async (
+    call,
+    dependencies: PrepareFileComparisonFromLinksDependencies = DEFAULT_PREPARE_FILE_COMPARISON_FROM_LINKS_DEPENDENCIES,
+  ) => await runPrepareFileComparisonFromLinksTool(call, dependencies),
+);
 
 /** The handler's extra dependency argument is optional, so it still is one. */
 handlePrepareFileComparisonFromLinksTool satisfies TypedMcpToolHandler<PrepareFileComparisonFromLinksOutput>;

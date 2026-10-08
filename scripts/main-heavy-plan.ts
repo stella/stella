@@ -1,20 +1,6 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
-// The queue's core checks remain separate from the per-commit heavy suites.
-export const THIN_JOBS = [
-  "ci-checks-generated",
-  "ci-checks-policy",
-  "ci-checks-rest",
-  "code-quality-api",
-  "code-quality-web",
-  "code-quality-rest",
-  "typecheck-baseline",
-  "ci-tests",
-  "parser-version-guard",
-  "web-build",
-] as const;
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -23,6 +9,20 @@ const record = (value: unknown) => {
     panic("Expected a workflow object");
   }
   return value;
+};
+
+export const thinJobs = (workflow: unknown) => {
+  const jobs = record(record(workflow)["jobs"]);
+  // The workflow owns which jobs a heavy-only dispatch omits. Derive the
+  // partition from those predicates, including the regular web build whose
+  // artifact is produced by heavy-web-build on a heavy dispatch.
+  return Object.entries(jobs).flatMap(([name, job]) => {
+    const condition = record(job)["if"];
+    return typeof condition === "string" &&
+      /\binputs\.heavy_only\s*!=\s*true\b/u.test(condition)
+      ? [name]
+      : [];
+  });
 };
 
 export const mainHeavyJobs = (workflow: unknown) => {
@@ -55,12 +55,27 @@ export const mainHeavyJobs = (workflow: unknown) => {
   ) {
     panic("ci-result dependencies and JOB_SCOPES disagree");
   }
-  for (const job of THIN_JOBS) {
+  const thin = thinJobs(workflow);
+  for (const job of thin) {
     if (!gated.includes(job)) {
       panic(`Missing thin job: ${job}`);
     }
   }
-  return gated.filter((job) => !THIN_JOBS.some((thin) => thin === job));
+  return gated.filter((job) => !thin.includes(job));
+};
+
+/** Heavy jobs a thin merge group still runs unless the switch turns them off. */
+export const QUEUE_BROWSER_SUITES_SWITCH = "vars.QUEUE_BROWSER_SUITES";
+
+export const queueAdmittedJobs = (workflow: unknown) => {
+  const jobs = record(record(workflow)["jobs"]);
+  return mainHeavyJobs(workflow).filter((name) => {
+    const condition = record(jobs[name])["if"];
+    return (
+      typeof condition === "string" &&
+      condition.includes(QUEUE_BROWSER_SUITES_SWITCH)
+    );
+  });
 };
 
 if (import.meta.main) {
@@ -68,8 +83,7 @@ if (import.meta.main) {
   if (!source) {
     panic("Expected workflow path");
   }
-  console.log(`thin_jobs=${JSON.stringify(THIN_JOBS)}`);
-  console.log(
-    `heavy_jobs=${JSON.stringify(mainHeavyJobs(Bun.YAML.parse(readFileSync(source, "utf-8"))))}`,
-  );
+  const workflow: unknown = Bun.YAML.parse(readFileSync(source, "utf-8"));
+  console.log(`thin_jobs=${JSON.stringify(thinJobs(workflow))}`);
+  console.log(`heavy_jobs=${JSON.stringify(mainHeavyJobs(workflow))}`);
 }

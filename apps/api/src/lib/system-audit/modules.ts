@@ -14,6 +14,10 @@
 import type { SystemRunActor } from "./actors";
 
 export const SYSTEM_AUDIT_MODULES = {
+  "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts":
+    "system:sanctions-monitoring-fanout",
+  "apps/api/src/lib/db/operator-registrations/read.ts":
+    "system:operator-registrations",
   "apps/api/src/lib/lists/sanctions/refresh.ts": "system:sanctions-refresh",
   "apps/api/src/lib/case-law/sitemap-shard-refresh.ts":
     "system:case-law-sitemap-refresh",
@@ -39,6 +43,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:case-law-background-replay",
   "apps/api/src/lib/legal-search/case-law-replay-audit.ts":
     "system:case-law-background-replay",
+  "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts":
+    "system:eu-corpus-completion",
 } as const satisfies Record<string, SystemRunActor>;
 
 export type SystemAuditModule = keyof typeof SYSTEM_AUDIT_MODULES;

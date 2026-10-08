@@ -54,12 +54,13 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
-import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type { WorkspaceView } from "@/lib/types";
 import {
   useConvertView,
@@ -168,7 +169,7 @@ export const ViewSwitcher = ({
   const canCreateView = usePermissions({ view: ["create"] });
   const canUpdateView = usePermissions({ view: ["update"] });
   const direction = useI18nStore((state) => getLangDir(state.lang));
-  const avtEnabled = useAvtPreviewEnabled();
+  const avtEnabled = useCallerFeatureEnabled(CALLER_FEATURE.verification);
   const { data: allViews = [] } = useQuery(viewsOptions(workspaceId));
   const views = switcherViews(allViews, avtEnabled);
   const createView = useCreateView(workspaceId);
@@ -468,7 +469,6 @@ const ViewRenameEditor = ({
 
   return (
     <InlineEdit
-      inputClassName="w-24"
       onCancel={() => {
         onStop();
         setRenameValue(name);

@@ -3,10 +3,16 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import {
   buildCzNsDecision,
   czNsAdapter,
+  type CzNsListingRow,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  decodeSourceRawEnvelope,
+  type StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 describe("Domino listings distinguish publisher refusal from an empty view", () => {
@@ -245,5 +251,98 @@ describe("decision pages the publisher did not serve", () => {
       page: "detail",
       read: { type: "absent", evidence: "http-404" },
     });
+  });
+});
+
+describe("the source hash fingerprints every stored part", () => {
+  afterEach(() => mock.restore());
+
+  const UNID = "fedcba9876543210fedcba9876543210";
+  const PAGE = "<html><body><p>Rozhodnutí soudu.</p></body></html>";
+
+  const built = async (row: CzNsListingRow) => {
+    spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(async () => await Promise.resolve(new Response(PAGE))),
+    );
+    const result = await buildCzNsDecision(row);
+    mock.restore();
+    if (result.type !== "built") {
+      throw new TypeError("Expected the served pages to build a decision");
+    }
+    return result.decision;
+  };
+
+  test("the hash is the fingerprint of the detail, print and listing parts", async () => {
+    const decision = await built({ unid: UNID, caseNumber: "1 Cdo 1/2026" });
+    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual([
+      "detail",
+      "listing",
+      "print",
+    ]);
+    expect(decision.rawHash).toBe(
+      sourceFingerprint({ sourceRaw: decision.sourceRaw ?? "" }),
+    );
+  });
+
+  test("a docket the publisher adds to the same document moves the hash", async () => {
+    const alone = await built({ unid: UNID, caseNumber: "1 Cdo 1/2026" });
+    const joined = await built({
+      unid: UNID,
+      caseNumber: "1 Cdo 1/2026",
+      additionalCaseNumbers: ["1 Cdo 2/2026"],
+    });
+
+    expect(joined.rawHash).not.toBe(alone.rawHash);
+  });
+
+  test("a listing row parked through JSONB keeps the hash", async () => {
+    const direct = await built({
+      unid: UNID,
+      caseNumber: "1 Cdo 1/2026",
+      additionalCaseNumbers: ["1 Cdo 2/2026"],
+    });
+    const reordered = await built({
+      additionalCaseNumbers: ["1 Cdo 2/2026"],
+      caseNumber: "1 Cdo 1/2026",
+      unid: UNID,
+    });
+
+    expect(reordered.rawHash).toBe(direct.rawHash);
+  });
+
+  test("a replay of the stored payload reproduces the crawl's hash", async () => {
+    const decision = await built({ unid: UNID, caseNumber: "1 Cdo 1/2026" });
+    const reparse = czNsAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-ns to implement stored-raw replay");
+    }
+    spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
+
+    const replayed = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    } satisfies StoredRawReparseInput);
+
+    expect(replayed.type).toBe("parsed");
+    if (replayed.type !== "parsed") {
+      return;
+    }
+    expect(replayed.result.rawHash).toBe(decision.rawHash);
   });
 });

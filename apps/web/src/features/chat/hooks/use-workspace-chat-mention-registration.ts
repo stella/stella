@@ -4,7 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 
-import { useChatEditorExtensions } from "@/components/chat-editor-provider";
+import {
+  CHAT_MENTION_SOURCE_LABELS,
+  useChatEditorExtensions,
+} from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import {
   buildEntityMentionOption,
@@ -19,6 +22,7 @@ import { detached } from "@/lib/detached";
 import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
 
 const getWorkspaceMentionExtensionId = (workspaceId: string) =>
   `workspace-chat:entity-mentions:${workspaceId}`;
@@ -55,7 +59,9 @@ export const useWorkspaceChatMentionRegistration = (
   const { data: activeView } = useQuery({
     ...viewsOptions(workspaceId),
     select: (data) =>
-      data.find((view) => view.id === viewId) ?? data.at(0) ?? null,
+      selectAvailableWorkspaceViews(data).find((view) => view.id === viewId) ??
+      selectAvailableWorkspaceViews(data).at(0) ??
+      null,
   });
   const { filters, sorts } = useMemo(
     () => getMentionViewScope(activeView?.layout),
@@ -157,6 +163,7 @@ export const useWorkspaceChatMentionRegistration = (
       mentionSources: [
         {
           id: extensionId,
+          labelKey: CHAT_MENTION_SOURCE_LABELS.files,
           getItems: () => [],
           searchItems: searchMentionItems,
         },

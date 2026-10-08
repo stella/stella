@@ -36,11 +36,13 @@ import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
 } from "@/components/chat/composer-submenu-search";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { modelOptionsOptions } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { useQueryView } from "@/lib/use-query-view";
 
 export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =
   "w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)";
@@ -109,12 +111,16 @@ export const ChatModelOptionsMenu = ({
   useFocusSearchOnOpen(open, searchRef);
   // Remounted on every open (keyed by the host), so All models starts folded.
   const [allModelsExpanded, setAllModelsExpanded] = useState(false);
-  const { data, isPending } = useQuery({
+  const modelsQuery = useQuery({
     ...modelOptionsOptions(activeOrganizationId),
     enabled,
   });
 
-  const options: readonly ModelOption[] = data?.options ?? EMPTY_MODEL_OPTIONS;
+  const modelsView = useQueryView(modelsQuery);
+  const data = modelsView.type === "items" ? modelsView.items : undefined;
+  const options: readonly ModelOption[] = data
+    ? data.options
+    : EMPTY_MODEL_OPTIONS;
   const view = getModelPickerView({
     benchmarks: data?.benchmarkOptions ?? EMPTY_BENCHMARK_OPTIONS,
     options,
@@ -177,8 +183,24 @@ export const ChatModelOptionsMenu = ({
     view.type === "all"
       ? view.entries.length
       : view.recommended.length + view.others.length;
-  let optionRows =
-    view.type === "all" ? (
+  const optionRows = (() => {
+    if (modelsView.type === "pending" || modelsView.type === "error") {
+      return <QueryViewFeedback view={modelsView} />;
+    }
+    if (visibleCount === 0) {
+      if (
+        modelsView.type === "items" &&
+        modelsView.refetchError !== undefined
+      ) {
+        return null;
+      }
+      return (
+        <p className="text-muted-foreground px-2.5 py-2 text-xs">
+          {t("organization.aiConfig.noModelResults")}
+        </p>
+      );
+    }
+    return view.type === "all" ? (
       <MenuRadioGroup value={radioValue}>
         {view.entries.map(renderRow)}
       </MenuRadioGroup>
@@ -226,19 +248,7 @@ export const ChatModelOptionsMenu = ({
         )}
       </>
     );
-  if (isPending) {
-    optionRows = (
-      <p className="text-muted-foreground px-2.5 py-2 text-xs">
-        {t("common.loading")}
-      </p>
-    );
-  } else if (visibleCount === 0) {
-    optionRows = (
-      <p className="text-muted-foreground px-2.5 py-2 text-xs">
-        {t("organization.aiConfig.noModelResults")}
-      </p>
-    );
-  }
+  })();
 
   return (
     <>
@@ -268,6 +278,7 @@ export const ChatModelOptionsMenu = ({
         </span>
       </MenuCheckboxItem>
       <MenuSeparator />
+      {modelsView.type === "items" && <QueryViewFeedback view={modelsView} />}
       {optionRows}
     </>
   );

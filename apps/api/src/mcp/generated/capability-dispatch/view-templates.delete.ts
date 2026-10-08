@@ -12,10 +12,14 @@ type CapabilityDispatchEntry = {
   load: () => Promise<Record<string, unknown>>;
   /** Present only for a named (non-default) export. */
   exportName?: string;
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
 };
 
 export const CAPABILITY_DISPATCH = {
   "view-templates.delete": {
     load: async () => await import("@/api/handlers/view-templates/delete"),
+    featureId: "list-verification",
+    featureAccess: "conditional",
   },
 } as const satisfies Record<string, CapabilityDispatchEntry>;

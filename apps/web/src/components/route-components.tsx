@@ -9,7 +9,7 @@ import { useTranslations } from "use-intl";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyIcon, MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
+import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -480,20 +480,37 @@ export const StatusMessage = ({
 
 type DefaultPendingComponentProps = {
   className?: string | undefined;
+  /**
+   * Announce the loading state. Off when the caller already wraps the
+   * skeleton in its own (localized) status region.
+   */
+  announce?: boolean | undefined;
 };
 
-// The router's pending fallback renders before the intl provider exists (it
-// covers the root route's own load), so it cannot read a translation: the
-// label is a constant.
-const PENDING_LABEL = "Loading";
-
+// Shared content fallback, including before the intl provider mounts. Shell
+// chrome belongs to the frame owner, never to a nested loading boundary.
 export const DefaultPendingComponent = ({
   className,
+  announce = true,
 }: DefaultPendingComponentProps) => (
+  // Announced as busy content; the skeleton bars themselves are decoration.
   <div
-    className={cn("flex h-full w-full items-center justify-center", className)}
+    {...(announce
+      ? { "aria-busy": true, "aria-label": "Loading", role: "status" }
+      : { "aria-hidden": true })}
+    className={cn(
+      "flex h-full min-h-0 w-full flex-1 flex-col gap-4 p-6",
+      className,
+    )}
   >
-    <Loader label={PENDING_LABEL} size="lg" />
+    <Skeleton aria-hidden="true" className="h-7 w-1/3" />
+    <Skeleton aria-hidden="true" className="h-4 w-2/3" />
+    <Skeleton
+      aria-hidden="true"
+      className="min-h-40 w-full flex-1 rounded-xl"
+    />
+    <Skeleton aria-hidden="true" className="h-4 w-1/2" />
+    <Skeleton aria-hidden="true" className="h-24 w-full rounded-xl" />
   </div>
 );
 

@@ -20,12 +20,11 @@ import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type AssertNoExtraFields,
   CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
   CREATE_TEMPLATE_PROJECTION,
-  type LIST_TEMPLATES_LIST_PROJECTION,
+  LIST_TEMPLATES_LIST_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
-  type TEMPLATE_DESCRIBE_PROJECTION,
+  TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { clauseDirectiveWarningSchema } from "@/api/lib/clauses/clause-directives";
 import {
@@ -36,7 +35,7 @@ import {
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
-import type { FieldMeta } from "@/api/lib/docx/types";
+import { CLAUSE_RESOLUTIONS, type FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -54,6 +53,11 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { projectionPayload } from "@/api/lib/projection-totality";
+import {
+  createModelActionAdmitter,
+  type AdmittedModelAction,
+} from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
@@ -92,6 +96,8 @@ import {
   templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
+  AiFillAdmission,
+  AiFillCollaborators,
   DescribeTemplateResult,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
@@ -101,6 +107,7 @@ import {
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
+import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
@@ -153,16 +160,17 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
+  invalidCursorResult,
   isToolErrorResult,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -1020,16 +1028,16 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   // Templates are organization-scoped, so the org id is the anonymization
   // scope. Only the org-authored free text (name, usage guidance, tags) is
   // redacted; ids and field counts pass through.
-  const payload = {
+  const payload = projectionPayload(LIST_TEMPLATES_LIST_PROJECTION, {
     templates: page.items,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_TEMPLATES_LIST_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     buildTemplateListTextFieldSpecs(context.organizationId),
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // Detail branch of list_templates: one template's field configuration. Reused
@@ -1060,7 +1068,7 @@ const describeTemplateDetail = async ({
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 /** One line describing a missing required field for the issues list: its
@@ -1117,6 +1125,17 @@ const TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA = v.strictObject({
   message: v.string(),
   paragraphIndex: v.pipe(v.number(), v.integer()),
   source: v.optional(v.unknown()),
+  // Set when the error sits in a clause body the fill rendered: the slot, and
+  // which stored clause version resolved into it.
+  clause: v.optional(
+    v.strictObject({
+      slotKey: v.string(),
+      resolution: v.optional(v.picklist(CLAUSE_RESOLUTIONS)),
+      version: v.optional(v.pipe(v.number(), v.integer())),
+      id: v.optional(v.string()),
+      name: v.optional(v.string()),
+    }),
+  ),
 });
 
 const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
@@ -1337,6 +1356,48 @@ const assertTemplateFillUsage = async ({
   });
 };
 
+/**
+ * A fill's AI admission: the usage preflight, then the fill inside one
+ * admitted action held until its last model call settles. The fill service
+ * runs it only for a manifest with AI fields. Inside the tool call's own
+ * admission it joins that action rather than drawing another.
+ */
+const admitTemplateFillAi = ({
+  context,
+  readOrgAIConfig,
+  workspaceId,
+  collaborators,
+}: {
+  context: McpRequestContext;
+  readOrgAIConfig: () => Promise<OrgAIConfigRead>;
+  workspaceId: SafeId<"workspace"> | null;
+  collaborators: (
+    admitted: AdmittedModelAction,
+  ) => Promise<AiFillCollaborators>;
+}): AiFillAdmission<
+  | NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+  | HandlerError<403 | 429 | 503>
+> => {
+  const admitModelAction = createModelActionAdmitter({
+    organizationId: context.organizationId,
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "templates.fill",
+  });
+  return async (fill) =>
+    await runAdmittedAiFill({
+      admitModelAction,
+      preflight: async () =>
+        await assertTemplateFillUsage({
+          context,
+          readOrgAIConfig,
+          workspaceId,
+        }),
+      collaborators,
+      fill,
+    });
+};
+
 const handleFillTemplateTool: McpToolHandler<
   v.InferInput<typeof FILL_TEMPLATE_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
@@ -1360,9 +1421,14 @@ const handleFillTemplateTool: McpToolHandler<
   // Built only when the manifest declares an AI field, so a deterministic fill
   // opens no metered trace. fill_template is org-scoped (no matter binding),
   // so there is no workspace id to redact tenant ids against.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission,
+      operationSignal: signal,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1398,12 +1464,12 @@ const handleFillTemplateTool: McpToolHandler<
     };
   };
 
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({
-      context,
-      readOrgAIConfig,
-      workspaceId: null,
-    });
+  const aiFill = admitTemplateFillAi({
+    context,
+    readOrgAIConfig,
+    workspaceId: null,
+    collaborators: aiCollaborators,
+  });
 
   const fillStoredTemplate =
     parsed.output.allow_unused_values === true
@@ -1416,10 +1482,10 @@ const handleFillTemplateTool: McpToolHandler<
     values: parsed.output.values,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
+    thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable,
-    aiCollaborators,
+    aiFill,
   });
   if ("usageRejection" in filled) {
     return errorResult(filled.usageRejection.message);
@@ -1478,26 +1544,28 @@ const handleFillTemplateTool: McpToolHandler<
 
   if (parsed.output.output_mode === "docx") {
     const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
-    return toolDataResult({
-      completionStatus: completion.completionStatus,
-      templateName: filled.templateName,
-      fileName: filled.fileName,
-      text: truncated
-        ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
-        : filled.text,
-      truncated,
-      docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
-      unmatchedPlaceholders: filled.unmatchedPlaceholders,
-      unusedValues: filled.unusedValues,
-      clauseWarnings: filled.clauseWarnings,
-      structureErrors: filled.structureErrors,
-      aiFieldErrors: filled.aiFieldErrors.map((error) => ({
-        field: error.valuePath,
-        reason: error.reason,
-        message: error.message,
-      })),
-      decisions: filled.conditionDecisions.map(toFillConditionDecision),
-    });
+    return toolDataResult(
+      projectionPayload(FILL_TEMPLATE_OUTPUT_SCHEMA, {
+        completionStatus: completion.completionStatus,
+        templateName: filled.templateName,
+        fileName: filled.fileName,
+        text: truncated
+          ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
+          : filled.text,
+        truncated,
+        docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
+        unmatchedPlaceholders: filled.unmatchedPlaceholders,
+        unusedValues: filled.unusedValues,
+        clauseWarnings: filled.clauseWarnings,
+        structureErrors: filled.structureErrors,
+        aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+          field: error.valuePath,
+          reason: error.reason,
+          message: error.message,
+        })),
+        decisions: filled.conditionDecisions.map(toFillConditionDecision),
+      }),
+    );
   }
 
   // The shared preview reader the template preview routes use: it flattens
@@ -1523,29 +1591,31 @@ const handleFillTemplateTool: McpToolHandler<
     renderedChars += paragraph.text.length;
   }
 
-  return toolDataResult({
-    completionStatus: completion.completionStatus,
-    templateName: filled.templateName,
-    fileName: filled.fileName,
-    paragraphs: rendered,
-    charCount,
-    truncated,
-    unmatchedPlaceholders: filled.unmatchedPlaceholders,
-    unusedValues: filled.unusedValues,
-    clauseWarnings: filled.clauseWarnings,
-    structureErrors: filled.structureErrors,
-    // Fields whose AI draft failed: they are unfilled in the document above,
-    // so an agent must supply them itself rather than treat the fill as done.
-    aiFieldErrors: filled.aiFieldErrors.map((error) => ({
-      field: error.valuePath,
-      reason: error.reason,
-      message: error.message,
-    })),
-    // What each AI-decided condition was settled on: an agent reading the
-    // paragraphs cannot tell an excluded block from one the template never
-    // carried, nor a decided `false` from a condition nothing could settle.
-    decisions: filled.conditionDecisions.map(toFillConditionDecision),
-  });
+  return toolDataResult(
+    projectionPayload(FILL_TEMPLATE_OUTPUT_SCHEMA, {
+      completionStatus: completion.completionStatus,
+      templateName: filled.templateName,
+      fileName: filled.fileName,
+      paragraphs: rendered,
+      charCount,
+      truncated,
+      unmatchedPlaceholders: filled.unmatchedPlaceholders,
+      unusedValues: filled.unusedValues,
+      clauseWarnings: filled.clauseWarnings,
+      structureErrors: filled.structureErrors,
+      // Fields whose AI draft failed: they are unfilled in the document above,
+      // so an agent must supply them itself rather than treat the fill as done.
+      aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+        field: error.valuePath,
+        reason: error.reason,
+        message: error.message,
+      })),
+      // What each AI-decided condition was settled on: an agent reading the
+      // paragraphs cannot tell an excluded block from one the template never
+      // carried, nor a decided `false` from a condition nothing could settle.
+      decisions: filled.conditionDecisions.map(toFillConditionDecision),
+    }),
+  );
 };
 
 const resolveFilledDocxName = ({
@@ -1732,12 +1802,21 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   if (Result.isError(claim)) {
     return internalFailureResult(claim.error);
   }
-  const claimToken = (() => {
+  const claimToken = (():
+    | string
+    | TypedMcpToolResponse<
+        v.InferInput<typeof SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA>
+      > => {
     switch (claim.value.status) {
       case "claimed":
         return claim.value.claimToken;
       case "completed":
-        return toolDataResult(claim.value.result);
+        return toolDataResult(
+          projectionPayload(
+            SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA,
+            claim.value.result,
+          ),
+        );
       case "conflict":
         return structuredErrorResult({
           code: "validation_error",
@@ -1800,8 +1879,6 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
 
   const readOrgAIConfig = deferOrgAIConfig(context);
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({ context, readOrgAIConfig, workspaceId });
 
   const renderDeadline = AbortSignal.timeout(
     SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
@@ -1812,9 +1889,13 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       : AbortSignal.any([context.request.signal, renderDeadline]);
   // Built only when the manifest declares an AI field: the fill service defers
   // this, so a deterministic fill opens no metered trace.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1846,7 +1927,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
       }),
-      operationSignal,
+      operationSignal: AbortSignal.any([operationSignal, signal]),
       tenantWorkspaceIds: [workspaceId],
     };
     return {
@@ -1867,11 +1948,16 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             values: input.values,
             scopedDb: context.scopedDb,
             organizationId: context.organizationId,
+            thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
             workspaceId,
             requiredFields: "enforce",
             useRecording: "caller",
-            assertUsageAvailable,
-            aiCollaborators,
+            aiFill: admitTemplateFillAi({
+              context,
+              readOrgAIConfig,
+              workspaceId,
+              collaborators: aiCollaborators,
+            }),
           }),
         {
           label: "save filled template render",
@@ -2055,7 +2141,12 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     await releaseClaim();
     return errorResult(persistence.value.message);
   }
-  return toolDataResult(persistence.value.value);
+  return toolDataResult(
+    projectionPayload(
+      SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA,
+      persistence.value.value,
+    ),
+  );
 };
 
 /**
@@ -2170,10 +2261,24 @@ const downloadHostFileDocx = async ({
   context: McpRequestContext;
   file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
 }): Promise<ResolvedTemplateDocx> => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "permission_denied",
+        message:
+          "This tool reaches a third-party service and runs only as a direct tool call",
+        hint: "Call the tool directly instead of from a script.",
+      }),
+    };
+  }
+
   const downloaded = await (
     context.testDependencies?.safeOutboundFetchBytes ?? safeOutboundFetchBytes
   )({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    permit,
     timeoutMs: HOST_FILE_DOWNLOAD_TIMEOUT_MS,
     url: file.download_url,
   });
@@ -2437,12 +2542,14 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     if (isToolErrorResult(described)) {
       return described;
     }
-    return toolDataResult({
-      templateId,
-      fieldCount: upserted.fieldCount,
-      ...described,
-      warnings: [...sourceWarnings, ...described.warnings],
-    });
+    return toolDataResult(
+      projectionPayload(CREATE_TEMPLATE_PROJECTION, {
+        templateId,
+        fieldCount: upserted.fieldCount,
+        ...described,
+        warnings: [...sourceWarnings, ...described.warnings],
+      }),
+    );
   }
 
   // The schema guarantees both on this branch: a create carries a name and a
@@ -2480,12 +2587,14 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     });
   }
 
-  return toolDataResult({
-    templateId: created.value.id,
-    fieldCount: created.value.fieldCount,
-    ...described,
-    warnings: [...sourceWarnings, ...described.warnings],
-  });
+  return toolDataResult(
+    projectionPayload(CREATE_TEMPLATE_PROJECTION, {
+      templateId: created.value.id,
+      fieldCount: created.value.fieldCount,
+      ...described,
+      warnings: [...sourceWarnings, ...described.warnings],
+    }),
+  );
 };
 
 /** The describe payload both `create_template` and `configure_template_fields`
@@ -2511,11 +2620,7 @@ const describeTemplateForAgent = async ({
       : storedTemplateFailureResult(described.storedTemplateError);
   }
   const payload = toTemplateDetailPayload(templateId, described);
-  type DescribedTemplatePayload = AssertNoExtraFields<
-    typeof payload,
-    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
-  >;
-  return payload satisfies DescribedTemplatePayload;
+  return projectionPayload(TEMPLATE_DESCRIBE_PROJECTION, payload);
 };
 
 /** `configure_template_fields`: overlay field configuration onto an existing
@@ -2864,12 +2969,14 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   if (isToolErrorResult(described)) {
     return described;
   }
-  return toolDataResult({
-    ...described,
-    issues: [...parsed.issues, ...serviceIssues].toSorted(
-      (left, right) => left.index - right.index,
-    ),
-  });
+  return toolDataResult(
+    projectionPayload(CONFIGURE_TEMPLATE_FIELDS_PROJECTION, {
+      ...described,
+      issues: [...parsed.issues, ...serviceIssues].toSorted(
+        (left, right) => left.index - right.index,
+      ),
+    }),
+  );
 };
 
 /** A stored template that could not be read: gone, its file refused by the
@@ -2976,7 +3083,13 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({
+    payload: projectionPayload(
+      PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA,
+      payload,
+    ),
+    textFields,
+  });
 };
 
 export const TEMPLATE_TOOL_HANDLERS = {

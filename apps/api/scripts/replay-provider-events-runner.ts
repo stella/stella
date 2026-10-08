@@ -42,10 +42,16 @@ const observeUnexpectedFailure = async ({
   });
 };
 
+// Dispatch reasons can quote provider values, so they stay out of stdout logs;
+// the results file keeps them.
+const stdoutLine = ({ reason: _reason, ...row }: ProviderEventReplayRow) =>
+  JSON.stringify(row);
+
 type RunReplayReportOptions = {
   ids: string[];
   mode: ProviderEventReplayMode;
   resultsPath: string;
+  writeStdout?: (chunk: string) => void;
   observeUnexpectedFailure?: typeof observeUnexpectedFailure;
   execution:
     | { type: "per_event"; replayEvent: (id: string) => Promise<ReplayAttempt> }
@@ -62,13 +68,18 @@ export const runReplayReport = async ({
   mode,
   resultsPath,
   execution,
+  writeStdout = (chunk) => process.stdout.write(chunk),
   observeUnexpectedFailure: observe = observeUnexpectedFailure,
 }: RunReplayReportOptions) => {
   const fd = openSync(resultsPath, "wx", 0o600);
   const rows: ProviderEventReplayRow[] = [];
+  // Stream rows inside a fenced JSON Lines block, like the usage policy seed,
+  // so a one-off task's results survive in its stdout logs after it exits.
+  writeStdout("```jsonl\n");
   const emitRow = (row: ProviderEventReplayRow) => {
     rows.push(row);
     writeFileSync(fd, `${JSON.stringify(row)}\n`);
+    writeStdout(`${stdoutLine(row)}\n`);
   };
   try {
     switch (execution.type) {
@@ -128,6 +139,7 @@ export const runReplayReport = async ({
       failed,
     };
   } finally {
+    writeStdout("```\n");
     closeSync(fd);
   }
 };

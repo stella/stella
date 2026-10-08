@@ -12,14 +12,18 @@ import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
 import type { DesktopLinkOutcome } from "@/features/desktop/desktop-connection-store.logic";
+import {
+  DESKTOP_HANDOFF_POLL_INTERVAL_MS,
+  watchDesktopEditHandoff,
+} from "@/features/desktop/desktop-edit-handoff";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
-const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
 const DESKTOP_ACCOUNT_LINK_HASH = "#desktop-account";
 
 export class DesktopBridgeUnavailableError extends Error {
@@ -45,11 +49,6 @@ type DesktopEditHandoff = {
   expiresAt: string;
   handoffId: string;
 };
-
-type DesktopEditHandoffStatus =
-  | { status: "expired"; expiresAt: string }
-  | { status: "opened"; sessionId: string }
-  | { status: "pending"; expiresAt: string };
 
 export type OpenFileInDesktopResult =
   | { type: "opened" }
@@ -288,7 +287,7 @@ const readDesktopEditHandoffStatus = async ({
     })
     .status.get();
 
-  return unwrapEden(response) satisfies DesktopEditHandoffStatus;
+  return unwrapEden(response);
 };
 
 const launchDesktopEditHandoff = (deepLinkUrl: string) => {
@@ -310,39 +309,15 @@ const waitForDesktopEditHandoffOpened = async ({
   handoffId: string;
   workspaceId: string;
 }) => {
-  const parsedDeadline = new Date(expiresAt).getTime();
-  let deadline = Number.isFinite(parsedDeadline)
-    ? parsedDeadline
-    : Temporal.Now.instant().epochMilliseconds + 30_000;
-
-  while (Temporal.Now.instant().epochMilliseconds < deadline) {
-    const handoffStatus = await readDesktopEditHandoffStatus({
-      handoffId,
-      workspaceId,
-    });
-
-    if (handoffStatus.status === "opened") {
-      return;
-    }
-
-    if (handoffStatus.status === "expired") {
-      break;
-    }
-
-    const nextDeadline = new Date(handoffStatus.expiresAt).getTime();
-    if (Number.isFinite(nextDeadline) && nextDeadline > deadline) {
-      deadline = nextDeadline;
-    }
-
-    await wait(
-      Math.max(
-        0,
-        Math.min(
-          DESKTOP_HANDOFF_POLL_INTERVAL_MS,
-          deadline - Temporal.Now.instant().epochMilliseconds,
-        ),
-      ),
-    );
+  const outcome = readQueryResult(
+    await watchDesktopEditHandoff({
+      expiresAt,
+      readStatus: async () =>
+        await readDesktopEditHandoffStatus({ handoffId, workspaceId }),
+    }),
+  );
+  if (outcome === "opened") {
+    return;
   }
 
   throw new DesktopBridgeUnavailableError();

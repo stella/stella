@@ -1,9 +1,12 @@
+// parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import {
@@ -11,7 +14,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -2088,7 +2090,7 @@ const readNalusText = async (
   }: NalusRequestInit & { refusalScope: ReadRefusalScope },
 ): Promise<ReadOutcome<string>> => {
   const read = await readGatedResponseText({
-    request: async () => await nalusResponse(url, init),
+    request: async () => await nalusResponse(url, { ...init, refusalScope }),
     signal: init.signal,
     refusalScope,
   });

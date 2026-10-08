@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { UploadIcon } from "@stll/ui/icons";
+import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
@@ -22,8 +22,10 @@ export const MatterUploadAction = ({
 
   return (
     <ChromeHeaderActions>
-      <Button
-        aria-label={label}
+      <ToolbarIconAction
+        density="header"
+        icon={<UploadIcon className="size-4" />}
+        label={label}
         onClick={() => {
           openFilePicker({
             multiple: true,
@@ -32,13 +34,7 @@ export const MatterUploadAction = ({
             },
           });
         }}
-        size="sm"
-        title={label}
-        variant="ghost"
-      >
-        <UploadIcon className="size-4" />
-        <span className="hidden sm:inline">{label}</span>
-      </Button>
+      />
     </ChromeHeaderActions>
   );
 };

@@ -5,7 +5,7 @@ import {
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
 } from "@stll/api-contract/search";
 
-import { projectionBranch } from "@/api/lib/chat/projection-schema";
+import { projectionBranch } from "../chat/projection-fields";
 
 export const SEARCH_PAGINATION_OUTCOME_SCHEMA = v.union([
   projectionBranch(

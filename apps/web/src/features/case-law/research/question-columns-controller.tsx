@@ -25,6 +25,8 @@ import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-controls";
+import { aiColumnRunScope } from "@/components/workspaces/ai-column-run.logic";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { AddQuestionColumn } from "@/features/case-law/research/add-question-column";
@@ -42,12 +44,15 @@ import {
   questionColumnSurface,
   questionReads,
   questionRunSet,
+  questionQueuedAnswerKeys,
+  questionRefusedAnswerKeys,
 } from "@/features/case-law/research/question-columns.logic";
 import type {
   QuestionAnswer,
   QuestionColumn,
   QuestionColumnAction,
   QuestionColumnGrants,
+  QuestionColumnRunOptions,
   QuestionColumnSurface,
   QuestionRunSet,
   QuestionSuggestionSearch,
@@ -61,6 +66,7 @@ import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
 
@@ -104,6 +110,7 @@ type RunRequest = {
 
 /** A run the reader has been shown the size of and has not yet confirmed. */
 type PendingRun = {
+  force: boolean;
   runSet: QuestionRunSet;
   /** Named so the toast and the dialog can say which question is being asked. */
   question: string | null;
@@ -117,12 +124,17 @@ export type QuestionColumnsController = {
   pendingRun: PendingRun | null;
   onCancelRun: () => void;
   onConfirmRun: () => void;
-  /** Asks every question this search shows of every row that lacks an answer. */
-  onRunAll: () => void;
   removing: QuestionColumn | null;
   onCancelRemove: () => void;
   onConfirmRemove: () => void;
 };
+
+const NO_ADDED_IDS: ReadonlySet<string> = new Set();
+const ANSWER_BUDGET_REFUSAL_CODE = "usage_limit_exceeded";
+const DEFAULT_RUN_OPTIONS = {
+  type: "remaining",
+  scope: "selection",
+} as const satisfies QuestionColumnRunOptions;
 
 export const useQuestionColumns = ({
   enabled,
@@ -152,6 +164,8 @@ export const useQuestionColumns = ({
 
   const [editing, setEditing] = useState<QuestionColumn | null>(null);
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
+  // Questions added during this visit, so their headers can say so.
+  const [addedIds, setAddedIds] = useState<ReadonlySet<string>>(NO_ADDED_IDS);
   const [removing, setRemoving] = useState<QuestionColumn | null>(null);
 
   const columnsQuery = useQuery({
@@ -217,9 +231,7 @@ export const useQuestionColumns = ({
     onError: reportFailure,
   });
 
-  // `force` is the retry of one cell that already holds a failure: the server
-  // treats anything but `pending` as answered, so without it a failed cell
-  // would be skipped and the retry would do nothing.
+  // The shared policy skips active work and licensing refusals even when forced.
   const run = useMutation({
     mutationFn: async ({ force, runSet }: RunRequest) =>
       await runAnswers({
@@ -235,11 +247,17 @@ export const useQuestionColumns = ({
       });
       await invalidateColumns();
     },
-    onError: reportFailure,
+    onError: (error) => {
+      setPendingRun(null);
+      reportFailure(error);
+    },
   });
 
   /** Ask for a run, or say there is nothing to ask; never run silently. */
-  const askToRun = (column: QuestionColumn | null) => {
+  const askToRun = (
+    column: QuestionColumn | null,
+    options: QuestionColumnRunOptions = DEFAULT_RUN_OPTIONS,
+  ) => {
     if (!canRun) {
       return;
     }
@@ -248,16 +266,45 @@ export const useQuestionColumns = ({
       ...(column === null ? {} : { columnId: column.id }),
       columns: shown,
       pageDecisionIds,
-      selectedDecisionIds,
+      selectedDecisionIds: options.scope === "page" ? [] : selectedDecisionIds,
+      force: options.type === "rerun",
     });
     if (runSet.cells === 0) {
       stellaToast.add({ title: t("caseLaw.research.nothingToRun") });
       return;
     }
     setPendingRun({
+      force: options.type === "rerun",
       runSet,
       question: column === null ? null : column.question,
     });
+  };
+
+  /**
+   * A question joins the table at its end, often past the columns on screen,
+   * with no answers until it is run: say that it arrived and offer the run,
+   * so the press is never answered by nothing visible.
+   */
+  const announceAdded = (columnIds: readonly string[]) => {
+    for (const columnId of columnIds) {
+      const column = columns.find((known) => known.id === columnId);
+      if (column === undefined) {
+        continue;
+      }
+      stellaToast.add({
+        title: t("caseLaw.research.questionAdded", {
+          question: column.question,
+        }),
+        ...(canRun
+          ? {
+              actionProps: {
+                children: t("caseLaw.research.runConfirm"),
+                onClick: () => askToRun(column),
+              },
+            }
+          : {}),
+      });
+    }
   };
 
   const onColumnAction = (
@@ -296,6 +343,26 @@ export const useQuestionColumns = ({
             activeOrganizationId,
             enabled,
             answersByKey,
+            pageDecisionIds,
+            selectedDecisionIds,
+            queuedAnswerKeys: run.isPending
+              ? questionQueuedAnswerKeys({
+                  answersByKey,
+                  force: run.variables.force,
+                  runSet: run.variables.runSet,
+                })
+              : NO_ADDED_IDS,
+            refusedAnswerKeys:
+              run.isError &&
+              APIError.is(run.error) &&
+              run.error.code === ANSWER_BUDGET_REFUSAL_CODE
+                ? questionRefusedAnswerKeys({
+                    answersByKey,
+                    runSet: run.variables.runSet,
+                  })
+                : NO_ADDED_IDS,
+            onRunColumn: askToRun,
+            onRunSelectedRows: () => askToRun(null),
             columns: shown,
             addable,
             onAddToSearch: (columnIds) => {
@@ -309,7 +376,10 @@ export const useQuestionColumns = ({
                   shownIds,
                 }),
               );
+              setAddedIds((current) => new Set([...current, ...columnIds]));
+              announceAdded(columnIds);
             },
+            addedIds,
             grants: { ...grants, run: grants.run && canRun },
             ...(reads.type === "ready" && reads.notice !== undefined
               ? { readNotice: reads.notice }
@@ -344,11 +414,10 @@ export const useQuestionColumns = ({
         return;
       }
       detached(
-        run.mutateAsync({ force: false, runSet: pendingRun.runSet }),
+        run.mutateAsync({ force: pendingRun.force, runSet: pendingRun.runSet }),
         "case-law-questions.run",
       );
     },
-    onRunAll: () => askToRun(null),
     removing,
     onCancelRemove: () => setRemoving(null),
     onConfirmRemove: () => {
@@ -390,6 +459,37 @@ const QuestionReadError = ({ retry }: { retry: () => Promise<unknown> }) => {
   );
 };
 
+export const QuestionColumnSelectionBar = ({
+  surface,
+}: {
+  surface: QuestionColumnSurface;
+}) => {
+  if (
+    surface.type !== "available" ||
+    !surface.grants.run ||
+    surface.columns.length === 0
+  ) {
+    return null;
+  }
+  const scope = aiColumnRunScope({
+    pageRowIds: surface.pageDecisionIds,
+    selectedRowIds: surface.selectedDecisionIds,
+  });
+  if (scope.type !== "selection") {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+      <AiColumnSelectionAction
+        columns={surface.columns.length}
+        rows={scope.count}
+        disabled={surface.isRunning}
+        onRun={surface.onRunSelectedRows}
+      />
+    </div>
+  );
+};
+
 export const QuestionColumnControls = ({
   controller,
 }: {
@@ -423,17 +523,6 @@ export const QuestionColumnControls = ({
         <QuestionReadError retry={surface.readNotice.retry} />
       )}
       <AddQuestionColumn surface={surface} triggerVariant="labelled" />
-      {surface.grants.run && surface.columns.length > 0 && (
-        <Button
-          className="text-muted-foreground h-7 min-h-0"
-          disabled={surface.isRunning}
-          onClick={controller.onRunAll}
-          size="sm"
-          variant="ghost"
-        >
-          {t("caseLaw.research.runAll")}
-        </Button>
-      )}
 
       {editing !== null && (
         <BulkAddColumns
@@ -448,7 +537,7 @@ export const QuestionColumnControls = ({
           open
           target={{
             kind: "organisation",
-            editing,
+            mode: { type: "edit", column: editing },
             suggestion: surface.suggestion,
           }}
           triggerVariant="none"

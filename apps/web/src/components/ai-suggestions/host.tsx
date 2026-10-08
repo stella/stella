@@ -64,6 +64,7 @@ import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-optio
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
+import { DockedChatSurface } from "@/components/chat/docked-chat-stack";
 import {
   DOC_FLOAT_SURFACE_CLASS,
   DockedComposer,
@@ -79,7 +80,6 @@ import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availabi
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
-import { DOCKED_COMPOSER_WIDTH_CLASS } from "./composer-geometry";
 import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
 import type { FileAIChatStatus } from "./types";
 
@@ -296,30 +296,6 @@ type PromptBarProps = {
 };
 
 /**
- * Bottom offset for a floating `ChatThreadCard` so it clears the docked
- * composer stack that `DockedComposer` pins at `bottom-3.5` (14px).
- *
- * Stack, measured from the pane's bottom edge: 14px column offset +
- * ~24px status row (icon-xs controls) + 6px bar-to-row gap (`mt-1.5`) +
- * ~46px bar (the shared compact row, `min-h-11` + border) ⇒ the bar's TOP
- * sits ~90px up. `bottom-26` (104px) drops the card ~14px above that,
- * matching the transcript's rhythm. (Both floating surfaces render a status
- * row; a bar-only stack would clear this offset with room to spare.)
- */
-const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-26";
-
-/**
- * Taller bottom offset for the thread card when the floating DOCX
- * `ReviewBar` is present. The review pill pins at `bottom-24` (96px) and
- * stands ~40px tall, so its top sits ~136px up. `bottom-40` (160px) drops
- * the card ~24px above the pill so the two never overlap (the collision
- * seen when a card and the review bar were both anchored near the pane
- * bottom). Callers pass this to `ChatThreadCard`'s `bottomOffsetClass`
- * whenever the entity has pending suggestions driving the review bar.
- */
-export const FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS = "bottom-40";
-
-/**
  * Collapse affordance rendered by `ChatThreadCard` in its top end
  * corner, so the composer bar never carries a thread-visibility
  * control. The card reopens automatically on the next send.
@@ -350,13 +326,6 @@ type ChatThreadCardProps = {
   scrollRef: RefObject<HTMLDivElement | null>;
   onCollapse: () => void;
   /**
-   * Bottom offset of the floating card. Defaults to
-   * {@link FLOATING_THREAD_CARD_OFFSET_CLASS}; pass
-   * {@link FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS} when the DOCX
-   * review bar is present so the card clears it.
-   */
-  bottomOffsetClass?: string | undefined;
-  /**
    * Optional title area at the start of the header row (e.g. the thread's
    * rename affordance). Optional because Template Studio renders this card
    * without a header beyond the collapse control.
@@ -367,59 +336,59 @@ type ChatThreadCardProps = {
 
 /**
  * The floating glass thread card shared by the file-chat overlay and
- * Template Studio. One owner of the card's geometry (aligned to the
- * `DockedComposer` stack via the shared width + offset constants), its
- * glass treatment, the collapse affordance, and the scrolling transcript
- * container, so the two surfaces can never drift. Surfaces pass only
- * their transcript (and any suggestion list) as children.
+ * Template Studio. It has no position of its own: it renders into the
+ * composer column's thread slot (`DockedChatSurface`), so it takes the
+ * composer's width, inset and anchor and sits on the bar with one gap on
+ * every host. It owns the glass treatment, the header, the collapse
+ * affordance and the scrolling transcript; surfaces pass only their
+ * transcript (and any suggestion list) as children.
  */
 export const ChatThreadCard = ({
   scrollRef,
   onCollapse,
-  bottomOffsetClass,
   titleSlot,
   children,
 }: ChatThreadCardProps) => {
   const t = useTranslations();
   return (
-    <div
-      aria-label={t("chat.aiThread")}
-      className={cn(
-        "absolute start-1/2 z-40 flex max-h-[min(45dvh,380px)] min-h-0 -translate-x-1/2 flex-col overflow-hidden rounded-2xl border",
-        bottomOffsetClass ?? FLOATING_THREAD_CARD_OFFSET_CLASS,
-        DOCKED_COMPOSER_WIDTH_CLASS,
-        "bg-popover/90 border-border text-popover-foreground",
-        "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
-        "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
-        "hover:bg-popover focus-within:bg-popover",
-        "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
-        "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
-      )}
-      role="dialog"
-    >
-      {/* Collapse control lives in its own non-scrolling header row so the
-          transcript's scrollbar runs *below* it — the two no longer clash at
-          the top-end corner. */}
-      <div className="flex shrink-0 items-center justify-end gap-2 px-1.5 pt-1.5">
-        {titleSlot !== undefined && (
-          <div className="flex min-w-0 flex-1 items-center ps-1.5">
-            {titleSlot}
-          </div>
+    <DockedChatSurface slot="thread">
+      <div
+        aria-label={t("chat.aiThread")}
+        className={cn(
+          "relative flex max-h-[min(45dvh,380px)] min-h-0 w-full flex-col overflow-hidden rounded-2xl border",
+          "bg-popover/90 border-border text-popover-foreground",
+          "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
+          "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
+          "hover:bg-popover focus-within:bg-popover",
+          "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
+          "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
         )}
-        <ThreadCardCollapseButton onCollapse={onCollapse} />
-      </div>
-      {/* Plain scroll container — bypasses the legacy Conversation's
+        role="dialog"
+      >
+        {/* The header is its own opaque row with a hairline under it, so the
+          transcript and whatever lies behind the glass never show through
+          the title. The transcript scrolls in the row below, never under it. */}
+        <div className="border-border bg-popover flex shrink-0 items-center justify-end gap-2 border-b px-1.5 py-1.5">
+          {titleSlot !== undefined && (
+            <div className="flex min-w-0 flex-1 items-center ps-1.5">
+              {titleSlot}
+            </div>
+          )}
+          <ThreadCardCollapseButton onCollapse={onCollapse} />
+        </div>
+        {/* Plain scroll container — bypasses the legacy Conversation's
           `size-full` chain, which only resolves when the parent has an
           explicit height (this card caps with `max-h` only, so flex-1
           children get no definite size to base `size-full` on). */}
-      <div
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pt-1 pb-3"
-        ref={scrollRef}
-        style={{ scrollbarGutter: "stable" }}
-      >
-        {children}
+        <div
+          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pt-1 pb-3"
+          ref={scrollRef}
+          style={{ scrollbarGutter: "stable" }}
+        >
+          {children}
+        </div>
       </div>
-    </div>
+    </DockedChatSurface>
   );
 };
 
@@ -1051,7 +1020,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
     // button stays the keyboard/AT path); clicks owned by interior
     // buttons (header, accept, reject) are skipped so they don't
     // double-fire.
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
     <div
       data-status={suggestion.status}
       onClick={(event) => {

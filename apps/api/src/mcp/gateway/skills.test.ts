@@ -248,7 +248,7 @@ describe("MCP gateway skill tools", () => {
 
     expect(writer.map((tool) => tool.exposedName)).toEqual([
       "skill__plain",
-      "skill__playbook-builder",
+      "skill__playbook_builder",
     ]);
     expect(reader.map((tool) => tool.exposedName)).toEqual(["skill__plain"]);
   });
@@ -291,7 +291,7 @@ describe("MCP gateway skill tools", () => {
 
     const resolved = await resolveSkillTool({
       context,
-      toolName: "skill__playbook-builder",
+      toolName: "skill__playbook_builder",
     });
 
     expect(resolved?.availability).toEqual({

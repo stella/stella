@@ -20,6 +20,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "@stll/ui/icons";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import {
   Menu,
@@ -1012,23 +1013,12 @@ function SkillFileTree({
       renderName={(node) => {
         if (node.kind === "folder" && renamingFolderPath === node.id) {
           return (
-            <Input
-              autoFocus
-              className="flex-1"
+            <InlineRenameInput
               onBlur={onCancelFolderRename}
-              onChange={(event) => setRenameValue(event.target.value)}
+              onCancel={onCancelFolderRename}
+              onValueChange={setRenameValue}
               onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  onSubmitFolderRename(node.id, renameValue);
-                }
-                if (event.key === "Escape") {
-                  onCancelFolderRename();
-                }
-              }}
-              size="sm"
+              onCommit={() => onSubmitFolderRename(node.id, renameValue)}
               value={renameValue}
             />
           );
@@ -1041,28 +1031,21 @@ function SkillFileTree({
           resource
         ) {
           return (
-            <Input
-              autoFocus
-              className="flex-1"
+            <InlineRenameInput
               onBlur={onCancelRename}
-              onChange={(event) => setRenameValue(event.target.value)}
+              onCancel={onCancelRename}
+              onValueChange={setRenameValue}
               onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  onSubmitRename(resource.path, renameValue);
-                }
-                if (event.key === "Escape") {
-                  onCancelRename();
-                }
-              }}
-              size="sm"
+              onCommit={() => onSubmitRename(resource.path, renameValue)}
               value={renameValue}
             />
           );
         }
-        return <span className="truncate">{node.name}</span>;
+        return (
+          <span className="overflow-hidden text-ellipsis whitespace-pre">
+            {node.name}
+          </span>
+        );
       }}
       selectedId={selectedId}
     />

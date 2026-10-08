@@ -159,6 +159,8 @@ describe("OAuth consent app details", () => {
     for (const [clientId, unverified] of [
       ["https://claude.ai/oauth/claude-code-client-metadata", false],
       ["https://chatgpt.com/oauth/client.json", false],
+      ["https://chatgpt.com/oauth/codex/client.json", false],
+      ["https://chatgpt.com/oauth/codex/other.json", true],
       ["https://claude.ai/oauth/other-client-metadata", true],
     ] as const) {
       expect(

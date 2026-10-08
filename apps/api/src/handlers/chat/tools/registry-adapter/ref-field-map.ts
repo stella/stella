@@ -26,6 +26,7 @@ import {
   MANAGE_ORGANIZATION_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   LOOKUP_CASE_LAW_PROJECTION,
+  CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROJECTION,
@@ -278,6 +279,11 @@ export const READ_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Public corpora: public ids, no tenant refs ---------------------------
+  case_law_coverage: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: CASE_LAW_COVERAGE_PROJECTION,
+  },
   search_case_law: {
     chatProjectable: true,
     inputRefs: [],

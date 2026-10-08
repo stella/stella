@@ -34,7 +34,10 @@ export type FeatureAccessGrants = Readonly<
   Record<string, readonly FeatureGrant[]>
 >;
 
-const grantsObjectSchema = v.record(v.string(), v.array(featureGrantSchema));
+// Validate entries so prototype-named keys receive the same shape checks.
+const grantsEntriesSchema = v.array(
+  v.tuple([v.string(), v.array(featureGrantSchema)]),
+);
 
 export const createFeatureAccessGrantsEnvSchema = (registry: FeatureRegistry) =>
   v.optional(
@@ -42,26 +45,26 @@ export const createFeatureAccessGrantsEnvSchema = (registry: FeatureRegistry) =>
       v.string(),
       v.rawTransform(({ dataset, addIssue, NEVER }) => {
         const json = Result.try((): unknown => JSON.parse(dataset.value));
-        const parsed = json.isOk()
-          ? v.safeParse(grantsObjectSchema, json.value)
-          : null;
-        if (
-          parsed === null ||
-          !parsed.success ||
-          !json.isOk() ||
-          !isRecord(json.value) ||
-          Object.keys(json.value).some(
-            (featureId) => !Object.hasOwn(registry, featureId),
-          )
-        ) {
+        const parsed =
+          json.isOk() && isRecord(json.value)
+            ? v.safeParse(grantsEntriesSchema, Object.entries(json.value))
+            : null;
+        if (parsed === null || !parsed.success) {
           addIssue({
             input: "[redacted]",
             message:
-              "API_FEATURE_ACCESS_GRANTS must be a JSON object of registered feature grants",
+              "API_FEATURE_ACCESS_GRANTS must be a JSON object of feature grants",
           });
           return NEVER;
         }
-        return parsed.output;
+        const entries = parsed.output;
+        const knownEntries = entries.filter(([featureId]) =>
+          Object.hasOwn(registry, featureId),
+        );
+        return {
+          grants: Object.fromEntries(knownEntries),
+          unknownGrantCount: entries.length - knownEntries.length,
+        };
       }),
     ),
     "{}",

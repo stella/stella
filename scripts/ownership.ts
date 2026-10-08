@@ -18,9 +18,37 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
+import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "../apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
+import { OUTBOUND_PERMIT_GRANT_OWNERS } from "./outbound-transport-census.ts";
+import { SHA256_OWNERS } from "./sha256-owners.ts";
+
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = ["docs/module-ownership.md"];
+
+const statusTransitionColumns = () => {
+  const columns = new Map(
+    Object.entries(STATUS_COLUMNS).map(([table, names]) => [
+      table,
+      new Set<string>(names),
+    ]),
+  );
+  for (const { tableName, stateColumn } of Object.values(
+    SANCTIONS_MONITORING_TRANSITION_IDENTITIES,
+  )) {
+    const names = columns.get(tableName) ?? new Set<string>();
+    names.add(stateColumn);
+    columns.set(tableName, names);
+  }
+  return Object.fromEntries(
+    [...columns].map(([table, names]) => [table, [...names].toSorted()]),
+  );
+};
+
+const STATUS_TRANSITION_COLUMNS = statusTransitionColumns();
 
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
@@ -31,6 +59,11 @@ export type AllowedFile = {
 
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "literal-pattern";
+      readonly pattern: string;
+      readonly allowed: readonly AllowedFile[];
+    }
   | {
       readonly kind: "status-set";
       readonly columns: Readonly<Record<string, readonly string[]>>;
@@ -62,6 +95,12 @@ export type OwnershipEnforcement =
       readonly method: string;
       readonly within: readonly string[];
       readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      readonly kind: "function-call";
+      readonly name: string;
+      readonly within: readonly string[];
+      readonly allowed: readonly AllowedFile[];
     };
 
 export type OwnershipEntry = {
@@ -71,6 +110,56 @@ export type OwnershipEntry = {
   readonly summary: string;
   readonly enforcement: OwnershipEnforcement;
 };
+
+export const SCHEMA_INTROSPECTION = [
+  {
+    path: "apps/api/src/scripts/check-public-corpus-audit.ts",
+    reason:
+      "Enumerates full-schema metadata for corpus admission verification without database operations.",
+  },
+  {
+    path: "apps/api/scripts/generate-status-tables.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/schema.ts",
+    reason: "Re-exports the schema declarations.",
+  },
+  {
+    path: "apps/api/src/db/code-owned-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/high-volume-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/db/plan-guard-tables.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/tests/security/schema-invariants.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+  {
+    path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
+    reason: "Enumerates full-schema metadata without database operations.",
+  },
+] as const satisfies readonly AllowedFile[];
+
+const isSchemaEnforcement = (
+  enforcement: OwnershipEnforcement,
+  ownerPath: string,
+): boolean =>
+  enforcement.kind === "import" &&
+  enforcement.specifiers.length > 0 &&
+  enforcement.specifiers.every((specifier) => {
+    const module = canonicalModuleId(specifier, ownerPath);
+    return (
+      module === "apps/api/src/db/schema" ||
+      module.startsWith("apps/api/src/db/schema/")
+    );
+  });
 
 const FLUSHES_ITS_OWN_SEARCH_MARKS =
   "Flushes the search marks its own transaction committed.";
@@ -88,6 +177,134 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // exemptions cannot drift apart. Adding a door here does not add a shape to
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
+  {
+    id: "personal-api-key-lifecycle",
+    capability: "Managing member-owned credentials in the denied auth table",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-lifecycle.ts"],
+    summary:
+      "Bounded lifecycle operations retain organization and owner SQL predicates, lock live membership, enforce policy and active-key limits, and audit within the mutation transaction. No raw database handle is exported.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-lifecycle"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/api-keys/personal/create.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/rotate.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/list-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/revoke-organization.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/handlers/api-keys/personal/policy.ts",
+          reason: "Owns the session-authorized personal key operation.",
+        },
+        {
+          path: "apps/api/src/lib/machine-api-keys/personal-policy-reader.ts",
+          reason: "Exposes only the read-only organization policy operation.",
+        },
+      ],
+    },
+  },
+  {
+    id: "operator-registration-directory",
+    capability: "Serving audited operator registration pages",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Reads bounded registration pages through the owner connection and records each read transactionally; callers receive only the declared directory fields, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["readOperatorRegistrationPage"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/operator/registrations.ts",
+          reason:
+            "Authorizes the deployment credential before reading the directory.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "review-account-provisioning",
+    capability:
+      "Provisioning the restricted review account's organization and owner membership",
+    owner: [
+      "apps/api/src/db/root.ts",
+      "apps/api/src/lib/db/review-account-organization-store.ts",
+    ],
+    summary:
+      "The organization plugin refuses the review account by policy, so its single organization, the creation seeds and the owner membership are written on the owner connection in one transaction. The connection owner binds the store; the operator command receives the operations, never a database handle.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["bindOwnerReviewAccountOrganizationStore"],
+      allowed: [
+        {
+          path: "apps/api/src/scripts/review-account.ts",
+          reason: "Command that provisions the restricted review account.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "review-organization-reset-fence",
+    capability:
+      "Locking the restricted review organization before each reset transaction",
+    owner: ["apps/api/src/db/root.ts"],
+    summary:
+      "Runs the caller's organization-row lock and sole-membership check as the owner at the start of each scoped transaction, before the role switch; the caller receives a scoped database, never the pool.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/root"],
+      names: ["createFencedRlsDatabase"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Fences every reset transaction to the review account's sole membership.",
+        },
+      ],
+    },
+  },
+
+  {
+    id: "personal-api-key-policy-reader",
+    capability:
+      "Reading personal API key policy during credential verification",
+    owner: ["apps/api/src/lib/machine-api-keys/personal-policy-reader.ts"],
+    summary:
+      "The MCP authentication boundary can read policy without importing lifecycle mutations.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/machine-api-keys/personal-policy-reader"],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason: "Checks policy before accepting a personal credential.",
+        },
+      ],
+    },
+  },
+
   {
     id: "public-sanctions-reader-binding",
     capability:
@@ -154,6 +371,11 @@ export const ROOT_CONNECTION_DOORS = [
         {
           path: "apps/api/src/handlers/desktop-registry/redeem-link.ts",
           reason: "Claims the native connection request.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/handoff-auth.ts",
+          reason:
+            "Records a terminal handoff acknowledgement before returning a protocol or account refusal.",
         },
         {
           path: "apps/api/src/handlers/entities/desktop-edit-handoffs.ts",
@@ -374,12 +596,22 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
 const MODEL_REQUEST_NAMES = [
   "collectTanStackTextRun",
   "generateChatObject",
+  "generateTanStackChatObject",
   "generateTanStackObjectForRole",
   "generateTanStackTextForRole",
   "streamChatChunks",
   "streamChatObject",
+  "streamTanStackChatRun",
   "streamTanStackObjectForRole",
   "streamTanStackTextForRole",
+] as const;
+
+// The engine's raw run forms. Their failures carry provider and model text, so
+// only the modules that project them to fixed-message errors call them.
+const RAW_MODEL_RUN_NAMES = [
+  "generateChatObject",
+  "streamChatChunks",
+  "streamChatObject",
 ] as const;
 
 export const STATUS_TRANSITION_OWNERSHIP = {
@@ -388,7 +620,11 @@ export const STATUS_TRANSITION_OWNERSHIP = {
   owner: ["apps/api/src/lib/db/transitions.ts"],
   summary:
     "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. A required recorder audits successful updates in the caller's transaction; stale updates record nothing and recorder failure rolls the update back. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments are lint errors outside the measured backlog; per-file shrink-only guards forbid adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
-  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+  enforcement: {
+    kind: "status-set",
+    columns: STATUS_TRANSITION_COLUMNS,
+    allowed: [],
+  },
 } as const satisfies OwnershipEntry;
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
@@ -410,8 +646,98 @@ const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
 ] as const;
 
-export const OWNERSHIP = [
+const OWNERSHIP_DECLARATIONS = [
+  {
+    id: "third-party-outbound-permit",
+    capability: "Issuing third-party request authority",
+    owner: ["apps/api/src/lib/auth/third-party-outbound-permit.ts"],
+    summary:
+      "Direct request, job and operator boundaries issue the identities checked by the shared outbound request owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/auth/third-party-outbound-permit"],
+      names: ["grantThirdPartyOutboundPermit"],
+      allowed: OUTBOUND_PERMIT_GRANT_OWNERS,
+    },
+  },
+  {
+    id: "outbound-request-transport",
+    capability: "Sending bounded outbound requests",
+    owner: ["apps/api/src/lib/safe-outbound-fetch.ts"],
+    summary:
+      "Byte and stream requests carry an issued permit. scripts/outbound-transport-ownership.ts enumerates API transport acquisition against the classified owner census in scripts/outbound-transport-census.ts.",
+    enforcement: { kind: "none" },
+  },
+
   STATUS_TRANSITION_OWNERSHIP,
+  {
+    id: "deferred-document-source-ownership",
+    capability: "Owning deferred document writes",
+    owner: ["apps/api/src/lib/legal-search/sk-document-backfill.ts"],
+    summary:
+      "Deferred document operations acquire source ownership before remote and database effects. Raw write functions stay within the writer module.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/legal-search/deferred-document-source-ownership"],
+      allowed: [],
+    },
+  },
+  {
+    id: "sha256",
+    capability: "Hashing content with SHA-256 across runtimes",
+    owner: Object.keys(SHA256_OWNERS),
+    summary:
+      "Private runtime helpers and a published-package local owner preserve bytes, update order and digest encodings. no-raw-sha256 confines primitives to registered owners; the enumerating migration ledger only shrinks.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "desktop-presence-observations",
+    capability: "Reading and retaining desktop presence observations",
+    owner: ["apps/api/src/handlers/desktop-presence/service.ts"],
+    summary:
+      "The service serializes reports against live membership and retains ten newest installations per organization and user. Offboarding clears observations in its membership transaction.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/desktop-presence"],
+      names: ["desktopPresence"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/member-assignment-offboarding.ts",
+          reason: "Clears observations during organization membership removal.",
+        },
+      ],
+    },
+  },
+  {
+    id: "citation-graph-transaction",
+    capability: "Acquiring the citation graph transaction lock",
+    owner: ["apps/api/src/handlers/case-law/citation-graph-transaction.ts"],
+    summary:
+      "The graph owner acquires its advisory lock before domain row locks and passes a branded transaction to graph writers. The conditional owner declines busy walks before reading their cursor.",
+    enforcement: {
+      kind: "literal-pattern",
+      pattern: "citation_resolution_walk",
+      allowed: [
+        {
+          path: "scripts/ownership.ts",
+          reason: "Declares the confined lock key.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/citation-graph-transaction.test.ts",
+          reason: "Checks graph admission and failed acquisition.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/citation-graph-lock-order.postgres.test.ts",
+          reason: "Exercises graph lock ordering and the rejecting mutation.",
+        },
+        {
+          path: ".oxlint-plugins/__tests__/confine-owner.test.ts",
+          reason:
+            "Exercises rejected literal and SQL fixtures through the lint rule.",
+        },
+      ],
+    },
+  },
   {
     id: "task-assignment-membership",
     capability: "Writing task assignments for current matter members",
@@ -431,16 +757,6 @@ export const OWNERSHIP = [
       ],
       names: ["taskAssignees"],
       allowed: [
-        {
-          path: "apps/api/src/scripts/check-public-corpus-audit.ts",
-          reason:
-            "Full-schema introspection for corpus admission verification; no reads or writes of the protected tables.",
-        },
-        {
-          path: "apps/api/scripts/generate-status-tables.ts",
-          reason:
-            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes task assignments.",
-        },
         {
           path: "apps/api/src/db/",
           reason: "Schema and relation declarations.",
@@ -464,6 +780,53 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/mcp/matter-tools.ts",
           reason: "Read task detail projection.",
+        },
+      ],
+    },
+  },
+  {
+    id: "transaction-proof-minting",
+    capability: "Minting transaction-bound checked proofs",
+    owner: ["apps/api/src/lib/proofs/checked-transaction.ts"],
+    summary:
+      "The shared proof core names the actor, entity and transaction, runs the trusted predicate, and supplies evidence only after success. Predicate modules retain their domain checks.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@gdp-ts/core"],
+      names: ["defineProof"],
+      allowed: [],
+    },
+  },
+  {
+    id: "transaction-proof-predicates",
+    capability: "Checking facts for transaction-bound proofs",
+    owner: [
+      "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
+      "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
+    ],
+    summary:
+      "Only trusted predicate modules may invoke the shared proof boundary; operation callers use their domain checking functions.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/proofs/checked-transaction"],
+      names: ["withCheckedTransaction"],
+      allowed: [],
+    },
+  },
+  {
+    id: "audit-detail-projection",
+    capability: "Projecting audit change details for storage and reads",
+    owner: ["apps/api/src/lib/audit-log-details.ts"],
+    summary:
+      "Audit readers share a total resource policy and principal-bound feature projection. The storage projection is confined to the audit writer; pages, exports and tools use the read projection.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/audit-log-details"],
+      names: ["auditChangesForResource"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/audit-log.ts",
+          reason: "Applies the storage projection when recording audit events.",
         },
       ],
     },
@@ -550,52 +913,12 @@ export const OWNERSHIP = [
       names: ["hostedUsageWebhookEvents"],
       allowed: [
         {
-          path: "apps/api/src/scripts/check-public-corpus-audit.ts",
-          reason:
-            "Full-schema introspection for corpus admission verification; no provider event reads or writes.",
-        },
-        {
-          path: "apps/api/scripts/generate-status-tables.ts",
-          reason:
-            "Inspects Drizzle column metadata to generate the lifecycle inventory; never writes provider receipts.",
-        },
-        {
-          path: "apps/api/src/db/schema.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/code-owned-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/high-volume-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/db/plan-guard-tables.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
           path: "apps/api/src/tests/pglite-test-db.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
         {
-          path: "apps/api/src/tests/security/schema-invariants.test.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
           path: "apps/api/src/tests/security/test-utils.ts",
-          reason:
-            "Schema export or full-schema test introspection; no production receipt writer.",
-        },
-        {
-          path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
@@ -809,6 +1132,124 @@ export const OWNERSHIP = [
       "types and constructors outside this owner, including aliases and Default paths. " +
       "Local HTTP tests exercise the outgoing headers across configuration choices.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "model-dispatch-admission",
+    capability: "Proving a model dispatch was admitted",
+    owner: ["apps/api/src/lib/rate-limit/model-dispatch-admission.ts"],
+    summary:
+      "Every model dispatch for an organization carries a `ModelDispatchAdmission`, " +
+      "which only the admission wrappers mint, inside the run they admitted. A step of " +
+      "a larger action (a subagent, an in-turn compaction, a workflow batch) dispatches " +
+      "on its parent's proof and is never admitted again. The proof lives only while " +
+      "its admitted run does; `model-dispatch-admission.test.ts` enumerates every dispatch site.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
+      names: ["admitModelDispatch"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/api-handlers.ts",
+          reason: "Finite handler admission, for the request it admitted.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/execution-admission.ts",
+          reason: "Chat and streamed executions, for the lease it holds.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/queued-action-admission.ts",
+          reason: "Background jobs and scheduled work, for the slot it holds.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/model-action-admission.ts",
+          reason:
+            "Model actions code starts on its own, for the run it admitted.",
+        },
+      ],
+    },
+  },
+  {
+    id: "fixture-model-dispatch-admission",
+    capability: "Proving a fixture dispatch no admission holds",
+    owner: ["apps/api/src/lib/rate-limit/model-dispatch-admission.ts"],
+    summary:
+      "Production proofs live only inside the run an admission wrapper admitted; " +
+      "only offline evaluations (and tests) mint a standalone proof for a fixture organization.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
+      names: ["admitFixtureModelDispatch"],
+      allowed: [
+        {
+          path: "apps/api/evals/",
+          reason: "Offline evaluations against a fixture organization.",
+        },
+      ],
+    },
+  },
+  {
+    id: "no-organization-model-dispatch",
+    capability: "Model work with no organization budget",
+    owner: ["apps/api/src/lib/rate-limit/model-dispatch-admission.ts"],
+    summary:
+      "A dispatch with no organization (corpus-wide work, provider canaries, " +
+      "evaluations) carries `NO_ORGANIZATION_MODEL_DISPATCH`; the dispatch type ties " +
+      "it to a null organization, so tenant work cannot use it.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/rate-limit/model-dispatch-admission"],
+      names: ["NO_ORGANIZATION_MODEL_DISPATCH"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
+          reason: "Corpus citation polarity, run by operator scripts.",
+        },
+        {
+          path: "apps/api/evals/",
+          reason: "Offline evaluations over fixture content.",
+        },
+        {
+          path: "apps/api/scripts/ai-native-image-canary.ts",
+          reason: "Provider canary with synthetic content.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary.ts",
+          reason: "Provider canary with synthetic content.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-cassette-probe.ts",
+          reason: "Records provider cassettes from synthetic prompts.",
+        },
+        {
+          path: "apps/api/scripts/benchmark-chat-read-surface.ts",
+          reason: "Benchmark with synthetic content.",
+        },
+      ],
+    },
+  },
+  {
+    id: "model-resolution",
+    capability: "Resolving a model adapter",
+    owner: ["apps/api/src/lib/tanstack-ai-models.ts"],
+    summary:
+      "Production code resolves a model through `resolveTanStackTextModel`, which " +
+      "requires the dispatch's admission proof; the adapter builders behind it are " +
+      "not reachable without one.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/tanstack-ai-models"],
+      names: [
+        "createTanStackTextAdapterFactory",
+        "getTanStackTextModelById",
+        "getTanStackTextModelForRole",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/lib/tanstack-ai-generate.ts",
+          reason: "The dispatch seam: resolves after checking the admission.",
+        },
+      ],
+    },
   },
   {
     id: "desktop-account",
@@ -1181,6 +1622,33 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "bounded-export-read",
+    capability: "Reading a complete set within an export row cap",
+    owner: ["apps/api/src/lib/db/read-bounded.ts"],
+    summary:
+      "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
+      "complete rows or an explicit overflow result without a partial set. " +
+      "`readCursorPage` uses the same sentinel and the existing `Page` owner " +
+      "to preserve worker continuation without claiming a partial set is complete. " +
+      "This owner handles expected export ceilings; `boundedAll` instead " +
+      "panics when a write-path cardinality invariant is violated. " +
+      "`scripts/transfer-read-guard.ts` enumerates fixed-limit reads and " +
+      "enforces their shrink-only migration baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "fetch-transfer-timeout",
+    capability: "Applying response header and body idle deadlines",
+    owner: ["packages/fetch/src/index.ts"],
+    summary:
+      "`@stll/fetch` requires a header or idle timeout policy for new callers " +
+      "and composes caller cancellation. Idle deadlines cover pending body reads; " +
+      "header deadlines stop at the response. Deprecated numeric callers and " +
+      "raw total deadlines on body reads are enumerated by " +
+      "`scripts/transfer-read-guard.ts` with a shrink-only baseline.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "case-law-source-fingerprint",
     capability:
       "The change-detection hash of a case-law decision's stored source",
@@ -1248,6 +1716,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
           reason: "Loads persisted source bytes for ingestion.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
+          reason:
+            "Loads persisted source bytes under the completion job's byte cap and tick deadline.",
         },
         {
           path: "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
@@ -1563,6 +2036,11 @@ export const OWNERSHIP = [
       names: ["sessionMemberRole", "authorizedMemberRole"],
       allowed: [
         {
+          path: "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
+          reason:
+            "Builds the key owner authority from a locked live membership before minting.",
+        },
+        {
           path: "apps/api/src/lib/auth.ts",
           reason: "Builds the authenticated session context.",
         },
@@ -1587,6 +2065,11 @@ export const OWNERSHIP = [
           path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
           reason:
             "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
+        {
+          path: "apps/api/src/lib/review-organization/reset.ts",
+          reason:
+            "Builds the restricted review account's authority from the sole membership the reset just proved, for the sample-data seed.",
         },
       ],
     },
@@ -1730,6 +2213,46 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/file-scan/document-parsers.ts",
           reason:
             "Parse boundary: wraps applyFolioAIEditsToBuffer so its input must be a ScannedFile; applyAiEditsToDocx in the owner calls the wrapper, so edit attribution stays with the owner.",
+        },
+      ],
+    },
+  },
+  {
+    id: "model-run-failure-projection",
+    capability: "Running a model through the engine's raw run forms",
+    owner: ["apps/api/src/lib/tanstack-ai-generate.ts"],
+    summary:
+      "A failed run's `RUN_ERROR` message and code, and the errors the engine " +
+      "throws, carry provider bodies and model output. The owner turns every " +
+      "failure into a `ProviderCallError` or `ModelRunError` with a fixed " +
+      "message (`withRecoveredProviderStatus`), and hands a caller that " +
+      "consumes chunks itself `streamTanStackChatRun`, whose `RUN_ERROR` " +
+      "carries only that message and the classified kind. A caller that " +
+      "assembles its own options uses `streamTanStackChatRun`, " +
+      "`collectTanStackTextRun` or `generateTanStackChatObject`.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/chat/tanstack-chat-runtime"],
+      names: RAW_MODEL_RUN_NAMES,
+      allowed: [
+        {
+          path: "apps/api/src/handlers/chat/stream-chat.ts",
+          reason:
+            "The chat turn projects each `RUN_ERROR` through `normalizeRunErrorChunk` before it is streamed or stored.",
+        },
+        {
+          path: "apps/api/evals/",
+          reason:
+            "Offline evaluations: a run failure is reported to the operator and never stored.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary.ts",
+          reason:
+            "Provider canary: reads the raw run error to report the provider's answer to the operator.",
+        },
+        {
+          path: "apps/api/scripts/benchmark-chat-read-surface.ts",
+          reason: "Benchmark with synthetic content; nothing is stored.",
         },
       ],
     },
@@ -2338,6 +2861,20 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "bullmq-worker",
+    capability:
+      "Constructing BullMQ workers with a shared failure record policy",
+    owner: ["apps/api/src/lib/bullmq-queue.ts"],
+    summary:
+      "BullMqWorker owns persisted job failure records while retaining original errors in worker events. All queue workers use this constructor.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["bullmq"],
+      names: ["Worker"],
+      allowed: [],
+    },
+  },
+  {
     id: "deterministic-job-requeue",
     capability:
       "Re-enqueueing a row's work under its deterministic BullMQ job id",
@@ -2360,6 +2897,70 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/report-export-recovery.ts",
           reason:
             "Reads a job's state to decide whether an export outlived its job; it never enqueues.",
+        },
+      ],
+    },
+  },
+  {
+    id: "corpus-hit-classification",
+    capability: "Classifying corpus engine hit identities",
+    owner: ["apps/api/src/lib/legal-search/corpus-hit-disposition.ts"],
+    summary:
+      "The identity reader runs through one typed disposition owner in native, " +
+      "scored, BM25 and highlight modes. Malformed hits are counted separately " +
+      "from repeated passages and physical highlight copies.",
+    enforcement: {
+      kind: "function-call",
+      name: "extractId",
+      within: ["apps/api/src/lib/legal-search/", "apps/api/src/handlers/"],
+      allowed: [],
+    },
+  },
+  {
+    id: "corpus-candidate-rehydration",
+    capability: "Classifying eligible canonical search candidates",
+    owner: [
+      "apps/api/src/handlers/case-law/decisions/search.ts",
+      "apps/api/src/lib/legal-search/corpus-index-provider.ts",
+      "apps/api/src/lib/legal-search/corpus-rehydration-disposition.ts",
+      "apps/api/src/handlers/legislation/search.ts",
+    ],
+    summary:
+      "SQL gates content before it leaves the canonical read. " +
+      "`partitionCorpusRehydration` returns eligible rows separately from id-only " +
+      "dispositions, accumulated by the request through `recordCorpusRehydrationDispositions`.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/handlers/case-law/decisions/search",
+        "@/api/lib/legal-search/corpus-index-provider",
+        "@/api/handlers/legislation/search",
+      ],
+      names: [
+        "candidateDecisionRowsStatement",
+        "pageDecisionRowsStatement",
+        "rehydrateCorpusIndexProviderCandidatesStatement",
+        "legislationCandidateRowsStatement",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/mcp/generated/capability-dispatch/legislation.search.ts",
+          reason:
+            "Lazy-loads the handler endpoint; does not invoke its canonical-read statement exports.",
+        },
+        {
+          path: "apps/api/src/tests/query-plans/registry.ts",
+          reason:
+            "Measures production canonical-read statements under the public reader role.",
+        },
+        {
+          path: "apps/api/src/handlers/legislation/search-hydration.db.test.ts",
+          reason:
+            "Verifies the legislation read boundary and indexed statement plan.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/decisions/search-hydration.db.test.ts",
+          reason: "Verifies candidate eligibility with the public reader role.",
         },
       ],
     },
@@ -2499,6 +3100,31 @@ export const OWNERSHIP = [
   ...ROOT_CONNECTION_DOORS,
 ] as const satisfies readonly OwnershipEntry[];
 
+// Materialize shared exceptions once, before either the lint rule or the
+// documentation consumes the registry; new schema owners inherit them.
+export const withSchemaIntrospection = (
+  entry: OwnershipEntry,
+): OwnershipEntry => {
+  if (
+    entry.enforcement.kind !== "import" ||
+    !isSchemaEnforcement(
+      entry.enforcement,
+      entry.owner.at(0) ?? panic("Schema export ownership requires an owner"),
+    )
+  ) {
+    return entry;
+  }
+  return {
+    ...entry,
+    enforcement: {
+      ...entry.enforcement,
+      allowed: [...entry.enforcement.allowed, ...SCHEMA_INTROSPECTION],
+    },
+  };
+};
+
+export const OWNERSHIP = OWNERSHIP_DECLARATIONS.map(withSchemaIntrospection);
+
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DOC_PATH = "docs/module-ownership.md";
 
@@ -2516,6 +3142,11 @@ Rows whose enforcement is not \`none\` are also read by the
 \`confine-owner/confine-owner\` lint rule, which reports any linted file outside
 the owner and its \`allowed\` list. Add a bypass by adding an \`allowed\` entry with a
 reason, in the same table.
+
+Schema export owners inherit the exact files in \`SCHEMA_INTROSPECTION\`.
+The ownership check follows their runtime dependencies and checks that they
+only enumerate schema metadata. The ratchet measures each shared path;
+additions require a justified allowance and removals are free.
 `;
 
 const ownerPathExists = (repoRoot: string, entryPath: string): boolean =>
@@ -2538,8 +3169,14 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     case "member-call": {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
     }
+    case "function-call": {
+      return `call \`${enforcement.name}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
+    }
+    case "literal-pattern": {
+      return `literal pattern \`${enforcement.pattern}\``;
     }
     default: {
       enforcement satisfies never;
@@ -2588,6 +3225,25 @@ export const validateOwnership = (
     }
     seen.add(entry.id);
 
+    if (entry.enforcement.kind === "import") {
+      const ownerPath = entry.owner.at(0);
+      if (
+        ownerPath !== undefined &&
+        entry.enforcement.specifiers.some((specifier) => {
+          const module = canonicalModuleId(specifier, ownerPath);
+          return (
+            module === "apps/api/src/db/schema" ||
+            module.startsWith("apps/api/src/db/schema/")
+          );
+        }) &&
+        !isSchemaEnforcement(entry.enforcement, ownerPath)
+      ) {
+        problems.push(
+          `${entry.id}: schema imports require a separate ownership entry from other modules`,
+        );
+      }
+    }
+
     for (const entryPath of entry.owner) {
       if (!ownerPathExists(repoRoot, entryPath)) {
         problems.push(`${entry.id}: owner path does not exist: ${entryPath}`);
@@ -2623,7 +3279,15 @@ const main = async (argv: readonly string[]): Promise<number> => {
     return 1;
   }
 
-  const problems = [...validateOwnership(OWNERSHIP, REPO_ROOT)];
+  const { validateSchemaIntrospection } =
+    await import("./schema-introspection.ts");
+  const problems = [
+    ...validateOwnership(OWNERSHIP, REPO_ROOT),
+    ...validateSchemaIntrospection({
+      entries: SCHEMA_INTROSPECTION,
+      repoRoot: REPO_ROOT,
+    }),
+  ];
   const committed = existsSync(docFile) ? readFileSync(docFile, "utf-8") : "";
   if (committed !== rendered) {
     problems.push(

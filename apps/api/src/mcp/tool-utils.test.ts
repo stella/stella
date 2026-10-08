@@ -5,12 +5,15 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  buildLegislationDocumentAppUrl,
+  legalCitationLinkFields,
   buildCaseLawDecisionUrl,
   closestToolNames,
   didYouMean,
@@ -25,6 +28,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  untypedToolDataResult,
   toPlainTextSnippet,
   validationErrorResult,
   windowTextByCursor,
@@ -34,6 +38,14 @@ import {
   defineProjectedMcpToolOutput,
 } from "@/api/mcp/valibot-tool-definition";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
@@ -312,7 +324,7 @@ describe("serializeToolResult", () => {
       v.object({ entityId: v.string(), nextStep: v.string() }),
     );
     const result = serializeToolResult(
-      toolDataResult({
+      untypedToolDataResult({
         nextStep: "Choose a file.",
         undeclared: true,
         entityId: "doc_1",
@@ -373,6 +385,140 @@ describe("serializeToolResult", () => {
         contract,
       ),
     ).toThrow("MCP tool output violated its advertised contract");
+  });
+
+  describe("undeclared output keys", () => {
+    let analytics: RecordingAnalytics;
+    let logs: RecordingLogger;
+
+    beforeEach(() => {
+      analytics = installRecordingAnalytics();
+      logs = installRecordingLogger();
+    });
+
+    afterEach(() => {
+      analytics.restore();
+      logs.restore();
+    });
+
+    const degradeLogs = () =>
+      logs
+        .at("ERROR")
+        .filter(
+          ({ message }) => message === TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT,
+        )
+        .map(({ attributes }) => attributes);
+
+    const contract = defineMcpToolOutput(
+      v.strictObject({
+        entityId: v.string(),
+        hits: v.array(
+          v.strictObject({
+            match: v.variant("kind", [
+              v.strictObject({ kind: v.literal("exact"), score: v.number() }),
+              v.strictObject({
+                kind: v.literal("fuzzy"),
+                distance: v.number(),
+              }),
+            ]),
+            title: v.string(),
+          }),
+        ),
+      }),
+    );
+
+    test("are stripped at every depth, the result returned and the defect logged", () => {
+      const result = serializeToolResult(
+        untypedToolDataResult({
+          entityId: "doc_1",
+          hits: [
+            {
+              match: { kind: "exact", score: 1, rawScore: "privileged-1" },
+              title: "A",
+            },
+            {
+              match: { distance: 2, kind: "fuzzy" },
+              snippetHtml: "privileged-2",
+              title: "B",
+            },
+          ],
+          internalCursor: "privileged-3",
+        }),
+        contract,
+        "search_test",
+      );
+
+      const expected = {
+        entityId: "doc_1",
+        hits: [
+          { match: { kind: "exact", score: 1 }, title: "A" },
+          { match: { distance: 2, kind: "fuzzy" }, title: "B" },
+        ],
+      };
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual(expected);
+      expect(result.content).toEqual([
+        { type: "text", text: JSON.stringify(result.structuredContent) },
+      ]);
+      expect(degradeLogs()).toEqual([
+        {
+          defect: "undeclared_fields",
+          paths: "hits[].match.rawScore, hits[].snippetHtml, internalCursor",
+          source: "mcp",
+          tool: "search_test",
+        },
+      ]);
+      expect(
+        analytics.exceptions().map((event) => event.properties),
+      ).toMatchObject([
+        {
+          defect: "undeclared_fields",
+          "error.class": "ToolOutputContractDegradedError",
+          toolName: "search_test",
+        },
+      ]);
+      expect(JSON.stringify([analytics.events, logs.records])).not.toContain(
+        "privileged",
+      );
+    });
+
+    test("never excuse a missing or invalid declared field", () => {
+      for (const data of [
+        // Missing declared field.
+        { hits: [] },
+        // Invalid declared field.
+        { entityId: 42, hits: [] },
+        // Invalid declared field inside a union branch, beside an extra key.
+        {
+          entityId: "doc_1",
+          hits: [{ match: { kind: "exact", score: "1" }, title: "A", x: 1 }],
+        },
+        // An extra key beside a missing one.
+        { extra: true, hits: [] },
+      ]) {
+        expect(() =>
+          serializeToolResult(
+            untypedToolDataResult(data),
+            contract,
+            "search_test",
+          ),
+        ).toThrow("MCP tool output violated its advertised contract");
+      }
+      expect(degradeLogs()).toEqual([]);
+    });
+
+    test("a contract-clean output reports nothing", () => {
+      const data = { entityId: "doc_1", hits: [] };
+      const result = serializeToolResult(
+        untypedToolDataResult(data),
+        contract,
+        "search_test",
+      );
+
+      expect(result.structuredContent).toEqual(data);
+      expect(degradeLogs()).toEqual([]);
+      expect(analytics.exceptions()).toEqual([]);
+    });
   });
 
   test("omits structuredContent for a non-object payload", () => {
@@ -663,5 +809,47 @@ describe("resolveWindowBounds", () => {
       end: 5,
       nextOffset: null,
     });
+  });
+});
+
+describe("primary legal citation links", () => {
+  for (const path of [
+    "/law/cze/statutes/89-2012-sb",
+    "/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+    "/law/cze/cases/ns/1-24",
+  ]) {
+    test(`held ${path} keeps its publisher as a secondary source`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      const appUrl = `${BASE}${path}`;
+      expect(legalCitationLinkFields({ appUrl, sourceUrl })).toEqual({
+        appUrl,
+        url: appUrl,
+        source_url: sourceUrl,
+      });
+    });
+    test(`unserved ${path} falls back to the publisher`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      expect(legalCitationLinkFields({ appUrl: null, sourceUrl })).toEqual({
+        appUrl: null,
+        url: sourceUrl,
+      });
+    });
+  }
+  test("a held provision links its consolidation and exact anchor", () => {
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
+    try {
+      expect(
+        buildLegislationDocumentAppUrl({
+          country: "CZE",
+          documentId: DECISION_ID,
+          eli: "/eli/cz/sb/2012/89",
+          slug: "89-2012-sb",
+          version: "2014-01-01",
+          anchor: "par_1729",
+        }),
+      ).toBe(`${BASE}/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729`);
+    } finally {
+      restore();
+    }
   });
 });

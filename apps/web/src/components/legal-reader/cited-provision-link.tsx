@@ -1,10 +1,10 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -14,7 +14,6 @@ import {
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
 import { Skeleton } from "@stll/ui/skeleton";
-import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
@@ -23,10 +22,12 @@ import {
   citedProvisionClick,
   CITED_PROVISION_CLICK,
 } from "@/components/legal-reader/cited-provision-link.logic";
+import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
 import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
+import { formatValidityDate } from "@/features/statutes/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 export type CitedProvisionTarget = {
@@ -61,7 +62,7 @@ type ProvisionWordingArgs = {
 };
 
 /**
- * The wording one citation points at. The card and the in-place expansion ask
+ * The wording one citation points at. The preview and the paragraph card ask
  * under the same key, so unfolding a citation the reader has already hovered
  * costs no second read.
  */
@@ -137,39 +138,53 @@ const CitedProvisionPreview = (args: ProvisionWordingArgs) => {
   );
 };
 
-type CitedProvisionExpansionProps = Omit<ProvisionWordingArgs, "enabled"> & {
-  id: string;
-  onOpenProvision: () => void;
+type ProvisionWordingVersion =
+  | { type: "current" }
+  | { type: "consolidation"; validFrom: string | null };
+
+const ProvisionVersionLabel = ({
+  version,
+}: {
+  version: ProvisionWordingVersion;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  switch (version.type) {
+    case "current":
+      return (
+        <span className="reader-chrome text-muted-foreground text-xs">
+          {t("statutes.currentWording")}
+        </span>
+      );
+    case "consolidation": {
+      const date = formatValidityDate(version.validFrom, format);
+      return (
+        <span className="reader-chrome text-muted-foreground text-xs">
+          {date === null
+            ? t("statutes.wordingVersionUnknown")
+            : t("statutes.wordingValidFrom", { date })}
+        </span>
+      );
+    }
+    default:
+      version satisfies never;
+      return panic("Unhandled provision wording version");
+  }
 };
 
-/**
- * The provision unfolded where it is cited: a quiet inset in the paragraph's
- * own flow, not a `<div>` — the decision's blocks are paragraphs, and a block
- * element inside one would close it.
- */
-const CitedProvisionExpansion = ({
-  id,
-  onOpenProvision,
-  ...args
-}: CitedProvisionExpansionProps) => {
+const OpenCitedProvisionButton = ({
+  provision,
+}: {
+  provision: ProvisionViewPayload;
+}) => {
   const t = useTranslations();
-  const { isPending, wording } = useProvisionWording({
-    ...args,
-    enabled: true,
-  });
-  const hasWording = wording !== undefined && wording.blocks.length > 0;
-
+  const inspector = useInspectorView();
   return (
-    <span
-      className="reader-chrome border-border my-2 flex flex-col gap-1.5 border-s ps-3 text-sm"
-      id={id}
-    >
-      {hasWording && <ProvisionWording wording={wording} />}
-      {wording === undefined && isPending && <ProvisionWordingSkeleton />}
+    <span className="reader-chrome">
       <Button
-        className="h-6 w-fit px-2"
-        onClick={onOpenProvision}
-        size="sm"
+        className="w-fit"
+        onClick={() => inspector.open(createProvisionViewTab(provision))}
+        size="xs"
         variant="outline"
       >
         {t("statutes.openProvision")}
@@ -178,40 +193,60 @@ const CitedProvisionExpansion = ({
   );
 };
 
-/**
- * A link from a decision to the provision it applies. Hovering shows the
- * card; a plain click unfolds the wording under the citation, where opening
- * the provision in the inspector is one further, explicit action; a modified
- * click or a mobile tap follows the link into the statute reader.
- */
+/** Rendered by the paragraph owner, never by its inline citation link. */
+export const CitedProvisionExpansion = ({
+  label,
+  provision,
+  version,
+}: {
+  label: string;
+  provision: CitedProvisionTarget;
+  version: ProvisionWordingVersion;
+}) => {
+  const { isPending, wording } = useProvisionWording({
+    documentId: provision.document.id,
+    enabled: true,
+    preview: provision.preview,
+    provision: provision.payload,
+  });
+
+  return (
+    <ReaderInsetBox
+      className="my-3 flex flex-col gap-2"
+      data-reader-chrome=""
+      data-slot="provision-card"
+    >
+      <span className="reader-chrome">
+        <BidiText as="span" className="text-sm font-medium">
+          {label}
+        </BidiText>
+      </span>
+      <ProvisionVersionLabel version={version} />
+      {wording !== undefined && wording.blocks.length > 0 && (
+        <ProvisionWording wording={wording} />
+      )}
+      {wording === undefined && isPending && <ProvisionWordingSkeleton />}
+      <OpenCitedProvisionButton provision={provision.payload} />
+    </ReaderInsetBox>
+  );
+};
+
+/** Hover or a plain click peeks at wording without interrupting the sentence. */
 export const CitedProvisionLink = ({
   children,
   className,
   provision,
 }: CitedProvisionLinkProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const isMobile = useIsMobile();
-  const inspector = useInspectorView();
-  const expansionId = useId();
-  const expandsInPlace = !isMobile;
 
   const onProvisionClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    const click = citedProvisionClick({
-      expanded,
-      expandsInPlace,
-      gesture: event,
-    });
+    const click = citedProvisionClick(event);
     switch (click) {
       case CITED_PROVISION_CLICK.navigate:
         break;
-      case CITED_PROVISION_CLICK.expand:
+      case CITED_PROVISION_CLICK.peek:
         event.preventDefault();
-        setExpanded(true);
-        break;
-      case CITED_PROVISION_CLICK.collapse:
-        event.preventDefault();
-        setExpanded(false);
+        setPreviewOpen(true);
         break;
       default:
         click satisfies never;
@@ -220,64 +255,51 @@ export const CitedProvisionLink = ({
   };
 
   return (
-    <>
-      {/* The card is the hover reading; while the same wording stands
-          unfolded in the text, it would only cover it. */}
-      <PreviewCard
-        onOpenChange={setPreviewOpen}
-        open={previewOpen && !expanded}
-      >
-        <PreviewCardTrigger
-          render={
-            <Link
-              aria-controls={expanded ? expansionId : undefined}
-              aria-expanded={expandsInPlace ? expanded : undefined}
-              className={cn(LEGAL_CITATION_LINK_CLASS_NAME, className)}
-              hash={
-                provision.payload.highlightAnchorId ??
-                provision.payload.anchorId
-              }
-              onClick={onProvisionClick}
-              {...createStatuteLinkTarget({
-                country: provision.document.country,
-                documentId: provision.document.id,
-                eli: provision.document.eli,
-                slug: provision.document.slug,
-                versionValidFrom: provision.document.versionValidFrom,
-              })}
-            />
-          }
-        >
-          {children}
-        </PreviewCardTrigger>
-        <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-0.5 p-3">
-          <BidiText as="span" className="text-foreground text-sm font-medium">
-            {provision.payload.provisionLabel}
-          </BidiText>
-          {provision.payload.statuteTitle !== "" && (
-            <span className="text-muted-foreground text-xs">
-              {provision.payload.statuteTitle}
-            </span>
-          )}
-          <CitedProvisionPreview
-            documentId={provision.document.id}
-            enabled={previewOpen}
-            preview={provision.preview}
-            provision={provision.payload}
+    <PreviewCard onOpenChange={setPreviewOpen} open={previewOpen}>
+      <PreviewCardTrigger
+        render={
+          <Link
+            aria-expanded={previewOpen}
+            className={cn(LEGAL_CITATION_LINK_CLASS_NAME, className)}
+            hash={
+              provision.payload.highlightAnchorId ?? provision.payload.anchorId
+            }
+            onClick={onProvisionClick}
+            {...createStatuteLinkTarget({
+              country: provision.document.country,
+              documentId: provision.document.id,
+              eli: provision.document.eli,
+              slug: provision.document.slug,
+              versionValidFrom: provision.document.versionValidFrom,
+            })}
           />
-        </PreviewCardPopup>
-      </PreviewCard>
-      {expanded && (
-        <CitedProvisionExpansion
+        }
+      >
+        {children}
+      </PreviewCardTrigger>
+      <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-0.5 p-3">
+        <BidiText as="span" className="text-foreground text-sm font-medium">
+          {provision.payload.provisionLabel}
+        </BidiText>
+        {provision.payload.statuteTitle !== "" && (
+          <span className="text-muted-foreground text-xs">
+            {provision.payload.statuteTitle}
+          </span>
+        )}
+        <ProvisionVersionLabel
+          version={{
+            type: "consolidation",
+            validFrom: provision.document.versionValidFrom,
+          }}
+        />
+        <CitedProvisionPreview
           documentId={provision.document.id}
-          id={expansionId}
-          onOpenProvision={() =>
-            inspector.open(createProvisionViewTab(provision.payload))
-          }
+          enabled={previewOpen}
           preview={provision.preview}
           provision={provision.payload}
         />
-      )}
-    </>
+        <OpenCitedProvisionButton provision={provision.payload} />
+      </PreviewCardPopup>
+    </PreviewCard>
   );
 };

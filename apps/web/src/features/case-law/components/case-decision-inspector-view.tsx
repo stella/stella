@@ -8,7 +8,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { InfoIcon } from "@stll/ui/icons";
+import { BookTextIcon, InfoIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -29,10 +29,14 @@ import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-cha
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
+import {
+  DecisionInspectorOutline,
+  scrollDecisionInspectorToAnchor,
+} from "@/features/case-law/components/case-viewer/analysis/decision-inspector-outline";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
-import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
+import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
+import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import {
   buildDecisionFacts,
@@ -44,13 +48,14 @@ import type {
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
-import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { DecisionMainViewAction } from "@/features/case-law/components/decision-main-view-action";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -66,6 +71,33 @@ const HEADER_DECISION_FACTS = [
   "judges",
 ] as const satisfies readonly DecisionFactKind[];
 
+type DecisionInspectorOutlineControlProps = {
+  decision: PublicCaseLawDecision;
+  documentReady: boolean;
+  onAnchorClick: (anchorId: string) => void;
+};
+
+const DecisionInspectorOutlineControl = ({
+  decision,
+  documentReady,
+  onAnchorClick,
+}: DecisionInspectorOutlineControlProps) => {
+  const analysis = useLazyDecisionAnalysis({
+    decisionId: decision.id,
+    decisionUpdatedAt: decision.updatedAt,
+    documentReady,
+    sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
+    mode: "enabled",
+  });
+  return (
+    <DecisionInspectorOutline
+      available={analysis.available}
+      onAnchorClick={onAnchorClick}
+      state={analysis.state}
+    />
+  );
+};
+
 /** A compact decision reader composed for the inspector's bounded width. */
 export const CaseDecisionInspectorView = ({
   onClose,
@@ -74,6 +106,7 @@ export const CaseDecisionInspectorView = ({
   const t = useTranslations();
   const { payload } = tab;
   const textScale = useReaderTextScale();
+  const provisions = useReaderProvisionMode();
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const {
@@ -88,23 +121,28 @@ export const CaseDecisionInspectorView = ({
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const provisionAnchors = useDecisionProvisionAnchors({
-    blocks: visibleDecisionBlocks(ast, caseNumberType),
+    court: decision?.court ?? null,
+    caseNumber: decision?.caseNumber ?? null,
+    surface: "inspector",
+    blocks: visibleDecisionBlocks(ast, caseNumberType, decision?.fulltext),
     country: decision?.country ?? null,
     decisionId,
     decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast, caseNumberType),
+    visibleDecisionBlocks(ast, caseNumberType, decision?.fulltext),
     decisionDate,
   );
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   // Cmd/Ctrl+F belongs to the decision in front of the reader rather than to
   // the results table behind it, for as long as there is text to search.
   const find = useInspectorFind({
     contentRef,
     enabled: decision !== undefined,
     highlightKey: tab.id,
+    initialQuery: payload.searchQuery,
     panelRef,
   });
   // The same marks, store and bar the full page has. The target is addressed
@@ -155,6 +193,17 @@ export const CaseDecisionInspectorView = ({
           <>
             {decision !== undefined && (
               <>
+                <Button
+                  aria-label={t("caseLaw.reader.expandProvisions")}
+                  aria-pressed={provisions.expandProvisions}
+                  data-pressed={provisions.expandProvisions ? "" : undefined}
+                  onClick={provisions.toggle}
+                  size="icon-xs"
+                  tooltip={t("caseLaw.reader.expandProvisions")}
+                  variant="ghost"
+                >
+                  <BookTextIcon aria-hidden="true" className="size-3.5" />
+                </Button>
                 <OpenOriginalButton href={decision.sourceUrl} size="icon-xs" />
                 <DecisionInfoPopover
                   decisionType={decision.decisionType}
@@ -166,7 +215,10 @@ export const CaseDecisionInspectorView = ({
               </>
             )}
             {/* The text moves to the page, so the tab that held it goes. */}
-            <DecisionMainViewAction onMoveToMain={onClose} payload={payload} />
+            <DecisionMainViewAction
+              onMoveToMain={onClose}
+              payload={{ ...payload, searchQuery: find.findQuery || undefined }}
+            />
           </>
         }
         label={tab.label}
@@ -180,15 +232,16 @@ export const CaseDecisionInspectorView = ({
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}
       <LegalReaderAIChat
+        aiMode="enabled"
         activeLegal={activeLegalFromReaderTarget(annotationTarget)}
         className="min-h-0 flex-1"
       >
         {/* The pane's width is the reader's to drag; nothing the court's file
             contains may take it. A table that needs the axis scrolls inside
             its own box. */}
-        <ScrollArea axis="vertical" className="h-full">
+        <ScrollArea axis="vertical" className="h-full" viewportRef={scrollRef}>
           <main
-            className="reader-paper min-h-full px-4 py-6"
+            className="reader-paper min-h-full px-4 pt-10 pb-6"
             ref={contentRef}
             {...textScale.rootProps}
           >
@@ -214,20 +267,7 @@ export const CaseDecisionInspectorView = ({
             )}
             {decision !== undefined && (
               <>
-                <CitationHeader
-                  decisionDate={decision.decisionDate}
-                  decisionId={decisionId}
-                  target={{
-                    caseNumber: decision.caseNumber,
-                    country: decision.country,
-                    court: decision.court,
-                    decisionId: decision.id,
-                    language: decision.language,
-                    languageAlternates: decision.languageAlternates,
-                    slug: decision.slug,
-                  }}
-                />
-                <DecisionCitations
+                <DecisionCitationBox
                   decision={{
                     caseNumber: decision.caseNumber,
                     caseNumberType: decision.caseNumberType,
@@ -241,26 +281,22 @@ export const CaseDecisionInspectorView = ({
                     languageAlternates: decision.languageAlternates,
                     slug: decision.slug,
                   }}
-                  decisionId={decisionId}
-                />
-                <ProvisionsCited
                   decisionDate={decision.decisionDate}
                   decisionId={decisionId}
                 />
-                {/* The words that found the decision come with the tab: the
-                  reader opens on them marked, at the passage the row named,
-                  and the passage keeps its marker rather than flashing once. */}
+                {/* The find bar owns every search mark; the landing passage
+                    remains independent of the query the reader edits. */}
                 <DecisionText
-                  activeMatchIndex={0}
+                  surface="inspector"
                   annotationAnchors={annotations.anchors}
                   citationAnchors={citationAnchors}
                   decision={decision}
                   decisionId={decisionId}
+                  expandProvisions={provisions.expandProvisions}
                   landingAnchorId={payload.anchorId}
                   notesByAnchorId={notesByAnchorId}
                   onAnnotationActivate={annotations.setActiveAnnotationId}
                   provisionAnchors={provisionAnchors}
-                  searchQuery={payload.searchQuery ?? ""}
                   statuteCitationAnchors={statuteCitationAnchors}
                 />
               </>
@@ -269,6 +305,20 @@ export const CaseDecisionInspectorView = ({
         </ScrollArea>
         {/* The same bar the PDF floats over its page, over the text. */}
         <ViewerOverlayBar>
+          {decision !== undefined && (
+            <DecisionInspectorOutlineControl
+              decision={decision}
+              documentReady={ast !== null}
+              key={decisionId}
+              onAnchorClick={(anchorId) => {
+                scrollDecisionInspectorToAnchor({
+                  anchorId,
+                  content: contentRef.current,
+                  viewport: scrollRef.current,
+                });
+              }}
+            />
+          )}
           <ZoomControls
             atMax={textScale.atMax}
             atMin={textScale.atMin}
@@ -322,7 +372,7 @@ const DecisionInfoPopover = (input: DecisionFactsInput) => {
       <PopoverPopup align="end" className="w-72" side="bottom">
         <DecisionFacts
           {...input}
-          className="mb-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3"
+          className="mb-0"
           facts={HEADER_DECISION_FACTS}
         />
       </PopoverPopup>

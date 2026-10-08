@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -17,20 +17,34 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteInput } from "@stll/api-contract/case-law-decision-route";
+import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import {
   createStatutePath,
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
+import { declareFailureClass } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  parseStrippingUndeclaredKeys,
+  reportToolOutputDegrade,
+} from "@/api/lib/chat/tool-output-degrade";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  isSearchIndexUnavailable,
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+  SEARCH_INDEX_UNAVAILABLE_HINT,
+  SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+} from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
@@ -46,12 +60,15 @@ import {
   projectMcpRefusal,
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
+import type { CheckedOutput } from "@/api/mcp/output-excess-keys";
+import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
   InternalToolErrorResult,
   InternalToolResult,
   InternalToolSuccess,
+  McpEgressPlan,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
 
@@ -406,16 +423,75 @@ export const confirmProp = (
     description,
   }) as const;
 
-export const toolDataResult = <TData>(
-  data: TData,
+/**
+ * A tool's successful output. `TData` is read from the return context (the
+ * handler's declared output), and `data` may carry no property that type
+ * lacks: a strict output schema would reject it after the handler succeeded.
+ */
+export const toolDataResult = <TData, TActual extends TData>(
+  data: CheckedOutput<TActual, TData>,
 ): InternalToolSuccess<TData> => ({
   status: "success",
   data,
 });
 
+/**
+ * Output for a surface without a declared output type (gateway families,
+ * capability passthrough), which nothing validates against a Stella schema.
+ */
+export const untypedToolDataResult = (data: unknown): InternalToolSuccess => ({
+  status: "success",
+  data,
+});
+
+type StructuredEgressPlan<TPayload> = Extract<
+  McpEgressPlan<TPayload>,
+  { egress: "structured" }
+>;
+
+type StructuredEgressPlanOptions<TPayload, TActual> = Omit<
+  StructuredEgressPlan<TPayload>,
+  "egress" | "payload"
+> & { payload: CheckedOutput<TActual, TPayload> };
+
+/** `toolDataResult` for a payload the egress pipeline finalizes. */
+export const structuredEgressPlan = <TPayload, TActual extends TPayload>({
+  payload,
+  ...plan
+}: StructuredEgressPlanOptions<
+  TPayload,
+  TActual
+>): StructuredEgressPlan<TPayload> => ({
+  egress: "structured",
+  payload,
+  ...plan,
+});
+
+/** `untypedToolDataResult` for a payload the egress pipeline finalizes. */
+export const untypedStructuredEgressPlan = (
+  plan: Omit<StructuredEgressPlan<unknown>, "egress">,
+): StructuredEgressPlan<unknown> => ({ egress: "structured", ...plan });
+
 // TypeScript's JSON.stringify overload for `unknown` claims it always returns
 // a string, but the runtime returns undefined for unsupported root values.
 const stringifyJson = (value: unknown): unknown => JSON.stringify(value);
+
+/**
+ * A tool succeeded but its output failed the output schema it advertises on a
+ * declared field (missing or invalid; undeclared extra keys alone are
+ * stripped and reported instead). The cause of the panic
+ * `serializeToolResult` raises; observed as a defect: the handler and its
+ * contract disagree, so every call on that path fails until the code changes.
+ */
+export class McpOutputContractError extends TaggedError(
+  "McpOutputContractError",
+)<{
+  message: string;
+}> {
+  static {
+    declareFailureClass(this, "response_invalid");
+  }
+}
 
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -430,31 +506,58 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
  * and the `{ error: … }` envelope is the absence of one. A client validating
  * it against an output schema must not be handed a failure envelope in that
  * slot.
+ *
+ * Output whose only violation is undeclared extra keys is stripped of them
+ * (the degrade shared with the chat projection) and reported as a defect; the
+ * caller still gets exactly the advertised shape.
  */
 const successStructuredContent = (
   result: InternalToolSuccess,
   outputContract: RuntimeMcpToolOutputContract | undefined,
+  toolName: string | undefined,
 ): Record<string, unknown> | undefined => {
   if (outputContract === undefined) {
     return isJsonObject(result.data) ? result.data : undefined;
   }
   const projected = outputContract.project(result.data);
-  const parsed = v.safeParse(outputContract.outputSchemaSource, projected);
-  if (!parsed.success) {
-    return panic("MCP tool output violated its advertised contract", {
-      issues: parsed.issues,
+  const parsed = parseStrippingUndeclaredKeys(
+    outputContract.outputSchemaSource,
+    projected,
+  );
+  if (Result.isError(parsed)) {
+    // Paths only: an issue's `input` is the tool's output, which carries
+    // matter content.
+    const paths = parsed.error.issues.map(
+      (issue) => v.getDotPath(issue) ?? "(root)",
+    );
+    return panic(
+      "MCP tool output violated its advertised contract",
+      new McpOutputContractError({
+        message: `MCP tool output violated its advertised contract at ${paths.join(", ")}`,
+      }),
+    );
+  }
+  const { output, undeclaredPaths } = parsed.value;
+  if (undeclaredPaths.length > 0) {
+    reportToolOutputDegrade({
+      defect: "undeclared_fields",
+      paths: undeclaredPaths,
+      source: "mcp",
+      toolName: toolName ?? "(unknown)",
     });
   }
-  if (!isJsonObject(parsed.output)) {
+  if (!isJsonObject(output)) {
     return panic("MCP tool output contract produced a non-object root");
   }
-  return parsed.output;
+  return output;
 };
 
 /** Serialize a canonical Stella tool result at the external MCP boundary. */
 export const serializeToolResult = (
   result: InternalToolResult,
   outputContract?: RuntimeMcpToolOutputContract,
+  /** Telemetry only: names the tool in a degraded-output defect report. */
+  toolName?: string,
 ): CallToolResult => {
   if (result.status === "success") {
     const serializedData = stringifyJson(result.data);
@@ -463,7 +566,11 @@ export const serializeToolResult = (
     }
     // A host shows the model either the text or `structuredContent`, so the
     // one text block is the JSON of the same validated object.
-    const structuredContent = successStructuredContent(result, outputContract);
+    const structuredContent = successStructuredContent(
+      result,
+      outputContract,
+      toolName,
+    );
     return {
       content: [
         {
@@ -489,6 +596,9 @@ export const serializeToolResult = (
   return {
     content: [{ type: "text", text: JSON.stringify({ error }) }],
     isError: true,
+    ...(result.error.code === "internal_error"
+      ? { [MCP_INTERNAL_TOOL_FAILURE]: result.error[MCP_INTERNAL_TOOL_FAILURE] }
+      : {}),
   };
 };
 
@@ -500,7 +610,7 @@ export const serializeToolResult = (
  */
 export const serializeMcpData = (data: unknown): CallToolResult => {
   const { structuredContent: _upstream, ...result } = serializeToolResult(
-    toolDataResult(data),
+    untypedToolDataResult(data),
   );
   return result;
 };
@@ -588,34 +698,23 @@ export const structuredErrorResult = ({
   retryable?: boolean | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
-  const error: {
-    type: "structured";
-    code: McpErrorCode;
-    message: string;
-    hint?: string;
-    issues?: readonly McpValidationIssue[];
-    retryable?: boolean;
-    contactUrl?: string;
-    requestId?: string;
-  } = { type: "structured", code, message };
-  if (hint !== undefined) {
-    error.hint = hint;
-  }
-  if (issues !== undefined && issues.length > 0) {
-    error.issues = issues;
-  }
-  if (retryable !== undefined) {
-    error.retryable = retryable;
-  }
-  if (contactUrl !== undefined) {
-    error.contactUrl = contactUrl;
-  }
   const requestId = getCurrentRequestId();
-  if (requestId !== undefined) {
-    error.requestId = requestId;
-  }
-
-  return { status: "error", error };
+  const fields = {
+    type: "structured",
+    message,
+    ...(hint === undefined ? {} : { hint }),
+    ...(issues === undefined || issues.length === 0 ? {} : { issues }),
+    ...(retryable === undefined ? {} : { retryable }),
+    ...(contactUrl === undefined ? {} : { contactUrl }),
+    ...(requestId === undefined ? {} : { requestId }),
+  } as const;
+  return {
+    status: "error",
+    error:
+      code === "internal_error"
+        ? { code, ...fields, [MCP_INTERNAL_TOOL_FAILURE]: true }
+        : { code, ...fields },
+  };
 };
 
 /**
@@ -693,6 +792,34 @@ export const notFoundResult = (
 ): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
 
+const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
+  event: "mcp.search_index_unavailable",
+  expected: [],
+});
+
+/**
+ * Envelope for a search whose index could not be reached. Every tool backed
+ * by the public-law search index answers it the same way, whichever path the
+ * refusal took to the boundary (a thrown handler error, a failed `Result`, a
+ * safe handler's 503 body): the stable code to branch on, the cause in the
+ * message, and a retry, because the arguments did not cause it. The cause
+ * is still observed, so an index that stays away is seen.
+ */
+export const searchIndexUnavailableResult = (
+  error: unknown,
+): InternalToolErrorResult => {
+  observeFailure(error, {
+    sink: SEARCH_INDEX_UNAVAILABLE_SINK,
+    ctx: { source: "mcp" },
+  });
+  return structuredErrorResult({
+    code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+    hint: SEARCH_INDEX_UNAVAILABLE_HINT,
+    retryable: true,
+  });
+};
+
 /**
  * Envelope for a failed backing-handler `Result`, the single sink for the
  * `errorResult(result.error.message)` class. Every tool site that unwraps a
@@ -718,6 +845,9 @@ export const notFoundResult = (
 export const internalFailureResult = (
   error: unknown,
 ): InternalToolErrorResult => {
+  if (isSearchIndexUnavailable(error)) {
+    return searchIndexUnavailableResult(error);
+  }
   if (HandlerError.is(error)) {
     if (error.code === "upstream_unavailable") {
       captureError(error, { source: "mcp" });
@@ -1110,6 +1240,28 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
+/** Keep the legacy app URL beside the shared primary/source link contract. */
+export const legalCitationLinkFields = ({
+  appUrl,
+  sourceUrl,
+}: {
+  appUrl: string | null;
+  sourceUrl: string | null;
+}) => {
+  const links = resolveLegalCitationLinks({
+    appUrl,
+    sourceUrl,
+    appOrigins: new Set([new URL(getAppBaseUrl()).origin]),
+  });
+  return {
+    appUrl,
+    url: links.url,
+    ...(links.type === "external" || links.source_url === undefined
+      ? {}
+      : { source_url: links.source_url }),
+  };
+};
+
 export const buildCaseLawDecisionAppUrl = (
   input: CaseLawDecisionRouteInput,
 ): string | null =>
@@ -1155,8 +1307,8 @@ export const toPlainCorpusText = ({
 };
 
 /**
- * A statute's canonical public address, always the latest consolidation of
- * the Work: its stored slug, or the id form when the corpus holds none. The
+ * A statute's canonical public address: its stored slug, or the id form when
+ * the corpus holds none. A version and provision anchor preserve a dated read. The
  * route shape is owned by `@stll/api-contract/statute-route`, so the address
  * a tool reports and the page the web serves cannot diverge. Null only when
  * the public-law surface is off.
@@ -1166,7 +1318,12 @@ export const buildLegislationDocumentAppUrl = ({
   documentId,
   eli,
   slug,
-}: Omit<StatuteRouteInput, "version">): string | null =>
+  version = null,
+  anchor,
+}: Omit<StatuteRouteInput, "version"> & {
+  version?: string | null;
+  anchor?: string;
+}): string | null =>
   isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
     ? `${getAppBaseUrl()}${createStatutePath(
         createStatuteRouteParams({
@@ -1174,9 +1331,9 @@ export const buildLegislationDocumentAppUrl = ({
           documentId,
           eli,
           slug,
-          version: null,
+          version,
         }),
-      )}`
+      )}${anchor === undefined ? "" : `#${encodeURIComponent(anchor)}`}`
     : null;
 
 /**

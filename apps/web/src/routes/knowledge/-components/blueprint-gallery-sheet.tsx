@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -140,6 +141,10 @@ const BlueprintGallerySheetBody = ({
 
   return (
     <DialogPopup className="sm:max-w-2xl">
+      <DialogFormState
+        dirty={scope !== "private"}
+        onDiscard={() => setScope("private")}
+      />
       <DialogHeader>
         <DialogTitle>{tGallery("title")}</DialogTitle>
         <p className="text-muted-foreground text-sm">{tGallery("subtitle")}</p>

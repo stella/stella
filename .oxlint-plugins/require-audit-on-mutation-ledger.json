@@ -974,8 +974,8 @@
   {
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reserveOrganizationFilesBytesOnce.try",
     "writes": {
-      "insert:organization_file_objects": 1,
-      "insert:organizationFileUsage": 1
+      "insert:organizationFileUsage": 1,
+      "insert:organization_file_objects": 1
     },
     "reason": "Document storage step called by an audited operation; confirm the caller records the event."
   },
@@ -996,48 +996,48 @@
   {
     "id": "apps/api/src/lib/flows/automated-run-cap.ts::insertAutomatedFlowRunWithinCap",
     "writes": {
-      "insert:flowRuns": 1,
-      "insert:flowRunSteps": 1
+      "insert:flowRunSteps": 1,
+      "insert:flowRuns": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
     "writes": {
-      "update:flowRuns": 1,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::completeStepInTransaction",
     "writes": {
-      "update:flowRuns": 2,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 2
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::executeFlowStep",
     "writes": {
-      "update:flowRuns": 1,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::failFlowRunFromWorker.writeFailure",
     "writes": {
-      "update:flowRuns": 1,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::pauseAtReviewGate",
     "writes": {
-      "update:flowRuns": 1,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
@@ -1051,8 +1051,8 @@
   {
     "id": "apps/api/src/lib/flows/start-flow-run.ts::startFlowRun.createAndEnqueue",
     "writes": {
-      "insert:flowRuns": 1,
-      "insert:flowRunSteps": 1
+      "insert:flowRunSteps": 1,
+      "insert:flowRuns": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
@@ -1499,13 +1499,6 @@
       "update:?": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/verification/run-queue.ts::reconcileStuckListVerificationRuns",
-    "writes": {
-      "update:legalListVerificationRuns": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/matter-reference.ts::allocateMatterReference",

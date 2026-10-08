@@ -1,4 +1,4 @@
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { Result } from "better-result";
 import {
   afterAll,
@@ -2736,7 +2736,53 @@ describe("a failed or refused NALUS read", () => {
     },
   );
 
-  test.each([401, 403] as const)(
+  for (const [path, scope] of [
+    ["/Search/GetText.aspx", "document"],
+    ["/Search/ResultDetail.aspx", "part"],
+    ["/Search/GetAbstract.aspx", "part"],
+  ] as const) {
+    test.each([401, 403, 451])(
+      `HTTP %d at ${path} retains its typed ${scope} refusal and Retry-After`,
+      async (status) => {
+        installSearchMock({ rows: [ROW] });
+        const served = globalThis.fetch;
+        globalThis.fetch = asFetchMock(async (input, init) =>
+          new URL(resolveUrl(input)).pathname === path
+            ? new Response("refused", {
+                status,
+                headers: { "Retry-After": "60" },
+              })
+            : await served(input, init),
+        );
+        const page = unwrap(
+          await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+        );
+        expect(page.decisions).toHaveLength(1);
+        const decision = page.decisions[0];
+        expect(decision?.sourceDocumentId === `nalus-record:${ROW.id}`).toBe(
+          true,
+        );
+        expect(decision?.metadata[READ_OUTCOME_METADATA_KEY]).toMatchObject({
+          type: "refused",
+          status,
+          scope,
+          cause: { kind: "http-status", retryAfter: "60" },
+        });
+        if (scope === "document") {
+          expect(decision?.isListingOnly).toBe(true);
+          expect(decision?.fulltext).toBeUndefined();
+          expect(
+            decision?.metadata["listedOnlyReason"] === `text-refused-${status}`,
+          ).toBe(true);
+        } else {
+          expect(decision?.isListingOnly).toBeUndefined();
+          expect(decision?.fulltext).toContain("Lorem ipsum");
+        }
+      },
+    );
+  }
+
+  test.each([401, 403, 451] as const)(
     "a session the court answers %d for stops the source as a typed refusal",
     async (status) => {
       globalThis.fetch = asFetchMock(
