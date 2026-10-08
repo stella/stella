@@ -895,6 +895,22 @@ for (const theme of ["light", "dark"] as const) {
       );
       await page.evaluate(
         (payload) => globalThis.appFixtureHost.sendAppResult(payload),
+        {
+          ...APP_SEARCH_FIXTURE,
+          headnotes: "omitted",
+          results: [{ ...first, headnote: null, keywords: null }],
+        },
+      );
+      await expect(panel).toContainText(
+        locale === "ar"
+          ? "حُذفت خلاصات الأحكام لتقليل حجم هذه الصفحة. افتح القرار للاطلاع على التفاصيل."
+          : "Headnotes omitted to keep this page small. Open the decision for details.",
+      );
+      await expect(panel).not.toContainText(
+        locale === "ar" ? "لم يرد في الحكم" : "Not stated in the decision",
+      );
+      await page.evaluate(
+        (payload) => globalThis.appFixtureHost.sendAppResult(payload),
         { ...APP_SEARCH_FIXTURE, results: [{ ...first, snippet: null }] },
       );
       await expect(panel).toContainText(first.headnote.text);

@@ -321,24 +321,31 @@ describe("MCP app registry and contracts", () => {
       lookup.rows.every((row) => row.type === "lookup" && row.snippet === null),
     ).toBe(true);
   });
-  test("app consumed-field headnote omission stays distinct from publisher absence", () => {
-    const view = searchView({
-      ...APP_SEARCH_FIXTURE,
-      headnotes: "omitted",
-      results: APP_SEARCH_FIXTURE.results.map((row) => ({
-        ...row,
-        headnote: null,
-      })),
-    });
-    if (view.type !== "search") {
-      throw new Error("Expected search view");
-    }
-    expect(
-      view.results.every(
-        (row) => row.type === "search" && row.headnote.type === "omitted",
-      ),
-    ).toBe(true);
-  });
+  test.each([
+    { availability: "included" as const, expected: "not_stated" },
+    { availability: "omitted" as const, expected: "omitted" },
+  ])(
+    "null headnotes preserve the page's presentation state ($availability)",
+    ({ availability, expected }) => {
+      const first = APP_SEARCH_FIXTURE.results.at(0);
+      if (first === undefined) {
+        throw new Error("Missing search fixture");
+      }
+      const page = {
+        ...APP_SEARCH_FIXTURE,
+        headnotes: availability,
+        results: [{ ...first, headnote: null }],
+      };
+      expect(page.results.at(0)?.headnote).toBeNull();
+      const view = searchView(page);
+      if (view.type !== "search") {
+        throw new Error("Expected search view");
+      }
+      expect(view.results).toHaveLength(1);
+      expect(view.results.at(0)?.headnote).toEqual({ type: expected });
+      expect(view.results.at(0)?.appUrl).toBe(first.appUrl);
+    },
+  );
   test("decision actions use only HTTP links from their own contract fields", () => {
     const first = APP_SEARCH_FIXTURE.results.at(0);
     if (first === undefined) {
