@@ -105,6 +105,114 @@ const withFixture = async <T>(
   }
 };
 
+type Fixture = Parameters<Parameters<typeof withFixture>[1]>[0];
+
+/** A request awaiting input, answered once with the saved credential. */
+const answerPendingRequest = async (
+  db: GatedTestDb,
+  scope: Fixture,
+  toolCallId: string,
+) => {
+  const credential = Bun.randomUUIDv7();
+  const encrypted = await encryptMcpSecret({
+    ...scope,
+    purpose: "mcp_static_token",
+    secret: credential,
+  });
+  await db.transaction(
+    async (tx) => await saveChatSecretForFuture({ tx, ...scope, encrypted }),
+  );
+  const input = {
+    purpose: "Test operation",
+    kind: "token" as const,
+    target: {
+      type: "mcp-connector" as const,
+      connectorSlug: scope.targetSlug,
+    },
+  };
+  const userMessageId = createSafeId<"chatMessage">();
+  const assistantMessageId = createSafeId<"chatMessage">();
+  await db.insert(chatMessages).values([
+    {
+      id: userMessageId,
+      threadId: scope.threadId,
+      userId: scope.userId,
+      role: "user",
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "Test request" }],
+      }),
+    },
+    {
+      id: assistantMessageId,
+      threadId: scope.threadId,
+      userId: scope.userId,
+      role: "assistant",
+      content: toPersistedChatMessageContentV3({
+        data: [
+          {
+            type: "tool-call",
+            id: toolCallId,
+            name: REQUEST_SECRET_TOOL_NAME,
+            arguments: JSON.stringify(input),
+            input,
+            state: "input-complete",
+          },
+        ],
+      }),
+    },
+  ]);
+  const turnId = createSafeId<"chatTurn">();
+  await db.insert(chatTurns).values({
+    id: turnId,
+    organizationId: scope.organizationId,
+    userId: scope.userId,
+    threadId: scope.threadId,
+    userMessageId,
+    assistantMessageId,
+    status: "awaiting-user",
+    interactionType: "client-tool",
+    interactionToolCallId: toolCallId,
+  });
+  const safeDb = safeDbFromScoped(async (run) => await db.transaction(run));
+  const submit = (body: unknown) =>
+    submitSecret.handler(
+      createTestHandlerContext<Parameters<typeof submitSecret.handler>[0]>({
+        safeDb,
+        session: { activeOrganizationId: scope.organizationId },
+        user: { id: scope.userId },
+        params: { threadId: scope.threadId, toolCallId },
+        body,
+        recordAuditEvent: async () => {},
+      }),
+    );
+  const connection = (
+    await db
+      .select({ id: mcpUserConnections.id })
+      .from(mcpUserConnections)
+      .where(eq(mcpUserConnections.connectorId, scope.connectorId))
+  ).at(0);
+  if (!connection) {
+    return panic("Expected saved connection");
+  }
+  const targetConnection = {
+    connectionId: connection.id,
+    host: new URL(scope.targetUrl).host,
+  };
+  const first = await submit({ decision: "use-saved", targetConnection });
+  if (!v.safeParse(requestSecretOutputSchema, first).success) {
+    return panic("Expected stored receipt");
+  }
+  const retryWithValue = () =>
+    submit({
+      decision: "provide",
+      targetConnection,
+      value: credential,
+      saveForFuture: false,
+      normalConnectionAction: "preserve",
+    });
+  return { first, retryWithValue, turnId };
+};
+
 if (!databaseUrl || !runPostgres) {
   describe.skip("chat secret receipts", () => {
     test("requires a configured Postgres test database", () => {});
@@ -135,13 +243,13 @@ if (!databaseUrl || !runPostgres) {
             },
           };
           const part = {
-            type: "tool-call" as const,
+            type: "tool-call",
             id: toolCallId,
             name: REQUEST_SECRET_TOOL_NAME,
             arguments: JSON.stringify(input),
             input,
-            state: "input-complete" as const,
-          };
+            state: "input-complete",
+          } as const satisfies ChatPart;
           const userMessageId = createSafeId<"chatMessage">();
           const assistantMessageId = createSafeId<"chatMessage">();
           await db.insert(chatMessages).values([
@@ -151,7 +259,7 @@ if (!databaseUrl || !runPostgres) {
               userId: scope.userId,
               role: "user",
               content: toPersistedChatMessageContentV3({
-                data: [{ type: "text", text: "Test request" }],
+                data: [{ type: "text", content: "Test request" }],
               }),
             },
             {
@@ -250,6 +358,47 @@ if (!databaseUrl || !runPostgres) {
             .from(chatSecrets)
             .where(eq(chatSecrets.threadId, scope.threadId));
           expect(rows).toHaveLength(1);
+        });
+      });
+    });
+
+    test("refuses a same-value retry once the request stopped waiting", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withFixture(db, async (scope) => {
+          const { first, retryWithValue, turnId } = await answerPendingRequest(
+            db,
+            scope,
+            "moved-on-request",
+          );
+          expect(await retryWithValue()).toEqual(first);
+          await db
+            .update(chatTurns)
+            .set({
+              status: "completed",
+              interactionType: null,
+              interactionToolCallId: null,
+              settledAt: new Date(),
+            })
+            .where(eq(chatTurns.id, turnId));
+          expect(await retryWithValue()).toMatchObject({ code: 409 });
+        });
+      });
+    });
+
+    test("caps same-value retries per request", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withFixture(db, async (scope) => {
+          const { first, retryWithValue } = await answerPendingRequest(
+            db,
+            scope,
+            "capped-request",
+          );
+          for (let attempt = 0; attempt < 5; attempt += 1) {
+            expect(await retryWithValue()).toEqual(first);
+          }
+          expect(await retryWithValue()).toMatchObject({ code: 409 });
         });
       });
     });

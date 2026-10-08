@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import { sha256Bytes } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
-import { chatSecrets } from "@/api/db/schema";
+import { chatSecrets, chatTurns } from "@/api/db/schema";
 import { readSavedChatSecret } from "@/api/handlers/chat/chat-secrets";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
@@ -33,14 +33,26 @@ type RecoverChatSecretOptions = {
     | { decision: "decline" };
 };
 
-const submissionConflict = () =>
-  Result.err(
-    new HandlerError({
-      status: 409,
-      code: "CHAT_PRIVATE_INPUT_ALREADY_SUBMITTED",
-      message: "Private input was already submitted with a different decision",
-    }),
-  );
+/** Same-decision retries allowed per request before the generic conflict. */
+export const CHAT_SECRET_RETRY_LIMIT = 5;
+
+export const chatSecretSubmissionConflict = () =>
+  new HandlerError({
+    status: 409,
+    code: "CHAT_PRIVATE_INPUT_ALREADY_SUBMITTED",
+    message: "Private input was already submitted with a different decision",
+  });
+
+/**
+ * `conflict` is an outcome rather than an error so the caller can commit the
+ * consumed retry attempt before answering with the generic conflict.
+ */
+type RecoveryOutcome =
+  | { kind: "absent" }
+  | { kind: "conflict" }
+  | { kind: "receipt"; receipt: RequestSecretOutput };
+
+const conflict = (): RecoveryOutcome => ({ kind: "conflict" });
 
 export const recoverChatSecretSubmission = async ({
   tx,
@@ -49,9 +61,8 @@ export const recoverChatSecretSubmission = async ({
   threadId,
   toolCallId,
   secretDecision,
-}: RecoverChatSecretOptions): Promise<
-  Result<RequestSecretOutput | undefined, HandlerError>
-> => {
+}: RecoverChatSecretOptions): Promise<RecoveryOutcome> => {
+  // audit: skip - The retry counter is bookkeeping inside the audited submission transaction.
   const readStored = () =>
     tx
       .select({
@@ -76,7 +87,32 @@ export const recoverChatSecretSubmission = async ({
       .limit(1);
   const prior = (await readStored()).at(0);
   if (!prior) {
-    return Result.ok(undefined);
+    return { kind: "absent" };
+  }
+  // Rank order: the interaction fence precedes the receipt fence, matching
+  // the first-submission path that locks the turn after this returns.
+  await withAggregateLock({
+    aggregate: "chatTurn",
+    tx,
+    id: { organizationId, userId, threadId, toolCallId },
+  });
+  const turn = (
+    await tx
+      .select({ status: chatTurns.status })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.threadId, threadId),
+          eq(chatTurns.organizationId, organizationId),
+          eq(chatTurns.userId, userId),
+          eq(chatTurns.interactionToolCallId, toolCallId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  // A retry only resumes a request that is still waiting for this input.
+  if (turn?.status !== "awaiting-user") {
+    return conflict();
   }
   await withAggregateLock({
     aggregate: "chatSecret",
@@ -85,7 +121,20 @@ export const recoverChatSecretSubmission = async ({
   });
   const stored = (await readStored()).at(0);
   if (!stored) {
-    return Result.ok(undefined);
+    return { kind: "absent" };
+  }
+  const attempt = await tx
+    .update(chatSecrets)
+    .set({ retryAttempts: sql`${chatSecrets.retryAttempts} + 1` })
+    .where(
+      and(
+        eq(chatSecrets.id, stored.id),
+        lt(chatSecrets.retryAttempts, CHAT_SECRET_RETRY_LIMIT),
+      ),
+    )
+    .returning({ id: chatSecrets.id });
+  if (attempt.length === 0) {
+    return conflict();
   }
   const target = {
     type: "mcp-connector" as const,
@@ -93,8 +142,8 @@ export const recoverChatSecretSubmission = async ({
   };
   if (stored.status === "declined") {
     return secretDecision.decision === "decline"
-      ? Result.ok({ status: "declined", target })
-      : submissionConflict();
+      ? { kind: "receipt", receipt: { status: "declined", target } }
+      : conflict();
   }
   if (
     secretDecision.decision === "decline" ||
@@ -102,14 +151,14 @@ export const recoverChatSecretSubmission = async ({
     !stored.ciphertext ||
     !stored.iv
   ) {
-    return submissionConflict();
+    return conflict();
   }
   if (
     stored.targetConnectionId !==
       secretDecision.targetConnection.connectionId ||
     new URL(stored.targetUrl).host !== secretDecision.targetConnection.host
   ) {
-    return submissionConflict();
+    return conflict();
   }
   const envelopeScope = {
     organizationId,
@@ -151,7 +200,10 @@ export const recoverChatSecretSubmission = async ({
   });
   // Decryption failures carry no envelope or submitted value across this boundary.
   if (compared.isErr() || !compared.value) {
-    return submissionConflict();
+    return conflict();
   }
-  return Result.ok({ status: "provided", secretRef: stored.id, target });
+  return {
+    kind: "receipt",
+    receipt: { status: "provided", secretRef: stored.id, target },
+  };
 };

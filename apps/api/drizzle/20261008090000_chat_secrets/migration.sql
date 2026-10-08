@@ -15,6 +15,7 @@ CREATE TABLE "chat_secrets" (
   "iv" bytea,
   "expires_at" timestamptz NOT NULL,
   "remaining_uses" integer DEFAULT 8 NOT NULL,
+  "retry_attempts" integer DEFAULT 0 NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "chat_secrets_decision_check" CHECK (
     (decision = 'provided' AND remaining_uses > 0 AND ciphertext IS NOT NULL AND iv IS NOT NULL)
@@ -22,6 +23,7 @@ CREATE TABLE "chat_secrets" (
     OR (decision = 'declined' AND remaining_uses = 0 AND ciphertext IS NULL AND iv IS NULL)
   ),
   CONSTRAINT "chat_secrets_remaining_uses_check" CHECK (remaining_uses BETWEEN 0 AND 8),
+  CONSTRAINT "chat_secrets_retry_attempts_check" CHECK (retry_attempts BETWEEN 0 AND 5),
   CONSTRAINT "chat_secrets_target_connection_check" CHECK (decision = 'declined' OR target_connection_id IS NOT NULL),
   CONSTRAINT "chat_secrets_expiry_check" CHECK (expires_at <= created_at::timestamptz + interval '24 hours')
 );--> statement-breakpoint

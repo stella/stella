@@ -43,6 +43,7 @@ export const chatSecrets = p.pgTable.withRLS(
     iv: bytea("iv"),
     expiresAt: timestamptz("expires_at").notNull(),
     remainingUses: p.integer("remaining_uses").notNull().default(8),
+    retryAttempts: p.integer("retry_attempts").notNull().default(0),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -60,6 +61,10 @@ export const chatSecrets = p.pgTable.withRLS(
     p.check(
       "chat_secrets_remaining_uses_check",
       sql`${table.remainingUses} BETWEEN 0 AND 8`,
+    ),
+    p.check(
+      "chat_secrets_retry_attempts_check",
+      sql`${table.retryAttempts} BETWEEN 0 AND 5`,
     ),
     p.check(
       "chat_secrets_expiry_check",

@@ -7,6 +7,7 @@ import {
   REQUEST_SECRET_TOOL_NAME,
   requestSecretInputSchema,
 } from "@stll/api-contract/chat-secret";
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
@@ -20,7 +21,10 @@ import {
 } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
-import { recoverChatSecretSubmission } from "@/api/handlers/chat/chat-secret-retry";
+import {
+  chatSecretSubmissionConflict,
+  recoverChatSecretSubmission,
+} from "@/api/handlers/chat/chat-secret-retry";
 import {
   readSavedChatSecret,
   saveChatSecretForFuture,
@@ -247,6 +251,15 @@ const readEnabledConnector = async ({
   return connector;
 };
 
+type SubmitOutcome =
+  | { kind: "conflict" }
+  | { kind: "receipt"; receipt: RequestSecretOutput };
+
+const submitOutcomeResult = (outcome: SubmitOutcome) =>
+  outcome.kind === "conflict"
+    ? Result.err(chatSecretSubmissionConflict())
+    : Result.ok(outcome.receipt);
+
 const submitSecret = createSafeRootHandler(
   config,
   async function* ({
@@ -280,7 +293,7 @@ const submitSecret = createSafeRootHandler(
       );
     }
     const result = yield* Result.await(
-      resultTx(safeDb, async (tx) => {
+      resultTx<SubmitOutcome>(safeDb, async (tx) => {
         await withAggregateLock({
           aggregate: "chatThread",
           tx,
@@ -316,11 +329,9 @@ const submitSecret = createSafeRootHandler(
           toolCallId,
           secretDecision,
         });
-        if (recovery.isErr()) {
-          return Result.err(recovery.error);
-        }
-        if (recovery.value) {
-          return Result.ok(recovery.value);
+        // Commit the consumed retry attempt; the conflict is answered after.
+        if (recovery.kind !== "absent") {
+          return Result.ok(recovery);
         }
         const scope = {
           tx,
@@ -352,7 +363,10 @@ const submitSecret = createSafeRootHandler(
               savedForFuture: false,
             },
           });
-          return Result.ok({ ...receipt, target: input.value.target });
+          return Result.ok({
+            kind: "receipt" as const,
+            receipt: { ...receipt, target: input.value.target },
+          });
         }
         const connector = await readEnabledConnector({
           tx,
@@ -439,10 +453,13 @@ const submitSecret = createSafeRootHandler(
               secretDecision.saveForFuture,
           },
         });
-        return Result.ok({ ...saved, target: input.value.target });
+        return Result.ok({
+          kind: "receipt" as const,
+          receipt: { ...saved, target: input.value.target },
+        });
       }),
     );
-    return Result.ok(result);
+    return submitOutcomeResult(result);
   },
 );
 export default submitSecret;

@@ -341,7 +341,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const isSensitiveBinding = (name: string) =>
           isSecretName(name) ||
-          (/\/(?:submit-secret|request-secret-card|use-chat-session)\.tsx?$/u.test(
+          (/\/(?:submit-secret|chat-secret-retry|request-secret-card|use-chat-session)\.tsx?$/u.test(
             filenameForContext(context),
           ) &&
             [
