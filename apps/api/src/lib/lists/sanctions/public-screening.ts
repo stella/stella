@@ -393,7 +393,7 @@ export const createPublicSanctionsScreening = ({
         screenSanctionsSubject({
           ...props,
           reportFailure,
-          matcher: ({ source, edition }) =>
+          matcher: async ({ source, edition }) =>
             Promise.resolve(
               Result.err({
                 code: warmer.status(source, edition),
