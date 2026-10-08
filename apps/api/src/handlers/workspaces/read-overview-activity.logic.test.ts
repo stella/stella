@@ -204,6 +204,12 @@ describe("activity filter cursors", () => {
 });
 
 describe("activity target sources", () => {
+  test("personal search history stays outside matter activity", () => {
+    expect(FEED_ACTIVITY_RESOURCE_TYPES).not.toContain(
+      AUDIT_RESOURCE_TYPE.SEARCH_HISTORY,
+    );
+    expect(ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE.search_history).toBeNull();
+  });
   test("names or excludes every audited resource type, for every action", () => {
     const resourceTypes = Object.values(AUDIT_RESOURCE_TYPE);
     const actions = Object.values(AUDIT_ACTION);

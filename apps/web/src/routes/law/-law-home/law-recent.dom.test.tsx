@@ -257,6 +257,7 @@ test("signed-in recents import local data once and always display server data", 
   const requests: { path: string; method: string; body: unknown }[] = [];
   let serverQuery = seed[0].query.toString();
   let nextRead: Promise<void> | undefined;
+  let serverScope = { userId: "history-reader", organizationId: "history-org" };
   const transport = spyOn(globalThis, "fetch").mockImplementation(
     async (input, init) => {
       const path = new URL(String(input)).pathname;
@@ -270,10 +271,12 @@ test("signed-in recents import local data once and always display server data", 
         return Response.json({ entries: 2, skipped: 0 });
       }
       const query = serverQuery;
+      const scope = serverScope;
       if (nextRead !== undefined) {
         await nextRead;
       }
       return Response.json({
+        scope,
         items: [{ ...seed[0], query }],
         nextCursor: null,
         limit: 20,
@@ -325,6 +328,10 @@ test("signed-in recents import local data once and always display server data", 
     const organizationRead = Promise.withResolvers<undefined>();
     nextRead = organizationRead.promise;
     serverQuery = "other organization query";
+    serverScope = {
+      userId: "history-reader",
+      organizationId: "history-org-two",
+    };
     await act(async () => {
       client.setQueryData(sessionOptions.queryKey, {
         ...signedSession,
@@ -351,6 +358,10 @@ test("signed-in recents import local data once and always display server data", 
     const accountRead = Promise.withResolvers<undefined>();
     nextRead = accountRead.promise;
     serverQuery = "other account query";
+    serverScope = {
+      userId: "history-other-reader",
+      organizationId: "history-org",
+    };
     await act(async () => {
       client.setQueryData(sessionOptions.queryKey, {
         ...signedSession,
@@ -428,6 +439,7 @@ const mountServerHistory = async (
   }
   return {
     requests,
+    client,
     setScope: async ({
       userId,
       organizationId,
@@ -466,6 +478,161 @@ const mountServerHistory = async (
   };
 };
 
+for (const responseScope of [
+  { userId: "scoped-history-reader", organizationId: "scoped-history-org-b" },
+  { userId: "other-history-reader", organizationId: "scoped-history-org-a" },
+]) {
+  test(`recents discard a response for ${responseScope.userId}/${responseScope.organizationId} instead of caching it under the requesting scope`, async () => {
+    const requestingScope = {
+      userId: "scoped-history-reader",
+      organizationId: "scoped-history-org-a",
+    };
+    let listReads = 0;
+    const matchingRead = Promise.withResolvers<Response>();
+    const fixture = await mountServerHistory(({ url, method }) => {
+      if (method !== "GET") {
+        throw new TypeError("Expected a history recovery read");
+      }
+      if (url.pathname.endsWith("/get-session")) {
+        return Response.json(createSignedSession(requestingScope));
+      }
+      if (!url.pathname.includes("search-history")) {
+        throw new TypeError("Expected a history or authoritative session read");
+      }
+      listReads += 1;
+      if (listReads === 2) {
+        return matchingRead.promise;
+      }
+      return Response.json({
+        scope: responseScope,
+        items: [{ ...seed[0], query: "Wrong owner private query" }],
+        nextCursor: null,
+        limit: 20,
+      });
+    });
+    try {
+      const ownerLists = () =>
+        fixture.client.getQueryCache().findAll({
+          queryKey: ["law-search-history", requestingScope, "list"],
+        });
+      await waitFor(() => {
+        expect(ownerLists()).toHaveLength(1);
+        expect(listReads).toBe(2);
+        expect(ownerLists().at(0)?.state.status).toBe("pending");
+      });
+      const sessionReads = fixture.requests.filter(({ url }) =>
+        url.pathname.endsWith("/get-session"),
+      );
+      expect(sessionReads).toHaveLength(1);
+      expect(
+        sessionReads.at(0)?.url.searchParams.get("disableCookieCache"),
+      ).toBe("true");
+      expect(ownerLists().at(0)?.state.data).toBeUndefined();
+      expect(screen.queryByText("Wrong owner private query") === null).toBe(
+        true,
+      );
+      await act(async () => {
+        matchingRead.resolve(
+          Response.json({
+            scope: requestingScope,
+            items: [{ ...seed[0], query: "Matching owner query" }],
+            nextCursor: null,
+            limit: 20,
+          }),
+        );
+      });
+      await waitFor(() =>
+        expect(screen.getByText("Matching owner query")).toBeTruthy(),
+      );
+      expect(listReads).toBe(2);
+      expect(ownerLists().at(0)?.state.data).toEqual([
+        { ...seed[0], query: "Matching owner query" },
+      ]);
+      expect(screen.queryByText("Wrong owner private query") === null).toBe(
+        true,
+      );
+    } finally {
+      matchingRead.resolve(
+        Response.json({
+          scope: requestingScope,
+          items: [],
+          nextCursor: null,
+          limit: 20,
+        }),
+      );
+      await fixture.dispose();
+    }
+  });
+}
+
+test("recents recover the authoritative owner automatically without retaining the discarded response under the previous owner", async () => {
+  const previousScope = {
+    userId: "scoped-history-reader",
+    organizationId: "scoped-history-org-a",
+  };
+  const currentScope = {
+    userId: "scoped-history-reader",
+    organizationId: "scoped-history-org-b",
+  };
+  let listReads = 0;
+  const fixture = await mountServerHistory(({ url, method }) => {
+    if (method !== "GET") {
+      throw new TypeError("Expected a history recovery read");
+    }
+    if (url.pathname.endsWith("/get-session")) {
+      return Response.json(createSignedSession(currentScope));
+    }
+    if (!url.pathname.includes("search-history")) {
+      throw new TypeError("Expected a history or authoritative session read");
+    }
+    listReads += 1;
+    return Response.json({
+      scope: currentScope,
+      items: [
+        {
+          ...seed[0],
+          query:
+            listReads === 1
+              ? "Discarded foreign response"
+              : "Authoritative owner query",
+        },
+      ],
+      nextCursor: null,
+      limit: 20,
+    });
+  });
+  try {
+    await waitFor(() =>
+      expect(screen.getByText("Authoritative owner query")).toBeTruthy(),
+    );
+    expect(listReads).toBe(2);
+    expect(screen.queryByText("Discarded foreign response") === null).toBe(
+      true,
+    );
+    const previousLists = fixture.client
+      .getQueryCache()
+      .findAll({ queryKey: ["law-search-history", previousScope, "list"] });
+    expect(previousLists).toHaveLength(1);
+    expect(previousLists.at(0)?.state.data).toBeUndefined();
+    const currentLists = fixture.client
+      .getQueryCache()
+      .findAll({ queryKey: ["law-search-history", currentScope, "list"] });
+    expect(currentLists).toHaveLength(1);
+    expect(currentLists.at(0)?.state.data).toEqual([
+      { ...seed[0], query: "Authoritative owner query" },
+    ]);
+    const sessionReads = fixture.requests.filter(({ url }) =>
+      url.pathname.endsWith("/get-session"),
+    );
+    expect(sessionReads).toHaveLength(1);
+    expect(sessionReads.at(0)?.url.searchParams.get("disableCookieCache")).toBe(
+      "true",
+    );
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("recents tabs fetch each kind beyond the newest twenty mixed entries", async () => {
   const searches = Array.from({ length: 21 }, (_, index) => ({
     ...seed[0],
@@ -486,6 +653,10 @@ test("recents tabs fetch each kind beyond the newest twenty mixed entries", asyn
     const filtered =
       kind === null ? stored : stored.filter((entry) => entry.kind === kind);
     return Response.json({
+      scope: {
+        userId: "scoped-history-reader",
+        organizationId: "scoped-history-org-a",
+      },
       items: filtered.slice(0, 20),
       nextCursor: filtered.length > 20 ? "older-entries" : null,
       limit: 20,
@@ -557,6 +728,7 @@ test("clear confirmation belongs to its opening organization and cannot survive 
     }
     const query = queries.get(activeOrganization);
     return Response.json({
+      scope: { userId, organizationId: activeOrganization },
       items: query === undefined ? [] : [{ ...seed[0], query }],
       nextCursor: null,
       limit: 20,

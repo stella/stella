@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { SafeId } from "@stll/api-contract/safe-id";
@@ -7,8 +8,10 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { api } from "@/lib/api";
+import { fetchSession } from "@/lib/auth-queries";
 import { sessionOptions } from "@/lib/auth-query-options";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   LAW_HISTORY_DISPLAY_LIMIT,
@@ -39,6 +42,16 @@ const historyMutationRequest = (
   },
   ...(signal === undefined ? {} : { fetch: { signal } }),
 });
+const historyScopeMatches = ({
+  actual,
+  expected,
+}: {
+  actual: LawHistoryOwner;
+  expected: LawHistoryOwner;
+}) =>
+  actual.userId === expected.userId &&
+  actual.organizationId === expected.organizationId;
+
 const lawHistoryKeys = {
   owner: (scope: LawHistoryScope) => ["law-search-history", scope],
   import: (scope: LawHistoryScope) => [
@@ -129,20 +142,61 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   const importView = useQueryView(importQuery);
   useQueryViewError(importView);
   const query = useQuery({
-    queryKey: lawHistoryKeys.list({ scope: keyScope, filter }),
+    queryKey: lawHistoryKeys.list({ scope: scope ?? keyScope, filter }),
     enabled: enabled && importView.type === "items",
     retry: false,
     queryFn: async ({ signal }) => {
-      const page = unwrapEden(
-        await api["search-history"].get({
-          query:
-            filter === "all"
-              ? { limit: LAW_HISTORY_DISPLAY_LIMIT }
-              : { limit: LAW_HISTORY_DISPLAY_LIMIT, kind: filter },
-          fetch: { signal },
-        }),
-      );
-      return page.items;
+      if (scope === null) {
+        return [];
+      }
+      const originatingScope = {
+        userId: scope.userId,
+        organizationId: scope.organizationId,
+      };
+      const readPage = async () =>
+        unwrapEden(
+          await api["search-history"].get({
+            query:
+              filter === "all"
+                ? { limit: LAW_HISTORY_DISPLAY_LIMIT }
+                : { limit: LAW_HISTORY_DISPLAY_LIMIT, kind: filter },
+            fetch: { signal },
+          }),
+        );
+      const page = await readPage();
+      if (
+        historyScopeMatches({ actual: page.scope, expected: originatingScope })
+      ) {
+        return page.items;
+      }
+
+      // Refresh the authoritative session once; foreign rows never enter this cache.
+      const authoritativeSession = await fetchSession({
+        bypassCookieCache: true,
+      });
+      signal.throwIfAborted();
+      queryClient.setQueryData(sessionOptions.queryKey, authoritativeSession);
+      if (
+        authoritativeSession?.user.id !== originatingScope.userId ||
+        authoritativeSession.session.activeOrganizationId !==
+          originatingScope.organizationId
+      ) {
+        return readQueryResult(
+          Result.err(new APIError({ status: 409, message: t("common.error") })),
+        );
+      }
+      const refreshedPage = await readPage();
+      if (
+        !historyScopeMatches({
+          actual: refreshedPage.scope,
+          expected: originatingScope,
+        })
+      ) {
+        return readQueryResult(
+          Result.err(new APIError({ status: 409, message: t("common.error") })),
+        );
+      }
+      return refreshedPage.items;
     },
   });
   const view = useQueryView(query);

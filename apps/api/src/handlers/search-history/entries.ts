@@ -435,6 +435,12 @@ type SearchHistoryRow = Pick<
   | "useCount"
 >;
 
+const SEARCH_HISTORY_PAYLOAD_SCHEMAS = {
+  search: searchPayloadSchema,
+  decision: decisionPayloadSchema,
+  statute: statutePayloadSchema,
+} as const satisfies Record<SearchHistoryKind, v.GenericSchema>;
+
 /** The entry a row holds, decrypted, as the list returns it. */
 export const toSearchHistoryEntryResponse = async (
   organizationId: SafeId<"organization">,
@@ -495,23 +501,31 @@ type SearchHistoryEntryResponse = Awaited<
   ReturnType<typeof toSearchHistoryEntryResponse>
 >;
 
-// Logical fields recovered from the encrypted payload have the same schemas
-// that validate the list projection.
-type SearchHistoryProjectionSource = SearchHistoryEntryRow &
-  v.InferOutput<typeof searchPayloadSchema> &
-  v.InferOutput<typeof decisionPayloadSchema> &
-  v.InferOutput<typeof statutePayloadSchema>;
+// Bind each encrypted payload to its own response branch; their document
+// identities are mutually exclusive, so they cannot form one intersection.
+type SearchHistoryProjectionSource<Kind extends SearchHistoryKind> =
+  SearchHistoryEntryRow &
+    v.InferOutput<(typeof SEARCH_HISTORY_PAYLOAD_SCHEMAS)[Kind]>;
 
-type MissingProjectedSearchHistoryColumn = UnprojectedColumns<
-  SearchHistoryProjectionSource,
-  SearchHistoryEntryResponse,
-  (typeof UNPROJECTED_SEARCH_HISTORY_COLUMNS)[number]
->;
-type UnexpectedProjectedSearchHistoryColumn = UnbackedProjectionKeys<
-  SearchHistoryProjectionSource,
-  SearchHistoryEntryResponse,
-  (typeof UNPROJECTED_SEARCH_HISTORY_COLUMNS)[number]
->;
+// Court identity is meaningful only on a decision, never a query or statute.
+type UnprojectedSearchHistoryColumns<Kind extends SearchHistoryKind> =
+  | (typeof UNPROJECTED_SEARCH_HISTORY_COLUMNS)[number]
+  | (Kind extends "decision" ? never : "courtId");
+
+type MissingProjectedSearchHistoryColumn = {
+  [Kind in SearchHistoryKind]: UnprojectedColumns<
+    SearchHistoryProjectionSource<Kind>,
+    Extract<SearchHistoryEntryResponse, { kind: Kind }>,
+    UnprojectedSearchHistoryColumns<Kind>
+  >;
+}[SearchHistoryKind];
+type UnexpectedProjectedSearchHistoryColumn = {
+  [Kind in SearchHistoryKind]: UnbackedProjectionKeys<
+    SearchHistoryProjectionSource<Kind>,
+    Extract<SearchHistoryEntryResponse, { kind: Kind }>,
+    UnprojectedSearchHistoryColumns<Kind>
+  >;
+}[SearchHistoryKind];
 
 true satisfies MissingProjectedSearchHistoryColumn extends never ? true : never;
 true satisfies UnexpectedProjectedSearchHistoryColumn extends never

@@ -276,7 +276,38 @@ describe("personal API key authority", () => {
     for (const role of roleNames) {
       expect(personalApiKeyPermissions(sessionMemberRole(role))).toEqual({
         workspace: ["read"],
+        searchHistory: ["read"],
       });
+    }
+  });
+
+  test("own history authority follows read and knowledge-write consent for every role", () => {
+    for (const role of roleNames) {
+      const memberRole = sessionMemberRole(role);
+      for (const scope of PERSONAL_API_KEY_SCOPES) {
+        const permissions = personalApiKeyPermissions(memberRole, [scope]);
+        switch (scope) {
+          case "stella:read":
+            expect(permissions.searchHistory).toEqual(["read"]);
+            break;
+          case "stella:knowledge_write":
+            expect(permissions.searchHistory).toEqual(["delete"]);
+            break;
+          default:
+            expect(permissions.searchHistory).toBeUndefined();
+        }
+        expect(
+          personalApiKeyPermissionsAllowed({ searchHistory: ["create"] }, [
+            scope,
+          ]),
+        ).toBe(false);
+      }
+      expect(
+        personalApiKeyPermissions(memberRole, [
+          "stella:read",
+          "stella:knowledge_write",
+        ]).searchHistory,
+      ).toEqual(["read", "delete"]);
     }
   });
 

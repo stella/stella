@@ -555,9 +555,14 @@ const api = new Elysia()
       .use(legislationCorpusRoute)
       .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
       .use(publicKnowledgeRoute)
-      .use(searchRoute)
-      .use(savedSearchesRoute)
-      .use(searchHistoryRoute)
+      // Compose the search slice in one link to bound the server's inferred
+      // Elysia chain depth while preserving each route's full contract.
+      .use(
+        new Elysia()
+          .use(searchRoute)
+          .use(savedSearchesRoute)
+          .use(searchHistoryRoute),
+      )
       .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
       .use(caseLawRoute)
