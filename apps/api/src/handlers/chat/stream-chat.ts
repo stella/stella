@@ -194,7 +194,7 @@ import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   createProviderDiagnostic,
   redactedProviderDiagnostic,
-} from "@/api/lib/errors/provider-diagnostic";
+} from "@/api/lib/errors/redacted-provider-diagnostic";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,

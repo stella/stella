@@ -9335,7 +9335,7 @@
     "seconds": 1,
     "source": "estimated"
   },
-  "src/lib/errors/provider-diagnostic.test.ts": {
+  "src/lib/errors/redacted-provider-diagnostic.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }

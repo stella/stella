@@ -14,7 +14,7 @@ import { createProviderCallError } from "@/api/lib/errors/provider-call-failure"
 import {
   redactedProviderDiagnostic,
   redactProviderMessage,
-} from "@/api/lib/errors/provider-diagnostic";
+} from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";

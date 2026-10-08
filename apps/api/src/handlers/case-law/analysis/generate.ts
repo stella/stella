@@ -43,7 +43,7 @@ import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
   redactProviderMessage,
   type RedactedProviderDiagnostic,
-} from "@/api/lib/errors/provider-diagnostic";
+} from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

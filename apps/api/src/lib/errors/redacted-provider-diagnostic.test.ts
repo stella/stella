@@ -13,7 +13,7 @@ import {
   redactedProviderDiagnostic,
   redactProviderMessage,
   registerProviderDiagnosticCredentials,
-} from "./provider-diagnostic";
+} from "./redacted-provider-diagnostic";
 
 test("every catalogue fixture reaches guidance and supported runtime adapters keep evidence private", () => {
   for (const code of Object.values(PROVIDER_SETUP_ERROR_CODE)) {

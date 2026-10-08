@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { redactedProviderDiagnostic } from "@/api/lib/errors/provider-diagnostic";
+import { redactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 
 import {
   AnalysisFailureStoreError,
