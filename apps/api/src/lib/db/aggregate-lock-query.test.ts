@@ -158,7 +158,7 @@ describe("aggregate queries preserve their decisive read", () => {
     });
   });
 
-  test("returned physical identity must match the declared resource", async () => {
+  test("rejects rows outside the requested identity", async () => {
     const error = await rejectionOf(
       withAggregateTransaction(db, async (rawTx) => {
         const tx = asTestRaw<Transaction>(rawTx);
@@ -183,7 +183,7 @@ describe("aggregate queries preserve their decisive read", () => {
     });
   });
 
-  test("a query cannot lock an unregistered target table", async () => {
+  test("rejects a non-registered target table", async () => {
     const error = await rejectionOf(
       withAggregateTransaction(db, async (rawTx) => {
         const tx = asTestRaw<Transaction>(rawTx);
@@ -206,7 +206,7 @@ describe("aggregate queries preserve their decisive read", () => {
 });
 
 describe("outer aggregate query target validation", () => {
-  test("a projection's workspace subquery cannot authorize locking an outer organization row", async () => {
+  test("rejects a non-registered outer target with a nested projection", async () => {
     const error = await rejectionOf(
       withAggregateTransaction(db, async (rawTx) => {
         const tx = asTestRaw<Transaction>(rawTx);
@@ -332,7 +332,7 @@ describe("aggregate query projection ownership", () => {
   });
 
   test.each(["id", "tenant"] as const)(
-    "a forged %s literal is refused before acquisition and leaves history idle",
+    "rejects a %s literal in place of a registered column and leaves history idle",
     async (field) => {
       await withAggregateTransaction(db, async (rawTx) => {
         const tx = asTestRaw<Transaction>(rawTx);
@@ -371,7 +371,7 @@ describe("aggregate query projection ownership", () => {
     },
   );
 
-  test("a same-named ID column from a joined table cannot impersonate the registered key", async () => {
+  test("rejects a key column from a different joined table", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
       const tx = asTestRaw<Transaction>(rawTx);
       expect(
@@ -412,6 +412,92 @@ describe("aggregate query projection ownership", () => {
 });
 
 describe("returned aggregate identity validation", () => {
+  test.each(["identity", "tenant", "cardinality"] as const)(
+    "a blocking %s refusal retains the acquired identities and leaves history idle",
+    async (mismatch) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        const returnedIds =
+          mismatch === "cardinality"
+            ? [workspaceId, otherWorkspaceId]
+            : [mismatch === "identity" ? otherWorkspaceId : workspaceId];
+        expect(
+          await rejectionOf(
+            withAggregateRowQuery({
+              aggregate: "workspace",
+              id: {
+                id: workspaceId,
+                organizationId:
+                  mismatch === "tenant"
+                    ? mintAuthProviderId<"organization">()
+                    : organizationId,
+              },
+              tx,
+              mode: "key share",
+              select: (queryTx) =>
+                queryTx
+                  .select({
+                    id: workspaces.id,
+                    organizationId: workspaces.organizationId,
+                  })
+                  .from(workspaces)
+                  .where(
+                    mismatch === "cardinality"
+                      ? eq(workspaces.organizationId, organizationId)
+                      : eq(
+                          workspaces.id,
+                          mismatch === "identity"
+                            ? otherWorkspaceId
+                            : workspaceId,
+                        ),
+                  ),
+            }),
+          ),
+        ).toMatchObject({
+          message:
+            mismatch === "cardinality"
+              ? "Aggregate query returned more than one physical row"
+              : "Aggregate query returned an undeclared physical or tenant resource",
+        });
+        for (const id of returnedIds) {
+          expect(
+            await rejectionOf(
+              withAggregateLock({
+                aggregate: "workspace",
+                id: { id, organizationId },
+                tx,
+                mode: "update",
+              }),
+            ),
+          ).toMatchObject({
+            message:
+              "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+          });
+          await withAggregateSavepoint(tx, async (child) => {
+            expect(
+              await withAggregateLock({
+                aggregate: "workspace",
+                id: { id, organizationId },
+                tx: child,
+                mode: "key share",
+              }),
+            ).toEqual({ status: "locked" });
+          });
+        }
+        expect(
+          await rejectionOf(
+            withAggregateLock({
+              aggregate: "organization",
+              id: organizationId,
+              tx,
+              mode: "key share",
+            }),
+          ),
+        ).toMatchObject({ message: "Aggregate lock rank inversion" });
+      });
+    },
+  );
+
   test("a returned tenant mismatch rejects the read and retains no parent lock", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
       const tx = asTestRaw<Transaction>(rawTx);
@@ -698,7 +784,7 @@ describe("aggregate query targets and lock modes", () => {
     });
   });
 
-  test("a strengthening reacquisition cannot bypass a higher row fence", async () => {
+  test("rejects a blocking mode upgrade after a higher-ranked acquisition", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
       const tx = asTestRaw<Transaction>(rawTx);
       await withAggregateLock({

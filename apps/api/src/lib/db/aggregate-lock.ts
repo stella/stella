@@ -1032,38 +1032,51 @@ const registeredProjection = (
   });
 };
 
-type ValidatedPhysicalIdentity = readonly (string | number)[] | null;
-const validateProjectedRows = (
-  rows: readonly unknown[],
+type ProjectedValue = RegisteredProjection & { value: unknown };
+const projectedRowValues = (
+  row: unknown,
   projection: readonly RegisteredProjection[],
-): ValidatedPhysicalIdentity => {
+): ProjectedValue[] =>
+  projection.map((column) => {
+    let value: unknown = row;
+    for (const key of column.path) {
+      if (!isRecord(value)) {
+        panic("Aggregate query returned an invalid registered projection");
+      }
+      value = value[key];
+    }
+    return { ...column, value };
+  });
+
+const projectedPhysicalIdentity = (
+  row: readonly ProjectedValue[],
+): (string | number)[] => {
+  const physicalValues: (string | number)[] = [];
+  for (const { value, kind, position } of row) {
+    if (kind !== "physical") {
+      continue;
+    }
+    if (typeof value !== "string" && typeof value !== "number") {
+      panic("Aggregate query returned an invalid physical key");
+    }
+    physicalValues[position] = value;
+  }
+  return physicalValues;
+};
+
+const validateProjectedRows = (rows: readonly ProjectedValue[][]): void => {
   if (rows.length > 1) {
     panic("Aggregate query returned more than one physical row");
   }
-  const physicalValues: (string | number)[] = [];
   for (const row of rows) {
-    for (const { path, expected, kind, position } of projection) {
-      let value: unknown = row;
-      for (const key of path) {
-        if (!isRecord(value)) {
-          panic("Aggregate query returned an invalid registered projection");
-        }
-        value = value[key];
-      }
+    for (const { value, expected } of row) {
       if (value !== expected) {
         panic(
           "Aggregate query returned an undeclared physical or tenant resource",
         );
       }
-      if (kind === "physical") {
-        if (typeof value !== "string" && typeof value !== "number") {
-          panic("Aggregate query returned an invalid physical key");
-        }
-        physicalValues[position] = value;
-      }
     }
   }
-  return rows.length === 0 ? null : physicalValues;
 };
 
 /** Lock the caller's exact selected rows; preserve CAS/projection and record only returned physical identities. */
@@ -1113,8 +1126,10 @@ export const withAggregateRowQuery = async <Row>(
         ? { ...options.lockConfig, noWait: true }
         : options.lockConfig,
     );
-    const physicalValues = validateProjectedRows(rows, projection);
-    if (physicalValues !== null) {
+    const projected = rows.map((row) => projectedRowValues(row, projection));
+    // The query already holds these locks, even when its returned rows fail validation.
+    for (const row of projected) {
+      const physicalValues = projectedPhysicalIdentity(row);
       retainLock(queryHistory, {
         ...requested,
         key: JSON.stringify(["row", table, ...physicalValues]),
@@ -1122,6 +1137,7 @@ export const withAggregateRowQuery = async <Row>(
       });
     }
     completeAcquisition(queryHistory);
+    validateProjectedRows(projected);
     return { status: rows.length === 0 ? "missing" : "locked", rows };
   };
   if (wait === "nowait") {
