@@ -13,15 +13,18 @@ import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type {
-  AnalysisFailed,
   AnalysisGenerating,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawAnalysisFailures, caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import {
+  ANALYSIS_FAILURE_HOLD_MS,
+  type AnalysisFailureRecord,
+} from "./analysis-failure";
 import {
   analysisSentinel,
   claimableAnalysisRow,
@@ -30,11 +33,14 @@ import {
 } from "./stored-analysis";
 
 /**
- * The one Drizzle capability the store needs. Structural rather than a
+ * The Drizzle capabilities the store needs. Structural rather than a
  * concrete handle, so a script's own connection satisfies it without the
  * store reaching for the application's.
  */
-export type AnalysisRowWriter = Pick<Transaction, "update">;
+export type AnalysisRowWriter = Pick<
+  Transaction,
+  "delete" | "insert" | "select" | "update"
+>;
 
 type AnalysisClaim = AnalysisStoreKey & {
   /** The stored value this caller read and found wanting; see `claimableAnalysisRow`. */
@@ -62,10 +68,23 @@ type AnalysisRelease = {
   sentinel: AnalysisGenerating;
 };
 
-type AnalysisFailure = AnalysisRelease & {
-  /** Over the sentinel's own input, which the store does not re-derive. */
-  failure: AnalysisFailed;
+type AnalysisFailureKey = {
+  decisionId: SafeId<"caseLawDecision">;
+  /** The reader key the failure is filed under (`analysisFailureKeyTag`). */
+  keyTag: string;
 };
+
+type AnalysisFailure = AnalysisRelease & {
+  keyTag: string;
+  /** Over the sentinel's own input, which the store does not re-derive. */
+  failure: AnalysisFailureRecord;
+};
+
+/**
+ * Expired failure records swept by each failure write, oldest first: enough
+ * to keep pace with the writes that add them, bounded so a write never scans.
+ */
+const FAILURE_SWEEP_BATCH = 50;
 
 export type AnalysisStore = {
   /**
@@ -92,49 +111,78 @@ export type AnalysisStore = {
    */
   clear: (release: AnalysisRelease) => Promise<void>;
   /**
-   * Replaces this run's sentinel, and only this run's, with the record of
-   * how it failed, so a reader polling the run learns it ended and why
-   * instead of finding the row empty and starting it again. Answers whether
-   * the row still held the sentinel; when it did not, a newer run owns the
-   * row and keeps it.
+   * Records how this run failed under its reader's key, then releases its
+   * sentinel. The record sits apart from the shared row, so another reader's
+   * run on the same decision neither replaces nor clears it: the reader whose
+   * key failed is told so until it asks to run again, while every other
+   * reader runs with its own key.
    */
-  fail: (failure: AnalysisFailure) => Promise<boolean>;
+  fail: (failure: AnalysisFailure) => Promise<void>;
+  /** The failure last recorded under this reader key, if any. */
+  readFailure: (
+    key: AnalysisFailureKey,
+  ) => Promise<AnalysisFailureRecord | null>;
   /** What the store holds beside the row; null where the row is the store. */
   peek: (decisionId: SafeId<"caseLawDecision">) => unknown;
 };
 
 /**
  * How a run gives the row back: its exact sentinel, and only that, becomes
- * nothing (the run was released) or the record of how it failed. A
- * replacement run that took over a stale sentinel holds a different value
- * and is left alone.
+ * nothing. A replacement run that took over a stale sentinel holds a
+ * different value and is left alone. A failed run first files its failure
+ * under its reader key (sweeping a bounded batch of expired records), so a
+ * poll between the two statements still sees the sentinel, never a row with
+ * neither.
  */
-const replaceSentinel = async (
+const releaseRun = async (
   db: AnalysisRowWriter,
   {
     decisionId,
     sentinel,
-    value,
-  }: AnalysisRelease & { value: AnalysisFailed | null },
-): Promise<boolean> => {
-  // audit: skip — analysis sentinel release or outcome; no user-facing record changes
-  const written = await db
+    failure,
+  }: AnalysisRelease & {
+    failure?: { keyTag: string; record: AnalysisFailureRecord } | undefined;
+  },
+): Promise<void> => {
+  // audit: skip — analysis run bookkeeping; no user-facing record changes
+  if (failure !== undefined) {
+    const { keyTag, record } = failure;
+    await db
+      .insert(caseLawAnalysisFailures)
+      .values({ decisionId, keyTag, ...record })
+      .onConflictDoUpdate({
+        target: [
+          caseLawAnalysisFailures.decisionId,
+          caseLawAnalysisFailures.keyTag,
+        ],
+        set: record,
+      });
+    const expiredBefore = new Date(
+      record.recordedAt.getTime() - ANALYSIS_FAILURE_HOLD_MS,
+    );
+    await db
+      .delete(caseLawAnalysisFailures)
+      .where(
+        sql`(${caseLawAnalysisFailures.decisionId}, ${caseLawAnalysisFailures.keyTag}) IN (SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures" WHERE "recorded_at" < ${expiredBefore.toISOString()}::timestamptz ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH})`,
+      );
+  }
+  await db
     .update(caseLawDecisions)
-    .set({ analysis: value })
+    .set({ analysis: null })
     .where(
       and(
         eq(caseLawDecisions.id, decisionId),
         // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
         sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
       ),
-    )
-    .returning({ id: caseLawDecisions.id });
-  return written.length > 0;
+    );
 };
 
 /**
- * The row-backed store. Its statements touch one column of one table,
- * which is exactly what the restricted analysis-writer role is granted.
+ * The row-backed store. Its claim, save and release touch one column of one
+ * table, which is exactly what the restricted analysis-writer role is
+ * granted; only a failed run's record reaches a second table, which only the
+ * owner connection that runs the analysis may write.
  */
 export const createDbAnalysisStore = (
   db: AnalysisRowWriter,
@@ -171,13 +219,36 @@ export const createDbAnalysisStore = (
     return written.length > 0;
   },
   clear: async ({ decisionId, sentinel }) => {
-    await replaceSentinel(db, { decisionId, sentinel, value: null });
+    await releaseRun(db, { decisionId, sentinel });
   },
-  fail: async ({ decisionId, failure, sentinel }) => {
+  fail: async ({ decisionId, failure, keyTag, sentinel }) => {
     if (failure.inputFingerprint !== sentinel.inputFingerprint) {
       return panic("A failure record must be over its run's own input");
     }
-    return await replaceSentinel(db, { decisionId, sentinel, value: failure });
+    await releaseRun(db, {
+      decisionId,
+      sentinel,
+      failure: { keyTag, record: failure },
+    });
+  },
+  readFailure: async ({ decisionId, keyTag }) => {
+    const [row] = await db
+      .select({
+        code: caseLawAnalysisFailures.code,
+        inputFingerprint: caseLawAnalysisFailures.inputFingerprint,
+        keySource: caseLawAnalysisFailures.keySource,
+        provider: caseLawAnalysisFailures.provider,
+        recordedAt: caseLawAnalysisFailures.recordedAt,
+      })
+      .from(caseLawAnalysisFailures)
+      .where(
+        and(
+          eq(caseLawAnalysisFailures.decisionId, decisionId),
+          eq(caseLawAnalysisFailures.keyTag, keyTag),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
   },
   peek: () => null,
 });

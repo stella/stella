@@ -7,7 +7,6 @@ import { stellaCaseLawAnalysisWriter } from "@/api/db/rls";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
-import { analysisFailure } from "@/api/lib/case-law/stored-analysis";
 import {
   CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS,
   CASE_LAW_ANALYSIS_WRITER_UPDATE_COLUMNS,
@@ -240,7 +239,7 @@ describe("case-law analysis writer role", () => {
   // because that column carries `$onUpdate`, and a statement touching an
   // ungranted column is refused whole, so the store is driven here as
   // itself rather than transcribed into SQL the store never sends.
-  test("SET ROLE runs the real store's claim, fail, save and clear", async () => {
+  test("SET ROLE runs the real store's claim, save and clear", async () => {
     const sourceId = createSafeId<"caseLawSource">();
     const decisionId = createSafeId<"caseLawDecision">();
     const fingerprint = "f".repeat(64);
@@ -274,17 +273,6 @@ describe("case-law analysis writer role", () => {
           tx.rollback();
           return;
         }
-        const failed = await store.fail({
-          decisionId,
-          sentinel,
-          failure: analysisFailure({
-            code: "timed_out",
-            decisionId,
-            fingerprint,
-            now: new Date("2026-09-01T12:00:00.000Z"),
-            reader: { source: "platform" },
-          }),
-        });
         const wrote = await store.save({
           decisionId,
           contentHash: null,
@@ -300,7 +288,7 @@ describe("case-law analysis writer role", () => {
           },
         });
         await store.clear({ decisionId, sentinel });
-        outcome = `failed: ${String(failed)}, saved: ${String(wrote)}`;
+        outcome = wrote ? "claimed and saved" : "save wrote nothing";
 
         tx.rollback();
       });
@@ -310,7 +298,7 @@ describe("case-law analysis writer role", () => {
       }
     }
 
-    expect(outcome).toBe("failed: true, saved: true");
+    expect(outcome).toBe("claimed and saved");
   });
 
   test("SET ROLE updates analysis on a live row and is refused any other column", async () => {

@@ -2,13 +2,13 @@ import { queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  type CaseLawAnalysisFailureCode as AnalysisFailureCode,
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
-  ANALYSIS_FAILURE_CODES,
-  type AnalysisFailureCode,
   type DecisionAnalysis,
   type PersistedDecisionAnalysis,
   parsePersistedDecisionAnalysis,
@@ -84,7 +84,7 @@ const parseAnalysisError = (value: Record<string, unknown>): AnalysisError => {
   if (isMember(CASE_LAW_ANALYSIS_UNAVAILABLE_CODES, code)) {
     return { kind: "unavailable", code };
   }
-  if (isMember(ANALYSIS_FAILURE_CODES, code)) {
+  if (isMember(CASE_LAW_ANALYSIS_FAILURE_CODES, code)) {
     const key = parseFailureKey(value["key"]);
     return key === null ? UNREADABLE : { kind: "failed", code, key };
   }

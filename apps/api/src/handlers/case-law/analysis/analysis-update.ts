@@ -113,9 +113,6 @@ export const applyAnalysisUpdate = async ({
       return { kind: "unchanged", analysis: stored.analysis };
     case "generating":
       return { kind: "run-in-flight" };
-    // A failed run's record holds the row only against the same run starting
-    // again unasked; a finished analysis submitted for the document replaces it.
-    case "failed":
     case "none":
       break;
     default:

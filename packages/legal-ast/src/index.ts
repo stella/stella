@@ -3,17 +3,12 @@ export {
   analysisHeadingSchema,
   CORE_CATEGORIES,
   decisionAnalysisSchema,
-  ANALYSIS_FAILURE_CODES,
-  isAnalysisFailed,
   isAnalysisGenerating,
   isDecisionAnalysis,
   parsePersistedDecisionAnalysis,
 } from "./analysis.js";
 export type {
   AnalysisAnnotation,
-  AnalysisFailed,
-  AnalysisFailureCode,
-  AnalysisFailureKey,
   AnalysisGenerating,
   AnalysisHeading,
   AnalysisInputFingerprint,

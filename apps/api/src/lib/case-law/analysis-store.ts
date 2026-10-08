@@ -20,6 +20,7 @@ import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
+import type { AnalysisFailureRecord } from "./analysis-failure";
 import {
   createDbAnalysisStore,
   type AnalysisStore,
@@ -31,6 +32,15 @@ export type { AnalysisStore } from "./analysis-store-core";
 const dbAnalysisStore = createDbAnalysisStore(rootDb);
 
 const memoryAnalyses = new Map<SafeId<"caseLawDecision">, unknown>();
+
+// A development process's failure records; it restarts long before they
+// could accumulate.
+const memoryFailures = new Map<string, AnalysisFailureRecord>();
+
+const memoryFailureKey = (
+  decisionId: SafeId<"caseLawDecision">,
+  keyTag: string,
+): string => `${decisionId}:${keyTag}`;
 
 const memoryAnalysisStore: AnalysisStore = {
   claim: async ({ decisionId, fingerprint, observed }) => {
@@ -69,13 +79,17 @@ const memoryAnalysisStore: AnalysisStore = {
     }
     await Promise.resolve();
   },
-  fail: async ({ decisionId, failure, sentinel }) => {
-    const held = memoryAnalyses.get(decisionId) === sentinel;
-    if (held) {
-      memoryAnalyses.set(decisionId, failure);
+  fail: async ({ decisionId, failure, keyTag, sentinel }) => {
+    memoryFailures.set(memoryFailureKey(decisionId, keyTag), failure);
+    if (memoryAnalyses.get(decisionId) === sentinel) {
+      memoryAnalyses.delete(decisionId);
     }
-    return await Promise.resolve(held);
+    await Promise.resolve();
   },
+  readFailure: async ({ decisionId, keyTag }) =>
+    await Promise.resolve(
+      memoryFailures.get(memoryFailureKey(decisionId, keyTag)) ?? null,
+    ),
   peek: (decisionId) => memoryAnalyses.get(decisionId) ?? null,
 };
 

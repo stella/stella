@@ -3,8 +3,10 @@ import { readdirSync } from "node:fs";
 import nodePath from "node:path";
 import { createTranslator } from "use-intl/core";
 
-import { CASE_LAW_ANALYSIS_UNAVAILABLE_CODES } from "@stll/api-contract";
-import { ANALYSIS_FAILURE_CODES } from "@stll/legal-ast/analysis";
+import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+} from "@stll/api-contract";
 
 import { PROVIDER_KEYS } from "@/components/ai-config-role-models.logic";
 import ar from "@/i18n/langs/ar.json";
@@ -52,7 +54,9 @@ const catalogs: readonly { locale: string; messages: typeof en }[] = [
   { locale: "sk", messages: sk },
 ];
 
-const keyedCodes = ANALYSIS_FAILURE_CODES.filter((code) => code !== "failed");
+const keyedCodes = CASE_LAW_ANALYSIS_FAILURE_CODES.filter(
+  (code) => code !== "failed",
+);
 
 describe("analysis error messages", () => {
   test("every failed-run code but the generic one names whose key the run used", () => {

@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { CASE_LAW_ANALYSIS_UNAVAILABLE_CODES } from "@stll/api-contract";
+import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+} from "@stll/api-contract";
 import type {
   AnalysisHeading,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
-import { ANALYSIS_FAILURE_CODES } from "@stll/legal-ast/analysis";
 
 import {
   type AnalysisError,
@@ -98,7 +100,7 @@ describe("decision analysis response parsing", () => {
   });
 
   test("reads every failed-run code with whose key the run used", () => {
-    for (const code of ANALYSIS_FAILURE_CODES) {
+    for (const code of CASE_LAW_ANALYSIS_FAILURE_CODES) {
       expect(
         parseAnalysisResponse({
           status: "error",
@@ -203,7 +205,7 @@ describe("decision analysis query state", () => {
 
 describe("what Retry does for each analysis error", () => {
   test("a failed run asks for a new run, for every failure code and key", () => {
-    for (const code of ANALYSIS_FAILURE_CODES) {
+    for (const code of CASE_LAW_ANALYSIS_FAILURE_CODES) {
       for (const key of [
         { source: "organization", provider: "google" },
         { source: "platform" },

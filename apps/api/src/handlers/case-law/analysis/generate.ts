@@ -10,10 +10,11 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import type { CaseLawAnalysisUnavailableCode } from "@stll/api-contract";
 import type {
-  AnalysisFailed,
-  AnalysisFailureCode,
+  CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  CaseLawAnalysisUnavailableCode,
+} from "@stll/api-contract";
+import type {
   AnalysisGenerating,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
@@ -31,18 +32,20 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  analysisFailureKeyTag,
+  analysisFailureRecord,
+  failureStillHolds,
+  type AnalysisFailureRecord,
+  type AnalysisReaderKey,
+} from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
   analysisStore,
   storesAnalyses,
   type AnalysisStore,
 } from "@/api/lib/case-law/analysis-store";
-import {
-  analysisFailure,
-  failureAnswersReader,
-  storedAnalysisState,
-  type AnalysisReaderKey,
-} from "@/api/lib/case-law/stored-analysis";
+import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -131,11 +134,12 @@ export type GenerateAnalysisResponse =
       key: AnalysisFailureKeyView;
     };
 
-const failureResponse = (failure: AnalysisFailed): GenerateAnalysisResponse => {
-  const { key } = failure;
+const failureResponse = (
+  failure: AnalysisFailureRecord,
+): GenerateAnalysisResponse => {
   const view: AnalysisFailureKeyView =
-    key.source === "organization"
-      ? { source: "organization", provider: key.provider }
+    failure.keySource === "organization" && failure.provider !== null
+      ? { source: "organization", provider: failure.provider }
       : { source: "platform" };
   const base = ANALYSIS_FAILURE_MESSAGE[failure.code];
   return {
@@ -176,7 +180,7 @@ const readerKeyOf = ({
 
 /**
  * Run the AI generation in the background. Updates the DB when done; on
- * failure replaces its sentinel with the failure record.
+ * failure files the failure under the reader's key and releases the sentinel.
  *
  * `orgAIConfig` is captured from the request scope and threaded
  * through here so BYOK orgs route this fire-and-forget call to
@@ -291,36 +295,43 @@ const runGeneration = async ({
       });
     }
     aiAnalytics.captureError(error);
-    const failure = analysisFailure({
+    const failure = analysisFailureRecord({
       code: ANALYSIS_FAILURE_CODE_BY_KIND[classifyAIError(error)],
-      decisionId,
       fingerprint: sentinel.inputFingerprint,
       now: new Date(),
       reader,
     });
-    await recordFailedRun({ decisionId, failure, sentinel, store });
+    await recordFailedRun({
+      decisionId,
+      failure,
+      keyTag: analysisFailureKeyTag(reader, decisionId),
+      sentinel,
+      store,
+    });
   }
 };
 
 /**
- * Replaces the run's sentinel with its failure record. When the record cannot
- * be written, releases the sentinel instead rather than leave the decision
- * pinned in the generating state, and captures what went wrong: neither is
- * the fault the run itself failed on.
+ * Files the run's failure under its reader key and releases its sentinel.
+ * When the record cannot be written, releases the sentinel anyway rather than
+ * leave the decision pinned in the generating state, and captures what went
+ * wrong: neither is the fault the run itself failed on.
  */
 const recordFailedRun = async ({
   decisionId,
   failure,
+  keyTag,
   sentinel,
   store,
 }: {
   decisionId: SafeId<"caseLawDecision">;
-  failure: AnalysisFailed;
+  failure: AnalysisFailureRecord;
+  keyTag: string;
   sentinel: AnalysisGenerating;
   store: AnalysisStore;
 }): Promise<void> => {
   const recorded = await Result.tryPromise(
-    async () => await store.fail({ decisionId, failure, sentinel }),
+    async () => await store.fail({ decisionId, failure, keyTag, sentinel }),
   );
   if (Result.isOk(recorded)) {
     return;
@@ -436,22 +447,32 @@ export const generateAnalysis = async ({
       return Result.ok({ status: "done", analysis: stored.analysis });
     case "generating":
       return Result.ok({ status: "generating" });
-    case "failed":
-      // The run this reader's key made failed: say so until the reader asks
-      // again. A failure under any other key says nothing about this one, so
-      // that reader runs with its own key as if the row were empty.
-      if (
-        !retry &&
-        failureAnswersReader({ decisionId, failure: stored.failure, reader })
-      ) {
-        return Result.ok(failureResponse(stored.failure));
-      }
-      break;
     case "none":
       break;
     default: {
       stored satisfies never;
       return panic(`Unhandled stored: ${String(stored)}`);
+    }
+  }
+
+  // Before a run starts: when the run this reader's key made last failed,
+  // say so until the reader asks again. The record is filed under this
+  // reader's key alone, so another reader's run on the shared row neither
+  // replaces nor clears it, and this reader never re-runs unasked.
+  if (!retry) {
+    const failure = await store.readFailure({
+      decisionId,
+      keyTag: analysisFailureKeyTag(reader, decisionId),
+    });
+    if (
+      failure !== null &&
+      failureStillHolds({
+        failure,
+        fingerprint: input.fingerprint,
+        now: new Date(),
+      })
+    ) {
+      return Result.ok(failureResponse(failure));
     }
   }
 

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { AnalysisFailureCode } from "@stll/legal-ast/analysis";
+import type { CaseLawAnalysisFailureCode as AnalysisFailureCode } from "@stll/api-contract";
 
 import {
   PROVIDER_KEYS,

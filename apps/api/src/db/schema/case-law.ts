@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 
 import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_KEY_SOURCES,
   CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS,
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_ANSWER_TYPES,
@@ -3018,6 +3020,59 @@ export const caseLawSearchBackfillFailures = p.pgTable(
       sql`(${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN} AND ${t.nextEligibleAt} IS NOT NULL) OR (${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED} AND ${t.nextEligibleAt} IS NULL)`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+const CASE_LAW_ANALYSIS_FAILURE_CODE_SQL_VALUES =
+  CASE_LAW_ANALYSIS_FAILURE_CODES.map((code) => sql.raw(`'${code}'`));
+
+/**
+ * How a reader's last analysis run of a decision failed, one row per decision
+ * and reader key. Kept apart from the decision row, which every reader
+ * shares: a failure under one key must stay recorded while another reader
+ * runs with theirs. Only the owner connection that runs the analysis reads or
+ * writes it.
+ */
+export const caseLawAnalysisFailures = p.pgTable.withRLS(
+  "case_law_analysis_failures",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    keyTag: p.text("key_tag").notNull(),
+    inputFingerprint: p.text("input_fingerprint").notNull(),
+    code: p.text({ enum: CASE_LAW_ANALYSIS_FAILURE_CODES }).notNull(),
+    keySource: p
+      .text("key_source", { enum: CASE_LAW_ANALYSIS_KEY_SOURCES })
+      .notNull(),
+    provider: p.text(),
+    recordedAt: timestamptz("recorded_at").notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_analysis_failures_pkey",
+      columns: [t.decisionId, t.keyTag],
+    }),
+    p
+      .foreignKey({
+        name: "case_law_analysis_failure_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
+    p.index("case_law_analysis_failures_recorded_at_idx").on(t.recordedAt),
+    p.check(
+      "case_law_analysis_failures_code_values",
+      sql`${t.code} IN (${sql.join(CASE_LAW_ANALYSIS_FAILURE_CODE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_analysis_failures_key_shape",
+      sql`(${t.keySource} = 'organization' AND ${t.provider} IS NOT NULL) OR (${t.keySource} = 'platform' AND ${t.provider} IS NULL)`,
+    ),
+    p.pgPolicy("case_law_analysis_failure_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_analysis_failures'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_analysis_failures'::regclass)`,
+    }),
   ],
 );
 

@@ -1,6 +1,6 @@
 /**
- * A generation run that fails leaves a record of why on the decision row, in
- * place of its sentinel, and the read answers that record: so a reader
+ * A generation run that fails releases the decision row and files a record of
+ * why under its reader's key, and the read answers that record: so a reader
  * polling the run is told it ended (and with whose key), the poll never
  * starts the run that just failed a second time, and only an explicit retry
  * runs again.
@@ -22,13 +22,22 @@ import {
 } from "@stll/ai-catalog";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawAnalysisFailures,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  ANALYSIS_FAILURE_HOLD_MS,
+  analysisFailureRecord,
+} from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
+import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -46,6 +55,8 @@ import {
 } from "./generate";
 
 const ORG_A = toSafeId<"organization">("org_analysis_a");
+const ORG_B = toSafeId<"organization">("org_analysis_b");
+const FINGERPRINT = "f".repeat(64);
 const USER_ID = toSafeId<"user">("user_analysis");
 
 const paragraph = (anchorId: string, plainText: string): ParagraphBlock => ({
@@ -266,6 +277,16 @@ describe("a failed analysis run", () => {
     return row?.analysis ?? null;
   };
 
+  const failureRows = async (decisionId: SafeId<"caseLawDecision">) =>
+    await db
+      .select({
+        code: caseLawAnalysisFailures.code,
+        keySource: caseLawAnalysisFailures.keySource,
+        provider: caseLawAnalysisFailures.provider,
+      })
+      .from(caseLawAnalysisFailures)
+      .where(eq(caseLawAnalysisFailures.decisionId, decisionId));
+
   const read = async ({
     decisionId,
     model,
@@ -309,13 +330,15 @@ describe("a failed analysis run", () => {
     const first = await read({ decisionId, model: google.model });
     expect(first).toEqual({ response: { status: "generating" }, starts: 1 });
 
-    // The run replaced its sentinel with the record of how it failed.
-    const stored = await storedValue(decisionId);
-    expect(stored).toMatchObject({
-      status: "failed",
-      code: "answer_incomplete",
-      key: { source: "organization", provider: "google" },
-    });
+    // The run released the shared row and filed how it failed on its own.
+    expect(await storedValue(decisionId)).toBeNull();
+    expect(await failureRows(decisionId)).toEqual([
+      expect.objectContaining({
+        code: "answer_incomplete",
+        keySource: "organization",
+        provider: "google",
+      }),
+    ]);
 
     // The next poll is told, with whose key, and starts nothing.
     const poll = await read({ decisionId, model: google.model });
@@ -330,6 +353,72 @@ describe("a failed analysis run", () => {
       starts: 0,
     });
     expect(google.remaining()).toBe(0);
+  });
+
+  test("two readers whose runs both fail, polling in turn, each keep their own failure and neither runs again unasked", async () => {
+    const decisionId = await insertDecision();
+    const first = fakeGoogle(["cut-off"]);
+    const second = fakeGoogle(["cut-off"]);
+    const asFirst = { decisionId, model: first.model };
+    const asSecond = {
+      decisionId,
+      model: second.model,
+      organizationId: ORG_B,
+    };
+
+    expect((await read(asFirst)).starts).toBe(1);
+    // The first reader's failure is filed apart from the shared row, so the
+    // second reader runs with its own key.
+    expect((await read(asSecond)).starts).toBe(1);
+
+    for (let round = 0; round < 3; round += 1) {
+      for (const reader of [asFirst, asSecond]) {
+        const poll = await read(reader);
+        expect(poll).toEqual({
+          response: expect.objectContaining({
+            status: "error",
+            code: "answer_incomplete",
+          }),
+          starts: 0,
+        });
+      }
+    }
+    expect(first.remaining()).toBe(0);
+    expect(second.remaining()).toBe(0);
+    expect(await failureRows(decisionId)).toHaveLength(2);
+  });
+
+  test("recording a failure sweeps records past their hold, and keeps fresh ones", async () => {
+    const expiredDecision = await insertDecision();
+    const freshDecision = await insertDecision();
+    const now = new Date();
+    const store = createDbAnalysisStore(db);
+    const recordFor = (
+      decisionId: SafeId<"caseLawDecision">,
+      recordedAt: Date,
+    ) =>
+      store.fail({
+        decisionId,
+        keyTag: "platform",
+        sentinel: analysisSentinel(FINGERPRINT, recordedAt),
+        failure: analysisFailureRecord({
+          code: "failed",
+          fingerprint: FINGERPRINT,
+          now: recordedAt,
+          reader: { source: "platform" },
+        }),
+      });
+
+    await recordFor(
+      expiredDecision,
+      new Date(now.getTime() - ANALYSIS_FAILURE_HOLD_MS - 1000),
+    );
+    expect(await failureRows(expiredDecision)).toHaveLength(1);
+
+    await recordFor(freshDecision, now);
+
+    expect(await failureRows(expiredDecision)).toHaveLength(0);
+    expect(await failureRows(freshDecision)).toHaveLength(1);
   });
 
   test("the run asks for the analysis budget, bounded by the model's catalog limit", async () => {
