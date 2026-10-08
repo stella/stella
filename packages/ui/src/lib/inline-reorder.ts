@@ -1,12 +1,17 @@
-import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
+/**
+ * Reordering for a horizontal row of items (tabs, chips) dragged with
+ * pragmatic drag and drop. Edges match the hitbox package's `Edge`, so a
+ * caller passes `extractClosestEdge(...)` straight through.
+ */
+type InlineDropEdge = "top" | "right" | "bottom" | "left";
 
-export type WorkspaceViewDirection = "ltr" | "rtl";
-export type WorkspaceViewDropPosition = "before" | "after";
+export type InlineDirection = "ltr" | "rtl";
+export type InlineDropPosition = "before" | "after";
 
-export const toWorkspaceViewDropPosition = (
-  edge: Edge | null,
-  direction: WorkspaceViewDirection,
-): WorkspaceViewDropPosition | null => {
+export const toInlineDropPosition = (
+  edge: InlineDropEdge | null,
+  direction: InlineDirection,
+): InlineDropPosition | null => {
   if (edge !== "left" && edge !== "right") {
     return null;
   }
@@ -16,19 +21,20 @@ export const toWorkspaceViewDropPosition = (
   return isTrailingEdge ? "after" : "before";
 };
 
-type ReorderWorkspaceViewIdsParams = {
+type ReorderInlineIdsParams = {
   ids: readonly string[];
   draggedId: string;
   targetId: string;
-  position: WorkspaceViewDropPosition;
+  position: InlineDropPosition;
 };
 
-export const reorderWorkspaceViewIds = ({
+/** The new order, or null when the drop leaves the order unchanged. */
+export const reorderInlineIds = ({
   ids,
   draggedId,
   targetId,
   position,
-}: ReorderWorkspaceViewIdsParams): string[] | null => {
+}: ReorderInlineIdsParams): string[] | null => {
   if (
     draggedId === targetId ||
     !ids.includes(draggedId) ||
