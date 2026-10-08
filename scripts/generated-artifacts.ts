@@ -30,7 +30,7 @@ export const formattedArtifactsLikeRepository = async (
       temporaryFile: path.join(workDir, `output-${index}${path.extname(file)}`),
     }));
     await Promise.all(
-      files.map(({ temporaryFile, contents }) =>
+      files.map(async ({ temporaryFile, contents }) =>
         writeFile(temporaryFile, contents, "utf-8"),
       ),
     );
