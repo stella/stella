@@ -4,7 +4,8 @@ import {
 } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
-import { createHash } from "node:crypto";
+
+import { createSha256 } from "@stll/sha256/node";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -163,91 +164,94 @@ describe("document file upload surface", () => {
     });
   });
 
-  test("bridges a host file through the canonical create and finalize capabilities", async () => {
-    const bytes = new TextEncoder().encode("agreement body");
-    const invocations: Record<string, unknown>[] = [];
+  test.each(["agreement body", "Příliš žluťoučký kůň 📄 中文", "e\u0301"])(
+    "bridges host bytes with the former SHA-256 reservation digest: %j",
+    async (text) => {
+      const bytes = new TextEncoder().encode(text);
+      const invocations: Record<string, unknown>[] = [];
 
-    const result = await uploadRemoteDocumentVersion({
-      context: createContext(),
-      entityId: "00000000-0000-4000-8000-000000000010",
-      file: {
-        download_url: "https://files.example/agreement.docx",
-        file_id: "file_123",
-        file_name: "agreement.docx",
-        mime_type:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      },
-      workspaceId: "00000000-0000-4000-8000-000000000001",
-      dependencies: {
-        abort: mock(async () => ({
-          status: "ok" as const,
-          payload: { aborted: true },
-        })),
-        captureCleanupFailure: mock(() => undefined),
-        download: mock(async () =>
-          Result.ok({
-            body: bytes.buffer,
-            headers: new Headers(),
-            ok: true,
-            status: 200,
-          }),
-        ),
-        invoke: mock(async ({ args }) => {
-          invocations.push(args);
-          return args["capability"] === "uploads.create"
-            ? ({
-                status: "ok",
-                payload: {
-                  headers: { "content-type": "application/octet-stream" },
-                  uploadId: "upload_123",
-                  url: "https://storage.example/upload",
-                },
-              } satisfies { status: "ok"; payload: unknown })
-            : ({
-                status: "ok",
-                payload: {
-                  finalizedResult: {
-                    type: "entity_version",
-                    entityId: "00000000-0000-4000-8000-000000000010",
-                    entityVersionId: "version_123",
-                    versionNumber: 2,
-                    fileId: "file_456",
-                    fileName: "agreement.docx",
+      const result = await uploadRemoteDocumentVersion({
+        context: createContext(),
+        entityId: "00000000-0000-4000-8000-000000000010",
+        file: {
+          download_url: "https://files.example/agreement.docx",
+          file_id: "file_123",
+          file_name: "agreement.docx",
+          mime_type:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+        dependencies: {
+          abort: mock(async () => ({
+            status: "ok" as const,
+            payload: { aborted: true },
+          })),
+          captureCleanupFailure: mock(() => undefined),
+          download: mock(async () =>
+            Result.ok({
+              body: bytes.buffer,
+              headers: new Headers(),
+              ok: true,
+              status: 200,
+            }),
+          ),
+          invoke: mock(async ({ args }) => {
+            invocations.push(args);
+            return args["capability"] === "uploads.create"
+              ? ({
+                  status: "ok",
+                  payload: {
+                    headers: { "content-type": "application/octet-stream" },
+                    uploadId: "upload_123",
+                    url: "https://storage.example/upload",
                   },
-                },
-              } satisfies { status: "ok"; payload: unknown });
-        }),
-        put: mock(async () => Result.ok(new Response(null, { status: 200 }))),
-      },
-    });
+                } satisfies { status: "ok"; payload: unknown })
+              : ({
+                  status: "ok",
+                  payload: {
+                    finalizedResult: {
+                      type: "entity_version",
+                      entityId: "00000000-0000-4000-8000-000000000010",
+                      entityVersionId: "version_123",
+                      versionNumber: 2,
+                      fileId: "file_456",
+                      fileName: "agreement.docx",
+                    },
+                  },
+                } satisfies { status: "ok"; payload: unknown });
+          }),
+          put: mock(async () => Result.ok(new Response(null, { status: 200 }))),
+        },
+      });
 
-    expect(result).toMatchObject({
-      egress: "structured",
-      payload: {
-        finalizedResult: {
-          type: "entity_version",
-          entityId: "00000000-0000-4000-8000-000000000010",
-          entityVersionId: "version_123",
-          versionNumber: 2,
-          fileId: "file_456",
-          fileName: "agreement.docx",
+      expect(result).toMatchObject({
+        egress: "structured",
+        payload: {
+          finalizedResult: {
+            type: "entity_version",
+            entityId: "00000000-0000-4000-8000-000000000010",
+            entityVersionId: "version_123",
+            versionNumber: 2,
+            fileId: "file_456",
+            fileName: "agreement.docx",
+          },
         },
-      },
-    });
-    expect(invocations.map((args) => args["capability"])).toEqual([
-      "uploads.create",
-      "uploads.update",
-    ]);
-    expect(invocations.at(0)).toMatchObject({
-      input: {
-        body: {
-          purpose: "entity_version",
-          sha256Hex: createHash("sha256").update(bytes).digest("hex"),
-          size: bytes.byteLength,
+      });
+      expect(invocations.map((args) => args["capability"])).toEqual([
+        "uploads.create",
+        "uploads.update",
+      ]);
+      expect(invocations.at(0)).toMatchObject({
+        input: {
+          body: {
+            purpose: "entity_version",
+            sha256Hex: createSha256().update(bytes).digest("hex"),
+            size: bytes.byteLength,
+          },
         },
-      },
-    });
-  });
+      });
+    },
+  );
 
   test("stops before downloading when the request context has no permit", async () => {
     const download = mock(async () =>

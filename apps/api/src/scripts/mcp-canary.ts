@@ -10,12 +10,13 @@ import {
 } from "@modelcontextprotocol/server";
 import type { CallToolRequestParams } from "@modelcontextprotocol/server";
 import { Result, TaggedError } from "better-result";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
@@ -29,6 +30,10 @@ import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 
 export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+
+export const canaryPkceChallenge = (verifier: string) =>
+  sha256Base64Url(verifier);
+export const canaryVerifierHash = (verifier: string) => sha256Hex(verifier);
 
 const PROBE_TIMEOUT_MS = MCP_NOTIFICATION_KEEP_ALIVE_MS * 4;
 const STREAM_OPEN_OBSERVATION_MS = 100;
@@ -887,9 +892,9 @@ export const runOAuthJourneys = async (
             );
           }
           const url = new URL(authorizationEndpoint);
-          const challenge = createHash("sha256")
-            .update(randomBytes(32).toString("base64url"))
-            .digest("base64url");
+          const challenge = canaryPkceChallenge(
+            randomBytes(32).toString("base64url"),
+          );
           url.search = new URLSearchParams({
             client_id: clientId,
             redirect_uri: redirectUri,
@@ -1063,9 +1068,7 @@ export const runDesktopProbe = async (
               },
               body: JSON.stringify({
                 correlationId,
-                verifierHash: createHash("sha256")
-                  .update(verifier)
-                  .digest("hex"),
+                verifierHash: canaryVerifierHash(verifier),
               }),
               timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
             },
@@ -1696,7 +1699,7 @@ const authorizeReviewOAuth = async (
     redirect_uri: state.callback.redirectUri,
     response_type: "code",
     code_challenge_method: "S256",
-    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    code_challenge: canaryPkceChallenge(verifier),
     state: stateValue,
     scope: REVIEW_JOURNEY_SCOPE,
     resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),

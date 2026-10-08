@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/browser";
 
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
@@ -109,7 +110,7 @@ export const registerOAuthClient = async (
 
 const toCodeChallenge = async (verifier: string) =>
   Buffer.from(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
+    await hashSha256Bytes(new TextEncoder().encode(verifier)),
   ).toString("base64url");
 
 const readCode = (redirectUrl: string): string =>

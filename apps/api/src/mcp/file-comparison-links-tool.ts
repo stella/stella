@@ -8,6 +8,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
@@ -313,7 +314,7 @@ const resolveLinkedFile = async ({
   return Result.ok({
     bytes,
     name: linkedFileName({ file, side }),
-    sha256Hex: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+    sha256Hex: createSha256().update(bytes).digest("hex"),
     size: bytes.byteLength,
   });
 };
