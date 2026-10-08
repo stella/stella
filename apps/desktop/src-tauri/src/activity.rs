@@ -1126,7 +1126,6 @@ impl ActivityManager {
     &self,
     date: NaiveDate,
     start: &str,
-    _end: &str,
   ) -> Result<(), String> {
     self.require_writable()?;
     if self
@@ -1144,7 +1143,7 @@ impl ActivityManager {
     date: NaiveDate,
     marker: ActivityDraftedEntry,
   ) -> Result<(), String> {
-    self.require_draftable(date, &marker.start, &marker.end)?;
+    self.require_draftable(date, &marker.start)?;
     if let ActivityPersistence::Encrypted(store) = &self.persistence {
       store.record_drafted(date, marker)?;
     } else {
@@ -2201,6 +2200,14 @@ mod tests {
         manager.observe(at(5), active("private-a"));
         let caller_a = ActivityCaller::for_account_test(1, "a");
         assert!(manager.require_caller(&caller_a).is_ok());
+        let marker = ActivityDraftedEntry {
+          start: at(0).to_rfc3339(),
+          end: at(5).to_rfc3339(),
+          entry_id: "entry-a".into(),
+        };
+        manager
+          .record_drafted(local_date(at(0)), marker.clone())
+          .unwrap();
         manager.unload_account(at(5)).unwrap();
         assert!(!manager.is_initialized());
         assert!(!manager.is_recording());
@@ -2236,6 +2243,12 @@ mod tests {
               .segments
               .is_empty()
           );
+          assert!(
+            manager
+              .drafted_for_day(local_date(at(0)))
+              .unwrap()
+              .is_empty()
+          );
           assert!(manager.require_caller(&caller_a).is_err());
         } else {
           assert!(manager.namespace.is_none());
@@ -2269,9 +2282,42 @@ mod tests {
             .len(),
           1
         );
+        assert_eq!(
+          manager.drafted_for_day(local_date(at(0))).unwrap(),
+          vec![marker]
+        );
         std::fs::remove_dir_all(root).unwrap();
       }
     }
+  }
+
+  #[test]
+  fn memory_only_draft_markers_are_unloaded_with_the_linked_account() {
+    let mut manager = ActivityManager::new();
+    manager.install_account(
+      (1, "a".into()),
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings::default(),
+    );
+    let day = local_date(at(0));
+    manager
+      .record_drafted(
+        day,
+        ActivityDraftedEntry {
+          start: at(0).to_rfc3339(),
+          end: at(5).to_rfc3339(),
+          entry_id: "entry-a".into(),
+        },
+      )
+      .unwrap();
+    assert_eq!(manager.drafted_for_day(day).unwrap().len(), 1);
+    manager.unload_account(at(5)).unwrap();
+    manager.install_account(
+      (2, "b".into()),
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings::default(),
+    );
+    assert!(manager.drafted_for_day(day).unwrap().is_empty());
   }
 
   #[test]

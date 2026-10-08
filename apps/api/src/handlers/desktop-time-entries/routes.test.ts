@@ -185,6 +185,12 @@ test("either hidden feature refuses creation", async () => {
 
 test("create permission and accessible matter are required", async () => {
   expect((await exercise({ denied: true })).status).toBe(403);
+  const readablePicker = await exercise({ denied: true, picker: true });
+  expect(readablePicker.status).toBe(200);
+  expect(readablePicker.body).toEqual({
+    matters: [{ id: WORKSPACE_ID, name: "Matter", reference: "M-1" }],
+  });
+  expect(readablePicker.inserted).toEqual([]);
   expect((await exercise({ missingMatter: true })).status).toBe(404);
 });
 

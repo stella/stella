@@ -14,6 +14,7 @@ import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
@@ -45,6 +46,14 @@ export const createDesktopTimeEntryEndpoint = (
       const account = yield* Result.await(
         authorizeDesktopTimeEntries(request, authorizeAccount),
       );
+      if (!hasMemberPermission(account.memberRole, { timeEntry: ["create"] })) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Time entry creation is not permitted",
+          }),
+        );
+      }
       const workspace = yield* Result.await(
         account.safeDb((tx) =>
           tx.query.workspaces.findFirst({

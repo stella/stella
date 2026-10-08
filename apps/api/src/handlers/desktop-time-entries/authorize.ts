@@ -7,7 +7,6 @@ import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context
 import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const REQUIRED_FEATURE_IDS = [
   "activity-timeline",
@@ -37,14 +36,6 @@ export const authorizeDesktopTimeEntries = async (
         new HandlerError({
           status: 403,
           message: "Draft time entries are unavailable",
-        }),
-      );
-    }
-    if (!hasMemberPermission(account.memberRole, { timeEntry: ["create"] })) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Time entry creation is not permitted",
         }),
       );
     }

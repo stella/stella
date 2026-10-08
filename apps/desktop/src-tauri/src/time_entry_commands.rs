@@ -92,7 +92,7 @@ pub async fn time_entry_submit_confirmed(
   {
     let manager = state.lock().map_err(|_| REFUSAL.to_string())?;
     manager.require_caller(&caller)?;
-    manager.require_draftable(date, &block.start, &block.end)?;
+    manager.require_draftable(date, &block.start)?;
   }
   let created = time_entry_submit::submit(&account, &entry).await?;
   require_account(&caller, &gates, &account)?;
@@ -157,6 +157,8 @@ mod tests {
     other.identity.user_id = "other_user".into();
     assert!(require_account(&caller, &gates, &other).is_err());
     gates.invalidate();
+    assert!(require_account(&caller, &gates, &account).is_err());
+    gates.finish_account_change();
     gates
       .install(
         gates.generation().unwrap(),

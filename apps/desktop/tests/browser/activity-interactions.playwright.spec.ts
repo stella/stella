@@ -10,6 +10,8 @@ import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
 const SNAPSHOT = {
   date: "2026-10-07",
+  draftedEntries: [],
+  timeBillingEnabled: true,
   earliestDate: "2026-10-01",
   excludedApps: [],
   otherAccountHistoryDays: 0,
@@ -146,6 +148,14 @@ const installNativeBoundary = async (
             };
             emitActivityChanged();
           }
+          if (command === "time_entry_search_matters") {
+            return [
+              { id: "matter-1", name: "Example matter", reference: "M-001" },
+            ];
+          }
+          if (command === "time_entry_submit_confirmed") {
+            return { id: "draft-1", markerSaved: true };
+          }
           if (command === "get_desktop_language") {
             return "en";
           }
@@ -236,55 +246,104 @@ test("canceling exclusion leaves recording and history unchanged", async ({
   );
 });
 
-test("only an explicit summary copy publishes activity to the clipboard", async ({
+test("only explicit confirmation creates a draft with the editable billing fields", async ({
   page,
 }) => {
   await installNativeBoundary(page);
-  await page.evaluate(() => {
-    const changed: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_ACTIVITY_CHANGED__",
-    );
-    if (typeof changed !== "function") {
-      throw new TypeError("Activity event fixture is missing");
-    }
-    changed();
+  const createDraft = page.getByRole("button", {
+    name: enMessages.activity.createDraftEntry,
   });
-  await page
-    .getByRole("button", { name: enMessages.activity.previousDay })
+  await createDraft.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue("");
+  await expect(
+    dialog.getByRole("spinbutton", { name: enMessages.activity.entryDuration }),
+  ).toHaveValue("30");
+  await expect(
+    dialog.getByRole("checkbox", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  await dialog.getByRole("button", { name: "Example matter (M-001)" }).click();
+  const matterSearch = dialog.getByRole("searchbox", {
+    name: enMessages.activity.entryMatter,
+  });
+  await matterSearch.fill("Example");
+  await matterSearch.press("Enter");
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_confirmed" }),
+  );
+  await dialog
+    .getByRole("button", { name: enMessages.activity.cancel })
+    .click();
+  await expect(dialog).toBeHidden();
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_confirmed" }),
+  );
+
+  await createDraft.click();
+  await expect(
+    dialog.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue("");
+  await dialog.getByRole("button", { name: "Example matter (M-001)" }).click();
+  await dialog
+    .getByRole("button", { name: enMessages.activity.confirmDraftEntry })
     .click();
   await expect(
-    page.getByRole("button", { name: enMessages.activity.nextDay }),
-  ).toBeEnabled();
-  const callsBeforeCopy = await invocations(page);
-  expect(callsBeforeCopy).not.toContainEqual(
+    dialog.getByText(enMessages.activity.entryCreated, { exact: true }),
+  ).toBeVisible();
+  const timezoneId = await page.evaluate(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  const calls = await invocations(page);
+  expect(calls).toContainEqual({
+    command: "time_entry_search_matters",
+    args: { query: "" },
+  });
+  expect(calls).toContainEqual({
+    command: "time_entry_submit_confirmed",
+    args: {
+      block: {
+        date: "2026-10-07",
+        start: "2026-10-07T09:00:00Z",
+        end: "2026-10-07T09:30:00Z",
+      },
+      entry: {
+        workspaceId: "matter-1",
+        dateWorked: "2026-10-07",
+        timezoneId,
+        durationMinutes: 30,
+        narrative: "",
+        billable: true,
+      },
+    },
+  });
+  expect(calls).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
-  expect(callsBeforeCopy).not.toContainEqual(
+  expect(calls).not.toContainEqual(
     expect.objectContaining({ command: expect.stringContaining("clipboard_") }),
   );
-  await page
-    .getByRole("button", { name: enMessages.activity.copySummary })
-    .click();
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.copied }),
-  ).toBeVisible();
-  const callsAfterCopy = await invocations(page);
-  expect(callsAfterCopy).toContainEqual({
-    command: "activity_copy_text",
-    args: { text: expect.stringContaining("Example Editor") },
-  });
   expect(
-    Array.isArray(callsAfterCopy)
-      ? callsAfterCopy.filter(
+    Array.isArray(calls)
+      ? calls.filter(
           (call: unknown) =>
             typeof call === "object" &&
             call !== null &&
             "command" in call &&
-            call.command === "activity_copy_text",
+            call.command === "time_entry_submit_confirmed",
         )
       : [],
   ).toHaveLength(1);
+  await dialog
+    .getByRole("button", { name: enMessages.activity.closeEntry })
+    .click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByText(enMessages.activity.draftedEntry, { exact: true }),
+  ).toBeVisible();
+  await expect(createDraft).toHaveCount(0);
 });
 
 for (const state of [
