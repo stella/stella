@@ -93,6 +93,9 @@
     "weekStartSunday": "Nedeľa"
   },
   "auth": {
+    "accessReset": {
+      "description": "Pokračovaním odpojíte tieto spôsoby prihlásenia: <identity>{providers}</identity>, a odhlásite ostatné zariadenia. Tieto prepojenia neoverili váš e-mail. Pokračovať?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Nastavovací token",
     "checkSpamHint": "Ak ho nevidíte, pozrite sa do priečinka Spam.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Vytvoriť organizáciu",
     "emailPlaceholder": "vy@example.com",
     "error": {
-      "accountNotLinked": "Tento e-mail sa prihlasuje iným spôsobom. Použite svoj pôvodný spôsob prihlásenia alebo to skúste znova.",
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",
       "title": "Nepodarilo sa vás prihlásiť"
     },
@@ -132,6 +134,13 @@
     "signIn": "Prihlásiť sa",
     "signInBeforeInvitation": "Na prijatie pozvánky do organizácie sa musíte najprv prihlásiť.",
     "signInWithPassword": "Prihlásiť sa heslom",
+    "socialLink": {
+      "connect": "Prepojiť účet <identity>{provider}</identity> nabudúce?",
+      "connectButton": "Prepojiť <identity>{provider}</identity>",
+      "emailProof": "Pokračujte prihlásením pomocou kódu z e-mailu.",
+      "methodHint": "Tento e-mail už používa <identity>{method}</identity>. Pokračujte prihlásením pomocou kódu z e-mailu.",
+      "skip": "Teraz preskočiť"
+    },
     "subtitle": "Dokumenty, judikatúra aj revízie pod kontrolou. S pomocou AI.",
     "twoFactor": {
       "backupCodePlaceholder": "Zadajte záložný kód",
