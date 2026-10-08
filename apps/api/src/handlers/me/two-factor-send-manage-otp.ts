@@ -58,7 +58,8 @@ const twoFactorSendManageOtp = createSafeSessionHandler(
       );
       stashDevOtp(emailStr, otp);
       if (emailResult.isErr()) {
-        errorOutputLogger.warn(
+        errorOutputLogger.log(
+          "warn",
           "[DEV] Failed to send email via SMTP:",
           emailResult.error,
         );

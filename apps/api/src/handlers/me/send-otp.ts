@@ -71,7 +71,8 @@ const deleteAccountSendOtp = createSafeSessionHandler(
         `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: delete-account)\x1b[0m\n`,
       );
       if (emailResult.isErr()) {
-        errorOutputLogger.warn(
+        errorOutputLogger.log(
+          "warn",
           "[DEV] Failed to send email via SMTP:",
           emailResult.error,
         );

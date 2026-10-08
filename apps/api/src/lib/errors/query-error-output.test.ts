@@ -333,7 +333,9 @@ test("output sinks redact query markers across sibling and nested payloads", () 
   };
   const devLog = createDevErrorLogger({
     echoErrors: true,
-    sink: (record) => devRecords.push(record),
+    sink: (record) => {
+      devRecords.push(record);
+    },
   });
 
   try {
