@@ -219,6 +219,9 @@ export const lintRuleAcrossFiles = async (
         configPath,
         "-f",
         "json",
+        // One worker walks every file, so state a rule keeps between files
+        // is visible instead of split across threads.
+        "--threads=1",
         ...names,
       ],
       { cwd: directory, stderr: "pipe", stdout: "pipe" },
