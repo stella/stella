@@ -52,7 +52,6 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   isFlowEffectAdmitted,
@@ -978,7 +977,7 @@ const runCreateDocumentStep = async ({
           });
           if (
             completion.result === null ||
-            completion.result.status === "stale"
+            completion.result.status !== "completed"
           ) {
             tx.rollback();
           }
@@ -989,14 +988,20 @@ const runCreateDocumentStep = async ({
   if (
     (admissionPaused ||
       completion.result === null ||
-      completion.result?.status === "stale") &&
+      (completion.result !== undefined &&
+        completion.result !== null &&
+        completion.result.status !== "completed")) &&
     created.isErr() &&
     created.error instanceof TransactionRollbackError
   ) {
     if (admissionPaused) {
       return { status: "paused" };
     }
-    if (completion.result?.status === "stale") {
+    if (
+      completion.result !== undefined &&
+      completion.result !== null &&
+      completion.result.status !== "completed"
+    ) {
       return completion.result;
     }
     return { status: "completed" };
@@ -1005,7 +1010,11 @@ const runCreateDocumentStep = async ({
     Result.flatten(created),
     "The document could not be created for this workspace (entity limit reached or missing file property).",
   );
-  if (completion.result === null || completion.result === undefined) {
+  if (
+    completion.result === null ||
+    completion.result === undefined ||
+    completion.result.status !== "completed"
+  ) {
     panic("Created flow document without its owning step completion");
   }
   await publishCompletedStep(completionArgs, completion.result);
@@ -1043,10 +1052,10 @@ const completeStepInTransaction = async (
     flowName,
   }: CompleteStepArgs,
 ) => {
-  await lockFeatureRecoveryAdmission({
+  const admitted = await isFlowEffectAdmitted({
     tx,
     organizationId,
-    featureId: "flows",
+    userId: actorUserId,
   });
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
@@ -1066,6 +1075,10 @@ const completeStepInTransaction = async (
     current.step?.status !== "running"
   ) {
     return null;
+  }
+  if (!admitted) {
+    // The running claim remains recoverable; re-grant retries the current step.
+    return { status: "paused" } as const;
   }
   await tx
     .update(flowRunSteps)
@@ -1129,7 +1142,7 @@ const publishCompletedStep = async (
 ): Promise<void> => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
 
-  if (completed === null || completed.status === "stale") {
+  if (completed === null || completed.status !== "completed") {
     return;
   }
   const { payload, pings } = completed;
@@ -1148,7 +1161,9 @@ const completeStepAndAdvance = async (
     async (tx) => await completeStepInTransaction(tx, args),
   );
   await publishCompletedStep(args, completed);
-  return completed?.status === "stale" ? completed : { status: "completed" };
+  return completed !== null && completed.status !== "completed"
+    ? completed
+    : { status: "completed" };
 };
 
 /**
@@ -1421,10 +1436,10 @@ export const failFlowRunFromWorker = async (
   const now = new Date();
 
   const writeFailure = async (tx: Transaction) => {
-    await lockFeatureRecoveryAdmission({
+    const admitted = await isFlowEffectAdmitted({
       tx,
       organizationId: scope.organizationId,
-      featureId: "flows",
+      userId: scope.actorUserId,
     });
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
@@ -1445,6 +1460,9 @@ export const failFlowRunFromWorker = async (
         : current.step?.startedAtToken !== claimedStartedAt
     ) {
       return { status: "stale" } as const;
+    }
+    if (!admitted) {
+      return { status: "paused" } as const;
     }
     await tx
       .update(flowRunSteps)
@@ -1492,8 +1510,8 @@ export const failFlowRunFromWorker = async (
   };
 
   // A null actor (automated run whose author was deleted) has no RLS-scoped
-  // handle to write through; write on the worker's own connection so the run
-  // still finalizes instead of being stranded non-terminal.
+  // handle to write through; the worker connection still checks admission before
+  // any failure settlement. An absent actor retains the run for recovery.
   const failed =
     scope.actorUserId === null
       ? await withAggregateTransaction(database, writeFailure)
@@ -1505,7 +1523,7 @@ export const failFlowRunFromWorker = async (
   if (failed === null) {
     return { status: "completed" };
   }
-  if (failed.status === "stale") {
+  if (failed.status !== "completed") {
     return failed;
   }
   const { payload, pings } = failed;
