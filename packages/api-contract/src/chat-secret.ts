@@ -29,3 +29,6 @@ export type RequestSecretOutput = v.InferOutput<
   typeof requestSecretOutputSchema
 >;
 export type ChatSecretTarget = v.InferOutput<typeof chatSecretTargetSchema>;
+
+export const requiresPerCallChatApproval = (toolName: string): boolean =>
+  toolName === USE_CONNECTOR_SECRET_TOOL_NAME;

@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Use a private card",
     "credentialPasteDescription": "This text resembles a credential. Use a private card to keep it out of chat. Paste it again in the card when it appears.",
+    "credentialPasteRequest": "Please request this credential using a private card.",
     "credentialPasteTitle": "Credential paste held",
     "credentialSendAction": "Send anyway",
     "credentialSendDescription": "Send only if you intend to share this value in the conversation.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Rename conversation",
     "renameUnavailableEmptyThread": "Send a message first, then the conversation can be renamed.",
     "requestSecret": {
+      "checkingTarget": "Checking connector details…",
+      "connectionDisposition": "Connection: {disposition}",
       "declined": "Declined",
       "description": "The assistant needs this to continue",
       "error": "Could not submit the credential. Try again.",
       "kind": {
         "token": "Token"
       },
+      "normalConnection": "Ordinary connection",
       "private": "The assistant will not see this value.",
       "provideAction": "Provide",
       "provided": "Provided",
+      "purposeByAi": "Purpose written by the AI: {purpose}",
+      "receiptOnlyConnection": "Private-only connection",
+      "replaceOrdinaryConnection": "Replace ordinary connection with private-only use",
       "saveForFuture": "Save for future chats",
       "savedAvailabilityError": "Could not check for a saved credential.",
       "target": "Target: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "No connections match “{query}”",
       "notConnected": "Not connected",
       "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
+      "privateCredentialOnly": "Private credential only",
       "searchPlaceholder": "Search connections",
       "title": "Connections",
       "turnedOff": "Turned off"

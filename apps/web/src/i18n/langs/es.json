@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Usar una tarjeta privada",
     "credentialPasteDescription": "Este texto parece una credencial. Usa una tarjeta privada para que no aparezca en el chat. Vuelve a pegarla en la tarjeta cuando aparezca.",
+    "credentialPasteRequest": "Solicita esta credencial mediante una tarjeta privada.",
     "credentialPasteTitle": "Pegado de credenciales detenido",
     "credentialSendAction": "Enviar de todos modos",
     "credentialSendDescription": "Envíalo solo si quieres compartir este valor en la conversación.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Cambiar el nombre de la conversación",
     "renameUnavailableEmptyThread": "Envía un mensaje primero; después podrás cambiar el nombre de la conversación.",
     "requestSecret": {
+      "checkingTarget": "Comprobando los datos del conector…",
+      "connectionDisposition": "Conexión: {disposition}",
       "declined": "Rechazada",
       "description": "El asistente la necesita para continuar",
       "error": "No se pudo enviar la credencial. Inténtalo de nuevo.",
       "kind": {
         "token": "Token de acceso"
       },
+      "normalConnection": "Conexión normal",
       "private": "El asistente no verá este valor.",
       "provideAction": "Proporcionar",
       "provided": "Proporcionada",
+      "purposeByAi": "Propósito escrito por la IA: {purpose}",
+      "receiptOnlyConnection": "Conexión solo privada",
+      "replaceOrdinaryConnection": "Sustituir la conexión normal por un uso solo privado",
       "saveForFuture": "Guardar para futuros chats",
       "savedAvailabilityError": "No se pudo comprobar si hay una credencial guardada.",
       "target": "Destino: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Ninguna conexión coincide con «{query}»",
       "notConnected": "Sin conectar",
       "permissionCount": "{count, plural, one {# permiso} other {# permisos}}",
+      "privateCredentialOnly": "Solo credencial privada",
       "searchPlaceholder": "Buscar conexiones",
       "title": "Conexiones",
       "turnedOff": "Desactivada"

@@ -631,6 +631,7 @@ const createCreateDocumentTools = () => ({
 type CreateWorkspaceDocumentChatToolsProps = Pick<
   GetChatToolsProps,
   | "memberRole"
+  | "delegationDepth"
   | "organizationId"
   | "recordAuditEvent"
   | "refRegistry"
@@ -774,6 +775,7 @@ const honouredSkillDeclarations = ({
 
 type CreateSecretToolsForTurnProps = Pick<
   GetChatToolsProps,
+  | "delegationDepth"
   | "memberRole"
   | "organizationId"
   | "purpose"
@@ -784,6 +786,7 @@ type CreateSecretToolsForTurnProps = Pick<
 >;
 
 const createSecretToolsForTurn = ({
+  delegationDepth,
   memberRole,
   organizationId,
   purpose,
@@ -792,6 +795,9 @@ const createSecretToolsForTurn = ({
   thirdPartyBoundary,
   userId,
 }: CreateSecretToolsForTurnProps): ChatToolMap => {
+  if ((delegationDepth ?? 0) > 0) {
+    return {};
+  }
   if (purpose === CHAT_TOOL_SET_PURPOSE.validation) {
     return createSecretTools({ safeDb, organizationId, userId, threadId });
   }
@@ -863,6 +869,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     scopedDb,
   });
   const secretTools = createSecretToolsForTurn({
+    delegationDepth: props.delegationDepth,
     memberRole,
     organizationId,
     purpose,

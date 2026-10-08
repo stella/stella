@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 
 import { DECISION_PASSAGE_MIME } from "./chat-decision-passage";
-import { readChatPaste } from "./chat-editor-paste.logic";
+import {
+  insertCredentialPasteRequest,
+  readChatPaste,
+} from "./chat-editor-paste.logic";
 import { PASTED_TEXT_CHIP_MIN_CHARS } from "./chat-pasted-text";
 
 const clipboard = (data: Record<string, string>, kinds: string[] = []) => ({
@@ -56,6 +59,30 @@ test("holds a synthetic credential-shaped paste out of the composer draft", () =
   expect(
     readChatPaste(clipboard({ "text/plain": `sk-${"a".repeat(32)}` })),
   ).toEqual({ type: "credential" });
+});
+
+test("inserts a neutral private-card request into a nonempty draft at the cursor", () => {
+  let draft = "Review this connector and continue";
+  const cursor = "Review this connector".length;
+  const editor = {
+    isDestroyed: false,
+    commands: {
+      insertContent: (content: string) => {
+        draft = `${draft.slice(0, cursor)}${content}${draft.slice(cursor)}`;
+        return true;
+      },
+    },
+  } satisfies Parameters<typeof insertCredentialPasteRequest>[0];
+
+  expect(
+    insertCredentialPasteRequest(
+      editor,
+      " Please request this credential using a private card.",
+    ),
+  ).toBe(true);
+  expect(draft).toBe(
+    "Review this connector Please request this credential using a private card. and continue",
+  );
 });
 
 const passage = {

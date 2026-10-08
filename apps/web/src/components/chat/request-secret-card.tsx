@@ -11,6 +11,11 @@ import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { useChatApproval } from "@/components/chat/chat-approval-context";
+import type {
+  NormalConnectionAction,
+  RequestSecretDecision,
+  SecretTargetResolution,
+} from "@/components/chat/chat-approval-context";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -31,18 +36,140 @@ const REQUEST_SECRET_KIND_KEYS = {
   key: "common.key",
 } as const satisfies Record<RequestSecretInput["kind"], TranslationKey>;
 
+type RequestSecretCredentialFieldsProps = {
+  value: string;
+  saveForFuture: boolean;
+  normalConnectionAction: NormalConnectionAction;
+  responseDisposition: "normal" | "receipt-only";
+  disabled: boolean;
+  onValueChange: (value: string) => void;
+  onSaveForFutureChange: (checked: boolean) => void;
+  onNormalConnectionActionChange: (action: NormalConnectionAction) => void;
+};
+
+const RequestSecretCredentialFields = ({
+  value,
+  saveForFuture,
+  normalConnectionAction,
+  responseDisposition,
+  disabled,
+  onValueChange,
+  onSaveForFutureChange,
+  onNormalConnectionActionChange,
+}: RequestSecretCredentialFieldsProps) => {
+  const t = useTranslations();
+  return (
+    <>
+      <label className="block space-y-1 text-sm">
+        <span>{t("chat.requestSecret.valueLabel")}</span>
+        <input
+          autoComplete="off"
+          className={cn(
+            "border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-11 w-full rounded-md border px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-2 md:text-sm",
+          )}
+          disabled={disabled}
+          onChange={(event) => onValueChange(event.currentTarget.value)}
+          type="password"
+          value={value}
+        />
+      </label>
+      <label className="flex min-h-11 items-center gap-2 text-sm">
+        <input
+          checked={saveForFuture}
+          disabled={disabled}
+          onChange={(event) =>
+            onSaveForFutureChange(event.currentTarget.checked)
+          }
+          type="checkbox"
+        />
+        <span>{t("chat.requestSecret.saveForFuture")}</span>
+      </label>
+      {saveForFuture && responseDisposition === "normal" ? (
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <input
+            checked={normalConnectionAction === "replace-with-receipt-only"}
+            disabled={disabled}
+            onChange={(event) =>
+              onNormalConnectionActionChange(
+                event.currentTarget.checked
+                  ? "replace-with-receipt-only"
+                  : "preserve",
+              )
+            }
+            type="checkbox"
+          />
+          <span>{t("chat.requestSecret.replaceOrdinaryConnection")}</span>
+        </label>
+      ) : null}
+    </>
+  );
+};
+
+type RequestSecretDetailsProps = {
+  input: RequestSecretInput;
+  secretTarget: SecretTargetResolution | undefined;
+  isCheckingTarget: boolean;
+};
+
+const RequestSecretDetails = ({
+  input,
+  secretTarget,
+  isCheckingTarget,
+}: RequestSecretDetailsProps) => {
+  const t = useTranslations();
+  return (
+    <div className="mt-3 space-y-2 text-sm">
+      <p className="text-muted-foreground">
+        {t("chat.requestSecret.description")}
+      </p>
+      <p>{t("chat.requestSecret.purposeByAi", { purpose: input.purpose })}</p>
+      <p className="text-muted-foreground">
+        {t(REQUEST_SECRET_KIND_KEYS[input.kind])}
+      </p>
+      {secretTarget ? (
+        <p className="text-muted-foreground">
+          {t("chat.requestSecret.target", {
+            target: `${secretTarget.connector.displayName} (${secretTarget.connector.host})`,
+          })}
+        </p>
+      ) : null}
+      {secretTarget ? (
+        <p className="text-muted-foreground">
+          {t("chat.requestSecret.connectionDisposition", {
+            disposition: t(
+              secretTarget.connector.responseDisposition === "normal"
+                ? "chat.requestSecret.normalConnection"
+                : "chat.requestSecret.receiptOnlyConnection",
+            ),
+          })}
+        </p>
+      ) : null}
+      {input.formatHint ? (
+        <p className="text-muted-foreground">{input.formatHint}</p>
+      ) : null}
+      <p className="text-muted-foreground font-medium">
+        {t("chat.requestSecret.private")}
+      </p>
+      {isCheckingTarget ? (
+        <p className="text-muted-foreground" role="status">
+          {t("chat.requestSecret.checkingTarget")}
+        </p>
+      ) : null}
+    </div>
+  );
+};
+
 export const RequestSecretCard = ({
   isAwaitingUser,
   part,
 }: RequestSecretCardProps) => {
   const t = useTranslations();
-  const {
-    handleRequestSecret,
-    secretAvailabilityKey,
-    checkSavedSecretAvailability,
-  } = useChatApproval();
+  const { handleRequestSecret, secretAvailabilityKey, resolveSecretTarget } =
+    useChatApproval();
   const [value, setValue] = useState("");
   const [saveForFuture, setSaveForFuture] = useState(false);
+  const [normalConnectionAction, setNormalConnectionAction] =
+    useState<NormalConnectionAction>("preserve");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasError, setHasError] = useState(false);
   const input = part.state === "input-streaming" ? null : part.input;
@@ -56,11 +183,14 @@ export const RequestSecretCard = ({
       if (connectorSlug === undefined) {
         return panic("Saved credential query requires a connector");
       }
-      return checkSavedSecretAvailability(connectorSlug, signal);
+      return resolveSecretTarget(connectorSlug, signal);
     },
   });
+  const secretTarget = savedSecretQuery.isSuccess
+    ? savedSecretQuery.data
+    : undefined;
 
-  const submit = async (decision: "provide" | "use-saved" | "decline") => {
+  const submit = async (decision: RequestSecretDecision["decision"]) => {
     if (input === null || input === undefined || !isPending || isSubmitting) {
       return;
     }
@@ -68,13 +198,19 @@ export const RequestSecretCard = ({
     setValue("");
     setIsSubmitting(true);
     setHasError(false);
+    const submission: RequestSecretDecision =
+      decision === "provide"
+        ? {
+            decision,
+            value: submittedValue,
+            saveForFuture,
+            normalConnectionAction: saveForFuture
+              ? normalConnectionAction
+              : "preserve",
+          }
+        : { decision };
     const result = await Result.tryPromise(() =>
-      handleRequestSecret(
-        part.id,
-        decision === "provide"
-          ? { decision, value: submittedValue, saveForFuture }
-          : { decision },
-      ),
+      handleRequestSecret(part.id, submission),
     );
     if (Result.isError(result)) {
       setHasError(true);
@@ -95,26 +231,11 @@ export const RequestSecretCard = ({
         {t("chat.requestSecret.title")}
       </div>
       {input && output === undefined ? (
-        <div className="mt-3 space-y-2 text-sm">
-          <p className="text-muted-foreground">
-            {t("chat.requestSecret.description")}
-          </p>
-          <p>{input.purpose}</p>
-          <p className="text-muted-foreground">
-            {t(REQUEST_SECRET_KIND_KEYS[input.kind])}
-          </p>
-          <p className="text-muted-foreground">
-            {t("chat.requestSecret.target", {
-              target: input.target.connectorSlug,
-            })}
-          </p>
-          {input.formatHint ? (
-            <p className="text-muted-foreground">{input.formatHint}</p>
-          ) : null}
-          <p className="text-muted-foreground font-medium">
-            {t("chat.requestSecret.private")}
-          </p>
-        </div>
+        <RequestSecretDetails
+          input={input}
+          isCheckingTarget={savedSecretQuery.isPending}
+          secretTarget={secretTarget}
+        />
       ) : null}
       {output ? (
         <p className="text-muted-foreground mt-3 text-sm">
@@ -125,30 +246,23 @@ export const RequestSecretCard = ({
       ) : null}
       {isPending && input ? (
         <div className="mt-4 space-y-3">
-          <label className="block space-y-1 text-sm">
-            <span>{t("chat.requestSecret.valueLabel")}</span>
-            <input
-              autoComplete="off"
-              className={cn(
-                "border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-11 w-full rounded-md border px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-2 md:text-sm",
-              )}
+          {secretTarget ? (
+            <RequestSecretCredentialFields
               disabled={isSubmitting}
-              onChange={(event) => setValue(event.currentTarget.value)}
-              type="password"
+              normalConnectionAction={normalConnectionAction}
+              onNormalConnectionActionChange={setNormalConnectionAction}
+              onSaveForFutureChange={(checked) => {
+                setSaveForFuture(checked);
+                if (!checked) {
+                  setNormalConnectionAction("preserve");
+                }
+              }}
+              onValueChange={setValue}
+              responseDisposition={secretTarget.connector.responseDisposition}
+              saveForFuture={saveForFuture}
               value={value}
             />
-          </label>
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input
-              checked={saveForFuture}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setSaveForFuture(event.currentTarget.checked)
-              }
-              type="checkbox"
-            />
-            <span>{t("chat.requestSecret.saveForFuture")}</span>
-          </label>
+          ) : null}
           {hasError ? (
             <p className="text-destructive text-sm" role="alert">
               {t("chat.requestSecret.error")}
@@ -170,7 +284,7 @@ export const RequestSecretCard = ({
             >
               {t("common.decline")}
             </Button>
-            {savedSecretQuery.data === true ? (
+            {secretTarget?.available === true ? (
               <Button
                 disabled={isSubmitting}
                 onClick={() =>
@@ -182,16 +296,24 @@ export const RequestSecretCard = ({
                 {t("chat.requestSecret.useSavedAction")}
               </Button>
             ) : null}
-            <Button
-              disabled={isSubmitting || value.length === 0}
-              onClick={() =>
-                detached(submit("provide"), "request-secret-card.provide")
-              }
-              type="button"
-            >
-              {isSubmitting ? <Loader className="size-4" /> : null}
-              {t("chat.requestSecret.provideAction")}
-            </Button>
+            {secretTarget ? (
+              <Button
+                disabled={
+                  isSubmitting ||
+                  value.length === 0 ||
+                  (saveForFuture &&
+                    secretTarget.connector.responseDisposition === "normal" &&
+                    normalConnectionAction !== "replace-with-receipt-only")
+                }
+                onClick={() =>
+                  detached(submit("provide"), "request-secret-card.provide")
+                }
+                type="button"
+              >
+                {isSubmitting ? <Loader className="size-4" /> : null}
+                {t("chat.requestSecret.provideAction")}
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Utiliser une carte privée",
     "credentialPasteDescription": "Ce texte ressemble à un identifiant. Utilisez une carte privée pour qu’il n’apparaisse pas dans la conversation. Collez-le à nouveau dans la carte lorsqu’elle s’affiche.",
+    "credentialPasteRequest": "Veuillez demander cet identifiant à l’aide d’une carte privée.",
     "credentialPasteTitle": "Collage d’identifiant suspendu",
     "credentialSendAction": "Envoyer quand même",
     "credentialSendDescription": "Envoyez-le uniquement si vous souhaitez partager cette valeur dans la conversation.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Renommer la conversation",
     "renameUnavailableEmptyThread": "Envoyez d'abord un message, la conversation pourra ensuite être renommée.",
     "requestSecret": {
+      "checkingTarget": "Vérification des détails du connecteur…",
+      "connectionDisposition": "Connexion : {disposition}",
       "declined": "Refusé",
       "description": "L’assistant en a besoin pour continuer",
       "error": "Impossible d’envoyer l’identifiant. Réessayez.",
       "kind": {
         "token": "Jeton d’accès"
       },
+      "normalConnection": "Connexion standard",
       "private": "L’assistant ne verra pas cette valeur.",
       "provideAction": "Fournir",
       "provided": "Fourni",
+      "purposeByAi": "Objectif rédigé par l’IA : {purpose}",
+      "receiptOnlyConnection": "Connexion privée uniquement",
+      "replaceOrdinaryConnection": "Remplacer la connexion standard par un usage privé uniquement",
       "saveForFuture": "Enregistrer pour les prochaines conversations",
       "savedAvailabilityError": "Impossible de vérifier si un identifiant est enregistré.",
       "target": "Cible : {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Aucune connexion ne correspond à « {query} »",
       "notConnected": "Non connectée",
       "permissionCount": "{count, plural, one {# autorisation} other {# autorisations}}",
+      "privateCredentialOnly": "Identifiant privé uniquement",
       "searchPlaceholder": "Rechercher des connexions",
       "title": "Connexions",
       "turnedOff": "Désactivée"

@@ -68,7 +68,14 @@ const renderWithProviders = (children: ReactNode) => {
                   target: { type: "mcp-connector", connectorSlug: "test" },
                 }),
                 secretAvailabilityKey: "test-thread",
-                checkSavedSecretAvailability: async () => false,
+                resolveSecretTarget: async () => ({
+                  available: false,
+                  connector: {
+                    displayName: "Sample connector",
+                    host: "sample.test",
+                    responseDisposition: "normal",
+                  },
+                }),
               }}
             >
               <ChatEditorProvider>{children}</ChatEditorProvider>

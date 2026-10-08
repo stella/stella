@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Użyj prywatnej karty",
     "credentialPasteDescription": "Ten tekst przypomina dane dostępowe. Użyj prywatnej karty, aby nie trafił do czatu. Gdy karta się pojawi, wklej wartość ponownie.",
+    "credentialPasteRequest": "Poproś o te dane dostępowe za pomocą prywatnej karty.",
     "credentialPasteTitle": "Wstrzymano wklejanie danych dostępowych",
     "credentialSendAction": "Mimo to wyślij",
     "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Zmień nazwę rozmowy",
     "renameUnavailableEmptyThread": "Najpierw wyślij wiadomość, potem będzie można zmienić nazwę rozmowy.",
     "requestSecret": {
+      "checkingTarget": "Sprawdzanie szczegółów łącznika…",
+      "connectionDisposition": "Połączenie: {disposition}",
       "declined": "Odmówiono",
       "description": "Asystent potrzebuje ich, aby kontynuować",
       "error": "Nie udało się przekazać danych dostępowych. Spróbuj ponownie.",
       "kind": {
         "token": "Token dostępu"
       },
+      "normalConnection": "Zwykłe połączenie",
       "private": "Asystent nie zobaczy tej wartości.",
       "provideAction": "Przekaż",
       "provided": "Przekazano",
+      "purposeByAi": "Cel określony przez AI: {purpose}",
+      "receiptOnlyConnection": "Tylko prywatne połączenie",
+      "replaceOrdinaryConnection": "Zastąp zwykłe połączenie użyciem wyłącznie prywatnym",
       "saveForFuture": "Zapisz na potrzeby przyszłych czatów",
       "savedAvailabilityError": "Nie udało się sprawdzić, czy zapisano dane dostępowe.",
       "target": "Cel: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Żadne połączenie nie pasuje do „{query}”",
       "notConnected": "Niepołączone",
       "permissionCount": "{count, plural, one {# uprawnienie} few {# uprawnienia} many {# uprawnień} other {# uprawnienia}}",
+      "privateCredentialOnly": "Tylko prywatne dane dostępowe",
       "searchPlaceholder": "Szukaj połączeń",
       "title": "Połączenia",
       "turnedOff": "Wyłączone"

@@ -31,9 +31,11 @@ export const chatSecrets = p.pgTable.withRLS(
       .notNull()
       .references(() => chatThreads.id, { onDelete: "cascade" }),
     toolCallId: p.text("tool_call_id").notNull(),
-    connectorId: safeUuid<"mcpConnector">("connector_id")
-      .notNull()
-      .references(() => mcpConnectors.id, { onDelete: "cascade" }),
+    connectorId: safeUuid<"mcpConnector">("connector_id").references(
+      () => mcpConnectors.id,
+      { onDelete: "set null" },
+    ),
+    targetSlug: p.varchar("target_slug", { length: 80 }).notNull(),
     targetUrl: p.text("target_url").notNull(),
     decision: p.text({ enum: CHAT_SECRET_DECISIONS }).notNull(),
     ciphertext: bytea("ciphertext"),
@@ -52,11 +54,15 @@ export const chatSecrets = p.pgTable.withRLS(
     p.index("chat_secrets_user_idx").on(table.userId),
     p.check(
       "chat_secrets_decision_check",
-      sql`(${table.decision} = 'provided' AND ${table.ciphertext} IS NOT NULL AND ${table.iv} IS NOT NULL) OR (${table.decision} = 'provided' AND ${table.remainingUses} = 0 AND ${table.ciphertext} IS NULL AND ${table.iv} IS NULL) OR (${table.decision} = 'declined' AND ${table.ciphertext} IS NULL AND ${table.iv} IS NULL)`,
+      sql`(${table.decision} = 'provided' AND ${table.remainingUses} > 0 AND ${table.ciphertext} IS NOT NULL AND ${table.iv} IS NOT NULL) OR (${table.decision} = 'provided' AND ${table.remainingUses} = 0 AND ${table.ciphertext} IS NULL AND ${table.iv} IS NULL) OR (${table.decision} = 'declined' AND ${table.remainingUses} = 0 AND ${table.ciphertext} IS NULL AND ${table.iv} IS NULL)`,
     ),
     p.check(
       "chat_secrets_remaining_uses_check",
       sql`${table.remainingUses} BETWEEN 0 AND 8`,
+    ),
+    p.check(
+      "chat_secrets_expiry_check",
+      sql`${table.expiresAt} <= ${table.createdAt}::timestamptz + interval '24 hours'`,
     ),
     ...chatSecretPolicies(),
   ],

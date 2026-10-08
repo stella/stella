@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Usar um cartão privado",
     "credentialPasteDescription": "Este texto parece ser uma credencial. Use um cartão privado para que não apareça no chat. Cole o valor novamente no cartão quando ele aparecer.",
+    "credentialPasteRequest": "Solicite esta credencial usando um cartão privado.",
     "credentialPasteTitle": "Colagem de credencial interrompida",
     "credentialSendAction": "Enviar mesmo assim",
     "credentialSendDescription": "Envie somente se quiser compartilhar este valor na conversa.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Renomear conversa",
     "renameUnavailableEmptyThread": "Envie uma mensagem primeiro; depois será possível renomear a conversa.",
     "requestSecret": {
+      "checkingTarget": "Verificando os detalhes do conector…",
+      "connectionDisposition": "Conexão: {disposition}",
       "declined": "Recusada",
       "description": "O assistente precisa dela para continuar",
       "error": "Não foi possível enviar a credencial. Tente novamente.",
       "kind": {
         "token": "Token de acesso"
       },
+      "normalConnection": "Conexão normal",
       "private": "O assistente não verá este valor.",
       "provideAction": "Fornecer",
       "provided": "Fornecida",
+      "purposeByAi": "Finalidade escrita pela IA: {purpose}",
+      "receiptOnlyConnection": "Conexão somente privada",
+      "replaceOrdinaryConnection": "Substituir a conexão normal por uso somente privado",
       "saveForFuture": "Salvar para futuras conversas",
       "savedAvailabilityError": "Não foi possível verificar se há uma credencial salva.",
       "target": "Destino: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Nenhuma conexão corresponde a “{query}”",
       "notConnected": "Não conectada",
       "permissionCount": "{count, plural, one {# permissão} other {# permissões}}",
+      "privateCredentialOnly": "Somente credencial privada",
       "searchPlaceholder": "Buscar conexões",
       "title": "Conexões",
       "turnedOff": "Desativada"

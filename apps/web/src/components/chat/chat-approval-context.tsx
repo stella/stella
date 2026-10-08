@@ -10,6 +10,18 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import type { ChatSendMessageOptions } from "@/features/chat/chat-runtime";
 
+export type NormalConnectionAction = "preserve" | "replace-with-receipt-only";
+
+export type RequestSecretDecision =
+  | {
+      decision: "provide";
+      value: string;
+      saveForFuture: boolean;
+      normalConnectionAction: NormalConnectionAction;
+    }
+  | { decision: "use-saved" }
+  | { decision: "decline" };
+
 /**
  * Tool-approval handlers and grant sets shared by every leaf that
  * renders a `tool-approval` part (currently `ToolApprovalCard`).
@@ -40,16 +52,13 @@ type ChatApprovalContextValue = {
   handleDeny: (id: string) => void | PromiseLike<void>;
   handleRequestSecret: (
     toolCallId: string,
-    decision:
-      | { decision: "provide"; value: string; saveForFuture: boolean }
-      | { decision: "use-saved" }
-      | { decision: "decline" },
+    decision: RequestSecretDecision,
   ) => PromiseLike<RequestSecretOutput>;
   secretAvailabilityKey: string;
-  checkSavedSecretAvailability: (
+  resolveSecretTarget: (
     connectorSlug: string,
     signal: AbortSignal,
-  ) => Promise<boolean>;
+  ) => Promise<SecretTargetResolution>;
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
   /**
@@ -69,6 +78,15 @@ type ChatApprovalContextValue = {
    * overlay) never need to supply it.
    */
   handleRetryAfterAuthorNameSet?: (() => void | PromiseLike<void>) | undefined;
+};
+
+export type SecretTargetResolution = {
+  available: boolean;
+  connector: {
+    displayName: string;
+    host: string;
+    responseDisposition: "normal" | "receipt-only";
+  };
 };
 
 export const ChatApprovalContext =

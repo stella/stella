@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import { chatThreads, mcpConnectors } from "@/api/db/schema";
+import {
+  chatThreads,
+  mcpConnectors,
+  mcpUserConnections,
+} from "@/api/db/schema";
 import { readSavedChatSecret } from "@/api/handlers/chat/chat-secrets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -51,8 +55,22 @@ const savedSecret = createSafeRootHandler(
             id: mcpConnectors.id,
             url: mcpConnectors.url,
             authType: mcpConnectors.authType,
+            displayName: mcpConnectors.displayName,
+            responseDisposition: mcpUserConnections.responseDisposition,
           })
           .from(mcpConnectors)
+          .innerJoin(
+            mcpUserConnections,
+            and(
+              eq(mcpUserConnections.connectorId, mcpConnectors.id),
+              eq(
+                mcpUserConnections.organizationId,
+                session.activeOrganizationId,
+              ),
+              eq(mcpUserConnections.userId, user.id),
+              eq(mcpUserConnections.enabled, true),
+            ),
+          )
           .where(
             and(
               eq(mcpConnectors.slug, connectorSlug),
@@ -66,7 +84,13 @@ const savedSecret = createSafeRootHandler(
         const connector =
           connectors.length === 1 ? connectors.at(0) : undefined;
         if (!connector || connector.authType !== "bearer") {
-          return Result.ok({ available: false });
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message:
+                "Enable this connector in settings before providing a credential",
+            }),
+          );
         }
         const stored = await readSavedChatSecret({
           tx,
@@ -75,7 +99,14 @@ const savedSecret = createSafeRootHandler(
           connectorId: connector.id,
           targetUrl: connector.url,
         });
-        return Result.ok({ available: stored !== undefined });
+        return Result.ok({
+          available: stored !== undefined,
+          connector: {
+            displayName: connector.displayName,
+            host: new URL(connector.url).host,
+            responseDisposition: connector.responseDisposition,
+          },
+        });
       }),
     );
     return result;

@@ -1697,7 +1697,14 @@ function SharedChatRendererSample() {
               target: { type: "mcp-connector", connectorSlug: "playground" },
             }),
             secretAvailabilityKey: "playground-thread",
-            checkSavedSecretAvailability: async () => false,
+            resolveSecretTarget: async () => ({
+              available: false,
+              connector: {
+                displayName: "Sample connector",
+                host: "sample.test",
+                responseDisposition: "normal",
+              },
+            }),
           }}
         >
           <ChatThreadMessages

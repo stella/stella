@@ -45,7 +45,10 @@ import {
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
-import { readChatPaste } from "@/components/chat-editor-paste.logic";
+import {
+  insertCredentialPasteRequest,
+  readChatPaste,
+} from "@/components/chat-editor-paste.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
 import { ChatMention } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -704,11 +707,10 @@ export const useChatEditor = ({
         action: {
           label: t("chat.credentialPasteAction"),
           onClick: () => {
-            if (targetEditor.isDestroyed) {
-              return;
-            }
-            const request = t("chat.credentialPasteAction");
-            targetEditor.commands.setContent(request);
+            insertCredentialPasteRequest(
+              targetEditor,
+              t("chat.credentialPasteRequest"),
+            );
           },
         },
       });

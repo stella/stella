@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Použiť súkromnú kartu",
     "credentialPasteDescription": "Tento text vyzerá ako prístupový údaj. Použite súkromnú kartu, aby sa nedostal do chatu. Keď sa karta zobrazí, vložte údaj znova do karty.",
+    "credentialPasteRequest": "Požiadajte o tento prístupový údaj pomocou súkromnej karty.",
     "credentialPasteTitle": "Vloženie prístupového údaja pozastavené",
     "credentialSendAction": "Napriek tomu odoslať",
     "credentialSendDescription": "Odošlite ju iba vtedy, ak chcete túto hodnotu zdieľať v konverzácii.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Premenovať konverzáciu",
     "renameUnavailableEmptyThread": "Najprv odošlite správu, potom bude možné konverzáciu premenovať.",
     "requestSecret": {
+      "checkingTarget": "Overujú sa podrobnosti konektora…",
+      "connectionDisposition": "Pripojenie: {disposition}",
       "declined": "Odmietnuté",
       "description": "Asistent tento údaj potrebuje na pokračovanie",
       "error": "Prístupový údaj sa nepodarilo odoslať. Skúste to znova.",
       "kind": {
         "token": "Prístupový token"
       },
+      "normalConnection": "Bežné pripojenie",
       "private": "Asistent túto hodnotu neuvidí.",
       "provideAction": "Poskytnúť",
       "provided": "Poskytnuté",
+      "purposeByAi": "Účel napísaný umelou inteligenciou: {purpose}",
+      "receiptOnlyConnection": "Iba súkromné pripojenie",
+      "replaceOrdinaryConnection": "Nahradiť bežné pripojenie súkromným použitím",
       "saveForFuture": "Uložiť pre budúce chaty",
       "savedAvailabilityError": "Nepodarilo sa overiť, či sú prihlasovacie údaje uložené.",
       "target": "Cieľ: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Výrazu „{query}“ nezodpovedá žiadne pripojenie",
       "notConnected": "Nepripojené",
       "permissionCount": "{count, plural, one {# oprávnenie} few {# oprávnenia} many {# oprávnenia} other {# oprávnení}}",
+      "privateCredentialOnly": "Iba súkromné prihlasovacie údaje",
       "searchPlaceholder": "Hľadať pripojenia",
       "title": "Pripojenia",
       "turnedOff": "Vypnuté"

@@ -9,7 +9,7 @@ import {
 } from "@stll/api-contract/chat-secret";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatSecrets, mcpConnectors } from "@/api/db/schema";
+import { chatSecrets } from "@/api/db/schema";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -45,10 +45,9 @@ export const validatePrivateReceipts = async ({
         toolCallId: chatSecrets.toolCallId,
         id: chatSecrets.id,
         status: chatSecrets.decision,
-        slug: mcpConnectors.slug,
+        slug: chatSecrets.targetSlug,
       })
       .from(chatSecrets)
-      .innerJoin(mcpConnectors, eq(mcpConnectors.id, chatSecrets.connectorId))
       .where(
         and(
           eq(chatSecrets.threadId, threadId),

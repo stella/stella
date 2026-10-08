@@ -274,7 +274,7 @@ export const mcpUserConnections = p.pgTable(
     ),
     p.check(
       "mcp_user_connections_response_target_check",
-      sql`${table.responseDisposition} = 'normal' OR ${table.responseTargetUrl} IS NOT NULL`,
+      sql`${table.responseDisposition} = 'normal' OR (${table.responseTargetUrl} IS NOT NULL AND ${table.staticTokenEncrypted} IS NOT NULL AND ${table.staticTokenIv} IS NOT NULL AND ${table.accessTokenEncrypted} IS NULL AND ${table.accessTokenIv} IS NULL AND ${table.refreshTokenEncrypted} IS NULL AND ${table.refreshTokenIv} IS NULL)`,
     ),
     ...mcpUserConnectionPolicies(),
   ],

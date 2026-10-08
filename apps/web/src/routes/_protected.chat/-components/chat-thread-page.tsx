@@ -235,7 +235,7 @@ export const ChatThreadPage = ({
     handleAllowInConversation,
     handleDeny,
     handleRequestSecret,
-    checkSavedSecretAvailability,
+    resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
@@ -575,7 +575,7 @@ export const ChatThreadPage = ({
             handleApprove,
             handleDeny,
             handleRequestSecret,
-            checkSavedSecretAvailability,
+            resolveSecretTarget,
             secretAvailabilityKey,
           }}
         >

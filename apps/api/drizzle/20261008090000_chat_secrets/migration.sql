@@ -6,7 +6,8 @@ CREATE TABLE "chat_secrets" (
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "thread_id" uuid NOT NULL REFERENCES "chat_threads"("id") ON DELETE CASCADE,
   "tool_call_id" text NOT NULL,
-  "connector_id" uuid NOT NULL REFERENCES "mcp_connectors"("id") ON DELETE CASCADE,
+  "connector_id" uuid REFERENCES "mcp_connectors"("id") ON DELETE SET NULL,
+  "target_slug" varchar(80) NOT NULL,
   "target_url" text NOT NULL,
   "decision" text NOT NULL,
   "ciphertext" bytea,
@@ -15,11 +16,12 @@ CREATE TABLE "chat_secrets" (
   "remaining_uses" integer DEFAULT 8 NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "chat_secrets_decision_check" CHECK (
-    (decision = 'provided' AND ciphertext IS NOT NULL AND iv IS NOT NULL)
+    (decision = 'provided' AND remaining_uses > 0 AND ciphertext IS NOT NULL AND iv IS NOT NULL)
     OR (decision = 'provided' AND remaining_uses = 0 AND ciphertext IS NULL AND iv IS NULL)
-    OR (decision = 'declined' AND ciphertext IS NULL AND iv IS NULL)
+    OR (decision = 'declined' AND remaining_uses = 0 AND ciphertext IS NULL AND iv IS NULL)
   ),
-  CONSTRAINT "chat_secrets_remaining_uses_check" CHECK (remaining_uses BETWEEN 0 AND 8)
+  CONSTRAINT "chat_secrets_remaining_uses_check" CHECK (remaining_uses BETWEEN 0 AND 8),
+  CONSTRAINT "chat_secrets_expiry_check" CHECK (expires_at <= created_at::timestamptz + interval '24 hours')
 );--> statement-breakpoint
 CREATE UNIQUE INDEX "chat_secrets_request_uidx" ON "chat_secrets" (organization_id, user_id, thread_id, tool_call_id);--> statement-breakpoint
 CREATE INDEX "chat_secrets_thread_idx" ON "chat_secrets" (thread_id);--> statement-breakpoint
@@ -85,6 +87,6 @@ CREATE POLICY "chat_secrets_owner_access" ON "chat_secrets" AS PERMISSIVE FOR AL
 ALTER TABLE "mcp_user_connections" ADD COLUMN "response_disposition" text DEFAULT 'normal' NOT NULL;--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD COLUMN "response_target_url" text;--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD CONSTRAINT "mcp_user_connections_response_disposition_check" CHECK (response_disposition IN ('normal', 'receipt-only')) NOT VALID;--> statement-breakpoint
-ALTER TABLE "mcp_user_connections" ADD CONSTRAINT "mcp_user_connections_response_target_check" CHECK (response_disposition = 'normal' OR response_target_url IS NOT NULL) NOT VALID;--> statement-breakpoint
+ALTER TABLE "mcp_user_connections" ADD CONSTRAINT "mcp_user_connections_response_target_check" CHECK (response_disposition = 'normal' OR (response_target_url IS NOT NULL AND static_token_encrypted IS NOT NULL AND static_token_iv IS NOT NULL AND access_token_encrypted IS NULL AND access_token_iv IS NULL AND refresh_token_encrypted IS NULL AND refresh_token_iv IS NULL)) NOT VALID;--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" VALIDATE CONSTRAINT "mcp_user_connections_response_disposition_check";--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" VALIDATE CONSTRAINT "mcp_user_connections_response_target_check";

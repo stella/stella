@@ -1,4 +1,4 @@
-import type { JSONContent } from "@tiptap/core";
+import type { Editor, JSONContent } from "@tiptap/core";
 
 import { readDecisionPassage } from "./chat-decision-passage";
 import type { DecisionPassage } from "./chat-decision-passage";
@@ -17,6 +17,18 @@ type ChatPaste =
   | { type: "chip"; text: string }
   | { type: "credential" }
   | { type: "text"; content: JSONContent[] };
+
+export type CredentialPasteEditor = Pick<Editor, "commands" | "isDestroyed">;
+
+export const insertCredentialPasteRequest = (
+  editor: CredentialPasteEditor,
+  request: string,
+): boolean => {
+  if (editor.isDestroyed) {
+    return false;
+  }
+  return editor.commands.insertContent(request);
+};
 
 /** Every paste is owned here; HTML must never reach the editor's default parser. */
 export const readChatPaste = (clipboard: PasteClipboard | null): ChatPaste => {

@@ -16,6 +16,7 @@ import {
   chatTurns,
   chatSecrets,
   mcpConnectors,
+  mcpUserConnections,
 } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
@@ -32,12 +33,17 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import { secretSchema } from "@/api/lib/secret-brands";
 
 const submissionSchema = v.variant("decision", [
   v.strictObject({
     decision: v.literal("provide"),
-    value: v.pipe(v.string(), v.minLength(1), v.maxLength(4096)),
+    value: v.pipe(v.string(), v.minLength(1), v.maxLength(4096), secretSchema),
     saveForFuture: v.boolean(),
+    normalConnectionAction: v.picklist([
+      "preserve",
+      "replace-with-receipt-only",
+    ]),
   }),
   v.strictObject({ decision: v.literal("decline") }),
   v.strictObject({ decision: v.literal("use-saved") }),
@@ -132,15 +138,15 @@ const readPendingRequest = async ({
 
 type PreparePrivateInputOptions = {
   scope: Parameters<typeof readSavedChatSecret>[0];
-  decision: v.InferOutput<typeof submissionSchema>;
+  secretDecision: v.InferOutput<typeof submissionSchema>;
 };
 
 const preparePrivateInput = async ({
   scope,
-  decision,
+  secretDecision,
 }: PreparePrivateInputOptions) => {
   const { organizationId, userId, connectorId } = scope;
-  switch (decision.decision) {
+  switch (secretDecision.decision) {
     case "decline":
       return Result.ok({ status: "declined" as const });
     case "provide":
@@ -151,7 +157,7 @@ const preparePrivateInput = async ({
           userId,
           connectorId,
           purpose: "mcp_static_token",
-          secret: decision.value,
+          secret: secretDecision.value,
         })),
       });
     case "use-saved": {
@@ -167,15 +173,59 @@ const preparePrivateInput = async ({
       return Result.ok({ status: "provided" as const, ...encrypted });
     }
     default:
-      decision satisfies never;
+      secretDecision satisfies never;
       return panic("Unhandled private input decision");
   }
+};
+
+type EnabledConnectorOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  connectorSlug: string;
+};
+
+const readEnabledConnector = async ({
+  tx,
+  organizationId,
+  userId,
+  connectorSlug,
+}: EnabledConnectorOptions) => {
+  const connectors = await tx
+    .select({
+      id: mcpConnectors.id,
+      authType: mcpConnectors.authType,
+      url: mcpConnectors.url,
+    })
+    .from(mcpConnectors)
+    .innerJoin(
+      mcpUserConnections,
+      and(
+        eq(mcpUserConnections.connectorId, mcpConnectors.id),
+        eq(mcpUserConnections.organizationId, organizationId),
+        eq(mcpUserConnections.userId, userId),
+        eq(mcpUserConnections.enabled, true),
+      ),
+    )
+    .where(
+      and(
+        eq(mcpConnectors.slug, connectorSlug),
+        or(
+          isNull(mcpConnectors.organizationId),
+          eq(mcpConnectors.organizationId, organizationId),
+        ),
+      ),
+    )
+    .limit(2);
+  const connector = connectors.length === 1 ? connectors.at(0) : undefined;
+
+  return connector;
 };
 
 const submitSecret = createSafeRootHandler(
   config,
   async function* ({
-    body,
+    body: credentialBody,
     params: { threadId, toolCallId },
     safeDb,
     session,
@@ -183,8 +233,8 @@ const submitSecret = createSafeRootHandler(
     memberRole,
     recordAuditEvent,
   }) {
-    const parsed = v.safeParse(submissionSchema, body);
-    if (!parsed.success) {
+    const credentialSubmission = v.safeParse(submissionSchema, credentialBody);
+    if (!credentialSubmission.success) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -192,9 +242,9 @@ const submitSecret = createSafeRootHandler(
         }),
       );
     }
-    const decision = parsed.output;
+    const secretDecision = credentialSubmission.output;
     if (
-      decision.decision !== "decline" &&
+      secretDecision.decision !== "decline" &&
       !hasMemberPermission(memberRole, { integration: ["create"] })
     ) {
       return Result.err(
@@ -230,13 +280,9 @@ const submitSecret = createSafeRootHandler(
             .select({
               id: chatSecrets.id,
               status: chatSecrets.decision,
-              slug: mcpConnectors.slug,
+              slug: chatSecrets.targetSlug,
             })
             .from(chatSecrets)
-            .innerJoin(
-              mcpConnectors,
-              eq(mcpConnectors.id, chatSecrets.connectorId),
-            )
             .where(
               and(
                 eq(chatSecrets.threadId, threadId),
@@ -248,14 +294,12 @@ const submitSecret = createSafeRootHandler(
             .limit(1)
         ).at(0);
         if (existing) {
-          const target = {
-            type: "mcp-connector" as const,
-            connectorSlug: existing.slug,
-          };
-          return Result.ok(
-            existing.status === "provided"
-              ? { status: existing.status, secretRef: existing.id, target }
-              : { status: existing.status, target },
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              code: "CHAT_PRIVATE_INPUT_ALREADY_SUBMITTED",
+              message: "Private input was already submitted",
+            }),
           );
         }
         const scope = {
@@ -269,25 +313,33 @@ const submitSecret = createSafeRootHandler(
         if (input.isErr()) {
           return Result.err(input.error);
         }
-        const connectors = await tx
-          .select({
-            id: mcpConnectors.id,
-            authType: mcpConnectors.authType,
-            url: mcpConnectors.url,
-          })
-          .from(mcpConnectors)
-          .where(
-            and(
-              eq(mcpConnectors.slug, input.value.target.connectorSlug),
-              or(
-                isNull(mcpConnectors.organizationId),
-                eq(mcpConnectors.organizationId, session.activeOrganizationId),
-              ),
-            ),
-          )
-          .limit(2);
-        const connector =
-          connectors.length === 1 ? connectors.at(0) : undefined;
+        if (secretDecision.decision === "decline") {
+          const receipt = await storeChatSecret({
+            ...scope,
+            connectorId: null,
+            targetUrl: "",
+            targetSlug: input.value.target.connectorSlug,
+            decision: { status: "declined" },
+          });
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+            resourceId: threadId,
+            changes: {
+              privateInput: {
+                old: null,
+                new: { status: "declined", savedForFuture: false },
+              },
+            },
+          });
+          return Result.ok({ ...receipt, target: input.value.target });
+        }
+        const connector = await readEnabledConnector({
+          tx,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          connectorSlug: input.value.target.connectorSlug,
+        });
         if (!connector || connector.authType !== "bearer") {
           return Result.err(
             new HandlerError({
@@ -297,7 +349,7 @@ const submitSecret = createSafeRootHandler(
           );
         }
         if (
-          decision.decision === "provide" &&
+          secretDecision.decision === "provide" &&
           !envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY
         ) {
           return Result.err(
@@ -316,7 +368,7 @@ const submitSecret = createSafeRootHandler(
         };
         const encryptedDecision = await preparePrivateInput({
           scope: savedScope,
-          decision,
+          secretDecision,
         });
         if (encryptedDecision.isErr()) {
           return Result.err(encryptedDecision.error);
@@ -326,14 +378,19 @@ const submitSecret = createSafeRootHandler(
           ...scope,
           connectorId: connector.id,
           targetUrl: connector.url,
+          targetSlug: input.value.target.connectorSlug,
           decision: encrypted,
         });
         if (
-          decision.decision === "provide" &&
-          decision.saveForFuture &&
+          secretDecision.decision === "provide" &&
+          secretDecision.saveForFuture &&
           encrypted.status === "provided"
         ) {
-          await saveChatSecretForFuture({ ...savedScope, encrypted });
+          await saveChatSecretForFuture({
+            ...savedScope,
+            encrypted,
+            normalConnectionAction: secretDecision.normalConnectionAction,
+          });
         }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
@@ -345,7 +402,8 @@ const submitSecret = createSafeRootHandler(
               new: {
                 status: saved.status,
                 savedForFuture:
-                  decision.decision === "provide" && decision.saveForFuture,
+                  secretDecision.decision === "provide" &&
+                  secretDecision.saveForFuture,
               },
             },
           },

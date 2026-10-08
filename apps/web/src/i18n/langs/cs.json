@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Použít soukromou kartu",
     "credentialPasteDescription": "Tento text vypadá jako přístupový údaj. Použijte soukromou kartu, aby se nedostal do chatu. Až se zobrazí, vložte údaj znovu do karty.",
+    "credentialPasteRequest": "Požádejte o tento přístupový údaj pomocí soukromé karty.",
     "credentialPasteTitle": "Vložení přístupového údaje pozastaveno",
     "credentialSendAction": "Přesto odeslat",
     "credentialSendDescription": "Odešlete ji pouze tehdy, pokud chcete tuto hodnotu sdílet v konverzaci.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Přejmenovat konverzaci",
     "renameUnavailableEmptyThread": "Nejprve odešlete zprávu, poté bude možné konverzaci přejmenovat.",
     "requestSecret": {
+      "checkingTarget": "Ověřují se podrobnosti konektoru…",
+      "connectionDisposition": "Připojení: {disposition}",
       "declined": "Odmítnuto",
       "description": "Asistent tento údaj potřebuje k pokračování",
       "error": "Přístupový údaj se nepodařilo odeslat. Zkuste to znovu.",
       "kind": {
         "token": "Přístupový token"
       },
+      "normalConnection": "Běžné připojení",
       "private": "Asistent tuto hodnotu neuvidí.",
       "provideAction": "Poskytnout",
       "provided": "Poskytnuto",
+      "purposeByAi": "Účel napsaný umělou inteligencí: {purpose}",
+      "receiptOnlyConnection": "Pouze soukromé připojení",
+      "replaceOrdinaryConnection": "Nahradit běžné připojení soukromým použitím",
       "saveForFuture": "Uložit pro budoucí chaty",
       "savedAvailabilityError": "Nepodařilo se ověřit, zda jsou přihlašovací údaje uložené.",
       "target": "Cíl: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Hledanému výrazu „{query}“ neodpovídá žádné připojení",
       "notConnected": "Nepřipojeno",
       "permissionCount": "{count, plural, one {# oprávnění} few {# oprávnění} many {# oprávnění} other {# oprávnění}}",
+      "privateCredentialOnly": "Pouze soukromé přihlašovací údaje",
       "searchPlaceholder": "Hledat připojení",
       "title": "Připojení",
       "turnedOff": "Vypnuto"

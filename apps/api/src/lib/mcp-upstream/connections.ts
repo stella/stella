@@ -181,6 +181,7 @@ type RawConnectionRow = {
 };
 
 type McpConnectionBase = {
+  responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
   allowedTools: string[] | null;
   connectorId: SafeId<"mcpConnector">;
   description: string;
@@ -313,6 +314,10 @@ export const loadActiveMcpConnectionsForUser = async ({
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.enabled, true),
           eq(mcpUserConnections.status, "connected"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
+          ),
           or(
             isNull(mcpConnectorAuthorizationReviews.status),
             eq(mcpConnectorAuthorizationReviews.status, "approved"),
@@ -379,6 +384,10 @@ export const loadMcpConnectionById = async ({
           eq(mcpUserConnections.organizationId, organizationId),
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.status, "connected"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
+          ),
           or(
             isNull(mcpConnectorAuthorizationReviews.status),
             eq(mcpConnectorAuthorizationReviews.status, "approved"),
@@ -1541,9 +1550,12 @@ type NormalizedConnectionRow =
   | { type: "unusable" };
 
 const normalizeMcpConnectionRow = (
-  rawRow: RawConnectionRow,
+  rawRow: RawConnectionRow & {
+    responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
+  },
 ): NormalizedConnectionRow => {
   const base = {
+    responseDisposition: rawRow.responseDisposition,
     allowedTools: rawRow.allowedTools,
     connectorId: rawRow.connectorId,
     description: rawRow.description,

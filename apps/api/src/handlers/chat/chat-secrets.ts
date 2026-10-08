@@ -76,8 +76,9 @@ export const getChatSecretReceipt = async ({
 };
 
 type StoreChatSecretOptions = GetChatSecretReceiptOptions & {
-  connectorId: SafeId<"mcpConnector">;
+  connectorId: SafeId<"mcpConnector"> | null;
   targetUrl: string;
+  targetSlug: string;
   decision: ({ status: "provided" } & EncryptedSecret) | { status: "declined" };
 };
 
@@ -89,9 +90,11 @@ export const storeChatSecret = async ({
   toolCallId,
   connectorId,
   targetUrl,
+  targetSlug,
   decision,
 }: StoreChatSecretOptions): Promise<ChatSecretReceipt> => {
   // audit: skip - Request receipts are ephemeral bookkeeping in the audited submission transaction.
+  const createdAt = new Date();
   const encrypted =
     decision.status === "provided"
       ? { ciphertext: decision.ciphertext, iv: decision.iv }
@@ -106,6 +109,8 @@ export const storeChatSecret = async ({
         toolCallId,
         connectorId,
         targetUrl,
+        targetSlug,
+        createdAt,
         decision: decision.status,
         ...encrypted,
         expiresAt: new Date(
@@ -254,6 +259,7 @@ type SavedChatSecretOptions = {
 
 type SaveChatSecretForFutureOptions = SavedChatSecretOptions & {
   encrypted: EncryptedSecret;
+  normalConnectionAction?: "preserve" | "replace-with-receipt-only";
 };
 
 export const saveChatSecretForFuture = async ({
@@ -263,6 +269,7 @@ export const saveChatSecretForFuture = async ({
   connectorId,
   targetUrl,
   encrypted,
+  normalConnectionAction = "preserve",
 }: SaveChatSecretForFutureOptions) => {
   // audit: skip - Explicit consent storage participates in the audited submission transaction.
   const saved = {
@@ -288,7 +295,7 @@ export const saveChatSecretForFuture = async ({
     enabled: true,
     updatedAt: new Date(),
   } as const;
-  await tx
+  const written = await tx
     .insert(mcpUserConnections)
     .values({
       organizationId,
@@ -305,7 +312,24 @@ export const saveChatSecretForFuture = async ({
       ],
       // Receipt reuse follows consent and enabled, independently of connection lifecycle.
       set: saved,
-    });
+      setWhere:
+        normalConnectionAction === "replace-with-receipt-only"
+          ? undefined
+          : eq(
+              mcpUserConnections.responseDisposition,
+              MCP_RESPONSE_DISPOSITION.receiptOnly,
+            ),
+    })
+    .returning({ id: mcpUserConnections.id });
+  if (written.length === 0) {
+    return abortTransaction(
+      new HandlerError({
+        status: 409,
+        code: "CHAT_SAVED_CONNECTION_EXISTS",
+        message: "A connector connection already exists",
+      }),
+    );
+  }
 };
 
 export const readSavedChatSecret = async ({

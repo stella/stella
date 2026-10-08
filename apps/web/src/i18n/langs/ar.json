@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "استخدام بطاقة خاصة",
     "credentialPasteDescription": "يبدو هذا النص كبيانات اعتماد. استخدم بطاقة خاصة لإبقائه خارج الدردشة. أعد لصق القيمة في البطاقة عند ظهورها.",
+    "credentialPasteRequest": "يرجى طلب بيانات الاعتماد هذه عبر بطاقة خاصة.",
     "credentialPasteTitle": "تم إيقاف لصق بيانات الاعتماد",
     "credentialSendAction": "إرسال على أي حال",
     "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
@@ -1315,15 +1316,21 @@
     "renameThread": "إعادة تسمية المحادثة",
     "renameUnavailableEmptyThread": "أرسل رسالة أولاً، ثم يمكن إعادة تسمية المحادثة.",
     "requestSecret": {
+      "checkingTarget": "جارٍ التحقق من تفاصيل الموصل…",
+      "connectionDisposition": "نوع الاتصال: {disposition}",
       "declined": "تم الرفض",
       "description": "يحتاج المساعد إليها للمتابعة",
       "error": "تعذر إرسال بيانات الاعتماد. حاول مرة أخرى.",
       "kind": {
         "token": "رمز وصول"
       },
+      "normalConnection": "اتصال عادي",
       "private": "لن يرى المساعد هذه القيمة.",
       "provideAction": "تقديم",
       "provided": "تم التقديم",
+      "purposeByAi": "الغرض الذي كتبه الذكاء الاصطناعي: {purpose}",
+      "receiptOnlyConnection": "اتصال خاص فقط",
+      "replaceOrdinaryConnection": "استبدال الاتصال العادي للاستخدام الخاص فقط",
       "saveForFuture": "حفظ للدردشات المستقبلية",
       "savedAvailabilityError": "تعذر التحقق من وجود بيانات اعتماد محفوظة.",
       "target": "الهدف: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "لا يوجد اتصال يطابق «{query}»",
       "notConnected": "غير متصل",
       "permissionCount": "{count, plural, zero {لا أذونات} one {إذن واحد} two {إذنان} few {# أذونات} many {# إذنًا} other {# إذن}}",
+      "privateCredentialOnly": "بيانات اعتماد خاصة فقط",
       "searchPlaceholder": "ابحث في الاتصالات",
       "title": "الاتصالات",
       "turnedOff": "متوقف"

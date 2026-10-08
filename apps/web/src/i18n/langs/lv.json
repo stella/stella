@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Izmantot privātu kartīti",
     "credentialPasteDescription": "Šis teksts izskatās pēc piekļuves informācijas. Izmantojiet privātu kartīti, lai tā nenonāktu tērzēšanā. Kad kartīte parādās, ielīmējiet vērtību tajā vēlreiz.",
+    "credentialPasteRequest": "Pieprasiet šo piekļuves informāciju, izmantojot privātu kartīti.",
     "credentialPasteTitle": "Piekļuves informācijas ielīmēšana apturēta",
     "credentialSendAction": "Sūtīt tik un tā",
     "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Pārdēvēt sarunu",
     "renameUnavailableEmptyThread": "Vispirms nosūtiet ziņu, pēc tam sarunu varēs pārdēvēt.",
     "requestSecret": {
+      "checkingTarget": "Tiek pārbaudīta savienotāja informācija…",
+      "connectionDisposition": "Savienojums: {disposition}",
       "declined": "Atteikts",
       "description": "Asistentam tā ir vajadzīga, lai turpinātu",
       "error": "Neizdevās iesniegt piekļuves informāciju. Mēģiniet vēlreiz.",
       "kind": {
         "token": "Piekļuves tokens"
       },
+      "normalConnection": "Parastais savienojums",
       "private": "Asistents šo vērtību neredzēs.",
       "provideAction": "Iesniegt",
       "provided": "Iesniegts",
+      "purposeByAi": "AI norādītais mērķis: {purpose}",
+      "receiptOnlyConnection": "Tikai privāts savienojums",
+      "replaceOrdinaryConnection": "Aizstāt parasto savienojumu ar tikai privātu izmantošanu",
       "saveForFuture": "Saglabāt turpmākām tērzēšanas sarunām",
       "savedAvailabilityError": "Neizdevās pārbaudīt, vai ir saglabāti piekļuves dati.",
       "target": "Mērķis: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Vaicājumam “{query}” neatbilst neviens savienojums",
       "notConnected": "Nav pievienots",
       "permissionCount": "{count, plural, zero {# atļauju} one {# atļauja} other {# atļaujas}}",
+      "privateCredentialOnly": "Tikai privāta piekļuves informācija",
       "searchPlaceholder": "Meklēt savienojumus",
       "title": "Savienojumi",
       "turnedOff": "Izslēgts"

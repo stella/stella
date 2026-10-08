@@ -278,6 +278,7 @@ const makeSafeDb = () => {
 const oauthRow = (
   overrides: Partial<Extract<LoadedMcpConnection, { type: "oauth2" }>> = {},
 ): LoadedMcpConnection => ({
+  responseDisposition: "normal",
   accessTokenEncrypted: Buffer.from("access"),
   accessTokenIv: Buffer.from("iv"),
   allowedTools: null,
@@ -1051,6 +1052,7 @@ describe("MCP upstream connection lifecycle", () => {
 
   test("bearer connections send the decrypted static token, no OAuth path", async () => {
     const bearerRow: LoadedMcpConnection = {
+      responseDisposition: "normal",
       allowedTools: null,
       connectorId: toSafeId<"mcpConnector">("connector_1"),
       description: "Static-token connector",

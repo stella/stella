@@ -15,12 +15,17 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
+import type {
+  RequestSecretDecision,
+  SecretTargetResolution,
+} from "@/components/chat/chat-approval-context";
 import type {
   ApprovalToolName,
   AskUserOutput,
@@ -842,6 +847,10 @@ export const useChatSession = ({
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(conversationGrantsOwner)) {
         return;
       }
@@ -863,6 +872,10 @@ export const useChatSession = ({
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
         return;
       }
@@ -922,14 +935,7 @@ export const useChatSession = ({
   const handleRequestSecret = useCallback(
     async (
       toolCallId: string,
-      decision:
-        | {
-            decision: "provide";
-            value: string;
-            saveForFuture: boolean;
-          }
-        | { decision: "use-saved" }
-        | { decision: "decline" },
+      decision: RequestSecretDecision,
     ): Promise<RequestSecretOutput> => {
       const output = await unwrapEden(
         await api.chat
@@ -946,15 +952,18 @@ export const useChatSession = ({
     },
     [addToolResult, conversationId],
   );
-  const checkSavedSecretAvailability = useCallback(
-    async (connectorSlug: string, signal: AbortSignal): Promise<boolean> => {
+  const resolveSecretTarget = useCallback(
+    async (
+      connectorSlug: string,
+      signal: AbortSignal,
+    ): Promise<SecretTargetResolution> => {
       const response = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(conversationId) })
         ["saved-secret"].get({
           query: { connectorSlug },
           fetch: { signal },
         });
-      return unwrapEden(response).available;
+      return unwrapEden(response);
     },
     [conversationId],
   );
@@ -1594,7 +1603,7 @@ export const useChatSession = ({
     handleDeny,
     handleAskUserSubmit,
     handleRequestSecret,
-    checkSavedSecretAvailability,
+    resolveSecretTarget,
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,

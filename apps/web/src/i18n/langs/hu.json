@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Privát kártya használata",
     "credentialPasteDescription": "Ez a szöveg hitelesítő adatnak tűnik. Használj privát kártyát, hogy ne kerüljön a csevegésbe. Amikor megjelenik a kártya, illeszd be újra az értéket.",
+    "credentialPasteRequest": "Kérd ezt a hitelesítő adatot privát kártyán keresztül.",
     "credentialPasteTitle": "Hitelesítő adat beillesztése felfüggesztve",
     "credentialSendAction": "Küldés mindenképpen",
     "credentialSendDescription": "Csak akkor küldd el, ha meg szeretnéd osztani ezt az értéket a beszélgetésben.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Beszélgetés átnevezése",
     "renameUnavailableEmptyThread": "Először küldjön egy üzenetet, utána a beszélgetés átnevezhető.",
     "requestSecret": {
+      "checkingTarget": "A csatlakozó adatainak ellenőrzése…",
+      "connectionDisposition": "Kapcsolat: {disposition}",
       "declined": "Elutasítva",
       "description": "Az asszisztensnek szüksége van erre a folytatáshoz",
       "error": "Nem sikerült elküldeni a hitelesítő adatot. Próbáld újra.",
       "kind": {
         "token": "Hozzáférési token"
       },
+      "normalConnection": "Szokásos kapcsolat",
       "private": "Az asszisztens nem fogja látni ezt az értéket.",
       "provideAction": "Megadás",
       "provided": "Megadva",
+      "purposeByAi": "A mesterséges intelligencia által megadott cél: {purpose}",
+      "receiptOnlyConnection": "Csak privát kapcsolat",
+      "replaceOrdinaryConnection": "A szokásos kapcsolat lecserélése privát használatra",
       "saveForFuture": "Mentés későbbi csevegésekhez",
       "savedAvailabilityError": "Nem sikerült ellenőrizni a mentett hitelesítő adatot.",
       "target": "Cél: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Egy kapcsolat sem felel meg ennek: „{query}”",
       "notConnected": "Nincs csatlakoztatva",
       "permissionCount": "{count, plural, one {# jogosultság} other {# jogosultság}}",
+      "privateCredentialOnly": "Csak privát hitelesítő adat",
       "searchPlaceholder": "Kapcsolatok keresése",
       "title": "Kapcsolatok",
       "turnedOff": "Kikapcsolva"

@@ -39,6 +39,7 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  filenameForContext,
   getPropertyName,
   invokedCallee,
   isAstNode,
@@ -338,6 +339,12 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const isSensitiveBinding = (name: string) =>
+          isSecretName(name) ||
+          (/\/(?:submit-secret|request-secret-card|use-chat-session)\.tsx?$/u.test(
+            filenameForContext(context),
+          ) &&
+            ["body", "parsed", "decision", "issues", "value"].includes(name));
         // A global binding: unresolved, or a built-in the scope manager
         // declares without a definition.
         const isGlobal = (node: unknown, name: string): boolean => {
@@ -376,7 +383,7 @@ export default eslintCompatPlugin({
           if (!isIdentifierReference(expression)) {
             return;
           }
-          if (isSecretName(expression.name)) {
+          if (isSensitiveBinding(expression.name)) {
             hits.push({ node: expression, name: expression.name });
             return;
           }
@@ -422,7 +429,7 @@ export default eslintCompatPlugin({
           const property = memberPropertyName(expression);
           if (
             property !== null &&
-            (isSecretName(property) ||
+            (isSensitiveBinding(property) ||
               (isEnvironmentObject(expression.object) &&
                 SECRET_ENV_NAME.test(property)))
           ) {
@@ -466,7 +473,7 @@ export default eslintCompatPlugin({
             }
             const key = getPropertyName(property.key);
             const value = unwrapExpression(property.value);
-            if (key !== null && isSecretName(key)) {
+            if (key !== null && isSensitiveBinding(key)) {
               if (!(value?.type === "CallExpression" && isMaskingCall(value))) {
                 hits.push({ node: property, name: key });
               }

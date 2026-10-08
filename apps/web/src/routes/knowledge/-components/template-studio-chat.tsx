@@ -669,7 +669,7 @@ const TemplateStudioChatInner = ({
     handleAllowInConversation,
     handleDeny,
     handleRequestSecret,
-    checkSavedSecretAvailability,
+    resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
@@ -1333,7 +1333,7 @@ const TemplateStudioChatInner = ({
           handleApprove: handleApproveForTemplate,
           handleDeny,
           handleRequestSecret,
-          checkSavedSecretAvailability,
+          resolveSecretTarget,
           secretAvailabilityKey,
         }}
       >

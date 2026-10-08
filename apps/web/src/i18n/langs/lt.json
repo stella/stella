@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Naudoti privačią kortelę",
     "credentialPasteDescription": "Šis tekstas panašus į prisijungimo duomenis. Naudokite privačią kortelę, kad jie nepatektų į pokalbį. Kai kortelė pasirodys, įklijuokite reikšmę į ją dar kartą.",
+    "credentialPasteRequest": "Paprašykite šių prisijungimo duomenų naudojant privačią kortelę.",
     "credentialPasteTitle": "Prisijungimo duomenų įklijavimas sulaikytas",
     "credentialSendAction": "Vis tiek siųsti",
     "credentialSendDescription": "Siųskite tik jei norite bendrinti šią reikšmę pokalbyje.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Pervadinti pokalbį",
     "renameUnavailableEmptyThread": "Pirmiausia išsiųskite žinutę, tada pokalbį bus galima pervadinti.",
     "requestSecret": {
+      "checkingTarget": "Tikrinama jungties informacija…",
+      "connectionDisposition": "Ryšys: {disposition}",
       "declined": "Atsisakyta",
       "description": "Asistentui jų reikia, kad galėtų tęsti",
       "error": "Nepavyko pateikti prisijungimo duomenų. Bandykite dar kartą.",
       "kind": {
         "token": "Prieigos raktas"
       },
+      "normalConnection": "Įprastas ryšys",
       "private": "Asistentas šios reikšmės nematys.",
       "provideAction": "Pateikti",
       "provided": "Pateikta",
+      "purposeByAi": "DI parašytas tikslas: {purpose}",
+      "receiptOnlyConnection": "Tik privatus ryšys",
+      "replaceOrdinaryConnection": "Pakeisti įprastą ryšį į tik privatų naudojimą",
       "saveForFuture": "Išsaugoti būsimiems pokalbiams",
       "savedAvailabilityError": "Nepavyko patikrinti, ar yra išsaugotų prisijungimo duomenų.",
       "target": "Paskirtis: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Užklausą „{query}“ atitinkančių ryšių nėra",
       "notConnected": "Neprijungta",
       "permissionCount": "{count, plural, one {# leidimas} few {# leidimai} many {# leidimo} other {# leidimų}}",
+      "privateCredentialOnly": "Tik privatūs prisijungimo duomenys",
       "searchPlaceholder": "Ieškoti ryšių",
       "title": "Ryšiai",
       "turnedOff": "Išjungta"

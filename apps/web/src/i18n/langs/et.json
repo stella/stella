@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Kasuta privaatset kaarti",
     "credentialPasteDescription": "See tekst näib olevat mandaat. Kasuta privaatset kaarti, et see vestlusesse ei satuks. Kui kaart ilmub, kleebi väärtus sinna uuesti.",
+    "credentialPasteRequest": "Paluge seda mandaati privaatse kaardi kaudu.",
     "credentialPasteTitle": "Mandaadi kleepimine peatati",
     "credentialSendAction": "Saada siiski",
     "credentialSendDescription": "Saada see ainult siis, kui soovid seda väärtust vestluses jagada.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Nimeta vestlus ümber",
     "renameUnavailableEmptyThread": "Saada esmalt sõnum, seejärel saab vestluse ümber nimetada.",
     "requestSecret": {
+      "checkingTarget": "Kontrollin ühenduse üksikasju…",
+      "connectionDisposition": "Ühendus: {disposition}",
       "declined": "Keeldutud",
       "description": "Assistent vajab seda jätkamiseks",
       "error": "Mandaadi saatmine ebaõnnestus. Proovi uuesti.",
       "kind": {
         "token": "Juurdepääsutõend"
       },
+      "normalConnection": "Tavaline ühendus",
       "private": "Assistent seda väärtust ei näe.",
       "provideAction": "Anna",
       "provided": "Antud",
+      "purposeByAi": "Tehisintellekti kirjutatud eesmärk: {purpose}",
+      "receiptOnlyConnection": "Ainult privaatne ühendus",
+      "replaceOrdinaryConnection": "Asenda tavaline ühendus ainult privaatse kasutusega",
       "saveForFuture": "Salvesta tulevaste vestluste jaoks",
       "savedAvailabilityError": "Salvestatud mandaadi olemasolu ei saanud kontrollida.",
       "target": "Sihtkoht: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Päringule „{query}“ ei vasta ükski ühendus",
       "notConnected": "Ühendamata",
       "permissionCount": "{count, plural, one {# õigus} other {# õigust}}",
+      "privateCredentialOnly": "Ainult privaatne mandaat",
       "searchPlaceholder": "Otsi ühendusi",
       "title": "Ühendused",
       "turnedOff": "Välja lülitatud"

@@ -1174,6 +1174,7 @@
     },
     "credentialPasteAction": "Private Karte verwenden",
     "credentialPasteDescription": "Dieser Text sieht wie eine Zugangsinformation aus. Verwenden Sie eine private Karte, damit er nicht im Chat landet. Fügen Sie den Wert erneut in die Karte ein, sobald sie erscheint.",
+    "credentialPasteRequest": "Bitte fordere diese Zugangsdaten über eine private Karte an.",
     "credentialPasteTitle": "Einfügen von Zugangsdaten angehalten",
     "credentialSendAction": "Trotzdem senden",
     "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
@@ -1315,15 +1316,21 @@
     "renameThread": "Konversation umbenennen",
     "renameUnavailableEmptyThread": "Zuerst eine Nachricht senden, dann kann die Konversation umbenannt werden.",
     "requestSecret": {
+      "checkingTarget": "Connector-Details werden überprüft …",
+      "connectionDisposition": "Verbindung: {disposition}",
       "declined": "Abgelehnt",
       "description": "Der Assistent benötigt diese Angabe, um fortzufahren",
       "error": "Die Zugangsdaten konnten nicht übermittelt werden. Versuchen Sie es erneut.",
       "kind": {
         "token": "Zugriffstoken"
       },
+      "normalConnection": "Normale Verbindung",
       "private": "Der Assistent sieht diesen Wert nicht.",
       "provideAction": "Bereitstellen",
       "provided": "Bereitgestellt",
+      "purposeByAi": "Von der KI angegebener Zweck: {purpose}",
+      "receiptOnlyConnection": "Nur private Verbindung",
+      "replaceOrdinaryConnection": "Normale Verbindung durch private Nutzung ersetzen",
       "saveForFuture": "Für zukünftige Chats speichern",
       "savedAvailabilityError": "Gespeicherte Zugangsdaten konnten nicht überprüft werden.",
       "target": "Ziel: {target}",
@@ -4535,6 +4542,7 @@
       "noMatches": "Keine Verbindung passt zu „{query}“",
       "notConnected": "Nicht verbunden",
       "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+      "privateCredentialOnly": "Nur private Zugangsdaten",
       "searchPlaceholder": "Verbindungen durchsuchen",
       "title": "Verbindungen",
       "turnedOff": "Ausgeschaltet"

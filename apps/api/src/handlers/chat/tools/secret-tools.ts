@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/chat-secret";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { mcpConnectors } from "@/api/db/schema";
+import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
 import { consumeChatSecret } from "@/api/handlers/chat/chat-secrets";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -54,7 +54,7 @@ export const createSecretTools = ({
   [REQUEST_SECRET_TOOL_NAME]: toolDefinition({
     name: REQUEST_SECRET_TOOL_NAME,
     description:
-      "Request a credential in a private input card. Use only for an MCP connector accepting a bearer credential. Name its exact connector slug and explain the purpose. Never request credentials through ask-user or ordinary chat. The result contains an opaque reference, never the value. If declined, continue without it. References last 24 hours and permit eight connector operations; use use_connector_secret to call a tool already known from the connector catalog. Browser login remains manual and the code runner cannot resolve references.",
+      "Request a credential in a private input card. Use only for a connector the user has enabled that accepts a bearer credential. Name its exact connector slug and explain the purpose. Never request credentials through ask-user or ordinary chat. The result contains an opaque reference, never the value. If declined, continue without it. References last 24 hours and permit eight connector operations; use use_connector_secret to call a tool already known from the connector catalog. Browser login remains manual and the code runner cannot resolve references.",
     inputSchema: toTanStackToolSchema(requestSecretInputSchema),
     outputSchema: toTanStackToolSchema(requestSecretOutputSchema),
   }),
@@ -74,6 +74,15 @@ export const createSecretTools = ({
           authType: mcpConnectors.authType,
         })
         .from(mcpConnectors)
+        .innerJoin(
+          mcpUserConnections,
+          and(
+            eq(mcpUserConnections.connectorId, mcpConnectors.id),
+            eq(mcpUserConnections.organizationId, organizationId),
+            eq(mcpUserConnections.userId, userId),
+            eq(mcpUserConnections.enabled, true),
+          ),
+        )
         .where(
           and(
             eq(mcpConnectors.slug, target.connectorSlug),

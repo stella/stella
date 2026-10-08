@@ -43,10 +43,14 @@ afterAll(() => {
 const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
   const queryClient = new QueryClient();
   if (savedSecretAvailable) {
-    queryClient.setQueryData(
-      ["chat-saved-secret", "test-thread", "sample"],
-      true,
-    );
+    queryClient.setQueryData(["chat-saved-secret", "test-thread", "sample"], {
+      available: true,
+      connector: {
+        displayName: "Sample connector",
+        host: "sample.test",
+        responseDisposition: "receipt-only",
+      },
+    });
   }
   return (
     <ChatThreadTestRouter>
@@ -71,7 +75,14 @@ const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
                   target: { type: "mcp-connector", connectorSlug: "test" },
                 }),
                 secretAvailabilityKey: "test-thread",
-                checkSavedSecretAvailability: async () => false,
+                resolveSecretTarget: async () => ({
+                  available: false,
+                  connector: {
+                    displayName: "Sample connector",
+                    host: "sample.test",
+                    responseDisposition: "normal",
+                  },
+                }),
               }}
             >
               <ChatEditorProvider>{children}</ChatEditorProvider>

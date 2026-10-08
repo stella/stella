@@ -7,6 +7,10 @@ import type {
 } from "@stll/api-contract/chat-secret";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import type {
+  RequestSecretDecision,
+  SecretTargetResolution,
+} from "@/components/chat/chat-approval-context";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import messages from "@/i18n/langs/en.json";
@@ -52,19 +56,23 @@ const declineOutput = {
 } satisfies RequestSecretOutput;
 
 const mountCard = ({
-  checkSavedSecretAvailability = async () => false,
+  resolveSecretTarget = async () => ({
+    available: false,
+    connector: {
+      displayName: "Sample connector",
+      host: "sample.test",
+      responseDisposition: "normal",
+    },
+  }),
   handleRequestSecret = async () => declineOutput,
 }: {
-  checkSavedSecretAvailability?: (
+  resolveSecretTarget?: (
     connectorSlug: string,
     signal: AbortSignal,
-  ) => Promise<boolean>;
+  ) => Promise<SecretTargetResolution>;
   handleRequestSecret?: (
     toolCallId: string,
-    decision:
-      | { decision: "provide"; value: string; saveForFuture: boolean }
-      | { decision: "use-saved" }
-      | { decision: "decline" },
+    decision: RequestSecretDecision,
   ) => Promise<RequestSecretOutput>;
 }) => {
   const queryClient = new QueryClient({
@@ -84,7 +92,7 @@ const mountCard = ({
             handleDeny: () => {},
             handleRequestSecret,
             secretAvailabilityKey: "sample-thread",
-            checkSavedSecretAvailability,
+            resolveSecretTarget,
           }}
         >
           <RequestSecretCard isAwaitingUser part={part} />
@@ -117,16 +125,32 @@ describe("request secret card", () => {
       },
     });
 
-    const credentialField = screen.getByLabelText(
+    const credentialField = await screen.findByLabelText(
       messages.chat.requestSecret.valueLabel,
     );
-    expect(credentialField.getAttribute("type")).toBe("password");
-    fireEvent.change(credentialField, { target: { value: "sample-value" } });
-    fireEvent.click(
+    expect(
+      screen.getByText(
+        messages.chat.requestSecret.purposeByAi.replace(
+          "{purpose}",
+          () => input.purpose,
+        ),
+      ),
+    ).not.toBeNull();
+    expect(
+      screen.getByText("Target: Sample connector (sample.test)"),
+    ).not.toBeNull();
+    expect(
       screen.getByRole("checkbox", {
         name: messages.chat.requestSecret.saveForFuture,
       }),
-    );
+    ).not.toBeNull();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: messages.chat.requestSecret.replaceOrdinaryConnection,
+      }),
+    ).toBeNull();
+    expect(credentialField.getAttribute("type")).toBe("password");
+    fireEvent.change(credentialField, { target: { value: "sample-value" } });
     await act(async () =>
       fireEvent.click(
         screen.getByRole("button", {
@@ -141,7 +165,8 @@ describe("request secret card", () => {
         decision: {
           decision: "provide",
           value: "sample-value",
-          saveForFuture: true,
+          saveForFuture: false,
+          normalConnectionAction: "preserve",
         },
       },
     ]);
@@ -159,6 +184,47 @@ describe("request secret card", () => {
     expect(
       screen.getByText(messages.chat.requestSecret.provided),
     ).not.toBeNull();
+    queryClient.clear();
+  });
+
+  test("requires confirmation before replacing a normal connection", async () => {
+    const submissions: RequestSecretDecision[] = [];
+    const { queryClient } = mountCard({
+      handleRequestSecret: async (_toolCallId, decision) => {
+        submissions.push(decision);
+        return providedOutput;
+      },
+    });
+
+    const credentialField = await screen.findByLabelText(
+      messages.chat.requestSecret.valueLabel,
+    );
+    fireEvent.change(credentialField, { target: { value: "sample-value" } });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: messages.chat.requestSecret.saveForFuture,
+      }),
+    );
+    const provideButton = screen.getByRole("button", {
+      name: messages.chat.requestSecret.provideAction,
+    });
+    expect(provideButton.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: messages.chat.requestSecret.replaceOrdinaryConnection,
+      }),
+    );
+    expect(provideButton.hasAttribute("disabled")).toBe(false);
+    await act(async () => fireEvent.click(provideButton));
+
+    expect(submissions).toEqual([
+      {
+        decision: "provide",
+        value: "sample-value",
+        saveForFuture: true,
+        normalConnectionAction: "replace-with-receipt-only",
+      },
+    ]);
     queryClient.clear();
   });
 
@@ -184,7 +250,14 @@ describe("request secret card", () => {
   test("offers an available saved credential and submits that choice", async () => {
     const submissions: unknown[] = [];
     const { queryClient } = mountCard({
-      checkSavedSecretAvailability: async () => true,
+      resolveSecretTarget: async () => ({
+        available: true,
+        connector: {
+          displayName: "Sample connector",
+          host: "sample.test",
+          responseDisposition: "receipt-only",
+        },
+      }),
       handleRequestSecret: async (_toolCallId, decision) => {
         submissions.push(decision);
         return providedOutput;
@@ -194,6 +267,11 @@ describe("request secret card", () => {
     const useSavedButton = await screen.findByRole("button", {
       name: messages.chat.requestSecret.useSavedAction,
     });
+    expect(
+      screen.getByRole("checkbox", {
+        name: messages.chat.requestSecret.saveForFuture,
+      }),
+    ).not.toBeNull();
     await act(async () => fireEvent.click(useSavedButton));
 
     expect(submissions).toEqual([{ decision: "use-saved" }]);
@@ -202,7 +280,7 @@ describe("request secret card", () => {
 
   test("shows a generic alert when saved credential availability fails", async () => {
     const { queryClient } = mountCard({
-      checkSavedSecretAvailability: async () => {
+      resolveSecretTarget: async () => {
         throw new Error("availability unavailable");
       },
     });
