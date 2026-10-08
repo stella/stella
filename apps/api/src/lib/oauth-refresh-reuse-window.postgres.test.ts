@@ -170,7 +170,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       context.adapter.incrementOne = originalIncrement;
       expect(arrived).toBe(2);
       expect(await countRefreshRows(client.clientId)).toBe(2);
-      const statuses = responses.map(({ status }) => status).toSorted();
+      const statuses = responses
+        .map(({ status }) => status)
+        .toSorted((left, right) => left - right);
       const accepted =
         responses.find(({ status }) => status === 200) ??
         panic("One rotation must succeed");
