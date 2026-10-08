@@ -101,9 +101,13 @@ const outputAttributeValue = (value: unknown): AttributeValue | undefined => {
   return value === undefined ? undefined : JSON.stringify(value);
 };
 
-export const sanitizeLogAttributes = (
-  attributes: unknown,
-): LoggerAttributes | undefined => {
+const filterLogAttributes = ({
+  attributes,
+  queryFieldsDropped,
+}: {
+  attributes: unknown;
+  queryFieldsDropped: number;
+}): LoggerAttributes | undefined => {
   if (
     attributes === null ||
     typeof attributes !== "object" ||
@@ -111,17 +115,9 @@ export const sanitizeLogAttributes = (
   ) {
     return undefined;
   }
-  const projected = sanitizeErrorForOutput(attributes);
-  if (
-    projected === null ||
-    typeof projected !== "object" ||
-    Array.isArray(projected)
-  ) {
-    return undefined;
-  }
-  let dropped = Object.keys(attributes).filter(isQueryErrorOutputKey).length;
+  let dropped = queryFieldsDropped;
   const safeAttributes: LoggerAttributes = {};
-  for (const [key, value] of Object.entries(projected)) {
+  for (const [key, value] of Object.entries(attributes)) {
     if (
       SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key) ||
       !isOwnedValueValid(key, value)
@@ -141,6 +137,18 @@ export const sanitizeLogAttributes = (
   }
   return safeAttributes;
 };
+
+const queryFieldCount = (
+  attributes: LoggerAttributeInput | undefined,
+): number => Object.keys(attributes ?? {}).filter(isQueryErrorOutputKey).length;
+
+export const sanitizeLogAttributes = (
+  attributes: LoggerAttributeInput | undefined,
+): LoggerAttributes | undefined =>
+  filterLogAttributes({
+    attributes: sanitizeErrorForOutput(attributes),
+    queryFieldsDropped: queryFieldCount(attributes),
+  });
 
 export type LogRecord = {
   readonly severityText: string;
@@ -193,11 +201,13 @@ const emit = ({
   message,
   severityNumber,
   severityText,
+  outputStream = "stderr",
 }: {
   attributes: LoggerAttributeInput | undefined;
   message: string;
   severityNumber: SeverityNumber;
   severityText: string;
+  outputStream?: "stderr" | "stdout";
 }): void => {
   const output = sanitizeErrorForOutput([message, attributes]);
   const safeMessage =
@@ -206,7 +216,10 @@ const emit = ({
       : "[unreadable log]";
   const safeAttributes = annotateUnowned(
     severityNumber,
-    sanitizeLogAttributes(Array.isArray(output) ? output.at(1) : undefined),
+    filterLogAttributes({
+      attributes: Array.isArray(output) ? output.at(1) : undefined,
+      queryFieldsDropped: queryFieldCount(attributes),
+    }),
   );
   if (recordSink !== null) {
     recordSink({
@@ -247,7 +260,7 @@ const emit = ({
   // of severity, so severity was never what kept payloads out. DEBUG stays
   // unmirrored as the escape hatch for hot loops.
   if (severityNumber >= SeverityNumber.INFO) {
-    process.stderr.write(
+    process[outputStream].write(
       `${JSON.stringify({
         severity: severityText,
         message: safeMessage,
@@ -277,10 +290,12 @@ const emitRequest = ({
   severity,
   statusCode,
 }: RequestLogOptions): void => {
-  const safeMessage = String(sanitizeErrorForOutput(message));
-  const safeAttributes = annotateUnowned(
-    REQUEST_SEVERITY[severity],
-    sanitizeLogAttributes({
+  emit({
+    message,
+    severityNumber: REQUEST_SEVERITY[severity],
+    severityText: severity,
+    outputStream: "stdout",
+    attributes: {
       // The fingerprint's keys are already this sink's attribute names, so the
       // record ships whole rather than being re-listed field by field. A second
       // copy of that key set can only ever be a shorter one, and a field it
@@ -304,26 +319,8 @@ const emitRequest = ({
             "failure.reason": failure.reason,
             "failure.shadow": "true",
           }),
-    }),
-  );
-
-  if (recordSink !== null) {
-    recordSink({
-      severityText: severity,
-      message: safeMessage,
-      attributes: safeAttributes,
-    });
-    return;
-  }
-  logs.getLogger("stella.api").emit({
-    ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
-    body: safeMessage,
-    severityNumber: REQUEST_SEVERITY[severity],
-    severityText: severity,
+    },
   });
-  process.stdout.write(
-    `${JSON.stringify({ severity, message: safeMessage, ...safeAttributes })}\n`,
-  );
 };
 
 export const logger = {

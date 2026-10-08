@@ -82,13 +82,13 @@ describe("logger attributes", () => {
     expect(output).not.toContain('"body"');
   });
 
-  test("string arrays and wrapped values are redacted before OTel and stderr", async () => {
-    const marker = "fixture-logger-query-marker";
+  test("every logger entry point projects payload shapes before recording, OTel and process output", async () => {
+    const marker = "request.failed";
     const driver = Object.assign(new Error("duplicate"), {
       name: "PostgresError",
       code: "23505",
       constraint: "account_token_unique",
-      query: "insert into account values ('fixture-logger-query-marker')",
+      query: "insert into account values ('request.failed')",
     });
     const queryError = new DrizzleQueryError(
       "insert into account values ($1)",
@@ -103,6 +103,44 @@ describe("logger attributes", () => {
         cause: { cause: queryError, note: marker },
       }),
     ];
+    const entryPoints = {
+      debug: logger.debug,
+      info: logger.info,
+      warn: logger.warn,
+      error: logger.error,
+    };
+    expect([...Object.keys(entryPoints), "request"].toSorted()).toEqual(
+      Object.keys(logger).toSorted(),
+    );
+    const emitDiagnostic = (diagnostic: unknown): void => {
+      for (const entryPoint of Object.values(entryPoints)) {
+        entryPoint(`Diagnostic ${marker}`, {
+          diagnostic,
+          failure: queryError,
+        });
+      }
+      logger.request({
+        durationMs: 12,
+        message: marker,
+        method: "POST",
+        severity: "ERROR",
+        statusCode: 500,
+        errorFingerprint: {
+          parameters: marker,
+          diagnostic: JSON.stringify(diagnostic),
+        },
+      });
+    };
+    const recording = installRecordingLogger();
+    try {
+      for (const diagnostic of diagnostics) {
+        emitDiagnostic(diagnostic);
+      }
+      expect(recording.records).toHaveLength(diagnostics.length * 5);
+      expect(inspect(recording.records, { depth: 30 })).not.toContain(marker);
+    } finally {
+      recording.restore();
+    }
     const exporter = new InMemoryLogRecordExporter();
     const provider = new LoggerProvider({
       processors: [new SimpleLogRecordProcessor({ exporter })],
@@ -120,27 +158,13 @@ describe("logger attributes", () => {
     otelLogs.setGlobalLoggerProvider(provider);
     try {
       for (const diagnostic of diagnostics) {
-        logger.error(`Diagnostic ${marker}`, {
-          diagnostic,
-          failure: queryError,
-        });
-        logger.request({
-          durationMs: 12,
-          message: "request.failed",
-          method: "POST",
-          severity: "ERROR",
-          statusCode: 500,
-          errorFingerprint: {
-            parameters: marker,
-            diagnostic: JSON.stringify(diagnostic),
-          },
-        });
+        emitDiagnostic(diagnostic);
       }
       await provider.forceFlush();
 
       const exported = exporter.getFinishedLogRecords();
       const output = inspect({ exported, chunks }, { depth: 30 });
-      expect(exported).toHaveLength(diagnostics.length * 2);
+      expect(exported).toHaveLength(diagnostics.length * 5);
       expect(output).not.toContain(marker);
       expect(output).toContain("account_token_unique");
       expect(output).toContain("23505");
