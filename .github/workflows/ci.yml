@@ -5721,9 +5721,9 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 12m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
+    # Longest leg: 13m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
     # Checkout reached 5m53s under load; green Playwright shards reached 5m04s.
-    timeout-minutes: 27
+    timeout-minutes: 28
     permissions:
       contents: read
       actions: write
@@ -5749,10 +5749,12 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
-        timeout-minutes: 1
+        timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # Three attempts and both waits fit inside the step deadline.
+          RETRY_DELAYS_SECONDS: "5 10"
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
