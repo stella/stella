@@ -65,7 +65,7 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
       context === "unknown" &&
       match[0] !== match[0].toUpperCase() &&
       before.trim().length > 0 &&
-      !/\b(?:SELECT|FROM|WHERE|JOIN|ORDER\s+BY|GROUP\s+BY|LIMIT|OFFSET|RETURNING)\b|[=()$]|::/iu.test(
+      !/\b(?:SELECT|TABLE|FROM|WHERE|JOIN|ORDER\s+BY|GROUP\s+BY|LIMIT|OFFSET|RETURNING)\b|[=()$]|::/iu.test(
         before,
       )
     ) {
