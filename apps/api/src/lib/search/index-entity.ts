@@ -12,6 +12,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
@@ -368,6 +369,16 @@ export const upsertSearchDocument = async (
   const hasObservedSource = observedSource !== null;
 
   await database.transaction(async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: [doc.organizationId],
+      workspaceIds: [doc.workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(doc.organizationId) ||
+      !parents.workspaceIds.has(doc.workspaceId)
+    ) {
+      return;
+    }
     // Version writers serialize on this entity. Take the lock in a separate
     // statement so the following CAS sees commits made while we waited.
     const locked = await tx.execute<IndexedSearchDocument>(sql`

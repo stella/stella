@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -16,18 +15,13 @@ import {
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
-  AlertTriangleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Loader2Icon,
-  PlusIcon,
-  RefreshCwIcon,
-  Trash2Icon,
   AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   VersionDiffBlock,
@@ -37,19 +31,12 @@ import type {
   AsyncContent,
   VersionDiffSegment,
 } from "@/components/versions/version-list";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import {
-  invalidateTemplateClauseSources,
-  templateClausesOptions,
-} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { LinkClauseDialog } from "@/routes/knowledge/-components/link-clause-dialog";
 
 // ── Types ────────────────────────────────────────────
 
@@ -79,294 +66,6 @@ export type LinkedClause = {
   variantDeleted: boolean;
 };
 
-type TemplateClausesTabProps = {
-  templateId: string;
-};
-
-// ── Component ────────────────────────────────────────
-
-export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [syncingAll, setSyncingAll] = useState(false);
-
-  const { data, isLoading, isError } = useQuery(
-    templateClausesOptions(activeOrganizationId, templateId),
-  );
-
-  const links: LinkedClause[] =
-    data && "links" in data && Array.isArray(data.links) ? data.links : [];
-  const outdatedCount = links.filter((link) => link.isOutdated).length;
-
-  const invalidateLinks = useCallback(() => {
-    invalidateTemplateClauseSources(queryClient, activeOrganizationId).catch(
-      (error: unknown) => {
-        // Invalidation failure leaves the clause list (and its nested preview)
-        // stale without a user-facing symptom: capture it for telemetry.
-        getAnalytics().captureError(error);
-      },
-    );
-  }, [queryClient, activeOrganizationId]);
-
-  const handleSyncAll = useCallback(async () => {
-    setSyncingAll(true);
-
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses.sync.post();
-
-    setSyncingAll(false);
-
-    if (response.error) {
-      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    if ("syncedCount" in response.data) {
-      stellaToast.add({
-        type: "success",
-        title: t("clauses.syncedAllResult", {
-          count: response.data.syncedCount,
-        }),
-      });
-    }
-    invalidateLinks();
-  }, [templateId, t, invalidateLinks]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("clauses.loadFailed")}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-muted-foreground text-sm font-medium">
-          {t("clauses.linkedClauses")}
-        </h3>
-        <div className="flex items-center gap-1.5">
-          {outdatedCount > 0 && (
-            <Button
-              disabled={syncingAll}
-              onClick={() => {
-                detached(handleSyncAll(), "template-clauses-tab.sync-all");
-              }}
-              size="sm"
-              variant="outline"
-            >
-              <RefreshCwIcon className={cn(syncingAll && "animate-spin")} />
-              {t("clauses.syncAllOutdated")}
-            </Button>
-          )}
-          <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
-            <PlusIcon />
-            {t("clauses.linkClause")}
-          </Button>
-        </div>
-      </div>
-
-      {links.length === 0 && (
-        <p className="text-muted-foreground py-4 text-center text-sm">
-          {t("clauses.noLinkedClauses")}
-        </p>
-      )}
-
-      {links.length > 0 && (
-        <div className="rounded-lg border">
-          <ul className="divide-y">
-            {links.map((link) => (
-              <LinkedClauseRow
-                key={link.id}
-                link={link}
-                onChanged={invalidateLinks}
-                templateId={templateId}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <LinkClauseDialog
-        onLinked={invalidateLinks}
-        onOpenChange={setLinkOpen}
-        open={linkOpen}
-        // Deferred slot renames exist only in the Studio session; this
-        // standalone tab has none to reserve.
-        reservedSlotNames={[]}
-        templateId={templateId}
-      />
-    </div>
-  );
-};
-
-// ── Linked Clause Row ────────────────────────────────
-
-type LinkedClauseRowProps = {
-  link: LinkedClause;
-  templateId: string;
-  onChanged: () => void;
-};
-
-const LinkedClauseRow = ({
-  link,
-  templateId,
-  onChanged,
-}: LinkedClauseRowProps) => {
-  const t = useTranslations();
-  const [syncing, setSyncing] = useState(false);
-
-  const isDeleted = link.clause === null;
-
-  const handleSync = async () => {
-    setSyncing(true);
-
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses({ linkId: toSafeId<"templateClause">(link.id) })
-      .sync.post();
-
-    setSyncing(false);
-
-    if (response.error) {
-      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    stellaToast.add({
-      type: "success",
-      title: t("clauses.synced"),
-    });
-    onChanged();
-  };
-
-  if (isDeleted) {
-    return (
-      <li className="bg-destructive/5 flex items-center gap-3 px-4 py-3">
-        <Trash2Icon className="text-destructive size-4 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="text-destructive text-sm font-medium">
-            {t("clauses.clauseDeletedTombstone")}
-          </p>
-          <div className="flex items-center gap-2 text-xs">
-            {link.slotName && <SlotChip slotName={link.slotName} />}
-            <span className="text-destructive/80">
-              {t("clauses.clauseDeletedHint")}
-            </span>
-          </div>
-        </div>
-        <UnlinkButton
-          destructive
-          linkId={link.id}
-          onChanged={onChanged}
-          templateId={templateId}
-        />
-      </li>
-    );
-  }
-
-  return (
-    <li className="flex flex-col px-4 py-3">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium" dir="auto">
-            {link.clause?.title}
-          </p>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-            {link.slotName && <SlotChip slotName={link.slotName} />}
-            {link.clauseVariant && <span>{link.clauseVariant.label}</span>}
-            {link.variantDeleted && (
-              <span className="text-warning-foreground flex items-center gap-1">
-                <AlertTriangleIcon className="size-3" />
-                {t("clauses.variantDeletedWithLabel", {
-                  label: link.clauseVariantLabel ?? "",
-                })}
-              </span>
-            )}
-            {link.clauseVersion && (
-              <span>
-                {t("common.versionLabel", {
-                  version: String(link.clauseVersion.version),
-                })}
-              </span>
-            )}
-            {link.isOutdated && (
-              <span className="text-warning-foreground flex items-center gap-1">
-                <AlertTriangleIcon className="size-3" />
-                {t("clauses.outdatedVersion")}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 gap-1">
-          {link.isOutdated && (
-            <Button
-              disabled={syncing}
-              onClick={() => {
-                detached(handleSync(), "template-clauses-tab.sync");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <RefreshCwIcon className="size-3.5" />
-              {t("clauses.syncVersion")}
-            </Button>
-          )}
-
-          <UnlinkButton
-            linkId={link.id}
-            onChanged={onChanged}
-            templateId={templateId}
-          />
-        </div>
-      </div>
-
-      {link.variantDeleted && link.slotName && (
-        <p className="text-warning-foreground mt-1 text-xs">
-          {t("clauses.variantDeletedNoFill", { slot: link.slotName })}
-        </p>
-      )}
-
-      {link.isOutdated && link.clauseId && link.clauseVersion && (
-        <OutdatedChanges
-          clauseId={link.clauseId}
-          versionId={link.clauseVersion.id}
-        />
-      )}
-    </li>
-  );
-};
-
-// ── Outdated changes disclosure ──────────────────────
-
-// Expands the "update available" state into a line diff between the
-// pinned version and the clause's current one, plus an on-demand AI
-// summary; rendering reuses the shared version-history blocks.
 export const OutdatedChanges = ({
   clauseId,
   versionId,
@@ -475,15 +174,6 @@ export const OutdatedChanges = ({
 
 // ── Shared bits ──────────────────────────────────────
 
-const SlotChip = ({ slotName }: { slotName: string }) => (
-  <span className="bg-muted text-foreground rounded-sm px-1.5 py-0.5">
-    {slotName}
-  </span>
-);
-
-// One unlink flow (trigger button + confirm dialog) shared by the
-// tombstone row and the regular row; the tombstone renders it in a
-// destructive tint.
 type UnlinkButtonProps = {
   linkId: string;
   templateId: string;

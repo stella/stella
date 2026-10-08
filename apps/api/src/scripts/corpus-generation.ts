@@ -923,7 +923,7 @@ const runCensusPass = async ({
         }),
       );
     }
-    const { expected, driftRevisions, nextCursor, complete } = page.value;
+    const { expected, driftRevisions, complete } = page.value;
     if (driftRevisions.length > 0) {
       return Result.err(
         new CorpusGenerationCensusDriftError({
@@ -935,10 +935,10 @@ const runCensusPass = async ({
       );
     }
     inspected += page.value.inspected;
-    if (complete || nextCursor === null) {
+    if (complete || page.value.nextCursor === null) {
       return Result.ok(inspected);
     }
-    after = nextCursor;
+    after = page.value.nextCursor;
   }
 };
 

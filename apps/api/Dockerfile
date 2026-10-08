@@ -241,7 +241,8 @@ RUN bun build \
 # Reviewed citation polarities: stores them and applies them to the current
 # citation rows. Needs the API env (database) and runs inside the API task;
 # reports without writing until `--apply`:
-#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json", "--apply"]
+#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
+#    "--results", "/tmp/results.jsonl", "--apply"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \

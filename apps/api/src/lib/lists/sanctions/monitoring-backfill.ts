@@ -123,7 +123,7 @@ export const resetMonitoringBackfills = async (
     },
   });
 
-export const transitionMonitoringBackfill = async ({
+const transitionMonitoringBackfill = async ({
   tx,
   job,
   to,

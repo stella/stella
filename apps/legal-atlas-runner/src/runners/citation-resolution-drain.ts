@@ -43,9 +43,6 @@ export const CITATION_RESOLUTION_STEP = {
   BUSY: "busy",
 } as const;
 
-export type CitationResolutionStepKind =
-  (typeof CITATION_RESOLUTION_STEP)[keyof typeof CITATION_RESOLUTION_STEP];
-
 export type CitationResolutionStep =
   | {
       type: typeof CITATION_RESOLUTION_STEP.SETTLED;
@@ -138,7 +135,7 @@ export const CITATION_RESOLUTION_DRAIN_TIMING = {
  * The longest slice a pacing wait sleeps before re-checking the drain flag.
  * The idle ceiling is minutes; a SIGTERM must not wait it out.
  */
-export const CITATION_RESOLUTION_CHECK_SLICE_MS = 1000;
+const CITATION_RESOLUTION_CHECK_SLICE_MS = 1000;
 
 export type CitationResolutionDrainOptions = {
   /**

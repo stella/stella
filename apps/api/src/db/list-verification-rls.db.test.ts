@@ -22,9 +22,11 @@ import {
   reconcileQueuedListVerificationRuns,
   reconcileStuckListVerificationRuns,
 } from "@/api/lib/lists/verification/run-queue";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -294,7 +296,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
 
         // An unresolved pin stops execution before any document or model I/O.
         // It still exercises the queue's conditional claim and terminal write.
-        await processListVerificationRun({ actor, data: jobData, grants });
+        await processListVerificationRun({
+          actor,
+          admission: testModelAdmission(actor.organizationId),
+          data: jobData,
+          grants,
+        });
         const failed = await db
           .select()
           .from(legalListVerificationRuns)
@@ -305,7 +312,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
         });
         expect(failed.at(0)?.startedAt).toBeInstanceOf(Date);
         expect(failed.at(0)?.finishedAt).toBeInstanceOf(Date);
-        await processListVerificationRun({ actor, data: jobData, grants });
+        await processListVerificationRun({
+          actor,
+          admission: testModelAdmission(actor.organizationId),
+          data: jobData,
+          grants,
+        });
         expect(await db.select().from(legalListVerificationRuns)).toEqual(
           failed,
         );
@@ -432,9 +444,15 @@ describe.skipIf(!enabled)("list evidence row security", () => {
           expect(
             await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
           ).toEqual([]);
+          // The driver's own `code` is not the SQLSTATE; read it where the
+          // shared failure snapshot finds it, and keep the denial exact.
           expect(
-            await rejectionOf(client.unsafe(`INSERT INTO ${table} VALUES (3)`)),
-          ).toMatchObject({ code: "42501" });
+            getPgErrorCode(
+              await rejectionOf(
+                client.unsafe(`INSERT INTO ${table} VALUES (3)`),
+              ),
+            ),
+          ).toBe(PG_ERROR.INSUFFICIENT_PRIVILEGE);
           await client.unsafe("RESET ROLE");
         }
       } finally {
