@@ -1283,6 +1283,11 @@ describe("handleMcpHttpRequest", () => {
         },
       ],
       isError: true,
+      _meta: {
+        "mcp/www_authenticate": [
+          getMcpWwwAuthenticateHeader({ error: "insufficient_scope" }),
+        ],
+      },
     });
   });
 
