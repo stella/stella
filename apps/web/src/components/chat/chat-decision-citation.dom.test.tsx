@@ -279,3 +279,26 @@ test("passive answer links and complete carried source metadata schedule no deci
   );
   expect(client.isFetching()).toBe(0);
 });
+
+test("an anchored decision chip carries its paragraph in the link native navigation follows", async () => {
+  const view = mount(
+    clientWithDecisions(),
+    <ChatDecisionCitation
+      decisionId={first.id}
+      passage={paragraph}
+      anchorId="p-12"
+      interactive
+    />,
+  );
+  const link = await waitFor(() => {
+    const anchor = view.container.querySelector("a[href]");
+    expect(anchor).not.toBeNull();
+    return anchor ?? panic("chip link missing");
+  });
+  const target = new URL(
+    link.getAttribute("href") ?? "",
+    window.location.origin,
+  );
+  expect(target.hash).toBe("#p-12");
+  expect(target.pathname).not.toContain("#");
+});

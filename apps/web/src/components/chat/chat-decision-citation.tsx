@@ -65,11 +65,23 @@ const AnswerDecisionContext = createContext<AnswerDecisionContextValue | null>(
   null,
 );
 
+// Native navigation (modifier click, middle click, copied link) follows the
+// href, so the cited paragraph has to live in the URL, not only in onOpen.
+const withAnchor = (href: string, anchorId: string | undefined): string => {
+  if (anchorId === undefined) {
+    return href;
+  }
+  const hashIndex = href.indexOf("#");
+  const base = hashIndex === -1 ? href : href.slice(0, hashIndex);
+  return `${base}#${encodeURIComponent(anchorId)}`;
+};
+
 const CitationView = ({
   read,
   passage,
   readerUrl,
   originalUrl,
+  anchorId,
   renderPassage = true,
   presentationById,
   onOpen,
@@ -89,7 +101,7 @@ const CitationView = ({
   }
   const decision = {
     ...metadata,
-    readerUrl: readerUrl ?? metadata.readerUrl,
+    readerUrl: withAnchor(readerUrl ?? metadata.readerUrl, anchorId),
     originalUrl: originalUrl === undefined ? metadata.originalUrl : originalUrl,
   };
   return (
