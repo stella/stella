@@ -1,9 +1,10 @@
 /**
  * The one shape a document analysis of a court decision is produced in,
  * whoever produced it: the in-app generation run constrains its model with
- * this schema, `analysis.input.get` publishes it so an external producer
- * can constrain its own model with the same one, and `analysis.update`
- * parses what comes back through it. A second spelling of this shape
+ * this schema, `src/scripts/decision-analysis-input.ts` publishes it so an
+ * external producer can constrain its own model with the same one, and
+ * `src/scripts/decision-analysis-save.ts` parses what comes back through
+ * it. A second spelling of this shape
  * anywhere would let the three drift, so there is exactly one.
  *
  * Document-fenced layers only. `significance` is written from the citation

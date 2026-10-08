@@ -691,6 +691,14 @@
     "seconds": 0.182872,
     "source": "estimated"
   },
+  "src/handlers/case-law/analysis/generate.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/prompts/prompt-registry.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/analysis/significance.test.ts": {
     "seconds": 0.620126,
     "source": "estimated"
@@ -8227,6 +8235,10 @@
     "seconds": 0.41,
     "source": "estimated"
   },
+  "src/mcp/caller-feature-projection.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/capability-feature.test.ts": {
     "seconds": 0.141302,
     "source": "estimated"
@@ -9204,6 +9216,22 @@
     "source": "estimated"
   },
   "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/lock-for-write.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-extension.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-query.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock-order.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }

@@ -22,6 +22,7 @@ import {
   MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import {
@@ -60,7 +61,7 @@ const deriveCliAnnotation = (
   const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
   const annotation = {
     ...declared,
-    ...pickDefined(tool, ["featureId"]),
+    ...pickDefined(tool, ["feature", "featureId"]),
   };
   const behavior =
     "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
@@ -107,8 +108,7 @@ const deriveCliAnnotation = (
   };
 };
 
-// The four wire fields exposed by `tools/list` (scope/feature/access/anonymized
-// are server-internal and never leave the server).
+// The tools/list wire fields plus build-time CLI metadata.
 type RegistryToolListing = {
   cli: McpCliToolAnnotation;
   name: string;
@@ -185,10 +185,7 @@ const submissionTools = Object.fromEntries(
       readOnlyJustification =
         "Deletes or writes off the selected record in the user’s private stella workspace.";
     }
-    if (
-      tool.name === "upload_document_version" ||
-      tool.name === "open_document_version_upload"
-    ) {
+    if (tool.name === "upload_document_version") {
       readOnlyJustification =
         "Starts or completes a private document-version upload in the user’s stella workspace.";
     }
@@ -209,6 +206,10 @@ const submissionTools = Object.fromEntries(
         "Stores the human-approved feedback report and delivers it to the maintainers configured by the deployment.";
     }
 
+    if ("nonDestructiveReason" in tool) {
+      readOnlyJustification = tool.nonDestructiveReason;
+    }
+
     let openWorldJustification = privateOpenWorldJustification;
     if (tool.annotations.openWorldHint) {
       openWorldJustification = externalOpenWorldJustification;
@@ -222,7 +223,9 @@ const submissionTools = Object.fromEntries(
         "Sends the approved report to the maintainer channels the deployment configures, which may include a public issue tracker.";
     }
 
-    let destructiveJustification = nonDestructiveJustification;
+    let destructiveJustification = tool.annotations.destructiveHint
+      ? "Can modify or replace existing stored data in the user’s private stella workspace."
+      : nonDestructiveJustification;
     if (behavior?.type === "always") {
       destructiveJustification =
         "Can irreversibly delete or write off the selected private record and requires explicit confirmation.";
@@ -424,6 +427,8 @@ export const CLI_KNOWN_SCOPES = ${JSON.stringify(cliKnownScopes, null, 2)} as co
 export const CLI_REQUIRED_RESOURCE_SCOPES = ${JSON.stringify(MCP_DEFAULT_RESOURCE_SCOPES, null, 2)} as const;
 export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+export const VERIFICATION_RUN_CAP_CODES = ${JSON.stringify(VERIFICATION_RUN_CAP_CODES, null, 2)} as const;
+export type VerificationRunCapCode = (typeof VERIFICATION_RUN_CAP_CODES)[keyof typeof VERIFICATION_RUN_CAP_CODES];
 export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUSALS, null, 2)} as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;

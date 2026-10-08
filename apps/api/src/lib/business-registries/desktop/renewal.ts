@@ -76,6 +76,7 @@ export const renewDesktopCredential = async ({
         const membershipLock = await withAggregateLock({
           aggregate: "desktopMembership",
           id: { organizationId, userId },
+          mode: "update",
           tx,
         });
         if (membershipLock.status === "missing") {
@@ -103,6 +104,7 @@ export const renewDesktopCredential = async ({
         const keyLock = await withAggregateLock({
           aggregate: "desktopCredential",
           id: { id: keyId, userId },
+          mode: "update",
           tx,
         });
         if (keyLock.status === "missing") {
@@ -226,6 +228,7 @@ export const probeDesktopCredential = async ({
         const keyLock = await withAggregateLock({
           aggregate: "desktopCredential",
           id: { id: keyId, userId },
+          mode: "update",
           tx,
         });
         if (keyLock.status === "missing") {
