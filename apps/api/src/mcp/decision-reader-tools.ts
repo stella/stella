@@ -128,7 +128,16 @@ const openTool: TypedMcpToolHandler<
     return conflict();
   }
   const source = read.value;
-  const metadata = metadataOf(source);
+  const { paragraphs } = parsed.output;
+  const decisionMetadata = metadataOf(source);
+  // Every outcome links to the requested range, withheld text included: there the link is the reader's path.
+  const metadata = {
+    ...decisionMetadata,
+    appUrl:
+      decisionMetadata.appUrl === null || paragraphs === undefined
+        ? decisionMetadata.appUrl
+        : `${decisionMetadata.appUrl}#${decisionParagraphFragment(paragraphs)}`,
+  };
   // Model-visible open never carries licence-withheld body text, whichever widget policy is selected.
   if (!source.decision.source.allowsDerivedAi) {
     return toolDataResult({ status: "withheld", metadata, withheldReason });
@@ -138,7 +147,7 @@ const openTool: TypedMcpToolHandler<
   }
   const selected = selectReaderWindow({
     ast: source.ast,
-    paragraphs: parsed.output.paragraphs,
+    paragraphs,
   });
   switch (selected.status) {
     case "not_found":
@@ -151,13 +160,7 @@ const openTool: TypedMcpToolHandler<
     case "selected":
       return toolDataResult({
         status: "available",
-        metadata: {
-          ...metadata,
-          appUrl:
-            metadata.appUrl === null || parsed.output.paragraphs === undefined
-              ? metadata.appUrl
-              : `${metadata.appUrl}#${decisionParagraphFragment(parsed.output.paragraphs)}`,
-        },
+        metadata,
         outline: readerOutline(source.ast.blocks),
         window: selected.window,
         truncated: selected.truncated,

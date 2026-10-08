@@ -521,7 +521,7 @@ describe("decision reader tool contracts", () => {
     }
     expect(shown.data.content.items.length).toBeGreaterThan(0);
     const model = await open({
-      args: { decision_id: id, paragraphs: "48" },
+      args: { decision_id: id, paragraphs: "48-49" },
       context,
     });
     expect(model.status).toBe("success");
@@ -529,12 +529,27 @@ describe("decision reader tool contracts", () => {
       throw new Error("Expected opening metadata");
     }
     expect(model.data.status).toBe("withheld");
+    expect(model.data.metadata.appUrl).toEndWith("#par=48-49");
     expect(JSON.stringify(model.data)).not.toContain("Paragraph 48");
     expect(policies).toEqual([
       "metadata-only",
       "show-to-user",
       "metadata-only",
     ]);
+  });
+  test("an opening without decision text still links to the requested range", async () => {
+    const result = await open({
+      args: { decision_id: id, paragraphs: "48-49" },
+      context: contextWith({
+        readDecisionReaderSource: async () => ({ ...sourceOf(), ast: null }),
+      }),
+    });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected opening metadata");
+    }
+    expect(result.data.status).toBe("unavailable");
+    expect(result.data.metadata.appUrl).toEndWith("#par=48-49");
   });
   test("missing or gated decisions are typed not-found and expose no source data", async () => {
     const context = contextWith({ readDecisionReaderSource: async () => null });
