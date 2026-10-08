@@ -469,7 +469,7 @@ describe("a failed analysis run", () => {
       },
     });
 
-    const claimed = await store.claim({
+    const claimed = await store.claimUnlessFailed({
       decisionId,
       fingerprint: FINGERPRINT,
       observed: null,
@@ -478,7 +478,7 @@ describe("a failed analysis run", () => {
 
     // The failure read saw it, so the swap was rolled back (with the seam's
     // own insert, which shared the claim's transaction).
-    expect(claimed).toBeNull();
+    expect(claimed.unwrap()).toBeNull();
     expect(await storedValue(decisionId)).toBeNull();
   });
 
@@ -493,16 +493,18 @@ describe("a failed analysis run", () => {
       },
     });
 
-    const claimed = await store.claim({
-      decisionId,
-      fingerprint: FINGERPRINT,
-      observed: null,
-      unlessFailed: failureClaimGuard({
+    const claimed = (
+      await store.claimUnlessFailed({
         decisionId,
-        now,
-        reader: { source: "platform" },
-      }),
-    });
+        fingerprint: FINGERPRINT,
+        observed: null,
+        unlessFailed: failureClaimGuard({
+          decisionId,
+          now,
+          reader: { source: "platform" },
+        }),
+      })
+    ).unwrap();
 
     expect(seen).toEqual(["locked"]);
     expect(claimed).toMatchObject({ status: "generating" });

@@ -9,8 +9,8 @@
  * sentinel cleanup must then leave the newer parse's state alone.
  */
 
-import { panic, Result } from "better-result";
-import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
+import { panic, Result, type UnhandledException } from "better-result";
+import { and, eq, sql, TransactionRollbackError, type SQL } from "drizzle-orm";
 
 import type {
   AnalysisGenerating,
@@ -36,27 +36,38 @@ import {
 
 /**
  * The Drizzle capabilities the store needs. Structural rather than a
- * concrete handle, so a script's own connection satisfies it without the
- * store reaching for the application's.
+ * concrete handle, so a script's own connection (or another driver's
+ * handle) satisfies it without the store reaching for the application's.
+ * `execute` is typed by what the store needs of it, a statement run for its
+ * effect: its result's shape differs between drivers, and no caller reads it.
  */
-export type AnalysisRowWriter = Pick<
-  Transaction,
-  "delete" | "execute" | "select" | "update"
->;
+export type AnalysisRowWriter = Pick<Transaction, "select" | "update"> & {
+  execute: (statement: SQL) => PromiseLike<unknown>;
+};
 
-/** The store's handle: the row writer, able to open the claim's transaction. */
-export type AnalysisClaimWriter = AnalysisRowWriter &
-  Pick<Transaction, "transaction">;
+/** The claim transaction's handle: the row writer, able to roll back its swap. */
+type AnalysisClaimTransaction = AnalysisRowWriter &
+  Pick<Transaction, "rollback">;
+
+/**
+ * The store's handle: the row writer, able to open the claim's transaction.
+ * Stated over the callback's handle rather than picked from `Transaction`,
+ * whose callback is typed to one driver.
+ */
+export type AnalysisClaimWriter = AnalysisRowWriter & {
+  transaction: <Value>(
+    run: (tx: AnalysisClaimTransaction) => Promise<Value>,
+  ) => Promise<Value>;
+};
 
 type AnalysisClaim = AnalysisStoreKey & {
   /** The stored value this caller read and found wanting; see `claimableAnalysisRow`. */
   observed: unknown;
-  /**
-   * A plain read's claim: refused while this reader's key has an applicable
-   * failure, checked in the claim statement itself. Absent for an explicit
-   * retry and for writers that submit a finished analysis.
-   */
-  unlessFailed?: FailureClaimGuard | undefined;
+};
+
+type GuardedAnalysisClaim = AnalysisClaim & {
+  /** This reader's key: an applicable failure under it refuses the claim. */
+  unlessFailed: FailureClaimGuard;
 };
 
 type AnalysisSave = {
@@ -105,6 +116,15 @@ export type AnalysisStore = {
    * identity from here on; null when another writer got there first.
    */
   claim: (claim: AnalysisClaim) => Promise<AnalysisGenerating | null>;
+  /**
+   * A plain read's claim: `claim`, also refused (null) while this reader's
+   * key has an applicable failure. An explicit retry and a writer that
+   * submits a finished analysis use `claim`. Fails with the database error
+   * that ended the claim's transaction.
+   */
+  claimUnlessFailed: (
+    claim: GuardedAnalysisClaim,
+  ) => Promise<Result<AnalysisGenerating | null, UnhandledException>>;
   /**
    * Stores the result, only where the row still carries this run's
    * fingerprint and the document it was claimed under. A re-parse during
@@ -204,14 +224,33 @@ const releaseRun = async (
   // candidate subquery. A candidate another writer refreshed while this
   // statement waited on its lock is rechecked against the outer condition
   // only, so without it the fresh record would be deleted by its key.
-  await db
-    .delete(caseLawAnalysisFailures)
-    .where(
-      and(
-        sql`(${caseLawAnalysisFailures.decisionId}, ${caseLawAnalysisFailures.keyTag}) IN (SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures" WHERE "recorded_at" < ${expiredBefore}::timestamptz ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH})`,
-        sql`${caseLawAnalysisFailures.recordedAt} < ${expiredBefore}::timestamptz`,
-      ),
-    );
+  await db.execute(sql`
+    DELETE FROM "case_law_analysis_failures"
+    WHERE ("decision_id", "key_tag") IN (
+        SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures"
+        WHERE "recorded_at" < ${expiredBefore}::timestamptz
+        ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH}
+      )
+      AND "recorded_at" < ${expiredBefore}::timestamptz
+  `);
+};
+
+/** The claim's compare-and-swap: the row becomes `sentinel` if it still holds `observed`. */
+const swapAnalysisRow = async (
+  handle: AnalysisRowWriter,
+  {
+    decisionId,
+    observed,
+    sentinel,
+  }: Omit<AnalysisClaim, "fingerprint"> & { sentinel: AnalysisGenerating },
+): Promise<AnalysisGenerating | null> => {
+  // audit: skip — analysis sentinel; the caller audits the analysis it saves
+  const [updated] = await handle
+    .update(caseLawDecisions)
+    .set({ analysis: sentinel })
+    .where(claimableAnalysisRow({ decisionId, observed }))
+    .returning({ id: caseLawDecisions.id });
+  return updated === undefined ? null : sentinel;
 };
 
 /**
@@ -230,20 +269,19 @@ export const createDbAnalysisStore = (
   db: AnalysisClaimWriter,
   hooks: AnalysisStoreHooks = {},
 ): AnalysisStore => ({
-  claim: async ({ decisionId, fingerprint, observed, unlessFailed }) => {
-    // audit: skip — analysis sentinel; the caller audits the analysis it saves
+  claim: async ({ decisionId, fingerprint, observed }) =>
+    await swapAnalysisRow(db, {
+      decisionId,
+      observed,
+      sentinel: analysisSentinel(fingerprint, new Date()),
+    }),
+  claimUnlessFailed: async ({
+    decisionId,
+    fingerprint,
+    observed,
+    unlessFailed,
+  }) => {
     const sentinel = analysisSentinel(fingerprint, new Date());
-    const swap = async (handle: AnalysisRowWriter) => {
-      const [updated] = await handle
-        .update(caseLawDecisions)
-        .set({ analysis: sentinel })
-        .where(claimableAnalysisRow({ decisionId, observed }))
-        .returning({ id: caseLawDecisions.id });
-      return updated === undefined ? null : sentinel;
-    };
-    if (unlessFailed === undefined) {
-      return await swap(db);
-    }
     // A plain claim, in one short transaction. Under READ COMMITTED a guard
     // folded into the UPDATE would read failures from the statement's own
     // snapshot, and a concurrent failure write (which releases the row and
@@ -254,10 +292,14 @@ export const createDbAnalysisStore = (
     // what that write filed, and an applicable failure rolls the swap back.
     // The swap is the lock: the aggregate-lock owner confines explicit
     // `FOR UPDATE` reads, and an UPDATE of this one row needs none.
-    const outcome = await Result.tryPromise({
-      try: async () =>
-        await withAggregateTransaction(db, async (tx: Transaction) => {
-          const claimed = await swap(tx);
+    const outcome = await Result.tryPromise(
+      async () =>
+        await withAggregateTransaction(db, async (tx) => {
+          const claimed = await swapAnalysisRow(tx, {
+            decisionId,
+            observed,
+            sentinel,
+          });
           if (claimed === null) {
             return null;
           }
@@ -281,15 +323,15 @@ export const createDbAnalysisStore = (
           }
           return claimed;
         }),
-      catch: (error: unknown) => error,
-    });
-    if (Result.isOk(outcome)) {
-      return outcome.value;
+    );
+    // The refusal's rollback is an answer, not a failure.
+    if (
+      Result.isError(outcome) &&
+      outcome.error.cause instanceof TransactionRollbackError
+    ) {
+      return Result.ok(null);
     }
-    if (outcome.error instanceof TransactionRollbackError) {
-      return null;
-    }
-    throw outcome.error;
+    return outcome;
   },
   save: async ({ analysis, contentHash, decisionId, expected }) => {
     // audit: skip — the caller audits the analysis it saves

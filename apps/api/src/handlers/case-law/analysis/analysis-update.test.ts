@@ -6,6 +6,7 @@
  * decide both, for the in-app run and for the operator script alike.
  */
 
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type {
@@ -119,6 +120,8 @@ const createStore = ({
         claimWins ? analysisSentinel(fingerprint, NOW) : null,
       );
     },
+    claimUnlessFailed: () =>
+      panic("A writer that submits an analysis never guards its claim"),
     save: async ({ analysis, contentHash }) => {
       calls.saves.push({ analysis, contentHash });
       return await Promise.resolve(saveWrites);

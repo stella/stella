@@ -207,7 +207,7 @@ if (!databaseUrl || !runPostgresTests) {
 
         // Connection two: a plain read that observed the run's marker as it
         // stood claims over it, and waits on the row lock the write holds.
-        claim = createDbAnalysisStore(second.db).claim({
+        claim = createDbAnalysisStore(second.db).claimUnlessFailed({
           decisionId,
           fingerprint: FINGERPRINT,
           observed: sentinel,
@@ -230,7 +230,7 @@ if (!databaseUrl || !runPostgresTests) {
         }
       });
 
-      expect(await claim).toBeNull();
+      expect(await claim).toMatchObject({ status: "ok", value: null });
       const [row] = await db
         .select({ analysis: caseLawDecisions.analysis })
         .from(caseLawDecisions)

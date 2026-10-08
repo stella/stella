@@ -531,29 +531,35 @@ export const generateAnalysis = async ({
   const started = await startModelAction({
     label: "analysis-generate.run-generation",
     // Another request won the race when the claim returns null. A plain
-    // read's claim also refuses, in the same statement, while this reader's
+    // read's claim also refuses, in its own transaction, while this reader's
     // key has an applicable failure: one filed after the read above, by a
-    // run that started and failed meanwhile, still stops it.
-    start: async () =>
-      await store.claim({
-        decisionId,
-        fingerprint: input.fingerprint,
-        observed,
-        ...(retry
-          ? {}
-          : {
-              unlessFailed: failureClaimGuard({
-                decisionId,
-                now: new Date(),
-                reader,
-              }),
+    // run that started and failed meanwhile, still stops it. An explicit
+    // retry claims over that failure.
+    start: async (): ReturnType<AnalysisStore["claimUnlessFailed"]> =>
+      retry
+        ? Result.ok(
+            await store.claim({
+              decisionId,
+              fingerprint: input.fingerprint,
+              observed,
             }),
-      }),
+          )
+        : await store.claimUnlessFailed({
+            decisionId,
+            fingerprint: input.fingerprint,
+            observed,
+            unlessFailed: failureClaimGuard({
+              decisionId,
+              now: new Date(),
+              reader,
+            }),
+          }),
     // The proof aborts the generation's model call if the lease is lost.
-    background: async ({ admission }, sentinel) => {
-      if (sentinel === null) {
+    background: async ({ admission }, claimed) => {
+      if (claimed.isErr() || claimed.value === null) {
         return;
       }
+      const sentinel = claimed.value;
       await runGeneration({
         admission,
         anchorIds,
@@ -572,21 +578,27 @@ export const generateAnalysis = async ({
       });
     },
   });
+  const cannotStart = (cause: unknown) =>
+    new HandlerError({
+      status: 503,
+      message: "Analysis generation could not start",
+      cause,
+    });
   if (Result.isError(started)) {
     return Result.err(
       ActionAdmissionError.is(started.error)
         ? started.error
-        : new HandlerError({
-            status: 503,
-            message: "Analysis generation could not start",
-            cause: started.error,
-          }),
+        : cannotStart(started.error),
     );
+  }
+  const claimed = started.value;
+  if (claimed.isErr()) {
+    return Result.err(cannotStart(claimed.error));
   }
 
   // A claim lost to a failure filed since the read answers that failure;
   // one lost to another run answers that run in flight.
-  if (started.value === null && !retry) {
+  if (claimed.value === null && !retry) {
     const failure = await applicableFailure();
     if (failure !== null) {
       return Result.ok(failureResponse(failure));

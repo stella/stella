@@ -103,7 +103,7 @@ export const useDecisionAnalysis = ({
     mutationFn: async () =>
       // `staleTime: 0`: a cached failure, however fresh, never answers the
       // reader's explicit request to run again.
-      await queryClient.fetchQuery({
+      await queryClient.query({
         ...decisionAnalysisOptions({ ...key, retry: true }),
         staleTime: 0,
       }),
