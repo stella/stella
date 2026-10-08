@@ -2,7 +2,12 @@ import { TaggedError } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { lexShell, programWords } from "./install-free-ci";
+import {
+  SOURCE_FILE,
+  lexShell,
+  parseBunFlags,
+  programWords,
+} from "./install-free-ci";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 class OfflineCheckPolicyError extends TaggedError("OfflineCheckPolicyError")<{
@@ -16,21 +21,47 @@ const preload = path.join(root, "scripts/offline-network-preload.ts");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const usesPreload = (words: readonly string[], cwd: string) => {
-  const index = words.indexOf("--preload");
-  const target = words.at(index + 1);
+export const usesOfflineCheckPreload = (
+  words: readonly string[],
+  cwd: string,
+) => {
+  if (words.at(0) !== "bun") {
+    return false;
+  }
+  const relativeCwd = path.relative(root, cwd);
+  const invocation = parseBunFlags({
+    args: words.slice(1),
+    context: { root, expanding: new Set() },
+    cwd: relativeCwd,
+    stdin: undefined,
+  });
+  if (invocation.type !== "parsed") {
+    return false;
+  }
+  const entry = invocation.positional.at(0);
+  // Package scripts launch their own process; verify its command separately.
   return (
-    index !== -1 &&
-    target !== undefined &&
-    path.resolve(cwd, target) === preload
+    invocation.filter === undefined &&
+    invocation.dir === relativeCwd &&
+    entry !== undefined &&
+    SOURCE_FILE.test(entry) &&
+    invocation.preloads.some((target) => path.resolve(root, target) === preload)
   );
 };
 
 const protectsPackageCommand = (words: readonly string[]) => {
-  const index = words.indexOf("--filter");
-  const name = words.at(index + 1);
-  const script = words.at(index + 2);
-  if (index === -1 || name === undefined || script === undefined) {
+  const invocation = parseBunFlags({
+    args: words.slice(1),
+    context: { root, expanding: new Set() },
+    cwd: "",
+    stdin: undefined,
+  });
+  if (invocation.type !== "parsed") {
+    return false;
+  }
+  const name = invocation.filter;
+  const script = invocation.positional.at(0);
+  if (name === undefined || script === undefined || invocation.dir !== "") {
     return false;
   }
   for (const file of new Bun.Glob("{apps,packages}/*/package.json").scanSync({
@@ -56,7 +87,7 @@ const protectsPackageCommand = (words: readonly string[]) => {
     return (
       commands.length === 1 &&
       commands.every(({ words: packageWords }) =>
-        usesPreload(
+        usesOfflineCheckPreload(
           programWords(packageWords),
           path.dirname(path.join(root, file)),
         ),
@@ -91,7 +122,8 @@ export const enumerateOfflineChecks = (
           command: JSON.stringify(words),
           protected:
             words.at(0) === "bun" &&
-            (usesPreload(words, root) || protectsPackageCommand(words)),
+            (usesOfflineCheckPreload(words, root) ||
+              protectsPackageCommand(words)),
         });
       }
     }

@@ -9,6 +9,7 @@ import {
   offlineCheckExceptionGrowth,
   offlineCheckViolations,
   parseOfflineCheckExceptions,
+  usesOfflineCheckPreload,
 } from "./offline-check-policy";
 
 const root = path.resolve(import.meta.dir, "..");
@@ -44,6 +45,67 @@ test("new check invocations cannot bypass the offline preload in nested shell or
   );
   expect(protectedChecks).toHaveLength(1);
   expect(offlineCheckViolations(protectedChecks, [])).toEqual([]);
+});
+
+test("the preload must precede the Bun entry and package-script arguments", () => {
+  for (const run of [
+    "bun scripts/planted-check.ts --check --preload ./scripts/offline-network-preload.ts",
+    "bun run scripts/planted-check.ts --check --preload ./scripts/offline-network-preload.ts",
+    "bun scripts/planted-check.ts --check --filter @stll/ai-catalog gen:rates",
+  ]) {
+    const checks = enumerateOfflineChecks(workflow(run));
+    expect(checks).toHaveLength(1);
+    expect(checks.at(0)?.protected).toBe(false);
+    expect(offlineCheckViolations(checks, [])).toHaveLength(1);
+  }
+  for (const run of [
+    "bun --preload ./scripts/offline-network-preload.ts scripts/planted-check.ts --check",
+    "bun run --preload ./scripts/offline-network-preload.ts scripts/planted-check.ts --check",
+    "bun --preload=./scripts/offline-network-preload.ts run scripts/planted-check.ts --check",
+    "bun --filter @stll/ai-catalog gen:rates --check",
+    "bun run --filter @stll/ai-catalog gen:capabilities --check",
+  ]) {
+    const checks = enumerateOfflineChecks(workflow(run));
+    expect(checks).toHaveLength(1);
+    expect(checks.at(0)?.protected).toBe(true);
+    expect(offlineCheckViolations(checks, [])).toEqual([]);
+  }
+});
+
+test("expanded package commands obey the same runtime-option boundary", () => {
+  const cwd = path.join(root, "packages/ai-catalog");
+  const script = "../scripts/src/model-catalog-rates-gen.ts";
+  const loader = "../../scripts/offline-network-preload.ts";
+  expect(
+    usesOfflineCheckPreload(
+      ["bun", script, "--check", "--preload", loader],
+      cwd,
+    ),
+  ).toBe(false);
+  expect(
+    usesOfflineCheckPreload(
+      ["bun", "run", script, "--check", "--preload", loader],
+      cwd,
+    ),
+  ).toBe(false);
+  expect(
+    usesOfflineCheckPreload(
+      ["bun", "--preload", loader, script, "--check"],
+      cwd,
+    ),
+  ).toBe(true);
+  expect(
+    usesOfflineCheckPreload(
+      ["bun", "run", "--preload", loader, script, "--check"],
+      cwd,
+    ),
+  ).toBe(true);
+  expect(
+    usesOfflineCheckPreload(
+      ["node", "--preload", loader, script, "--check"],
+      cwd,
+    ),
+  ).toBe(false);
 });
 
 test("check exceptions are reasoned, shrink only, and cannot outlive the raw invocation", () => {
