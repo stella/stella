@@ -89,8 +89,11 @@ const requestPresentationTool = async ({
   const called = await Result.tryPromise(async () =>
     app.callServerTool(request),
   );
-  if (Result.isError(called) || called.value.isError === true) {
-    return undefined;
+  if (Result.isError(called)) {
+    return {
+      isError: true,
+      content: [{ type: "text" as const, text: called.error.message }],
+    };
   }
   return called.value;
 };
@@ -197,7 +200,7 @@ export const createPresentationBridge = <View>({
   Reflect.set(app, "onerror", reportAppError);
 
   // Paged reads and previews own their request state; a late failure must not replace a newer opening.
-  const requestTool = (request: ReadCall) =>
+  const requestTool = async (request: ReadCall) =>
     requestPresentationTool({ app, manifest, request });
   const requestDisplayMode = async (
     mode: "fullscreen" | "inline",

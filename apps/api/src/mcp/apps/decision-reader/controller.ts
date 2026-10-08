@@ -5,6 +5,7 @@ import { createPresentationBridge } from "../shared/bridge";
 import {
   appendReaderPage,
   createReaderPager,
+  isReaderCursorConflict,
   parseOpenDecision,
   parseProvisionPreview,
   parseReaderPage,
@@ -14,13 +15,15 @@ import type { OpenDecision, ProvisionPreview, ReaderPager } from "./model";
 
 type ReaderControllerSnapshot = {
   document: ReaderPager | null;
-  requestStatus: "idle" | "loading" | "error";
+  requestStatus: "idle" | "loading" | "error" | "conflict";
+  documentRevision: number;
   previewStatus: "idle" | "loading" | "error";
   preview: ProvisionPreview | null;
 };
 const createReaderSnapshot = (): ReaderControllerSnapshot => ({
   document: null,
   requestStatus: "idle",
+  documentRevision: 0,
   previewStatus: "idle",
   preview: null,
 });
@@ -55,7 +58,8 @@ export const createReaderController = (
     if (
       document === null ||
       document.complete ||
-      snapshot.requestStatus === "loading"
+      snapshot.requestStatus === "loading" ||
+      snapshot.requestStatus === "conflict"
     ) {
       return;
     }
@@ -73,8 +77,21 @@ export const createReaderController = (
     if (current !== generation) {
       return;
     }
+    if (isReaderCursorConflict(result)) {
+      generation += 1;
+      previewGeneration += 1;
+      lastProvision = undefined;
+      snapshot = {
+        ...createReaderSnapshot(),
+        document: createReaderPager(document.metadata),
+        requestStatus: "conflict",
+        documentRevision: snapshot.documentRevision + 1,
+      };
+      publish();
+      return;
+    }
     const page =
-      result === undefined
+      result === undefined || result.isError === true
         ? undefined
         : parseReaderPage(result.structuredContent);
     const appended =
@@ -117,7 +134,7 @@ export const createReaderController = (
       return;
     }
     const preview =
-      result === undefined
+      result === undefined || result.isError === true
         ? undefined
         : parseProvisionPreview(result.structuredContent);
     snapshot = {
@@ -128,6 +145,12 @@ export const createReaderController = (
     publish();
   };
   const retry = async () => {
+    if (snapshot.requestStatus === "conflict") {
+      snapshot = { ...snapshot, requestStatus: "idle" };
+      publish();
+      await loadNext();
+      return;
+    }
     if (snapshot.requestStatus === "error") {
       await loadNext();
       return;

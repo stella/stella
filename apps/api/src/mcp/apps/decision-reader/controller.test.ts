@@ -239,6 +239,148 @@ describe("MCP decision reader controller", () => {
       paragraph(49),
     ]);
   });
+  test("a conflicted continuation restarts revised pages and preserves the paragraph range", async () => {
+    const host = fixture();
+    host.emit({
+      status: "ready",
+      view: open({ ...metadata, appUrl: `${metadata.appUrl}#par=48-49` }),
+    });
+    host.nextCall().resolve(response(page(48, "old-page-2")));
+    await settle();
+    const continuation = host.nextCall();
+    expect(continuation.request.arguments["cursor"]).toBe("old-page-2");
+    const pendingPreview = host.controller.loadPreview({
+      document_id: metadata.decisionId,
+      anchor: "par-1",
+    });
+    const previewCall = host.nextCall();
+    continuation.resolve({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: {
+              code: "conflict",
+              message: "Decision text changed between pages.",
+              hint: "Restart the decision read without a cursor.",
+              retryable: true,
+            },
+          }),
+        },
+      ],
+    } satisfies NonNullable<ToolResponse>);
+    await settle();
+    expect(host.controller.getSnapshot().requestStatus).toBe("conflict");
+    expect(host.controller.getSnapshot().document?.blocks).toEqual([]);
+    expect(host.controller.getSnapshot().document?.nextCursor).toBeNull();
+    expect(host.controller.getSnapshot().preview).toBeNull();
+    await host.controller.loadNext();
+    expect(host.calls).toHaveLength(0);
+    const retry = host.controller.retry();
+    const restarted = host.nextCall();
+    expect(restarted.request.arguments).toEqual({
+      decision_id: metadata.decisionId,
+    });
+    expect(host.controller.getSnapshot().document?.blocks).toEqual([]);
+    expect(host.controller.getSnapshot().document?.seenCursors).toEqual([]);
+    expect(host.controller.getSnapshot().document?.citationAnchors).toEqual([]);
+    expect(host.controller.getSnapshot().document?.provisionAnchors).toEqual(
+      [],
+    );
+    expect(host.controller.getSnapshot().document?.pendingFragment).toBeNull();
+    expect(host.controller.range()).toEqual({ from: 48, to: 49 });
+    previewCall.resolve(
+      response({
+        appUrl: null,
+        documentId: metadata.decisionId,
+        language: "cs",
+        anchorId: "par-1",
+        citedAnchorId: null,
+        headings: [],
+        heading: null,
+        blocks: [],
+      }),
+    );
+    await pendingPreview;
+    expect(host.controller.getSnapshot().preview).toBeNull();
+    const revised = page(48, "revised-page-2");
+    if (revised.content.status !== "available") {
+      throw new TypeError("Expected an available revised page");
+    }
+    revised.content.items = [
+      {
+        ...paragraph(48),
+        plainText: "Revised paragraph 48",
+        inlines: [{ type: "text", text: "Revised paragraph 48" }],
+      },
+    ];
+    restarted.resolve(response(revised));
+    await settle();
+    const revisedContinuation = host.nextCall();
+    expect(revisedContinuation.request.arguments["cursor"]).toBe(
+      "revised-page-2",
+    );
+    revisedContinuation.resolve(response(page(49)));
+    await retry;
+    expect(host.controller.getSnapshot().requestStatus).toBe("idle");
+    expect(host.controller.getSnapshot().document?.complete).toBe(true);
+    expect(
+      host.controller.getSnapshot().document?.blocks.map((block) => block.id),
+    ).toEqual(["block-48", "block-49"]);
+    expect(
+      host.controller.getSnapshot().document?.blocks.at(0)?.plainText,
+    ).toBe("Revised paragraph 48");
+    expect(host.controller.getSnapshot().documentRevision).toBe(1);
+    expect(host.controller.range()).toEqual({ from: 48, to: 49 });
+    expect(host.failures).toEqual([]);
+  });
+
+  test.each([
+    {
+      isError: false,
+      content: [
+        { type: "text", text: JSON.stringify({ error: { code: "conflict" } }) },
+      ],
+    },
+    {
+      isError: true,
+      content: [{ type: "text", text: "There was a conflict." }],
+    },
+    {
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: { code: "upstream_unavailable", message: "Retry later." },
+          }),
+        },
+      ],
+    },
+  ] satisfies NonNullable<ToolResponse>[])(
+    "other failed continuations retain their loaded pages and retry cursor (%#)",
+    async (failure) => {
+      const host = fixture();
+      host.emit({ status: "ready", view: open() });
+      host.nextCall().resolve(response(page(48, "page-2")));
+      await settle();
+      const continuation = host.controller.loadNext();
+      host.nextCall().resolve(failure);
+      await continuation;
+      expect(host.controller.getSnapshot().requestStatus).toBe("error");
+      const retry = host.controller.retry();
+      const retried = host.nextCall();
+      expect(retried.request.arguments["cursor"]).toBe("page-2");
+      retried.resolve(response(page(49)));
+      await retry;
+      expect(host.controller.getSnapshot().document?.blocks).toEqual([
+        paragraph(48),
+        paragraph(49),
+      ]);
+      expect(host.controller.getSnapshot().documentRevision).toBe(0);
+    },
+  );
   test("concurrent page requests coalesce within one reader", async () => {
     const host = fixture();
     host.emit({ status: "ready", view: open() });

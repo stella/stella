@@ -270,6 +270,7 @@ export const ReaderView = ({
   const preview = state.preview;
   const error =
     state.requestStatus === "error" ||
+    state.requestStatus === "conflict" ||
     state.previewStatus === "error" ||
     bridgeState.result.status === "error";
   return (
@@ -315,9 +316,17 @@ export const ReaderView = ({
               formattingLocale={formattingLocale}
               openInStella={messages.openInStella}
             />
+            {(state.requestStatus === "conflict" ||
+              state.documentRevision > 0) && (
+              <p role="status" className="text-muted-foreground text-sm">
+                {presentation["caseLaw.reader.documentUpdated"]}
+              </p>
+            )}
             {error && (
-              <div role="alert">
-                <p>{messages.error}</p>
+              <div
+                role={state.requestStatus === "conflict" ? undefined : "alert"}
+              >
+                {state.requestStatus !== "conflict" && <p>{messages.error}</p>}
                 <Button
                   variant="outline"
                   onClick={() =>
@@ -342,7 +351,7 @@ export const ReaderView = ({
                   ) {
                     return;
                   }
-                  const key = `${state.document.metadata.decisionId}:${resolution.firstAnchorId}`;
+                  const key = `${state.documentRevision}:${state.document.metadata.decisionId}:${resolution.firstAnchorId}`;
                   if (
                     landing.current.key === key &&
                     landing.current.opening === bridgeState.result
@@ -380,7 +389,8 @@ export const ReaderView = ({
             />
             {state.document?.status === "available" &&
               !state.document.complete &&
-              state.requestStatus !== "error" && (
+              state.requestStatus !== "error" &&
+              state.requestStatus !== "conflict" && (
                 <Button
                   variant="outline"
                   disabled={state.requestStatus === "loading"}

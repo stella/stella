@@ -15,6 +15,7 @@
     "statutes.wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح",
     "statutes.openProvision": "فتح الحكم",
     "caseLaw.viewer.textUnavailable": "لا يتوفر نص لهذا الحكم",
+    "caseLaw.reader.documentUpdated": "تم تحديث المستند.",
     "caseLaw.reader.sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "الصياغة النافذة منذ {date}"
@@ -35,6 +36,7 @@
     "statutes.wordingVersionUnknown": "Datum verze znění není k dispozici",
     "statutes.openProvision": "Otevřít ustanovení",
     "caseLaw.viewer.textUnavailable": "K tomuto rozhodnutí není k dispozici text",
+    "caseLaw.reader.documentUpdated": "Dokument byl aktualizován.",
     "caseLaw.reader.sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Znění účinné od {date}"
@@ -55,6 +57,7 @@
     "statutes.wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar",
     "statutes.openProvision": "Vorschrift öffnen",
     "caseLaw.viewer.textUnavailable": "Für diese Entscheidung liegt kein Text vor",
+    "caseLaw.reader.documentUpdated": "Das Dokument wurde aktualisiert.",
     "caseLaw.reader.sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Sondervotum: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Wortlaut in Kraft seit {date}"
@@ -75,6 +78,7 @@
     "statutes.wordingVersionUnknown": "Wording version date unavailable",
     "statutes.openProvision": "Open provision",
     "caseLaw.viewer.textUnavailable": "No text is available for this decision",
+    "caseLaw.reader.documentUpdated": "The document was updated.",
     "caseLaw.reader.sourceAttribution": "The source data is freely available at <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Dissenting: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Wording in force since {date}"
@@ -95,6 +99,7 @@
     "statutes.wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción",
     "statutes.openProvision": "Abrir la disposición",
     "caseLaw.viewer.textUnavailable": "No hay texto disponible para esta resolución",
+    "caseLaw.reader.documentUpdated": "El documento se ha actualizado.",
     "caseLaw.reader.sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Voto particular: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Redacción vigente desde {date}"
@@ -115,6 +120,7 @@
     "statutes.wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada",
     "statutes.openProvision": "Ava säte",
     "caseLaw.viewer.textUnavailable": "Selle lahendi teksti ei ole saadaval",
+    "caseLaw.reader.documentUpdated": "Dokumenti on uuendatud.",
     "caseLaw.reader.sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Sõnastus kehtib alates {date}"
@@ -135,6 +141,7 @@
     "statutes.wordingVersionUnknown": "Date de la version de la rédaction indisponible",
     "statutes.openProvision": "Ouvrir la disposition",
     "caseLaw.viewer.textUnavailable": "Aucun texte n'est disponible pour cette décision",
+    "caseLaw.reader.documentUpdated": "Le document a été mis à jour.",
     "caseLaw.reader.sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Rédaction en vigueur depuis le {date}"
@@ -155,6 +162,7 @@
     "statutes.wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el",
     "statutes.openProvision": "Rendelkezés megnyitása",
     "caseLaw.viewer.textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
+    "caseLaw.reader.documentUpdated": "A dokumentum frissült.",
     "caseLaw.reader.sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Különvélemény: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "A szöveg {date} óta hatályos"
@@ -175,6 +183,7 @@
     "statutes.wordingVersionUnknown": "Redakcijos versijos data nežinoma",
     "statutes.openProvision": "Atverti nuostatą",
     "caseLaw.viewer.textUnavailable": "Šiam sprendimui teksto nėra",
+    "caseLaw.reader.documentUpdated": "Dokumentas atnaujintas.",
     "caseLaw.reader.sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Redakcija galioja nuo {date}"
@@ -195,6 +204,7 @@
     "statutes.wordingVersionUnknown": "Redakcijas versijas datums nav pieejams",
     "statutes.openProvision": "Atvērt normu",
     "caseLaw.viewer.textUnavailable": "Šim nolēmumam teksts nav pieejams",
+    "caseLaw.reader.documentUpdated": "Dokuments ir atjaunināts.",
     "caseLaw.reader.sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Redakcija ir spēkā kopš {date}"
@@ -215,6 +225,7 @@
     "statutes.wordingVersionUnknown": "Data wersji brzmienia jest niedostępna",
     "statutes.openProvision": "Otwórz przepis",
     "caseLaw.viewer.textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
+    "caseLaw.reader.documentUpdated": "Dokument został zaktualizowany.",
     "caseLaw.reader.sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Brzmienie obowiązuje od {date}"
@@ -235,6 +246,7 @@
     "statutes.wordingVersionUnknown": "Data da versão da redação indisponível",
     "statutes.openProvision": "Abrir o dispositivo",
     "caseLaw.viewer.textUnavailable": "Não há texto disponível para esta decisão",
+    "caseLaw.reader.documentUpdated": "O documento foi atualizado.",
     "caseLaw.reader.sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Voto divergente: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Redação em vigor desde {date}"
@@ -255,6 +267,7 @@
     "statutes.wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii",
     "statutes.openProvision": "Otvoriť ustanovenie",
     "caseLaw.viewer.textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+    "caseLaw.reader.documentUpdated": "Dokument bol aktualizovaný.",
     "caseLaw.reader.sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>.",
     "caseLaw.viewer.dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
     "statutes.wordingValidFrom": "Znenie účinné od {date}"

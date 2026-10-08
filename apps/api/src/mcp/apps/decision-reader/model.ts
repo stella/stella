@@ -1,3 +1,4 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { Result } from "better-result";
 import * as v from "valibot";
 
@@ -30,6 +31,29 @@ export const parseReaderPage = (payload: unknown) => {
 export const parseProvisionPreview = (payload: unknown) => {
   const parsed = v.safeParse(APP_PROVISION_PREVIEW_SCHEMA, payload);
   return parsed.success ? parsed.output : undefined;
+};
+
+const READER_CURSOR_CONFLICT_CODE = "conflict";
+const cursorConflictSchema = v.object({
+  error: v.object({ code: v.literal(READER_CURSOR_CONFLICT_CODE) }),
+});
+
+export const isReaderCursorConflict = (
+  result: Pick<CallToolResult, "isError" | "content"> | undefined,
+) => {
+  if (result?.isError !== true) {
+    return false;
+  }
+  return result.content.some((content) => {
+    if (content.type !== "text") {
+      return false;
+    }
+    const parsed = Result.try((): unknown => JSON.parse(content.text));
+    return (
+      Result.isOk(parsed) &&
+      v.safeParse(cursorConflictSchema, parsed.value).success
+    );
+  });
 };
 
 type PendingFragment = { blockId: string; totalChars: number; json: string };

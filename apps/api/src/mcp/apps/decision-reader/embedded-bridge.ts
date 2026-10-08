@@ -65,7 +65,7 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
       return;
     }
     const view =
-      result === undefined
+      result === undefined || result.isError === true
         ? undefined
         : parseOpenDecision(result.structuredContent);
     publish(

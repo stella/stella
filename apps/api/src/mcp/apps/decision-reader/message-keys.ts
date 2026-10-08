@@ -19,6 +19,7 @@ export const READER_MESSAGE_KEYS = {
 
 export const READER_TEMPLATE_KEYS = [
   "caseLaw.viewer.textUnavailable",
+  "caseLaw.reader.documentUpdated",
   "caseLaw.reader.sourceAttribution",
   "caseLaw.viewer.dissentByline",
   "statutes.wordingValidFrom",

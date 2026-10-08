@@ -62,19 +62,20 @@ const WITHHELD_PAGE = {
   metadata,
   content: { status: "withheld", withheldReason: WITHHELD.withheldReason },
 } satisfies ReaderPage;
-const paragraph = (number: number): Block => ({
-  type: "paragraph",
-  id: `block${number}`,
-  anchorId: `para${number}`,
-  number,
-  plainText: `Reader-only paragraph ${number}. ${"Legal reasoning. ".repeat(20)}`,
-  inlines: [
-    {
-      type: "text",
-      text: `Reader-only paragraph ${number}. ${"Legal reasoning. ".repeat(20)}`,
-    },
-  ],
-});
+const paragraph = (number: number) =>
+  ({
+    type: "paragraph",
+    id: `block${number}`,
+    anchorId: `para${number}`,
+    number,
+    plainText: `Reader-only paragraph ${number}. ${"Legal reasoning. ".repeat(20)}`,
+    inlines: [
+      {
+        type: "text",
+        text: `Reader-only paragraph ${number}. ${"Legal reasoning. ".repeat(20)}`,
+      },
+    ],
+  }) satisfies Block;
 const FIRST = {
   metadata,
   content: {
@@ -101,6 +102,29 @@ const SECOND = {
     limit: 60_000,
   },
 } satisfies ReaderPage;
+
+const revisedParagraph = (number: number): Block => ({
+  ...paragraph(number),
+  plainText: `Updated paragraph ${number}.`,
+  inlines: [{ type: "text", text: `Updated paragraph ${number}.` }],
+});
+const REVISED_PAGES = [
+  {
+    ...FIRST,
+    content: {
+      ...FIRST.content,
+      items: [revisedParagraph(1)],
+      nextCursor: "fixture-revised-page-2",
+    },
+  },
+  {
+    ...SECOND,
+    content: {
+      ...SECOND.content,
+      items: [revisedParagraph(48), revisedParagraph(49)],
+    },
+  },
+] satisfies ReaderPage[];
 
 const citedDecisionId = "00000000-0000-4000-8000-000000000002";
 const citedDecisionUrl =
@@ -233,6 +257,7 @@ type HostOptions = {
   navigation?: "tools" | "links";
   surface?: "reader" | "results";
   sandbox?: "opaque" | "same-origin";
+  revision?: "stable" | "updated";
 };
 const mountReader = async ({
   page,
@@ -244,6 +269,7 @@ const mountReader = async ({
   navigation = "tools",
   surface = "reader",
   sandbox = "opaque",
+  revision = "stable",
 }: HostOptions) => {
   const bundle = await readFile(
     new URL(
@@ -283,6 +309,8 @@ const mountReader = async ({
       provisionPreview,
       surface: appSurface,
       searchResult,
+      revision: documentRevision,
+      revisedPages,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -293,6 +321,7 @@ const mountReader = async ({
       const failures: string[] = [];
       const messages: ReaderFixtureHost["messages"] = [];
       const toolResponses: ReaderFixtureHost["toolResponses"] = [];
+      let revisionState: "initial" | "conflict" | "revised" = "initial";
       const reply = (message: unknown) =>
         iframe.contentWindow?.postMessage(message, "*");
       const toolResult = (data: unknown) => ({
@@ -415,10 +444,45 @@ const mountReader = async ({
               });
               break;
             }
+            if (
+              documentRevision === "updated" &&
+              revisionState === "initial" &&
+              args["cursor"] !== undefined
+            ) {
+              revisionState = "conflict";
+              const output = {
+                isError: true,
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify({
+                      error: {
+                        code: "conflict",
+                        message: "The decision changed while loading.",
+                        hint: "Read the decision again without a cursor.",
+                        retryable: true,
+                      },
+                    }),
+                  },
+                ],
+              };
+              toolResponses.push(output);
+              reply({ jsonrpc: "2.0", id, result: output });
+              break;
+            }
+            if (
+              documentRevision === "updated" &&
+              revisionState === "conflict" &&
+              args["cursor"] === undefined
+            ) {
+              revisionState = "revised";
+            }
+            const activePages =
+              revisionState === "revised" ? revisedPages : results;
             const index =
               args["cursor"] === undefined
                 ? 0
-                : results.findIndex(
+                : activePages.findIndex(
                     (entry) =>
                       entry.content.status === "available" &&
                       entry.content.nextCursor === args["cursor"],
@@ -426,7 +490,7 @@ const mountReader = async ({
             const response =
               args["decision_id"] === citedOpening.metadata.decisionId
                 ? citedPage
-                : results.at(index);
+                : activePages.at(index);
             if (response === undefined) {
               failures.push("Missing reader page fixture");
               reply({
@@ -495,6 +559,8 @@ const mountReader = async ({
       provisionPreview: PREVIEW,
       surface,
       searchResult: RESULT_FIXTURE,
+      revision,
+      revisedPages: REVISED_PAGES,
     },
   );
   expect(mounted).toBe("mounted");
@@ -519,6 +585,90 @@ const expectNoCopyAction = async (app: FrameLocator) => {
 };
 
 for (const host of ["ChatGPT", "Claude"] as const) {
+  test(`${host} reader reloads revised pages after a continuation conflict`, async ({
+    page,
+  }) => {
+    const app = await mountReader({
+      page,
+      host,
+      paragraphs: "48-49",
+      open: {
+        ...OPEN,
+        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+      },
+      revision: "updated",
+    });
+    await expect(
+      app.getByRole("status").filter({ hasText: "The document was updated." }),
+    ).toBeVisible();
+    await expect(app.locator("#para1")).toHaveCount(0);
+    await expect(app.getByRole("alert")).toHaveCount(0);
+    await app.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(app.locator("#para1")).toContainText("Updated paragraph 1.");
+    await expect(app.locator("#para48[data-reader-landing]")).toContainText(
+      "Updated paragraph 48.",
+    );
+    await expect(app.locator("#para49[data-reader-landing]")).toContainText(
+      "Updated paragraph 49.",
+    );
+    await expect(
+      app.getByText("Reader-only paragraph", { exact: false }),
+    ).toHaveCount(0);
+    await expectNoCopyAction(app);
+    await expect(
+      app.getByRole("status").filter({ hasText: "The document was updated." }),
+    ).toBeVisible();
+    await expect
+      .poll(async () => (await history(page)).calls)
+      .toEqual([
+        {
+          name: "read_case_law_decision_blocks",
+          arguments: { decision_id: metadata.decisionId },
+        },
+        {
+          name: "read_case_law_decision_blocks",
+          arguments: {
+            decision_id: metadata.decisionId,
+            cursor: "fixture-page-2",
+          },
+        },
+        {
+          name: "read_case_law_decision_blocks",
+          arguments: { decision_id: metadata.decisionId },
+        },
+        {
+          name: "read_case_law_decision_blocks",
+          arguments: {
+            decision_id: metadata.decisionId,
+            cursor: "fixture-revised-page-2",
+          },
+        },
+      ]);
+    const recorded = await history(page);
+    expect(recorded.toolResponses.at(1)).toEqual({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: {
+              code: "conflict",
+              message: "The decision changed while loading.",
+              hint: "Read the decision again without a cursor.",
+              retryable: true,
+            },
+          }),
+        },
+      ],
+    });
+    expect(
+      recorded.messages.some(
+        ({ method }) =>
+          method === "ui/update-model-context" || method === "ui/message",
+      ),
+    ).toBe(false);
+  });
+
   test(`${host} reader loads app-only pages and opens the web reader through the host`, async ({
     page,
   }) => {
