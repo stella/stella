@@ -48,6 +48,8 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { useLegalDocumentChatThreads } =
   await import("@/features/chat/legal-document-chat-threads");
+const { ChatEditorProvider } =
+  await import("@/components/chat-editor-provider");
 const { LegalReaderAIChat } = await import("./legal-reader-ai-chat");
 
 const READER_CONTENT = "Reader content";
@@ -63,9 +65,10 @@ afterAll(async () => {
 });
 
 // The statute and decision readers, in the main view and in their inspector
-// views, all reach the chat through this component. The public law routes
-// mount it without the app shell's providers, so it must bring what the
-// overlay needs rather than panic in a signed-in reader's face.
+// views, all reach the chat through this component. Every route that mounts
+// it provides the chat editor, but none may be trusted to put the AI key gate
+// above it, so the overlay must bring its own rather than panic in a
+// signed-in reader's face.
 test.each([
   {
     type: "statute",
@@ -100,9 +103,11 @@ test.each([
         >
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
-                <p>{READER_CONTENT}</p>
-              </LegalReaderAIChat>
+              <ChatEditorProvider>
+                <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
+                  <p>{READER_CONTENT}</p>
+                </LegalReaderAIChat>
+              </ChatEditorProvider>
             </FormattingProvider>
           </IntlProvider>
         </AuthenticatedUserProvider>
@@ -119,6 +124,7 @@ test.each([
     );
     expect(screen.getByText(READER_CONTENT)).toBeDefined();
     expect(screen.queryByText(messages.common.somethingWentWrong)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
     queryClient.clear();
   },
   // The overlay host is a lazy chunk; its first load under a busy runner
