@@ -1131,6 +1131,80 @@ test("a request while the warmup indexes still answers within the request deadli
   }
 });
 
+test("an edition asked for during a pass's last load, or after the pass ends, loads without another request", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const evicted = new Set<SanctionsSource>();
+  const reads = new Map<SanctionsSource, number>();
+  const held = { source: null as SanctionsSource | null };
+  const reading = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      ...pool,
+      run: async (work, options) =>
+        await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              // As if a newer edition replaced the loaded one.
+              hasEdition: (source, editionId) =>
+                !evicted.has(source) && session.hasEdition(source, editionId),
+            }),
+          options,
+        ),
+    },
+    clock,
+    loadEntries: async (options) => {
+      const entries = await loadEditionEntries(options);
+      const source = entries.at(0)?.source ?? panic("Missing fixture entry");
+      reads.set(source, (reads.get(source) ?? 0) + 1);
+      if (source === held.source) {
+        reading.resolve(undefined);
+        await release.promise;
+      }
+      // Loaded again: the matcher holds it once more.
+      evicted.delete(source);
+      return entries;
+    },
+  });
+  const ask = async () =>
+    await publicScreen(publicProps("A Completely Distant Name"));
+  try {
+    await ask();
+    await publicScreen.warmupSettled();
+    // During: the pass is on its only edition when a second one is asked for.
+    held.source = "uk";
+    evicted.add("uk");
+    await ask();
+    await reading.promise;
+    evicted.add("ch");
+    await ask();
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    expect(reads.get("uk")).toBe(2);
+    expect(reads.get("ch")).toBe(2);
+    // After: the pass has ended; the next ask starts a new one by itself.
+    evicted.add("eu");
+    await ask();
+    await publicScreen.warmupSettled();
+    expect(reads.get("eu")).toBe(2);
+    expect((await ask()).unwrap().status).toBe("clear");
+    expect(
+      sanctionsSourceIds()
+        .filter((source) => !["uk", "ch", "eu"].includes(source))
+        .map((source) => reads.get(source)),
+    ).toEqual(
+      sanctionsSourceIds()
+        .filter((source) => !["uk", "ch", "eu"].includes(source))
+        .map(() => 1),
+    );
+  } finally {
+    release.resolve(undefined);
+    await pool.close();
+  }
+});
+
 test.each(["entries-read", "short-read"] as const)(
   "one list failing on %s does not block the other six and retries with backoff",
   async (fault) => {

@@ -178,9 +178,11 @@ const createEditionWarmer = ({
   const targets = new Map<SanctionsSource, WarmTarget>();
   const state: {
     db: SanctionsReadDb | null;
+    /** A pass will look at the targets again before it ends. */
+    active: boolean;
     running: Promise<void> | null;
     holdsMatcher: boolean;
-  } = { db: null, running: null, holdsMatcher: false };
+  } = { db: null, active: false, running: null, holdsMatcher: false };
   const detached = createDetached((error) => {
     reportFailure({ stage: "public-warmup", reason: "operation", error });
   });
@@ -285,6 +287,8 @@ const createEditionWarmer = ({
       const instant = now();
       const due = [...targets].find(([, target]) => target.retryAt <= instant);
       if (due === undefined || state.db === null) {
+        // In the same step as the last look: any later request starts a pass.
+        state.active = false;
         return;
       }
       const [source, target] = due;
@@ -294,15 +298,12 @@ const createEditionWarmer = ({
   };
 
   const start = () => {
+    state.active = true;
     const running = pass().finally(() => {
-      state.running = null;
-      // A request may have asked for an edition after the pass last looked.
-      const instant = now();
-      if (
-        state.db !== null &&
-        [...targets.values()].some((target) => target.retryAt <= instant)
-      ) {
-        start();
+      // A newer pass may already run; only this pass's own state is cleared.
+      if (state.running === running) {
+        state.active = false;
+        state.running = null;
       }
     });
     state.running = running;
@@ -347,7 +348,7 @@ const createEditionWarmer = ({
       if (target.retryAt > instant) {
         return "load-failed";
       }
-      if (state.running === null) {
+      if (!state.active) {
         start();
       }
       return "warming";
