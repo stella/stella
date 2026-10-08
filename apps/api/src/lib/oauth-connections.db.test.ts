@@ -13,6 +13,7 @@ import {
   oauthAccessToken,
   oauthConsent,
   oauthRefreshToken,
+  session,
 } from "@/api/db/auth-schema";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
@@ -195,8 +196,8 @@ describe("resource-bound OAuth refresh", () => {
     // The browser session is gone; the offline refresh token must outlive it,
     // so a connected app keeps working without a new sign-in.
     expect(
-      await getAuth().api.getSession({ headers: browser.headers() }),
-    ).toBeNull();
+      await testDb.$count(session, eq(session.userId, browser.userId)),
+    ).toBe(0);
     let refreshToken = granted.refreshToken;
     for (let rotation = 0; rotation < 2; rotation += 1) {
       const response = await refreshOAuthGrant({ client, refreshToken });
