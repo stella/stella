@@ -131,12 +131,21 @@ const transpilers = {
   js: new Bun.Transpiler({ loader: "jsx" }),
 };
 
+const READER_PATTERN =
+  /\b(?:readFile(?:Sync)?|readdir(?:Sync)?|Glob)\b|\bBun\s*\.\s*file\b/u;
+// Computed imports cannot appear in scanImports; directory scanners and
+// computed module loaders therefore run whenever source files change.
+const SCANNER_PATTERN =
+  /\b(?:readdir(?:Sync)?|Glob|glob)\b|import\.meta\.glob|\b(?:import|require)\s*\(\s*[^"'\s]/u;
+
 /**
- * Reads a module for the import graph: its static imports plus its code
- * without comments, so prose that mentions a glob or readdir cannot mark a
- * hub module as a scanner and widen every plan through it. The transpiler
- * rejects a leading shebang that Bun itself runs, and one unscannable module
- * widens every failure-strict plan to the full suite, so strip it first.
+ * Reads a module for the import graph: its static imports and whether its
+ * code (not its comments) reads files or scans directories, so prose that
+ * mentions a glob cannot mark a hub module as a scanner and widen every plan
+ * through it. Only sources whose raw text matches are transpiled, which keeps
+ * the graph fast. The transpiler rejects a leading shebang that Bun itself
+ * runs, and one unscannable module widens every failure-strict plan to the
+ * full suite, so strip it first.
  */
 export const analyzeModule = (file: string, source: string) => {
   let transpiler = transpilers.js;
@@ -146,9 +155,15 @@ export const analyzeModule = (file: string, source: string) => {
     transpiler = transpilers.ts;
   }
   const runnable = source.replace(/^#![^\n]*/u, "");
+  const imports = transpiler.scanImports(runnable);
+  const mentionsReads = READER_PATTERN.test(runnable);
+  const mentionsScans = SCANNER_PATTERN.test(runnable);
+  const code =
+    mentionsReads || mentionsScans ? transpiler.transformSync(runnable) : "";
   return {
-    imports: transpiler.scanImports(runnable),
-    code: transpiler.transformSync(runnable),
+    imports,
+    reads: mentionsReads && READER_PATTERN.test(code),
+    scans: mentionsScans && SCANNER_PATTERN.test(code),
   };
 };
 
@@ -206,24 +221,14 @@ const buildGraph = (root: string, starts: readonly string[]) => {
       continue;
     }
     const scanned = Result.try(() => {
-      const { imports, code } = analyzeModule(
+      const { imports, reads, scans } = analyzeModule(
         file,
         readFileSync(absolute, "utf-8"),
       );
-      if (
-        /\b(?:readFile(?:Sync)?|readdir(?:Sync)?|Glob)\b|\bBun\s*\.\s*file\b/u.test(
-          code,
-        )
-      ) {
+      if (reads) {
         readers.add(file);
       }
-      // Computed imports cannot appear in scanImports; directory scanners and
-      // computed module loaders therefore run whenever source files change.
-      if (
-        /\b(?:readdir(?:Sync)?|Glob|glob)\b|import\.meta\.glob|\b(?:import|require)\s*\(\s*[^"'\s]/u.test(
-          code,
-        )
-      ) {
+      if (scans) {
         scanners.add(file);
       }
       return imports;
