@@ -9254,5 +9254,9 @@
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
     "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
