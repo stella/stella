@@ -24,7 +24,7 @@ const organizationId = toSafeId<"organization">("checked_org");
 const userId = toSafeId<"user">("checked_user");
 
 for (const executor of ["write", "copy"] as const) {
-  test(`checked file ${executor} ignores substituted caller fields and reservation`, async () => {
+  test(`checked file ${executor} keeps the checked fields and reservation`, async () => {
     const input = {
       operation: {
         organizationId,
@@ -90,19 +90,19 @@ for (const executor of ["write", "copy"] as const) {
       expect(
         Object.isFrozen(context.proof.input.value.operation.metadata),
       ).toBe(true);
-      const substituted = {
+      const otherInput = {
         ...context,
         input: { ...context.input, value: context.scratch },
       };
       return executor === "write"
-        ? await runCheckedOrganizationFileWrite(substituted)
-        : await runCheckedOrganizationFileCopy(substituted);
+        ? await runCheckedOrganizationFileWrite(otherInput)
+        : await runCheckedOrganizationFileCopy(otherInput);
     });
     expect(result).toEqual(Result.ok(`checked ${executor}`));
   });
 }
 
-test("checked AI configuration ignores substituted actor and nested settings", async () => {
+test("checked AI configuration keeps the checked actor and nested settings", async () => {
   const authorized = await authorizeOperation({
     kind: "AIConfigurationAllowed",
     input: {
@@ -206,7 +206,7 @@ test("checked actions use checked callback, tenant and admission scope", async (
     run: async (context) => {
       context.scratch.organizationId = toSafeId<"organization">("other_org");
       context.scratch.run = async () => await Promise.resolve("other");
-      const substituted = {
+      const otherInput = {
         ...context,
         input: { ...context.input, value: context.scratch },
         admission: {
@@ -214,7 +214,7 @@ test("checked actions use checked callback, tenant and admission scope", async (
           value: { signal: AbortSignal.abort(), control },
         },
       };
-      return await runCheckedAction(substituted);
+      return await runCheckedAction(otherInput);
     },
   });
   expect(result).toBe("checked");
