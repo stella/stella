@@ -73,7 +73,7 @@ test("duration cache saves only after green main API shards", () => {
     workflowStepByName(
       workflowJobSteps(workflow, "api-test-durations"),
       "Aggregate API test durations",
-    ).run,
+    )["run"],
   );
   expect(aggregate).toContain('mkdir -p "$RUNNER_TEMP/api-test-timings"');
   expect(aggregate.indexOf("mkdir")).toBeLessThan(
@@ -82,9 +82,9 @@ test("duration cache saves only after green main API shards", () => {
   // The aggregator imports API dependencies; a clean runner must install them first.
   const steps = workflowJobSteps(workflow, "api-test-durations");
   const stepIndex = (name: string) =>
-    steps.findIndex((step) => step.name === name);
+    steps.findIndex((step) => step["name"] === name);
   const install = workflowStepByName(steps, "Install API script dependencies");
-  expect(String(install.run)).toContain("--filter @stll/api");
+  expect(String(install["run"])).toContain("--filter @stll/api");
   expect(stepIndex("Install API script dependencies")).toBeGreaterThan(
     stepIndex("Setup Bun"),
   );
@@ -110,9 +110,9 @@ test("API shards consume and verify the plan artifact before testing", () => {
   expect(
     shardSteps.some(
       (step) =>
-        step.name === "Restore planned API test durations" ||
-        (String(step.uses).startsWith("actions/cache/restore@") &&
-          String(Reflect.get(step.with ?? {}, "path")).includes(
+        step["name"] === "Restore planned API test durations" ||
+        (String(step["uses"]).startsWith("actions/cache/restore@") &&
+          String(Reflect.get(step["with"] ?? {}, "path")).includes(
             "api-test-durations",
           )),
     ),
@@ -121,14 +121,14 @@ test("API shards consume and verify the plan artifact before testing", () => {
     workflowStepByName(shardSteps, "Download planned API test durations"),
   ).toMatchObject({ with: { name: "api-test-durations-plan" } });
   const verifyIndex = shardSteps.findIndex(
-    (step) => step.name === "Verify planned API test durations",
+    (step) => step["name"] === "Verify planned API test durations",
   );
   const testIndex = shardSteps.findIndex(
-    (step) => step.name === "Test API or rest",
+    (step) => step["name"] === "Test API or rest",
   );
   expect(verifyIndex).toBeGreaterThanOrEqual(0);
   expect(verifyIndex).toBeLessThan(testIndex);
-  expect(String(shardSteps[verifyIndex]?.run)).toContain("sha256sum");
+  expect(String(shardSteps[verifyIndex]?.["run"])).toContain("sha256sum");
 });
 
 test("API shard cache identity includes and receives the duration hash", () => {
@@ -144,7 +144,7 @@ test("API shard cache identity includes and receives the duration hash", () => {
     workflowJobSteps(workflow, "ci-tests"),
     "Test API or rest",
   );
-  expect(Reflect.get(testStep.env ?? {}, "API_TEST_DURATIONS_HASH")).toBe(
+  expect(Reflect.get(testStep["env"] ?? {}, "API_TEST_DURATIONS_HASH")).toBe(
     `\${{ needs.ci-plan.outputs.api_test_durations_hash }}`,
   );
 });
