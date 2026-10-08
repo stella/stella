@@ -10,6 +10,15 @@ test("keeps actual global fetch calls network bound", async () => {
     ),
   ).toEqual([2, 3, 4, 5]);
 });
+test("keeps typed and asserted global fetch receivers network bound", async () => {
+  expect(
+    await lintSingleRule(
+      "no-network-await-in-loop",
+      "async function load() { for (const id of ids) {\nawait (globalThis as typeof globalThis).fetch(id);\nawait globalThis!.fetch(id);\nawait (window satisfies Window).fetch(id);\nawait (self).fetch(id);\n} }",
+      { sourcePath: "source.ts" },
+    ),
+  ).toEqual([2, 3, 4, 5]);
+});
 test("keeps imported aliases namespaces and fluent clients network bound", async () => {
   expect(
     await lintSingleRule(

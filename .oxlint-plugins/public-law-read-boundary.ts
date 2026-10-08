@@ -279,6 +279,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const functions = new Map<string, AstNode>();
         return {
+          // createOnce keeps this closure across files: start each file empty.
+          before() {
+            functions.clear();
+          },
           FunctionDeclaration(node) {
             if (
               isAstNode(node) &&
@@ -326,6 +330,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         let publicLawReadFunction: AstNode | null = null;
         return {
+          // createOnce keeps this closure across files: start each file empty.
+          before() {
+            publicLawReadFunction = null;
+          },
           VariableDeclarator(node) {
             const functionEntry = namedFunctionFromDeclarator(node);
             if (functionEntry?.[0] === "publicLawReadDb") {

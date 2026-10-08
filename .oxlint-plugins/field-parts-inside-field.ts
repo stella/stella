@@ -31,14 +31,16 @@
 // which composes Base UI directly, is out of scope.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree, Variable } from "@oxlint/plugins";
 
-import type { AstNode } from "./utils.ts";
+import type { AstNode, ScopeContext } from "./utils.ts";
 import {
   elementName,
   everyNode,
   getImportLocalName,
   getImportedName,
   isAstNode,
+  resolveVariable,
 } from "./utils.ts";
 
 const FIELD_MODULE = "@stll/ui/field";
@@ -75,21 +77,53 @@ const FUNCTION_TYPES = new Set([
 
 // The name a component is declared under: `function Row()` and
 // `const Row = () => …` both name `Row`, while a callback names nothing.
-const declaredComponentName = (node: AstNode): string | null => {
+const isNameNode = (
+  node: unknown,
+): node is ESTree.IdentifierReference | ESTree.JSXIdentifier =>
+  isAstNode(node) &&
+  (node.type === "Identifier" || node.type === "JSXIdentifier") &&
+  typeof node.name === "string" &&
+  Array.isArray(node.range);
+
+// The identifier a function declares itself under: its own id, or the
+// variable an arrow or function expression is assigned to.
+const declaredComponentId = (
+  node: AstNode,
+): ESTree.IdentifierReference | ESTree.JSXIdentifier | null => {
   if (node.type === "FunctionDeclaration") {
-    return isAstNode(node.id) && typeof node.id.name === "string"
-      ? node.id.name
-      : null;
+    return isNameNode(node.id) ? node.id : null;
   }
   if (!FUNCTION_TYPES.has(node.type)) {
     return null;
   }
   const parent = isAstNode(node.parent) ? node.parent : null;
-  return parent?.type === "VariableDeclarator" &&
-    isAstNode(parent.id) &&
-    parent.id.type === "Identifier" &&
-    typeof parent.id.name === "string"
-    ? parent.id.name
+  return parent?.type === "VariableDeclarator" && isNameNode(parent.id)
+    ? parent.id
+    : null;
+};
+
+const declaredComponentName = (node: AstNode): string | null =>
+  declaredComponentId(node)?.name ?? null;
+
+// The binding a component name resolves to, so two components that share a
+// name in different scopes are never confused.
+const declaredComponentBinding = (
+  context: ScopeContext,
+  node: AstNode,
+): Variable | null => {
+  const id = declaredComponentId(node);
+  return id === null ? null : resolveVariable(context, id);
+};
+
+const elementBinding = (
+  context: ScopeContext,
+  element: AstNode,
+): Variable | null => {
+  const opening = isAstNode(element.openingElement)
+    ? element.openingElement
+    : null;
+  return opening !== null && isNameNode(opening.name)
+    ? resolveVariable(context, opening.name)
     : null;
 };
 
@@ -115,13 +149,13 @@ export default eslintCompatPlugin({
         >();
         // Components declared in this file. A name missing from this set
         // belongs to another module and cannot be read from here.
-        const localComponents = new Set<string>();
+        const localComponents = new Set<Variable>();
         // Local components that render a `Field` somewhere in their body, so
         // one standing between a part and the markup may well be its root.
-        const localFieldWrappers = new Set<string>();
+        const localFieldWrappers = new Set<Variable>();
         // Where this file mounts its own components, which is where a part in
         // their markup is decided.
-        const localMountSites = new Map<string, AstNode[]>();
+        const localMountSites = new Map<Variable, AstNode[]>();
 
         const collectImports = (program: AstNode) => {
           rootLocals.clear();
@@ -166,23 +200,28 @@ export default eslintCompatPlugin({
             if (name === null || !COMPONENT_NAME.test(name)) {
               continue;
             }
-            localComponents.add(name);
+            const binding = declaredComponentBinding(context, node);
+            if (binding === null) {
+              continue;
+            }
+            localComponents.add(binding);
             const rendersField = everyNode(node).some((current) => {
               const rendered = elementName(current);
               return rendered !== null && rootLocals.has(rendered);
             });
             if (rendersField) {
-              localFieldWrappers.add(name);
+              localFieldWrappers.add(binding);
             }
           }
           for (const node of nodes) {
-            const name = elementName(node);
-            if (name === null || !localComponents.has(name)) {
+            const binding =
+              elementName(node) === null ? null : elementBinding(context, node);
+            if (binding === null || !localComponents.has(binding)) {
               continue;
             }
-            const sites = localMountSites.get(name);
+            const sites = localMountSites.get(binding);
             if (sites === undefined) {
-              localMountSites.set(name, [node]);
+              localMountSites.set(binding, [node]);
             } else {
               sites.push(node);
             }
@@ -191,13 +230,13 @@ export default eslintCompatPlugin({
 
         // The component whose markup holds this element, skipping the
         // anonymous callbacks a list or a render prop introduces.
-        const owningComponent = (node: AstNode): string | null => {
+        const owningComponent = (node: AstNode): Variable | null => {
           let current = isAstNode(node.parent) ? node.parent : null;
           while (current !== null) {
             if (FUNCTION_TYPES.has(current.type)) {
               const name = declaredComponentName(current);
               if (name !== null && COMPONENT_NAME.test(name)) {
-                return name;
+                return declaredComponentBinding(context, current);
               }
             }
             current = isAstNode(current.parent) ? current.parent : null;
@@ -216,7 +255,7 @@ export default eslintCompatPlugin({
         // rendered by another module and answers for itself.
         const isCoveredByField = (
           node: unknown,
-          visited: Set<string>,
+          visited: Set<Variable>,
         ): boolean => {
           if (!isAstNode(node)) {
             return true;
@@ -227,11 +266,13 @@ export default eslintCompatPlugin({
             const name = elementName(current);
             if (name !== null) {
               mounted = true;
+              const binding = elementBinding(context, current);
               if (
                 COMPONENT_NAME.test(name) &&
                 (rootLocals.has(name) ||
-                  !localComponents.has(name) ||
-                  localFieldWrappers.has(name))
+                  binding === null ||
+                  !localComponents.has(binding) ||
+                  localFieldWrappers.has(binding))
               ) {
                 return true;
               }

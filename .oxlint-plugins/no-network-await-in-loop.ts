@@ -233,12 +233,19 @@ export default eslintCompatPlugin({
           if (isIdentifier(callee, "fetch")) {
             return isUnboundGlobal(callee);
           }
+          if (
+            callee?.type !== "MemberExpression" ||
+            memberPropertyName(callee) !== "fetch"
+          ) {
+            return false;
+          }
+          // `(globalThis as typeof globalThis).fetch` and `globalThis!.fetch`
+          // still name the global receiver.
+          const receiver = unwrapExpression(callee.object);
           return (
-            callee?.type === "MemberExpression" &&
-            memberPropertyName(callee) === "fetch" &&
-            isIdentifier(callee.object) &&
-            GLOBAL_FETCH_OBJECTS.has(callee.object.name) &&
-            isUnboundGlobal(callee.object)
+            isIdentifier(receiver) &&
+            GLOBAL_FETCH_OBJECTS.has(receiver.name) &&
+            isUnboundGlobal(receiver)
           );
         };
 

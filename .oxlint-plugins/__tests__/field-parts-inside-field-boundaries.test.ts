@@ -107,3 +107,19 @@ test("follows local wrapper mounting paths without exempting their exported entr
     ),
   ).toEqual([]);
 });
+
+test("keeps same-named nested components in different scopes apart", async () => {
+  // A's Hint is mounted under a Field; B's unrelated Hint is not.
+  const source = [
+    "export function A() {",
+    "  const Hint = () => <section><FieldDescription>a</FieldDescription></section>;",
+    "  return <Field><Hint /></Field>;",
+    "}",
+    "export function B() {",
+    "  const Hint = () => <section><FieldDescription>b</FieldDescription></section>;",
+    "  return <main><Hint /></main>;",
+    "}",
+  ].join("\n");
+  // Line 1 is the Field import, so B's part sits on line 7.
+  expect(await lint(source)).toEqual([7]);
+});
