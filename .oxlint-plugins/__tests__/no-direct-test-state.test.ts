@@ -5,7 +5,7 @@ import path from "node:path";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-direct-test-state";
-const lint = (source: string) =>
+const lint = async (source: string) =>
   lintSingleRule(RULE, source, { sourcePath: "source.test.ts" });
 
 describe(RULE, () => {

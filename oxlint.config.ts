@@ -4946,7 +4946,10 @@ const config = defineConfig({
       },
     },
     {
-      files: ["**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}", "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}"],
+      files: [
+        "**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+        "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
       },
