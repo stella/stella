@@ -16,12 +16,12 @@ const LIST_PLACEMENT_FIELDS = [
   "listDescription",
 ] as const;
 
-export const taskInputUsesLegalLists = (body: unknown): boolean =>
+const taskInputUsesLegalLists = (body: unknown): boolean =>
   isRecord(body) &&
   ((body["listItemType"] !== undefined && body["listItemType"] !== "task") ||
     LIST_PLACEMENT_FIELDS.some((field) => body[field] !== undefined));
 
-export const projectTaskListInputSchemas = (
+const projectTaskListInputSchemas = (
   schemas: AdvertisedSchemas,
 ): AdvertisedSchemas => {
   const body = schemas.body;
