@@ -213,14 +213,16 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  safeDb(async (tx) => await syncSearchActivity(workspaceId, tx))
-    .then((result) => {
-      if (result.isErr()) {
-        captureError(result.error);
-      }
-      return result;
-    })
-    .catch(captureError);
+  Result.tryPromise(
+    async () =>
+      await safeDb(async (tx) => await syncSearchActivity(workspaceId, tx)),
+  ).then((searchAttempt) => {
+    const result = searchAttempt.andThen((value) => value);
+    if (result.isErr()) {
+      captureError(result.error);
+    }
+    return result;
+  });
 
   return Result.ok({});
 };

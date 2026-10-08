@@ -997,4 +997,168 @@ if (!databaseUrl || !enabled) {
       },
     );
   });
+  describe("flow regrant timestamp admission (postgres)", () => {
+    test.each(["earlier", "later"] as const)(
+      "%s grant is ordered against the exact claim timestamp",
+      async (grantOrder) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const observer = openClient();
+          const worker = openClient();
+          const f = await flowReviewGateFixture(observer.db, {
+            intermediate: false,
+            initialRunStatus: "pending",
+          });
+          let clock = new Date("2030-01-01T12:00:00.000Z");
+          let modelCalls = 0;
+          const safeDb = f.safeDb(worker.db);
+          const scopedDb: ScopedDb = async (work) => {
+            const result = await safeDb(work);
+            if (result.isErr()) {
+              throw result.error;
+            }
+            return result.value;
+          };
+          const job = { runId: f.runId, stepIndex: 0 };
+          const grantWhere = and(
+            eq(featureEnrolments.organizationId, f.organizationId),
+            eq(featureEnrolments.userId, f.userId),
+            eq(featureEnrolments.featureId, "flows"),
+          );
+          const dependencies = {
+            database: worker.db,
+            now: () => clock,
+            admission: testModelAdmission(f.organizationId),
+            makeScopedDb: () => scopedDb,
+            makeSafeDb: () => safeDb,
+            loadAIConfig: async () => Result.ok(null),
+            enqueueStep: async () => panic("Unexpected step advancement"),
+            broadcastUpdate: () => {},
+            generateTextForRole: async () => {
+              modelCalls += 1;
+              return "Recovered output";
+            },
+          };
+          const execute = () =>
+            executeFlowStep(job, new AbortController().signal, dependencies);
+          try {
+            await prepareAiPersistenceRun(observer.db, f);
+            if (grantOrder === "earlier") {
+              await observer.db
+                .update(featureEnrolments)
+                .set({
+                  createdAt: sql`date_trunc('milliseconds', clock_timestamp()) - interval '1 millisecond' + interval '100 microseconds'`,
+                })
+                .where(grantWhere);
+              const grant =
+                (await observer.db.query.featureEnrolments.findFirst({
+                  where: {
+                    organizationId: { eq: f.organizationId },
+                    userId: { eq: f.userId },
+                    featureId: { eq: "flows" },
+                  },
+                  columns: { createdAt: true },
+                })) ?? panic("Expected initial grant");
+              clock = grant.createdAt;
+              const interrupted = await Result.tryPromise(
+                async () =>
+                  await executeFlowStep(job, new AbortController().signal, {
+                    ...dependencies,
+                    onClaim: async () => {
+                      throw new FlowStepError({
+                        message: "Worker unavailable",
+                      });
+                    },
+                  }),
+              );
+              expect(interrupted.isErr()).toBe(true);
+              const ordering = (
+                await observer.db
+                  .select({
+                    afterGrant: sql<boolean>`${flowRunSteps.startedAt} > ${featureEnrolments.createdAt}::timestamptz`,
+                  })
+                  .from(flowRunSteps)
+                  .innerJoin(
+                    featureEnrolments,
+                    eq(featureEnrolments.organizationId, f.organizationId),
+                  )
+                  .where(and(eq(flowRunSteps.runId, f.runId), grantWhere))
+                  .limit(1)
+              ).at(0);
+              expect(ordering?.afterGrant).toBe(true);
+              const claimed = await f.read();
+              expect(claimed.steps.at(0)?.status).toBe("running");
+              expect(await execute()).toEqual({ status: "paused" });
+              expect(await f.read()).toEqual(claimed);
+              expect(modelCalls).toBe(0);
+              return;
+            }
+            const originalStartedAt = "2030-01-01T12:00:00.000100Z";
+            const grantedAt = "2030-01-01T12:00:00.000900Z";
+            await observer.db
+              .update(flowRuns)
+              .set({ status: "running" })
+              .where(eq(flowRuns.id, f.runId));
+            await observer.db
+              .update(flowRunSteps)
+              .set({
+                status: "running",
+                startedAt: sql`${originalStartedAt}::text::timestamptz`,
+              })
+              .where(eq(flowRunSteps.runId, f.runId));
+            await observer.db.transaction(async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId: f.organizationId,
+                featureId: "flows",
+              });
+              await tx.delete(featureEnrolments).where(grantWhere);
+              await tx.insert(featureEnrolments).values({
+                organizationId: f.organizationId,
+                userId: f.userId,
+                featureId: "flows",
+                createdAt: sql`${grantedAt}::text::timestamptz`,
+              });
+            });
+            const before = await f.read();
+            expect(before.steps.at(0)?.startedAt).toEqual(clock);
+            const grant = await observer.db.query.featureEnrolments.findFirst({
+              where: {
+                organizationId: { eq: f.organizationId },
+                userId: { eq: f.userId },
+                featureId: { eq: "flows" },
+              },
+              columns: { createdAt: true },
+            });
+            expect(grant?.createdAt).toEqual(clock);
+            expect(await execute()).toEqual({ status: "completed" });
+            const reclaimedOrdering = (
+              await observer.db
+                .select({
+                  afterGrant: sql<boolean>`${flowRunSteps.startedAt} > ${featureEnrolments.createdAt}::timestamptz`,
+                })
+                .from(flowRunSteps)
+                .innerJoin(
+                  featureEnrolments,
+                  eq(featureEnrolments.organizationId, f.organizationId),
+                )
+                .where(and(eq(flowRunSteps.runId, f.runId), grantWhere))
+                .limit(1)
+            ).at(0);
+            expect(reclaimedOrdering?.afterGrant).toBe(true);
+            const completed = await f.read();
+            expect(completed.run).toMatchObject({ status: "completed" });
+            expect(completed.steps.at(0)).toMatchObject({
+              status: "completed",
+              output: { kind: "ai", markdown: "Recovered output" },
+            });
+            expect(await execute()).toEqual({ status: "completed" });
+            expect(await f.read()).toEqual(completed);
+            expect(modelCalls).toBe(1);
+          } finally {
+            await f.cleanup();
+          }
+        });
+      },
+    );
+  });
 }

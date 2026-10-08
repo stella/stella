@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/search/pg-fts-maintenance.ts",
+  "delta": 2,
+  "reason": "Moves the existing organization index rebuild page and per-entity projection builder from pg-fts-provider unchanged, keeping maintenance outside request-only search admission. The old reader loses the same two directives; no new round trips or broader rebuild scope are introduced."
+}

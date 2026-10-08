@@ -351,20 +351,22 @@ export const deleteEntitiesHandler = async function* ({
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   for (const entity of deletedEntities) {
-    safeDb(
-      async (tx) =>
-        await getSearchMaintenance(tx, upsertSearchDocument).removeEntity({
-          entityId: entity.id,
-          workspaceId,
-        }),
-    )
-      .then((result) => {
-        if (result.isErr()) {
-          captureError(result.error);
-        }
-        return result;
-      })
-      .catch(captureError);
+    Result.tryPromise(
+      async () =>
+        await safeDb(
+          async (tx) =>
+            await getSearchMaintenance(tx, upsertSearchDocument).removeEntity({
+              entityId: entity.id,
+              workspaceId,
+            }),
+        ),
+    ).then((searchAttempt) => {
+      const result = searchAttempt.andThen((value) => value);
+      if (result.isErr()) {
+        captureError(result.error);
+      }
+      return result;
+    });
   }
 
   return Result.ok({});

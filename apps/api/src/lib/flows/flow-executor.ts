@@ -6,6 +6,7 @@ import {
   getTableColumns,
   inArray,
   lt,
+  sql,
   TransactionRollbackError,
 } from "drizzle-orm";
 
@@ -18,6 +19,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
+  featureEnrolments,
   flowRuns,
   workspaces,
   flowRunSteps,
@@ -351,9 +353,7 @@ export const executeFlowStep = async (
     ) {
       return { type: "paused" } as const;
     }
-    const startedAt = new Date(
-      Math.max(now().getTime(), (current.step?.startedAt?.getTime() ?? 0) + 1),
-    );
+    const startedAt = sql`greatest(clock_timestamp(), ${now()}::timestamptz, ${current.step?.startedAtToken ?? null}::timestamptz + interval '1 millisecond')`;
     const claimed = await tx
       .update(flowRunSteps)
       .set({ status: "running", startedAt })
@@ -559,7 +559,7 @@ type RecoverFlowStepClaimOptions = {
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
   startedAt: Date | null;
-  token: TimestampCasToken;
+  token: TimestampCasToken | null;
   retainedClaim: TimestampCasToken | undefined;
   now: Date;
 };
@@ -573,7 +573,7 @@ const mayRecoverFlowStepClaim = async ({
   retainedClaim,
   now,
 }: RecoverFlowStepClaimOptions): Promise<boolean> => {
-  if (startedAt === null) {
+  if (startedAt === null || token === null) {
     return panic("Running flow step missing its claim timestamp");
   }
   if (
@@ -582,15 +582,19 @@ const mayRecoverFlowStepClaim = async ({
   ) {
     return true;
   }
-  const grant = await tx.query.featureEnrolments.findFirst({
-    where: {
-      organizationId: { eq: organizationId },
-      userId: { eq: actorUserId },
-      featureId: { eq: "flows" },
-    },
-    columns: { createdAt: true },
-  });
-  return grant !== undefined && grant.createdAt.getTime() > startedAt.getTime();
+  const grant = await tx
+    .select({ userId: featureEnrolments.userId })
+    .from(featureEnrolments)
+    .where(
+      and(
+        eq(featureEnrolments.organizationId, organizationId),
+        eq(featureEnrolments.userId, actorUserId),
+        eq(featureEnrolments.featureId, "flows"),
+        sql`${featureEnrolments.createdAt} > ${token}::timestamptz`,
+      ),
+    )
+    .limit(1);
+  return grant.length !== 0;
 };
 
 type LoadExecutableFlowStepOptions = {
@@ -1568,7 +1572,7 @@ type FlowFailureClaimOptions = {
     | {
         status: FlowRunStepStatus;
         startedAt: Date | null;
-        startedAtToken: TimestampCasToken;
+        startedAtToken: TimestampCasToken | null;
       }
     | undefined;
   retainedClaim: TimestampCasToken | undefined;
@@ -1584,6 +1588,12 @@ const decideFlowFailureClaim = ({
 }: FlowFailureClaimOptions) => {
   if (step === undefined) {
     return panic("Flow failure missing current step");
+  }
+  if (
+    step.status === "running" &&
+    (step.startedAt === null || step.startedAtToken === null)
+  ) {
+    return panic("Running flow step missing its claim timestamp");
   }
   const expired =
     step.status === "running" &&

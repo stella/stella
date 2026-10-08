@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -59,7 +60,12 @@ export const enrolFeatureHandler = async function* ({
       }
       const rows = await tx
         .insert(featureEnrolments)
-        .values({ userId, organizationId, featureId })
+        .values({
+          userId,
+          organizationId,
+          featureId,
+          createdAt: sql`clock_timestamp()`,
+        })
         .onConflictDoNothing()
         .returning({ featureId: featureEnrolments.featureId });
       if (rows.length === 0) {

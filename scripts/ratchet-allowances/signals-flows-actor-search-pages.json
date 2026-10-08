@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/feature-access/background.ts",
+  "delta": 1,
+  "reason": "Keyset pages search every live enrolled candidate until canonical feature policy admits one. A refused candidate must not hide later eligible members, and an unbounded member load would violate the bounded-query contract."
+}

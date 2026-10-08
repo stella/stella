@@ -674,29 +674,36 @@ const copyToWorkspaceHandler = async function* ({
   }
 
   // Sync search indexes
-  safeDb(
-    async (tx) =>
-      await dependencies.syncWorkspaceSearchActivity(targetWorkspaceId, tx),
-  )
-    .then((result) => {
+  Result.tryPromise(
+    async () =>
+      await safeDb(
+        async (tx) =>
+          await dependencies.syncWorkspaceSearchActivity(targetWorkspaceId, tx),
+      ),
+  ).then((searchAttempt) => {
+    const result = searchAttempt.andThen((value) => value);
+    if (result.isErr()) {
+      captureError(result.error);
+    }
+    return result;
+  });
+  if (deleteSource) {
+    Result.tryPromise(
+      async () =>
+        await safeDb(
+          async (tx) =>
+            await dependencies.syncWorkspaceSearchActivity(
+              sourceWorkspaceId,
+              tx,
+            ),
+        ),
+    ).then((searchAttempt) => {
+      const result = searchAttempt.andThen((value) => value);
       if (result.isErr()) {
         captureError(result.error);
       }
       return result;
-    })
-    .catch(captureError);
-  if (deleteSource) {
-    safeDb(
-      async (tx) =>
-        await dependencies.syncWorkspaceSearchActivity(sourceWorkspaceId, tx),
-    )
-      .then((result) => {
-        if (result.isErr()) {
-          captureError(result.error);
-        }
-        return result;
-      })
-      .catch(captureError);
+    });
   }
 
   // The source workspace event is emitted by the route macro. This explicit
