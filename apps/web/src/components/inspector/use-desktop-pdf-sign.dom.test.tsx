@@ -239,3 +239,46 @@ test("a failing status read ends in a visible error and frees the action", async
   expect(ui.result.current.isSigning).toBe(false);
   client.clear();
 });
+
+test("a browser cancel that loses to a desktop rejection keeps its reason", async () => {
+  const rejected = {
+    closeReason: "certificate_rejected",
+    expiresAt: "",
+    finalizedVersionNumber: null,
+    status: "cancelled",
+  } as const;
+  let settled = false;
+  const { calls, expiresAt } = stubApi({
+    readSession: () =>
+      settled
+        ? { ...rejected, expiresAt }
+        : {
+            closeReason: null,
+            expiresAt,
+            finalizedVersionNumber: null,
+            status: "open",
+          },
+    cancelSession: () => {
+      settled = true;
+      return { ...rejected, expiresAt };
+    },
+  });
+  const { client, ui } = mountSign();
+
+  let signing: Promise<void> | undefined;
+  await act(async () => {
+    signing = ui.result.current.sign({ target });
+  });
+  fireEvent.click(
+    await screen.findByRole("button", { name: en.common.cancel }),
+  );
+  await waitFor(() => expect(calls.cancel).toBe(1));
+  await act(async () => {
+    await signing;
+  });
+  expect(document.body.textContent).toContain(
+    copy.cancelledCertificateDescription,
+  );
+  expect(ui.result.current.isSigning).toBe(false);
+  client.clear();
+});

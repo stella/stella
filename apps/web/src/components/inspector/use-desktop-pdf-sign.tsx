@@ -237,8 +237,12 @@ export const useDesktopPdfSign = ({
     const browserCancel = { settled: false };
     const cancel = async () => {
       const snapshot = await cancelPdfSigningSession(session);
-      if (snapshot.status !== "cancelled") {
-        // The exchange settled first; the watcher reports how.
+      if (
+        snapshot.status !== "cancelled" ||
+        snapshot.closeReason !== "user_cancelled"
+      ) {
+        // The exchange settled first (finished, or closed by stella desktop
+        // with its own reason); the watcher reports how.
         return;
       }
       browserCancel.settled = true;
