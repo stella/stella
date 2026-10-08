@@ -308,8 +308,7 @@ pub async fn invalidate(
 }
 
 pub fn notify(app: &tauri::AppHandle) {
-  crate::feature_access::account_changed(app);
-  crate::activity::unload_account(app);
+  crate::feature_access::account_changed(app, crate::activity::unload_account);
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(error = %error, "desktop account change was not delivered");
   }

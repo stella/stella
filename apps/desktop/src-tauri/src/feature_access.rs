@@ -147,10 +147,11 @@ fn refresh_signal() -> &'static tokio::sync::Notify {
 }
 
 /// Asks the refresh loop to fetch now (after an account link or unlink).
-pub fn account_changed(app: &AppHandle) {
+pub fn account_changed(app: &AppHandle, unload: impl FnOnce(&AppHandle)) {
   if let Some(gates) = app.try_state::<FeatureGates>() {
     gates.invalidate();
   }
+  unload(app);
   refresh_signal().notify_one();
 }
 
