@@ -51,7 +51,7 @@ type OTPPanelProps = {
   surface?: "frame" | "bare";
   onUseDifferentEmail?: () => void;
   onVerified?: () => void | Promise<void>;
-  linkProvider?: SocialProvider;
+  linkProvider?: SocialProvider | undefined;
 };
 
 const OTP_LENGTH = 6;

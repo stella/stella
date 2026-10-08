@@ -120,7 +120,7 @@ const createFixture = async ({
     expect(response.status).toBe(200);
     const state = new URL(body.url).searchParams.get("state");
     expect(state).toBeString();
-    return { cookie: cookies(response), state };
+    return { cookie: cookies(response), state: state ?? "" };
   };
   const callback = async ({
     cookie,

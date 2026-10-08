@@ -137,12 +137,12 @@ test("connecting requires successful email proof followed by an explicit click",
     ).toHaveLength(1),
   );
   expect(
-    calls.find(({ path }) => path.endsWith("/link-social"))?.body.provider,
+    calls.find(({ path }) => path.endsWith("/link-social"))?.body["provider"],
   ).toBe("google");
 });
 test("reset confirmation resends the same code with consent only after Continue", async () => {
   const calls = fakeAuth((body) =>
-    body.confirmReset === true
+    body["confirmReset"] === true
       ? Response.json({ token: "session" })
       : Response.json(
           {
@@ -199,7 +199,7 @@ test("canceling reset sends no confirmed request", async () => {
   expect(
     calls.filter(({ path }) => path.endsWith("/sign-in/email-otp")),
   ).toHaveLength(1);
-  expect(calls.some(({ body }) => body.confirmReset)).toBe(false);
+  expect(calls.some(({ body }) => body["confirmReset"])).toBe(false);
 });
 test("a second factor must complete before connecting can be offered", async () => {
   const calls = fakeAuth(() => Response.json({ twoFactorRedirect: true }));
@@ -243,7 +243,7 @@ test("an invalid code never offers connecting or confirms a reset", async () => 
     expect(ui.getByRole("textbox").getAttribute("value")).toBe(""),
   );
   expect(ui.queryByRole("button", { name: "Connect Google" })).toBeNull();
-  expect(calls.some(({ body }) => body.confirmReset)).toBe(false);
+  expect(calls.some(({ body }) => body["confirmReset"])).toBe(false);
 });
 
 test("a missing method hint shows the generic email proof step", async () => {

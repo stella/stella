@@ -44,9 +44,9 @@ export const SocialRecoveryPanel = ({
   signedIn,
   hint,
 }: {
-  error?: string;
+  error?: string | undefined;
   redirectTo: string;
-  linkProvider?: SocialProvider;
+  linkProvider?: SocialProvider | undefined;
   signedIn: boolean;
   hint: { method: SocialProvider | null; provider: SocialProvider | null };
 }) => {
@@ -155,18 +155,14 @@ export const SocialRecoveryPanel = ({
     );
   }
 
-  const description = (() => {
-    if (error !== "account_not_linked") {
-      return t("auth.error.generic");
-    }
-    if (!method) {
-      return t("auth.socialLink.emailProof");
-    }
-    return t.rich("auth.socialLink.methodHint", {
-      identity: renderProvider,
-      method: socialProviderName(method),
-    });
-  })();
+  const proofDescription = method
+    ? t.rich("auth.socialLink.methodHint", {
+        identity: renderProvider,
+        method: socialProviderName(method),
+      })
+    : t("auth.socialLink.emailProof");
+  const description =
+    error === "account_not_linked" ? proofDescription : t("auth.error.generic");
 
   return (
     <Frame className="w-full max-w-sm">
