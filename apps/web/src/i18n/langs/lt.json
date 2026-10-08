@@ -870,9 +870,13 @@
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
+      "pageOfCount": "{page} psl. iš {pageCount}",
+      "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
-      "perPage": "Viename puslapyje"
+      "perPage": "Viename puslapyje",
+      "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
     },
     "provision": {
       "article": "{value} str.",

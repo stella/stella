@@ -22,11 +22,11 @@ import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-sear
 import { caseLawCountryScope } from "@/features/case-law/case-law-jurisdiction";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
-  decisionsInfiniteOptions,
+  decisionsPageOptions,
   type DecisionListFilters,
 } from "@/features/case-law/queries/decisions";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
-import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 /** What a case-law URL says about the corpus slice the reader is looking at. */
@@ -173,20 +173,20 @@ export const openDecisionMatch = async ({
     return false;
   }
 
-  const pages = await ensureRouteInfiniteQueryData(
+  const firstPage = await ensureRouteQueryData(
     queryClient,
-    decisionsInfiniteOptions(
-      createDecisionFiltersFromSearch(
+    decisionsPageOptions({
+      filters: createDecisionFiltersFromSearch(
         { ...search, q: searchTextOfDecisionQuery(intent) },
         { excerpt },
       ),
-    ),
+      page: 1,
+    }),
   );
   // Only a result set the page has seen whole can prove the match is the only
   // one: with more pages unseen, another court's decision under the same
   // docket may still be coming, so the list stays and the reader picks.
-  const firstPage = pages.pages.at(0);
-  if (firstPage === undefined || firstPage.nextCursor !== null) {
+  if (firstPage.hasMore) {
     return false;
   }
 

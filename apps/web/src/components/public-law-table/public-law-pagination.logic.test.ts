@@ -1,10 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import {
+  SEARCH_TOTAL_NOT_COUNTED,
+  SEARCH_TOTAL_TYPE,
+  type SearchTotal,
+} from "@stll/api-contract/search";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   PUBLIC_LAW_MAX_PAGE,
   PUBLIC_LAW_PAGE_SIZES,
   DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+  publicLawNumberedPagerModel,
   publicLawPageIndex,
+  type PublicLawPageItem,
+  publicLawPageWindow,
   publicLawPageNumber,
   publicLawPagesToWalk,
   publicLawPageSearchValue,
@@ -241,5 +252,234 @@ describe("a deep link on a chain the router could not walk", () => {
         walkedPageCount: FRESH_CHAIN,
       }).currentPage,
     ).not.toBe(3);
+  });
+});
+
+/** Ranges the generated pagers are drawn from: wider than any real list. */
+const LAST_PAGE_CEILING = 500;
+const DEEPEST_PAGE_CEILING = 40;
+const REQUESTED_PAGE_CEILING = 60;
+const RESULT_COUNT_CEILING = 1_000_000;
+
+/** The window drawn as the reader sees it: numbers, `…`, the current in brackets. */
+const drawWindow = (items: readonly PublicLawPageItem[], current: number) =>
+  items
+    .map((item) => {
+      if (item.type === "gap") {
+        return "…";
+      }
+      return item.page === current
+        ? `[${String(item.page)}]`
+        : String(item.page);
+    })
+    .join(" ");
+
+describe("the numbered page window", () => {
+  test("the reader's neighbours sit between the first and the last page", () => {
+    expect(
+      drawWindow(publicLawPageWindow({ currentPage: 6, lastPage: 20 }), 6),
+    ).toBe("1 … 4 5 [6] 7 8 … 20");
+    expect(
+      drawWindow(publicLawPageWindow({ currentPage: 1, lastPage: 20 }), 1),
+    ).toBe("[1] 2 3 … 20");
+    expect(
+      drawWindow(publicLawPageWindow({ currentPage: 20, lastPage: 20 }), 20),
+    ).toBe("1 … 18 19 [20]");
+    // One left-out page is drawn rather than hidden behind an ellipsis.
+    expect(
+      drawWindow(publicLawPageWindow({ currentPage: 5, lastPage: 20 }), 5),
+    ).toBe("1 2 3 4 [5] 6 7 … 20");
+    expect(
+      drawWindow(publicLawPageWindow({ currentPage: 1, lastPage: 1 }), 1),
+    ).toBe("[1]");
+  });
+
+  test("the page window keeps both ends and the reader's neighbours and hides only runs of pages", () => {
+    assertProperty(
+      "the page window keeps both ends and the reader's neighbours and hides only runs of pages",
+      fc.property(
+        fc
+          .integer({ min: 1, max: LAST_PAGE_CEILING })
+          .chain((lastPage) =>
+            fc.tuple(
+              fc.integer({ min: 1, max: lastPage }),
+              fc.constant(lastPage),
+            ),
+          ),
+        ([currentPage, lastPage]) => {
+          const items = publicLawPageWindow({ currentPage, lastPage });
+          const pages = items.flatMap((item) =>
+            item.type === "page" ? [item.page] : [],
+          );
+
+          expect(items.at(0)).toEqual({ type: "page", page: 1 });
+          expect(items.at(-1)).toEqual({ type: "page", page: lastPage });
+          expect(pages).toEqual(pages.toSorted((left, right) => left - right));
+          expect(new Set(pages).size).toBe(pages.length);
+          for (
+            let page = Math.max(1, currentPage - 2);
+            page <= Math.min(lastPage, currentPage + 2);
+            page += 1
+          ) {
+            expect(pages).toContain(page);
+          }
+          // Every page is either drawn or behind exactly one gap, and a gap
+          // always stands for two pages or more.
+          for (const [index, item] of items.entries()) {
+            const before = index === 0 ? undefined : items.at(index - 1);
+            if (before === undefined) {
+              continue;
+            }
+            if (item.type === "gap") {
+              const after = items.at(index + 1);
+              expect(before.type).toBe("page");
+              expect(after?.type).toBe("page");
+              if (before.type === "page" && after?.type === "page") {
+                expect(item.after).toBe(before.page);
+                expect(after.page - before.page).toBeGreaterThanOrEqual(3);
+              }
+            } else if (before.type === "page") {
+              expect(item.page - before.page).toBe(1);
+            }
+          }
+          expect(items.length).toBeLessThanOrEqual(9);
+        },
+      ),
+    );
+  });
+});
+
+describe("a pager over pages addressed by offset", () => {
+  const estimated = (count: number) =>
+    ({
+      type: SEARCH_TOTAL_TYPE.ESTIMATE,
+      count,
+    }) as const satisfies SearchTotal;
+
+  test("a long result set is numbered up to the deepest page and asks for a narrower search", () => {
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 10,
+      hasMore: true,
+      page: 6,
+      pageSize: 50,
+      total: estimated(116_300),
+    });
+
+    expect(model.pageCount).toEqual({
+      type: "counted",
+      precision: SEARCH_TOTAL_TYPE.ESTIMATE,
+      pages: 2326,
+    });
+    // One page between 8 and the last is drawn rather than hidden.
+    expect(drawWindow(model.items, model.currentPage)).toBe(
+      "1 … 4 5 [6] 7 8 9 10",
+    );
+    expect(model.previousPage).toBe(5);
+    expect(model.nextPage).toBe(7);
+    expect(model.beyondReach).toBe(true);
+  });
+
+  test("the deepest page offers no step further", () => {
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 10,
+      hasMore: true,
+      page: 10,
+      pageSize: 50,
+      total: estimated(116_300),
+    });
+
+    expect(model.nextPage).toBeNull();
+    expect(model.beyondReach).toBe(true);
+  });
+
+  test("a result set within reach ends at its own last page", () => {
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 10,
+      hasMore: false,
+      page: 3,
+      pageSize: 50,
+      total: { type: SEARCH_TOTAL_TYPE.EXACT, count: 120 },
+    });
+
+    expect(drawWindow(model.items, model.currentPage)).toBe("1 2 [3]");
+    expect(model.nextPage).toBeNull();
+    expect(model.beyondReach).toBe(false);
+  });
+
+  test("an estimate that falls short does not hide the page the search says follows", () => {
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 10,
+      hasMore: true,
+      page: 2,
+      pageSize: 50,
+      total: estimated(60),
+    });
+
+    expect(model.nextPage).toBe(3);
+  });
+
+  test("an uncounted result set steps either way and numbers nothing", () => {
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 10,
+      hasMore: true,
+      page: 4,
+      pageSize: 50,
+      total: SEARCH_TOTAL_NOT_COUNTED,
+    });
+
+    expect(model.items).toEqual([]);
+    expect(model.pageCount).toEqual({ type: "not_counted" });
+    expect(model.previousPage).toBe(3);
+    expect(model.nextPage).toBe(5);
+    expect(
+      publicLawNumberedPagerModel({
+        deepestPage: 10,
+        hasMore: true,
+        page: 10,
+        pageSize: 50,
+        total: SEARCH_TOTAL_NOT_COUNTED,
+      }),
+    ).toMatchObject({ nextPage: null, beyondReach: true });
+  });
+
+  test("no button leads past the deepest page", () => {
+    assertProperty(
+      "no button leads past the deepest page",
+      fc.property(
+        fc.integer({ min: 1, max: DEEPEST_PAGE_CEILING }),
+        fc.integer({ min: 1, max: REQUESTED_PAGE_CEILING }),
+        fc.constantFrom(...PUBLIC_LAW_PAGE_SIZES),
+        fc.boolean(),
+        fc.oneof(
+          fc.constant(SEARCH_TOTAL_NOT_COUNTED),
+          fc
+            .integer({ min: 0, max: RESULT_COUNT_CEILING })
+            .map((count) => ({ type: SEARCH_TOTAL_TYPE.EXACT, count })),
+          fc
+            .integer({ min: 0, max: RESULT_COUNT_CEILING })
+            .map((count) => ({ type: SEARCH_TOTAL_TYPE.ESTIMATE, count })),
+        ),
+        (deepestPage, page, pageSize, hasMore, total) => {
+          const model = publicLawNumberedPagerModel({
+            deepestPage,
+            hasMore,
+            page,
+            pageSize,
+            total,
+          });
+          const reachable = (target: number | null) =>
+            target === null || (target >= 1 && target <= deepestPage);
+
+          expect(reachable(model.currentPage)).toBe(true);
+          expect(reachable(model.previousPage)).toBe(true);
+          expect(reachable(model.nextPage)).toBe(true);
+          for (const item of model.items) {
+            if (item.type === "page") {
+              expect(reachable(item.page)).toBe(true);
+            }
+          }
+        },
+      ),
+    );
   });
 });

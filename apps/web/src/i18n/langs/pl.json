@@ -870,9 +870,13 @@
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
       "label": "Strony wyników",
+      "pageOfCount": "Strona {page} z {pageCount}",
+      "pageOfEstimatedCount": "Strona {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Strona {page} z około {pageCount}",
       "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
-      "perPage": "Na stronę"
+      "perPage": "Na stronę",
+      "refineForMore": "Zawęź wyszukiwanie, aby zobaczyć więcej wyników"
     },
     "provision": {
       "article": "art. {value}",

@@ -870,9 +870,13 @@
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
+      "pageOfCount": "Page {page} sur {pageCount}",
+      "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
-      "perPage": "Par page"
+      "perPage": "Par page",
+      "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
     },
     "provision": {
       "article": "art. {value}",

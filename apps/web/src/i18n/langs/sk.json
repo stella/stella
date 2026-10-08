@@ -870,9 +870,13 @@
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
       "label": "Stránky výsledkov",
+      "pageOfCount": "Stránka {page} z {pageCount}",
+      "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
       "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
-      "perPage": "Na stránku"
+      "perPage": "Na stránku",
+      "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"
     },
     "provision": {
       "article": "čl. {value}",

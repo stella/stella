@@ -870,9 +870,13 @@
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",
       "label": "Rezultātu lapas",
+      "pageOfCount": "{page}. lapa no {pageCount}",
+      "pageOfEstimatedCount": "{page}. lapa no ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page}. lapa no aptuveni {pageCount}",
       "pageWithEstimatedResultCount": "{page}. lapa · aptuveni {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
-      "perPage": "Vienā lapā"
+      "perPage": "Vienā lapā",
+      "refineForMore": "Precizējiet meklēšanu, lai redzētu vairāk rezultātu"
     },
     "provision": {
       "article": "{value}. pants",

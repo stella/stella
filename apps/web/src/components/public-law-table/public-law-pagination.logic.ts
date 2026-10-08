@@ -1,19 +1,26 @@
 /**
- * Explicit pages over a cursor-only search.
+ * Explicit pages over the public-law result lists, in two shapes.
  *
- * The corpus answers with a cursor, not an offset: page N is only reachable by
- * walking there, and the cursor of a page nobody has visited does not exist.
- * So the URL carries a page number and the browser keeps the chain of cursors
- * it has walked (the infinite query's own page list). A load that arrives
- * without that chain walks one to the page the URL names, up to the depth
- * limit; only where the results themselves run out first does the page fall
- * back to the deepest one the chain reached.
+ * A list answered by cursor only (statutes) is walked: page N is reachable
+ * only by walking there, and the cursor of a page nobody has visited does not
+ * exist. So the URL carries a page number and the browser keeps the chain of
+ * cursors it has walked (the infinite query's own page list). A load that
+ * arrives without that chain walks one to the page the URL names, up to the
+ * depth limit; only where the results themselves run out first does the page
+ * fall back to the deepest one the chain reached.
  *
- * All of that is arithmetic over three numbers, which is why it lives here and
- * not in the route.
+ * A list addressed by offset (case law) reaches any page up to its deepest in
+ * one request, so its pager numbers the pages from the total instead
+ * (`publicLawNumberedPagerModel`).
+ *
+ * All of that is arithmetic over a few numbers, which is why it lives here and
+ * not in the routes.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
+
+import { SEARCH_TOTAL_TYPE, type SearchTotal } from "@stll/api-contract/search";
 
 export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
 
@@ -39,12 +46,19 @@ export const publicLawPageSize = (
     ? value
     : DEFAULT_PUBLIC_LAW_PAGE_SIZE;
 
-/** The page a URL asks for; anything that is not one of ours is the first. */
-export const publicLawPageNumber = (value: number | undefined): number =>
+/**
+ * The page a URL asks for; anything that is not one of ours is the first. A
+ * list addressed by offset passes its own deepest page; the walked lists keep
+ * the walk's depth limit.
+ */
+export const publicLawPageNumber = (
+  value: number | undefined,
+  deepestPage = PUBLIC_LAW_MAX_PAGE,
+): number =>
   value !== undefined &&
   Number.isInteger(value) &&
   value >= 1 &&
-  value <= PUBLIC_LAW_MAX_PAGE
+  value <= deepestPage
     ? value
     : 1;
 
@@ -141,22 +155,168 @@ export const publicLawPagerModel = ({
   };
 };
 
+/** One slot of a numbered pager: a page, or the run of pages it leaves out. */
+export type PublicLawPageItem =
+  | { type: "page"; page: number }
+  /** Pages between `after` and the next page item, not drawn one by one. */
+  | { type: "gap"; after: number };
+
+/** Pages drawn on either side of the current one. */
+const PAGE_WINDOW_RADIUS = 2;
+
+type PublicLawPageWindowInput = {
+  currentPage: number;
+  /** The last page a button may lead to: the results' end or the depth bound. */
+  lastPage: number;
+};
+
+/**
+ * The page buttons around the reader: the first and the last page, and the
+ * pages near the current one, `1 … 4 5 [6] 7 8 … 20`. A gap stands for two
+ * pages or more: one left-out page is drawn instead, since an ellipsis is no
+ * narrower than the number it would hide.
+ */
+export const publicLawPageWindow = ({
+  currentPage,
+  lastPage,
+}: PublicLawPageWindowInput): PublicLawPageItem[] => {
+  const last = Math.max(1, lastPage);
+  const current = Math.min(Math.max(1, currentPage), last);
+  const shown = new Set([1, last]);
+  for (
+    let page = current - PAGE_WINDOW_RADIUS;
+    page <= current + PAGE_WINDOW_RADIUS;
+    page += 1
+  ) {
+    if (page >= 1 && page <= last) {
+      shown.add(page);
+    }
+  }
+
+  const items: PublicLawPageItem[] = [];
+  let previous: number | null = null;
+  for (const page of [...shown].toSorted((left, right) => left - right)) {
+    if (previous !== null && page - previous === 2) {
+      items.push({ type: "page", page: previous + 1 });
+    } else if (previous !== null && page - previous > 2) {
+      items.push({ type: "gap", after: previous });
+    }
+    items.push({ type: "page", page });
+    previous = page;
+  }
+  return items;
+};
+
+/** How many pages the results fill, as far as the search counted them. */
+export type PublicLawPageCount =
+  | {
+      type: "counted";
+      /** An estimate is drawn with `~` and read out as approximate. */
+      precision:
+        | typeof SEARCH_TOTAL_TYPE.EXACT
+        | typeof SEARCH_TOTAL_TYPE.ESTIMATE;
+      pages: number;
+    }
+  | { type: "not_counted" };
+
+export type PublicLawNumberedPagerModel = {
+  currentPage: number;
+  /** The numbered buttons; none when the results were not counted. */
+  items: PublicLawPageItem[];
+  previousPage: number | null;
+  nextPage: number | null;
+  pageCount: PublicLawPageCount;
+  /**
+   * The results run on past the deepest page a request may reach. No button
+   * leads there; the pager asks the reader to narrow the search instead.
+   */
+  beyondReach: boolean;
+};
+
+type PublicLawNumberedPagerInput = {
+  page: number;
+  pageSize: number;
+  /** The deepest page a request may address at this page size. */
+  deepestPage: number;
+  total: SearchTotal;
+  /** Whether the search reported results after the page on screen. */
+  hasMore: boolean;
+};
+
+/**
+ * What a pager over a list addressed by offset offers. Every page up to the
+ * deepest reachable one is one request away, so the pager numbers them from
+ * the total; a total that was not counted leaves it the step either way.
+ */
+export const publicLawNumberedPagerModel = ({
+  deepestPage,
+  hasMore,
+  page,
+  pageSize,
+  total,
+}: PublicLawNumberedPagerInput): PublicLawNumberedPagerModel => {
+  const currentPage = Math.min(Math.max(1, page), Math.max(1, deepestPage));
+  const previousPage = currentPage > 1 ? currentPage - 1 : null;
+
+  switch (total.type) {
+    case SEARCH_TOTAL_TYPE.EXACT:
+    case SEARCH_TOTAL_TYPE.ESTIMATE: {
+      // An estimate can fall short of where the results really end, so the
+      // page on screen saying another follows outweighs the arithmetic.
+      const pages = Math.max(
+        Math.ceil(total.count / pageSize),
+        hasMore ? currentPage + 1 : currentPage,
+      );
+      const lastPage = Math.min(pages, deepestPage);
+      return {
+        currentPage,
+        items: publicLawPageWindow({ currentPage, lastPage }),
+        previousPage,
+        nextPage: currentPage < lastPage ? currentPage + 1 : null,
+        pageCount: {
+          type: "counted",
+          precision: total.type,
+          pages,
+        },
+        beyondReach: pages > deepestPage,
+      };
+    }
+    case SEARCH_TOTAL_TYPE.NOT_COUNTED:
+      return {
+        currentPage,
+        items: [],
+        previousPage,
+        nextPage: hasMore && currentPage < deepestPage ? currentPage + 1 : null,
+        pageCount: { type: "not_counted" },
+        beyondReach: hasMore && currentPage >= deepestPage,
+      };
+    default:
+      total satisfies never;
+      return panic("Unhandled search total");
+  }
+};
+
 /**
  * Which page of the results, and how large a page is, as a route's search
  * schema reads them. Both are dropped from the URL at their default, and both
  * are read leniently: a public link may be typed or crawled, and a page number
  * nobody can reach is the first page, not an error screen.
  */
-export const publicLawPageSearchSchema = v.fallback(
-  v.optional(
-    v.pipe(
-      v.union([v.number(), v.string()]),
-      v.transform((value) => publicLawPageNumber(Number(value))),
-      v.transform((page) => publicLawPageSearchValue(page)),
+export const publicLawPageSearchSchemaUpTo = (deepestPage: number) =>
+  v.fallback(
+    v.optional(
+      v.pipe(
+        v.union([v.number(), v.string()]),
+        v.transform((value) => publicLawPageNumber(Number(value), deepestPage)),
+        v.transform((page) => publicLawPageSearchValue(page)),
+      ),
     ),
-  ),
-  undefined,
-);
+    undefined,
+  );
+
+/** The page of a list walked by cursor, up to the walk's depth limit. */
+export const publicLawPageSearchSchema =
+  publicLawPageSearchSchemaUpTo(PUBLIC_LAW_MAX_PAGE);
 
 export const publicLawPageSizeSearchSchema = v.fallback(
   v.optional(

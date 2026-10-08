@@ -870,9 +870,13 @@
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",
       "label": "Találati oldalak",
+      "pageOfCount": "{page}. oldal / {pageCount}",
+      "pageOfEstimatedCount": "{page}. oldal / ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page}. oldal a körülbelül {pageCount} oldalból",
       "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
-      "perPage": "Oldalanként"
+      "perPage": "Oldalanként",
+      "refineForMore": "Szűkítse a keresést, hogy további találatokat lásson"
     },
     "provision": {
       "article": "{value}. cikk",
