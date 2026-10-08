@@ -2401,7 +2401,7 @@ describe("third-party outbound permit", () => {
 
 describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
-    const text = "Žaloba se zamítá. Náklady řízení nese žalobce.";
+    const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
       hasDocument: true,
       documentPending: false,
@@ -2497,6 +2497,36 @@ describe("decision text in chat projection", () => {
     expect(readPathValues(result.value, "items[].decision.text")).toEqual([
       text,
     ]);
+    const queryResult = await runRegistryReadTool({
+      args: { decision_ids: [uid(54)], query: "Žaloba" },
+      context: contextFor(toolName, {}),
+      refRegistry,
+      toolName,
+    });
+    if (Result.isError(queryResult)) {
+      panic("Decision query projection failed", queryResult.error);
+    }
+    expect(
+      readPathValues(queryResult.value, "items[].decision.textSource"),
+    ).toEqual(["fulltext"]);
+    expect(
+      readPathValues(
+        queryResult.value,
+        "items[].decision.matches.paragraphs[].position",
+      ),
+    ).toEqual([1]);
+    expect(
+      readPathValues(
+        queryResult.value,
+        "items[].decision.matches.paragraphs[].label",
+      ),
+    ).toEqual(["23"]);
+    expect(
+      readPathValues(
+        queryResult.value,
+        "items[].decision.matches.paragraphs[].headingPath",
+      ),
+    ).toEqual([[]]);
     expect(recordedExceptions()).toEqual([]);
   });
 });

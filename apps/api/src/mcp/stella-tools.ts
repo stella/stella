@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
   DECISION_TEXT_FIELD_KEYS,
+  DECISION_TEXT_SOURCE,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -927,7 +928,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(LIMITS.caseLawIdentifierMaxLength),
         v.description(
-          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full.",
+          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full.",
         ),
       ),
     ),
@@ -1207,12 +1208,12 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read decisions by `decision_ids[]`, in input order. `page` N is the " +
-      "Nth window of `max_chars`; entries give page/pageCount. Pass a " +
+      "Read `decision_ids[]` in input order. `page` N is the Nth " +
+      "`max_chars` window; entries give page/pageCount. Pass a " +
       "page's textVersion back as text_version; versionChanged flags a " +
       "changed text. `full: true` (whole text, up to " +
-      `${READ_DECISION_FULL_MAX_TEXT_CHARS} chars) for reasoning or citation work; pages for skimming. ` +
-      "`query` returns matching paragraphs with neighbours. Page 1 adds " +
+      `${READ_DECISION_FULL_MAX_TEXT_CHARS} chars). ` +
+      "`query` returns matching paragraphs with neighbours, position, publisher label and verbatim headingPath. Page 1 adds " +
       "details (`url` the reader, `source_url` the publisher), metadata, " +
       "published textFields and a citation summary: citedBy count of citing " +
       "references, polarity counts, top 5 citers, what it cites (decisionId " +
@@ -2751,7 +2752,9 @@ const decisionTextPart = ({
       matches: {
         hitCount: found.hitCount,
         paragraphs: found.paragraphs.map((paragraph) => ({
-          paragraph: paragraph.paragraph,
+          position: paragraph.position,
+          label: paragraph.label,
+          headingPath: paragraph.headingPath,
           text: paragraph.text,
           ...(paragraph.hit ? { hit: true as const } : {}),
           ...deepLink(appUrl, paragraph.anchorId),
@@ -2929,8 +2932,13 @@ const decisionItemResult = ({
   const blocks = aiTextAllowed
     ? (parseUsableDocumentAst(read.documentAst)?.blocks ?? null)
     : null;
+  // The reader renders AST blocks: use that same text for passage anchors
+  // and every verbatim outline heading, even when the fulltext column differs.
   const plainText = aiTextAllowed
-    ? toPlainCorpusText({ blocks, fulltext: read.fulltext })
+    ? toPlainCorpusText({
+        blocks,
+        fulltext: blocks === null ? read.fulltext : null,
+      })
     : null;
   const text = plainText === null || plainText.length === 0 ? null : plainText;
   const appUrl = caseLawDecisionAppUrlOf(read);
@@ -2960,6 +2968,14 @@ const decisionItemResult = ({
           windowChars,
         });
 
+  const navigation =
+    outline === "include" &&
+    text !== null &&
+    starts !== null &&
+    includedFields.has("outline")
+      ? decisionOutline({ blocks, text })
+      : null;
+
   return {
     decisionId,
     ...(messages.length === 0 ? {} : { message: messages.join(" ") }),
@@ -2970,16 +2986,24 @@ const decisionItemResult = ({
       ...nonDocketReference(read),
       ...decisionStaticFields({ appUrl, digest, includedFields, read }),
       ...textPart,
-      ...(outline === "include" &&
-      text !== null &&
-      starts !== null &&
-      includedFields.has("outline")
+      ...(text === null
+        ? {}
+        : {
+            textSource:
+              blocks === null
+                ? DECISION_TEXT_SOURCE.FULLTEXT
+                : DECISION_TEXT_SOURCE.AST,
+          }),
+      ...(navigation !== null && starts !== null
         ? {
-            outline: decisionOutline({ blocks, text }).map((entry) => ({
+            outline: navigation.entries.map((entry) => ({
               title: entry.title,
               page: pageOfOffset(starts, entry.start),
               ...deepLink(appUrl, entry.anchorId),
             })),
+            ...(navigation.numberedEntriesTruncated
+              ? { outlineNumberedEntriesTruncated: true as const }
+              : {}),
           }
         : {}),
       ...decisionTextAbsence(read, readsSharedCorpus),

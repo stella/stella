@@ -3,6 +3,12 @@ import { panic } from "better-result";
 // parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
 // parser-output-unchanged: Publisher field absence markers widen the accepted absence fields; adapters that emit none produce the same output.
 
+/** Canonical text used to page and locate a decision's passages. */
+export const DECISION_TEXT_SOURCE = {
+  AST: "ast",
+  FULLTEXT: "fulltext",
+} as const;
+
 export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
   PRESENT: "present",
