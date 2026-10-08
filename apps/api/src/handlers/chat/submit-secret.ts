@@ -94,6 +94,7 @@ const readPendingRequest = async ({
 }: PendingRequestOptions) => {
   await withAggregateLock({
     aggregate: "chatTurn",
+    mode: "update",
     tx,
     id: { organizationId, userId, threadId, toolCallId },
   });
@@ -299,6 +300,7 @@ const submitSecret = createSafeRootHandler(
       abortableTx(safeDb, async (tx): Promise<SubmitOutcome> => {
         await withAggregateLock({
           aggregate: "chatThread",
+          mode: "update",
           tx,
           id: {
             id: threadId,

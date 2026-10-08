@@ -259,6 +259,7 @@ export const ChatThreadPage = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
@@ -268,6 +269,7 @@ export const ChatThreadPage = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "auto-open",
     onError: (nextError) => {
       usageLimit.handle(nextError);
     },
@@ -667,6 +669,7 @@ export const ChatThreadPage = ({
                           handleOpenCreateDocumentDraft
                         }
                         onOpenCreatedDocument={handleOpenCreatedDocument}
+                        onOpenPlaybook={handleOpenPlaybook}
                         onResend={resendLatestMessage}
                         onSendWithoutAnonymization={sendWithoutAnonymization}
                         queuedMessageActions={{

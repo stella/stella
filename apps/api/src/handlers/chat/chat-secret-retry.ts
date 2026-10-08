@@ -93,6 +93,7 @@ export const recoverChatSecretSubmission = async ({
   // the first-submission path that locks the turn after this returns.
   await withAggregateLock({
     aggregate: "chatTurn",
+    mode: "update",
     tx,
     id: { organizationId, userId, threadId, toolCallId },
   });
@@ -116,6 +117,7 @@ export const recoverChatSecretSubmission = async ({
   }
   await withAggregateLock({
     aggregate: "chatSecret",
+    mode: "update",
     tx,
     id: { id: prior.id, organizationId, userId, threadId },
   });

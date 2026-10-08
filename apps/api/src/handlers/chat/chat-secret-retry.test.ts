@@ -46,7 +46,12 @@ describe("chat secret retry lock order", () => {
 
     // The first-submission path fences the turn next; that must not invert rank.
     expect(
-      await withAggregateLock({ aggregate: "chatTurn", tx, id: scope }),
+      await withAggregateLock({
+        aggregate: "chatTurn",
+        mode: "update",
+        tx,
+        id: scope,
+      }),
     ).toEqual({ status: "locked" });
   });
 });

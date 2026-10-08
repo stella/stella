@@ -678,6 +678,7 @@ const TemplateStudioChatInner = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -687,6 +688,7 @@ const TemplateStudioChatInner = ({
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
@@ -1354,6 +1356,7 @@ const TemplateStudioChatInner = ({
               onCreateDocumentResolve={handleCreateDocumentResolve}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

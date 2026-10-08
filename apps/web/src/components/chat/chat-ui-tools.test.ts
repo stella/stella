@@ -7,6 +7,7 @@ import {
 
 import {
   consumeDocumentDeletionToolCalls,
+  consumePlaybookSaveToolCalls,
   getChatAssistantTurnError,
   getChatToolTitleKey,
   getAwaitedAssistantMessageId,
@@ -37,8 +38,57 @@ import type {
   ChatPart,
   DocumentDeletionMessage,
   PersistedChatMessage,
+  PlaybookSaveMessage,
 } from "@/components/chat/chat-ui-tools";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+
+describe("playbook save consumption", () => {
+  test("a reverse completion refreshes caches without following the older call", () => {
+    const handledToolCallIds = new Set<string>();
+    const saves = (olderState: "complete" | "input-complete") =>
+      [
+        {
+          id: "assistant-saves",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-a",
+              state: olderState,
+              output: { playbookId: "playbook-a" },
+            },
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-b",
+              state: "complete",
+              output: { playbookId: "playbook-b" },
+            },
+          ],
+        },
+      ] satisfies PlaybookSaveMessage[];
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("input-complete"),
+      }),
+    ).toEqual({ playbookId: "playbook-b" });
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toEqual({ playbookId: null });
+    expect(handledToolCallIds).toEqual(new Set(["save-a", "save-b"]));
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("assistant turn outcomes", () => {
   test("reloads every stored refusal with its canonical recovery actions", () => {
@@ -517,13 +567,13 @@ describe("isApprovalPart", () => {
 });
 
 describe("tool approval grants", () => {
-  test("keeps sensitive write approvals per call", () => {
+  test("keeps sensitive and update-capable write approvals per call", () => {
     expect(isApprovalOnceChatToolName("suggest_changes")).toBe(true);
     expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
+    expect(isApprovalOnceChatToolName("save_clause")).toBe(true);
   });
 
-  test("rejects persistent grants for destructive deletes and the approve-once writes, without the stronger never-auto bar", () => {
+  test("rejects persistent grants for deletes and update-capable writes, without the stronger never-auto bar", () => {
     for (const name of [
       "delete_clause",
       "delete_contact",
@@ -538,9 +588,11 @@ describe("tool approval grants", () => {
     }
   });
 
-  test("keeps an ordinary mutation grantable", () => {
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
-    expect(isNonPersistentGrantChatToolName("save_clause")).toBe(false);
+  test("keeps a create-only mutation grantable", () => {
+    expect(isApprovalOnceChatToolName("create_reader_annotation")).toBe(false);
+    expect(isNonPersistentGrantChatToolName("create_reader_annotation")).toBe(
+      false,
+    );
   });
 
   test("renders the registry-write summary only for tools opted into it", () => {

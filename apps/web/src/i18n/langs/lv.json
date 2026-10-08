@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Nav saglabāts",
-      "failedTitle": "Jūsu izmaiņas netika saglabātas",
-      "saved": "Saglabāts",
-      "saving": "Saglabā…"
+      "failedTitle": "Jūsu izmaiņas netika saglabātas"
     },
     "sourceMediumTooltip": "Avota nesējs ir neitrāls raksturojums. Tas pats par sevi nemazina ticamību.",
     "states": {
@@ -1278,6 +1276,8 @@
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
     "openCitation": "Atvērt citātu {label}",
     "openThread": "Atvērt sarunu",
+    "overlayLoadFailed": "Neizdevās ielādēt dokumenta tērzēšanu.",
+    "overlayUpdated": "stella ir atjaunināta. Lai izmantotu dokumenta tērzēšanu, pārlādējiet lapu.",
     "pastedChars": "Ielīmēts · {count} rakstz.",
     "pastedText": {
       "expand": "Rādīt pilnu tekstu",
@@ -1913,6 +1913,8 @@
     "saveAndLeave": "Saglabāt un iziet",
     "saveAsPdf": "Saglabāt kā PDF",
     "saveChanges": "Saglabāt izmaiņas",
+    "saved": "Saglabāts",
+    "saving": "Saglabā…",
     "scopeThisPage": "(šī lapa)",
     "scrollToBottom": "Ritināt uz leju",
     "scrollToTop": "Ritināt uz augšu",
@@ -2419,6 +2421,8 @@
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
+      "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
+      "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
     },
     "failedToAcceptInvitation": "Neizdevās pieņemt uzaicinājumu",
@@ -3603,6 +3607,11 @@
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
       "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
+      "autosave": {
+        "failed": "Neizdevās saglabāt",
+        "nameMissing": "Nav saglabāts: pievienojiet nosaukumu",
+        "positionsNeedAttention": "Nav saglabāts: {count, plural, zero {# pozīcijām} one {# pozīcijai} other {# pozīcijām}} jāpievērš uzmanība"
+      },
       "check": "Izmantot precīzu noteikumu AI vietā",
       "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
       "checkKind": {
@@ -3632,6 +3641,7 @@
       "deletePlaybook": "Dzēst pārbaudes ceļvedi",
       "deletePosition": "Dzēst pozīciju",
       "deleted": "Pārbaudes ceļvedis izdzēsts",
+      "deletedElsewhere": "Šis pārbaudes ceļvedis ir izdzēsts.",
       "derivedAutomatically": "Izgūšanas jautājums un atbildes formāts tiek izveidoti no šīs pozīcijas. Nekas nav jāiestata.",
       "derivedQuestion": "Izgūšanas jautājums",
       "derivedType": "Atbildes formāts",
@@ -3684,10 +3694,12 @@
       },
       "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
       "noSettledPosition": "Nav noteiktas pozīcijas",
+      "openInPane": "Atvērt pārbaudes ceļvedi",
       "optionPlaceholder": "Iespējas vērtība",
       "optionsLabel": "Iespējas",
       "outline": "Struktūra",
       "positionOfTotal": "Pozīcija {index} no {total}",
+      "positionRemoved": "Pozīcija noņemta",
       "positions": "Pozīcijas",
       "recent": "Nesen izmantotie",
       "recommended": "Ieteicamie sākuma ceļveži",
@@ -5554,6 +5566,7 @@
       "desktopGate": {
         "alreadyInstalled": "Jau instalēts? Savienot",
         "connect": "Savienot stella desktop",
+        "connected": "stella desktop ir pievienota",
         "editNone": "Lejupielādējiet stella desktop, lai rediģētu šo failu",
         "editOutdated": "Atjauniniet stella desktop, lai rediģētu",
         "editReason": "Rediģēšana datorā atver failu jūsu datora lietotnē, izmantojot stella desktop.",
@@ -5575,6 +5588,7 @@
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
       "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
       "pdfSigning": {
+        "alreadySigningTitle": "Parakstīšana stella desktop jau notiek",
         "cancelledBaseVersionDescription": "Dokuments parakstīšanas laikā mainījās. Atveriet jaunāko versiju un parakstiet to vēlreiz.",
         "cancelledCertificateDescription": "Izvēlēto sertifikātu nevar izmantot parakstīšanai. Izvēlieties tādu, kas atļauj digitālo parakstu.",
         "cancelledCertifiedDescription": "Šis PDF ir sertificēts, un tā sertifikācija neatļauj pievienot citus parakstus.",
@@ -5595,6 +5609,9 @@
         "inProgressDescription": "Šis fails jau tiek parakstīts. Vispirms pabeidziet vai atceliet šo parakstīšanu stella desktop.",
         "noFileDescription": "Šim dokumentam nav faila, ko parakstīt.",
         "notAPdfDescription": "Parakstīt var tikai PDF failus.",
+        "notOpeningConnect": "Neatveras? Pievienojiet stella desktop",
+        "notPickedUpDescription": "stella desktop, iespējams, nedarbojas vai nav pievienota šim kontam. Pievienojiet to un mēģiniet vēlreiz.",
+        "notPickedUpTitle": "stella desktop neatvēra PDF",
         "placementBox": "Zīmoga novietojums",
         "placementConfirm": "Atvērt lietotnē stella desktop",
         "placementDescription": "Izvēlieties, kā paraksts tiks parādīts PDF failā.",
@@ -5609,10 +5626,12 @@
         "placementTooSmall": "Šī lapa ir par mazu zīmogam. Izvēlieties citu lapu.",
         "placementVisible": "Redzams zīmogs",
         "placementVisibleDescription": "Rāmis lapā parāda, kas un kad parakstīja.",
+        "preparingDescription": "Notiek PDF sagatavošana stella desktop.",
         "readOnlyDescription": "Šis dokuments ir tikai lasāms.",
         "signedDescription": "Paraksts saglabāts kā {versionNumber, number}. versija.",
         "signedDescriptionNoVersion": "Paraksts saglabāts kā jauna versija.",
         "signedTitle": "PDF parakstīts",
+        "signingLabel": "Notiek parakstīšana stella desktop…",
         "stampLocation": "Vieta",
         "stampRejectedDescription": "Zīmogu tur nevar novietot. Novietojiet to vēlreiz un mēģiniet vēlreiz.",
         "stampSignedBy": "Digitāli parakstījis",

@@ -96,9 +96,17 @@ export type PdfSigningSessionSnapshot = {
   status: "cancelled" | "expired" | "finalized" | "open";
 };
 
+/**
+ * Where an exchange ran out of time: `handoff` means stella desktop never
+ * redeemed the deep link (not running, not registered for the scheme, or not
+ * connected to this account); `session` means it redeemed it and then did
+ * not finish.
+ */
+export type PdfSigningExpiryStage = "handoff" | "session";
+
 export type PdfSigningOutcome =
   | { type: "cancelled"; closeReason: PdfSigningCloseReason | null }
-  | { type: "expired" }
+  | { type: "expired"; stage: PdfSigningExpiryStage }
   | { type: "finalized"; versionNumber: number | null };
 
 export type PdfSigningPollDecision =
@@ -116,15 +124,35 @@ export const parsePdfSigningDeadline = ({
   return Number.isFinite(parsed) ? parsed : now + PDF_SIGNING_FALLBACK_WATCH_MS;
 };
 
-export const decidePdfSigningPoll = ({
-  deadline,
-  now,
-  session,
-}: {
+type DecidePdfSigningPollOptions = {
+  /** The latest expiry observed so far; it only ever moves outward. */
   deadline: number;
+  /** The unredeemed handoff's expiry, as the create response reported it. */
+  handoffDeadline: number;
   now: number;
   session: PdfSigningSessionSnapshot;
-}): PdfSigningPollDecision => {
+};
+
+export const decidePdfSigningPoll = ({
+  deadline,
+  handoffDeadline,
+  now,
+  session,
+}: DecidePdfSigningPollOptions): PdfSigningPollDecision => {
+  // Redeeming the handoff replaces its two-minute window with the signing
+  // session's own TTL, so the deadline only ever moves outward, and an expiry
+  // past the handoff's own proves the desktop app picked the handoff up.
+  const extended = Math.max(
+    deadline,
+    parsePdfSigningDeadline({ expiresAt: session.expiresAt, now }),
+  );
+  const expired = {
+    type: "settled",
+    outcome: {
+      type: "expired",
+      stage: extended > handoffDeadline ? "session" : "handoff",
+    },
+  } as const satisfies PdfSigningPollDecision;
   switch (session.status) {
     case "cancelled": {
       return {
@@ -133,7 +161,7 @@ export const decidePdfSigningPoll = ({
       };
     }
     case "expired": {
-      return { type: "settled", outcome: { type: "expired" } };
+      return expired;
     }
     case "finalized": {
       return {
@@ -145,14 +173,8 @@ export const decidePdfSigningPoll = ({
       };
     }
     case "open": {
-      // Redeeming the handoff replaces its two-minute window with the signing
-      // session's own TTL, so the deadline only ever moves outward.
-      const extended = Math.max(
-        deadline,
-        parsePdfSigningDeadline({ expiresAt: session.expiresAt, now }),
-      );
       if (now >= extended) {
-        return { type: "settled", outcome: { type: "expired" } };
+        return expired;
       }
       return {
         type: "waiting",

@@ -175,6 +175,7 @@ export const consumeChatSecret = async ({
     );
     await withAggregateLock({
       aggregate: "chatSecret",
+      mode: "update",
       tx,
       id: { id: secretRef, organizationId, userId, threadId },
     });

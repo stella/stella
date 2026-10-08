@@ -1564,6 +1564,7 @@ const FileChatOverlayInner = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -1576,6 +1577,7 @@ const FileChatOverlayInner = ({
     getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId,
   });
@@ -2549,6 +2551,7 @@ const FileChatOverlayInner = ({
               onLoadOlder={loadOlder}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,
