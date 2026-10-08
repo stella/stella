@@ -67,7 +67,7 @@ const SCREENING_FAILURE_REASON = {
   operation: "unclassified",
 } as const satisfies Record<SanctionsScreeningFailureCause, FailureReason>;
 
-class SanctionsScreeningFailure extends TaggedError(
+export class SanctionsScreeningFailure extends TaggedError(
   "SanctionsScreeningFailure",
 )<{
   message: string;

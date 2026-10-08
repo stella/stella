@@ -52,10 +52,8 @@ import {
   createSanctionsMatcherPool,
   SANCTIONS_MATCHER_CONFIG,
 } from "./matcher-pool";
-import type {
-  MatcherWorkOutcome,
-  SanctionsMatcherSession,
-} from "./matcher-pool";
+import type { MatcherWorkOutcome } from "./matcher-pool";
+import type { SanctionsMatcherSession } from "./matcher-pool-core";
 import type {
   SanctionsMatcherMessage,
   SanctionsMatcherReply,
