@@ -1,10 +1,6 @@
 import { Result } from "better-result";
 
-import {
-  createDetached,
-  isQueryErrorOutputKey,
-  sanitizeQueryErrorText,
-} from "@stll/errors";
+import { createDetached, sanitizeErrorForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -85,15 +81,11 @@ const acceptCaptureContext = (
   const accepted: ErrorTelemetryContext = {};
   let rejected = 0;
   for (const [key, value] of Object.entries(context ?? {})) {
-    if (
-      RESERVED_CONTEXT_KEY.test(key) ||
-      RESERVED_CONTEXT_NAMES.has(key) ||
-      isQueryErrorOutputKey(key)
-    ) {
+    if (RESERVED_CONTEXT_KEY.test(key) || RESERVED_CONTEXT_NAMES.has(key)) {
       rejected += 1;
       continue;
     }
-    accepted[key] = sanitizeQueryErrorText(value);
+    accepted[key] = value;
   }
   return { context: accepted, rejected };
 };
@@ -234,7 +226,33 @@ const captureErrorWithOptions = (
           request: options.request,
         })
       : options.observed.grading;
-  const { context, rejected } = acceptCaptureContext(options.context);
+  const safeOutput = sanitizeErrorForOutput({
+    error,
+    context: options.context,
+  });
+  const safeEnvelope =
+    safeOutput !== null &&
+    typeof safeOutput === "object" &&
+    "error" in safeOutput
+      ? safeOutput
+      : undefined;
+  const safeError =
+    safeEnvelope === undefined ? safeOutput : safeEnvelope.error;
+  const contextValue =
+    safeEnvelope !== undefined && "context" in safeEnvelope
+      ? safeEnvelope.context
+      : undefined;
+  const safeContext =
+    contextValue !== null &&
+    typeof contextValue === "object" &&
+    !Array.isArray(contextValue)
+      ? Object.fromEntries(
+          Object.entries(contextValue).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string",
+          ),
+        )
+      : undefined;
+  const { context, rejected } = acceptCaptureContext(safeContext);
   // PostHog ingestion drops `$exception` events that lack `$exception_list`,
   // so the entry is required even though we deliberately keep it empty —
   // the redaction contract above forbids shipping the message or stack.
@@ -278,7 +296,7 @@ const captureErrorWithOptions = (
 
   // Before the throttle: dev sinks are local and unmetered, and a developer
   // reproducing a tight failure loop needs every occurrence.
-  logServerDevError(error, properties);
+  logServerDevError(safeError, properties);
 
   const suppressed = admitCapture(
     captureWindowKey(properties),

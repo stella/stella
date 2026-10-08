@@ -4,6 +4,7 @@ import { inspect } from "node:util";
 
 import {
   createDevErrorLogger,
+  errorOutputLogger,
   QUERY_ERROR_OUTPUT_FIELDS,
   printError,
   sanitizeErrorForOutput,
@@ -279,6 +280,97 @@ test("output sinks exclude query text present only in an ordinary error stack", 
       expect(inspect(output, { depth: 20 })).not.toContain(marker);
     }
     expect(error.stack).toContain(marker);
+  } finally {
+    analytics.restore();
+    logs.restore();
+  }
+});
+
+test("output sinks redact query markers across sibling and nested payloads", () => {
+  const marker = SECRETS[1];
+  const cases = [
+    {
+      name: "string",
+      payload: `Diagnostic ${marker}`,
+      failure: () =>
+        new Error(`Diagnostic ${marker}`, { cause: queryFailure() }),
+    },
+    {
+      name: "array",
+      payload: [queryFailure(), `Diagnostic ${marker}`],
+      failure: () => new Error("array wrapper", { cause: queryFailure() }),
+    },
+    {
+      name: "plain object wrapper",
+      payload: { message: `Diagnostic ${marker}`, cause: queryFailure() },
+      failure: () => new Error("object wrapper", { cause: queryFailure() }),
+    },
+    {
+      name: "nested cause",
+      payload: new Error(`Diagnostic ${marker}`, {
+        cause: {
+          failure: new Error("inner wrapper", { cause: queryFailure() }),
+          diagnostic: `Diagnostic ${marker}`,
+        },
+      }),
+      failure: () =>
+        new Error(`Diagnostic ${marker}`, {
+          cause: {
+            failure: new Error("inner wrapper", { cause: queryFailure() }),
+            diagnostic: `Diagnostic ${marker}`,
+          },
+        }),
+    },
+  ] as const;
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const consoleRecords: unknown[][] = [];
+  const devRecords: unknown[] = [];
+  console.error = (...args: unknown[]) => {
+    consoleRecords.push(args);
+  };
+  const devLog = createDevErrorLogger({
+    echoErrors: true,
+    sink: (record) => devRecords.push(record),
+  });
+
+  try {
+    for (const scenario of cases) {
+      const error = scenario.failure();
+      printError("query diagnostic", scenario.payload, error);
+      devLog(error, { diagnostic: scenario.payload });
+      errorOutputLogger.log(
+        "error",
+        "query diagnostic",
+        scenario.payload,
+        error,
+      );
+      captureError(error, { diagnostic: marker });
+      logger.error(`Diagnostic ${marker}`, {
+        diagnostic: scenario.payload,
+        failure: error,
+      });
+    }
+
+    for (const output of [
+      consoleRecords,
+      devRecords,
+      analytics.events,
+      logs.records,
+    ]) {
+      const printed = inspect(output, { depth: 30 });
+      expect(printed).not.toContain(marker);
+      for (const secret of SECRETS) {
+        expect(printed).not.toContain(secret);
+      }
+    }
+    expect(inspect(consoleRecords, { depth: 30 })).toContain(
+      "account_token_unique",
+    );
+    expect(inspect(devRecords, { depth: 30 })).toContain("23505");
+    expect(inspect(logs.records, { depth: 30 })).toContain(
+      "insert into ? ( ? , ? ) values ( $1 , $2 ) returning ?",
+    );
   } finally {
     analytics.restore();
     logs.restore();

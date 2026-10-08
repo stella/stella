@@ -1,5 +1,4 @@
 import { sanitizeErrorForOutput } from "./query-error";
-import { isQueryErrorOutputKey } from "./query-field-policy";
 
 // Dev-only error logging, shared by the API and web apps. Both surface
 // errors to `console.error` in dev and no-op in prod; the API additionally
@@ -30,18 +29,26 @@ export const createDevErrorLogger =
     if (!echoErrors) {
       return;
     }
-    const safeError = sanitizeErrorForOutput(error);
+    const safeOutput = sanitizeErrorForOutput({ error, context });
+    const safeEnvelope =
+      safeOutput !== null &&
+      typeof safeOutput === "object" &&
+      "error" in safeOutput
+        ? safeOutput
+        : undefined;
+    const safeError =
+      safeEnvelope === undefined ? safeOutput : safeEnvelope.error;
+    const contextValue =
+      safeEnvelope !== undefined && "context" in safeEnvelope
+        ? safeEnvelope.context
+        : undefined;
+    const safeContext =
+      contextValue !== null &&
+      typeof contextValue === "object" &&
+      !Array.isArray(contextValue)
+        ? Object.fromEntries(Object.entries(contextValue))
+        : undefined;
     // oxlint-disable-next-line no-console -- dev-only error echo
     console.error(safeError);
-    sink?.({
-      error: safeError,
-      context:
-        context === undefined
-          ? undefined
-          : Object.fromEntries(
-              Object.entries(context)
-                .filter(([key]) => !isQueryErrorOutputKey(key))
-                .map(([key, value]) => [key, sanitizeErrorForOutput(value)]),
-            ),
-    });
+    sink?.({ error: safeError, context: safeContext });
   };

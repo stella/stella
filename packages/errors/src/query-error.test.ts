@@ -267,3 +267,27 @@ test("ordinary error stacks use the shared query field policy", () => {
     }
   }
 });
+
+test("query output projects strings throughout one logged value", () => {
+  const query = failure("insert into account values ($1)");
+  const shapes = [
+    SECRET,
+    [SECRET, { note: SECRET }],
+    { message: `Operation failed: ${SECRET}`, cause: query },
+    { outer: { cause: { cause: query, note: SECRET }, note: SECRET } },
+  ];
+  for (const shape of shapes) {
+    const input = [shape, query];
+    expect(inspect(input, { depth: 20 })).toContain(SECRET);
+    const projected = sanitizeErrorForOutput(input);
+    const output = inspect(projected, { depth: 20 });
+    expect(output).not.toContain(SECRET);
+    expect(JSON.stringify(projected)).not.toContain(SECRET);
+    expect(output).toContain("account_token_unique");
+    expect(output).toContain("23505");
+    expect(output).toContain("insert into ? values ( $1 )");
+    expect(inspect(sanitizeErrorForOutput(projected), { depth: 20 })).toBe(
+      output,
+    );
+  }
+});

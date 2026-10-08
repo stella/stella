@@ -66,40 +66,6 @@ const queryShape = (query: string): string => {
     .join(" ");
 };
 
-const containsQueryError = (value: unknown): boolean => {
-  const visited = new WeakSet<object>();
-  const pending = [value];
-  for (
-    let count = 0;
-    pending.length > 0 && count < MAX_ERROR_NODES;
-    count += 1
-  ) {
-    const item = pending.pop();
-    if (typeof item === "string") {
-      if (sanitizeQueryErrorText(item) !== item) {
-        return true;
-      }
-      continue;
-    }
-    if (!isRecord(item) || visited.has(item)) {
-      continue;
-    }
-    visited.add(item);
-    if (isQueryError(item)) {
-      return true;
-    }
-    for (const key of Object.getOwnPropertyNames(item)) {
-      if (isQueryErrorOutputKey(key)) {
-        return true;
-      }
-      pending.push(item[key]);
-    }
-    pending.push(item["cause"]);
-  }
-  // A graph too large to inspect is also too large to safely print.
-  return pending.length > 0;
-};
-
 const queryErrorMetadata = (input: Record<string, unknown>, cause: unknown) => {
   const fields: [string, string][] = [];
   for (const key of [
@@ -136,6 +102,20 @@ const queryErrorMetadata = (input: Record<string, unknown>, cause: unknown) => {
  */
 export const sanitizeErrorForOutput = (value: unknown): unknown => {
   const seen = new WeakSet<object>();
+  const queryValues = new Set<string>();
+  let queryGraph = false;
+  const projectText = (text: string): string => {
+    const output = sanitizeQueryErrorText(text);
+    if (output !== text) {
+      return output;
+    }
+    for (const queryValue of queryValues) {
+      if (text.includes(queryValue)) {
+        return "[redacted]";
+      }
+    }
+    return text;
+  };
   type VisitErrorOptions = {
     input: unknown;
     databaseCause?: boolean;
@@ -150,7 +130,10 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       if (databaseCause) {
         return "[redacted]";
       }
-      return typeof input === "string" ? sanitizeQueryErrorText(input) : input;
+      if (typeof input === "function" || typeof input === "symbol") {
+        return "[unsupported]";
+      }
+      return typeof input === "string" ? projectText(input) : input;
     }
     if (depth > MAX_ERROR_DEPTH) {
       return "[truncated]";
@@ -159,6 +142,11 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       return "[circular]";
     }
     seen.add(input);
+    if (Array.isArray(input)) {
+      return input.map((item) =>
+        visit({ input: item, databaseCause, depth: depth + 1 }),
+      );
+    }
     const database = databaseCause || isQueryError(input);
     const cause =
       input["cause"] === undefined
@@ -170,7 +158,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
           });
     const causeChanged = cause !== input["cause"];
     if (input instanceof Error || database) {
-      if (!database && !causeChanged && !containsQueryError(input)) {
+      if (!queryGraph && !database && !causeChanged) {
         return input;
       }
       const message = database
@@ -197,7 +185,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       for (const [key, field] of Object.entries(
         queryErrorMetadata(input, cause),
       )) {
-        Reflect.set(output, key, field);
+        Reflect.set(output, key, projectText(field));
       }
       const sql = input["query"] ?? input["sqlShape"];
       if (typeof sql === "string") {
@@ -209,18 +197,84 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       delete output.stack;
       return output;
     }
-    if (Array.isArray(input)) {
-      return input.map((item) => visit({ input: item, depth: depth + 1 }));
-    }
     return Object.fromEntries(
       Object.entries(input)
         .filter(([key]) => !isQueryErrorOutputKey(key))
-        .map(([key, item]) => [key, visit({ input: item, depth: depth + 1 })]),
+        .map(([key, item]) => {
+          const safeKey = projectText(key);
+          if (key === "message" && queryGraph && typeof item === "string") {
+            return [safeKey, "Error caused by database query failure"];
+          }
+          if (key === "cause") {
+            return [safeKey, cause];
+          }
+          return [safeKey, visit({ input: item, depth: depth + 1 })];
+        }),
     );
   };
-  return Result.try(() => visit({ input: value })).unwrapOr(
-    "[unreadable error]",
-  );
+  return Result.try(() => {
+    type ScanEntry = { input: unknown; source: "output" | "query" };
+    const pending: ScanEntry[] = [{ input: value, source: "output" }];
+    const visitedOutput = new WeakSet<object>();
+    const visitedQuery = new WeakSet<object>();
+    for (
+      let count = 0;
+      pending.length > 0 && count < MAX_ERROR_NODES;
+      count += 1
+    ) {
+      const entry = pending.pop();
+      if (entry === undefined) {
+        break;
+      }
+      const { input, source } = entry;
+      if (!isRecord(input)) {
+        if (typeof input === "string") {
+          queryGraph ||= sanitizeQueryErrorText(input) !== input;
+          if (source === "query" && input.length > 0) {
+            queryValues.add(input);
+            for (const line of input.split(/\r?\n/u)) {
+              if (line.length > 0) {
+                queryValues.add(line);
+              }
+            }
+            const encoded = JSON.stringify(input).slice(1, -1);
+            if (encoded.length > 0) {
+              queryValues.add(encoded);
+            }
+          }
+        } else if (
+          source === "query" &&
+          (typeof input === "number" ||
+            typeof input === "bigint" ||
+            typeof input === "boolean")
+        ) {
+          queryValues.add(String(input));
+        }
+        continue;
+      }
+      const visited = source === "query" ? visitedQuery : visitedOutput;
+      if (visited.has(input)) {
+        continue;
+      }
+      visited.add(input);
+      queryGraph ||= isQueryError(input);
+      for (const key of Object.getOwnPropertyNames(input)) {
+        if (Array.isArray(input) && key === "length") {
+          continue;
+        }
+        const queryField = isQueryErrorOutputKey(key);
+        queryGraph ||= queryField;
+        pending.push({
+          input: input[key],
+          source: source === "query" || queryField ? "query" : "output",
+        });
+      }
+    }
+    if (pending.length > 0) {
+      return "[truncated error]";
+    }
+    return visit({ input: value });
+  }).unwrapOr("[unreadable error]");
 };
 
 type ErrorOutputOptions = {
@@ -231,7 +285,8 @@ type ErrorOutputOptions = {
 /** Preserve SDK log levels while projecting every value before inspection. */
 export const logErrorOutput = ({ level, values }: ErrorOutputOptions): void => {
   const method = level === "info" ? "log" : level;
-  console[method](...values.map((value) => sanitizeErrorForOutput(value)));
+  const safeValues = sanitizeErrorForOutput(values);
+  console[method](...(Array.isArray(safeValues) ? safeValues : [safeValues]));
 };
 
 /** Logger contract used by SDKs that own their exception printing. */

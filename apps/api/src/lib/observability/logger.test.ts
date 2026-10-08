@@ -1,6 +1,13 @@
+import { logs as otelLogs } from "@opentelemetry/api-logs";
+import {
+  InMemoryLogRecordExporter,
+  LoggerProvider,
+  SimpleLogRecordProcessor,
+} from "@opentelemetry/sdk-logs";
 import { SQL } from "bun";
 import { afterEach, describe, expect, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
+import { inspect } from "node:util";
 
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
@@ -73,6 +80,76 @@ describe("logger attributes", () => {
     expect(output).not.toContain("secret.pdf");
     expect(output).not.toContain("fileName");
     expect(output).not.toContain('"body"');
+  });
+
+  test("string arrays and wrapped values are redacted before OTel and stderr", async () => {
+    const marker = "fixture-logger-query-marker";
+    const driver = Object.assign(new Error("duplicate"), {
+      name: "PostgresError",
+      code: "23505",
+      constraint: "account_token_unique",
+      query: "insert into account values ('fixture-logger-query-marker')",
+    });
+    const queryError = new DrizzleQueryError(
+      "insert into account values ($1)",
+      [marker],
+      driver,
+    );
+    const diagnostics = [
+      marker,
+      [marker, `Diagnostic ${marker}`],
+      { message: `Diagnostic ${marker}`, cause: queryError },
+      new Error(`Diagnostic ${marker}`, {
+        cause: { cause: queryError, note: marker },
+      }),
+    ];
+    const exporter = new InMemoryLogRecordExporter();
+    const provider = new LoggerProvider({
+      processors: [new SimpleLogRecordProcessor({ exporter })],
+    });
+    const previousProvider = otelLogs.getLoggerProvider();
+    const chunks: string[] = [];
+    const recordChunk = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+    process.stderr.write = recordChunk;
+    process.stdout.write = recordChunk;
+
+    otelLogs.disable();
+    otelLogs.setGlobalLoggerProvider(provider);
+    try {
+      for (const diagnostic of diagnostics) {
+        logger.error(`Diagnostic ${marker}`, {
+          diagnostic,
+          failure: queryError,
+        });
+        logger.request({
+          durationMs: 12,
+          message: "request.failed",
+          method: "POST",
+          severity: "ERROR",
+          statusCode: 500,
+          errorFingerprint: {
+            parameters: marker,
+            diagnostic: JSON.stringify(diagnostic),
+          },
+        });
+      }
+      await provider.forceFlush();
+
+      const exported = exporter.getFinishedLogRecords();
+      const output = inspect({ exported, chunks }, { depth: 30 });
+      expect(exported).toHaveLength(diagnostics.length * 2);
+      expect(output).not.toContain(marker);
+      expect(output).toContain("account_token_unique");
+      expect(output).toContain("23505");
+      expect(output).toContain("insert into ? values ( $1 )");
+    } finally {
+      await provider.shutdown();
+      otelLogs.disable();
+      otelLogs.setGlobalLoggerProvider(previousProvider);
+    }
   });
 
   test("streams operational info while keeping debug off the backstop", () => {
