@@ -8,8 +8,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   admitTaskFlowAccess,
   FLOW_TASK_FEATURE_ACCESS,
-  flowReviewTaskVisibilityCondition,
 } from "@/api/lib/flows/review-gate-task";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {

@@ -14,7 +14,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/review-gate-task";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import {
   createCursorPage,
   decodePaginationCursor,

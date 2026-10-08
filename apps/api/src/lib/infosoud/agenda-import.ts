@@ -17,7 +17,7 @@ import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import { insertEntityVersions } from "@/api/lib/entity-versions/insert-entity-version";
 import { LIMITS } from "@/api/lib/limits";
-import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
+import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings-recovery";
 import {
   INFO_SOUD_TIME_ZONE,
   toHearingRecord,

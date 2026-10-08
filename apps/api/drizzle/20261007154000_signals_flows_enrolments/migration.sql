@@ -13,6 +13,7 @@ CREATE TABLE "pending_scout_emissions" (
   "source_kind" text NOT NULL,
   "source_id" uuid NOT NULL,
   "next_attempt_at" timestamptz DEFAULT now() NOT NULL,
+  "last_error" varchar(128),
   "created_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "pending_scout_emissions_organization_id_source_kind_source_id_pk" PRIMARY KEY ("organization_id", "source_kind", "source_id"),
   CONSTRAINT "pending_scout_emissions_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE CASCADE,

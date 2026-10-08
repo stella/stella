@@ -612,3 +612,142 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
     expect(perEndpoint).toBeLessThan(moduleCount);
   });
 });
+
+describe("operational dispatch ownership", () => {
+  const facade = "apps/api/src/dispatch/receipt.ts";
+  const owner = "apps/api/src/feature/receipt-owner.ts";
+  const endpoint = "apps/api/src/routes/upload.ts";
+  const source =
+    'import { record } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await record(); };';
+  const ownerSource =
+    'import { featureRows } from "../db/schema/feature"; export const record = async (): Promise<void> => { await db.insert(featureRows); }; export const read = () => featureRows;';
+  const boundary = {
+    type: "operational",
+    module: facade,
+    effects: ["record-recovery"],
+    owners: [{ effect: "record-recovery", module: owner, exports: ["record"] }],
+    reason: "Persist replay receipts before feature admission.",
+  } as const;
+  const validate = (
+    facadeSource = source,
+    ownerBody = ownerSource,
+    extra: readonly (readonly [string, string])[] = [],
+  ) =>
+    validateFeatureAccessDeclarations({
+      registry: {
+        fixture: {
+          ...registry.fixture,
+          ownership: {
+            ...registry.fixture.ownership,
+            dispatchModules: [boundary],
+          },
+        },
+      },
+      endpoints: [{ file: endpoint, config: {} }],
+      sources: new Map([
+        ...baseSources,
+        [facade, facadeSource],
+        [owner, ownerBody],
+        [
+          endpoint,
+          'import { upload } from "../dispatch/receipt"; export const run = () => upload();',
+        ],
+        ...extra,
+      ]),
+    });
+  const invalid = {
+    file: facade,
+    message: "feature fixture has an invalid operational dispatch boundary",
+  };
+
+  test("a named void receipt owner does not require upload admission", () => {
+    expect(validate()).toEqual([]);
+    expect(
+      validate(
+        source
+          .replace("record }", "record as persist }")
+          .replace("await record()", "await persist()"),
+      ),
+    ).toEqual([]);
+  });
+  test.each([
+    'import { record, read } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await record(); read(); };',
+    'import * as receipts from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await receipts.record(); };',
+    'import receipt from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { await receipt(); };',
+    'export { record } from "../feature/receipt-owner";',
+    'export * from "../feature/receipt-owner";',
+    'export const upload = async (): Promise<void> => { const receipt = await import("../feature/receipt-owner"); await receipt.record(); };',
+    'import { record } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { return record(); };',
+    'import { record } from "../feature/receipt-owner"; export const upload = async () => { await record(); };',
+    'import { record } from "../feature/receipt-owner"; export const upload = async (): Promise<void> => { const call = record; await call(); };',
+    'import { record } from "../feature/receipt-owner"; import { featureRows } from "../db/schema/feature"; export const upload = async (): Promise<void> => { await record(); db.select(featureRows); };',
+  ])("rejects bypass or non-void operational facade: %s", (planted) => {
+    expect(validate(planted)).toContainEqual(invalid);
+  });
+  test("an unlisted wrapper cannot hide direct feature access", () => {
+    const planted = `${source} import { bypass } from "./bypass"; bypass();`;
+    expect(
+      validate(planted, ownerSource, [
+        [
+          "apps/api/src/dispatch/bypass.ts",
+          'import { run } from "../feature/core"; export const bypass = () => run();',
+        ],
+      ]),
+    ).toContainEqual(invalid);
+  });
+  test.each([
+    'import { featureRows } from "../db/schema/feature"; export const record = async (): Promise<void> => { return featureRows; };',
+    'import { featureRows } from "../db/schema/feature"; export const record = async () => { await db.insert(featureRows); };',
+    'import { featureRows } from "../db/schema/feature"; export const different = async (): Promise<void> => { await db.insert(featureRows); };',
+  ])("rejects missing or escaping owner exports: %s", (planted) => {
+    expect(validate(source, planted)).toContainEqual(invalid);
+  });
+  test("a generic handler still needs its own direct table declaration", () => {
+    expect(
+      validate(source, ownerSource, [
+        [
+          endpoint,
+          'import { featureRows } from "../db/schema/feature"; export const run = () => db.select(featureRows);',
+        ],
+      ]),
+    ).toContainEqual({
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
+  test.each([
+    { ...boundary, reason: " " },
+    { ...boundary, effects: [] },
+    { ...boundary, effects: ["record-recovery", "record-recovery"] },
+    { ...boundary, owners: [] },
+    { ...boundary, owners: [...boundary.owners, ...boundary.owners] },
+    {
+      ...boundary,
+      owners: [{ effect: "cleanup", module: owner, exports: ["record"] }],
+    },
+    {
+      ...boundary,
+      owners: [{ effect: "record-recovery", module: owner, exports: [] }],
+    },
+  ] as const)("rejects incomplete effect ownership %j", (planted) => {
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: {
+          fixture: {
+            ...registry.fixture,
+            ownership: {
+              ...registry.fixture.ownership,
+              dispatchModules: [planted],
+            },
+          },
+        },
+        endpoints: [],
+        sources: new Map([
+          ...baseSources,
+          [facade, source],
+          [owner, ownerSource],
+        ]),
+      }),
+    ).toContainEqual(invalid);
+  });
+});

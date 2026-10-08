@@ -71,7 +71,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import {
   maybeStartUploadTriggeredFlows,
   recordUploadTriggeredFlowIntents,
-} from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+} from "@/api/lib/flows/upload-trigger-recording";
 import { LIMITS } from "@/api/lib/limits";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";

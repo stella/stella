@@ -49,9 +49,9 @@ export const emitInfoSoudHearingSignals = async ({
   workspaceId,
   inserted,
   now = new Date(),
-}: EmitInfoSoudHearingSignalsArgs): Promise<number> => {
+}: EmitInfoSoudHearingSignalsArgs): Promise<void> => {
   if (inserted.length === 0) {
-    return 0;
+    return;
   }
   // audit: skip — derived emission intents commit with their audited hearing imports.
   await tx
@@ -69,7 +69,7 @@ export const emitInfoSoudHearingSignals = async ({
     (await findSignalsBackgroundActor({ tx, organizationId, workspaceId })) ===
     null
   ) {
-    return 0;
+    return;
   }
   const proposed: NewSignal[] = inserted
     .filter(({ hearing }) => !hearing.cancelled)
@@ -113,7 +113,7 @@ export const emitInfoSoudHearingSignals = async ({
       };
     });
 
-  const { insertedIds: emitted } = await emitSignals({
+  await emitSignals({
     tx,
     organizationId,
     signals: proposed,
@@ -129,5 +129,4 @@ export const emitInfoSoudHearingSignals = async ({
       ),
     ),
   );
-  return emitted.length;
 };

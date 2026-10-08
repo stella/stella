@@ -697,7 +697,12 @@ const OWNERSHIP_DECLARATIONS = [
       names: ["desktopPresence"],
       allowed: [
         {
-          path: "apps/api/src/lib/member-assignment-offboarding.ts",
+          path: "apps/api/src/lib/member-assignment-offboarding-census.ts",
+          reason:
+            "Static column metadata used only by the cleanup coverage test; no presence or assignment query.",
+        },
+        {
+          path: "apps/api/src/lib/member-assignment-offboarding-owner.ts",
           reason: "Clears observations during organization membership removal.",
         },
       ],
@@ -738,7 +743,7 @@ const OWNERSHIP_DECLARATIONS = [
     capability: "Writing task assignments for current matter members",
     owner: [
       "apps/api/src/lib/tasks/assignment-membership.ts",
-      "apps/api/src/lib/member-assignment-offboarding.ts",
+      "apps/api/src/lib/member-assignment-offboarding-owner.ts",
       "apps/api/src/lib/account-deletion-steps.ts",
     ],
     summary:
@@ -752,6 +757,11 @@ const OWNERSHIP_DECLARATIONS = [
       ],
       names: ["taskAssignees"],
       allowed: [
+        {
+          path: "apps/api/src/lib/member-assignment-offboarding-census.ts",
+          reason:
+            "Static column metadata used only by the cleanup coverage test; no presence or assignment query.",
+        },
         {
           path: "apps/api/src/db/",
           reason: "Schema and relation declarations.",

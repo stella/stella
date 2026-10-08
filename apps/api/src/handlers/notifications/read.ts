@@ -5,7 +5,7 @@ import { notifications } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { flowNotificationVisibilityCondition } from "@/api/lib/flows/review-gate-task";
+import { flowNotificationVisibilityCondition } from "@/api/lib/flows/visibility";
 
 import { notificationParamsSchema, readUnreadCount } from "./read-model";
 

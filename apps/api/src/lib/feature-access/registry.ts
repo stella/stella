@@ -2,6 +2,8 @@ import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 
+type OperationalFeatureEffect = "record-recovery" | "cleanup";
+
 type FeatureDefinition = {
   enrolment: "invitation" | "self-serve";
   deploymentFeature?: DeploymentFeatureFlag;
@@ -19,6 +21,17 @@ type FeatureDefinition = {
           admission: string;
           /** Where the admission comes from; the MCP feature gate by default. */
           specifier?: string;
+        }
+      | {
+          type: "operational";
+          module: string;
+          effects: readonly OperationalFeatureEffect[];
+          owners: readonly {
+            effect: OperationalFeatureEffect;
+            module: string;
+            exports: readonly string[];
+          }[];
+          reason: string;
         }
     )[];
   };
@@ -111,6 +124,7 @@ export const FEATURE_REGISTRY = {
           "signals",
           "signalEvents",
           "scoutRuns",
+          "pendingScoutEmissions",
         ],
       },
       coreModules: [
@@ -126,6 +140,18 @@ export const FEATURE_REGISTRY = {
       ],
       dispatchModules: [
         {
+          type: "admitted",
+          module: "apps/api/src/lib/entities/signal-window-rows.ts",
+          admission: "isFeatureEnabled",
+          specifier: "@/api/lib/auth/feature-access/policy",
+        },
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/scheduler/tasks/scout-emission-recovery.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
+        {
           type: "registry",
           module: "apps/api/src/lib/feature-access/registry.ts",
           registry: "SELF_SERVE_FEATURE_IDS",
@@ -135,10 +161,37 @@ export const FEATURE_REGISTRY = {
           module: "apps/api/src/mcp/capability-tools.ts",
           admission: "isMcpDescriptorFeatureEnabled",
         },
+        {
+          type: "operational",
+          module: "apps/api/src/lib/scouts/document-review-recovery.ts",
+          effects: ["record-recovery"],
+          owners: [
+            {
+              effect: "record-recovery",
+              module: "apps/api/src/lib/scouts/document-review.ts",
+              exports: ["maybeEmitDocumentReviewSignal"],
+            },
+          ],
+          reason:
+            "Source writes retain an emission receipt while admission is absent; emission admits its actor and exposes no signal result to the source caller.",
+        },
+        {
+          type: "operational",
+          module: "apps/api/src/lib/scouts/infosoud-hearings-recovery.ts",
+          effects: ["record-recovery"],
+          owners: [
+            {
+              effect: "record-recovery",
+              module: "apps/api/src/lib/scouts/infosoud-hearings.ts",
+              exports: ["emitInfoSoudHearingSignals"],
+            },
+          ],
+          reason:
+            "Source writes retain an emission receipt while admission is absent; emission admits its actor and exposes no signal result to the source caller.",
+        },
         ...[
           "apps/api/src/lib/scouts/document-deadlines.ts",
           "apps/api/src/lib/scouts/document-review.ts",
-          "apps/api/src/lib/scouts/infosoud-hearings.ts",
           "apps/api/src/lib/scouts/work-attention.ts",
         ].map(
           (module) =>
@@ -163,6 +216,7 @@ export const FEATURE_REGISTRY = {
           "flowDefinitions",
           "flowRuns",
           "flowRunSteps",
+          "flowUploadTriggerIntents",
         ],
       },
       coreModules: [
@@ -187,6 +241,32 @@ export const FEATURE_REGISTRY = {
       ],
       dispatchModules: [
         {
+          type: "operational",
+          module: "apps/api/src/lib/member-assignment-offboarding.ts",
+          effects: ["cleanup"],
+          owners: [
+            {
+              effect: "cleanup",
+              module: "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+              exports: [
+                "clearMemberAssignments",
+                "tryLockMemberCleanupWorkspace",
+                "tryLockAccountMemberCleanup",
+                "removeOrganizationMemberInTransaction",
+              ],
+            },
+          ],
+          reason:
+            "Membership removal clears retained flow assignments under the existing ordered locks, without exposing flow rows or derived workspace identities.",
+        },
+        {
+          type: "admitted",
+          module:
+            "apps/api/src/lib/scheduler/tasks/upload-flow-trigger-recovery.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
+        {
           type: "registry",
           module: "apps/api/src/lib/feature-access/registry.ts",
           registry: "SELF_SERVE_FEATURE_IDS",
@@ -196,9 +276,34 @@ export const FEATURE_REGISTRY = {
           module: "apps/api/src/mcp/capability-tools.ts",
           admission: "isMcpDescriptorFeatureEnabled",
         },
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/flows/visibility.ts",
+          admission: "isFeatureEnabled",
+          specifier: "@/api/lib/auth/feature-access/policy",
+        },
+        {
+          type: "operational",
+          module: "apps/api/src/lib/flows/upload-trigger-recording.ts",
+          effects: ["record-recovery"],
+          owners: [
+            {
+              effect: "record-recovery",
+              module:
+                "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts",
+              exports: [
+                "recordUploadTriggeredFlowIntents",
+                "maybeStartUploadTriggeredFlows",
+              ],
+            },
+          ],
+          reason:
+            "Uploads atomically retain delivery receipts; replay admits the definition author and exposes no flow result to the uploader.",
+        },
         ...[
           "apps/api/src/lib/flows/start-automated-flow-run.ts",
           "apps/api/src/lib/flows/flow-run-worker.ts",
+          "apps/api/src/lib/scheduler/tasks/flow-run.ts",
         ].map(
           (module) =>
             ({
