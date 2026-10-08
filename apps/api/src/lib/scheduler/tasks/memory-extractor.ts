@@ -38,6 +38,7 @@ import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
 import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
+import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedChatThreadCompactionId } from "@/api/lib/safe-id-boundaries";
@@ -538,7 +539,7 @@ const extractCandidates = async ({
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
     | undefined;
 
-  const result = await Result.tryPromise({
+  const tried = await Result.tryPromise({
     try: async () => {
       analytics = createTanStackAIAnalyticsCallbacks({
         dataClass: "customer",
@@ -560,7 +561,7 @@ const extractCandidates = async ({
       // before provider transmission. The outer check avoids needless setup;
       // this one closes the opt-out window around the actual model call.
       if (!(await hasCurrentExtractionConsent(db, compaction))) {
-        return null;
+        return Result.ok(null);
       }
       // Extraction has no anonymization step: a thread that switched to
       // anonymized mode after the claim is not sent, and later claims skip it.
@@ -584,37 +585,48 @@ const extractCandidates = async ({
         );
       });
       if (!sendable) {
-        return null;
+        return Result.ok(null);
       }
 
-      return await generateTanStackObjectForRole({
-        dataClass: "customer",
-        role: "fast",
-        serviceTier: "batch",
+      // The thread's sends drew its actions; extraction takes a background
+      // slot, and a refusal fails this attempt like any other.
+      return await runScheduledBackgroundWork({
+        actionKind: "chat.background",
         organizationId: compaction.threadOrganizationId,
-        orgAIConfig,
-        managedAIResidency,
-        tenantWorkspaceIds: compaction.threadDataWorkspaceIds,
-        analytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
-          role: "fast",
-          scopeKey: compaction.compactionId,
-        }),
-        system: EXTRACTION_SYSTEM_PROMPT,
-        prompt: buildExtractionPrompt({ summary, transcript }),
-        outputSchema: extractionSchema,
-        maxOutputTokens: MEMORY_MAX_OUTPUT_TOKENS,
-        // Combine the per-call timeout with the scheduler's shutdown signal
-        // so a graceful stop cancels an in-flight model call immediately.
-        abortSignal: AbortSignal.any([
-          AbortSignal.timeout(EXTRACTION_TIMEOUT_MS),
-          schedulerSignal,
-        ]),
+        userId: compaction.threadUserId,
+        run: async (leaseSignal, admission) =>
+          await generateTanStackObjectForRole({
+            dataClass: "customer",
+            role: "fast",
+            serviceTier: "batch",
+            organizationId: compaction.threadOrganizationId,
+            admission,
+            orgAIConfig,
+            managedAIResidency,
+            tenantWorkspaceIds: compaction.threadDataWorkspaceIds,
+            analytics,
+            caching: resolveCaching({
+              promptCachingEnabled,
+              role: "fast",
+              scopeKey: compaction.compactionId,
+            }),
+            system: EXTRACTION_SYSTEM_PROMPT,
+            prompt: buildExtractionPrompt({ summary, transcript }),
+            outputSchema: extractionSchema,
+            maxOutputTokens: MEMORY_MAX_OUTPUT_TOKENS,
+            // Combine the per-call timeout with the scheduler's shutdown signal
+            // so a graceful stop cancels an in-flight model call immediately.
+            abortSignal: AbortSignal.any([
+              AbortSignal.timeout(EXTRACTION_TIMEOUT_MS),
+              schedulerSignal,
+              leaseSignal,
+            ]),
+          }),
       });
     },
     catch: (error: unknown) => error,
   });
+  const result = Result.flatten(tried);
 
   if (Result.isError(result)) {
     analytics?.captureError(result.error);

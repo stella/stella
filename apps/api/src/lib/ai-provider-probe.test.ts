@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { ProbeProviderOptions } from "@/api/lib/ai-provider-probe";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundFetchError,
@@ -78,13 +79,12 @@ const { probeProvider: probeProviderImpl } =
   await import("@/api/lib/ai-provider-probe");
 
 const probeProvider = async (
-  provider: Parameters<typeof probeProviderImpl>[0],
-  apiKey: string,
-  options: Omit<ProbeProviderOptions, "fetchBytes"> = {},
+  options: Omit<ProbeProviderOptions, "fetchBytes" | "permit">,
 ) =>
-  await probeProviderImpl(provider, apiKey, {
+  await probeProviderImpl({
     ...options,
     fetchBytes: mockSafeOutboundFetchBytes,
+    permit: grantThirdPartyOutboundPermit(),
   });
 
 beforeEach(() => {
@@ -98,7 +98,12 @@ beforeEach(() => {
 
 describe("probeProvider", () => {
   test("probes OpenRouter authentication through the EU endpoint", async () => {
-    expect(await probeProvider("openrouter", "test-org-key")).toEqual({
+    expect(
+      await probeProvider({
+        provider: "openrouter",
+        apiKey: "test-org-key",
+      }),
+    ).toEqual({
       valid: true,
     });
     expect(calls).toHaveLength(1);
@@ -111,7 +116,9 @@ describe("probeProvider", () => {
   });
 
   test("passes the configured Azure API version to the Foundry probe", async () => {
-    const result = await probeProvider("azure_foundry", "azure-key", {
+    const result = await probeProvider({
+      provider: "azure_foundry",
+      apiKey: "azure-key",
       endpoint: "https://example.openai.azure.com/openai/v1",
       apiVersion: "2024-06-01",
     });
@@ -127,7 +134,9 @@ describe("probeProvider", () => {
   });
 
   test("uses the Azure default API version when none is configured", async () => {
-    const result = await probeProvider("azure_foundry", "azure-key", {
+    const result = await probeProvider({
+      provider: "azure_foundry",
+      apiKey: "azure-key",
       endpoint: "https://example.openai.azure.com/openai/v1",
     });
 
@@ -153,7 +162,9 @@ describe("probeProvider", () => {
       },
     };
 
-    const result = await probeProvider("azure_foundry", "azure-key", {
+    const result = await probeProvider({
+      provider: "azure_foundry",
+      apiKey: "azure-key",
       endpoint: "https://example.openai.azure.com/openai/v1",
       expectedAzureDeployments: ["gpt-5-chat", "gpt-5-mini"],
     });
@@ -168,7 +179,9 @@ describe("probeProvider", () => {
       body: { object: "list", data: [{ id: "gpt-5-chat" }] },
     };
 
-    const result = await probeProvider("azure_foundry", "azure-key", {
+    const result = await probeProvider({
+      provider: "azure_foundry",
+      apiKey: "azure-key",
       endpoint: "https://example.openai.azure.com/openai/v1",
       expectedAzureDeployments: ["gpt-5-chat", "typo-deployment"],
     });
@@ -182,7 +195,9 @@ describe("probeProvider", () => {
   test("Azure probe treats a malformed list-models body as zero deployments", async () => {
     nextResponse = { kind: "ok", status: 200, body: "not-an-object" };
 
-    const result = await probeProvider("azure_foundry", "azure-key", {
+    const result = await probeProvider({
+      provider: "azure_foundry",
+      apiKey: "azure-key",
       endpoint: "https://example.openai.azure.com/openai/v1",
       expectedAzureDeployments: ["any-deployment"],
     });
@@ -200,7 +215,9 @@ describe("probeProvider", () => {
       body: { error: { message: "Invalid API key" } },
     };
 
-    const result = await probeProvider("azure_foundry", "azure-key", {
+    const result = await probeProvider({
+      provider: "azure_foundry",
+      apiKey: "azure-key",
       endpoint: "https://example.openai.azure.com/openai/v1",
     });
 
@@ -216,7 +233,9 @@ describe("probeProvider", () => {
 
     let caught: unknown;
     try {
-      await probeProvider("azure_foundry", "azure-key", {
+      await probeProvider({
+        provider: "azure_foundry",
+        apiKey: "azure-key",
         endpoint: "https://example.openai.azure.com/openai/v1",
       });
     } catch (error) {
@@ -229,7 +248,9 @@ describe("probeProvider", () => {
   });
 
   test("Hugging Face probe calls the endpoint models route with bearer auth", async () => {
-    const result = await probeProvider("huggingface", "hf-test", {
+    const result = await probeProvider({
+      provider: "huggingface",
+      apiKey: "hf-test",
       endpoint: "https://example.endpoints.huggingface.cloud/v1/",
     });
 
@@ -245,7 +266,10 @@ describe("probeProvider", () => {
   });
 
   test("Hugging Face probe rejects missing endpoint", async () => {
-    const result = await probeProvider("huggingface", "hf-test");
+    const result = await probeProvider({
+      provider: "huggingface",
+      apiKey: "hf-test",
+    });
 
     expect(result).toEqual({
       valid: false,
@@ -254,7 +278,9 @@ describe("probeProvider", () => {
   });
 
   test("Hugging Face probe rejects unsafe endpoint shape before fetch", async () => {
-    const result = await probeProvider("huggingface", "hf-test", {
+    const result = await probeProvider({
+      provider: "huggingface",
+      apiKey: "hf-test",
       endpoint: "http://localhost:8080/v1",
     });
 
@@ -272,7 +298,9 @@ describe("probeProvider", () => {
       body: { error: { message: "Invalid token" } },
     };
 
-    const result = await probeProvider("huggingface", "hf-test", {
+    const result = await probeProvider({
+      provider: "huggingface",
+      apiKey: "hf-test",
       endpoint: "https://example.endpoints.huggingface.cloud/v1",
     });
 
@@ -284,7 +312,10 @@ describe("probeProvider", () => {
   });
 
   test("Bearer provider returns valid on 2xx", async () => {
-    const result = await probeProvider("openai", "sk-test");
+    const result = await probeProvider({
+      provider: "openai",
+      apiKey: "sk-test",
+    });
 
     expect(result).toEqual({ valid: true });
     const call = calls.at(0);
@@ -302,7 +333,10 @@ describe("probeProvider", () => {
       body: { error: "invalid_api_key" },
     };
 
-    const result = await probeProvider("anthropic", "bad-key");
+    const result = await probeProvider({
+      provider: "anthropic",
+      apiKey: "bad-key",
+    });
 
     expect(result).toEqual({
       valid: false,

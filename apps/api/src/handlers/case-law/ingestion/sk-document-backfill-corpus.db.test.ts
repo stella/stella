@@ -25,12 +25,14 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawCorpusPackRefs,
+  corpusIndexProjectionStates,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   CorpusPackError,
@@ -721,6 +723,100 @@ if (!databaseUrl || !runPostgresTests) {
           .select({ id: caseLawSearchDocumentPreviewPassages.decisionId })
           .from(caseLawSearchDocumentPreviewPassages)
           .where(eq(caseLawSearchDocumentPreviewPassages.decisionId, id)),
+      ).toHaveLength(0);
+    });
+
+    test("a decision merge fence starts after transfer and leaves the document unsettled", async () => {
+      const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";
+      const id = await insertDecision({
+        caseNumber: `ownership-${suffix}`,
+        contentHash: emptyHash,
+      });
+      const decision = await claimFor(id);
+      const desiredBefore = await db
+        .select()
+        .from(corpusIndexProjectionStates)
+        .where(
+          and(
+            eq(corpusIndexProjectionStates.family, "case_law"),
+            eq(corpusIndexProjectionStates.entityId, id),
+          ),
+        );
+      let transferred = 0;
+      const outcome = await storeBackfilledDocument({
+        decision,
+        document: parsedDocument,
+        scopedDb,
+        transfer: {
+          layout: "packs",
+          putPacks: async () => {
+            transferred += 1;
+            await db
+              .update(caseLawSources)
+              .set({
+                ingestionLeaseToken:
+                  createSafeId<"caseLawSourceIngestionLease">(),
+                ingestionLeasePurpose: "decision-merge",
+                ingestionLeaseExpiresAt: new Date(Date.now() + 60_000),
+              })
+              .where(eq(caseLawSources.id, sourceId));
+            return Result.ok(undefined);
+          },
+        },
+      });
+      await db
+        .update(caseLawSources)
+        .set({
+          ingestionLeaseToken: null,
+          ingestionLeaseExpiresAt: null,
+          ingestionLeasePurpose: "ingestion",
+        })
+        .where(eq(caseLawSources.id, sourceId));
+      expect(transferred).toBe(1);
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusPackRefs)
+          .where(eq(caseLawCorpusPackRefs.decisionId, id)),
+      ).toEqual([]);
+      expect(
+        await db
+          .select()
+          .from(corpusIndexProjectionStates)
+          .where(
+            and(
+              eq(corpusIndexProjectionStates.family, "case_law"),
+              eq(corpusIndexProjectionStates.entityId, id),
+            ),
+          ),
+      ).toEqual(desiredBefore);
+      expect(outcome).toEqual({ status: "lost" });
+      expect(
+        (
+          await db
+            .select({
+              fulltext: caseLawDecisions.fulltext,
+              contentHash: caseLawDecisions.contentHash,
+              textS3Key: caseLawDecisions.textS3Key,
+              normalizedS3Key: caseLawDecisions.normalizedS3Key,
+              astS3Key: caseLawDecisions.astS3Key,
+            })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, id))
+            .limit(1)
+        ).at(0),
+      ).toEqual({
+        fulltext: null,
+        contentHash: emptyHash,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+      });
+      expect(
+        await db
+          .select({ id: caseLawSearchDocuments.decisionId })
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, id)),
       ).toHaveLength(0);
     });
   });

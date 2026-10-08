@@ -42,6 +42,7 @@ import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundarie
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getTestDb,
@@ -304,6 +305,7 @@ test("queued revocation fails once and makes no execution call", async () => {
   let calls = 0;
   const args = {
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor: actorFor(runId),
     grants: {},
     execute: async () => {
@@ -367,6 +369,7 @@ test("access is rechecked after resolving the pinned file before reading documen
     });
     await processListVerificationRun({
       data: { runId, organizationId, workspaceId, userId },
+      admission: testModelAdmission(organizationId),
       actor: actorFor(runId, database),
       execution: {
         readDocument: async ({ file }) => {
@@ -407,6 +410,7 @@ test.each(["matter", "grant", "deployment", "active"] as const)(
       const control = await seedPinnedRun();
       await processListVerificationRun({
         data: { runId: control, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(control),
         execution,
       });
@@ -421,6 +425,7 @@ test.each(["matter", "grant", "deployment", "active"] as const)(
       try {
         const args = {
           data: { runId, organizationId, workspaceId, userId },
+          admission: testModelAdmission(organizationId),
           actor: actorFor(runId),
           execution,
         };
@@ -502,6 +507,7 @@ test("granted duplicate delivery executes once using the persisted requester", a
   };
   const args = {
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor,
     grants,
     execute,
@@ -521,6 +527,7 @@ test("job requester mismatch leaves the persisted run unchanged", async () => {
   let calls = 0;
   await processListVerificationRun({
     data: { runId, organizationId, workspaceId, userId: actor.userId },
+    admission: testModelAdmission(organizationId),
     actor,
     grants,
     execute: async () => {
@@ -608,6 +615,7 @@ test("membership removal closes queued execution with a server-bound audit", asy
   let calls = 0;
   await processListVerificationRun({
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor: actorFor(runId),
     grants,
     execute: async () => {
@@ -653,6 +661,7 @@ test("current role permission is required for queued execution", async () => {
   let calls = 0;
   await processListVerificationRun({
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor: actorFor(runId),
     grants,
     execute: async () => {
@@ -699,11 +708,13 @@ test.each([
       ).toEqual([{ id: workspaceMemberId }]);
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(runId),
         grants,
-        execute: async ({ actor, accessProof }) => {
+        execute: async ({ actor, admission, accessProof }) => {
           const call = createVerificationCall({
             deps: {
+              admission,
               accessProof,
               checkRunBudget: async () => Result.ok(),
               refreshAccessProof: async () => {
@@ -794,6 +805,7 @@ test.each([
       expect(await readAudits(runId)).toHaveLength(1);
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(runId),
         grants,
         execute: async () => {
@@ -891,6 +903,7 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
       await seedRun();
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(runId),
         grants,
         execution: {
