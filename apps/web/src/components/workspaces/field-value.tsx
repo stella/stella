@@ -153,7 +153,7 @@ export const IntFieldValue = ({
   );
 };
 
-export const MoneyFieldValue = ({
+const MoneyFieldValue = ({
   content,
   variant,
 }: {
@@ -174,7 +174,7 @@ export const MoneyFieldValue = ({
   );
 };
 
-export const PersonFieldValue = ({
+const PersonFieldValue = ({
   content,
   propertyId,
   variant,

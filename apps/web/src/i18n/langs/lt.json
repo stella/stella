@@ -5474,14 +5474,8 @@
     "exportToCsv": "Eksportuoti į CSV",
     "fields": {
       "calculating": "Skaičiuojama...",
-      "currencyLabel": "Valiuta (neprivaloma)",
-      "currencyPlaceholder": "pvz. USD, EUR",
-      "editFieldValue": "Redaguoti lauko reikšmę",
       "errored": "Klaida",
-      "fieldValueLabel": "Lauko reikšmė",
-      "fieldValuePlaceholder": "Įveskite lauko reikšmę",
       "formatNotSupported": "Formatas nepalaikomas",
-      "numberPlaceholder": "Įveskite skaičių",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes"
     },

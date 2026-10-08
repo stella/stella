@@ -48,6 +48,9 @@
 //   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
 //   bun scripts/merge-bar.ts --disarm <pr-number> [--repo owner/name] [--dry-run]
 //   bun scripts/merge-bar.ts --update-branch owner/name#<pr-number> --expected-head-sha <sha> [--dry-run]
+//   bun scripts/merge-bar.ts --classify-ejection <pr-number> --expected-head-sha <sha>
+//   bun scripts/merge-bar.ts --requeue-jump-reset <pr-number> --expected-head-sha <sha> [--dry-run]
+// STELLA_MERGE_BAR_STOP_FILE blocks native mutations while the file exists.
 //
 // A non-empty STELLA_MERGE_HOLD repository variable holds ordinary pull requests;
 // recognized release pull requests remain exempt, including --jump.
@@ -55,7 +58,7 @@
 // Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
 import { panic, Result, TaggedError } from "better-result";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,6 +80,12 @@ import {
   type CiCoverageLogError,
 } from "./merge-bar-ci-coverage";
 import { decideBarFreshness, readBarFreshness } from "./merge-bar-freshness";
+import {
+  classifyJumpReset,
+  createJumpResetStore,
+  type JumpResetClassification,
+  type JumpResetEvidence,
+} from "./merge-bar-jump-reset";
 import {
   branchUpdateResponse,
   createBranchUpdateStore,
@@ -1087,16 +1096,16 @@ const ratchetFreshnessFailure = ({
   ) {
     return "cannot read the ratchet definition paths from the base";
   }
-  const ratchetChanges = definitions.filter((filename) =>
-    changedPaths.has(filename),
-  );
+  const isDefinition = (filename: string) =>
+    definitions.some((pattern) => new Bun.Glob(pattern).match(filename));
+  const ratchetChanges = [...changedPaths].filter(isDefinition);
   if (ratchetChanges.length === 0) {
     return null;
   }
   // The recheck runs the base's checker, which cannot judge a PR that edits
   // the checker itself; the merge group runs the merged checker instead, and
   // a direct merge has none, so it needs CI on the merged tree.
-  if (pullFiles.some((filename) => definitions.includes(filename))) {
+  if (pullFiles.some(isDefinition)) {
     return mergeGroupRetests
       ? null
       : `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
@@ -1576,6 +1585,7 @@ type CheckEjectedHeadOptions = {
     "readMergeQueueRemovals" | "readMergeGroup" | "readBranchTip"
   >;
   pullRequest: Pick<PullRequestSnapshot, "headSha" | "baseRefName">;
+  readReset?: () => JumpResetClassification;
 };
 
 /**
@@ -1587,6 +1597,7 @@ type CheckEjectedHeadOptions = {
 export const checkEjectedHead = ({
   gateway,
   pullRequest,
+  readReset,
 }: CheckEjectedHeadOptions) => {
   const removal = latestEjection(gateway.readMergeQueueRemovals());
   if (removal === undefined) {
@@ -1614,6 +1625,11 @@ export const checkEjectedHead = ({
           : `${printed}; ${pullRequest.baseRefName} moved since (now ${mainTip.sha})`,
       );
     case "unchanged-retry":
+      if (readReset?.().type === "JUMP_RESET") {
+        return Result.ok(
+          `${printed}; JUMP_RESET: one recovery attempt permitted`,
+        );
+      }
       return Result.err(
         new UnchangedEjectedHeadError({
           message:
@@ -1660,6 +1676,7 @@ type GitHubGateway = {
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
   readMergeQueueRemovals: () => readonly MergeQueueRemoval[];
   readMergeGroup: (groupSha: string) => MergeGroupRecord;
+  readJumpResetEvidence: (groupSha: string) => JumpResetEvidence;
   readBranchTip: (branch: string) => BranchTip;
   sleep: (milliseconds: number) => void;
 };
@@ -1965,6 +1982,8 @@ type ArmAndVerifyOptions = {
   readState: () => unknown;
   readRemovals: () => readonly MergeQueueRemoval[];
   mutate: GitHubGateway["mutateHandoff"];
+  beforeWrite?: () => void;
+  onJumpAccepted?: (startedAt: string) => void;
 };
 
 type VerifyArmReceiptOptions = {
@@ -2035,6 +2054,8 @@ export const armAndVerify = ({
   readState,
   readRemovals,
   mutate,
+  beforeWrite,
+  onJumpAccepted,
 }: ArmAndVerifyOptions) =>
   Result.try(() => {
     const before = armState(readState());
@@ -2072,6 +2093,8 @@ export const armAndVerify = ({
       });
     }
     if (jump || checksSucceeded) {
+      beforeWrite?.();
+      const startedAt = new Date().toISOString();
       const result = readRecord(
         mutate(
           `mutation($id:ID!, $sha:GitObjectID!) {
@@ -2092,6 +2115,9 @@ export const armAndVerify = ({
           "enqueue entry",
         ),
       );
+      if (jump && receipt.jump) {
+        onJumpAccepted?.(startedAt);
+      }
       const after = armState(readState());
       if (after.id !== pullRequestId || after.headSha !== expectedHeadSha) {
         return refuseArm("HEAD_MOVED_DURING_ARMING");
@@ -2101,6 +2127,7 @@ export const armAndVerify = ({
       }
       return Result.ok({ kind: "queued", entry: receipt } as const);
     }
+    beforeWrite?.();
     if (before.autoMerge !== null) {
       const disabled = readRecord(
         mutate(
@@ -2286,11 +2313,21 @@ const githubEnvironment = (access: "read" | "write") => ({
       : process.env["GH_TOKEN"],
 });
 
+const checkMutationStop = () => {
+  const stopFile = process.env["STELLA_MERGE_BAR_STOP_FILE"];
+  if (stopFile !== undefined && existsSync(stopFile)) {
+    panic("Native mutations stopped by stop file");
+  }
+};
+
 const runGhProcess = (
   args: readonly string[],
   access: "read" | "write" = "read",
-) =>
-  Bun.spawnSync(
+) => {
+  if (access === "write") {
+    checkMutationStop();
+  }
+  return Bun.spawnSync(
     ["bash", fileURLToPath(new URL("gh-retry.sh", import.meta.url)), ...args],
     {
       env: githubEnvironment(access),
@@ -2298,6 +2335,7 @@ const runGhProcess = (
       stderr: "pipe",
     },
   );
+};
 
 const runGh = (
   args: readonly string[],
@@ -3178,6 +3216,116 @@ const createGhGateway = ({
       };
     },
 
+    readJumpResetEvidence: (groupSha) => {
+      const PAGE_LIMIT = 20;
+      let pagesRead = 0;
+      // Evidence that cannot be read completely is unavailable, never a
+      // crash: classification then fails closed (no recovery) and the
+      // ordinary ejection gate still answers.
+      const unavailable = (reason: string): null => {
+        console.error(`jump-reset evidence unavailable: ${reason}`);
+        return null;
+      };
+      type EvidenceRow = Record<string, unknown> & { id: number };
+      const readPages = (
+        endpoint: string,
+        field: string,
+      ): EvidenceRow[] | null => {
+        const rows: EvidenceRow[] = [];
+        const ids = new Set<number>();
+        let count: number | undefined;
+        for (let page = 1; page <= PAGE_LIMIT; page += 1) {
+          if (pagesRead >= PAGE_LIMIT) {
+            return unavailable("merge group evidence page budget exhausted");
+          }
+          pagesRead += 1;
+          if (page > 1) {
+            Bun.sleepSync(1100);
+          }
+          const body = readRecord(
+            runGhJson(["api", `${endpoint}&per_page=100&page=${page}`]),
+            "actions page",
+          );
+          const total = body["total_count"];
+          const items = body[field];
+          if (
+            typeof total !== "number" ||
+            !Number.isSafeInteger(total) ||
+            total < 0 ||
+            !Array.isArray(items)
+          ) {
+            return unavailable("incomplete merge group evidence");
+          }
+          if (count !== undefined && count !== total) {
+            return unavailable(
+              "merge group evidence changed during pagination",
+            );
+          }
+          count = total;
+          for (const item of items) {
+            const row = readRecord(item, field);
+            const id = row["id"];
+            if (
+              typeof id !== "number" ||
+              !Number.isSafeInteger(id) ||
+              id <= 0 ||
+              ids.has(id)
+            ) {
+              return unavailable(
+                "invalid or duplicate merge group evidence id",
+              );
+            }
+            ids.add(id);
+            rows.push({ ...row, id });
+          }
+          if (items.length < 100) {
+            if (rows.length !== count) {
+              return unavailable("truncated merge group evidence");
+            }
+            return rows;
+          }
+        }
+        return unavailable("merge group evidence page budget exhausted");
+      };
+      const runs = readPages(
+        `repos/${repo}/actions/runs?event=merge_group&head_sha=${encodeURIComponent(groupSha)}`,
+        "workflow_runs",
+      );
+      if (runs === null || runs.length === 0) {
+        return { type: "unavailable" };
+      }
+      const jobs: { conclusion: string | null; completedAt: string | null }[] =
+        [];
+      for (const run of runs) {
+        if (
+          readString(run, "head_sha") !== groupSha ||
+          readString(run, "event") !== "merge_group"
+        ) {
+          return { type: "unavailable" };
+        }
+        const id = run.id;
+        Bun.sleepSync(1100);
+        const rows = readPages(
+          `repos/${repo}/actions/runs/${id}/jobs?filter=latest`,
+          "jobs",
+        );
+        if (rows === null || rows.length === 0) {
+          return { type: "unavailable" };
+        }
+        for (const job of rows) {
+          jobs.push({
+            conclusion:
+              job["conclusion"] === null ? null : readString(job, "conclusion"),
+            completedAt:
+              job["completed_at"] === null
+                ? null
+                : readTimestamp(job, "completed_at"),
+          });
+        }
+      }
+      return { type: "complete", jobs, cancellationReason: null };
+    },
+
     readBranchTip: (branch) => {
       const tip = readRecord(
         runGhJson([
@@ -3209,6 +3357,11 @@ type MergeBarOptions = MergeBarCommonOptions &
     | { mode: "merge"; jump: boolean }
     | { mode: "disarm"; jump: false; expectedHeadSha?: string }
     | { mode: "update-branch"; jump: false; expectedHeadSha: string }
+    | {
+        mode: "classify-ejection" | "requeue-jump-reset";
+        jump: false;
+        expectedHeadSha: string;
+      }
   );
 
 type ReadPullReferenceOptions = {
@@ -3277,11 +3430,29 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
       jump = true;
       continue;
     }
-    if (argument === "--disarm" || argument === "--update-branch") {
+    if (
+      argument === "--disarm" ||
+      argument === "--update-branch" ||
+      argument === "--classify-ejection" ||
+      argument === "--requeue-jump-reset"
+    ) {
       if (mode !== "merge") {
-        panic("Only one of --disarm or --update-branch may be supplied");
+        panic("Only one merge-bar mode may be supplied");
       }
-      mode = argument === "--disarm" ? "disarm" : "update-branch";
+      switch (argument) {
+        case "--disarm":
+          mode = "disarm";
+          break;
+        case "--update-branch":
+          mode = "update-branch";
+          break;
+        case "--classify-ejection":
+          mode = "classify-ejection";
+          break;
+        case "--requeue-jump-reset":
+          mode = "requeue-jump-reset";
+          break;
+      }
       continue;
     }
     if (argument === "--expected-head-sha") {
@@ -3300,7 +3471,7 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   }
   if (positional.length !== 1) {
     panic(
-      `Expected exactly one PR number, got ${positional.length}. Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run] [--jump | --disarm | --update-branch --expected-head-sha <sha>]`,
+      `Expected exactly one PR number, got ${positional.length}. Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run] [--jump | --disarm | --update-branch | --classify-ejection | --requeue-jump-reset] [--expected-head-sha <sha>]`,
     );
   }
   const { pullNumber, repo } = readPullReference({
@@ -3312,12 +3483,14 @@ export const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(`--${mode} cannot be combined with --jump`);
   }
   if (mode === "merge" && expectedHeadSha !== undefined) {
-    panic("--expected-head-sha requires --update-branch or --disarm");
+    panic("--expected-head-sha requires a head-pinned mode");
   }
   switch (mode) {
     case "update-branch":
+    case "classify-ejection":
+    case "requeue-jump-reset":
       if (expectedHeadSha === undefined) {
-        panic("--update-branch requires --expected-head-sha");
+        panic(`--${mode} requires --expected-head-sha`);
       }
       return { mode, pullNumber, repo, dryRun, jump: false, expectedHeadSha };
     case "disarm":
@@ -3504,6 +3677,76 @@ if (import.meta.main) {
     pullNumber: options.pullNumber,
     migrationDirectory: MERGE_BAR_REPOSITORIES[options.repo].migrationDirectory,
   });
+  const resetStore = createJumpResetStore(
+    path.join(
+      process.env["STELLA_MERGE_BAR_STATE_DIR"] ??
+        path.join(
+          process.env["XDG_STATE_HOME"] ??
+            path.join(homedir(), ".local", "state"),
+          "stella",
+          "merge-bar",
+        ),
+      "jump-resets",
+    ),
+  );
+  const resetKey = (head: string) =>
+    `${options.repo}#${options.pullNumber}@${head}`;
+  const readReset = (head: string): JumpResetClassification => {
+    const removal = gateway.readMergeQueueRemovals().at(-1);
+    if (
+      removal === undefined ||
+      removalDisposition(removal.reason) !== "ejected" ||
+      removal.headSha !== head ||
+      removal.groupSha === null
+    ) {
+      return { type: "not-reset" };
+    }
+    const jumps = resetStore.readJumps();
+    if (jumps.isErr()) {
+      panic(jumps.error.message);
+    }
+    const evidence = gateway.readJumpResetEvidence(removal.groupSha);
+    return classifyJumpReset({
+      repo: options.repo,
+      evidence:
+        evidence.type === "complete"
+          ? {
+              type: "complete",
+              jobs: evidence.jobs,
+              cancellationReason: removal.reason.value,
+            }
+          : evidence,
+      jumps: jumps.value,
+    });
+  };
+
+  if (options.mode === "classify-ejection") {
+    const pr = gateway.readPullRequest();
+    if (
+      pr.state !== "OPEN" ||
+      pr.isCrossRepository ||
+      pr.headSha !== options.expectedHeadSha
+    ) {
+      panic("PR changed or ownership unverified");
+    }
+    const classification = readReset(pr.headSha);
+    const used = resetStore.hasReservation(resetKey(pr.headSha));
+    if (used.isErr()) {
+      panic(used.error.message);
+    }
+    console.log(
+      JSON.stringify({
+        status: classification.type,
+        head: pr.headSha,
+        retry: used.value ? "reserved" : "available",
+        ...(classification.type === "JUMP_RESET" &&
+        classification.cause === "jump-record"
+          ? { jump_at: classification.jump.at }
+          : {}),
+      }),
+    );
+    process.exit(0);
+  }
 
   if (options.mode === "disarm") {
     const receipt = disarmPullRequest({
@@ -3543,10 +3786,38 @@ if (import.meta.main) {
   }
 
   const pullRequest = readSettledPullRequest(gateway);
+  if (
+    options.mode === "requeue-jump-reset" &&
+    (pullRequest.headSha !== options.expectedHeadSha ||
+      pullRequest.isCrossRepository)
+  ) {
+    panic("PR changed or ownership unverified");
+  }
+  let reset: JumpResetClassification = { type: "not-reset" };
+  const readUnusedReset = () => {
+    reset = readReset(pullRequest.headSha);
+    const used = resetStore.hasReservation(resetKey(pullRequest.headSha));
+    if (used.isErr()) {
+      panic(used.error.message);
+    }
+    return used.value ? ({ type: "not-reset" } as const) : reset;
+  };
+  if (
+    options.mode === "requeue-jump-reset" &&
+    readUnusedReset().type !== "JUMP_RESET"
+  ) {
+    panic("NOT ARMED: no unused JUMP_RESET recovery for this head");
+  }
   const policy = readLiveRepositoryPolicy(
     options.repo,
     pullRequest.baseRefName,
   );
+  if (
+    options.mode === "requeue-jump-reset" &&
+    policy.landing !== "merge-when-ready"
+  ) {
+    panic("JUMP_RESET recovery requires a merge queue");
+  }
   const jump = options.jump;
   const requireFrontOfQueue = (
     context: string,
@@ -3584,7 +3855,11 @@ if (import.meta.main) {
     process.exit(0);
   }
   if (policy.landing === "merge-when-ready") {
-    const ejectedHead = checkEjectedHead({ gateway, pullRequest });
+    const ejectedHead = checkEjectedHead({
+      gateway,
+      pullRequest,
+      readReset: readUnusedReset,
+    });
     if (ejectedHead.isErr()) {
       console.error(ejectedHead.error.message);
       process.exit(1);
@@ -3717,6 +3992,34 @@ if (import.meta.main) {
             readState: gateway.readArmState,
             readRemovals: gateway.readMergeQueueRemovals,
             mutate: gateway.mutateHandoff,
+            beforeWrite: () => {
+              checkMutationStop();
+              if (reset.type !== "JUMP_RESET") {
+                return;
+              }
+              const fresh = readReset(snapshot.headShaBeforeMerge);
+              if (fresh.type !== "JUMP_RESET") {
+                panic("JUMP_RESET evidence changed before requeue");
+              }
+              checkMutationStop();
+              const reserved = resetStore.reserve(
+                resetKey(snapshot.headShaBeforeMerge),
+              );
+              if (reserved.isErr()) {
+                panic(reserved.error.message);
+              }
+            },
+            onJumpAccepted: (at) => {
+              const saved = resetStore.recordJump({
+                repo: options.repo,
+                pr: options.pullNumber,
+                head: snapshot.headShaBeforeMerge,
+                at,
+              });
+              if (saved.isErr()) {
+                panic(saved.error.message);
+              }
+            },
           });
           if (handoff.isErr()) {
             console.error(handoff.error.message);
@@ -3761,6 +4064,15 @@ if (import.meta.main) {
             default:
               handoffResult satisfies never;
               panic("Unhandled arm result");
+          }
+          if (options.mode === "requeue-jump-reset") {
+            console.log(
+              `REQUEUE ${options.repo}#${options.pullNumber}: ${JSON.stringify({
+                status:
+                  handoffResult.kind === "armed" ? "armed" : "re-enqueued",
+                head: snapshot.headShaBeforeMerge,
+              })}`,
+            );
           }
           break;
         }

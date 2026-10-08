@@ -12,7 +12,7 @@
  * should always carry an explicit descriptor.
  */
 
-export const CORPUS_LICENSES = [
+const CORPUS_LICENSES = [
   "public-domain",
   "official-open-data",
   "cc-by",
@@ -21,7 +21,7 @@ export const CORPUS_LICENSES = [
   "restricted",
 ] as const;
 
-export type CorpusLicense = (typeof CORPUS_LICENSES)[number];
+type CorpusLicense = (typeof CORPUS_LICENSES)[number];
 
 export type CorpusSourceDescriptor = {
   license: CorpusLicense;

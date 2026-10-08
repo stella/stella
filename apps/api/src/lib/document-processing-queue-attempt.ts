@@ -18,7 +18,7 @@ const RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES = [
   "request_failed",
 ] as const;
 
-export const isLifecycleInterruptionError = ({
+const isLifecycleInterruptionError = ({
   error,
   lifecycleSignal,
 }: {

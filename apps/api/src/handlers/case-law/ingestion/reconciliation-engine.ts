@@ -135,7 +135,7 @@ const PARKED_RETRY_BATCH = 25;
  * finite, and the slice records short afterwards, so it is selected again
  * rather than forgotten.
  */
-export const DEFAULT_SLICE_INGEST_BUDGET = 50;
+const DEFAULT_SLICE_INGEST_BUDGET = 50;
 /**
  * The most a unit may be asked to ingest. One walk holds the source lease for
  * its whole run, so the option is bounded here rather than trusted.
@@ -215,7 +215,7 @@ export const RECONCILIATION_LISTING_WORST_CASE_MS =
  */
 export const RECONCILIATION_UNIT_SETTLE_MS = 15 * 60_000;
 
-export type ReconciliationUnitSummary = {
+type ReconciliationUnitSummary = {
   unit: ReconciliationWorkUnit["type"];
   reason: SliceWalkReason | null;
   slice: string | null;
@@ -290,7 +290,7 @@ export type ReconciliationUnitOutcome =
  * enough that a slice nothing can serve costs its source one turn an hour
  * instead of one a minute.
  */
-export const RECONCILIATION_SLICE_RETRY_MS = 60 * 60_000;
+const RECONCILIATION_SLICE_RETRY_MS = 60 * 60_000;
 
 /** Longest `walk_error` text recorded; the ledger is a note, not a log. */
 const WALK_ERROR_MAX_LENGTH = 500;

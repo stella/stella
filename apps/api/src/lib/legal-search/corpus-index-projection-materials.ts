@@ -49,7 +49,7 @@ export type CorpusProjectionMaterial =
       astS3Key: string | null;
     });
 
-export type CorpusProjectionMaterialRejection = {
+type CorpusProjectionMaterialRejection = {
   lease: CorpusProjectionIntentLease;
   status: "lease_lost" | "stale" | "unreadable";
   reason: string;

@@ -120,7 +120,7 @@ const mapSequentially = async <Input, Output>(
   return mapSequentially(values, operation, index + 1, outputs);
 };
 
-export const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
+const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
 
 type ExecuteCorpusProjectionAppendCycleOptions<
   Family extends CorpusProjectionIntentLease["family"],
@@ -142,7 +142,7 @@ type ExecuteCorpusProjectionAppendCycleOptions<
 };
 
 /** Wall-clock milliseconds per phase, summed over the cycle, for the caller's logs. */
-export type CorpusProjectionAppendCycleTiming = {
+type CorpusProjectionAppendCycleTiming = {
   reservationMs: number;
   materialReadMs: number;
   /**

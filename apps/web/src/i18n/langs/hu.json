@@ -5474,14 +5474,8 @@
     "exportToCsv": "Exportálás CSV-be",
     "fields": {
       "calculating": "Számítás...",
-      "currencyLabel": "Pénznem (opcionális)",
-      "currencyPlaceholder": "pl. USD, EUR",
-      "editFieldValue": "Mezőérték szerkesztése",
       "errored": "Hiba",
-      "fieldValueLabel": "Mező értéke",
-      "fieldValuePlaceholder": "Adja meg a mezőértéket",
       "formatNotSupported": "Formátum nem támogatott",
-      "numberPlaceholder": "Szám megadása",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket"
     },

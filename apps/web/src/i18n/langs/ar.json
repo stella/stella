@@ -5474,14 +5474,8 @@
     "exportToCsv": "تصدير إلى CSV",
     "fields": {
       "calculating": "جارٍ الحساب...",
-      "currencyLabel": "العملة (اختياري)",
-      "currencyPlaceholder": "مثل USD أو EUR",
-      "editFieldValue": "تعديل قيمة الحقل",
       "errored": "حدث خطأ",
-      "fieldValueLabel": "قيمة الحقل",
-      "fieldValuePlaceholder": "أدخل قيمة الحقل",
       "formatNotSupported": "التنسيق غير مدعوم",
-      "numberPlaceholder": "أدخل رقمًا",
       "selectAValue": "اختر قيمة",
       "selectValues": "اختر القيم"
     },

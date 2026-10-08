@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-export const S3_DELETION_EFFECT_TYPE = "s3_delete" as const;
+const S3_DELETION_EFFECT_TYPE = "s3_delete" as const;
 export const S3_DELETION_EFFECT_CHUNK_SIZE = 50;
 export const DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE = 250;
 export const DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS = 15 * 60_000;
