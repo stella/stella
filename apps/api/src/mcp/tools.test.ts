@@ -99,16 +99,22 @@ import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
+import { MCP_MODES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  listStaticMcpToolDefinitions,
+} from "@/api/mcp/static-tool-definitions";
 import {
   CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
   READ_DECISION_BATCH_MAX_TEXT_CHARS,
   READ_DECISION_FULL_MAX_TEXT_CHARS,
 } from "@/api/mcp/stella-tools";
 import { MCP_CONTENT_MAX_CHARS } from "@/api/mcp/tool-utils";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import {
   findUndeclaredArguments,
   getMcpToolDefinition,
@@ -10013,4 +10019,340 @@ describe("undeclared-argument backstop", () => {
       },
     ]);
   });
+});
+
+/**
+ * Census: text a source keeps from AI never reaches a model-visible result.
+ *
+ * Every model-visible tool of every audience is either probed against one
+ * decision whose source keeps its text from AI, with a unique marker as its
+ * body, or states why it cannot read the shared case-law corpus. The map is
+ * total over the registry's names and checked against the model-visible set
+ * at runtime, so a new tool cannot land without a decision.
+ *
+ * The probes run the real dispatcher over the corpus read seams. Filtering
+ * that happens inside those reads (citation passages, the reader source)
+ * is covered by their own database suites.
+ */
+describe("text a source keeps from AI stays out of model context", () => {
+  const MARKER = "kept-from-ai-7c41e9";
+  const restrictedDecision = () => {
+    const base = createReadDecisionResult();
+    return {
+      ...base,
+      fulltext: `${MARKER} full text`,
+      documentAst: {
+        ...base.documentAst,
+        blocks: [
+          ...base.documentAst.blocks,
+          {
+            anchorId: "a-3",
+            id: "b-3",
+            inlines: [{ type: "text", text: MARKER }],
+            plainText: MARKER,
+            type: "paragraph",
+            number: 48,
+          },
+        ],
+      },
+      source: { ...base.source, allowsDerivedAi: false },
+    };
+  };
+
+  type DefaultToolName = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number]["name"];
+  type Probe =
+    | {
+        readonly type: "probe";
+        readonly args: Record<string, unknown>;
+        /**
+         * Whether the result names the decision it read (an answer or a typed
+         * licence refusal), proving the probe reached the fixture.
+         */
+        readonly namesDecision: boolean;
+      }
+    | { readonly type: "no-corpus-text"; readonly reason: string };
+
+  const probe = (args: Record<string, unknown>, namesDecision = true) =>
+    ({ type: "probe", args, namesDecision }) as const;
+  const noCorpusText = (reason: string) =>
+    ({ type: "no-corpus-text", reason }) as const;
+
+  const TENANT = "reads workspace records only";
+  const TENANT_WRITE = "writes workspace records only";
+  const LEGISLATION = "reads legislation, not case-law decisions";
+  const UPSTREAM = "reads an upstream registry or publisher";
+  const META =
+    "reads the capability catalog, whose case-law entries carry no decision text";
+  const APP_ONLY = "app-only; never listed to the model";
+
+  const PROBES = {
+    search: probe({ query: "smlouva" }),
+    fetch: probe({ id: `decision:${DECISION_ID}` }),
+    search_case_law: probe({ country: "CZE", queries: ["smlouva"] }),
+    case_law_coverage: noCorpusText(
+      "returns per-court counts, never decision text",
+    ),
+    lookup_case_law: probe({
+      country: "CZE",
+      identifiers: ["29 Cdo 123/2024"],
+    }),
+    read_case_law_decision: probe({ decision_ids: [DECISION_ID], full: true }),
+    read_case_law_citations: probe(
+      { decision_id: DECISION_ID, direction: "cites" },
+      false,
+    ),
+    open_case_law_decision: probe({
+      decision_id: DECISION_ID,
+      paragraphs: "48",
+    }),
+    read_case_law_decision_blocks: noCorpusText(APP_ONLY),
+    preview_cited_provision: noCorpusText(APP_ONLY),
+    list_matters: noCorpusText(TENANT),
+    search_across_matters: noCorpusText(
+      "searches workspace content; corpus hits are search_case_law's",
+    ),
+    read_content_across_matters: noCorpusText(TENANT),
+    read_contact: noCorpusText(TENANT),
+    set_practice_jurisdictions: noCorpusText(TENANT_WRITE),
+    search_legislation: noCorpusText(LEGISLATION),
+    read_statute: noCorpusText(LEGISLATION),
+    read_statute_provisions: noCorpusText(LEGISLATION),
+    read_provision_history: noCorpusText(LEGISLATION),
+    search_boe_legislation: noCorpusText(LEGISLATION),
+    list_templates: noCorpusText(TENANT),
+    fill_template: noCorpusText(TENANT_WRITE),
+    save_filled_template: noCorpusText(TENANT_WRITE),
+    create_template: noCorpusText(TENANT_WRITE),
+    configure_template_fields: noCorpusText(TENANT_WRITE),
+    preview_template_conditions: noCorpusText(TENANT),
+    list_documents: noCorpusText(TENANT),
+    read_document: noCorpusText(TENANT),
+    save_document: noCorpusText(TENANT_WRITE),
+    upload_document_version: noCorpusText(TENANT_WRITE),
+    open_document_version_upload: noCorpusText(TENANT_WRITE),
+    compare_documents: noCorpusText(TENANT_WRITE),
+    prepare_file_comparison: noCorpusText(TENANT_WRITE),
+    prepare_file_comparison_from_links: noCorpusText(TENANT_WRITE),
+    open_file_comparison: noCorpusText(TENANT_WRITE),
+    delete_document: noCorpusText(TENANT_WRITE),
+    list_properties: noCorpusText(TENANT),
+    set_field_value: noCorpusText(TENANT_WRITE),
+    save_matter: noCorpusText(TENANT_WRITE),
+    delete_matter: noCorpusText(TENANT_WRITE),
+    list_contacts: noCorpusText(TENANT),
+    save_contact: noCorpusText(TENANT_WRITE),
+    delete_contact: noCorpusText(TENANT_WRITE),
+    lookup_business_registry: noCorpusText(UPSTREAM),
+    check_counterparty: noCorpusText(UPSTREAM),
+    list_tasks: noCorpusText(TENANT),
+    save_task: noCorpusText(TENANT_WRITE),
+    delete_task: noCorpusText(TENANT_WRITE),
+    link_matter_contact: noCorpusText(TENANT_WRITE),
+    list_clauses: noCorpusText(TENANT),
+    save_clause: noCorpusText(TENANT_WRITE),
+    delete_clause: noCorpusText(TENANT_WRITE),
+    list_playbooks: noCorpusText(TENANT),
+    save_playbook: noCorpusText(TENANT_WRITE),
+    run_playbook: noCorpusText(TENANT_WRITE),
+    list_reader_annotations: noCorpusText(
+      "annotation quotes are taken only from text the source lets AI read",
+    ),
+    create_reader_annotation: noCorpusText(
+      "annotation quotes are taken only from text the source lets AI read",
+    ),
+    update_reader_annotation: noCorpusText(TENANT_WRITE),
+    delete_reader_annotation: noCorpusText(TENANT_WRITE),
+    list_time_entries: noCorpusText(TENANT),
+    save_time_entry: noCorpusText(TENANT_WRITE),
+    delete_time_entry: noCorpusText(TENANT_WRITE),
+    resolve_rate: noCorpusText(TENANT),
+    list_invoices: noCorpusText(TENANT),
+    get_usage: noCorpusText(TENANT),
+    list_audit_log: noCorpusText(TENANT),
+    manage_organization: noCorpusText(TENANT_WRITE),
+    prepare_feedback: noCorpusText("sanitizes caller text; reads nothing"),
+    submit_feedback: noCorpusText("sends caller text upstream; reads nothing"),
+    list_capabilities: noCorpusText(META),
+    describe_capability: noCorpusText(META),
+    read_capability: noCorpusText(META),
+    write_capability: noCorpusText(META),
+  } as const satisfies Record<DefaultToolName, Probe>;
+
+  const probeFor = new Map<string, Probe>(Object.entries(PROBES));
+
+  const readerSource = async ({ audience }: { audience: "model" | "app" }) => {
+    const decision = restrictedDecision();
+    const textAccess = audience === "app" ? "readable" : "withheld";
+    return await Promise.resolve({
+      status: "read" as const,
+      decision: {
+        id: toSafeId<"caseLawDecision">(DECISION_ID),
+        caseNumber: decision.caseNumber,
+        court: decision.court,
+        country: decision.country,
+        decisionDate: "2024-02-01",
+        ecli: decision.ecli,
+        language: decision.language,
+        languageAlternates: [],
+        slug: decision.slug,
+      },
+      textAccess,
+      ast: textAccess === "readable" ? decision.documentAst : null,
+      citationAnchors: [],
+      provisionAnchors: [],
+      referenceNextCursor: null,
+    });
+  };
+
+  beforeEach(() => {
+    readDecisionHandlerMock.mockReset();
+    readDecisionHandlerMock.mockResolvedValue(restrictedDecision());
+    readGatedDecisionMock.mockReset();
+    readGatedDecisionMock.mockImplementation(
+      async () => await readDecisionHandlerMock(),
+    );
+    readGatedDecisionCitationDigestMock.mockReset();
+    readGatedDecisionCitationDigestMock.mockResolvedValue(
+      createCitationDigest(),
+    );
+    readGatedDecisionCitationsMock.mockReset();
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      page: { items: [], nextCursor: null },
+    });
+    lookupDecisionsByIdentityMock.mockReset();
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        caseNumber: "29 Cdo 123/2024",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        courtAbbreviation: "NS",
+        decisionDate: "2024-02-01",
+        ecli: null,
+        id: toSafeId<"caseLawDecision">(DECISION_ID),
+        identifiers: [
+          {
+            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            value: "29 Cdo 123/2024",
+          },
+        ],
+        language: "cs",
+        languageAlternates: [],
+        slug: "stable-official-slug",
+      },
+    ]);
+    searchDecisionsHandlerMock.mockReset();
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      hits: [
+        {
+          caseNumber: "29 Cdo 123/2024",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          citationAuthority: 1,
+          citationCount: 0,
+          country: "CZE",
+          court: "Nejvyšší soud",
+          courtAbbreviation: "NS",
+          decisionDate: "2024-02-01",
+          decisionId: DECISION_ID,
+          decisionType: "judgment",
+          ecli: null,
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "29 Cdo 123/2024",
+            },
+          ],
+          headline: `<mark>${MARKER}</mark>`,
+          language: "cs",
+          languageAlternates: [],
+          matchingPassages: 1,
+          slug: "stable-official-slug",
+          sourceUrl: "https://example.test/decision",
+        },
+      ],
+      facets: {
+        courtYear: COURT_YEAR_FIXTURE,
+        court: [],
+        year: [],
+        decisionType: [],
+        source: [],
+        language: [],
+      },
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "smlouva",
+      warnings: [],
+    });
+    searchLegislationHandlerMock.mockReset();
+    searchLegislationHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      items: [],
+      nextCursor: null,
+      total: { type: "exact", value: 0 },
+    });
+  });
+
+  test("the probe map names exactly the registry's tools", () => {
+    expect(Object.keys(PROBES).toSorted()).toEqual(
+      DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name).toSorted(),
+    );
+    for (const mode of MCP_MODES) {
+      for (const tool of listStaticMcpToolDefinitions(mode)) {
+        expect(Object.hasOwn(PROBES, tool.name), tool.name).toBe(true);
+      }
+    }
+  });
+
+  test.each([...MCP_MODES])(
+    "no model-visible %s tool result carries the withheld text",
+    async (mode) => {
+      const probed: string[] = [];
+      for (const tool of listStaticMcpToolDefinitions(mode)) {
+        if (!isMcpToolVisibleTo(tool, "model")) {
+          continue;
+        }
+        const entry =
+          probeFor.get(tool.name) ??
+          panic(`No probe decision for ${tool.name}`);
+        if (entry.type !== "probe") {
+          continue;
+        }
+        const result = await handleMcpToolCall({
+          args: entry.args,
+          context: createContext({
+            testDependencies: {
+              readDecisionReaderSource:
+                asTestRaw<
+                  NonNullable<
+                    McpRequestContext["testDependencies"]
+                  >["readDecisionReaderSource"]
+                >(readerSource),
+            },
+          }),
+          mode,
+          toolName: tool.name,
+        });
+        const serialized = JSON.stringify(result);
+        if (entry.namesDecision) {
+          expect(
+            serialized.includes("29 Cdo 123/2024") ||
+              serialized.includes("stable-official-slug"),
+            `${mode}/${tool.name} reached the fixture: ${serialized}`,
+          ).toBe(true);
+        } else {
+          expect(
+            result.isError,
+            `${mode}/${tool.name}: ${serialized}`,
+          ).not.toBe(true);
+        }
+        expect(serialized, `${mode}/${tool.name}`).not.toContain(MARKER);
+        probed.push(tool.name);
+      }
+      if (mode === "default" || mode === "law") {
+        expect(probed).toContain("open_case_law_decision");
+      }
+    },
+  );
 });
