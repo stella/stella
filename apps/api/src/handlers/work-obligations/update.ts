@@ -22,7 +22,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+  reviewGateForTask,
+} from "@/api/lib/flows/review-gate-task";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
@@ -151,6 +155,7 @@ const updateWorkObligation = createSafeHandler(
       "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     realtime: workObligationRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -169,6 +174,17 @@ const updateWorkObligation = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, {
+            workspaceId,
+            taskEntityId: params.entityId,
+            userId: user.id,
+          }),
+      ),
+    );
+    yield* admission;
     const reason = body.reason?.trim();
     const hasChange =
       body.ownerUserId !== undefined ||

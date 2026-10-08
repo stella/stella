@@ -11,10 +11,12 @@ import {
   documentReviewFindings,
   documentReviewRuns,
   entities,
+  pendingScoutEmissions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import {
   REVIEW_FINDINGS_SHOWN_MAX,
   REVIEW_SIGNAL_CONFIDENCE,
@@ -40,12 +42,16 @@ export const emitDocumentReviewSignal = async ({
   tx,
   workspaceId,
   runId,
-}: EmitDocumentReviewSignalArgs): Promise<void> => {
+}: EmitDocumentReviewSignalArgs): Promise<"emitted" | "paused" | "absent"> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    return "paused";
+  }
   const run = (
     await tx
       .select({
         organizationId: documentReviewRuns.organizationId,
         entityId: documentReviewRuns.entityId,
+        requestedBy: documentReviewRuns.requestedBy,
       })
       .from(documentReviewRuns)
       .where(
@@ -57,7 +63,17 @@ export const emitDocumentReviewSignal = async ({
       .limit(1)
   ).at(0);
   if (!run) {
-    return;
+    return "absent";
+  }
+  if (
+    !(await isBackgroundFeatureEnabled({
+      tx,
+      organizationId: run.organizationId,
+      userId: run.requestedBy,
+      featureId: "signals",
+    }))
+  ) {
+    return "paused";
   }
   const rows = await tx
     .select({ payload: documentReviewFindings.payload })
@@ -72,7 +88,7 @@ export const emitDocumentReviewSignal = async ({
   const findings = toReviewSignalFindings(rows.map((row) => row.payload));
   const verdict = reviewVerdict(findings);
   if (verdict === "safe") {
-    return;
+    return "absent";
   }
 
   const entity = await tx
@@ -126,6 +142,7 @@ export const emitDocumentReviewSignal = async ({
       },
     ],
   });
+  return "emitted";
 };
 
 /**
@@ -139,5 +156,43 @@ export const maybeEmitDocumentReviewSignal = async (
   if (!isDeploymentFeatureEnabled("FEATURE_INBOX_DOCUMENT_SCOUTS")) {
     return;
   }
-  await emitDocumentReviewSignal(args);
+  const source = (
+    await args.tx
+      .select({ organizationId: documentReviewRuns.organizationId })
+      .from(documentReviewRuns)
+      .where(
+        and(
+          eq(documentReviewRuns.id, args.runId),
+          eq(documentReviewRuns.workspaceId, args.workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (!source) {
+    return;
+  }
+  // audit: skip — derived emission intent commits with the source review completion.
+  await args.tx
+    .insert(pendingScoutEmissions)
+    .values({
+      organizationId: source.organizationId,
+      workspaceId: args.workspaceId,
+      sourceKind: "document-review",
+      sourceId: args.runId,
+    })
+    .onConflictDoNothing();
+  const outcome = await emitDocumentReviewSignal(args);
+  if (outcome === "paused") {
+    return;
+  }
+  // audit: skip — derived intent settled atomically with its audited signal.
+  await args.tx
+    .delete(pendingScoutEmissions)
+    .where(
+      and(
+        eq(pendingScoutEmissions.organizationId, source.organizationId),
+        eq(pendingScoutEmissions.sourceKind, "document-review"),
+        eq(pendingScoutEmissions.sourceId, args.runId),
+      ),
+    );
 };

@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
+  featureEnrolments,
   flowDefinitions,
   flowRuns,
   workspaceMembers,
@@ -22,6 +23,7 @@ import {
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
@@ -78,7 +80,8 @@ describe("startAutomatedFlowRun authorization gate", () => {
     await testDb.insert(user).values({
       id: authorId,
       name: "Flow Author",
-      email: `${authorId}@test.local`,
+      emailVerified: true,
+      email: `${authorId}@example.test`,
     });
     await testDb.insert(member).values({
       id: Bun.randomUUIDv7(),
@@ -87,6 +90,9 @@ describe("startAutomatedFlowRun authorization gate", () => {
       role: "member",
       createdAt: new Date(),
     });
+    await testDb
+      .insert(featureEnrolments)
+      .values({ featureId: "flows", organizationId, userId: authorId });
     await testDb.insert(workspaces).values([
       {
         id: authorizedWorkspaceId,
@@ -148,6 +154,13 @@ describe("startAutomatedFlowRun authorization gate", () => {
               organizationId: { eq: args.organizationId },
             },
             columns: { id: true, name: true, steps: true, enabled: true },
+          }),
+        featureEnabled: async (principal) =>
+          await isBackgroundFeatureEnabled({
+            tx: authorizationDatabase,
+            organizationId: principal.organizationId,
+            userId: principal.userId,
+            featureId: "flows",
           }),
         resolveAuthorization: async (args) =>
           await resolveMemberAuthorization(args, authorizationDatabase),

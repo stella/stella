@@ -76,6 +76,7 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/review-gate-task";
 import {
   brandPersistedEntityId,
   brandPersistedSignalId,
@@ -861,7 +862,18 @@ const queryEntitiesGenerator = async function* ({
     ...previewableConditions,
     ...extraConditions,
   ];
-  const entityAccess = and(workspaceCondition, ...entityConditions);
+  const reviewVisibility = yield* Result.await(
+    flowReviewTaskVisibilityCondition({
+      safeDb,
+      organizationId: currentOrganizationId,
+      userId: currentUserId,
+    }),
+  );
+  const entityAccess = and(
+    workspaceCondition,
+    reviewVisibility,
+    ...entityConditions,
+  );
   const sortKeys = buildSortKeys({
     organizationId: currentOrganizationId,
     search,

@@ -15,8 +15,10 @@
 
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
-import { env } from "@/api/env";
-import { runtimeMode } from "@/api/runtime-mode";
+import {
+  isDeploymentFeatureEnabled,
+  isDeploymentFeatureFlag,
+} from "@/api/lib/deployment-feature";
 
 type FeatureFlagSource = {
   runtimeMode: RuntimeMode;
@@ -45,4 +47,5 @@ export const featureEnabledIn = (
 export const isCapabilityFeatureEnabled = (
   feature: string | undefined,
 ): boolean =>
-  featureEnabledIn(feature, { runtimeMode: runtimeMode(), flags: env });
+  feature === undefined ||
+  (isDeploymentFeatureFlag(feature) && isDeploymentFeatureEnabled(feature));

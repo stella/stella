@@ -8,6 +8,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { flowNotificationVisibilityCondition } from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -62,6 +63,16 @@ const listNotifications = createSafeRootHandler(
       eq(notifications.userId, user.id),
       eq(notifications.organizationId, session.activeOrganizationId),
     ];
+    const visibility = yield* Result.await(
+      flowNotificationVisibilityCondition({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }),
+    );
+    if (visibility !== undefined) {
+      conditions.push(visibility);
+    }
     if (cursor) {
       const keysetCondition = notificationCursor.keysetAfter({
         cursor,
@@ -101,6 +112,7 @@ const listNotifications = createSafeRootHandler(
       readUnreadCount(safeDb, {
         organizationId: session.activeOrganizationId,
         userId: user.id,
+        visibility,
       }),
     );
 

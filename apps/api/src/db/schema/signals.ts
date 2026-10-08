@@ -325,3 +325,46 @@ export const scoutRuns = p.pgTable(
     ...orgPolicies(),
   ],
 );
+
+const SCOUT_EMISSION_SOURCE_KINDS = [
+  "document-review",
+  "infosoud-hearing",
+] as const;
+
+/** A source commits its deferred emission before its own terminal transition. */
+export const pendingScoutEmissions = p.pgTable(
+  "pending_scout_emissions",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    sourceKind: p
+      .text("source_kind", { enum: SCOUT_EMISSION_SOURCE_KINDS })
+      .notNull(),
+    sourceId: p.uuid("source_id").notNull(),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.organizationId, table.sourceKind, table.sourceId],
+    }),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "pending_scout_emissions_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p.index("pending_scout_emissions_next_attempt_idx").on(table.nextAttemptAt),
+    p.check(
+      "pending_scout_emissions_source_kind_check",
+      sql`${table.sourceKind} in (${sql.join(
+        SCOUT_EMISSION_SOURCE_KINDS.map((kind) => sql.raw(`'${kind}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...organizationOptionalWorkspacePolicies("pending_scout_emissions"),
+  ],
+);

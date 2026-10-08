@@ -10,6 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   description:
     "Permanently delete one automation flow definition from the organization " +
     "and remove its schedule trigger. Past runs survive on their own " +

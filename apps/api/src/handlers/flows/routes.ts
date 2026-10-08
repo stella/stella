@@ -6,9 +6,14 @@ import getFlowDefinition from "@/api/handlers/flows/get";
 import listFlowDefinitions from "@/api/handlers/flows/list";
 import updateFlowDefinition from "@/api/handlers/flows/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 /** Org-scoped flow definition CRUD (the "Workflows" recipes). */
 export const flowsRoute = new Elysia({ prefix: "/flows" })
+  .use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_FLOWS")))
+  .use(featureAccessGate("flows"))
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })

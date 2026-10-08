@@ -25,6 +25,7 @@ import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   description:
     "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
   permissions: { flow: ["run"] },

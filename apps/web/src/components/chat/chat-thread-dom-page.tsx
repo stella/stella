@@ -160,7 +160,10 @@ export const openChatThreadDomPage = async ({
   });
   queryClient.setQueryData(
     workspacesNavigationOptions({ organizationId, userId }).queryKey,
-    { workspaces: [], features: { timeBilling: false } },
+    {
+      workspaces: [],
+      features: { timeBilling: false, signals: false, flows: false },
+    },
   );
   // The thread route's loader fills a cold thread query before the page
   // mounts, so the page renders its messages on first paint instead of

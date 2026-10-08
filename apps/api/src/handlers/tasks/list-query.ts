@@ -16,6 +16,7 @@ import type { SQL } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -188,6 +189,14 @@ export const listTasksPage = async ({
       LIMITS.myTasksPageSizeMax,
     ),
   );
+  const reviewVisibility = await flowReviewTaskVisibilityCondition({
+    safeDb,
+    organizationId,
+    userId,
+  });
+  if (reviewVisibility.isErr()) {
+    return Result.err(reviewVisibility.error);
+  }
   const rows = await safeDb((tx) =>
     tx
       .select({
@@ -213,6 +222,7 @@ export const listTasksPage = async ({
         and(
           inArray(entities.workspaceId, [...workspaceIds]),
           eq(entities.kind, "task"),
+          reviewVisibility.value,
           query.status === undefined
             ? undefined
             : eq(entities.status, query.status),

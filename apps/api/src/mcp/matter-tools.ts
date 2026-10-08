@@ -68,6 +68,7 @@ import {
 } from "@/api/lib/chat/projections";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitTaskFlowAccess } from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
@@ -1473,6 +1474,20 @@ const handleListTasksTool: TypedMcpToolHandler<
       input.matter_id !== owner.workspaceId
     ) {
       return errorResult("task_id does not belong to matter_id");
+    }
+    const admission = await context.safeDb(
+      async (tx) =>
+        await admitTaskFlowAccess(tx, {
+          workspaceId: owner.workspaceId,
+          taskEntityId: taskId,
+          userId: context.userId,
+        }),
+    );
+    if (admission.isErr()) {
+      return internalFailureResult(admission.error);
+    }
+    if (admission.value.isErr()) {
+      return notFoundResult("Not found");
     }
     const { taskRow, assigneeRows, linkRows } = await readTaskDetail({
       context,

@@ -38,6 +38,7 @@ import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
 import {
   decideGateForTask,
   gateDecisionForTaskStatus,
+  admitTaskFlowAccess,
 } from "@/api/lib/flows/review-gate-task";
 import {
   agendaFieldsBodySchema,
@@ -552,6 +553,14 @@ const applyTaskUpdate = async function* ({
       // gate's decision, whichever surface asks for it. Nothing is written
       // here and no task or obligation lock is taken before the run's locks,
       // including when this is part of an outer Kanban transaction.
+      const admission = await admitTaskFlowAccess(tx, {
+        workspaceId,
+        taskEntityId: body.taskId,
+        userId,
+      });
+      if (admission.isErr()) {
+        return { type: "refused" as const, error: admission.error };
+      }
       const gateDecision = await gateDecisionForTaskStatus(tx, {
         workspaceId,
         taskEntityId: body.taskId,

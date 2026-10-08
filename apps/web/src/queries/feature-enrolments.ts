@@ -14,13 +14,9 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
-const TIME_BILLING_FEATURE_ID = "time-billing";
-
-// Takes a plain string: time billing is the only self-serve feature today, so
-// the endpoint's id type is that one literal, but the list is the contract and
-// the next feature must not be treated as this one.
-const isTimeBillingFeature = (featureId: string): boolean =>
-  featureId === TIME_BILLING_FEATURE_ID;
+type SelfServeFeatureId = Parameters<
+  (typeof api)["organization-settings"]["feature-enrolments"]
+>[0]["featureId"];
 
 type FeatureEnrolmentsCaller = {
   userId: string;
@@ -42,7 +38,7 @@ export const featureEnrolmentsOptions = ({
   });
 
 /** The endpoint lists only self-serve features offered by this deployment. */
-export const useTimeBillingEnrolment = () => {
+export const useFeatureEnrolment = (featureId: SelfServeFeatureId) => {
   const user = useAuthenticatedUser();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -52,9 +48,10 @@ export const useTimeBillingEnrolment = () => {
   });
   const view = useQueryView(useQuery(options));
   const mutation = useMutation({
+    mutationKey: options.queryKey,
     mutationFn: async (enrolled: boolean) => {
       const endpoint = api["organization-settings"]["feature-enrolments"]({
-        featureId: TIME_BILLING_FEATURE_ID,
+        featureId,
       });
       return unwrapEden(
         enrolled ? await endpoint.put() : await endpoint.delete(),
@@ -62,14 +59,16 @@ export const useTimeBillingEnrolment = () => {
     },
     onMutate: async (enrolled) => {
       await queryClient.cancelQueries({ queryKey: options.queryKey });
-      const previous = queryClient.getQueryData(options.queryKey);
+      const previous = queryClient
+        .getQueryData(options.queryKey)
+        ?.features.find((feature) => feature.featureId === featureId);
       queryClient.setQueryData(
         options.queryKey,
         (current) =>
           current && {
             ...current,
             features: current.features.map((feature) =>
-              isTimeBillingFeature(feature.featureId)
+              feature.featureId === featureId
                 ? { ...feature, enrolled }
                 : feature,
             ),
@@ -78,12 +77,27 @@ export const useTimeBillingEnrolment = () => {
       return { previous };
     },
     onError: (error, _enrolled, context) => {
-      if (context) {
-        queryClient.setQueryData(options.queryKey, context.previous);
+      if (context?.previous) {
+        const previous = context.previous;
+        queryClient.setQueryData(
+          options.queryKey,
+          (current) =>
+            current && {
+              ...current,
+              features: current.features.map((feature) =>
+                feature.featureId === featureId ? previous : feature,
+              ),
+            },
+        );
       }
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: async () => {
+      // Refetch only after the last toggle settles, preserving independent
+      // optimistic choices while another feature's request is still pending.
+      if (queryClient.isMutating({ mutationKey: options.queryKey }) > 1) {
+        return;
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: options.queryKey }),
         queryClient.invalidateQueries({
@@ -102,8 +116,8 @@ export const useTimeBillingEnrolment = () => {
       return { feature: undefined, mutation, view };
     case "items":
       return {
-        feature: view.items.features.find((feature) =>
-          isTimeBillingFeature(feature.featureId),
+        feature: view.items.features.find(
+          (feature) => feature.featureId === featureId,
         ),
         mutation,
         view,
@@ -113,3 +127,6 @@ export const useTimeBillingEnrolment = () => {
       return panic(`Unknown query view: ${String(view)}`);
   }
 };
+
+export const useTimeBillingEnrolment = () =>
+  useFeatureEnrolment("time-billing");

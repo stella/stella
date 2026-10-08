@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import {
   SCOUT_KEY,
@@ -7,13 +7,11 @@ import {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
-import { member as organizationMembers } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
   extractedContent,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -21,8 +19,13 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  findSignalsBackgroundActor,
+  isBackgroundFeatureEnabled,
+} from "@/api/lib/feature-access/background";
+import { logger } from "@/api/lib/observability/logger";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   capText,
   DEADLINE_SYSTEM_PROMPT,
@@ -42,7 +45,7 @@ const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // A 2,000-token allowance truncated valid extractions before JSON could close.
 const DEADLINE_MAX_OUTPUT_TOKENS = 8192;
 const DEADLINE_SCOUT_ERROR_CODE = {
-  NO_ACTOR: "no_actor",
+  FEATURE_NOT_GRANTED: "feature_not_granted",
   OBSERVATION_FAILED: "observation_failed",
   SOURCE_SUPERSEDED: "source_superseded",
 } as const;
@@ -86,50 +89,6 @@ const claimRun = async (
     )
     .returning();
   return claimed.at(0) ?? null;
-};
-
-const resolveActorUserId = async (
-  db: DeadlineScoutDb,
-  run: ClaimedRun,
-): Promise<SafeId<"user"> | null> => {
-  const candidates = await db
-    .select({ userId: workspaceMembers.userId })
-    .from(workspaceMembers)
-    .innerJoin(
-      organizationMembers,
-      and(
-        eq(organizationMembers.organizationId, run.organizationId),
-        eq(organizationMembers.userId, workspaceMembers.userId),
-      ),
-    )
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, workspaceMembers.workspaceId),
-        eq(workspaces.organizationId, run.organizationId),
-      ),
-    )
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, run.entityId),
-        eq(entities.workspaceId, workspaces.id),
-      ),
-    )
-    .where(eq(workspaceMembers.workspaceId, run.workspaceId))
-    .orderBy(
-      sql`CASE
-        WHEN ${workspaceMembers.userId} = ${run.requestedBy} THEN 0
-        WHEN ${workspaceMembers.userId} = ${entities.createdBy} THEN 1
-        WHEN ${workspaceMembers.userId} = ${workspaces.leadUserId} THEN 2
-        ELSE 3
-      END`,
-      asc(workspaceMembers.createdAt),
-      asc(workspaceMembers.id),
-    )
-    .limit(1);
-  const actor = candidates.at(0);
-  return actor ? brandPersistedUserId(actor.userId) : null;
 };
 
 const currentSourceWhere = (run: ClaimedRun) =>
@@ -226,6 +185,84 @@ const rejectDeadlineObservation = async ({
   });
 };
 
+const admittedDeadlineScoutActor = async ({
+  db,
+  sourceRunId,
+}: RunDocumentDeadlineScoutArgs) => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    logger.info("scout.document_deadlines.skipped", {
+      sourceRunId,
+      reason: "deployment_disabled",
+    });
+    return null;
+  }
+  const sourceRun = (
+    await db
+      .select()
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, sourceRunId))
+      .limit(1)
+  ).at(0);
+  if (!sourceRun) {
+    return null;
+  }
+  const actorUserId = await findSignalsBackgroundActor({
+    tx: db,
+    organizationId: sourceRun.organizationId,
+    workspaceId: sourceRun.workspaceId,
+  });
+  if (!actorUserId) {
+    logger.info("scout.document_deadlines.skipped", {
+      sourceRunId,
+      reason: "no_granted_member",
+    });
+    return null;
+  }
+  return actorUserId;
+};
+
+type ValidateDeadlineSourceOptions = {
+  tx: Parameters<typeof isBackgroundFeatureEnabled>[0]["tx"];
+  run: ClaimedRun;
+  actorUserId: SafeId<"user">;
+};
+
+const validateDeadlineSource = async ({
+  tx,
+  run,
+  actorUserId,
+}: ValidateDeadlineSourceOptions) => {
+  if (
+    !(await isBackgroundFeatureEnabled({
+      tx,
+      organizationId: run.organizationId,
+      userId: actorUserId,
+      featureId: "signals",
+    }))
+  ) {
+    return "not-granted" as const;
+  }
+  const current = await tx
+    .select({ entityId: extractedContent.entityId })
+    .from(extractedContent)
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.id, extractedContent.entityId),
+        eq(entities.workspaceId, extractedContent.workspaceId),
+      ),
+    )
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, extractedContent.workspaceId),
+        eq(workspaces.organizationId, extractedContent.organizationId),
+      ),
+    )
+    .where(currentSourceWhere(run))
+    .limit(1);
+  return current.length === 1 ? ("current" as const) : ("superseded" as const);
+};
 /**
  * Read one immutable processing result and surface explicit dated obligations.
  * PostgreSQL owns claiming and retry state; a BullMQ job is only a wake-up.
@@ -234,19 +271,12 @@ export const runDocumentDeadlineScout = async ({
   db,
   sourceRunId,
 }: RunDocumentDeadlineScoutArgs): Promise<void> => {
-  const run = await claimRun(db, sourceRunId);
-  if (!run) {
+  const actorUserId = await admittedDeadlineScoutActor({ db, sourceRunId });
+  if (!actorUserId) {
     return;
   }
-
-  const actorUserId = await resolveActorUserId(db, run);
-  if (!actorUserId) {
-    await settleRun({
-      db,
-      errorCode: DEADLINE_SCOUT_ERROR_CODE.NO_ACTOR,
-      run,
-      status: "failed",
-    });
+  const run = await claimRun(db, sourceRunId);
+  if (!run) {
     return;
   }
 
@@ -260,6 +290,8 @@ export const runDocumentDeadlineScout = async ({
     userId: actorUserId,
     workspaceIds: [run.workspaceId],
   });
+
+  const observationAdmission = { rejected: false };
 
   // The config is read before the scout run opens: an organization barred
   // from the instance provider without a key of its own cannot observe.
@@ -386,29 +418,13 @@ export const runDocumentDeadlineScout = async ({
             });
           },
           validate: async (tx) => {
-            const current = await tx
-              .select({ entityId: extractedContent.entityId })
-              .from(extractedContent)
-              .innerJoin(
-                entities,
-                and(
-                  eq(entities.id, extractedContent.entityId),
-                  eq(entities.workspaceId, extractedContent.workspaceId),
-                ),
-              )
-              .innerJoin(
-                workspaces,
-                and(
-                  eq(workspaces.id, extractedContent.workspaceId),
-                  eq(
-                    workspaces.organizationId,
-                    extractedContent.organizationId,
-                  ),
-                ),
-              )
-              .where(currentSourceWhere(run))
-              .limit(1);
-            return current.length === 1;
+            const decision = await validateDeadlineSource({
+              tx,
+              run,
+              actorUserId,
+            });
+            observationAdmission.rejected = decision === "not-granted";
+            return decision === "current";
           },
         }),
       );
@@ -419,6 +435,27 @@ export const runDocumentDeadlineScout = async ({
     return await rejectDeadlineObservation({ db, run, error: observed.error });
   }
 
+  if (
+    observationAdmission.rejected ||
+    !(await isBackgroundFeatureEnabled({
+      tx: db,
+      organizationId: run.organizationId,
+      userId: actorUserId,
+      featureId: "signals",
+    }))
+  ) {
+    await settleRun({
+      db,
+      errorCode: DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
+      run,
+      status: "pending",
+    });
+    logger.info("scout.document_deadlines.skipped", {
+      sourceRunId,
+      reason: "actor_not_granted",
+    });
+    return;
+  }
   await settleRun({
     db,
     errorCode: observed.value.observationAccepted

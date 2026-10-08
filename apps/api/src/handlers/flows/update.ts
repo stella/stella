@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   description:
     "Replace one flow definition's name, description, steps, trigger, and " +
     "enabled flag. The whole definition is revalidated and written, so this " +

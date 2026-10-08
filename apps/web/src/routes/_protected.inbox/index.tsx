@@ -13,8 +13,13 @@ import { entityViewsOptions } from "@/lib/workspaces/queries/entity-views";
 const protectedRouteApi = getRouteApi("/_protected");
 
 export const Route = createFileRoute("/_protected/inbox/")({
-  beforeLoad: () => {
-    if (!import.meta.env.DEV && !isInboxPreviewEnabled()) {
+  beforeLoad: async ({ context }) => {
+    if (
+      !(await isInboxPreviewEnabled(context.queryClient, {
+        userId: context.user.id,
+        organizationId: context.user.activeOrganizationId,
+      }))
+    ) {
       throw redirect({ to: "/chat" });
     }
   },

@@ -4,6 +4,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   description:
     "List flow definitions available to the organization, with optional status filtering and pagination.",
   permissions: { workspace: ["read"] },

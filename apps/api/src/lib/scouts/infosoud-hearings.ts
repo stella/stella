@@ -1,3 +1,5 @@
+import { and, eq, inArray } from "drizzle-orm";
+
 import {
   SCOUT_KEY,
   SIGNAL_KIND,
@@ -5,7 +7,9 @@ import {
 } from "@stll/api-contract/signals";
 
 import type { Transaction } from "@/api/db/root";
+import { pendingScoutEmissions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { findSignalsBackgroundActor } from "@/api/lib/feature-access/background";
 import {
   hearingDedupeKey,
   hearingSeverity,
@@ -47,6 +51,24 @@ export const emitInfoSoudHearingSignals = async ({
   now = new Date(),
 }: EmitInfoSoudHearingSignalsArgs): Promise<number> => {
   if (inserted.length === 0) {
+    return 0;
+  }
+  // audit: skip — derived emission intents commit with their audited hearing imports.
+  await tx
+    .insert(pendingScoutEmissions)
+    .values(
+      inserted.map(({ entityId }) => ({
+        organizationId,
+        workspaceId,
+        sourceKind: "infosoud-hearing" as const,
+        sourceId: entityId,
+      })),
+    )
+    .onConflictDoNothing();
+  if (
+    (await findSignalsBackgroundActor({ tx, organizationId, workspaceId })) ===
+    null
+  ) {
     return 0;
   }
   const proposed: NewSignal[] = inserted
@@ -96,5 +118,16 @@ export const emitInfoSoudHearingSignals = async ({
     organizationId,
     signals: proposed,
   });
+  // audit: skip — derived intents settled atomically with their audited signals.
+  await tx.delete(pendingScoutEmissions).where(
+    and(
+      eq(pendingScoutEmissions.organizationId, organizationId),
+      eq(pendingScoutEmissions.sourceKind, "infosoud-hearing"),
+      inArray(
+        pendingScoutEmissions.sourceId,
+        inserted.map(({ entityId }) => entityId),
+      ),
+    ),
+  );
   return emitted.length;
 };

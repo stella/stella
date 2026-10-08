@@ -12,6 +12,7 @@ import { dueAssignedTaskCondition } from "@/api/lib/tasks/assigned";
 import { resolveWorkAsOf } from "@/api/lib/work-obligations/at-risk";
 
 const config = {
+  featureAccess: { featureId: "signals", type: "required" },
   description:
     "Count what needs the caller in the Inbox: open signals visible to them " +
     "plus their unfinished tasks due on or before `asOf`; feeds the " +
