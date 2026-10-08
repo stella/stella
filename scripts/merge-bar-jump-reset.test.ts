@@ -48,10 +48,56 @@ describe("classifying merge queue cancellations", () => {
     },
   );
 
+  test("accepts jobs that succeeded before the jump beside causally cancelled ones", () => {
+    expect(
+      classify({
+        evidence: {
+          ...evidence,
+          jobs: [
+            {
+              conclusion: "success",
+              completedAt: new Date(at - 60_000).toISOString(),
+            },
+            { conclusion: "skipped", completedAt: null },
+            ...evidence.jobs,
+          ],
+        },
+      }),
+    ).toEqual({ type: "JUMP_RESET", cause: "jump-record", jump });
+  });
+
+  test("a group without a cancelled job is not a reset", () => {
+    expect(
+      classify({
+        evidence: {
+          ...evidence,
+          jobs: [
+            { conclusion: "success", completedAt: jump.at },
+            { conclusion: "skipped", completedAt: null },
+          ],
+        },
+      }),
+    ).toEqual({ type: "not-reset" });
+  });
+
+  test("a failed job still rules a reset out beside successful and cancelled jobs", () => {
+    expect(
+      classify({
+        evidence: {
+          ...evidence,
+          jobs: [
+            { conclusion: "success", completedAt: jump.at },
+            { conclusion: "failure", completedAt: jump.at },
+            ...evidence.jobs,
+          ],
+        },
+      }),
+    ).toEqual({ type: "not-reset" });
+  });
+
   test.each([
     "failure",
     "timed_out",
-    "success",
     "neutral",
     "action_required",
     null,

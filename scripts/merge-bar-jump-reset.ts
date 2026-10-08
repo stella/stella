@@ -60,11 +60,23 @@ export const classifyJumpReset = ({
   if (evidence.type === "unavailable") {
     return { type: "not-reset" };
   }
+  // Jobs that finished before the jump keep their success; a failed, timed
+  // out or unfinished job is real evidence and rules a reset out.
   const jobs = evidence.jobs.filter((job) => job.conclusion !== "skipped");
-  if (!jobs.length || jobs.some((job) => job.conclusion !== "cancelled")) {
+  if (
+    jobs.some(
+      (job) => job.conclusion !== "cancelled" && job.conclusion !== "success",
+    )
+  ) {
     return { type: "not-reset" };
   }
-  const cancellations = jobs.map((job) => Date.parse(job.completedAt ?? ""));
+  const cancelled = jobs.filter((job) => job.conclusion === "cancelled");
+  if (!cancelled.length) {
+    return { type: "not-reset" };
+  }
+  const cancellations = cancelled.map((job) =>
+    Date.parse(job.completedAt ?? ""),
+  );
   if (cancellations.some((at) => !Number.isFinite(at))) {
     return { type: "not-reset" };
   }
