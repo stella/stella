@@ -482,7 +482,7 @@ describe("aggregate mutation route coverage", () => {
         `import { Result } from "better-result"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { renewExample } from "@/api/services/example-lock"; const existing = createSafeHandler({}, async function* () { const renewed = yield* Result.await(${yielded}); return Result.ok(renewed); }); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
       sources.set(
         service,
-        `import { Result } from "better-result"; ${lockImport} export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await db.transaction(async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
+        `import { Result } from "better-result"; import { rootDb } from "@/api/db/root"; ${lockImport} export const renewExample = async () => { const outcome = await Result.tryPromise({ try: async () => await rootDb.transaction(async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
       );
       for (const yielded of [
         "await renewExample({ db })",
@@ -493,21 +493,54 @@ describe("aggregate mutation route coverage", () => {
       }
       sources.set(
         service,
-        `${lockImport} export const renewExample = async (db) => { await db.transaction(async function (tx) { ${acquisition} }); };`,
+        `import { rlsDb } from "@/api/db/root"; ${lockImport} export const renewExample = async () => { await rlsDb.transaction(async function (tx) { ${acquisition} }); };`,
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+      sources.set(
+        service,
+        `import { rootDb } from "@/api/db/root"; ${lockImport} export const renewExample = async () => { await rootDb.transaction(async (tx) => { await tx.transaction(async (savepoint) => { await withAggregateLock({aggregate: "workspace", id, tx: savepoint}); }); }); };`,
       );
       expect(enumerate(sources).at(0)?.declared).toBe(true);
       for (const detached of [
         `setTimeout(async () => { ${acquisition} }, 0);`,
         `await setTimeout(async () => { ${acquisition} }, 0);`,
         `await runInTransaction(db, async (tx) => { ${acquisition} });`,
-        `db.transaction(async (tx) => { ${acquisition} });`,
+        `rootDb.transaction(async (tx) => { ${acquisition} });`,
+        `await db.transaction(async (tx) => { ${acquisition} });`,
+        `const custom = { transaction: (run) => undefined }; await custom.transaction(async (tx) => { ${acquisition} });`,
+        `const rootDb = { transaction: (run) => undefined }; await rootDb.transaction(async (tx) => { ${acquisition} });`,
+        `await setTimeout(async (tx) => { await tx.transaction(async (inner) => { ${acquisition} }); }, 0);`,
+        `await rootDb.transaction(async (tx) => { const tx2 = tx; await tx2.transaction(async (inner) => { ${acquisition} }); });`,
         `await Result.tryPromise({ catch: async () => { ${acquisition} } });`,
         `const later = async (tx) => { ${acquisition} };`,
       ]) {
         sources.set(
           service,
-          `import { Result } from "better-result"; ${lockImport} export const renewExample = async (db) => { ${detached} };`,
+          `import { Result } from "better-result"; import { rootDb } from "@/api/db/root"; ${lockImport} export const renewExample = async (db) => { ${detached} };`,
         );
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+    });
+
+    test("shadowed or foreign runners earn no callback credit", () => {
+      const sources = setup();
+      sources.set(
+        module,
+        handlerModule({
+          imports:
+            'import { renewExample } from "@/api/services/example-lock";',
+          body: "await renewExample(tx);",
+        }),
+      );
+      for (const callee of [
+        `import { Result } from "better-result"; ${lockImport} export const renewExample = async (Result) => { await Result.tryPromise({ try: async () => { ${acquisition} } }); };`,
+        `import { custom } from "@/api/lib/custom-db"; ${lockImport} export const renewExample = async () => { await custom.transaction(async (tx) => { ${acquisition} }); };`,
+        `import { abortableTx } from "@/api/db/safe-db"; ${lockImport} export const renewExample = async (abortableTx) => { await abortableTx(db, async (tx) => { ${acquisition} }); };`,
+        `import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock"; ${lockImport} export const renewExample = async (tx) => { const withAggregateSavepoint = async () => {}; await withAggregateSavepoint(tx, async (inner) => { ${acquisition} }); };`,
+      ]) {
+        sources.set(service, callee);
         expect(() => enumerate(sources)).toThrow(
           "must await withAggregateLock",
         );

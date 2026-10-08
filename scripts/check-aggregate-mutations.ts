@@ -900,9 +900,131 @@ const handlerImplementation = ({
   });
 };
 
-type CanonicalResultOptions = { source: ts.SourceFile; name: string };
-const isCanonicalResult = ({ source, name }: CanonicalResultOptions) =>
-  source.statements.some((statement) => {
+const bindingNames = (name: ts.BindingName, names: Set<string>) => {
+  if (ts.isIdentifier(name)) {
+    names.add(name.text);
+    return;
+  }
+  for (const element of name.elements) {
+    if (!ts.isOmittedExpression(element)) {
+      bindingNames(element.name, names);
+    }
+  }
+};
+
+const statementNames = (statement: ts.Node, names: Set<string>) => {
+  if (ts.isVariableStatement(statement)) {
+    for (const declaration of statement.declarationList.declarations) {
+      bindingNames(declaration.name, names);
+    }
+  } else if (
+    (ts.isFunctionDeclaration(statement) ||
+      ts.isClassDeclaration(statement) ||
+      ts.isEnumDeclaration(statement)) &&
+    statement.name !== undefined
+  ) {
+    names.add(statement.name.text);
+  }
+};
+
+/** `var` declarations hoist to the function, whatever block they sit in. */
+const hoistedVarNames = (node: ts.Node, names: Set<string>) => {
+  if (ts.isFunctionLike(node) || ts.isClassLike(node)) {
+    return;
+  }
+  if (
+    ts.isVariableDeclarationList(node) &&
+    node.getFirstToken()?.kind === ts.SyntaxKind.VarKeyword
+  ) {
+    for (const declaration of node.declarations) {
+      bindingNames(declaration.name, names);
+    }
+  }
+  ts.forEachChild(node, (child) => hoistedVarNames(child, names));
+};
+
+type ScopeNames = { names: Set<string>; parameters: Set<string> };
+const scopeNames = (scope: ts.Node): ScopeNames => {
+  const names = new Set<string>();
+  const parameters = new Set<string>();
+  if (ts.isFunctionLike(scope)) {
+    for (const parameter of scope.parameters) {
+      bindingNames(parameter.name, parameters);
+      bindingNames(parameter.name, names);
+    }
+    if (ts.isFunctionExpression(scope) && scope.name !== undefined) {
+      names.add(scope.name.text);
+    }
+    if (
+      (ts.isArrowFunction(scope) ||
+        ts.isFunctionExpression(scope) ||
+        ts.isFunctionDeclaration(scope) ||
+        ts.isMethodDeclaration(scope)) &&
+      scope.body !== undefined
+    ) {
+      const hoisted = new Set<string>();
+      hoistedVarNames(scope.body, hoisted);
+      for (const name of hoisted) {
+        names.add(name);
+        // A `var` redeclaring a parameter rebinds it; never treat it as one.
+        parameters.delete(name);
+      }
+    }
+  }
+  if (ts.isBlock(scope) || ts.isModuleBlock(scope)) {
+    for (const statement of scope.statements) {
+      statementNames(statement, names);
+    }
+  }
+  if (ts.isCaseBlock(scope)) {
+    for (const clause of scope.clauses) {
+      for (const statement of clause.statements) {
+        statementNames(statement, names);
+      }
+    }
+  }
+  if (
+    (ts.isForStatement(scope) ||
+      ts.isForOfStatement(scope) ||
+      ts.isForInStatement(scope)) &&
+    scope.initializer !== undefined &&
+    ts.isVariableDeclarationList(scope.initializer)
+  ) {
+    for (const declaration of scope.initializer.declarations) {
+      bindingNames(declaration.name, names);
+    }
+  }
+  if (ts.isCatchClause(scope) && scope.variableDeclaration !== undefined) {
+    bindingNames(scope.variableDeclaration.name, names);
+  }
+  return { names, parameters };
+};
+
+/**
+ * The nearest scope enclosing `node` (below the module top level, and below
+ * `stop` when given) that binds `name`; undefined when only the module's
+ * top-level imports and definitions can bind it.
+ */
+const bindingScope = (node: ts.Node, name: string, stop?: ts.Node) => {
+  for (
+    let scope = node.parent;
+    !ts.isSourceFile(scope) && scope !== stop;
+    scope = scope.parent
+  ) {
+    if (scopeNames(scope).names.has(name)) {
+      return scope;
+    }
+  }
+  return undefined;
+};
+const isShadowed = (node: ts.Node, name: string, stop?: ts.Node) =>
+  bindingScope(node, name, stop) !== undefined;
+
+type CanonicalResultOptions = { node: ts.Node; name: string };
+/** `name` at `node` is better-result's `Result`, unshadowed. */
+const isCanonicalResult = ({ node, name }: CanonicalResultOptions) =>
+  !isShadowed(node, name) &&
+  node.getSourceFile().statements.some((statement) => {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
@@ -924,8 +1046,9 @@ const isCanonicalResult = ({ source, name }: CanonicalResultOptions) =>
 
 /**
  * The single allow-list of runners that await their callback before
- * resolving. Awaiting any other call (timers, arbitrary helpers) does not
- * join the callbacks passed to it, so locks inside them earn no credit.
+ * resolving. A runner earns callback credit only when its binding resolves,
+ * scope-aware, to one of these sources; every other call (timers, custom
+ * objects, shadowed names, arbitrary helpers) joins nothing.
  */
 const JOINING_RUNNERS = {
   /** Imported runners, by resolved module, export and callback position. */
@@ -933,17 +1056,24 @@ const JOINING_RUNNERS = {
     { module: `${API}db/safe-db.ts`, exported: "abortableTx", argument: 1 },
     { module: REGISTRY, exported: "withAggregateSavepoint", argument: 1 },
   ],
-  /** Followed callees only: drizzle `db.transaction(cb)` / `tx.transaction(cb)`. */
-  calleeMethods: [{ name: "transaction", argument: 0 }],
+  /**
+   * Followed callees only: `<receiver>.transaction(cb)` where the receiver
+   * is one of these imported database handles, or the transaction parameter
+   * of an enclosing callback that itself earns credit here.
+   */
+  transaction: {
+    method: "transaction",
+    argument: 0,
+    handles: { module: `${API}db/root.ts`, exported: ["rootDb", "rlsDb"] },
+  },
   /** Followed callees only: better-result `Result.tryPromise({ try })`. */
   calleeResultProperties: [{ method: "tryPromise", property: "try" }],
 } as const;
 
 type JoinedRunnerOptions = {
   call: ts.CallExpression;
-  source: ts.SourceFile;
 };
-const isYieldedResultAwait = ({ call, source }: JoinedRunnerOptions) => {
+const isYieldedResultAwait = ({ call }: JoinedRunnerOptions) => {
   const expression = call.expression;
   if (
     !ts.isPropertyAccessExpression(expression) ||
@@ -953,13 +1083,13 @@ const isYieldedResultAwait = ({ call, source }: JoinedRunnerOptions) => {
     return false;
   }
   return (
-    isCanonicalResult({ source, name: expression.expression.text }) &&
+    isCanonicalResult({ node: call, name: expression.expression.text }) &&
     ts.isYieldExpression(call.parent) &&
     call.parent.asteriskToken !== undefined &&
     call.parent.expression === call
   );
 };
-const isJoinedRunner = ({ call, source }: JoinedRunnerOptions) => {
+const isJoinedRunner = ({ call }: JoinedRunnerOptions) => {
   let expression: ts.Expression = call;
   while (ts.isParenthesizedExpression(expression.parent)) {
     expression = expression.parent;
@@ -971,7 +1101,7 @@ const isJoinedRunner = ({ call, source }: JoinedRunnerOptions) => {
   return (
     ts.isCallExpression(parent) &&
     parent.arguments.includes(expression) &&
-    isYieldedResultAwait({ call: parent, source })
+    isYieldedResultAwait({ call: parent })
   );
 };
 
@@ -986,7 +1116,7 @@ const isJoinedTransactionCallback = ({
   access,
 }: TransactionCallbackOptions) => {
   const call = callback.parent;
-  if (!ts.isCallExpression(call) || !isJoinedRunner({ call, source })) {
+  if (!ts.isCallExpression(call) || !isJoinedRunner({ call })) {
     return false;
   }
   const expression = call.expression;
@@ -999,6 +1129,7 @@ const isJoinedTransactionCallback = ({
       (ts.isArrowFunction(handler) ||
         ts.isFunctionExpression(handler) ||
         ts.isFunctionDeclaration(handler)) &&
+      !isShadowed(call, "safeDb", handler) &&
       handler.parameters.some(
         (parameter) =>
           ts.isObjectBindingPattern(parameter.name) &&
@@ -1011,6 +1142,9 @@ const isJoinedTransactionCallback = ({
           ),
       )
     );
+  }
+  if (isShadowed(call, expression.text)) {
+    return false;
   }
   const reference = importedReference({
     source,
@@ -1027,29 +1161,52 @@ const isJoinedTransactionCallback = ({
 };
 
 /**
- * In a followed callee, an inline callback counts when a joined call to an
- * allow-listed runner (JOINING_RUNNERS) receives it at its callback position.
+ * In a followed callee, an inline callback counts only when a joined call to
+ * an allow-listed runner (JOINING_RUNNERS) receives it at its callback
+ * position, with the runner's binding resolved through enclosing scopes.
  */
 const isJoinedInlineArgument = ({
   callback,
   implementation,
   access,
-}: TransactionCallbackOptions) => {
-  const { source } = implementation;
+}: TransactionCallbackOptions): boolean => {
+  const { source, file } = implementation;
   if (isJoinedTransactionCallback({ callback, implementation, access })) {
     return true;
   }
   const parent = callback.parent;
   if (ts.isCallExpression(parent)) {
     const method = parent.expression;
+    const { transaction } = JOINING_RUNNERS;
+    if (
+      !ts.isPropertyAccessExpression(method) ||
+      method.name.text !== transaction.method ||
+      parent.arguments.at(transaction.argument) !== callback ||
+      !ts.isIdentifier(method.expression) ||
+      !isJoinedRunner({ call: parent })
+    ) {
+      return false;
+    }
+    const receiver = method.expression.text;
+    const scope = bindingScope(parent, receiver);
+    if (scope === undefined) {
+      const reference = importedReference({
+        source,
+        file,
+        name: receiver,
+        access,
+      });
+      return (
+        reference?.module === transaction.handles.module &&
+        transaction.handles.exported.some(
+          (exported) => exported === reference.exported,
+        )
+      );
+    }
     return (
-      ts.isPropertyAccessExpression(method) &&
-      JOINING_RUNNERS.calleeMethods.some(
-        (runner) =>
-          method.name.text === runner.name &&
-          parent.arguments.at(runner.argument) === callback,
-      ) &&
-      isJoinedRunner({ call: parent, source })
+      (ts.isArrowFunction(scope) || ts.isFunctionExpression(scope)) &&
+      scopeNames(scope).parameters.has(receiver) &&
+      isJoinedInlineArgument({ callback: scope, implementation, access })
     );
   }
   if (
@@ -1066,7 +1223,7 @@ const isJoinedInlineArgument = ({
     call.arguments.at(0) !== options ||
     !ts.isPropertyAccessExpression(call.expression) ||
     !ts.isIdentifier(call.expression.expression) ||
-    !isCanonicalResult({ source, name: call.expression.expression.text })
+    !isCanonicalResult({ node: call, name: call.expression.expression.text })
   ) {
     return false;
   }
@@ -1075,7 +1232,7 @@ const isJoinedInlineArgument = ({
   return (
     JOINING_RUNNERS.calleeResultProperties.some(
       (runner) => runner.method === method && runner.property === property,
-    ) && isJoinedRunner({ call, source })
+    ) && isJoinedRunner({ call })
   );
 };
 
@@ -1100,7 +1257,7 @@ const awaitedAggregateNames = ({
       calls !== undefined &&
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      isJoinedRunner({ call: node, source })
+      isJoinedRunner({ call: node })
     ) {
       calls.push(node);
     }
@@ -1155,107 +1312,6 @@ const awaitedAggregateNames = ({
   };
   visit(body);
   return names;
-};
-
-const bindingNames = (name: ts.BindingName, names: Set<string>) => {
-  if (ts.isIdentifier(name)) {
-    names.add(name.text);
-    return;
-  }
-  for (const element of name.elements) {
-    if (!ts.isOmittedExpression(element)) {
-      bindingNames(element.name, names);
-    }
-  }
-};
-
-const statementNames = (statement: ts.Node, names: Set<string>) => {
-  if (ts.isVariableStatement(statement)) {
-    for (const declaration of statement.declarationList.declarations) {
-      bindingNames(declaration.name, names);
-    }
-  } else if (
-    (ts.isFunctionDeclaration(statement) ||
-      ts.isClassDeclaration(statement) ||
-      ts.isEnumDeclaration(statement)) &&
-    statement.name !== undefined
-  ) {
-    names.add(statement.name.text);
-  }
-};
-
-/** `var` declarations hoist to the function, whatever block they sit in. */
-const hoistedVarNames = (node: ts.Node, names: Set<string>) => {
-  if (ts.isFunctionLike(node) || ts.isClassLike(node)) {
-    return;
-  }
-  if (
-    ts.isVariableDeclarationList(node) &&
-    node.getFirstToken()?.kind === ts.SyntaxKind.VarKeyword
-  ) {
-    for (const declaration of node.declarations) {
-      bindingNames(declaration.name, names);
-    }
-  }
-  ts.forEachChild(node, (child) => hoistedVarNames(child, names));
-};
-
-/**
- * Whether `name` is bound in any scope enclosing `node` below the module's
- * top level. Callee resolution only knows top-level definitions and imports,
- * so a shadowed name is never credited.
- */
-const isShadowed = (node: ts.Node, name: string) => {
-  for (let scope = node.parent; !ts.isSourceFile(scope); scope = scope.parent) {
-    const names = new Set<string>();
-    if (ts.isFunctionLike(scope)) {
-      for (const parameter of scope.parameters) {
-        bindingNames(parameter.name, names);
-      }
-      if (ts.isFunctionExpression(scope) && scope.name !== undefined) {
-        names.add(scope.name.text);
-      }
-      if (
-        (ts.isArrowFunction(scope) ||
-          ts.isFunctionExpression(scope) ||
-          ts.isFunctionDeclaration(scope) ||
-          ts.isMethodDeclaration(scope)) &&
-        scope.body !== undefined
-      ) {
-        hoistedVarNames(scope.body, names);
-      }
-    }
-    if (ts.isBlock(scope) || ts.isModuleBlock(scope)) {
-      for (const statement of scope.statements) {
-        statementNames(statement, names);
-      }
-    }
-    if (ts.isCaseBlock(scope)) {
-      for (const clause of scope.clauses) {
-        for (const statement of clause.statements) {
-          statementNames(statement, names);
-        }
-      }
-    }
-    if (
-      (ts.isForStatement(scope) ||
-        ts.isForOfStatement(scope) ||
-        ts.isForInStatement(scope)) &&
-      scope.initializer !== undefined &&
-      ts.isVariableDeclarationList(scope.initializer)
-    ) {
-      for (const declaration of scope.initializer.declarations) {
-        bindingNames(declaration.name, names);
-      }
-    }
-    if (ts.isCatchClause(scope) && scope.variableDeclaration !== undefined) {
-      bindingNames(scope.variableDeclaration.name, names);
-    }
-    if (names.has(name)) {
-      return true;
-    }
-  }
-  return false;
 };
 
 /** `apps/<name>/` or `packages/<name>/`; callees never cross this boundary. */
