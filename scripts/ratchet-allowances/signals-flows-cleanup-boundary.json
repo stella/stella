@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 2,
+  "reason": "The existing member-assignment-offboarding module becomes the grantless void cleanup facade. Its unchanged transactional implementation moves to one named owner; static schema census metadata moves separately so no feature-derived workspace IDs or table columns escape through the operational facade. These two modules establish the enforced ownership and output contract."
+}
