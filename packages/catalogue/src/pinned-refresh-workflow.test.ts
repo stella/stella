@@ -153,7 +153,17 @@ test("confines every proposed file to the refresh write allowlist before publica
       .parse(v.string(), confinement.run)
       .matchAll(/:\(exclude,(?:glob|literal)\)([^"\n]+)/gu),
   ].map((match) => match[1]);
-  expect(excludedPaths.toSorted()).toEqual(paths.toSorted());
+  const byCodeUnit = (left: string | undefined, right: string | undefined) => {
+    const a = left ?? "";
+    const b = right ?? "";
+    if (a === b) {
+      return 0;
+    }
+    return a < b ? -1 : 1;
+  };
+  expect(excludedPaths.toSorted(byCodeUnit)).toEqual(
+    paths.toSorted(byCodeUnit),
+  );
   for (const path of paths) {
     expect(confinement.run).toContain(
       `:(exclude,${path.includes("*") ? "glob" : "literal"})${path}`,
