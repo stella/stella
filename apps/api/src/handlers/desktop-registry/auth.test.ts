@@ -342,32 +342,24 @@ describe("desktop registry API-key configuration", () => {
 
   test("every desktop issuance stores its inactivity deadline outside provider expiry cleanup", () => {
     const apiSourceUrl = new URL("../../", import.meta.url);
-    const census = Bun.spawnSync(
-      [
-        "rg",
-        "--files-with-matches",
-        "--glob",
-        "*.ts",
-        "--glob",
-        "!*.test.ts",
-        "--glob",
-        "!*.spec.ts",
-        "createApiKey",
-        ".",
-      ],
-      { cwd: fileURLToPath(apiSourceUrl), stdout: "pipe", stderr: "pipe" },
-    );
-    if (census.exitCode !== 0) {
-      panic("Desktop issuance source census must complete");
-    }
-    const sources = census.stdout
-      .toString()
-      .trim()
-      .split("\n")
+    // Scan in-process so the census does not depend on a host search binary.
+    const sources = [
+      ...new Bun.Glob("**/*.ts").scanSync({
+        cwd: fileURLToPath(apiSourceUrl),
+      }),
+    ]
+      .filter(
+        (filename) =>
+          !filename.endsWith(".test.ts") && !filename.endsWith(".spec.ts"),
+      )
       .map((filename) => ({
         filename,
         source: readFileSync(new URL(filename, apiSourceUrl), "utf-8"),
-      }));
+      }))
+      .filter(({ source }) => source.includes("createApiKey"));
+    if (sources.length === 0) {
+      panic("Desktop issuance source census must complete");
+    }
     assertDesktopIssuance(sources);
     const issuer = sources.find(
       ({ source }) =>
