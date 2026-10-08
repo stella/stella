@@ -33,7 +33,10 @@ const REPORT_FILE_ENV = [
   "PLAYWRIGHT_JSON_OUTPUT_DIR",
 ] as const;
 
-type ListedSuite = { file?: string; suites?: ListedSuite[] };
+type ListedSuite = {
+  file?: string | undefined;
+  suites?: ListedSuite[] | undefined;
+};
 
 const listedSuiteSchema = v.object({
   file: v.optional(v.string()),
