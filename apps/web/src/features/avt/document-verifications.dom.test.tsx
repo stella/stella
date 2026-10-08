@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { sleep } from "@stll/concurrency/sleep";
 import { stellaToast } from "@stll/ui/toast";
 
 import messages from "@/i18n/langs/en.json";
@@ -27,7 +28,7 @@ const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
 );
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
-const { cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -91,6 +92,11 @@ afterEach(() => {
   };
 });
 afterAll(async () => {
+  // A settled mutation leaves React work scheduled; let it run while the DOM
+  // globals still exist.
+  await act(async () => {
+    await sleep(50);
+  });
   fetchBoundary.mockRestore();
   await GlobalRegistrator.unregister();
 });
