@@ -43,10 +43,12 @@ export const refreshedTestDurations = (
     }
   }
   return Object.fromEntries(
-    Array.from(refreshed, ([file, seconds]) => [
-      file,
-      { seconds, source: TEST_DURATION_SOURCE.measured },
-    ]).filter(([file]) => live.has(file)),
+    Array.from(refreshed)
+      .filter(([file]) => live.has(file))
+      .map(([file, seconds]) => [
+        file,
+        { seconds, source: TEST_DURATION_SOURCE.measured },
+      ]),
   );
 };
 
