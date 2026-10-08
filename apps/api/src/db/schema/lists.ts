@@ -761,6 +761,10 @@ export const legalListGenerationCandidateSources = p.pgTable(
           { target: "entity_versions", kind: "owned-content" },
         ],
         [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.candidateId,
+          { kind: "owned-by-parent", parent: legalListGenerationCandidates },
+        ],
       ]),
     ),
     p

@@ -73,7 +73,7 @@ type RestrictivePolicy = {
 /** The one restrictive policy allowed to admit rows: the entity feature fence. */
 const ENTITY_FEATURE_POLICY_NAME = "workspace_entity_feature";
 const ENTITY_FEATURE_FENCE =
-  /EXISTS \(\s*SELECT 1\s+FROM (?:public\.)?(?:entities e|entity_versions v|fields f)\s|app\.enabled_features/u;
+  /EXISTS \(\s*SELECT 1\s+FROM (?:public\.)?(?:entities e|entity_versions v|fields f|[a-z_]+ parent_row)\s|app\.enabled_features/u;
 
 /** Every other restrictive policy is a deny; widening one must fail coverage. */
 const restrictivePolicyViolation = (
@@ -133,6 +133,16 @@ describe("policy coverage", () => {
     const fenced = { ...fence, check_expr: fence.using_expr };
     expect(restrictivePolicyViolation(fenced)).toBeUndefined();
     expect(restrictivePolicyViolation(fence)).toBeDefined();
+    const parentFence =
+      "CASE WHEN (run_id IS NULL) THEN true ELSE (EXISTS ( SELECT 1\n   FROM document_translation_runs parent_row\n  WHERE (parent_row.id = document_translation_units.run_id))) END";
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "document_translation_units",
+        using_expr: parentFence,
+        check_expr: parentFence,
+      }),
+    ).toBeUndefined();
     expect(
       restrictivePolicyViolation({
         ...fence,

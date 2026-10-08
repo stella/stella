@@ -95,6 +95,96 @@ test("context rows remain visible while owned content inherits visibility", () =
   ]);
 });
 
+test("a record owned by a fenced parent row inherits the parent's visibility", () => {
+  const unfenced = pgTable(
+    "fixture_parent_reader",
+    {
+      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
+    },
+    () => wsPolicies(),
+  );
+  expect(entityFeatureCoverageViolations([unfenced])).toEqual([
+    "fixture_parent_reader.run_id requires a classified parent relationship",
+  ]);
+  const misattributed = pgTable(
+    "fixture_parent_reader",
+    {
+      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
+    },
+    (table) =>
+      wsPolicies({
+        columns: table,
+        references: new Map([
+          [
+            table.runId,
+            { kind: "owned-by-parent", parent: schema.correspondence },
+          ],
+        ]),
+      }),
+  );
+  expect(entityFeatureCoverageViolations([misattributed])).toEqual([
+    "fixture_parent_reader.run_id requires a classified parent relationship",
+  ]);
+  const fenced = pgTable(
+    "fixture_parent_reader",
+    {
+      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
+    },
+    (table) =>
+      wsPolicies({
+        columns: table,
+        references: new Map([
+          [
+            table.runId,
+            {
+              kind: "owned-by-parent",
+              parent: schema.documentTranslationRuns,
+            },
+          ],
+        ]),
+      }),
+  );
+  expect(entityFeatureCoverageViolations([fenced])).toEqual([]);
+  const withoutFence = getTableConfig(fenced).policies.filter(
+    (policy) => policy.name !== "workspace_entity_feature",
+  );
+  const unprotected = pgTable(
+    "fixture_parent_reader",
+    {
+      runId: uuid("run_id").references(() => schema.documentTranslationRuns.id),
+    },
+    (table) => {
+      entityFeaturePolicies(
+        table,
+        new Map([
+          [
+            table.runId,
+            {
+              kind: "owned-by-parent",
+              parent: schema.documentTranslationRuns,
+            },
+          ],
+        ]),
+      );
+      return withoutFence;
+    },
+  );
+  expect(entityFeatureCoverageViolations([unprotected])).toEqual([
+    "fixture_parent_reader.run_id requires the parent feature fence",
+  ]);
+});
+
+test("a record owned by an unfenced parent needs no fence", () => {
+  const reader = pgTable(
+    "fixture_unfenced_parent_reader",
+    {
+      workspaceId: uuid("workspace_id").references(() => schema.workspaces.id),
+    },
+    () => wsPolicies(),
+  );
+  expect(entityFeatureCoverageViolations([reader])).toEqual([]);
+});
+
 test("the committed migration matches every schema-owned visibility policy", async () => {
   const migration = await Bun.file(
     new URL(

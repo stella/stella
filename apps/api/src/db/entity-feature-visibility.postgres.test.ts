@@ -17,8 +17,10 @@ import {
   WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
 import {
+  documentTranslationUnits,
   entities,
   entityVersions,
+  legalListClaims,
   searchDocuments,
   timeEntries,
   workObligations,
@@ -63,6 +65,10 @@ describe.skipIf(!runPostgresTests)(
           const versionId = createSafeId<"entityVersion">();
           const entryId = createSafeId<"timeEntry">();
           const eventId = createSafeId<"workObligationEvent">();
+          const translationRunId = createSafeId<"documentTranslationRun">();
+          const translationUnitId = createSafeId<"documentTranslationUnit">();
+          const verificationRunId = createSafeId<"legalListVerificationRun">();
+          const claimId = createSafeId<"legalListClaim">();
           const enabled = featureIds.includes(LEGAL_LISTS_FEATURE_ID);
           try {
             await client`INSERT INTO organization (id, name, slug, created_at)
@@ -99,6 +105,26 @@ describe.skipIf(!runPostgresTests)(
               },
             )}::text::jsonb)`;
 
+            // Dependent records hang off runs whose source is the hidden fact.
+            await client`INSERT INTO document_translation_runs (id, organization_id, workspace_id, entity_id,
+            file_field_id, entity_version_id, source_file_id, source_file_name, source_mime_type,
+            output, engine, target_lang)
+            VALUES (${translationRunId}, ${organizationId}, ${workspaceId}, ${factId},
+              ${Bun.randomUUIDv7()}, ${versionId}, ${Bun.randomUUIDv7()}, 'fact.docx', 'text/plain',
+              'translated', 'deepl', 'en')`;
+            await client`INSERT INTO document_translation_units (id, organization_id, workspace_id, run_id,
+            unit_key, ordinal, source_text, target_text, application)
+            VALUES (${translationUnitId}, ${organizationId}, ${workspaceId}, ${translationRunId},
+              'block-0', 0, 'Source text', 'Translated text', '{}'::jsonb)`;
+            await client`INSERT INTO legal_list_verification_runs (id, organization_id, workspace_id, entity_id,
+            file_field_id, entity_version_id, content_sha256, evidence)
+            VALUES (${verificationRunId}, ${organizationId}, ${workspaceId}, ${factId},
+              ${Bun.randomUUIDv7()}, ${versionId}, repeat('a', 64),
+              '{"facts": [], "listId": "fixture_list"}'::jsonb)`;
+            await client`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
+            VALUES (${claimId}, ${workspaceId}, ${verificationRunId}, 0, 'fact', 'nocover',
+              'Claim text', '{"type": "docx-block"}'::jsonb)`;
+
             await db.transaction(async (tx) => {
               await tx.execute(sql`SELECT set_config('role', 'stella', true),
               set_config(${SETTING_ORGANIZATION_ID}, ${organizationId}, true),
@@ -132,6 +158,18 @@ describe.skipIf(!runPostgresTests)(
                   .from(searchDocuments)
                   .where(eq(searchDocuments.workspaceId, workspaceId)),
               ).toEqual(enabled ? [{ id: factId }] : []);
+              expect(
+                await tx
+                  .select({ id: documentTranslationUnits.id })
+                  .from(documentTranslationUnits)
+                  .where(eq(documentTranslationUnits.workspaceId, workspaceId)),
+              ).toEqual(enabled ? [{ id: translationUnitId }] : []);
+              expect(
+                await tx
+                  .select({ id: legalListClaims.id })
+                  .from(legalListClaims)
+                  .where(eq(legalListClaims.workspaceId, workspaceId)),
+              ).toEqual(enabled ? [{ id: claimId }] : []);
               const ledger = await tx
                 .select({
                   id: timeEntries.id,

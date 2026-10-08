@@ -11,10 +11,16 @@ import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
-export type EntityReferenceClassification = {
-  target: "entities" | "entity_versions" | "fields";
-  kind: "owned-content" | "context";
-};
+export type EntityReferenceClassification =
+  | {
+      target: "entities" | "entity_versions" | "fields";
+      kind: "owned-content" | "context";
+    }
+  | {
+      /** A dependent record shown only while its fenced parent row is visible. */
+      kind: "owned-by-parent";
+      parent: PgTable;
+    };
 
 // Schema callbacks and FK metadata use distinct column objects for the same column.
 const entityReferences = new WeakMap<
@@ -82,6 +88,16 @@ export const entityFeaturePolicies = (
       continue;
     }
     const classification = references.get(column);
+    if (classification?.kind === "owned-by-parent") {
+      // Policy subqueries run as the querying role, and `stella` owns no table, so
+      // the parent's own policies (its feature fence included) decide whether the
+      // parent row exists here; visibility therefore follows chains of parents.
+      const parent = getTableConfig(classification.parent);
+      conditions.push(
+        sql`(CASE WHEN ${column} IS NULL THEN true ELSE EXISTS (SELECT 1 FROM ${sql.identifier(parent.schema ?? "public")}.${sql.identifier(parent.name)} parent_row WHERE parent_row.id = ${column}) END)`,
+      );
+      continue;
+    }
     if (classification?.kind !== "owned-content") {
       continue;
     }

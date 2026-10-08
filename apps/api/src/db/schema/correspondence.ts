@@ -287,7 +287,15 @@ export const correspondenceFilers = p.pgTable.withRLS(
       using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
       withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND filed_by_display = '{"status":"deleted"}'::jsonb)`,
     }),
-    ...wsOrganizationPolicies("correspondence_filers", { columns: table }),
+    ...wsOrganizationPolicies("correspondence_filers", {
+      columns: table,
+      references: new Map([
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -351,6 +359,10 @@ export const correspondenceAttachments = p.pgTable.withRLS(
       columns: table,
       references: new Map([
         [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
       ]),
     }),
   ],

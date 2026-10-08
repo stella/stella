@@ -710,6 +710,10 @@ export const desktopEditHandoffs = p.pgTable(
       columns: table,
       references: new Map([
         [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.desktopSessionId,
+          { kind: "owned-by-parent", parent: desktopEditSessions },
+        ],
       ]),
     }),
   ],
@@ -912,7 +916,12 @@ export const folioCollabRoomTokens = p.pgTable(
       "folio_collab_room_tokens_generation_check",
       sql`${table.generation} >= 0`,
     ),
-    ...wsPolicies({ columns: table }),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
+      ]),
+    }),
   ],
 );
 
@@ -969,6 +978,7 @@ export const folioCollabContributions = p.pgTable(
           table.sinceVersionId,
           { target: "entity_versions", kind: "owned-content" },
         ],
+        [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
       ]),
     }),
   ],
@@ -1028,6 +1038,7 @@ export const folioCollabPublications = p.pgTable(
           table.entityVersionId,
           { target: "entity_versions", kind: "owned-content" },
         ],
+        [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
       ]),
     }),
   ],
