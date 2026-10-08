@@ -86,6 +86,7 @@ import {
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
+import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpReadClass,
@@ -1033,13 +1034,16 @@ export const createMcpHttpRequestHandler = ({
           mode,
           toolName: toolRequest.params.name,
           run: async () =>
-            await handleToolsCallRequest({
-              toolRequest,
-              requestContext,
-              context,
+            withToolAuthChallenge(
+              await handleToolsCallRequest({
+                toolRequest,
+                requestContext,
+                context,
+                mode,
+                session,
+              }),
               mode,
-              session,
-            }),
+            ),
         }),
     );
 

@@ -30,6 +30,8 @@ export const AGGREGATE_LOCKS = {
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
   scoutCensus: { rank: 60, kind: "row" },
+  desktopMembership: { rank: 70, kind: "row" },
+  desktopCredential: { rank: 80, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
   // A chat interaction's fences: the thread, then the turn awaiting input,
@@ -90,6 +92,7 @@ export const AGGREGATE_CHAINS = {
     "obligation",
     "entity",
   ],
+  desktopRenewal: ["desktopMembership", "desktopCredential"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
 } as const satisfies Record<string, readonly AggregateName[]>;
@@ -118,6 +121,11 @@ const modeCovers = (
 
 type AggregateIdentities = {
   organization: SafeId<"organization">;
+  desktopMembership: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  desktopCredential: { id: string; userId: SafeId<"user"> };
   orgFeatureAdmission: {
     organizationId: SafeId<"organization">;
     featureId: "flows" | "signals";
@@ -488,6 +496,22 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         values: [options.id],
         scopeColumns: [],
         scopeValues: [],
+      };
+    case "desktopMembership":
+      return {
+        table: "member",
+        columns: ["user_id", "organization_id"],
+        values: [options.id.userId, options.id.organizationId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "desktopCredential":
+      return {
+        table: "apikey",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["reference_id"],
+        scopeValues: [options.id.userId],
       };
     case "workspace":
       return {
