@@ -237,3 +237,70 @@ export const readVerificationRun = async ({
     })),
   };
 };
+
+type ReadClaimForReviewArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+  claimId: SafeId<"legalListClaim">;
+};
+
+export const readClaimForReview = async ({
+  tx,
+  workspaceId,
+  runId,
+  claimId,
+}: ReadClaimForReviewArgs) =>
+  // Locking the claim serializes reviewers on it, so the fold the event
+  // is validated against is the one it will be appended to.
+  (
+    await tx
+      .select({
+        state: legalListClaims.state,
+        recordConflict: legalListClaims.recordConflict,
+      })
+      .from(legalListClaims)
+      .where(
+        and(
+          eq(legalListClaims.id, claimId),
+          eq(legalListClaims.runId, runId),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
+
+type ReadClaimsForBulkReviewArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+  claimIds: SafeId<"legalListClaim">[];
+};
+
+export const readClaimsForBulkReview = ({
+  tx,
+  workspaceId,
+  runId,
+  claimIds,
+}: ReadClaimsForBulkReviewArgs) =>
+  // Id order is the lock order every caller shares, so two overlapping
+  // bulk accepts cannot deadlock.
+  tx
+    .select({
+      id: legalListClaims.id,
+      state: legalListClaims.state,
+      refs: legalListClaims.refs,
+      recordConflict: legalListClaims.recordConflict,
+    })
+    .from(legalListClaims)
+    .where(
+      and(
+        eq(legalListClaims.workspaceId, workspaceId),
+        eq(legalListClaims.runId, runId),
+        inArray(legalListClaims.id, claimIds),
+      ),
+    )
+    .orderBy(asc(legalListClaims.id))
+    .limit(claimIds.length)
+    .for("update");

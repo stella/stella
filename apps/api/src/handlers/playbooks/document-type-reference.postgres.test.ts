@@ -32,6 +32,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
 
 import { DOCUMENT_TYPE_NOT_FOUND_MESSAGE } from "./assert-document-type";
 import { createPlaybookDefinitionHandler } from "./create-shared";
@@ -344,6 +345,9 @@ if (!databaseUrl || !runPostgresTests) {
                 server: null,
               });
               const writeContext = {
+                admitModelAction: testModelActionAdmitter(
+                  fixture.organizationId,
+                ),
                 organizationId: fixture.organizationId,
                 accessibleWorkspaceIds: [],
                 orgAIConfig: null,

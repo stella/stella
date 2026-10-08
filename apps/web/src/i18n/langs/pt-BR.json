@@ -2370,6 +2370,7 @@
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",
       "encryptedContent": "Não é possível extrair o conteúdo de um documento criptografado. Remova a senha do arquivo e tente novamente.",
       "filePropertyTypeImmutable": "Não é possível alterar o tipo de uma propriedade de arquivo. Mantenha o tipo atual; crie uma propriedade personalizada para outros valores.",
+      "fileSecurityRejected": "O arquivo foi rejeitado por uma verificação de segurança. Remova o conteúdo sinalizado e envie uma cópia limpa.",
       "forbidden": "Você não tem permissão para fazer isso.",
       "hostedCheckoutOpen": "Já existe um pagamento aberto para esta organização. Conclua-o ou inicie um novo depois que ele expirar.",
       "hostedSubscriptionLive": "Esta organização já tem uma assinatura. Altere-a em “Gerenciar uso hospedado”.",

@@ -86,6 +86,7 @@ const render = (node: ReactNode): string =>
 const renderDecision = (judges: readonly DecisionJudge[]): string =>
   render(
     <DecisionText
+      surface="development"
       decision={{
         caseNumber: "Pl. ÚS 1/2026",
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,

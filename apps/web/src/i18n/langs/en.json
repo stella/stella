@@ -2370,6 +2370,7 @@
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.",
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.",
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+      "fileSecurityRejected": "The file was rejected by a security check. Remove the flagged content and upload a cleaned copy.",
       "forbidden": "You do not have permission to do this.",
       "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.",
       "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.",
