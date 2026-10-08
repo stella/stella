@@ -338,6 +338,24 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "model-catalog-inputs",
+    outputKind: "committed",
+    outputs: [
+      "packages/ai-catalog/upstream/models.dev.gen.json",
+      "packages/ai-catalog/upstream/openrouter.gen.json",
+    ],
+    inputs: [
+      ...MODEL_CATALOG_INPUTS,
+      "packages/scripts/src/model-catalog-snapshot.ts",
+      "packages/ai-catalog/upstream/*.gen.json",
+      "scripts/offline-network-preload.ts",
+    ],
+    write: ["bun", "--filter", "@stll/ai-catalog", "gen:rates", "--refresh"],
+    check: ["bun", "--filter", "@stll/ai-catalog", "gen:rates", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "model-rates",
     outputKind: "committed",
     outputs: ["packages/ai-catalog/src/model-rates.gen.ts"],
