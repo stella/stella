@@ -842,6 +842,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@happy-dom/global-registrator": "20.14.5",
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
