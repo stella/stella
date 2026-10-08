@@ -393,12 +393,14 @@ export const createPublicSanctionsScreening = ({
         screenSanctionsSubject({
           ...props,
           reportFailure,
-          matcher: async ({ source, edition }) =>
-            Result.err({
-              code: warmer.status(source, edition),
-              stage: "public-warmup",
-              reason: null,
-            } as const),
+          matcher: ({ source, edition }) =>
+            Promise.resolve(
+              Result.err({
+                code: warmer.status(source, edition),
+                stage: "public-warmup",
+                reason: null,
+              } as const),
+            ),
         }),
         expired.promise,
       ]).finally(cancelDeadline);
