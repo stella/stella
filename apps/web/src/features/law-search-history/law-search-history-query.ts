@@ -7,7 +7,7 @@ import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { api } from "@/lib/api";
 import { sessionOptions } from "@/lib/auth-query-options";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   LAW_HISTORY_DISPLAY_LIMIT,
@@ -154,23 +154,15 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     onSuccess,
   });
   const clear = useMutation({
-    mutationFn: async (capturedScope: LawHistoryOwner) => {
-      const current = queryClient.getQueryData(sessionOptions.queryKey);
-      if (
-        current?.user.id !== capturedScope.userId ||
-        current.session.activeOrganizationId !== capturedScope.organizationId
-      ) {
-        throw new APIError({ status: 409, message: t("common.error") });
-      }
-      return unwrapEden(
+    mutationFn: async (capturedScope: LawHistoryOwner) =>
+      unwrapEden(
         await api["search-history"].delete(undefined, {
           query: {
             expectedUserId: capturedScope.userId,
             expectedOrganizationId: capturedScope.organizationId,
           },
         }),
-      );
-    },
+      ),
     onError,
     onSuccess: async (_, capturedScope) => {
       await queryClient.invalidateQueries({
