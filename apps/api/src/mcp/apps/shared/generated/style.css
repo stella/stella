@@ -1077,6 +1077,9 @@
   .w-\(--sidebar-width\) {
     width: var(--sidebar-width);
   }
+  .w-0 {
+    width: 0px;
+  }
   .w-0\.5 {
     width: calc(var(--spacing) * 0.5);
   }
