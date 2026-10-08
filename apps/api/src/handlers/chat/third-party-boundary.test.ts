@@ -135,6 +135,11 @@ const textDataUrl = (text: string) =>
  *  content the provider would read. Typed over the part union, so a new part
  *  type fails typecheck until it has an entry here. */
 const STORED_PART_CENSUS = {
+  activity: {
+    type: "activity",
+    activityType: "progress",
+    content: { text: STORED_PART_VALUE },
+  },
   audio: {
     type: "audio",
     source: {

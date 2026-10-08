@@ -1,3 +1,4 @@
+import type { SpecTypes } from "@modelcontextprotocol/client";
 import { toolDefinition } from "@tanstack/ai";
 import { createMCPClientFromTransport } from "@tanstack/ai-mcp";
 import type { Transport } from "@tanstack/ai-mcp";
@@ -59,19 +60,28 @@ const createFakeServer = ({ era, execution }: FakeServerOptions) => {
             serverInfo: { name: "timeout-test", version: "1.0.0" },
           });
           return;
-        case "tools/list":
-          reply({
-            tools: [
-              {
-                inputSchema: { properties: {}, type: "object" },
-                name: TOOL_NAME,
-                ...(execution === "task" || execution === "abort-task"
-                  ? { execution: { taskSupport: "required" } }
-                  : {}),
-              },
-            ],
-          });
+        case "tools/list": {
+          const tools = [
+            {
+              inputSchema: { properties: {}, type: "object" },
+              name: TOOL_NAME,
+              ...(execution === "task" || execution === "abort-task"
+                ? { execution: { taskSupport: "required" } }
+                : {}),
+            },
+          ] satisfies SpecTypes["ListToolsResult"]["tools"];
+          reply(
+            era === "modern"
+              ? ({
+                  resultType: "complete",
+                  ttlMs: 0,
+                  cacheScope: "private",
+                  tools,
+                } satisfies SpecTypes["ListToolsResult"])
+              : { tools },
+          );
           return;
+        }
         case "tools/call":
           calls.push(message.params);
           if (execution === "task" || execution === "abort-task") {
@@ -155,6 +165,7 @@ for (const scenario of cases) {
             {},
             {
               abortSignal: server.controller.signal,
+              emitCustomEvent: () => undefined,
               ...(scenario.execution === "input"
                 ? {
                     inputResponse: {
@@ -168,7 +179,8 @@ for (const scenario of cases) {
         ).toBe("completed");
         const requests = server.methods.slice(firstRequest);
         let expectedRequests = ["tools/call"];
-        switch (scenario.execution) {
+        const { execution } = scenario;
+        switch (execution) {
           case "task":
             expectedRequests = ["tools/call", "tasks/get", "tasks/result"];
             break;
@@ -178,7 +190,7 @@ for (const scenario of cases) {
           case "plain":
             break;
           default:
-            scenario.execution satisfies never;
+            execution satisfies never;
         }
         expect(requests).toEqual(expectedRequests);
         expect(timer.mock.calls.map(([, timeout]) => timeout)).toEqual(
@@ -212,7 +224,15 @@ test("aborting a task preserves cancellation and its configured request timeout"
   const timer = spyOn(globalThis, "setTimeout");
   try {
     const error = await rejectionOf(
-      tool.execute({}, { abortSignal: server.controller.signal }),
+      Promise.resolve(
+        tool.execute(
+          {},
+          {
+            abortSignal: server.controller.signal,
+            emitCustomEvent: () => undefined,
+          },
+        ),
+      ),
     );
     expect(error).toBeInstanceOf(DOMException);
     expect(error).toMatchObject({ message: "Stopped task" });

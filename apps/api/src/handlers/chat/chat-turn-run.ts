@@ -1,6 +1,6 @@
 import { RUN_CANCEL_REASON, toServerSentEventsResponse } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { AIProvider } from "@stll/ai-catalog";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -37,6 +37,88 @@ import { emitChatTurnSettlementMetric } from "@/api/lib/observability/request-me
 import { withSseHeartbeat } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+// Delivery is ephemeral; a stalled viewer must not hold a running turn's lease.
+const CHAT_TURN_DELIVERY_BUFFER_BYTES = 1024 * 1024;
+
+class ChatTurnDeliveryOverflow extends TaggedError("ChatTurnDeliveryOverflow")<{
+  message: string;
+}> {}
+
+/** Drain the SDK transport independently of the viewer, with a byte ceiling.
+ *  An overflowing connection fails explicitly; the owned producer still
+ *  settles its durable turn, which the page can reload. */
+const eagerlyDeliverTurn = (response: Response): Response => {
+  const upstream = response.body;
+  if (upstream === null) {
+    return panic("A chat turn response has no stream");
+  }
+  let delivery: "open" | "cancelled" | "overflowed" = "open";
+  const source: {
+    current:
+      | { status: "closed" }
+      | { status: "reading"; reader: ReadableStreamDefaultReader<Uint8Array> };
+  } = { current: { status: "closed" } };
+  const body = new ReadableStream<Uint8Array>(
+    {
+      start: (controller) => {
+        const drain = async () => {
+          const reader = upstream.getReader();
+          try {
+            source.current = { status: "reading", reader };
+            const drained = await Result.tryPromise(async () => {
+              while (delivery !== "cancelled") {
+                const next = await reader.read();
+                if (next.done) {
+                  if (delivery === "open") {
+                    controller.close();
+                  }
+                  return;
+                }
+                if (delivery !== "open") {
+                  continue;
+                }
+                if (next.value.byteLength > (controller.desiredSize ?? 0)) {
+                  delivery = "overflowed";
+                  controller.error(
+                    new ChatTurnDeliveryOverflow({
+                      message:
+                        "Chat delivery exceeded its buffer; reload the stored turn",
+                    }),
+                  );
+                  continue;
+                }
+                controller.enqueue(next.value);
+              }
+            });
+            if (Result.isError(drained)) {
+              const { error } = drained;
+              if (delivery === "open") {
+                controller.error(error);
+              } else {
+                throw error;
+              }
+            }
+          } finally {
+            reader.releaseLock();
+            source.current = { status: "closed" };
+          }
+        };
+        detached(drain(), "chat-turn-run.delivery");
+      },
+      cancel: async (reason) => {
+        delivery = "cancelled";
+        if (source.current.status === "reading") {
+          await source.current.reader.cancel(reason);
+        }
+      },
+    },
+    new ByteLengthQueuingStrategy({
+      highWaterMark: CHAT_TURN_DELIVERY_BUFFER_BYTES,
+    }),
+  );
+  return new Response(body, response);
+};
 
 // A turn's run: the part of a turn that starts at provider dispatch and ends
 // with the turn's stored outcome. The request that claimed the turn hands it
@@ -464,15 +546,17 @@ export class ChatTurnRun {
     }
     this.state = { status: "producing", heartbeat: this.startHeartbeat() };
     // Building the response starts its pump, which pulls the stream first.
-    const response = withSseHeartbeat(
-      toServerSentEventsResponse(
-        this.options.admission === undefined
-          ? output
-          : this.trackUpstream(output),
-        {
-          abortController: this.control.abortController,
-          headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
-        },
+    const response = eagerlyDeliverTurn(
+      withSseHeartbeat(
+        toServerSentEventsResponse(
+          this.options.admission === undefined
+            ? output
+            : this.trackUpstream(output),
+          {
+            abortController: this.control.abortController,
+            headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
+          },
+        ),
       ),
     );
     if (this.pendingAbort !== undefined) {

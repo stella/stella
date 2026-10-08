@@ -2,7 +2,10 @@
 // made it. Pure over message parts, with no app environment behind it, so the
 // scripts that read chat messages can import it.
 
-import { uiMessageToModelMessages } from "@tanstack/ai";
+import {
+  modelMessageToUIMessage,
+  uiMessageToModelMessages,
+} from "@tanstack/ai";
 
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toolCallStepOf } from "@/api/lib/chat/tool-call-step";
@@ -24,14 +27,12 @@ const trailingAnswerOf = (call: ToolCallPart): ToolResultPart | undefined => {
   }).find(
     (message) => message.role === "tool" && message.toolCallId === call.id,
   );
-  return answer === undefined || typeof answer.content !== "string"
-    ? undefined
-    : {
-        content: answer.content,
-        state: "complete",
-        toolCallId: call.id,
-        type: "tool-result",
-      };
+  if (answer === undefined || typeof answer.content !== "string") {
+    return undefined;
+  }
+  return modelMessageToUIMessage(answer, call.id).parts.find(
+    (part) => part.type === "tool-result",
+  );
 };
 
 const carriesApproval = (part: ChatPart | undefined): boolean =>

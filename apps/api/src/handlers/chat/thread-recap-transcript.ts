@@ -7,6 +7,13 @@ const RECAP_OMISSION_MARKER = "\n\n[...]\n\n";
 
 export type RecapMessage = Pick<ChatMessage, "role" | "parts">;
 
+const RECAP_ROLE_LABEL = {
+  activity: null,
+  assistant: "Assistant",
+  system: null,
+  user: "User",
+} as const satisfies Record<RecapMessage["role"], string | null>;
+
 const collapseWhitespace = (value: string): string => {
   const segments = value.trim().split(/\s/u);
   const words: string[] = [];
@@ -109,14 +116,15 @@ export const buildRecapTranscript = (
 ): string => {
   const lines: string[] = [];
   for (const message of messages) {
-    if (message.role !== "user" && message.role !== "assistant") {
+    const label = RECAP_ROLE_LABEL[message.role];
+    if (label === null) {
       continue;
     }
     const text = messageText(message);
     if (!text) {
       continue;
     }
-    lines.push(`${message.role === "user" ? "User" : "Assistant"}: ${text}`);
+    lines.push(`${label}: ${text}`);
   }
 
   if (lines.length === 0) {

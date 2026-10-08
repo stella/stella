@@ -639,6 +639,25 @@ describe("persisted chat message parts", () => {
     ).toBeNull();
   });
 
+  test("preserves activity payloads through persistence and reload without provider exposure", () => {
+    const part = {
+      activityType: "progress",
+      content: { completed: 2, steps: ["read", "write"] },
+      subagentRunId: "child-run",
+      type: "activity",
+    } as const satisfies ChatPart;
+    const stored = toPersistedChatMessageContentV3({ data: [part] });
+    expect(normalizePersistedChatMessageContent(stored).parts).toEqual([part]);
+    expect(isProviderVisibleChatPart(part)).toBe(false);
+    expect(isIncomingChatPart(part)).toBe(false);
+    expect(() =>
+      classifyChatPartForPersistence({
+        ...part,
+        content: { completed: undefined },
+      }),
+    ).toThrow("Cannot persist malformed chat part type: activity");
+  });
+
   test("persists every structured-output terminal and streaming state", () => {
     const parts = [
       { raw: '{"answer":', status: "streaming", type: "structured-output" },

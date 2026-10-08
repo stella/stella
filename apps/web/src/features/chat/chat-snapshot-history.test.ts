@@ -11,11 +11,12 @@ import {
   keepReasoningSteps,
 } from "@/features/chat/chat-snapshot-history";
 
-const message = (id: string, role: "assistant" | "user"): UIMessage => ({
-  id,
-  parts: [],
-  role,
-});
+const message = (id: string, role: "assistant" | "user") =>
+  ({
+    id,
+    parts: [],
+    role,
+  }) satisfies UIMessage;
 
 /** The page's messages, and which of them the server's snapshot keeps, in
  *  order, followed by the run's new messages. */
@@ -44,6 +45,28 @@ const caseArb = fc
   });
 
 describe("keepPostedMessages", () => {
+  test("rejects an activity message whose parts cannot preserve its wire identity", () => {
+    const activityPart = {
+      type: "activity",
+      activityType: "progress",
+      content: { completed: 2 },
+    } as const;
+    const invalidParts = [
+      [],
+      [{ type: "text", content: "Not an activity" }],
+      [activityPart, activityPart],
+      [activityPart, { type: "text", content: "Extra part" }],
+    ] satisfies UIMessage["parts"][];
+    for (const parts of invalidParts) {
+      expect(() =>
+        keepPostedMessages(
+          [{ id: "malformed-activity", role: "activity", parts }],
+          [],
+        ),
+      ).toThrow("An activity message must contain exactly one activity part");
+    }
+  });
+
   test("keeps every posted message, in the page's order, ahead of the run's", () => {
     fc.assert(
       fc.property(caseArb, ({ posted, snapshot }) => {

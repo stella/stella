@@ -254,9 +254,18 @@ describe("skill-documented chat reads", () => {
   test("every built-in skill's documented reads fit the prompt ceiling", async () => {
     for (const { name } of listSkillMetadata()) {
       const skill = await resolveBuiltInSkill(name);
-      const added =
-        chatCodeModeSystemPrompt(skill.documentedChatReads).length -
-        CHAT_CODE_MODE_SYSTEM_PROMPT.length;
+      const prompt = chatCodeModeSystemPrompt(skill.documentedChatReads);
+      const surface = createChatCodeModeSurface({
+        concurrencyKey: "skill-documented-reads-prompt-test",
+        documentedReads: skill.documentedChatReads,
+        runReadTool: async () => Result.ok({}),
+      });
+      expect(surface.systemPrompt).toBe(prompt);
+      // Eager descriptions include their projection once, beside the stub.
+      expect(prompt.match(/Returns: /gu)?.length).toBe(
+        1 + skill.documentedChatReads.length,
+      );
+      const added = prompt.length - CHAT_CODE_MODE_SYSTEM_PROMPT.length;
       expect(added, `${name} adds ${String(added)} chars`).toBeLessThanOrEqual(
         DOCUMENTED_READS_PROMPT_CHAR_CEILING,
       );

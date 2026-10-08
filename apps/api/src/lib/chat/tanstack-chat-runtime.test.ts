@@ -77,7 +77,10 @@ test("finishes an asynchronous document mutation before a sibling read starts", 
       return { version: observedVersion };
     }),
   ];
-  const results: string[] = [];
+  const results: Extract<
+    PublicStreamChunk,
+    { type: EventType.TOOL_CALL_RESULT }
+  >["content"][] = [];
   for await (const chunk of streamChatChunks({
     adapter,
     messages: [],

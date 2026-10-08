@@ -6,6 +6,17 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { ClientOperationError } from "@/lib/errors/client";
 
+/** Every SDK role chooses its visible message body explicitly. */
+export const CHAT_MESSAGE_RENDER_POLICY = {
+  activity: "activity",
+  assistant: "assistant",
+  system: "text",
+  user: "text",
+} as const satisfies Record<
+  PersistedChatMessage["role"],
+  "activity" | "assistant" | "text"
+>;
+
 export const DATA_URL_PREFIX = "data:";
 const BASE64_DATA_MARKER = ";base64,";
 

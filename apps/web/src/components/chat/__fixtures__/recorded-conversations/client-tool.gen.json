@@ -549,7 +549,7 @@
                 "role": "tool",
                 "id": "tool-call-1",
                 "toolCallId": "call-1",
-                "content": "{\"success\":true,\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"warnings\":[]}",
+                "content": "{\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"success\":true,\"warnings\":[]}",
                 "metadata": {
                   "tanstack": {
                     "toolResult": {}
@@ -927,17 +927,17 @@
                       "stellaStepId": "call-1"
                     },
                     "output": {
-                      "success": true,
                       "destination": "draft",
                       "fileName": "Mutual NDA.docx",
                       "fixes": [],
+                      "success": true,
                       "warnings": []
                     }
                   },
                   {
                     "type": "tool-result",
                     "toolCallId": "call-1",
-                    "content": "{\"success\":true,\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"warnings\":[]}",
+                    "content": "{\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"success\":true,\"warnings\":[]}",
                     "state": "complete"
                   }
                 ],
@@ -990,17 +990,17 @@
                       "stellaStepId": "call-1"
                     },
                     "output": {
-                      "success": true,
                       "destination": "draft",
                       "fileName": "Mutual NDA.docx",
                       "fixes": [],
+                      "success": true,
                       "warnings": []
                     }
                   },
                   {
                     "type": "tool-result",
                     "toolCallId": "call-1",
-                    "content": "{\"success\":true,\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"warnings\":[]}",
+                    "content": "{\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"success\":true,\"warnings\":[]}",
                     "state": "complete"
                   }
                 ],

@@ -1,11 +1,13 @@
 import {
+  renderLazyCatalogEntry,
   toolDefinition,
   type SchemaInput,
   type ServerTool,
 } from "@tanstack/ai";
 import {
   createCodeMode,
-  createCodeModeSystemPrompt,
+  generateTypeStubs,
+  toolsToBindings,
   type CodeModeTool,
   type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
@@ -227,24 +229,29 @@ export const createChatCodeModeSurface = ({
   documentedReads,
   nameGuide,
   runReadTool,
-}: CreateChatCodeModeSurfaceProps): CreateCodeModeResult =>
-  createCodeMode({
-    driver: createStellaIsolateDriver({
-      concurrencyKey,
-      ...(nameGuide === undefined ? {} : { nameGuide }),
-    }),
-    tools: buildChatReadTools({
-      featureAccessContext,
-      documentedReads,
-      runReadTool: async (toolName, args) => {
-        const result = await runReadTool(toolName, isRecord(args) ? args : {});
-        return Result.isError(result)
-          ? raiseChatToolError(result.error)
-          : result.value;
-      },
-    }),
-    ...CODE_MODE_RUNTIME_CONFIG,
+}: CreateChatCodeModeSurfaceProps): CreateCodeModeResult => {
+  const tools = buildChatReadTools({
+    featureAccessContext,
+    documentedReads,
+    runReadTool: async (toolName, args) => {
+      const result = await runReadTool(toolName, isRecord(args) ? args : {});
+      return Result.isError(result)
+        ? raiseChatToolError(result.error)
+        : result.value;
+    },
   });
+  return {
+    ...createCodeMode({
+      driver: createStellaIsolateDriver({
+        concurrencyKey,
+        ...(nameGuide === undefined ? {} : { nameGuide }),
+      }),
+      tools,
+      ...CODE_MODE_RUNTIME_CONFIG,
+    }),
+    systemPrompt: renderChatReadSystemPrompt(tools),
+  };
+};
 
 /** The prefix code mode gives every tool it exposes to a script. */
 const SCRIPT_FUNCTION_PREFIX = "external_";
@@ -402,17 +409,45 @@ const renderChatCodeModeSystemPrompt = (
   documentedReads: readonly RegistryReadToolName[],
   featureAccessContext?: McpFeatureAccessContext,
 ): string =>
-  createCodeModeSystemPrompt({
-    driver: createStellaIsolateDriver({
-      concurrencyKey: "chat-code-mode-prompt",
-    }),
-    tools: buildChatReadTools({
+  renderChatReadSystemPrompt(
+    buildChatReadTools({
       featureAccessContext,
       documentedReads: [...new Set(documentedReads)].toSorted(),
       runReadTool: () => ({}),
     }),
-    ...CODE_MODE_RUNTIME_CONFIG,
-  });
+  );
+
+/** Keep descriptions once, beside the SDK-derived signatures and field docs. */
+const renderChatReadSystemPrompt = (tools: CodeModeTool[]): string => {
+  const bindings = toolsToBindings(
+    tools.filter((tool) => !tool.lazy),
+    SCRIPT_FUNCTION_PREFIX,
+  );
+  const lazyCatalog = tools
+    .filter((tool) => tool.lazy)
+    .map(
+      (tool) =>
+        `- ${renderLazyCatalogEntry(`${SCRIPT_FUNCTION_PREFIX}${tool.name}`, tool.description, CODE_MODE_RUNTIME_CONFIG.lazyToolsConfig.includeDescription)}`,
+    )
+    .join("\n");
+
+  return `## Code Execution Tool
+
+Use \`execute_typescript\` for loops, calculations, transformations, or parallel reads with \`Promise.all\`. For simple operations, call tools directly.
+The sandbox has no network or filesystem access. Each execution is independent. All \`external_*\` functions are async: use \`await\`. Return a value to pass results back; \`console.log\` captures debugging logs.
+
+### Available External APIs
+
+\`\`\`typescript
+${generateTypeStubs(bindings)}
+\`\`\`
+
+### Discoverable APIs
+
+Before writing code that calls an undocumented \`external_<name>\`, call \`discover_tools\` with its names for full TypeScript signatures. \`discover_tools\` is a separate tool call, unavailable inside \`execute_typescript\`.
+
+${lazyCatalog}`;
+};
 
 let builtInVariants: ReadonlyMap<string, string> | undefined;
 

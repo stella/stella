@@ -834,13 +834,10 @@ const getToolApprovalState = ({
     part.output !== undefined &&
     isSuggestChangesApplyOutput(part.output) &&
     !part.output.success;
+  // The decision remains denied when the SDK settles the call as an error.
+  const isDenied = isStructuredEditFailure || part.approval.approved === false;
   const isApproved =
-    part.state === "complete" &&
-    part.output !== undefined &&
-    !isStructuredEditFailure;
-  const isDenied =
-    isStructuredEditFailure ||
-    (part.state === "approval-responded" && part.approval.approved === false);
+    part.state === "complete" && part.output !== undefined && !isDenied;
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
   // A valid browser command renders its own structured summary; one that

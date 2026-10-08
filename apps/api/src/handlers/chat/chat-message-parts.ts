@@ -549,7 +549,7 @@ type ChatPartPolicy = {
 const CHAT_PART_POLICY = {
   activity: {
     clientAcceptance: "server-only",
-    invalidHandling: "drop",
+    invalidHandling: "panic",
     providerVisibility: "ui-only",
   },
   audio: {
@@ -987,8 +987,7 @@ type ChatPartPersistence = "drop" | "persist";
 // Every TanStack part must receive an explicit persistence policy. A future SDK
 // variant fails typecheck here until it is deliberately persisted or dropped.
 const CHAT_PART_PERSISTENCE = {
-  // The chat runtime does not emit AG-UI activities.
-  activity: "drop",
+  activity: "persist",
   audio: "persist",
   document: "persist",
   image: "persist",
@@ -1049,7 +1048,12 @@ const isStructuredOutputPart = (part: Record<string, unknown>): boolean => {
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.
 const CHAT_PART_VALIDATORS = {
-  activity: () => false,
+  activity: (part) =>
+    typeof part["activityType"] === "string" &&
+    isRecord(part["content"]) &&
+    isPersistedJsonValue(part["content"]) &&
+    (part["subagentRunId"] === undefined ||
+      typeof part["subagentRunId"] === "string"),
   audio: (part) => isMediaPart(part, "audio/"),
   document: isContentPartWithSource,
   image: isContentPartWithSource,
@@ -1254,6 +1258,7 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-result":
       return part;
     case "activity":
+      return part;
     case "subagent":
       return panic(`A ${part.type} part is never persisted`);
     default: {

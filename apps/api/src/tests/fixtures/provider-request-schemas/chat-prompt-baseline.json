@@ -28,6 +28,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 32647
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 32323
       }
     ],
     "anthropic/extended": [
@@ -58,6 +62,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 33138
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 32812
       }
     ],
     "bedrock/default": [
@@ -88,6 +96,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 32869
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 32545
       }
     ],
     "bedrock/extended": [
@@ -118,6 +130,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 33359
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 33033
       }
     ],
     "google/default": [
@@ -148,6 +164,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 31964
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 31640
       }
     ],
     "google/extended": [
@@ -174,6 +194,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 32443
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 32117
       }
     ],
     "mistral/default": [
@@ -204,6 +228,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 34121
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 33796
       }
     ],
     "mistral/extended": [
@@ -234,6 +262,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 34648
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 34322
       }
     ],
     "openai/default": [
@@ -264,6 +296,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 33734
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 33410
       }
     ],
     "openai/extended": [
@@ -294,6 +330,10 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 34250
+      },
+      {
+        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
+        "tokens": 33925
       }
     ],
     "openrouter-anthropic/default": [

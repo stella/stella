@@ -38,14 +38,31 @@ export const keepPostedMessages = (
   const restore = (from: number, to: number) => {
     for (const message of posted.slice(from, to)) {
       if (!inSnapshot.has(message.id)) {
-        if (message.role === "activity") {
-          restored.push(
-            ...uiMessagesToWire([message], { includeActivity: true }),
-          );
-          continue;
+        switch (message.role) {
+          case "activity": {
+            if (
+              message.parts.length !== 1 ||
+              message.parts.at(0)?.type !== "activity"
+            ) {
+              return panic(
+                "An activity message must contain exactly one activity part",
+              );
+            }
+            restored.push(
+              ...uiMessagesToWire([message], { includeActivity: true }),
+            );
+            continue;
+          }
+          case "assistant":
+          case "system":
+          case "user":
+            // The client reads `parts`; keep the narrowed wire role.
+            restored.push({ ...message, role: message.role, content: "" });
+            break;
+          default:
+            message.role satisfies never;
+            panic(`Unhandled posted role: ${String(message.role)}`);
         }
-        // AG-UI requires `content`; the client reads `parts` instead.
-        restored.push({ ...message, content: "" });
       }
     }
   };
@@ -112,7 +129,7 @@ export const keepReasoningSteps = (
     const signature = reasoningSignature(message);
     // The stream processor's message type: its thinking part keeps a step,
     // which the client's narrower part type leaves out.
-    const settled: StreamUIMessage = {
+    const settled = {
       id: message.id,
       parts:
         message.content === "" && signature === undefined
@@ -130,7 +147,7 @@ export const keepReasoningSteps = (
             ],
       role: "assistant",
       ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-    };
+    } as const satisfies StreamUIMessage;
     // AG-UI requires `content`; the client reads `parts`.
     return { ...settled, content: "" };
   });
