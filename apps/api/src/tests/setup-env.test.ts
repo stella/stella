@@ -56,21 +56,42 @@ describe("API test preload credentials", () => {
     );
   });
 
-  test("preserves the set and unset distinction in a partial configuration", () => {
+  test("preserves set, empty and unset credentials in a partial configuration", () => {
+    const valueAt = (name: string, index: number) => {
+      if (index % 3 === 0) {
+        return "";
+      }
+      return index % 3 === 1 ? `sk-inherited-${name}-1234567890` : undefined;
+    };
     const inherited = Object.fromEntries(
-      credentialNames.map((name, index) => [
-        name,
-        index % 2 === 0 ? "" : undefined,
-      ]),
+      credentialNames.map((name, index) => [name, valueAt(name, index)]),
     );
     expect(readPreloadedCredentials(inherited)).toEqual(
       credentialNames.map((name, index) => {
-        if (index % 2 !== 0) {
+        const value = valueAt(name, index);
+        if (value === undefined) {
           return [name, null];
         }
-        return [name, nonModelKeys.has(name) ? "" : placeholder];
+        if (value === "" || nonModelKeys.has(name)) {
+          return [name, value];
+        }
+        return [name, placeholder];
       }),
     );
+  });
+
+  test("keeps an empty model credential unconfigured", () => {
+    const modelCredential = credentialNames.find(
+      (name) => !nonModelKeys.has(name),
+    );
+    expect(modelCredential).toBeDefined();
+    if (modelCredential === undefined) {
+      return;
+    }
+    expect(readPreloadedCredentials({ [modelCredential]: "" })).toContainEqual([
+      modelCredential,
+      "",
+    ]);
   });
 
   test("the placeholder remains valid for configured WIF fields", () => {

@@ -17,7 +17,9 @@ for (const name of Object.keys(envApiServerSchema)) {
     (name.endsWith("_API_KEY") && !nonModelServiceKeys.has(name)) ||
     name.startsWith("GOOGLE_AI_API_KEY_") ||
     name.startsWith("OPENROUTER_WIF_");
-  if (isModelCredential && process.env[name] !== undefined) {
+  // An empty value means unconfigured (the env owner parses it as absent).
+  const value = process.env[name];
+  if (isModelCredential && value !== undefined && value !== "") {
     process.env[name] = providerCredentialPlaceholder;
   }
 }
