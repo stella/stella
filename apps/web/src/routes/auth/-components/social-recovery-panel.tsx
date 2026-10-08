@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -24,6 +25,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { afterSignInNavigation } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
@@ -74,10 +76,11 @@ export const SocialRecoveryPanel = ({
         email: parsed,
         type: "sign-in",
       });
-      if (result.error) {
-        const cause = toAuthClientError(result.error);
-        throw cause;
-      }
+      readQueryResult(
+        result.error
+          ? Result.err(toAuthClientError(result.error))
+          : Result.ok(undefined),
+      );
       setStep({ type: "otp", email: parsed });
     },
     onError,
@@ -90,10 +93,11 @@ export const SocialRecoveryPanel = ({
         provider: selectedProvider,
         callbackURL: callback.toString(),
       });
-      if (result.error) {
-        const cause = toAuthClientError(result.error);
-        throw cause;
-      }
+      readQueryResult(
+        result.error
+          ? Result.err(toAuthClientError(result.error))
+          : Result.ok(undefined),
+      );
     },
     onError,
   });

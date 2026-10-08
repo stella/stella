@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { redirectToSchema } from "@/lib/redirect";
 import { SocialRecoveryPanel } from "@/routes/auth/-components/social-recovery-panel";
 
@@ -27,11 +29,10 @@ export const Route = createFileRoute("/auth/error")({
     const { data, error } = await authClient.$fetch("/social-link-hint", {
       method: "POST",
     });
-    if (error) {
-      const cause = toAuthClientError(error);
-      throw cause;
-    }
-    const parsed = v.safeParse(hintSchema, data);
+    const hint = readQueryResult(
+      error ? Result.err(toAuthClientError(error)) : Result.ok(data),
+    );
+    const parsed = v.safeParse(hintSchema, hint);
     return parsed.success ? parsed.output : { method: null, provider: null };
   },
   component: AuthError,

@@ -166,7 +166,11 @@ const createFixture = async ({
     expect(response.status).toBe(200);
     const body = v.parse(oauthResponseSchema, await response.json());
     const state = new URL(body.url).searchParams.get("state");
-    return await callback({ state, cookie: `${cookie}; ${cookies(response)}` });
+    expect(state).toBeString();
+    return await callback({
+      state: state ?? "",
+      cookie: `${cookie}; ${cookies(response)}`,
+    });
   };
   return {
     auth,

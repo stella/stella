@@ -9246,5 +9246,17 @@
   "src/lib/observability/event-loop-delay.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-response-parity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-link-hint.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
