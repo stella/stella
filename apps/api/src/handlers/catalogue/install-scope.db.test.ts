@@ -44,7 +44,6 @@ const installAsMember = async (scope: "private" | "team") => {
     createTestHandlerContext<Parameters<typeof installBundledSkill.handler>[0]>(
       {
         recordAuditEvent: auditRecorderDouble(),
-        createAuditRecorder: () => auditRecorderDouble(),
         memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
