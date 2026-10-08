@@ -89,13 +89,16 @@ describe("anonymous sanctions search", () => {
       practiceJurisdictions: [],
       now,
     });
+    const loadFailed = unavailableSanctionsScreening({
+      reason: "load-failed",
+      practiceJurisdictions: [],
+      now,
+    });
     const { app } = appWith(
       mock<typeof screenSanctionsSubject>(async () =>
         Result.ok({
           ...warming,
-          lists: warming.lists.map((list, index) =>
-            index === 0 ? list : { ...list, reason: "load-failed" as const },
-          ),
+          lists: [...warming.lists.slice(0, 1), ...loadFailed.lists.slice(1)],
         }),
       ),
     );
