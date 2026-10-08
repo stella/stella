@@ -69,6 +69,7 @@ import {
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admitTaskFlowAccess } from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
@@ -1368,6 +1369,15 @@ const readTaskDetail = async ({
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }) => {
+  const visibility = await flowRelatedTaskVisibilityConditions({
+    safeDb: context.safeDb,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
+  if (visibility.isErr()) {
+    return Result.err(visibility.error);
+  }
+  const linkVisibility = visibility.value?.link;
   const linkColumns = {
     id: true,
     linkType: true,
@@ -1413,6 +1423,7 @@ const readTaskDetail = async ({
         where: {
           workspaceId: { eq: workspaceId },
           sourceEntityId: { eq: taskId },
+          ...(linkVisibility === undefined ? {} : { RAW: linkVisibility }),
         },
         columns: linkColumns,
         with: linkWith,
@@ -1423,6 +1434,7 @@ const readTaskDetail = async ({
         where: {
           workspaceId: { eq: workspaceId },
           targetEntityId: { eq: taskId },
+          ...(linkVisibility === undefined ? {} : { RAW: linkVisibility }),
         },
         columns: linkColumns,
         with: linkWith,
@@ -1436,11 +1448,11 @@ const readTaskDetail = async ({
       };
     });
 
-  return {
+  return Result.ok({
     taskRow,
     assigneeRows,
     linkRows: [...linksAsSource, ...linksAsTarget],
-  };
+  });
 };
 
 const handleListTasksTool: TypedMcpToolHandler<
@@ -1489,11 +1501,15 @@ const handleListTasksTool: TypedMcpToolHandler<
     if (admission.value.isErr()) {
       return notFoundResult("Not found");
     }
-    const { taskRow, assigneeRows, linkRows } = await readTaskDetail({
+    const detail = await readTaskDetail({
       context,
       taskId,
       workspaceId: owner.workspaceId,
     });
+    if (detail.isErr()) {
+      return internalFailureResult(detail.error);
+    }
+    const { taskRow, assigneeRows, linkRows } = detail.value;
     if (!taskRow) {
       return notFoundResult("Task not found or not accessible");
     }

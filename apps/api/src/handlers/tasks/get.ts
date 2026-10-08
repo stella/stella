@@ -8,6 +8,7 @@ import {
   admitTaskFlowAccess,
   reviewGateForTask,
 } from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 
 const readTaskByIdParamsSchema = workspaceParams({ taskId: tSafeId("entity") });
 
@@ -25,7 +26,7 @@ const readTaskById = createSafeHandler(
     access: "read",
     params: readTaskByIdParamsSchema,
   },
-  async function* ({ workspaceId, params, safeDb, user }) {
+  async function* ({ workspaceId, params, safeDb, user, session }) {
     const admission = yield* Result.await(
       safeDb(
         async (tx) =>
@@ -37,6 +38,13 @@ const readTaskById = createSafeHandler(
       ),
     );
     yield* admission;
+    const visibility = yield* Result.await(
+      flowRelatedTaskVisibilityConditions({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }),
+    );
     const task = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
@@ -93,7 +101,10 @@ const readTaskById = createSafeHandler(
               },
             },
             children: {
-              where: { kind: { eq: "task" } },
+              where: {
+                kind: { eq: "task" },
+                ...(visibility === undefined ? {} : { RAW: visibility.entity }),
+              },
               columns: {
                 id: true,
                 name: true,
@@ -140,6 +151,9 @@ const readTaskById = createSafeHandler(
               },
             },
             linksAsSource: {
+              ...(visibility === undefined
+                ? {}
+                : { where: { RAW: visibility.link } }),
               with: {
                 targetEntity: {
                   columns: {
@@ -151,6 +165,9 @@ const readTaskById = createSafeHandler(
               },
             },
             linksAsTarget: {
+              ...(visibility === undefined
+                ? {}
+                : { where: { RAW: visibility.link } }),
               with: {
                 sourceEntity: {
                   columns: {

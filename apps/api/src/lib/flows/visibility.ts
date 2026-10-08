@@ -9,6 +9,7 @@ import {
 import type { NotificationKind } from "@stll/api-contract/notifications";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type { entityLinks } from "@/api/db/schema";
 import { entities, flowRunSteps, notifications } from "@/api/db/schema";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
@@ -59,6 +60,42 @@ export const flowReviewTaskVisibilityCondition = async (
     WHERE ${flowRunSteps.workspaceId} = ${entities.workspaceId}
       AND ${flowRunSteps.reviewTaskEntityId} = ${entities.id}
   )`);
+};
+
+/** Relational RAW callbacks bind child/link aliases before applying limits. */
+export const flowRelatedTaskVisibilityConditions = async (
+  options: FlowReviewTaskVisibilityOptions,
+) => {
+  const access = await canViewFlowData(options);
+  if (access.isErr()) {
+    return Result.err(access.error);
+  }
+  if (access.value) {
+    return Result.ok(undefined);
+  }
+  return Result.ok({
+    entity: ({
+      workspaceId,
+      id,
+    }: Pick<typeof entities, "workspaceId" | "id">) => sql`NOT EXISTS (
+      SELECT 1 FROM ${flowRunSteps}
+      WHERE ${flowRunSteps.workspaceId} = ${workspaceId}
+        AND ${flowRunSteps.reviewTaskEntityId} = ${id}
+    )`,
+    link: ({
+      workspaceId,
+      sourceEntityId,
+      targetEntityId,
+    }: Pick<
+      typeof entityLinks,
+      "workspaceId" | "sourceEntityId" | "targetEntityId"
+    >) => sql`NOT EXISTS (
+    SELECT 1 FROM ${flowRunSteps}
+    WHERE ${flowRunSteps.workspaceId} = ${workspaceId}
+      AND (${flowRunSteps.reviewTaskEntityId} = ${sourceEntityId}
+        OR ${flowRunSteps.reviewTaskEntityId} = ${targetEntityId})
+  )`,
+  });
 };
 
 const NOTIFICATION_FEATURE_OWNER = {

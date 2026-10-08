@@ -291,9 +291,7 @@ for (const feature of FEATURES) {
               enabled && enrolled ? expectedCapabilities.toSorted() : [],
             );
             for (const capability of expectedCapabilities) {
-              expect(omittedCapabilities.includes(capability)).toBe(
-                !(enabled && enrolled),
-              );
+              expect(omittedCapabilities).not.toContain(capability);
               const result = await handleMcpToolCall({
                 toolName: "invoke_capability",
                 args: { capability, input: {} },

@@ -6,16 +6,28 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { and, eq, inArray } from "drizzle-orm";
 
+import { user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { entities, taskAssignees } from "@/api/db/schema";
+import {
+  entities,
+  entityLinks,
+  featureEnrolments,
+  flowRuns,
+  flowRunSteps,
+  taskAssignees,
+} from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import listEntityLinks from "@/api/handlers/tasks/entity-links/list";
+import readTaskById from "@/api/handlers/tasks/get";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { TASK_ASSIGNEE_FILTER } from "@/api/lib/tasks/assigned";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -280,4 +292,167 @@ describe("list_tasks with matter_id", () => {
       error: { code: "not_found" },
     });
   });
+});
+
+test("ordinary task detail omits related flow reviews after revoke in HTTP and MCP", async () => {
+  const reviewId = createSafeId<"entity">();
+  const ordinaryId = createSafeId<"entity">();
+  const runId = createSafeId<"flowRun">();
+  const identity = await testDb.query.user.findFirst({
+    where: { id: { eq: ids.userA1 } },
+    columns: { emailVerified: true },
+  });
+  if (identity === undefined) {
+    return expect.unreachable("Missing member identity");
+  }
+  const grantWhere = and(
+    eq(featureEnrolments.organizationId, ids.orgA),
+    eq(featureEnrolments.userId, ids.userA1),
+    eq(featureEnrolments.featureId, "flows"),
+  );
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
+  try {
+    await testDb.insert(entities).values([
+      {
+        id: reviewId,
+        workspaceId: ids.wsA1,
+        kind: "task",
+        name: "Hidden flow review",
+        parentId: taskA1,
+      },
+      {
+        id: ordinaryId,
+        workspaceId: ids.wsA1,
+        kind: "task",
+        name: "Ordinary child",
+        parentId: taskA1,
+      },
+    ]);
+    await testDb.insert(flowRuns).values({
+      id: runId,
+      workspaceId: ids.wsA1,
+      definitionSnapshot: {
+        name: "Review flow",
+        steps: [
+          {
+            kind: "review-gate",
+            name: "Review",
+            instructions: "Review the draft",
+          },
+        ],
+      },
+      triggerSource: { type: "manual", userId: ids.userA1 },
+      status: "awaiting_review",
+      currentStepIndex: 0,
+      startedAt: new Date(),
+    });
+    await testDb.insert(flowRunSteps).values({
+      id: createSafeId<"flowRunStep">(),
+      workspaceId: ids.wsA1,
+      runId,
+      index: 0,
+      kind: "review-gate",
+      status: "awaiting_review",
+      reviewTaskEntityId: reviewId,
+      startedAt: new Date(),
+    });
+    await testDb.insert(entityLinks).values([
+      {
+        id: createSafeId<"entityLink">(),
+        workspaceId: ids.wsA1,
+        sourceEntityId: reviewId,
+        targetEntityId: taskA1,
+      },
+      {
+        id: createSafeId<"entityLink">(),
+        workspaceId: ids.wsA1,
+        sourceEntityId: taskA1,
+        targetEntityId: ordinaryId,
+      },
+    ]);
+    const context = await createContext({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      memberRole: "member",
+    });
+    const httpContext = {
+      safeDb: context.safeDb,
+      scopedDb: context.scopedDb,
+      user: { id: ids.userA1 },
+      session: { activeOrganizationId: ids.orgA },
+      workspaceId: ids.wsA1,
+      params: { workspaceId: ids.wsA1, taskId: taskA1 },
+      memberRole: sessionMemberRole("member"),
+    };
+    const readRelated = async () => {
+      const detail = await readTaskById.handler(
+        asTestRaw<Parameters<typeof readTaskById.handler>[0]>(httpContext),
+      );
+      if (!("children" in detail)) {
+        return expect.unreachable(
+          `Task read failed: ${JSON.stringify(detail)}`,
+        );
+      }
+      const links = await listEntityLinks.handler(
+        asTestRaw<Parameters<typeof listEntityLinks.handler>[0]>(httpContext),
+      );
+      if (!Array.isArray(links)) {
+        return expect.unreachable(`Link read failed: ${JSON.stringify(links)}`);
+      }
+      const mcp = await MATTER_TOOL_HANDLERS.list_tasks({
+        args: { task_id: taskA1 },
+        context,
+      });
+      if (!("egress" in mcp) || !("task" in mcp.payload)) {
+        return expect.unreachable(`MCP detail failed: ${JSON.stringify(mcp)}`);
+      }
+      return {
+        children: detail.children.map(({ id }) => id),
+        httpTargets: [
+          ...detail.linksAsSource.map(({ targetEntityId }) => targetEntityId),
+          ...detail.linksAsTarget.map(({ sourceEntityId }) => sourceEntityId),
+        ],
+        linkTargets: links.map(({ sourceEntityId, targetEntityId }) =>
+          sourceEntityId === taskA1 ? targetEntityId : sourceEntityId,
+        ),
+        mcpTargets: mcp.payload.task.links.map(({ entity }) => entity.id),
+      };
+    };
+    for (const enrolled of [false, true, false]) {
+      if (enrolled) {
+        await testDb.insert(featureEnrolments).values({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          featureId: "flows",
+        });
+      } else {
+        await testDb.delete(featureEnrolments).where(grantWhere);
+      }
+      const related = await readRelated();
+      for (const relatedIds of Object.values(related)) {
+        expect(relatedIds).toContain(ordinaryId);
+        expect(relatedIds.includes(reviewId)).toBe(enrolled);
+      }
+    }
+    const hiddenRoot = await listEntityLinks.handler(
+      asTestRaw<Parameters<typeof listEntityLinks.handler>[0]>({
+        ...httpContext,
+        params: { workspaceId: ids.wsA1, taskId: reviewId },
+      }),
+    );
+    expect(hiddenRoot).toMatchObject({ code: 404 });
+  } finally {
+    await testDb.delete(featureEnrolments).where(grantWhere);
+    await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+    await testDb
+      .delete(entities)
+      .where(inArray(entities.id, [reviewId, ordinaryId]));
+    await testDb
+      .update(user)
+      .set({ emailVerified: identity.emailVerified })
+      .where(eq(user.id, ids.userA1));
+  }
 });
