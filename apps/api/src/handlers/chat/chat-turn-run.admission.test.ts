@@ -97,6 +97,9 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission: {
         signal: admission.signal,
+        modelAdmission: testModelAdmission(
+          toSafeId<"organization">("org_admission"),
+        ),
         reservePeriod: async () => Result.ok(undefined),
         release: async () => {
           releases += 1;
