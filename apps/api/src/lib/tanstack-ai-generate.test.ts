@@ -2474,7 +2474,7 @@ const structuredStreamModel = (
   // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives; the rest
   // is `testModel`'s bookkeeping.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
-  return { ...testModel, adapter } as ResolvedTanStackTextModel;
+  return { ...testModel, adapter };
 };
 
 const runStarted = {
@@ -2771,8 +2771,7 @@ describe("a generation bounded by its own deadline", () => {
       tenantWorkspaceIds: [],
       // SAFETY: as `structuredStreamModel`.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
-      resolveTextModel: () =>
-        ({ ...testModel, adapter }) as ResolvedTanStackTextModel,
+      resolveTextModel: () => ({ ...testModel, adapter }),
     }).then(
       () => undefined,
       (error: unknown) => error,
@@ -2825,7 +2824,7 @@ describe("an output token budget bounded by the model's catalog limit", () => {
       outputTokenBudget: 16_384,
       resolveTextModel: () =>
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
-        ({ ...model, adapter: providerAdapter }) as ResolvedTanStackTextModel,
+        ({ ...model, adapter: providerAdapter }),
     });
 
     expect(providerRequests.at(-1)?.modelOptions).toMatchObject({
