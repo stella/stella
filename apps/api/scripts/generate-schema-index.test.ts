@@ -64,6 +64,20 @@ test("indexes each exported table with its SQL name, export, line and summary", 
   ]);
 });
 
+test("a table enabling RLS through its own chain is indexed as RLS", () => {
+  const indexed = indexSchemaSource({
+    fileName: "audit.ts",
+    source: `
+export const audited = p.pgTable("audited", { id: p.text() }).enableRLS();
+export const plain = p.pgTable("plain", { id: p.text() });
+`,
+  });
+  expect(indexed.map(({ rls, sqlName }) => ({ rls, sqlName }))).toEqual([
+    { rls: true, sqlName: "audited" },
+    { rls: false, sqlName: "plain" },
+  ]);
+});
+
 test("reads a column's SQL name, builder and flags from its builder chain", () => {
   expect(tables.at(0)?.columns).toEqual([
     {

@@ -197,6 +197,13 @@ const findTableCall = (node: ts.Node): ts.CallExpression | null => {
   return ts.forEachChild(node, findTableCall) ?? null;
 };
 
+/** `pgTable(...).enableRLS()`: RLS switched on by the declaration's own chain. */
+const enablesRls = (node: ts.Expression): boolean =>
+  ts.isCallExpression(node) &&
+  ts.isPropertyAccessExpression(node.expression) &&
+  (node.expression.name.text === "enableRLS" ||
+    enablesRls(node.expression.expression));
+
 /**
  * A column builder chain, innermost call first: `p.text("x").notNull()` is
  * the builder `text`, named `x`, flagged `not null`.
@@ -354,6 +361,7 @@ export const indexSchemaSource = ({
         line: lineOf(statement),
         rls:
           calleeName(call.expression) === "withRLS" ||
+          enablesRls(declaration.initializer) ||
           /Policies\(\)|pgPolicy\(/u.test(call.getText(sourceFile)),
         sqlName: nameArgument.text,
         summary: leadingSummary(statement, source),
