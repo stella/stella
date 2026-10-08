@@ -127,14 +127,14 @@ export const conditionalOperationMistakes = async (
   // @ts-expect-error Starting a flow requires an authorization-producing check.
   rejectedAtCompileTime(await startFlowRun(withoutAdmission));
   rejectedAtCompileTime(
-    // @ts-expect-error Raw collaborators cannot replace a checked provider.
-    await fillTemplateDocx({ ...fill, aiCollaborators: buildCollaborators }),
+    // @ts-expect-error Raw collaborators cannot replace an AI fill admission callback.
+    await fillTemplateDocx({ ...fill, aiFill: buildCollaborators }),
   );
   const unchecked = {
     ...fill,
-    aiCollaborators: async () => Result.ok(await buildCollaborators()),
+    aiFill: async () => Result.ok(await buildCollaborators()),
   };
-  // @ts-expect-error A successful result must carry the sealed authorization.
+  // @ts-expect-error AI fill admission requires an admitted/refused outcome, not a Result.
   rejectedAtCompileTime(await fillTemplateDocx(unchecked));
   return admit;
 };

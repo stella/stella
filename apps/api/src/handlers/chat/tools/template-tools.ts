@@ -303,6 +303,15 @@ export const createTemplateTools = (options: CreateTemplateToolsArgs) => {
           value: await fill(aiCollaborators(unrestoredFields)),
         }),
       });
+      if ("usageRejection" in result) {
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "limit",
+            message: "Template filling was refused by usage admission.",
+            cause: result.usageRejection,
+          }),
+        );
+      }
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
         // instead of inventing a value or leaving a raw {{marker}} in the

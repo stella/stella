@@ -119,10 +119,6 @@
     "seconds": 1.541259,
     "source": "estimated"
   },
-  "scripts/lib/enumerate-checked-operations.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "scripts/lib/feature-access-declarations.test.ts": {
     "seconds": 1.737437,
     "source": "estimated"
@@ -225,10 +221,6 @@
   },
   "src/db-url.test.ts": {
     "seconds": 0.261725,
-    "source": "estimated"
-  },
-  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/db/account-issuer-nullable-migration.db.test.ts": {
@@ -2611,10 +2603,6 @@
     "seconds": 3.2242,
     "source": "estimated"
   },
-  "src/handlers/document-translations/runs/create.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/handlers/document-translations/schemas.test.ts": {
     "seconds": 0.332837,
     "source": "estimated"
@@ -4847,18 +4835,6 @@
     "seconds": 0.493191,
     "source": "estimated"
   },
-  "src/lib/db/aggregate-lock.postgres.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-lock.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/db/aggregate-mutation-declaration.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/lib/db/arabic-normalize.test.ts": {
     "seconds": 1.739487,
     "source": "estimated"
@@ -5081,10 +5057,6 @@
   },
   "src/lib/document-processing-reconciliation-feeds.db.test.ts": {
     "seconds": 3.84235,
-    "source": "estimated"
-  },
-  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/document-reference.test.ts": {
@@ -5805,10 +5777,6 @@
   },
   "src/lib/files/office-evidence.test.ts": {
     "seconds": 0.12698,
-    "source": "estimated"
-  },
-  "src/lib/files/organization-file-usage-evidence.db.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/files/organization-file-usage-reconcile.db.test.ts": {
@@ -7051,14 +7019,6 @@
     "seconds": 0.091345,
     "source": "estimated"
   },
-  "src/lib/proofs/checked-executors.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/lib/proofs/checked-operation.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/lib/properties/column-prompt-suggestion.test.ts": {
     "seconds": 0.339309,
     "source": "estimated"
@@ -7605,10 +7565,6 @@
   },
   "src/lib/search/process-extraction.test.ts": {
     "seconds": 0.586685,
-    "source": "estimated"
-  },
-  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/search/projection-repair-queue.db.test.ts": {
@@ -8827,10 +8783,6 @@
     "seconds": 0.4,
     "source": "measured"
   },
-  "src/scripts/review-account.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/scripts/review-account.logic.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -8943,10 +8895,6 @@
     "seconds": 2.20168,
     "source": "estimated"
   },
-  "src/tests/proofs/checked-paths.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/tests/query-plans/plan-walker.test.ts": {
     "seconds": 0.575706,
     "source": "estimated"
@@ -8969,10 +8917,6 @@
   },
   "src/tests/security/account-wide-auth-revocation.test.ts": {
     "seconds": 1.93918,
-    "source": "estimated"
-  },
-  "src/tests/security/aggregate-mutations.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/security/ai-memories-rls.test.ts": {
@@ -9217,6 +9161,66 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
+    "source": "estimated"
+  },
+  "src/scripts/review-account.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/setup-env.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "scripts/lib/enumerate-checked-operations.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/document-translations/runs/create.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/files/organization-file-usage-evidence.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/proofs/checked-executors.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/proofs/checked-operation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/proofs/checked-paths.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   }
 }

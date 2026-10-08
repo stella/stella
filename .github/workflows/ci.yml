@@ -2918,6 +2918,14 @@ jobs:
         # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
         run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
+      - name: Offline check transport policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/offline-check-policy.test.ts
+          bun scripts/offline-check-policy.ts
+          bun --filter @stll/ai-catalog gen:rates --check
+          bun --filter @stll/ai-catalog gen:capabilities --check
+
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
         # These fetch models.dev and OpenRouter and byte-compare the
