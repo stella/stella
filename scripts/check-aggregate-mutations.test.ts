@@ -586,6 +586,57 @@ describe("aggregate mutation route coverage", () => {
       }
     });
 
+    test("only never-written const, function or import bindings are trusted", () => {
+      const sources = setup();
+      const imports = `${lockImport} import { lockExample } from "@/api/services/example-lock";`;
+      sources.set(
+        service,
+        `${lockImport} export const lockExample = async (tx) => { ${acquisition} };`,
+      );
+      sources.set(
+        module,
+        handlerModule({
+          imports: `${lockImport} let lockLocal = async (tx) => { ${acquisition} }; lockLocal = async () => {};`,
+          body: "await safeDb(async (tx) => { await lockLocal(tx); });",
+        }),
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+      for (const definition of [
+        `${lockImport} export let lockExample = async (tx) => { ${acquisition} };`,
+        `${lockImport} export const lockExample = async (tx) => { ${acquisition} }; export function reset() { lockExample = async () => {}; }`,
+        `${lockImport} export function lockExample(tx) { ${acquisition} } lockExample = async () => {};`,
+      ]) {
+        sources.set(service, definition);
+        sources.set(
+          module,
+          handlerModule({
+            imports,
+            body: "await safeDb(async (tx) => { await lockExample(tx); });",
+          }),
+        );
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+      for (const body of [
+        `const withAggregateLock = async () => {}; ${acquisition}`,
+        `await safeDb(async (tx) => { const withAggregateLock = async () => {}; ${acquisition} });`,
+        `({ safeDb } = { safeDb: async () => {} }); await safeDb(async (tx) => { ${acquisition} });`,
+      ]) {
+        sources.set(module, handlerModule({ imports: lockImport, body }));
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+      sources.set(
+        module,
+        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; ${lockImport} let existing = createSafeHandler({}, async ({safeDb}) => { await safeDb(async (tx) => { ${acquisition} }); }); existing = createSafeHandler({}, async () => {}); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+      );
+      expect(() => enumerate(sources)).toThrow(
+        "Cannot resolve declared aggregate handler implementation",
+      );
+    });
+
     test("the helper two levels deep does not cover the route", () => {
       const sources = setup();
       sources.set(
