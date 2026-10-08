@@ -32,7 +32,7 @@ export type SampleDocument = {
   body: string;
 };
 
-export type SampleTask = {
+type SampleTask = {
   key: string;
   name: string;
   status: "open" | "in_progress" | "done";
@@ -40,7 +40,7 @@ export type SampleTask = {
   dueDate: string;
 };
 
-export type SampleTimeEntry = {
+type SampleTimeEntry = {
   dateWorked: string;
   durationMinutes: number;
   narrative: string;
@@ -97,8 +97,6 @@ export const SAMPLE_CONTACTS = [
     notes: "Procurement lead at the fictional Brightwater Lantern Works.",
   },
 ] as const satisfies readonly SampleContact[];
-
-export type SampleContactKey = (typeof SAMPLE_CONTACTS)[number]["key"];
 
 export const SAMPLE_MATTERS = [
   {

@@ -91,7 +91,7 @@ jobs:
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
-      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
+      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
@@ -486,6 +486,7 @@ jobs:
         run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for heavy job planning
+        id: planner-bun
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -561,7 +562,7 @@ jobs:
           echo "required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for dependency scope
-        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        if: steps.planner-bun.outcome == 'skipped' && steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -2803,6 +2804,12 @@ jobs:
         # allowlists kept equal to their source lists.
         run: bun test scripts/ownership.test.ts
 
+      - name: Generated artifact formatting invariants
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # One formatter batch per check keeps the generated docs in step with
+        # their owners without a formatter process per row.
+        run: bun test scripts/generated-artifacts.test.ts
+
       - name: Schema introspection invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/schema-introspection.test.ts
@@ -3285,6 +3292,14 @@ jobs:
           bun test scripts/merge-bar-freshness.test.ts \
             scripts/merge-bar-arm-guard.test.ts scripts/merge-bar-disarm.test.ts
 
+      - name: Test merge queue jump-reset recovery
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/merge-bar-jump-reset.test.ts \
+            scripts/merge-bar-jump-reset-cli.test.ts \
+            scripts/merge-bar-jump-reset-handoff.test.ts \
+            scripts/merge-bar-jump-reset-requeue.test.ts
+
       # Check migration identity against the branch this run merges into. In a
       # merge group that is main as it stands at merge time.
       - name: Check migration identity against the base branch
@@ -3309,6 +3324,10 @@ jobs:
       - name: Test projection-totality classification
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/check-projection-totality.test.ts
+
+      - name: Test aggregate inventories
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
 
       - name: Office fixture metadata
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4227,6 +4246,11 @@ jobs:
 
       - name: Projection totality
         run: bun run check:projection-totality
+
+      - name: Aggregate ownership
+        run: |
+          bun run check:aggregate-locks
+          bun run check:aggregate-mutations
 
       - name: Split-button census
         run: |

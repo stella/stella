@@ -128,7 +128,7 @@ export type FacetBucket = {
   count: number;
 };
 
-export type SearchFacets = {
+type SearchFacets = {
   kind: FacetBucket[];
   workspace: FacetBucket[];
 };
@@ -180,17 +180,6 @@ export type SearchMaintenance = {
 export { GLOBAL_SEARCH_RESULT_TYPES };
 export type { GlobalSearchResultType };
 
-export const parseGlobalSearchResultType = (
-  value: unknown,
-): GlobalSearchResultType => {
-  const s = String(value);
-  const match = GLOBAL_SEARCH_RESULT_TYPES.find((v) => v === s);
-  if (!match) {
-    panic(`Invalid global search result type: ${s}`);
-  }
-  return match;
-};
-
 type GlobalSearchHitBase = {
   /** Stable compatibility key for existing v1 search consumers. */
   id: string;
@@ -234,7 +223,7 @@ export type ContactGlobalSearchHit = GlobalSearchHitBase & {
   contactType: ContactType;
 };
 
-export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
+type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   type: "case-law";
   resource: ResourceRef<"case_law_decision">;
   decisionId: string;
@@ -267,7 +256,7 @@ export type GlobalSearchHit =
   | CaseLawGlobalSearchHit
   | ChatGlobalSearchHit;
 
-export type GlobalSearchFacets = {
+type GlobalSearchFacets = {
   type: FacetBucket[];
   workspace: FacetBucket[];
   editor: FacetBucket[];

@@ -55,6 +55,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   ARRAY_INDEX_KEY_PREFIX,
   TemplateForm,
@@ -86,6 +87,7 @@ import {
   templateRecipesOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { LinkClauseDialog } from "@/routes/knowledge/-components/link-clause-dialog";
 import { parseArrayItemKey } from "@/routes/knowledge/-components/template-array-item-key";
 import { TemplateCheckDialog } from "@/routes/knowledge/-components/template-check-dialog";
@@ -152,9 +154,13 @@ function TemplateStudioInspectorView({
   // Languages sit in the tab header (next to the name) so the template's identity
   // reads at a glance; useQuery (not suspense) keeps a cache miss from blocking
   // the whole studio chrome.
-  const { data: detailData } = useQuery(
+  const detailDataQuery = useQuery(
     templateDetailOptions(activeOrganizationId, templateId),
   );
+  const detailDataView = useQueryView(detailDataQuery);
+  useQueryViewError(detailDataView);
+  const detailData =
+    detailDataView.type === "items" ? detailDataView.items : undefined;
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -325,7 +331,10 @@ const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
   const format = useFormatter();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data } = useQuery(templateCheckOptions(organizationId, templateId));
+  const dataQuery = useQuery(templateCheckOptions(organizationId, templateId));
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Nothing to show until the first result lands; keeps the row from flashing
   // a placeholder state on cold mount.
@@ -402,9 +411,13 @@ const TemplateFillFacet = ({
 }) => {
   const fillSaveTarget = useFillToMatterSaveTarget();
   const facetOrgId = useAuthenticatedUser().activeOrganizationId;
-  const { data: clausePreview } = useQuery({
+  const clausePreviewQuery = useQuery({
     ...templateClausePreviewOptions(facetOrgId, templateId),
   });
+  const clausePreviewView = useQueryView(clausePreviewQuery);
+  useQueryViewError(clausePreviewView);
+  const clausePreview =
+    clausePreviewView.type === "items" ? clausePreviewView.items : undefined;
   // Leaving the facet clears the in-document preview (and drops any pending
   // lookup-preview response so it cannot re-set a stale preview).
   useMountEffect(() => () => {
@@ -414,7 +427,11 @@ const TemplateFillFacet = ({
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
-  const { data: detailData } = useQuery(detailOptions);
+  const detailDataQuery = useQuery(detailOptions);
+  const detailDataView = useQueryView(detailDataQuery);
+  useQueryViewError(detailDataView);
+  const detailData =
+    detailDataView.type === "items" ? detailDataView.items : undefined;
   const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
   const fillActions = useTemplateStudioStore((s) => s.actions);
   // Persisted so the entered values survive a facet switch (edit a field and
@@ -434,9 +451,14 @@ const TemplateFillFacet = ({
       ? detailData
       : null;
 
-  const { data: clauseSources, isPending: clauseSourcesPending } = useQuery(
+  const clauseSourcesQuery = useQuery(
     templateClausesOptions(activeOrganizationId, templateId),
   );
+  const { isPending: clauseSourcesPending } = clauseSourcesQuery;
+  const clauseSourcesView = useQueryView(clauseSourcesQuery);
+  useQueryViewError(clauseSourcesView);
+  const clauseSources =
+    clauseSourcesView.type === "items" ? clauseSourcesView.items : undefined;
   const sourceStamp =
     clauseSources && "links" in clauseSources
       ? templateClauseSourceStamp(clauseSources.links)
@@ -444,11 +466,7 @@ const TemplateFillFacet = ({
 
   const presignedUrl = detail?.presignedUrl;
   const fileName = detail?.fileName;
-  const {
-    data: discovered,
-    isLoading: discovering,
-    isError,
-  } = useQuery(
+  const discoveredQuery = useQuery(
     templateFillDiscoverOptions({
       key: {
         organizationId: activeOrganizationId,
@@ -461,6 +479,20 @@ const TemplateFillFacet = ({
       },
     }),
   );
+  const { isLoading: discovering } = discoveredQuery;
+  const discoveredView = useQueryView(discoveredQuery);
+  useQueryViewError(discoveredView);
+  const discovered =
+    discoveredView.type === "items" ? discoveredView.items : undefined;
+
+  if (detailDataView.type === "error" || clauseSourcesView.type === "error") {
+    return (
+      <>
+        <QueryViewFeedback view={detailDataView} />
+        <QueryViewFeedback view={clauseSourcesView} />
+      </>
+    );
+  }
 
   if (!detail || discovering || clauseSourcesPending) {
     return (
@@ -470,18 +502,20 @@ const TemplateFillFacet = ({
     );
   }
 
-  if (isError || !discovered) {
+  if (discoveredView.type === "error" || !discovered) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("templates.loadFailed")}
-        </p>
+        <QueryViewFeedback view={discoveredView} />
       </div>
     );
   }
 
   return (
     <>
+      <QueryViewFeedback view={detailDataView} />
+      <QueryViewFeedback view={clausePreviewView} />
+      <QueryViewFeedback view={clauseSourcesView} />
+      <QueryViewFeedback view={discoveredView} />
       {fillIsDirty ? (
         <div className="border-warning/30 bg-warning/10 mx-4 mt-3 flex items-center justify-between gap-2 rounded-lg border p-2.5">
           <p className="text-warning-foreground text-xs">
@@ -908,14 +942,22 @@ const StudioInsertRow = () => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   // Linked clauses feed the Insert > Clause slot submenu so the user picks a
   // real clause instead of typing a slot name into a bare clause marker.
-  const { data: clausesData } = useQuery({
+  const clausesDataQuery = useQuery({
     ...templateClausesOptions(activeOrganizationId, sessionTemplateId ?? ""),
     enabled: sessionTemplateId !== null,
   });
+  const clausesDataView = useQueryView(clausesDataQuery);
+  useQueryViewError(clausesDataView);
+  const clausesData =
+    clausesDataView.type === "items" ? clausesDataView.items : undefined;
   // Saved recipes (org-wide) feed the Insert > Recipes submenu.
-  const { data: recipesData } = useQuery(
+  const recipesDataQuery = useQuery(
     templateRecipesOptions(activeOrganizationId),
   );
+  const recipesDataView = useQueryView(recipesDataQuery);
+  useQueryViewError(recipesDataView);
+  const recipesData =
+    recipesDataView.type === "items" ? recipesDataView.items : undefined;
   // The loop-counter submenu only makes sense inside
   // a `{% for %}` body. `isCaretInLoop` reads the live caret imperatively, so
   // recompute it each time the menu opens rather than reactively.
@@ -1024,6 +1066,10 @@ const StudioInsertRow = () => {
               return actions.focusEditor();
             }}
           >
+            {sessionTemplateId !== null && (
+              <QueryViewFeedback view={clausesDataView} />
+            )}
+            <QueryViewFeedback view={recipesDataView} />
             {fields.length > 0 && (
               <MenuSub>
                 <MenuSubTrigger>
@@ -1264,7 +1310,11 @@ const StudioOverviewSummary = ({
     activeOrganizationId,
     templateId,
   );
-  const { data: clausesData } = useQuery(clausesOptions);
+  const clausesDataQuery = useQuery(clausesOptions);
+  const clausesDataView = useQueryView(clausesDataQuery);
+  useQueryViewError(clausesDataView);
+  const clausesData =
+    clausesDataView.type === "items" ? clausesDataView.items : undefined;
   const links: LinkedClause[] =
     clausesData && "links" in clausesData ? clausesData.links : [];
   const outdated = links.filter((link) => link.isOutdated);
@@ -1354,16 +1404,14 @@ export const ClauseDriftPopover = ({
         </ul>
         <Button
           className="w-full"
-          disabled={syncingAll}
+          loading={syncingAll}
           onClick={() => {
             detached(handleSyncAll(), "template-studio-inspector.sync-all");
           }}
           size="sm"
           variant="outline"
         >
-          <RefreshCwIcon
-            className={cn("size-3.5", syncingAll && "animate-spin")}
-          />
+          <RefreshCwIcon className="size-3.5" />
           {t("clauses.syncAllOutdated")}
         </Button>
       </PopoverPopup>
@@ -1375,11 +1423,14 @@ export const ClauseDriftPopover = ({
  *  toward or away from this template. Its own tab because the guidance matters
  *  to agents picking a template, not just to the author drafting one. */
 const TemplateGuidanceFacet = ({ templateId }: { templateId: string }) => {
-  const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: detailData } = useQuery(
+  const detailDataQuery = useQuery(
     templateDetailOptions(activeOrganizationId, templateId),
   );
+  const detailDataView = useQueryView(detailDataQuery);
+  useQueryViewError(detailDataView);
+  const detailData =
+    detailDataView.type === "items" ? detailDataView.items : undefined;
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -1387,19 +1438,22 @@ const TemplateGuidanceFacet = ({ templateId }: { templateId: string }) => {
   if (detail === null) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+        <QueryViewFeedback view={detailDataView} />
       </div>
     );
   }
   return (
-    <GuidanceFields
-      key={templateId}
-      languages={detail.languages}
-      organizationId={activeOrganizationId}
-      templateId={templateId}
-      whenNotToUse={detail.whenNotToUse ?? ""}
-      whenToUse={detail.whenToUse ?? ""}
-    />
+    <>
+      <QueryViewFeedback view={detailDataView} />
+      <GuidanceFields
+        key={templateId}
+        languages={detail.languages}
+        organizationId={activeOrganizationId}
+        templateId={templateId}
+        whenNotToUse={detail.whenNotToUse ?? ""}
+        whenToUse={detail.whenToUse ?? ""}
+      />
+    </>
   );
 };
 

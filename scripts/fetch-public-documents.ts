@@ -204,9 +204,7 @@ export const retryDelayMs = (
   return Math.min(MAX_RETRY_DELAY_MS, Math.max(providerDelay, jitter));
 };
 const delay = async (milliseconds: number) => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
+  await Bun.sleep(milliseconds);
 };
 
 // This script runs without installed packages in a sparse checkout.

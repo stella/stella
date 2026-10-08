@@ -6,11 +6,8 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-} from "@stll/ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -33,6 +30,7 @@ import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
@@ -59,8 +57,12 @@ export const DocumentAiSourceBar = ({
   const openFile = useInspectorTabsStore((s) => s.openFile);
 
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesQueryView = useQueryView(propertiesQuery);
+  useQueryViewError(propertiesQueryView);
   const properties = propertiesQuery.data;
   const entityQuery = useQuery(entityOptions(workspaceId, activeTab.entityId));
+  const entityQueryView = useQueryView(entityQuery);
+  useQueryViewError(entityQueryView);
   const entity = entityQuery.data;
   useSyncJustifications({
     workspaceId,
@@ -413,7 +415,11 @@ export const DocumentAiSourceBar = ({
         )}
       >
         {isGeneratingBoxes && (
-          <LoaderCircleIcon className="text-muted-foreground size-3 shrink-0 animate-spin" />
+          <Loader
+            className="size-3 shrink-0"
+            label={t("common.loading")}
+            size="sm"
+          />
         )}
         <button
           aria-expanded={isAnswerExpanded}

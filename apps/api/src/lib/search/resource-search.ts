@@ -10,7 +10,7 @@ type SearchDisposition = { type: "searchable" } | { type: "not_searched" };
 const NOT_SEARCHED = { type: "not_searched" } as const;
 
 /** Every canonical resource kind must explicitly choose global-search behavior. */
-export const SEARCH_RESOURCE_DISPOSITION = {
+const SEARCH_RESOURCE_DISPOSITION = {
   [RESOURCE_TYPE.AGENT_SKILL]: NOT_SEARCHED,
   [RESOURCE_TYPE.AGENT_SKILL_COMMENT]: NOT_SEARCHED,
   [RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: NOT_SEARCHED,

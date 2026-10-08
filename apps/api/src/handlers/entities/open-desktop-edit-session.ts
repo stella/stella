@@ -42,7 +42,7 @@ import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-ro
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 
-export const openDesktopEditSessionBodySchema = t.Object({
+const openDesktopEditSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),
   force: t.Optional(t.Boolean()),
   propertyId: tSafeId("property"),

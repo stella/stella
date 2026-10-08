@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { Worker } from "node:worker_threads";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { createDetached } from "@stll/errors";
 import type { SanctionsSource } from "@stll/sanctions";
 
@@ -224,20 +225,17 @@ const matchSanctionsRequest = async ({
       fail,
     });
   if (request.list !== null) {
-    for (
-      let offset = 0;
-      offset < request.list.entries.length;
-      offset += MATCHER_TRANSFER_ENTRIES
-    ) {
+    for (const [batchIndex, itemBatch] of chunkItems(
+      request.list.entries,
+      MATCHER_TRANSFER_ENTRIES,
+    ).entries()) {
+      const offset = batchIndex * MATCHER_TRANSFER_ENTRIES;
       const response = await exchange({
         type: "entries",
         source: request.source,
         editionId: request.editionId,
         offset,
-        entries: request.list.entries.slice(
-          offset,
-          offset + MATCHER_TRANSFER_ENTRIES,
-        ),
+        entries: itemBatch,
       });
       if (response.status !== "entries-loaded") {
         return { status: "unavailable" };

@@ -3,6 +3,8 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { open, rename, unlink } from "node:fs/promises";
 import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { caseLawDecisions } from "@/api/db/schema";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -26,6 +28,8 @@ export class EcjFormexRefreshInputError extends TaggedError(
 )<{
   message: string;
 }> {}
+
+const REFRESH_IDENTITY_LOOKUP_BATCH_SIZE = 500;
 
 const REPLAY_COLUMNS = {
   id: caseLawDecisions.id,
@@ -153,8 +157,10 @@ const resolveRows = async ({
 }: ResolveRowsOptions) => {
   const rows: RefreshRow[] = [];
   // Bound SQL parameter count; all identities are resolved before any side effect.
-  for (let offset = 0; offset < requested.length; offset += 500) {
-    const chunk = requested.slice(offset, offset + 500);
+  for (const chunk of chunkItems(
+    requested,
+    REFRESH_IDENTITY_LOOKUP_BATCH_SIZE,
+  )) {
     const ids = chunk.flatMap((identity) =>
       identity.type === "row" ? [identity.value] : [],
     );

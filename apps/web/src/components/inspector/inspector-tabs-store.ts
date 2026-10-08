@@ -17,21 +17,11 @@ import { resolvedRouteIdsStore } from "@/components/inspector/resolved-route-ids
 
 export type {
   ChatTab,
-  CloseTabOptions,
-  ExternalTab,
-  ExternalTabId,
-  FileFieldReplacement,
   FileTab,
   GenericTab,
   InspectorTab,
-  InspectorTabsActions,
-  InspectorTabsState,
   InspectorTabsStore,
-  MatterTab,
-  MatterTabId,
   SkillResourceTab,
-  SkillResourceTabId,
-  TaskTab,
 } from "@/components/inspector/inspector-store-types";
 export type { InspectorBroadcastScope };
 export {

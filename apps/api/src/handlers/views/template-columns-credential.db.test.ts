@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
   getRlsFixture,
@@ -106,6 +107,8 @@ const createViewAs = async (
   createdViewIds.push(viewId);
   const result = await createView.handler(
     createTestHandlerContext<Parameters<typeof createView.handler>[0]>({
+      recordAuditEvent: auditRecorderDouble(),
+      createAuditRecorder: () => auditRecorderDouble(),
       memberRole,
       workspaceId: ids.wsA1,
       session: { activeOrganizationId: ids.orgA },
@@ -186,6 +189,8 @@ describe("template columns on a view", () => {
     const update = async (memberRole: AuthorizedMemberRole) =>
       await updateView.handler(
         createTestHandlerContext<Parameters<typeof updateView.handler>[0]>({
+          recordAuditEvent: auditRecorderDouble(),
+          createAuditRecorder: () => auditRecorderDouble(),
           memberRole,
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },

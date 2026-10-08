@@ -41,6 +41,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import {
   buildCollaboratorStats,
@@ -57,6 +58,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
@@ -219,12 +221,20 @@ const CreateMatterDialogBody = ({
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const { data: organization } = useChromeQuery({
+  const organizationQuery = useChromeQuery({
     ...organizationOptions(currentUser.activeOrganizationId),
   });
-  const { data: workspacesData } = useChromeQuery({
+  const organizationView = useQueryView(organizationQuery);
+  useQueryViewError(organizationView);
+  const organization =
+    organizationView.type === "items" ? organizationView.items : undefined;
+  const workspacesDataQuery = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
+  const workspacesDataView = useQueryView(workspacesDataQuery);
+  useQueryViewError(workspacesDataView);
+  const workspacesData =
+    workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
 
   const handleClose = () => {
     closeDialog();
@@ -427,6 +437,8 @@ const CreateMatterDialogBody = ({
         <DialogTitle>{t("common.newMatter")}</DialogTitle>
       </DialogHeader>
       <DialogPanel className="flex flex-col gap-5">
+        <QueryViewFeedback view={organizationView} />
+        <QueryViewFeedback view={workspacesDataView} />
         <OwnerTypeToggle onChange={setOwnerType} value={ownerType} />
 
         {(() => {

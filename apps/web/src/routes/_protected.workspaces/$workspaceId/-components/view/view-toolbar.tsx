@@ -15,7 +15,6 @@ import {
   ClockIcon,
   DownloadIcon,
   HashIcon,
-  Loader2Icon,
   PlayIcon,
   Rows3Icon,
   SparklesIcon,
@@ -23,6 +22,7 @@ import {
   AiActionIcon,
   WrapTextIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import {
   Menu,
   MenuGroup,
@@ -47,6 +47,7 @@ import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-controls";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
@@ -84,6 +85,7 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
@@ -119,7 +121,10 @@ export const ViewToolbar = ({
   view,
   workspaceId,
 }: ViewToolbarProps) => {
-  const { data: properties = [] } = useQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = useQueryView(propertiesQuery);
+  const properties =
+    propertiesView.type === "items" ? propertiesView.items : [];
   const updateView = useUpdateView(workspaceId);
   const { filters, sorts, hiddenProperties } = view.layout;
   const folderState = useWorkspaceStore((s) => s.folderState);
@@ -153,6 +158,7 @@ export const ViewToolbar = ({
       className="md:ms-auto md:justify-end"
       data-slot="workspace-view-toolbar"
     >
+      <QueryViewFeedback view={propertiesView} />
       <ExtractionRunProgress workspaceId={workspaceId} />
 
       {view.layout.type === "filesystem" && folderState.hasFolders && (
@@ -511,11 +517,10 @@ const ExportFormatIcon = ({ Icon, pending }: ExportFormatIconProps) => {
 
   if (pending) {
     return (
-      <Loader2Icon
-        aria-hidden={false}
-        aria-label={t("common.loading")}
-        className="text-muted-foreground size-4.5 animate-spin sm:size-4"
-        role="img"
+      <Loader
+        className="size-4.5 sm:size-4"
+        label={t("common.loading")}
+        size="sm"
       />
     );
   }
@@ -595,7 +600,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
           {exportingFormat === null ? (
             <DownloadIcon className="size-3.5" />
           ) : (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           )}
         </MenuTrigger>
         <MenuPopup className="min-w-56">
@@ -868,9 +873,15 @@ const FilesystemOrganizerAction = ({
   // independent of the FilesystemView's current page. useQuery (not
   // useSuspenseQuery) keeps a cache miss from suspending the toolbar
   // chrome — the action button just stays disabled until the data resolves.
-  const { data: foldersData } = useQuery(workspaceFoldersOptions(workspaceId));
+  const foldersDataQuery = useQuery(workspaceFoldersOptions(workspaceId));
+  const foldersDataView = useQueryView(foldersDataQuery);
+  const foldersData =
+    foldersDataView.type === "items" ? foldersDataView.items : undefined;
   const allFolders = normalizeOptionalArray(foldersData);
-  const { data: filesData } = useQuery(workspaceFilesOptions(workspaceId));
+  const filesDataQuery = useQuery(workspaceFilesOptions(workspaceId));
+  const filesDataView = useQueryView(filesDataQuery);
+  const filesData =
+    filesDataView.type === "items" ? filesDataView.items : undefined;
   const allFiles = normalizeOptionalArray(filesData);
 
   const existingFolders = (() => {
@@ -922,6 +933,8 @@ const FilesystemOrganizerAction = ({
 
   return (
     <>
+      <QueryViewFeedback view={foldersDataView} />
+      <QueryViewFeedback view={filesDataView} />
       <Button
         aria-label={
           selectedFiles.length > 0
@@ -930,7 +943,13 @@ const FilesystemOrganizerAction = ({
               })
             : t("workspaces.importOrganizer.action")
         }
-        disabled={organizerFiles.length === 0}
+        disabled={
+          organizerFiles.length === 0 ||
+          foldersDataView.type === "pending" ||
+          foldersDataView.type === "error" ||
+          filesDataView.type === "pending" ||
+          filesDataView.type === "error"
+        }
         onClick={() => setOpen(true)}
         size="xs"
         title={

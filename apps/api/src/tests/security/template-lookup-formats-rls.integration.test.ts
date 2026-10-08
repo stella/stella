@@ -19,6 +19,7 @@ import {
   LOOKUP_FORMAT_DEFAULT_SOURCE,
   resolveLookupFormatDefault,
 } from "@/api/lib/templates/lookup-formats/resolve-default";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -69,6 +70,7 @@ describe("organization company format isolation", () => {
       createScopedDb(testDb, [], ids.orgA, ids.userA1),
     );
     const context = {
+      recordAuditEvent: auditRecorderDouble(),
       scopedDb,
       safeDb: toSafeDbMock(scopedDb),
       session: { activeOrganizationId: ids.orgA },
@@ -251,6 +253,7 @@ describe("personal company format defaults", () => {
   ) => {
     const scopedDb = scopedFor(organizationId, userId);
     return {
+      recordAuditEvent: auditRecorderDouble(),
       scopedDb,
       safeDb: toSafeDbMock(scopedDb),
       session: { activeOrganizationId: organizationId },
