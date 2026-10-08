@@ -240,7 +240,7 @@ const main = async (): Promise<void> => {
       errorCode: OFFICE_EVIDENCE_UNAVAILABLE_CODE.parseFailed,
       status: OFFICE_EVIDENCE_STATUS.unavailable,
     } as const satisfies OfficeEvidenceWorkerResult;
-    process.stdout.write(JSON.stringify(sanitizeErrorForOutput(result)));
+    process.stdout.write(JSON.stringify(result));
     return;
   }
 
@@ -253,7 +253,7 @@ const main = async (): Promise<void> => {
       payload,
       status: OFFICE_EVIDENCE_STATUS.available,
     } as const satisfies OfficeEvidenceWorkerResult;
-    process.stdout.write(JSON.stringify(sanitizeErrorForOutput(result)));
+    process.stdout.write(JSON.stringify(result));
   } catch (error) {
     const result = {
       errorCode: classifyFailure(error),
