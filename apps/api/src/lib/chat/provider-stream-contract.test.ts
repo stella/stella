@@ -434,107 +434,110 @@ describe("signed reasoning in a thread's history", () => {
   }
 });
 
-test("the SDK tool loop replays current Anthropic thinking unchanged with one result", async () => {
-  const sink: ModelMessage[][] = [];
-  const model = "claude-sonnet-4-6";
-  const signature = "current-turn-signature";
-  const raw: AnyTextAdapter = {
-    ...adapterOf([]),
-    model,
-    async *chatStream({ messages, runId, threadId }) {
-      sink.push(structuredClone(messages));
-      yield {
-        ...started,
-        runId: runId ?? "run",
-        threadId: threadId ?? "thread",
-        model,
-      };
-      if (sink.length === 1) {
+for (const boundary of ["base contract", "run tool-call ledger"] as const) {
+  test(`the SDK tool loop replays current Anthropic thinking unchanged with one result through the ${boundary}`, async () => {
+    const sink: ModelMessage[][] = [];
+    const model = "claude-sonnet-4-6";
+    const signature = "current-turn-signature";
+    const raw: AnyTextAdapter = {
+      ...adapterOf([]),
+      model,
+      async *chatStream({ messages, runId, threadId }) {
+        sink.push(structuredClone(messages));
         yield {
-          type: EventType.STEP_STARTED,
-          stepName: "thinking",
-          stepId: "step-1",
+          ...started,
+          runId: runId ?? "run",
+          threadId: threadId ?? "thread",
           model,
-          timestamp: 1,
         };
-        yield {
-          type: EventType.REASONING_MESSAGE_CONTENT,
-          messageId: "thinking-1",
-          delta: "Original thinking",
-          model,
-          timestamp: 1,
-        };
-        yield {
-          type: EventType.STEP_FINISHED,
-          stepName: "thinking",
-          stepId: "step-1",
-          signature,
-          model,
-          timestamp: 1,
-        };
-        yield {
-          type: EventType.TOOL_CALL_START,
-          toolCallId: "call-1",
-          toolCallName: "search",
-          model,
-          timestamp: 1,
-        };
-        yield {
-          type: EventType.TOOL_CALL_ARGS,
-          toolCallId: "call-1",
-          delta: "{}",
-          model,
-          timestamp: 1,
-        };
-        yield {
-          type: "TOOL_CALL_END",
-          toolCallId: "call-1",
-          input: {},
-          model,
-          timestamp: 1,
-        };
-        yield { ...finished, model, finishReason: "tool_calls" };
-        return;
-      }
-      yield { ...delta, delta: "Answer", model };
-      yield { ...finished, model };
-    },
-  };
-  const adapter = withRunToolCallIds(
-    withProviderStreamContract(raw, "anthropic"),
-    new ToolCallIdLedger([]),
-  );
-  const search = toolDefinition({
-    name: "search",
-    description: "Search",
-    inputSchema: toTanStackToolSchema(v.object({})),
-  }).server(async () => ({ found: true }));
-  for await (const _chunk of chat({
-    adapter,
-    messages: [{ role: "user", content: "Search" }],
-    tools: [search],
-    agentLoopStrategy: maxIterations(3),
-  })) {
-    // Drain the SDK's real conversion and tool-execution loop.
-  }
-  expect(sink).toHaveLength(2);
-  const continuation = sink.at(1) ?? [];
-  expect(continuation.flatMap((message) => message.thinking ?? [])).toEqual([
-    {
-      content: "Original thinking",
-      signature,
-      provenance: {
-        provider: "anthropic",
-        model,
-        format: "anthropic-thinking-signature",
+        if (sink.length === 1) {
+          yield {
+            type: EventType.STEP_STARTED,
+            stepName: "thinking",
+            stepId: "step-1",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: "thinking-1",
+            delta: "Original thinking",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.STEP_FINISHED,
+            stepName: "thinking",
+            stepId: "step-1",
+            signature,
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.TOOL_CALL_START,
+            toolCallId: "call-1",
+            toolCallName: "search",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.TOOL_CALL_ARGS,
+            toolCallId: "call-1",
+            delta: "{}",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: "TOOL_CALL_END",
+            toolCallId: "call-1",
+            input: {},
+            model,
+            timestamp: 1,
+          };
+          yield { ...finished, model, finishReason: "tool_calls" };
+          return;
+        }
+        yield { ...delta, delta: "Answer", model };
+        yield { ...finished, model };
       },
-    },
-  ]);
-  const calls = continuation.flatMap((message) => message.toolCalls ?? []);
-  expect(calls.map(({ id }) => id)).toEqual(["call-1"]);
-  expect(
-    continuation
-      .filter((message) => message.role === "tool")
-      .map(({ toolCallId }) => toolCallId),
-  ).toEqual(["call-1"]);
-});
+    };
+    const baseContract = withProviderStreamContract(raw, "anthropic");
+    const adapter =
+      boundary === "base contract"
+        ? baseContract
+        : withRunToolCallIds(baseContract, new ToolCallIdLedger([]));
+    const search = toolDefinition({
+      name: "search",
+      description: "Search",
+      inputSchema: toTanStackToolSchema(v.object({})),
+    }).server(async () => ({ found: true }));
+    for await (const _chunk of chat({
+      adapter,
+      messages: [{ role: "user", content: "Search" }],
+      tools: [search],
+      agentLoopStrategy: maxIterations(3),
+    })) {
+      // Drain the SDK's real conversion and tool-execution loop.
+    }
+    expect(sink).toHaveLength(2);
+    const continuation = sink.at(1) ?? [];
+    expect(continuation.flatMap((message) => message.thinking ?? [])).toEqual([
+      {
+        content: "Original thinking",
+        signature,
+        provenance: {
+          provider: "anthropic",
+          model,
+          format: "anthropic-thinking-signature",
+        },
+      },
+    ]);
+    const calls = continuation.flatMap((message) => message.toolCalls ?? []);
+    expect(calls.map(({ id }) => id)).toEqual(["call-1"]);
+    expect(
+      continuation
+        .filter((message) => message.role === "tool")
+        .map(({ toolCallId }) => toolCallId),
+    ).toEqual(["call-1"]);
+  });
+}

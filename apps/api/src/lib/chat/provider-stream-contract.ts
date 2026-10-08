@@ -343,7 +343,7 @@ type StreamContract = {
   /** The run's tool call ids; absent outside a chat run. */
   ledger: ToolCallIdLedger | undefined;
   provider: TanStackAIProvider | undefined;
-  reasoning: Map<string, ReasoningProvenance> | undefined;
+  reasoning: Map<string, ReasoningProvenance>;
 };
 
 /** What each contracted adapter wraps, so a run can bind its ledger to the
@@ -399,10 +399,12 @@ async function* withProducedReasoning({
 }: ProducedReasoningOptions): AsyncIterable<StreamChunk> {
   for await (const chunk of chunks) {
     const signatures: unknown[] = [];
-    if (chunk.type === EventType.STEP_FINISHED)
+    if (chunk.type === EventType.STEP_FINISHED) {
       signatures.push(Reflect.get(chunk, "signature"));
-    if (chunk.type === EventType.REASONING_ENCRYPTED_VALUE)
+    }
+    if (chunk.type === EventType.REASONING_ENCRYPTED_VALUE) {
       signatures.push(chunk.encryptedValue);
+    }
     if (
       chunk.type === EventType.TOOL_CALL_START ||
       chunk.type === "TOOL_CALL_END"
@@ -410,7 +412,9 @@ async function* withProducedReasoning({
       signatures.push(chunk.metadata?.thoughtSignature);
     }
     for (const signature of signatures) {
-      if (typeof signature !== "string" || signature === "") continue;
+      if (typeof signature !== "string" || signature === "") {
+        continue;
+      }
       reasoning.set(
         signature,
         reasoningProvenanceForSignature({ provider, modelId, signature }),
@@ -432,8 +436,8 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
   const closeMessages = (
     requested: Pick<ChatStreamOptions, "messages" | "model">,
     activeReasoning: Map<string, ReasoningProvenance>,
-  ): ClosedTranscript | undefined => {
-    return provider === undefined
+  ): ClosedTranscript | undefined =>
+    provider === undefined
       ? undefined
       : buildClosedTranscript({
           messages: requested.messages.map((message): ModelMessage => ({
@@ -476,10 +480,8 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
           })),
           target: { provider, modelId: requested.model },
         });
-  };
   const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
-    const activeReasoning = reasoning ?? new Map<string, ReasoningProvenance>();
-    const closed = closeMessages(requested, activeReasoning);
+    const closed = closeMessages(requested, reasoning);
     const options =
       closed === undefined ? requested : { ...requested, messages: closed };
     refuseTurnPausingRequest(provider, options);
@@ -494,7 +496,7 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
             chunks: dispatched,
             provider,
             modelId: requested.model,
-            reasoning: activeReasoning,
+            reasoning,
           });
     return withOneTerminalEvent(
       withDeclaredToolInput(
@@ -514,7 +516,7 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
     );
   };
   const structuredOutput: AnyTextAdapter["structuredOutput"] = (requested) => {
-    const closed = closeMessages(requested.chatOptions, reasoning ?? new Map());
+    const closed = closeMessages(requested.chatOptions, reasoning);
     return closed === undefined
       ? adapter.structuredOutput(requested)
       : dispatchClosedStructuredRequest(adapter, {
@@ -527,10 +529,7 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
     rawStructuredStream === undefined
       ? undefined
       : (requested) => {
-          const closed = closeMessages(
-            requested.chatOptions,
-            reasoning ?? new Map(),
-          );
+          const closed = closeMessages(requested.chatOptions, reasoning);
           return closed === undefined
             ? rawStructuredStream.call(adapter, requested)
             : dispatchClosedStructuredStream({
@@ -544,9 +543,15 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
         };
   const proxy = new Proxy(adapter, {
     get: (target, key) => {
-      if (key === "chatStream") return chatStream;
-      if (key === "structuredOutput") return structuredOutput;
-      if (key === "structuredOutputStream") return structuredOutputStream;
+      if (key === "chatStream") {
+        return chatStream;
+      }
+      if (key === "structuredOutput") {
+        return structuredOutput;
+      }
+      if (key === "structuredOutputStream") {
+        return structuredOutputStream;
+      }
       const value: unknown = Reflect.get(target, key, target);
       if (typeof value !== "function") {
         return value;
@@ -583,7 +588,7 @@ export const withProviderStreamContract = (
     adapter,
     ledger: undefined,
     provider,
-    reasoning: undefined,
+    reasoning: new Map(),
   });
 };
 
