@@ -125,6 +125,7 @@ export const aggregateRecorder = () => {
   const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const tx = {
     execute: async (statement: SQL) => {
+      await Promise.resolve();
       statements.push(new PgDialect().sqlToQuery(statement));
       return aggregateExecutionRows(statement);
     },
