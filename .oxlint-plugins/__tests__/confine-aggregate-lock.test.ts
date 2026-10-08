@@ -10,7 +10,7 @@ test("rejects the planted acquisition outside the aggregate owner", async () => 
       import.meta.url,
     ),
     "utf-8",
-  );
+  ).replace(/^\/\/ oxlint-disable-next-line[^\n]*/gmu, "");
   expect(source).toContain('.for("update")');
   expect(
     await lintSingleRule("confine-aggregate-lock", source, {

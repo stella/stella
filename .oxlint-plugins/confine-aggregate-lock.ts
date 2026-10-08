@@ -24,18 +24,29 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           Program(node) {
-            const file = repoRelativeFilename(context);
+            const sourceFile = repoRelativeFilename(context);
+            const file =
+              sourceFile ===
+              ".oxlint-plugins/__fixtures__/confine-aggregate-lock.fixture.ts"
+                ? "apps/api/src/handlers/planted.ts"
+                : sourceFile;
             if (!aggregateLockSourceIncluded(file)) {
               return;
             }
-            const actual = aggregateLockBaseline(
-              aggregateLockSites(file, context.sourceCode.text),
-            );
+            const sites = aggregateLockSites(file, context.sourceCode.text);
+            const actual = aggregateLockBaseline(sites);
             for (const problem of aggregateLockBaselineProblems({
               actual,
               baseline: baseline.filter((row) => row.file === file),
             })) {
-              context.report({ node, messageId: "unowned", data: { problem } });
+              const site = sites.at(0);
+              context.report({
+                ...(site === undefined
+                  ? { node }
+                  : { loc: { line: site.line, column: 1 } }),
+                messageId: "unowned",
+                data: { problem },
+              });
             }
           },
         };

@@ -4,7 +4,7 @@ import {
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
   aggregateLockSites,
-} from "./aggregate-lock-sites.ts";
+} from "../aggregate-lock-sites.ts";
 
 const file = "apps/api/src/handlers/example.ts";
 describe("aggregate lock confinement", () => {

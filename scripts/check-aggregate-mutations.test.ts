@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -96,7 +97,7 @@ describe("aggregate mutation route coverage", () => {
     const sources = fixture('post("/existing", existing.handler)');
     sources.set(
       server,
-      `${sources.get(server)}; if (dev) { await import("@/api/handlers/dev/routes"); }`,
+      `${String(sources.get(server))}; if (dev) { await import("@/api/handlers/dev/routes"); }`,
     );
     sources.set(
       "apps/api/src/handlers/dev/routes.ts",
@@ -113,7 +114,7 @@ describe("aggregate mutation route coverage", () => {
     const sources = fixture('post("/existing", existing.handler)');
     sources.set(
       routes,
-      `import existing from "@/api/handlers/example/create"; ${sources.get(routes)}`,
+      `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
     );
     sources.set(
       "apps/api/src/handlers/example/create.ts",
@@ -131,7 +132,7 @@ describe("aggregate mutation route coverage", () => {
     const sources = fixture('post("/named", foo.handler)');
     sources.set(
       routes,
-      `import { foo } from "@/api/handlers/example/create"; ${sources.get(routes)}`,
+      `import { foo } from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
     );
     sources.set(
       "apps/api/src/handlers/example/create.ts",
@@ -151,7 +152,7 @@ describe("aggregate mutation route coverage", () => {
     const sources = fixture('post("/existing", existing.handler)');
     sources.set(
       routes,
-      `import existing from "@/api/handlers/example/create"; ${sources.get(routes)}`,
+      `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
     );
     const prefix =
       'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
@@ -188,11 +189,14 @@ describe("aggregate mutation route coverage", () => {
     const imports =
       'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
     const routeSource = sources.get(routes);
+    if (routeSource === undefined) {
+      panic("Missing route fixture");
+    }
     sources.set(routes, `${imports} ${routeSource}`);
     expect(enumerate(sources).at(0)?.declared).toBe(true);
     sources.set(
       routes,
-      `${imports} ${routeSource?.replace('await withAggregateLock({aggregate: "workspace", id, tx});', "")}`,
+      `${imports} ${routeSource.replace('await withAggregateLock({aggregate: "workspace", id, tx});', "")}`,
     );
     expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
     sources.set(
@@ -219,7 +223,7 @@ describe("aggregate mutation route coverage", () => {
     const sources = fixture("post(PATHS.create, existing.handler)");
     sources.set(
       routes,
-      `import { PATHS } from "@/api/lib/paths"; ${sources.get(routes)}`,
+      `import { PATHS } from "@/api/lib/paths"; ${String(sources.get(routes))}`,
     );
     sources.set(
       "apps/api/src/lib/paths.ts",
@@ -264,7 +268,7 @@ describe("aggregate mutation route coverage", () => {
     );
     sources.set(
       routes,
-      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; ${sources.get(routes)}`,
+      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; ${String(sources.get(routes))}`,
     );
     expect(() => enumerate(sources)).toThrow("Unknown aggregate registry name");
   });

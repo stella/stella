@@ -159,6 +159,9 @@ const createSourceAccess = (sourceLoader: SourceLoader) => {
       return local;
     }
     const [packageName, ...subpath] = name.slice("@stll/".length).split("/");
+    if (packageName === undefined) {
+      return undefined;
+    }
     const directory = `packages/${packageName}`;
     const metadataContent = load(`${directory}/package.json`);
     if (metadataContent === undefined) {
@@ -411,8 +414,8 @@ const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
     if (initializer !== undefined) {
       return isRouteReceiver(initializer, visited);
     }
-    let ancestor: ts.Node | undefined = node.parent;
-    while (ancestor !== undefined) {
+    let ancestor = node.parent;
+    while (!ts.isSourceFile(ancestor)) {
       if (
         (ts.isArrowFunction(ancestor) || ts.isFunctionExpression(ancestor)) &&
         ancestor.parameters.some(
