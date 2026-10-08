@@ -1,0 +1,44 @@
+[
+  {
+    "file": "apps/api/src/lib/document-processing-automatic-request.ts",
+    "from": "59176ccb70135273c1c0e4e67f04117f3959fb3f62adb4b7e8d33523d797a8e4",
+    "to": "cf958c7e24ca2bdc59917288b9f99d8eb10d3da25712c76662c3de9d1dcc3ef3",
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
+    "from": "d010b790b6f27ac5ec34eac1c4a7e41d1725c216318d09caf7a6739aff29c1df",
+    "to": "5faf26f4e8096b3db362ae8ff47b4668f2643ccef29205fa4b44f75b3eeddf8c",
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-request.ts",
+    "from": "47239f8bf74c4623e2b1f4283356caa2808d0df028f12d254dda3de59a228446",
+    "to": "ad54071d8f8927c6434b3ba0467f5f9aab582b933a6000886b2b70da448e28fd",
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "from": "219f49f9c4e988d1d414facd62afa2e6ffa6fd507ea6df52631bbf66a7c723fa",
+    "to": "216c562d37fb2bbdd5017636c8841cbff039348d75c2a61817a15afe12b75252",
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "from": "0f9bc85e5e3d9815f0ea749858c3996d508ef170fdafab04396de022c300b947",
+    "to": "4f95336f56a397d0b25c2de48bbd4c31d8817549643074bd2e9f7a2c12cd33eb",
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "from": "e941989ae71d987bcf4c15a246479b8e97fa335af6bbd158cd5cbf8215d6e2dd",
+    "to": "907bfb0173effa1e37c2d7d93a54df087c439968d5bee81db9c602fb4de7a120",
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "from": "b2a2f70ee587b8599a2852fd508cbfd24d2805f46a9dae6da801ed13c079e8db",
+    "to": "4095af46fc431287eb82618839a58fcf8c1ee2eb7e8ddb0d703a30f0884f3dd0",
+    "reason": "Existing row lock in native extraction repair; the edited batch query around it changed the site's fingerprint."
+  }
+]
