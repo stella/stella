@@ -10,7 +10,7 @@ export const liveDesktopEditSessionPredicates = (now: Date) => [
   gt(desktopEditSessions.tokenExpiresAt, now),
 ];
 
-export const expiredOpenDesktopEditSessionPredicates = (now: Date) => [
+const expiredOpenDesktopEditSessionPredicates = (now: Date) => [
   eq(desktopEditSessions.status, "open"),
   // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
   lt(desktopEditSessions.tokenExpiresAt, now),

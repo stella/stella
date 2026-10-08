@@ -115,7 +115,7 @@ const servedWhereItsToolsAreListed = (
 
 const PRODUCT_IDENTITY_URI = "stella://about";
 
-export const STELLA_PRODUCT_IDENTITY = {
+const STELLA_PRODUCT_IDENTITY = {
   name: "stella",
   display_name: "stella",
   preferred_casing: "lowercase",

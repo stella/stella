@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { ClockIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
@@ -95,8 +96,12 @@ export const ChatThreadRecap = ({
 
   if (isFetching) {
     return (
-      <div className="text-foreground-muted flex animate-pulse items-center gap-2 px-1 text-sm italic">
-        <ClockIcon aria-hidden className="size-3.5 shrink-0" />
+      <div
+        aria-busy="true"
+        className="text-foreground-muted flex items-center gap-2 px-1 text-sm italic"
+        role="status"
+      >
+        <Loader className="size-3.5 shrink-0" size="sm" variant="decorative" />
         <span>{t("chat.recapLoading")}</span>
       </div>
     );

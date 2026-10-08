@@ -178,7 +178,7 @@ export const decideFolioCollabSeedClaim = ({
   return "claimable";
 };
 
-export const claimFolioCollabRoomSeed = async ({
+const claimFolioCollabRoomSeed = async ({
   expectedGeneration,
   expectedSeedState,
   now,
@@ -212,7 +212,7 @@ export const claimFolioCollabRoomSeed = async ({
   return claimed.at(0) ?? null;
 };
 
-export const joinFolioCollabRoomHandler = async function* ({
+const joinFolioCollabRoomHandler = async function* ({
   body: { entityId, propertyId },
   organizationId,
   recordAuditEvent,

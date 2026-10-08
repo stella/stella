@@ -1,0 +1,7 @@
+# Desktop account link and credential lifecycle
+
+Generated from `scripts/ownership/desktop-account.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                        | Owner                                   | Enforcement | Summary                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------- | --------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `desktop-account` — Desktop account link and credential lifecycle | `apps/desktop/src-tauri/src/account.rs` | none        | One Keychain record holds account identity and its validated credential. Settings and registry search read the same account; expiry, revocation and disconnect cannot leave a profile-only connected state. The credential lifetime and prefix are derived from the API contract policy shared with the server. |

@@ -11,7 +11,7 @@ import {
 const sanitizedHtmlSchema = v.pipe(v.string(), v.brand("SanitizedVisualHtml"));
 export type SanitizedVisualHtml = v.InferOutput<typeof sanitizedHtmlSchema>;
 
-export class VisualMarkupError extends TaggedError("VisualMarkupError")<{
+class VisualMarkupError extends TaggedError("VisualMarkupError")<{
   message: string;
   reason: "size" | "depth" | "nodes" | "input";
 }> {}

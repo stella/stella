@@ -60,7 +60,6 @@ export const positionRuleSchema = t.Union([
   // and returns a tier.
   t.Object({ kind: t.Literal("positionMatch") }),
 ]);
-export type PositionRule = Static<typeof positionRuleSchema>;
 
 // ── Resolved tiers (verdict-time snapshot) ────────────
 // The tiered ladder resolved at run time and snapshotted onto the verdict tool,
@@ -93,4 +92,3 @@ export const resolvedTiersSchema = t.Object({
   acceptableRules: t.Array(resolvedTierRuleSchema, { maxItems: 50 }),
   notAcceptableRules: t.Array(resolvedTierRuleSchema, { maxItems: 50 }),
 });
-export type ResolvedTiers = Static<typeof resolvedTiersSchema>;

@@ -6,11 +6,8 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-} from "@stll/ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -413,7 +410,11 @@ export const DocumentAiSourceBar = ({
         )}
       >
         {isGeneratingBoxes && (
-          <LoaderCircleIcon className="text-muted-foreground size-3 shrink-0 animate-spin" />
+          <Loader
+            className="size-3 shrink-0"
+            label={t("common.loading")}
+            size="sm"
+          />
         )}
         <button
           aria-expanded={isAnswerExpanded}

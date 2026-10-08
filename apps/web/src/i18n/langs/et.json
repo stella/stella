@@ -5343,7 +5343,6 @@
       "noLanguagesFound": "Keeli ei leitud",
       "notConfigured": "DeepL pole selle organisatsiooni jaoks seadistatud. Tõlkimise lubamiseks lisage organisatsiooni seadetes DeepL-i API-võti.",
       "outputLabel": "Tõlke tüüp",
-      "progress": "Tõlke edenemine",
       "progressCount": "Valmis {completed} / {total}",
       "providerUnavailable": "Tõlketeenus pole saadaval. Proovige hiljem uuesti või võtke ühendust administraatoriga.",
       "runFailed": "Tõlget ei saanud lõpule viia.",
@@ -5475,14 +5474,8 @@
     "exportToCsv": "Ekspordi CSV-sse",
     "fields": {
       "calculating": "Arvutamine...",
-      "currencyLabel": "Valuuta (valikuline)",
-      "currencyPlaceholder": "nt USD, EUR",
-      "editFieldValue": "Muuda välja väärtust",
       "errored": "Viga",
-      "fieldValueLabel": "Välja väärtus",
-      "fieldValuePlaceholder": "Sisestage välja väärtus",
       "formatNotSupported": "Formaat ei ole toetatud",
-      "numberPlaceholder": "Sisestage number",
       "selectAValue": "Valige väärtus",
       "selectValues": "Valige väärtused"
     },

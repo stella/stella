@@ -13,7 +13,7 @@ import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
 type MaybePromise<T> = T | Promise<T>;
 
-export type RateLimitCounter = {
+type RateLimitCounter = {
   count: number;
   nextReset: Date;
   start: number;

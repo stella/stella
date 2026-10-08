@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
-import { namedOracles } from "./chat-mutation-matrix";
+import { namedOracles, scenarioTestPattern } from "./chat-mutation-matrix";
 
 test("data-only checking requires exactly one mutation target without executing scenarios", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "mutation-targets-"));
@@ -80,4 +80,13 @@ test("a non-kill names each oracle the failed scenario reported, once, in order"
     ),
   ).toEqual([CHAT_ORACLE.persistedTurnOutcome, CHAT_ORACLE.clientNoErrors]);
   expect(namedOracles("error: script exited with code 124")).toEqual([]);
+});
+
+test("a scenario filter matches its test inside a describe block or at the top level, and nothing longer", () => {
+  const pattern = new RegExp(scenarioTestPattern("keeps (a) call"), "u");
+  expect(pattern.test("keeps (a) call")).toBe(true);
+  expect(pattern.test("a replayed provider keeps (a) call")).toBe(true);
+  expect(pattern.test("outer inner keeps (a) call")).toBe(true);
+  expect(pattern.test("keeps (a) call twice")).toBe(false);
+  expect(pattern.test("rekeeps (a) call")).toBe(false);
 });

@@ -1,3 +1,4 @@
+// parser-output-unchanged: EcjDocumentBoundary is now private; parsing and document output are unchanged.
 /**
  * Court of Justice of the European Union (CJEU) XHTML parser.
  *
@@ -296,7 +297,7 @@ export type EcjDocumentRoot =
   | { boundary: "document"; root: cheerio.Cheerio<AnyNode> }
   | { boundary: "page-chrome"; root: cheerio.Cheerio<AnyNode> };
 
-export type EcjDocumentBoundary = EcjDocumentRoot["boundary"];
+type EcjDocumentBoundary = EcjDocumentRoot["boundary"];
 
 /**
  * Class prefix of the Europa Component Library, the design system every

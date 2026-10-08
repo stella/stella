@@ -5343,7 +5343,6 @@
       "noLanguagesFound": "Nie znaleziono języków",
       "notConfigured": "DeepL nie jest skonfigurowany dla tej organizacji. Aby włączyć tłumaczenie, dodaj klucz API DeepL w ustawieniach organizacji.",
       "outputLabel": "Typ tłumaczenia",
-      "progress": "Postęp tłumaczenia",
       "progressCount": "Ukończono {completed} z {total}",
       "providerUnavailable": "Usługa tłumaczenia jest niedostępna. Spróbuj ponownie później lub skontaktuj się z administratorem.",
       "runFailed": "Nie udało się ukończyć tłumaczenia.",
@@ -5475,14 +5474,8 @@
     "exportToCsv": "Eksportuj do CSV",
     "fields": {
       "calculating": "Obliczanie...",
-      "currencyLabel": "Waluta (opcjonalnie)",
-      "currencyPlaceholder": "np. USD, EUR",
-      "editFieldValue": "Edytuj wartość pola",
       "errored": "Błąd",
-      "fieldValueLabel": "Wartość pola",
-      "fieldValuePlaceholder": "Wprowadź wartość pola",
       "formatNotSupported": "Format nie jest obsługiwany",
-      "numberPlaceholder": "Wprowadź liczbę",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości"
     },
