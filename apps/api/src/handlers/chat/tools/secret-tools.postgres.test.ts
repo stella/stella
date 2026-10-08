@@ -124,7 +124,7 @@ const bodyText = (body: unknown): string => {
 };
 
 /** An in-process MCP server over streamable HTTP; nothing leaves the test. */
-const fakeUpstream = (sentinel: string) => {
+const fakeUpstream = () => {
   const requests: UpstreamRequest[] = [];
   const outboundFetch = asTestRaw<ChatSecretOutboundFetch>({
     validateOutboundFetchTarget: async (url: string) =>
@@ -165,8 +165,7 @@ const fakeUpstream = (sentinel: string) => {
             },
           ],
         },
-        // The upstream answers with private content the chat must never see.
-        "tools/call": { content: [{ type: "text", text: sentinel }] },
+        "tools/call": { content: [{ type: "text", text: "Listed 2 items." }] },
       };
       return upstreamReply(
         200,
@@ -228,8 +227,7 @@ if (!databaseUrl || !runPostgres) {
             if (receipt.status !== "provided") {
               throw new Error("Expected a provided receipt");
             }
-            const sentinel = `upstream-private-${Bun.randomUUIDv7()}`;
-            const upstream = fakeUpstream(sentinel);
+            const upstream = fakeUpstream();
             const tools = createSecretTools({
               safeDb: safeDbFromScoped(
                 async (run) => await db.transaction(run),
@@ -254,8 +252,8 @@ if (!databaseUrl || !runPostgres) {
               asTestRaw<Parameters<NonNullable<typeof execute>>[1]>({}),
             );
 
+            // Only the fixed completion receipt returns to the chat.
             expect(result).toEqual({ status: "completed" });
-            expect(JSON.stringify(result)).not.toContain(sentinel);
             expect(upstream.requests.length).toBeGreaterThan(0);
             expect(
               upstream.requests.map(({ authorization }) => authorization),
