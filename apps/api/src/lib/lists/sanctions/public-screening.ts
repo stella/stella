@@ -296,6 +296,14 @@ const createEditionWarmer = ({
   const start = () => {
     const running = pass().finally(() => {
       state.running = null;
+      // A request may have asked for an edition after the pass last looked.
+      const instant = now();
+      if (
+        state.db !== null &&
+        [...targets.values()].some((target) => target.retryAt <= instant)
+      ) {
+        start();
+      }
     });
     state.running = running;
     detached(running, "sanctions.public-warmup");
@@ -393,14 +401,12 @@ export const createPublicSanctionsScreening = ({
         screenSanctionsSubject({
           ...props,
           reportFailure,
-          matcher: async ({ source, edition }) =>
-            Promise.resolve(
-              Result.err({
-                code: warmer.status(source, edition),
-                stage: "public-warmup",
-                reason: null,
-              } as const),
-            ),
+          matcher: ({ source, edition }) =>
+            Result.err({
+              code: warmer.status(source, edition),
+              stage: "public-warmup",
+              reason: null,
+            } as const),
         }),
         expired.promise,
       ]).finally(cancelDeadline);

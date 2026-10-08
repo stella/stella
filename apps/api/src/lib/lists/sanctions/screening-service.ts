@@ -354,7 +354,9 @@ type SanctionsListMatcher = (props: {
   edition: SanctionsActiveEdition;
   query: ScreeningQuery;
   limit: number;
-}) => Promise<Result<ScreeningResult, SanctionsListMatchFailure>>;
+}) =>
+  | Result<ScreeningResult, SanctionsListMatchFailure>
+  | Promise<Result<ScreeningResult, SanctionsListMatchFailure>>;
 
 type ScreenListProps = {
   db: SanctionsReadDb;
