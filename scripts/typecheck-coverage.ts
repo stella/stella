@@ -17,7 +17,13 @@
 //   bun scripts/typecheck-coverage.ts --autofix <changed-source>...
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+  type Dirent,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -217,9 +223,23 @@ const supplementalProjects = (typecheckCommand: string): string[] => {
   return projects;
 };
 
+// A config that is a symlink to a file counts like a file, as it does for
+// nearestOxcConfig; a dangling link does not.
+const isConfigFile = (directory: string, entry: Dirent): boolean =>
+  entry.isFile() ||
+  (entry.isSymbolicLink() &&
+    (statSync(path.join(REPO_ROOT, directory, entry.name), {
+      throwIfNoEntry: false,
+    })?.isFile() ??
+      false));
+
 const projectsInDirectory = (directory: string): string[] =>
   readdirSync(path.join(REPO_ROOT, directory), { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^tsconfig.*\.json$/u.test(entry.name))
+    .filter(
+      (entry) =>
+        /^tsconfig.*\.json$/u.test(entry.name) &&
+        isConfigFile(directory, entry),
+    )
     .map((entry) => normalizeRepoPath(path.join(directory, entry.name)))
     .toSorted((left, right) => {
       if (isConventionalProject(left) !== isConventionalProject(right)) {

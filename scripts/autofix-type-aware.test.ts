@@ -219,6 +219,11 @@ const projectCases = [
     invalid: false,
   },
   {
+    name: "symlinked sibling project covers root sources",
+    layout: "symlinked-sibling",
+    invalid: false,
+  },
+  {
     name: "ancestor project covers nested sources",
     layout: "ancestor",
     invalid: false,
@@ -311,10 +316,23 @@ process.exit(result.exitCode);
       path.join(root, "tsconfig.json"),
       JSON.stringify(nearestProject),
     );
-    writeFileSync(
-      path.join(root, "tsconfig.oxlint-plugins.json"),
-      JSON.stringify(layout === "uncovered" ? emptyProject : config),
+    const siblingProject = JSON.stringify(
+      layout === "uncovered" ? emptyProject : config,
     );
+    if (layout === "symlinked-sibling") {
+      // The sibling project is a symlink to a config the name filter alone
+      // would not pick up.
+      writeFileSync(path.join(root, "plugins-config.json"), siblingProject);
+      symlinkSync(
+        "plugins-config.json",
+        path.join(root, "tsconfig.oxlint-plugins.json"),
+      );
+    } else {
+      writeFileSync(
+        path.join(root, "tsconfig.oxlint-plugins.json"),
+        siblingProject,
+      );
+    }
     const result = Bun.spawnSync(
       [
         process.execPath,
