@@ -9258,5 +9258,21 @@
   "src/lib/provider-error-catalogue.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/generate.failure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/case-law/analysis-failure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/case-law/analysis-failure.valkey.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/provider-diagnostic.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
