@@ -10,7 +10,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 /** IETF-style language tag; also the cloned style suffix folio used. */
 const LANGUAGE_TAG_PATTERN = "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$";
 
-export const languageTagSchema = t.String({
+const languageTagSchema = t.String({
   minLength: 2,
   maxLength: 16,
   pattern: LANGUAGE_TAG_PATTERN,
@@ -21,7 +21,7 @@ const termSchema = t.String({
   maxLength: BILINGUAL_LIMITS.termMax,
 });
 
-export const glossaryEntrySchema = t.Object({
+const glossaryEntrySchema = t.Object({
   source: termSchema,
   target: termSchema,
   sourceForms: t.Array(termSchema, { maxItems: BILINGUAL_LIMITS.formsMax }),

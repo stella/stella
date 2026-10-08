@@ -143,6 +143,7 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   useCreateEntities,
@@ -315,6 +316,28 @@ const OcrExportMenuItems = ({
   );
 };
 
+type ExportableOcrSourcesOptions = {
+  isBulk: boolean;
+  isCellContext: boolean;
+  ocrSource: OcrSource | undefined;
+  ocrSources: readonly OcrSource[];
+};
+
+const getExportableOcrSources = ({
+  isBulk,
+  isCellContext,
+  ocrSource,
+  ocrSources,
+}: ExportableOcrSourcesOptions): readonly OcrSource[] => {
+  if (isBulk) {
+    return [];
+  }
+  if (isCellContext) {
+    return ocrSource && hasOcrExport(ocrSource) ? [ocrSource] : [];
+  }
+  return ocrSources.filter(hasOcrExport);
+};
+
 export const RowActions = ({
   duplicatePresentation = "menu-only",
   entity,
@@ -352,7 +375,11 @@ export const RowActions = ({
   const [isOcrPending, setIsOcrPending] = useState(false);
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
-  const { data: properties } = useQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = useQueryView(propertiesQuery);
+  useQueryViewError(propertiesView);
+  const properties =
+    propertiesView.type === "items" ? propertiesView.items : undefined;
   const duplicateTargetIdsRef = useRef(new Map<string, string>());
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
@@ -480,12 +507,12 @@ export const RowActions = ({
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
-  let exportableOcrSources: readonly OcrSource[] = [];
-  if (!isBulk && isCellContext && ocrSource && hasOcrExport(ocrSource)) {
-    exportableOcrSources = [ocrSource];
-  } else if (!isBulk && !isCellContext) {
-    exportableOcrSources = ocrSources.filter(hasOcrExport);
-  }
+  const exportableOcrSources = getExportableOcrSources({
+    isBulk,
+    isCellContext,
+    ocrSource,
+    ocrSources,
+  });
   // A bulk selection keeps the originals: it spans files whose versions do not
   // share one answer, so no rendition is offered for all of them.
   const downloadRenditions =

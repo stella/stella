@@ -22,6 +22,7 @@ import {
   FULL_DATE_MEDIUM_TIME_FORMAT,
   isWithinLast,
 } from "@/lib/relative-time";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * How recent the newest change may be for the corpus to count as current:
@@ -52,7 +53,10 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const t = useTranslations();
   const format = useFormatter();
   const relativeTime = useRelativeTime();
-  const { data: status } = useQuery(caseLawCorpusStatusOptions(country));
+  const statusQuery = useQuery(caseLawCorpusStatusOptions(country));
+  const statusView = useQueryView(statusQuery);
+  useQueryViewError(statusView);
+  const status = statusView.type === "items" ? statusView.items : undefined;
 
   const updatedAt = status?.updatedAt ?? null;
   if (status === undefined || updatedAt === null) {

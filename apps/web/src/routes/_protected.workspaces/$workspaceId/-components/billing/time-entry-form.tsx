@@ -33,10 +33,12 @@ import {
 import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
@@ -87,6 +89,20 @@ const initialTimeEntryValues = (
   currency: entry?.currency ?? DEFAULT_CURRENCY,
 });
 
+const timeEntrySchema = (matterRequired: string) =>
+  v.strictObject({
+    matterId: v.pipe(v.string(), v.nonEmpty(matterRequired)),
+    dateWorked: v.string(),
+    durationMinutes: v.number(),
+    narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
+    invoiceNarrative: v.string(),
+    billable: v.boolean(),
+    taskCode: v.string(),
+    activityCode: v.string(),
+    rateAtEntry: v.number(),
+    currency: v.string(),
+  });
 export const TimeEntryForm = ({
   workspaceId,
   userId,
@@ -103,30 +119,20 @@ export const TimeEntryForm = ({
     initialRateInput(defaultValues),
   );
 
-  const { data: taskCodes } = useQuery(
-    billingCodesOptions(workspaceId, "task"),
-  );
-  const { data: activityCodes } = useQuery(
+  const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
+  const taskCodesView = useQueryView(taskCodesQuery);
+  const taskCodes =
+    taskCodesView.type === "items" ? taskCodesView.items : undefined;
+  const activityCodesQuery = useQuery(
     billingCodesOptions(workspaceId, "activity"),
   );
-
-  const schema = v.strictObject({
-    matterId: v.pipe(v.string(), v.nonEmpty(t("billing.matterRequired"))),
-    dateWorked: v.string(),
-    durationMinutes: v.number(),
-    narrative: v.string(),
-    narrativeLanguage: v.nullable(v.string()),
-    invoiceNarrative: v.string(),
-    billable: v.boolean(),
-    taskCode: v.string(),
-    activityCode: v.string(),
-    rateAtEntry: v.number(),
-    currency: v.string(),
-  });
+  const activityCodesView = useQueryView(activityCodesQuery);
+  const activityCodes =
+    activityCodesView.type === "items" ? activityCodesView.items : undefined;
 
   const form = useForm(
     schemaFormOptions({
-      schema,
+      schema: timeEntrySchema(t("billing.matterRequired")),
       submitValues: "raw",
       defaultValues: initialTimeEntryValues(defaultValues),
       onSubmit: async ({ value }) => {
@@ -149,9 +155,12 @@ export const TimeEntryForm = ({
 
   const dateWorked = useSelector(form.store, (s) => s.values.dateWorked);
 
-  const { data: resolved } = useQuery(
+  const resolvedQuery = useQuery(
     resolvedRateOptions(workspaceId, userId, dateWorked),
   );
+  const resolvedView = useQueryView(resolvedQuery);
+  const resolved =
+    resolvedView.type === "items" ? resolvedView.items : undefined;
 
   // Resolved rates are automatic defaults, not unsaved user changes.
   // Sync the external form store until the user overrides the rate.
@@ -194,9 +203,15 @@ export const TimeEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!rateOverride && resolvedView.type !== "items") {
+          return;
+        }
         detached(form.handleSubmit(), "time-entry-form.submit");
       }}
     >
+      <QueryViewFeedback view={taskCodesView} />
+      <QueryViewFeedback view={activityCodesView} />
+      <QueryViewFeedback view={resolvedView} />
       <div className="flex flex-col gap-1.5">
         <form.Field name="matterId">
           {(field) => (
@@ -401,7 +416,12 @@ export const TimeEntryForm = ({
             {t("common.cancel")}
           </Button>
         )}
-        <Button type="submit">{submitLabel ?? t("common.save")}</Button>
+        <Button
+          type="submit"
+          disabled={!rateOverride && resolvedView.type !== "items"}
+        >
+          {submitLabel ?? t("common.save")}
+        </Button>
       </div>
     </Form>
   );
