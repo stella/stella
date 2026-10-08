@@ -39,9 +39,12 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import {
+  EU_COMPLETION_CONTROL_LIFECYCLE,
+  EU_COMPLETION_RECEIPT_LIFECYCLE,
+} from "@/api/handlers/case-law/ingestion/eu-completion-transitions";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   permitsLifecycleMove,
   transitionLifecycle,
@@ -256,7 +259,7 @@ const moveReceiptTx = async (
   tx: Transaction,
   { receipt, status, attemptState, set }: ReceiptMoveOptions,
 ) => {
-  const { graphs } = TRANSITIONS.euCompletionReceipts;
+  const { graphs } = EU_COMPLETION_RECEIPT_LIFECYCLE;
   const statusMove = { from: [receipt.status], to: status };
   const attemptMove = { from: [receipt.attemptState], to: attemptState };
   if (
@@ -267,7 +270,7 @@ const moveReceiptTx = async (
   }
   const moved = await transitionLifecycle({
     tx,
-    spec: TRANSITIONS.euCompletionReceipts,
+    spec: EU_COMPLETION_RECEIPT_LIFECYCLE,
     id: receipt.id,
     moves: { status: statusMove, attemptState: attemptMove },
     set,
@@ -1076,7 +1079,7 @@ const readmitSettledMirrorsTx = async (
   ) => {
     const moved = await transitionLifecycleBatch({
       tx,
-      spec: TRANSITIONS.euCompletionReceipts,
+      spec: EU_COMPLETION_RECEIPT_LIFECYCLE,
       ids: rows.map(({ receipt }) => receipt.id),
       moves: {
         status: { from: ["review-required"], to },
@@ -1729,7 +1732,7 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
         .onConflictDoNothing();
       const moved = await transitionLifecycle({
         tx,
-        spec: TRANSITIONS.euCompletionControls,
+        spec: EU_COMPLETION_CONTROL_LIFECYCLE,
         id: key,
         moves: { state: { from: ["off", "on"], to: state } },
         set: { changedBy, changedAt },
