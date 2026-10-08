@@ -81,9 +81,9 @@ type PerUserRead =
   | { kind: "owned-id"; reason: string }
   // The session or role itself; the cache is dropped when it changes.
   | { kind: "session"; reason: string }
-  // Rows shared by every member, with the caller's own marked (an open edit
-  // session, say). Kept under the shared key; the whole cache is dropped when
-  // the signed-in user changes.
+  // Shared row identities with caller-specific markers or eligibility. Kept
+  // under the shared key; the whole cache is dropped when the signed-in user
+  // changes.
   | { kind: "caller-marker"; reason: string }
   // Not called by the web today.
   | { kind: "no-web-caller"; calls: string[] }
@@ -270,6 +270,16 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "entities/window/list.ts": {
     kind: "caller-marker",
     reason: OWN_EDIT_SESSION,
+  },
+  "tasks/get.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared task identities carry caller-specific review visibility; session-cache-guard clears them on member changes.",
+  },
+  "tasks/entity-links/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared task links carry caller-specific review visibility; session-cache-guard clears them on member changes.",
   },
   "entity-views/list.ts": {
     kind: "keyed",

@@ -20,7 +20,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentDeadlineScoutJob } from "@/api/lib/document-processing-enqueue";
 import type { DocumentDeadlineScoutJobData } from "@/api/lib/document-processing-enqueue";
-import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/document-processing-queue";
+import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/scouts/document-deadline-recovery";
 import { skipDeadlineScan } from "@/api/lib/scouts/document-deadlines";
 import { DEADLINE_SCOUT_MAX_ATTEMPTS } from "@/api/lib/scouts/document-deadlines.logic";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -162,37 +162,15 @@ const insertExpiredScoutClaim = async (): Promise<
  */
 const databaseClaimingBeforeFirstUpdate = (claim: () => Promise<void>) => {
   let armed = true;
-  const deferred = <Chain extends object>(chain: Chain): Chain =>
-    new Proxy(chain, {
-      get: (target, property, receiver) => {
-        const value: unknown = Reflect.get(target, property, receiver);
-        if (typeof value !== "function") {
-          return value;
-        }
-        // Awaiting the chain is what runs the statement, so the claim lands
-        // between the sweep's select and its update. The real `then` is
-        // called afterwards, unwrapped, so the query itself is untouched.
-        if (property === "then") {
-          return async (...args: unknown[]) => {
-            if (armed) {
-              armed = false;
-              await claim();
-            }
-            return await Reflect.apply(value, target, args);
-          };
-        }
-        return (...args: unknown[]) => {
-          const next: unknown = Reflect.apply(value, target, args);
-          return typeof next === "object" && next !== null
-            ? deferred(next)
-            : next;
-        };
-      },
-    });
   return asTestRaw<typeof rootDb>({
     select: testDb.select.bind(testDb),
-    update: (table: Parameters<typeof testDb.update>[0]) =>
-      deferred(testDb.update(table)),
+    execute: async (query: Parameters<typeof testDb.execute>[0]) => {
+      if (armed) {
+        armed = false;
+        await claim();
+      }
+      return await testDb.execute(query);
+    },
   });
 };
 

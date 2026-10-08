@@ -9170,5 +9170,41 @@
   "src/db/account-issuer-leftover-check-migration.db.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/handlers/entity-views/rows/inbox-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/signals-flows-feature-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/entities/signal-window-rows.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/feature-access/background.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/flows/review-gate-task-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/review-organization/reset-cleanup.integration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/scheduler/tasks/scout-emission-recovery.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/scheduler/tasks/upload-flow-trigger-recovery.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/scheduler/tasks/upload-flow-trigger-recovery.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

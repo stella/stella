@@ -1,7 +1,7 @@
+-- requires: 20261007154000_signals_flows_enrolments
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '10s';--> statement-breakpoint
 
--- requires: 20261007154000_signals_flows_enrolments
 -- Upload replay checks its durable source identity under the definition lock.
 -- Build the lookup index without blocking active runs.
 -- Drizzle wraps migrations in a transaction; PostgreSQL requires concurrent

@@ -5,8 +5,14 @@ import {
   organizationSettings,
   sanctionsContactMatches,
   sanctionsContactScreenings,
+  sanctionsEditionFanouts,
+  sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
-import { defineScopedTransitions } from "@/api/lib/db/transitions";
+import {
+  defineKeyedTransitions,
+  defineLifecycle,
+  defineScopedTransitions,
+} from "@/api/lib/db/transitions";
 import {
   SANCTIONS_SCREENING_STATUSES,
   SANCTIONS_REVIEW_DISPOSITIONS,
@@ -90,3 +96,32 @@ export const SCREENING_COVERAGE_TRANSITIONS = defineScopedTransitions({
   initial: SANCTIONS_SCREENING_STATUSES,
   sameStateUpsert: "update",
 });
+
+export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineLifecycle({
+  table: sanctionsEditionFanouts,
+  key: "sourceId",
+  graphs: {
+    status: {
+      edges: { pending: ["complete"], complete: ["pending"] },
+      terminal: [],
+    },
+    freshnessStatus: {
+      edges: {
+        unknown: ["fresh", "unavailable"],
+        fresh: ["unavailable"],
+        unavailable: ["fresh"],
+      },
+      terminal: [],
+    },
+  },
+});
+
+export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(
+  {
+    table: sanctionsMonitoringBackfills,
+    key: "sourceId",
+    scope: ["organizationId"],
+    edges: { pending: ["complete"], complete: ["pending"] },
+    options: { terminal: [], fence: "generation" },
+  },
+);

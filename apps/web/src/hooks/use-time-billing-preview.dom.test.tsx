@@ -25,6 +25,7 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
+const { taskKeys } = await import("@/lib/workspaces/queries/tasks.logic");
 const { GlobalTimer } = await import("@/features/time-timers/global-timer");
 const {
   isTimeBillingPreviewEnabled,
@@ -446,6 +447,9 @@ for (const feature of [
       await waitFor(() =>
         expect(checkbox.hasAttribute("disabled")).toBe(false),
       );
+      const taskKey = taskKeys.detail("matter-a", "ordinary-task");
+      queryClient.setQueryData(taskKey, { linkedReview: "private review" });
+      expect(queryClient.getQueryData(taskKey)).toBeDefined();
       fireEvent.click(checkbox);
       await waitFor(() =>
         expect(view.getByTestId(`${feature.id}-offer`).textContent).toBe(
@@ -453,6 +457,7 @@ for (const feature of [
         ),
       );
       expect(await feature.routeEnabled(queryClient, CALLER)).toBe(false);
+      expect(queryClient.getQueryData(taskKey)).toBeUndefined();
       expectNoDeploymentFeaturesRequest(paths);
     });
   });

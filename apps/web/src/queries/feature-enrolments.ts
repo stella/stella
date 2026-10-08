@@ -13,15 +13,11 @@ import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
-
-type SelfServeFeatureId = Parameters<
-  (typeof api)["organization-settings"]["feature-enrolments"]
->[0]["featureId"];
-
-type FeatureEnrolmentsCaller = {
-  userId: string;
-  organizationId: string;
-};
+import { resetFeatureEnrolmentCache } from "@/queries/feature-enrolments.logic";
+import type {
+  FeatureEnrolmentsCaller,
+  SelfServeFeatureId,
+} from "@/queries/feature-enrolments.logic";
 
 export const featureEnrolmentsOptions = ({
   userId,
@@ -92,6 +88,13 @@ export const useFeatureEnrolment = (featureId: SelfServeFeatureId) => {
       }
       notifyUserError(error, t("errors.actionFailed"));
     },
+    onSuccess: () =>
+      resetFeatureEnrolmentCache({
+        queryClient,
+        featureId,
+        userId: user.id,
+        organizationId: user.activeOrganizationId,
+      }),
     onSettled: async () => {
       // Refetch only after the last toggle settles, preserving independent
       // optimistic choices while another feature's request is still pending.

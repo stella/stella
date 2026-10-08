@@ -18,7 +18,6 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
@@ -30,8 +29,6 @@ import {
   extractedContent,
   fields,
   organizationSettings,
-  SCOUT_RUN_STATUS,
-  scoutRuns,
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -90,7 +87,12 @@ import {
 } from "@/api/lib/document-processing-queue-policy";
 import type { CurrentDocumentSource } from "@/api/lib/document-processing-queue-policy";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
-import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
+import {
+  cappedSelectionHasMore,
+  createReconciliationProgress,
+  RECONCILE_BATCH_SIZE,
+} from "@/api/lib/document-processing-reconciliation-progress";
+import type { ReconciliationPhaseResult } from "@/api/lib/document-processing-reconciliation-progress";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -120,7 +122,7 @@ import {
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
-import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
+import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/scouts/document-deadline-recovery";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
@@ -133,7 +135,6 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
 const RECONCILE_INTERVAL_MS = 30_000;
-export const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
 const QUEUED_OCR_SELECTION = {
@@ -143,8 +144,6 @@ const QUEUED_OCR_SELECTION = {
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
-const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
-const DEADLINE_SCOUT_DISPATCH_CONCURRENCY = 4;
 const SEARCH_INDEX_REPLAY_CONCURRENCY = 2;
 const SEARCH_INDEX_REPLAY_BATCH_SIZE = SEARCH_INDEX_REPLAY_CONCURRENCY * 2;
 const SEARCH_INDEX_REPLAY_STATE_TRANSITION_TIMEOUT_MS = 5000;
@@ -1699,19 +1698,6 @@ export const tryEnqueueDocumentProcessingRun = async ({
 };
 
 /**
- * What one reconciliation phase reports for one tick. `count` is the
- * effect the phase had (runs created, rows recovered, deliveries
- * attempted); `hasMore` is the phase's own answer to "was there more than
- * I could take this tick". The two are independent: a phase can scan a
- * full page and act on none of it, so `count` can never stand in for
- * saturation.
- */
-type ReconciliationPhaseResult = {
-  count: number;
-  hasMore: boolean;
-};
-
-/**
  * When this process's repair sweep last finished a pass. In-process on
  * purpose: the cursor that says where a pass stands is durable in Redis,
  * so a pass an exit cut short resumes on the next start, while the rest
@@ -1751,184 +1737,6 @@ export type DocumentProcessingReconciliationDependencies = {
     nextCursor: SafeId<"field"> | null;
   }) => Promise<boolean>;
 };
-
-/** The two dependencies this sweep needs, so the scheduler can run it without
- *  assembling the whole reconciliation set and a test can drive it with a
- *  stubbed queue. */
-type RecoverDocumentDeadlineScoutDispatchesOptions = {
-  database: DocumentProcessingReconciliationDependencies["database"];
-  enqueueDocumentDeadlineScout?: DocumentProcessingReconciliationDependencies["enqueueDocumentDeadlineScout"];
-};
-
-/**
- * Return expired scout dispatches to `pending` and hand every pending one to
- * the scout queue.
- *
- * Exported because the scout worker and this dispatcher live in different
- * processes: the worker starts with the API server, while the reconciliation
- * loop that used to be the dispatcher's only driver runs in the document
- * processing worker. Wherever that worker is absent, `pending` rows had
- * nothing to dispatch them. The scheduler runs it too; the enqueue is keyed by
- * the source run, so the two drivers converge rather than duplicating work.
- */
-export const recoverDocumentDeadlineScoutDispatches = async ({
-  database,
-  enqueueDocumentDeadlineScout: enqueueScout = enqueueDocumentDeadlineScout,
-}: RecoverDocumentDeadlineScoutDispatchesOptions): Promise<ReconciliationPhaseResult> => {
-  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
-    logger.info("scout.document_deadlines.recovery_skipped", {
-      reason: "deployment_disabled",
-    });
-    return { count: 0, hasMore: false };
-  }
-  const staleBefore = new Date(
-    Temporal.Now.instant().epochMilliseconds - DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
-  );
-  const staleDispatches = await database
-    .select({ id: documentProcessingRuns.id })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-        lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
-      ),
-    )
-    .orderBy(
-      asc(documentProcessingRuns.deadlineScoutClaimedAt),
-      asc(documentProcessingRuns.id),
-    )
-    .limit(RECONCILE_BATCH_SIZE);
-  // Compare-and-set on the state the select matched, not on the id alone.
-  // This sweep runs in the scheduler and in the processing worker's own
-  // reconciliation loop, so two of them can select the same expired dispatch.
-  // Once the first resets it a worker claims a fresh attempt, and an id-only
-  // update from the second would push that live claim back to `pending`: the
-  // worker's settlement predicate then rejects its own result and the metered
-  // scan is replayed on every later sweep. Re-asserting `running` and the same
-  // expired claim makes the second update match nothing.
-  const reclaimedDispatches =
-    staleDispatches.length === 0
-      ? []
-      : await database
-          .update(documentProcessingRuns)
-          .set({
-            deadlineScoutClaimedAt: null,
-            deadlineScoutErrorCode: "worker_lease_expired",
-            deadlineScoutStatus: "pending",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              inArray(
-                documentProcessingRuns.id,
-                staleDispatches.map(({ id }) => id),
-              ),
-              eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-              lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
-            ),
-          )
-          .returning({ id: documentProcessingRuns.id });
-
-  const staleCensusRuns = await database
-    .select({ id: scoutRuns.id })
-    .from(scoutRuns)
-    .where(
-      and(
-        eq(scoutRuns.scoutKey, SCOUT_KEY.DOCUMENT_DEADLINES),
-        eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
-        lt(scoutRuns.startedAt, staleBefore),
-      ),
-    )
-    .orderBy(asc(scoutRuns.startedAt), asc(scoutRuns.id))
-    .limit(RECONCILE_BATCH_SIZE);
-  // Same compare-and-set, so a census run that restarted between the select
-  // and this update is not retired out from under its worker.
-  const failedCensusRuns =
-    staleCensusRuns.length === 0
-      ? []
-      : await database
-          .update(scoutRuns)
-          .set({
-            error: "worker_lease_expired",
-            finishedAt: new Date(),
-            status: SCOUT_RUN_STATUS.FAILED,
-          })
-          .where(
-            and(
-              inArray(
-                scoutRuns.id,
-                staleCensusRuns.map(({ id }) => id),
-              ),
-              eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
-              lt(scoutRuns.startedAt, staleBefore),
-            ),
-          )
-          .returning({ id: scoutRuns.id });
-
-  const pending = await database
-    .select({ sourceRunId: documentProcessingRuns.id })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
-        deadlineScoutDue(new Date()),
-      ),
-    )
-    .orderBy(
-      asc(documentProcessingRuns.updatedAt),
-      asc(documentProcessingRuns.id),
-    )
-    .limit(RECONCILE_BATCH_SIZE);
-
-  const results = await mapWithConcurrency({
-    items: pending,
-    limit: DEADLINE_SCOUT_DISPATCH_CONCURRENCY,
-    operation: async ({ sourceRunId }) =>
-      await Result.tryPromise(async () => {
-        await enqueueScout({ sourceRunId });
-      }),
-  });
-  for (const result of results) {
-    if (Result.isError(result)) {
-      captureError(result.error, { operation: "deadline-scout-dispatch" });
-    }
-  }
-
-  return {
-    // Rows actually transitioned, not rows selected: a candidate another
-    // sweep already reclaimed is not this sweep's effect.
-    count:
-      reclaimedDispatches.length +
-      failedCensusRuns.length +
-      results.filter(Result.isOk).length,
-    hasMore:
-      cappedSelectionHasMore({
-        limit: RECONCILE_BATCH_SIZE,
-        selected: pending.length,
-      }) ||
-      cappedSelectionHasMore({
-        limit: RECONCILE_BATCH_SIZE,
-        selected: staleDispatches.length,
-      }) ||
-      cappedSelectionHasMore({
-        limit: RECONCILE_BATCH_SIZE,
-        selected: staleCensusRuns.length,
-      }),
-  };
-};
-
-/**
- * A capped selection that came back full stopped at the cap, not at the
- * end of the backlog. Every phase computes this from the rows it selected,
- * beside the `.limit()` that capped them.
- */
-const cappedSelectionHasMore = ({
-  limit,
-  selected,
-}: {
-  limit: number;
-  selected: number;
-}): boolean => selected >= limit;
 
 type RepairScanPage = ReconciliationPhaseResult & {
   nextCursor: SafeId<"field"> | null;

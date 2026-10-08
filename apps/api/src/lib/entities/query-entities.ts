@@ -170,7 +170,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
 type EntityWindowSource =
   | { type: "entities" }
   | {
-      type: "entities-and-signals";
+      type: "entities-and-inbox";
       /** The signal list's access and view predicate, from the signals slice. */
       signalConditions: SQL;
     };
@@ -590,7 +590,7 @@ const sourceTiebreakKeys = (source: EntityWindowSource): EntitySortKey[] => {
   switch (source.type) {
     case "entities":
       return [];
-    case "entities-and-signals":
+    case "entities-and-inbox":
       return [textSortKey({ direction: "asc", expr: windowRowKindColumn })];
     default: {
       source satisfies never;
@@ -770,7 +770,7 @@ const selectWindowRows = async ({
             })),
           );
     }
-    case "entities-and-signals": {
+    case "entities-and-inbox": {
       const union = await admittedEntityWindowUnionSource({
         safeDb,
         organizationId,

@@ -823,7 +823,7 @@
     "apps/api/src/lib/chat/thread-compaction.ts": 1,
     "apps/api/src/lib/document-processing-automatic-request.ts": 1,
     "apps/api/src/lib/document-processing-manual-ocr-restore.ts": 1,
-    "apps/api/src/lib/document-processing-queue.ts": 19,
+    "apps/api/src/lib/document-processing-queue.ts": 17,
     "apps/api/src/lib/document-processing-request.ts": 2,
     "apps/api/src/lib/document-review/run-finalize.ts": 1,
     "apps/api/src/lib/document-review/run-queue.ts": 3,

@@ -39,10 +39,12 @@ type FeatureDefinition = {
 
 export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
+export const SIGNALS_FEATURE_ID = "signals";
+export const FLOWS_FEATURE_ID = "flows";
 export const SELF_SERVE_FEATURE_IDS = [
   "time-billing",
-  "signals",
-  "flows",
+  SIGNALS_FEATURE_ID,
+  FLOWS_FEATURE_ID,
 ] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
@@ -113,7 +115,7 @@ export const FEATURE_REGISTRY = {
       ],
     },
   },
-  signals: {
+  [SIGNALS_FEATURE_ID]: {
     enrolment: "self-serve",
     deploymentFeature: "FEATURE_SIGNALS",
     ownership: {
@@ -176,6 +178,12 @@ export const FEATURE_REGISTRY = {
         },
         {
           type: "admitted",
+          module: "apps/api/src/lib/scouts/document-deadline-recovery.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
+        {
+          type: "admitted",
           module: "apps/api/src/lib/scheduler/tasks/scout-emission-recovery.ts",
           admission: "isDeploymentFeatureEnabled",
           specifier: "@/api/lib/deployment-feature",
@@ -234,7 +242,7 @@ export const FEATURE_REGISTRY = {
       ],
     },
   },
-  flows: {
+  [FLOWS_FEATURE_ID]: {
     enrolment: "self-serve",
     deploymentFeature: "FEATURE_FLOWS",
     ownership: {
@@ -426,10 +434,14 @@ true satisfies Exclude<
 export const deploymentFeatureFor = (
   featureId: string,
 ): DeploymentFeatureFlag | undefined => {
-  const definition = Object.entries(FEATURE_REGISTRY)
-    .find(([id]) => id === featureId)
-    ?.at(1);
-  return definition !== undefined && "deploymentFeature" in definition
+  const entry = Object.entries(FEATURE_REGISTRY).find(
+    ([id]) => id === featureId,
+  );
+  if (entry === undefined) {
+    return undefined;
+  }
+  const [, definition] = entry;
+  return "deploymentFeature" in definition
     ? definition.deploymentFeature
     : undefined;
 };

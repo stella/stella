@@ -36,7 +36,6 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import {
   createOpaqueToken,
@@ -45,6 +44,7 @@ import {
 } from "@/api/lib/entities/opaque-tokens";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { expiredOpenPdfSigningSessionPredicates } from "@/api/lib/files/pdf-signing/session-predicates";
+import { PDF_SIGNING_SESSION_TRANSITIONS } from "@/api/lib/files/pdf-signing/transition-spec";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import {
@@ -673,7 +673,7 @@ export const recordPdfSigningHandoffFailure = async ({
     });
     const result = await transition({
       tx,
-      spec: TRANSITIONS.pdfSigningSessions,
+      spec: PDF_SIGNING_SESSION_TRANSITIONS,
       id: session.id,
       options: {
         from: ["open"],

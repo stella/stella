@@ -4,10 +4,7 @@ import {
   euCompletionApprovals,
   euCompletionControls,
   euCompletionReceipts,
-  pdfSigningSessions,
   workObligations,
-  sanctionsEditionFanouts,
-  sanctionsMonitoringBackfills,
 } from "@/api/db/schema";
 import {
   FLOW_RUN_TRANSITIONS_V1,
@@ -29,12 +26,15 @@ import type {
   LifecycleSpec,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { PDF_SIGNING_SESSION_TRANSITIONS } from "@/api/lib/files/pdf-signing/transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
   MATCH_MEMBERSHIP_TRANSITIONS,
   MATCH_REVIEW_TRANSITIONS,
   SCREENING_COVERAGE_TRANSITIONS,
+  SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+  SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
 
 // Each table chooses an ownership category explicitly; new status tables must
@@ -82,12 +82,6 @@ const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   { terminal: ["finalized", "cancelled", "expired"] },
 );
 
-const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
-  pdfSigningSessions,
-  { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
-  { terminal: ["finalized", "cancelled"] },
-);
-
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   table: workObligations,
   key: "entityId",
@@ -117,34 +111,6 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: [] },
 });
 
-export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineLifecycle({
-  table: sanctionsEditionFanouts,
-  key: "sourceId",
-  graphs: {
-    status: {
-      edges: { pending: ["complete"], complete: ["pending"] },
-      terminal: [],
-    },
-    freshnessStatus: {
-      edges: {
-        unknown: ["fresh", "unavailable"],
-        fresh: ["unavailable"],
-        unavailable: ["fresh"],
-      },
-      terminal: [],
-    },
-  },
-});
-
-export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(
-  {
-    table: sanctionsMonitoringBackfills,
-    key: "sourceId",
-    scope: ["organizationId"],
-    edges: { pending: ["complete"], complete: ["pending"] },
-    options: { terminal: [], fence: "generation" },
-  },
-);
 // Active receipts settle to any outcome; dry-run settles only fetched work.
 // Failed and mirror-repair receipts are readmitted; the rest are final.
 const EU_COMPLETION_SETTLEMENTS = EU_COMPLETION_STATUSES.filter(

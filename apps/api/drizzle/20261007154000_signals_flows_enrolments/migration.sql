@@ -46,10 +46,6 @@ ALTER TABLE "pending_scout_emissions" FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "pending_scout_emissions" TO "stella";
 --> statement-breakpoint
-CREATE POLICY "pending_scout_emissions_owner" ON "pending_scout_emissions" FOR ALL TO public
-  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass))
-  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass));
---> statement-breakpoint
 CREATE POLICY "pending_scout_emissions_scope_select" ON "pending_scout_emissions" FOR SELECT TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND
     (workspace_id IS NULL OR CASE
       WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true
@@ -79,10 +75,6 @@ ALTER TABLE "flow_upload_trigger_intents" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "flow_upload_trigger_intents" FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "flow_upload_trigger_intents" TO "stella";
---> statement-breakpoint
-CREATE POLICY "flow_upload_trigger_intents_owner" ON "flow_upload_trigger_intents" FOR ALL TO public
-  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.flow_upload_trigger_intents'::regclass))
-  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.flow_upload_trigger_intents'::regclass));
 --> statement-breakpoint
 CREATE POLICY "flow_upload_trigger_intents_scope_select" ON "flow_upload_trigger_intents" FOR SELECT TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND
     (workspace_id IS NULL OR CASE

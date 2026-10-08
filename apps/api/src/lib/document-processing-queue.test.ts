@@ -21,7 +21,6 @@ import {
   handleDocumentProcessingReconcilePhaseFailure,
   indexDocumentProjectionAtJobBoundary,
   readRepairScanCursor,
-  RECONCILE_BATCH_SIZE,
   reconciliationLeftWorkBehind,
   reconciliationUnfinishedPhases,
   REPAIR_PASS_REST_MS,
@@ -58,7 +57,10 @@ import {
   shouldFailStaleAutomaticOcrRun,
   shouldPreserveCurrentProjection,
 } from "@/api/lib/document-processing-queue-policy";
-import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
+import {
+  RECONCILE_BATCH_SIZE,
+  createReconciliationProgress,
+} from "@/api/lib/document-processing-reconciliation-progress";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isTransientPgConnectionError } from "@/api/lib/pg-error";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";

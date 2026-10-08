@@ -187,118 +187,112 @@ const changeTrigger = async ({
   }
 };
 
-describe.skipIf(!enabled || !databaseUrl)(
-  "upload trigger commit admission (postgres)",
-  () => {
-    for (const change of TRIGGER_CHANGES) {
-      test(`${change}: admission revalidates a claimed receipt and converges on replay`, async () => {
-        const previousFlag = env.FEATURE_FLOWS;
-        const restoreMode = setRuntimeModeForTesting({
-          mode: RUNTIME_MODE.strict,
-        });
-        env.FEATURE_FLOWS = true;
-        try {
-          await withGatedTestClients(
-            databaseUrl ?? panic("Missing PostgreSQL test URL"),
-            async ({ openClient }) => {
-              const first = openClient();
-              const writer = openClient();
-              const f = await uploadFixture(first.db);
-              const db = asTestRaw<SchedulerDb>(first.db);
-              const enqueued: string[] = [];
-              const dependencies = {
-                ...automatedFlowRunDependencies(db),
-                enqueueStep: async ({ runId }) => {
-                  enqueued.push(runId);
-                },
-                kickoff: async ({ run }) =>
-                  await run(
-                    new AbortController().signal,
-                    async () => undefined,
-                  ),
-              } satisfies Parameters<typeof startAutomatedFlowRun>[1];
-              let starts = 0;
-              const recover = async (now: Date) =>
-                await recoverUploadFlowTriggerIntents({
-                  database: db,
-                  now,
-                  entityId: f.entityId,
-                  start: async (input) => {
-                    starts += 1;
-                    expect(
-                      (
-                        await first.db
-                          .select()
-                          .from(flowUploadTriggerIntents)
-                          .where(
-                            eq(flowUploadTriggerIntents.entityId, f.entityId),
-                          )
-                      ).at(0)?.retryAt,
-                    ).toEqual(new Date(now.getTime() + 5 * 60_000));
-                    // Another session commits after the receipt claim and before the authoritative start transaction.
-                    await changeTrigger({ db: writer.db, fixture: f, change });
-                    return await startAutomatedFlowRun(input, dependencies);
-                  },
-                });
-              try {
-                await recover(NOW);
-                const runs = await first.db
-                  .select()
-                  .from(flowRuns)
-                  .where(eq(flowRuns.definitionId, f.definitionId));
-                const receipts = await first.db
-                  .select()
-                  .from(flowUploadTriggerIntents)
-                  .where(eq(flowUploadTriggerIntents.entityId, f.entityId));
-                if (change === "unchanged") {
-                  expect(runs).toHaveLength(1);
-                  expect(enqueued).toEqual([runs.at(0)?.id]);
-                  expect(receipts).toEqual([]);
-                  // Recreate a still-pending receipt as if the process died after run commit and before settlement.
-                  await first.db.insert(flowUploadTriggerIntents).values({
-                    definitionId: f.definitionId,
-                    entityId: f.entityId,
-                    organizationId: f.organizationId,
-                    workspaceId: f.workspaceId,
-                    fileExtension: "pdf",
-                    retryAt: LATER,
-                  });
-                  await recover(LATER);
-                  expect(
-                    await first.db.$count(
-                      flowRuns,
-                      eq(flowRuns.definitionId, f.definitionId),
-                    ),
-                  ).toBe(1);
-                  expect(enqueued).toHaveLength(1);
-                } else {
-                  expect(runs).toEqual([]);
-                  expect(enqueued).toEqual([]);
-                  expect(receipts).toHaveLength(1);
-                  expect(receipts.at(0)).toMatchObject({
-                    status: "skipped",
-                    skipReason:
-                      change === "disabled"
-                        ? "definition_disabled"
-                        : "trigger_no_longer_matches",
-                  });
-                }
-                const settledStarts = starts;
-                await recover(LATER);
-                expect(starts).toBe(settledStarts);
-              } finally {
-                await first.db
-                  .delete(organization)
-                  .where(eq(organization.id, f.organizationId));
-                await first.db.delete(user).where(eq(user.id, f.userId));
-              }
-            },
-          );
-        } finally {
-          env.FEATURE_FLOWS = previousFlag;
-          restoreMode();
-        }
+describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
+  for (const change of TRIGGER_CHANGES) {
+    test(`${change}: admission revalidates a claimed receipt and converges on replay`, async () => {
+      const previousFlag = env.FEATURE_FLOWS;
+      const restoreMode = setRuntimeModeForTesting({
+        mode: RUNTIME_MODE.strict,
       });
-    }
-  },
-);
+      env.FEATURE_FLOWS = true;
+      try {
+        await withGatedTestClients(
+          databaseUrl ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const first = openClient();
+            const writer = openClient();
+            const f = await uploadFixture(first.db);
+            const db = asTestRaw<SchedulerDb>(first.db);
+            const enqueued: string[] = [];
+            const dependencies = {
+              ...automatedFlowRunDependencies(db),
+              enqueueStep: async ({ runId }) => {
+                enqueued.push(runId);
+              },
+              kickoff: async ({ run }) =>
+                await run(new AbortController().signal, async () => undefined),
+            } satisfies Parameters<typeof startAutomatedFlowRun>[1];
+            let starts = 0;
+            const recover = async (now: Date) =>
+              await recoverUploadFlowTriggerIntents({
+                database: db,
+                now,
+                entityId: f.entityId,
+                start: async (input) => {
+                  starts += 1;
+                  expect(
+                    (
+                      await first.db
+                        .select()
+                        .from(flowUploadTriggerIntents)
+                        .where(
+                          eq(flowUploadTriggerIntents.entityId, f.entityId),
+                        )
+                    ).at(0)?.retryAt,
+                  ).toEqual(new Date(now.getTime() + 5 * 60_000));
+                  // Another session commits after the receipt claim and before the authoritative start transaction.
+                  await changeTrigger({ db: writer.db, fixture: f, change });
+                  return await startAutomatedFlowRun(input, dependencies);
+                },
+              });
+            try {
+              await recover(NOW);
+              const runs = await first.db
+                .select()
+                .from(flowRuns)
+                .where(eq(flowRuns.definitionId, f.definitionId));
+              const receipts = await first.db
+                .select()
+                .from(flowUploadTriggerIntents)
+                .where(eq(flowUploadTriggerIntents.entityId, f.entityId));
+              if (change === "unchanged") {
+                expect(runs).toHaveLength(1);
+                expect(enqueued).toEqual([runs.at(0)?.id]);
+                expect(receipts).toEqual([]);
+                // Recreate a still-pending receipt as if the process died after run commit and before settlement.
+                await first.db.insert(flowUploadTriggerIntents).values({
+                  definitionId: f.definitionId,
+                  entityId: f.entityId,
+                  organizationId: f.organizationId,
+                  workspaceId: f.workspaceId,
+                  fileExtension: "pdf",
+                  retryAt: LATER,
+                });
+                await recover(LATER);
+                expect(
+                  await first.db.$count(
+                    flowRuns,
+                    eq(flowRuns.definitionId, f.definitionId),
+                  ),
+                ).toBe(1);
+                expect(enqueued).toHaveLength(1);
+              } else {
+                expect(runs).toEqual([]);
+                expect(enqueued).toEqual([]);
+                expect(receipts).toHaveLength(1);
+                expect(receipts.at(0)).toMatchObject({
+                  status: "skipped",
+                  skipReason:
+                    change === "disabled"
+                      ? "definition_disabled"
+                      : "trigger_no_longer_matches",
+                });
+              }
+              const settledStarts = starts;
+              await recover(LATER);
+              expect(starts).toBe(settledStarts);
+            } finally {
+              await first.db
+                .delete(organization)
+                .where(eq(organization.id, f.organizationId));
+              await first.db.delete(user).where(eq(user.id, f.userId));
+            }
+          },
+        );
+      } finally {
+        env.FEATURE_FLOWS = previousFlag;
+        restoreMode();
+      }
+    });
+  }
+});

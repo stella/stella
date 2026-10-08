@@ -1,3 +1,4 @@
+export const SIGNAL_RESET_AUDITOR = "signals";
 export const SIGNAL_RESET_SCOUT_TABLE = "scout_runs";
 export const SIGNAL_RESET_EVENT_TABLE = "signal_events";
 export const SIGNAL_RESET_SIGNAL_TABLE = "signals";
@@ -74,13 +75,13 @@ export const REVIEW_RESET_SWEEP = [
   ["sanctions_screening_events", "generic"],
   ["saved_searches", "generic"],
   ["saved_time_narratives", "generic"],
-  [SIGNAL_RESET_SCOUT_TABLE, "signals"],
+  [SIGNAL_RESET_SCOUT_TABLE, SIGNAL_RESET_AUDITOR],
   ["search_document_preview_passages", "generic"],
   ["search_documents", "generic"],
   ["search_projection_repair_queue", "generic"],
   ["seller_profiles", "generic"],
-  [SIGNAL_RESET_EVENT_TABLE, "signals"],
-  [SIGNAL_RESET_SIGNAL_TABLE, "signals"],
+  [SIGNAL_RESET_EVENT_TABLE, SIGNAL_RESET_AUDITOR],
+  [SIGNAL_RESET_SIGNAL_TABLE, SIGNAL_RESET_AUDITOR],
   ["style_sets", "generic"],
   ["template_categories", "generic"],
   ["template_chat_threads", "generic"],

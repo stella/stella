@@ -30,7 +30,7 @@ describe("conditional Inbox signal access", () => {
       query: undefined,
     };
     const projected = SIGNAL_INBOX_FEATURE_ACCESS.projectInputSchema(schemas);
-    expect(projected.body?.properties).toEqual({
+    expect(projected.body?.["properties"]).toEqual({
       limit: schemas.body.properties.limit,
       scope: schemas.body.properties.scope,
     });

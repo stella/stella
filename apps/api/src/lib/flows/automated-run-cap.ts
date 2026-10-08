@@ -21,6 +21,7 @@ import type {
 } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Atomic daily spend rail for automated (schedule / file-upload) flow runs,
@@ -247,7 +248,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
         tx,
         definitionId,
         definition: uploadDefinition,
-        entityId: rows.run.triggerSource.entityId,
+        entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
         rows,
       });
       switch (validation.type) {

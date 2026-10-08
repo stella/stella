@@ -1,0 +1,6 @@
+{
+  "metric": "root-connection-type-imports",
+  "file": "apps/api/src/lib/scouts/document-deadline-recovery.ts",
+  "delta": 1,
+  "reason": "The deployment-admitted deadline-scout recovery owner receives the same scheduler/worker owner connection that the existing reconciliation sweep used. Extraction removes feature tables from generic OCR imports; this module creates no connection and all scans remain bounded with state and expiry CAS predicates."
+}

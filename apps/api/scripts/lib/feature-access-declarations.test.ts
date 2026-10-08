@@ -516,6 +516,55 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
           violation.message.includes("requires featureAccess fixture"),
       ),
     ).toBe(true);
+
+    const isolatedConsumers = [
+      "apps/api/src/lib/files/pdf-signing/sessions.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-backfill.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts",
+    ];
+    const flowRegistry = {
+      flows: {
+        enrolment: "self-serve",
+        ownership: {
+          handlerDirectories: [],
+          tableSchemaFiles: [],
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/flows.ts": ["flowRuns", "flowRunSteps"],
+          },
+          coreModules: ["apps/api/src/lib/db/flow-run-transition-spec.ts"],
+        },
+      },
+    } as const;
+    const isolatedEndpoints = isolatedConsumers.map((file) => ({
+      file,
+      config: {},
+    }));
+    expect(
+      validateFeatureAccessDeclarations({
+        registry: flowRegistry,
+        endpoints: isolatedEndpoints,
+        sources,
+      }).filter((violation) => isolatedConsumers.includes(violation.file)),
+    ).toEqual([]);
+    for (const file of isolatedConsumers) {
+      const source = sources.get(file);
+      const owner = file.includes("/pdf-signing/")
+        ? "@/api/lib/files/pdf-signing/transition-spec"
+        : "@/api/lib/lists/sanctions/monitoring-transition-specs";
+      expect(source).toContain(owner);
+      const contaminated = new Map(sources);
+      contaminated.set(
+        file,
+        `${source ?? ""}\nimport { TRANSITIONS } from "@/api/lib/db/transition-specs"; export const planted = TRANSITIONS.flowRuns;`,
+      );
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: flowRegistry,
+          endpoints: isolatedEndpoints,
+          sources: contaminated,
+        }).some((violation) => violation.file === file),
+      ).toBe(true);
+    }
   });
 
   test("every endpoint reaching a shared module receives its feature uses", () => {

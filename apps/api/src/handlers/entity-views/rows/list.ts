@@ -182,7 +182,7 @@ const listRows = createSafeRootHandler(
           : {
               entityConditions: [inboxEntityCondition(signalAccess.view)],
               source: {
-                type: "entities-and-signals",
+                type: "entities-and-inbox",
                 signalConditions: inboxSignalCondition({
                   ...signalAccess,
                   scope,

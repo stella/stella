@@ -9,6 +9,7 @@ import { cleanupFlowDefinitions } from "@/api/lib/flows/reset-cleanup";
 import { inOrder } from "@/api/lib/review-organization/in-order";
 import {
   REVIEW_RESET_SWEEP,
+  SIGNAL_RESET_AUDITOR,
   SIGNAL_RESET_SCOUT_TABLE,
   SIGNAL_RESET_EVENT_TABLE,
   SIGNAL_RESET_SIGNAL_TABLE,
@@ -142,7 +143,7 @@ export const sweepReviewOrganization = async ({
       case "flows":
         await cleanupFlowDefinitions({ tx, organizationId, subject });
         return Result.ok(undefined);
-      case "signals":
+      case SIGNAL_RESET_AUDITOR:
         switch (name) {
           case SIGNAL_RESET_SCOUT_TABLE:
             await cleanupScoutRuns({ tx, organizationId, subject });
