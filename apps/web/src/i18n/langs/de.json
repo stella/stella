@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Zusammenfassen, wie Gerichte diese Vorschrift anwenden",
     "provisionAskSummarizePrompt": "Fasse zusammen, wie Gerichte {subject} anwenden, und zitiere die herangezogenen Entscheidungen.",
     "provisionDetailsFor": "Einzelheiten zu {provision}",
+    "provisionEffectiveFrom": "in Kraft seit {date}",
     "provisionHistoryEarliest": "Älteste überlieferte Fassung.",
     "provisionHistoryEmpty": "Zu dieser Vorschrift liegt keine Fassung vor.",
     "provisionHistoryLoadOlder": "Ältere Fassungen laden und vergleichen.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
+    "showCitedPartOnly": "Nur zitierten Teil anzeigen",
+    "showFullProvision": "Ganze Vorschrift anzeigen",
     "showInText": "Im Text anzeigen",
     "statedWindow": "Vom Herausgeber angegebene Daten: {range}",
     "status": {

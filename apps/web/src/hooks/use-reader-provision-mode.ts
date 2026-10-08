@@ -86,7 +86,7 @@ export const useReaderProvisionMode = (
         analytics.captureError(read.error);
         return;
       }
-      keepReadingPosition(scrollContainerRef.current, () => {
+      keepReadingPosition({ scroller: scrollContainerRef.current }, () => {
         setStored((previous) =>
           previous?.key === key &&
           previous.mode === read.value &&
@@ -124,7 +124,7 @@ export const useReaderProvisionMode = (
         mode === READER_PROVISION_MODE.expanded
           ? READER_PROVISION_MODE.collapsed
           : READER_PROVISION_MODE.expanded;
-      keepReadingPosition(scrollContainerRef.current, () => {
+      keepReadingPosition({ scroller: scrollContainerRef.current }, () => {
         setStored({ key, mode: next, readError: null, storage });
       });
       if (storage === null) {

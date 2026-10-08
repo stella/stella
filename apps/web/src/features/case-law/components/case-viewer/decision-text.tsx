@@ -22,11 +22,12 @@ import {
 import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import { ExternalCitationLink } from "@/components/legal-reader/citation-link";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
-import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
 import {
   CitedProvisionExpansion,
   CitedProvisionLink,
 } from "@/components/legal-reader/cited-provision-link";
+import { provisionCardsOf } from "@/components/legal-reader/cited-provision-link.logic";
+import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link.logic";
 import { CitedStatuteLink } from "@/components/legal-reader/cited-statute-link";
 import {
   BlockRenderer,
@@ -35,7 +36,6 @@ import {
   HighlightedText,
   InlineContent,
   WrappedParagraphRun,
-  inlinesToPlainText,
   rangesForPiece,
 } from "@/components/legal-reader/document-ast-text";
 import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
@@ -444,7 +444,7 @@ const DecisionTopMatterSections = ({
   return (
     // The text is read like the decision it belongs to: the article's serif,
     // size and line-height, inherited. Only the labels are chrome.
-    <ReaderInsetBox className="mb-8">
+    <ReaderInsetBox className="mb-8" density="roomy">
       {legalSentence !== null && (
         <HeadnoteBlock
           defaultOpen
@@ -732,12 +732,8 @@ const buildAnchorsByPieceId = ({
     }
     provisionsByAnchorId.set(
       block.anchorId,
-      spans.map((span) => (
-        <CitedProvisionExpansion
-          key={`${span.source.id}:${String(span.start)}`}
-          label={inlinesToPlainText(block.inlines).slice(span.start, span.end)}
-          provision={span.source.target}
-        />
+      provisionCardsOf(spans.map(({ source }) => source)).map((card) => (
+        <CitedProvisionExpansion citations={card.citations} key={card.id} />
       )),
     );
   }
@@ -1070,10 +1066,13 @@ export const DecisionText = ({
   // A block's note keeps its place in the tree whether the provision cards
   // above it are shown or not, so toggling them never remounts the note.
   const supplementsByAnchorId = new Map<string, ReactNode>();
-  for (const anchorId of new Set([
-    ...(notesByAnchorId?.keys() ?? []),
-    ...(expandProvisions ? provisionsByAnchorId.keys() : []),
-  ])) {
+  const supplementedAnchorIds = new Set(notesByAnchorId?.keys());
+  if (expandProvisions) {
+    for (const anchorId of provisionsByAnchorId.keys()) {
+      supplementedAnchorIds.add(anchorId);
+    }
+  }
+  for (const anchorId of supplementedAnchorIds) {
     supplementsByAnchorId.set(
       anchorId,
       <>

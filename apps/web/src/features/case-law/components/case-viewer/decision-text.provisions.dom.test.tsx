@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import {
@@ -37,6 +38,10 @@ const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { DecisionText } = await import("./decision-text");
+const { useInspectorTabsStore } =
+  await import("@/components/inspector/inspector-tabs-store");
+const { createProvisionViewTab } =
+  await import("@/features/statutes/provision-inspector.logic");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { toSafeId } = await import("@/lib/safe-id");
 
@@ -65,7 +70,7 @@ const THIRD_CITATION = "§ 90 odst. 5";
 const FIRST_PARAGRAPH = `Ustanovení ${FIRST_CITATION} věty třetí zákona a ${SECOND_CITATION} se použijí společně.`;
 const SECOND_PARAGRAPH = `Dále soud použil ${THIRD_CITATION} k rozhodnutí věci.`;
 const HEADNOTE = "The court applies the cited provisions together.";
-const WORDING_VERSION_LABEL = "In force since Jan 1, 2026";
+const WORDING_VERSION_LABEL = "in force since Jan 1, 2026";
 
 const paragraph = (id: string, text: string) => ({
   anchorId: `anchor-${id}`,
@@ -75,10 +80,17 @@ const paragraph = (id: string, text: string) => ({
   type: "paragraph" as const,
 });
 
+const PART_ONE = "§ 226 odst. 1";
+const PART_TWO = "§ 226 odst. 2";
+const REPEAT_PARAGRAPH = `Soud vyšel z ${PART_ONE}, k němuž se pojí ${PART_TWO}, a ${PART_ONE} použil znovu.`;
+const VERSIONS_PARAGRAPH = `Soud porovnal ${SECOND_CITATION} dřívější s ${SECOND_CITATION} nynějším.`;
+
 const ast = {
   blocks: [
     paragraph("first", FIRST_PARAGRAPH),
     paragraph("second", SECOND_PARAGRAPH),
+    paragraph("repeat", REPEAT_PARAGRAPH),
+    paragraph("versions", VERSIONS_PARAGRAPH),
   ],
   metadata: {
     caseNumber: "1 As 1/2026",
@@ -167,7 +179,7 @@ const provisionAnchor = ({
         documentId,
         eli: "/eli/cz/sb/2026/1",
         jurisdiction: "CZE",
-        provisionLabel: `§ ${String(section)}`,
+        provisionLabel: citation,
         statuteTitle: "Test Act",
         versionCount: 1,
         versionValidFrom: "2026-01-01",
@@ -216,8 +228,7 @@ const anchors = [
 ];
 
 const cardLabel = (card: Element) =>
-  card.querySelector('[data-slot="provision-card-header"]')?.firstElementChild
-    ?.textContent;
+  card.querySelector('[data-slot="provision-card-label"]')?.textContent;
 
 const renderDecision = async (
   expandProvisions?: boolean,
@@ -375,7 +386,9 @@ describe("compact provision cards", () => {
   test("names, dates and opens each provision in one header row", async () => {
     const view = await renderDecision(true);
     const cards = [
-      ...view.container.querySelectorAll('[data-slot="provision-card"]'),
+      ...view.container.querySelectorAll<HTMLElement>(
+        '[data-slot="provision-card"]',
+      ),
     ];
     expect(cards).toHaveLength(3);
     for (const card of cards) {
@@ -383,12 +396,12 @@ describe("compact provision cards", () => {
         '[data-slot="provision-card-header"]',
       );
       expect(headers).toHaveLength(1);
-      const header = headers[0];
-      expect(header?.textContent).toContain(WORDING_VERSION_LABEL);
-      const open = within(card as HTMLElement).getByRole("button", {
+      const header = headers.item(0);
+      expect(header.textContent).toContain(WORDING_VERSION_LABEL);
+      const open = within(card).getByRole("button", {
         name: messages.statutes.openProvision,
       });
-      expect(header?.contains(open)).toBe(true);
+      expect(header.contains(open)).toBe(true);
       // Icon-only: the name comes from the label, not from visible text.
       expect(open.textContent).toBe("");
     }
@@ -397,13 +410,15 @@ describe("compact provision cards", () => {
   test("shows where a provision sits only where its label does not say so", async () => {
     const placed = withTarget((target) => ({
       ...target,
-      payload: { ...target.payload, statuteTitle: "odst." },
       preview:
         target.preview === null
           ? null
           : {
               ...target.preview,
-              headings: [{ anchorId: "cast-1", level: 1, text: "Část první" }],
+              headings: [
+                { anchorId: "odst", level: 1, text: "odst." },
+                { anchorId: "cast-1", level: 2, text: "Část první" },
+              ],
             },
     }));
     const view = await renderDecision(true, placed);
@@ -417,7 +432,7 @@ describe("compact provision cards", () => {
     ]);
     // "§ 31 odst. 4" and "§ 90 odst. 5" already spell "odst." out; "§ 7"
     // does not, so only its card carries that place.
-    expect(cards.map((card) => card.textContent?.includes("odst. ›"))).toEqual([
+    expect(cards.map((card) => card.textContent.includes("odst. ›"))).toEqual([
       false,
       true,
       false,
@@ -480,5 +495,351 @@ describe("compact provision cards", () => {
     expect(
       firstCard(view)?.querySelector('[data-slot="provision-card-pending"]'),
     ).toBeNull();
+  });
+});
+
+const ACT_DOCUMENT_ID = "c7bbc901-27a1-4d00-b75a-111111111111";
+const EARLIER_DOCUMENT_ID = "c7bbc901-27a1-4d00-b75a-000000000000";
+
+type CitationOptions = {
+  blockId: string;
+  citation: string;
+  documentId?: string | undefined;
+  /** Where in the sentence to start looking, for a repeated citation. */
+  from?: number | undefined;
+  part: string | null;
+  section: number;
+  sentenceText: string;
+  versionValidFrom?: string | undefined;
+};
+
+/** A citation of a provision, or of one numbered part of it. */
+const citationAnchor = ({
+  blockId,
+  citation,
+  documentId = ACT_DOCUMENT_ID,
+  from = 0,
+  part,
+  section,
+  sentenceText,
+  versionValidFrom = "2026-01-01",
+}: CitationOptions): DecisionProvisionAnchor => {
+  const start = sentenceText.indexOf(citation, from);
+  const anchorId = `par_${String(section)}`;
+  const citedAnchorId = part === null ? anchorId : `${anchorId}-odst_${part}`;
+  const id = toSafeId<"legislationDocument">(documentId);
+  return {
+    exactSpan: { blockId, end: start + citation.length, start },
+    id: `${blockId}-${citedAnchorId}-${String(start)}`,
+    reference: {
+      letter: null,
+      section,
+      sectionSuffix: null,
+      subsection: part,
+      unit: "section",
+    },
+    sentenceText,
+    spanStart: start,
+    target: {
+      document: {
+        country: "cz",
+        eli: "/eli/cz/sb/2026/1",
+        id,
+        slug: "test-act",
+        versionValidFrom,
+      },
+      payload: {
+        anchorId,
+        documentId: id,
+        eli: "/eli/cz/sb/2026/1",
+        highlightAnchorId: citedAnchorId,
+        jurisdiction: "CZE",
+        provisionLabel: citation,
+        statuteTitle: "Test Act",
+        versionCount: 2,
+        versionValidFrom,
+      },
+      preview: {
+        anchorId,
+        blocks: [
+          {
+            anchorId: citedAnchorId,
+            id: `${documentId}:${citedAnchorId}`,
+            text: `Wording of ${citedAnchorId} in force since ${versionValidFrom}.`,
+          },
+        ],
+        citedAnchorId: part === null ? null : citedAnchorId,
+        documentId: id,
+        heading: null,
+        headings: [],
+        language: "cs",
+      },
+    },
+  };
+};
+
+const repeatCitation = (citation: string, part: string, from = 0) =>
+  citationAnchor({
+    blockId: "repeat",
+    citation,
+    from,
+    part,
+    section: 226,
+    sentenceText: REPEAT_PARAGRAPH,
+  });
+
+const cardsIn = (
+  view: Awaited<ReturnType<typeof renderDecision>>,
+  anchorId: string,
+) => {
+  const cards: HTMLElement[] = [];
+  let sibling = view.container.querySelector(
+    `p[data-anchor="${anchorId}"]`,
+  )?.nextElementSibling;
+  while (
+    sibling instanceof HTMLElement &&
+    sibling.dataset.slot === "provision-card"
+  ) {
+    cards.push(sibling);
+    sibling = sibling.nextElementSibling;
+  }
+  return cards;
+};
+
+describe("one card per cited provision in a paragraph", () => {
+  test("a paragraph that cites one part of a provision twice gets one card", async () => {
+    const view = await renderDecision(true, [
+      repeatCitation(PART_ONE, "1"),
+      repeatCitation(PART_ONE, "1", REPEAT_PARAGRAPH.lastIndexOf(PART_ONE)),
+    ]);
+    // Both mentions stay links; only the card is shared.
+    expect(view.getAllByRole("link", { name: PART_ONE })).toHaveLength(2);
+    const cards = cardsIn(view, "anchor-repeat");
+    expect(cards).toHaveLength(1);
+    expect(cards.map(cardLabel)).toEqual([PART_ONE]);
+    expect(
+      cards.at(0)?.querySelectorAll('[data-slot="provision-card-wording"] > *'),
+    ).toHaveLength(1);
+  });
+
+  test("citations of two parts of one provision share a card that marks each part", async () => {
+    const view = await renderDecision(true, [
+      repeatCitation(PART_ONE, "1"),
+      repeatCitation(PART_TWO, "2"),
+      repeatCitation(PART_ONE, "1", REPEAT_PARAGRAPH.lastIndexOf(PART_ONE)),
+    ]);
+    const cards = cardsIn(view, "anchor-repeat");
+    expect(cards).toHaveLength(1);
+    const card = cards.at(0);
+    expect(cardLabel(card ?? panic("No card"))).toBe(
+      `${PART_ONE}, ${PART_TWO}`,
+    );
+    const marked = [...(card?.querySelectorAll("[data-cited]") ?? [])];
+    expect(marked.map((block) => block.textContent)).toEqual([
+      "Wording of par_226-odst_1 in force since 2026-01-01.",
+      "Wording of par_226-odst_2 in force since 2026-01-01.",
+    ]);
+  });
+
+  test("the same provision applied in two consolidations keeps a card for each", async () => {
+    const versions = [
+      citationAnchor({
+        blockId: "versions",
+        citation: SECOND_CITATION,
+        documentId: EARLIER_DOCUMENT_ID,
+        part: null,
+        section: 7,
+        sentenceText: VERSIONS_PARAGRAPH,
+        versionValidFrom: "2020-01-01",
+      }),
+      citationAnchor({
+        blockId: "versions",
+        citation: SECOND_CITATION,
+        from: VERSIONS_PARAGRAPH.lastIndexOf(SECOND_CITATION),
+        part: null,
+        section: 7,
+        sentenceText: VERSIONS_PARAGRAPH,
+      }),
+    ];
+    const view = await renderDecision(true, versions);
+    const cards = cardsIn(view, "anchor-versions");
+    expect(cards).toHaveLength(2);
+    expect(cards.map((card) => card.textContent)).toEqual([
+      expect.stringContaining("in force since Jan 1, 2020"),
+      expect.stringContaining("in force since Jan 1, 2026"),
+    ]);
+  });
+});
+
+describe("the provision card header", () => {
+  const headerParts = (header: Element) =>
+    [...header.querySelectorAll<HTMLElement>(":scope > *")].map((part) =>
+      part.matches("button")
+        ? "button"
+        : (part.dataset.slot ?? part.tagName.toLowerCase()),
+    );
+
+  const openPeek = async (
+    view: Awaited<ReturnType<typeof renderDecision>>,
+    citation: string,
+  ) => {
+    const link = view.getByRole("link", { name: citation });
+    fireEvent.click(link);
+    return await waitFor(
+      () =>
+        view.baseElement.querySelector<HTMLElement>(
+          '[data-slot="preview-card-content"]',
+        ) ?? panic("The hover card did not open"),
+    );
+  };
+
+  test("the hover card and the inline card draw the same header", async () => {
+    const view = await renderDecision(true);
+    const inline =
+      view.container.querySelector('[data-slot="provision-card-header"]') ??
+      panic("The inline card has no header");
+    const peek = await openPeek(view, FIRST_CITATION);
+    const peeked =
+      peek.querySelector('[data-slot="provision-card-header"]') ??
+      panic("The hover card has no header");
+    expect(
+      peek.querySelectorAll('[data-slot="provision-card-header"]'),
+    ).toHaveLength(1);
+    expect(peeked.className).toBe(inline.className);
+    expect(headerParts(peeked)).toEqual(headerParts(inline));
+    expect(peeked.textContent).toBe(inline.textContent);
+  });
+
+  test("keeps to one row whose act title gives way before the date", async () => {
+    const view = await renderDecision();
+    const peek = await openPeek(view, FIRST_CITATION);
+    const header =
+      peek.querySelector('[data-slot="provision-card-header"]') ??
+      panic("The hover card has no header");
+    expect(headerParts(header)).toEqual([
+      "provision-card-label",
+      "span",
+      "provision-card-act",
+      "span",
+      "provision-card-date",
+      "button",
+    ]);
+    const classesOf = (slot: string) =>
+      header.querySelector(`[data-slot="${slot}"]`)?.classList ??
+      panic(`No ${slot}`);
+    // One line: nothing in the row wraps, and the row clips rather than grows.
+    expect(header.classList.contains("whitespace-nowrap")).toBe(true);
+    expect(header.classList.contains("overflow-hidden")).toBe(true);
+    expect(header.classList.contains("flex-wrap")).toBe(false);
+    // The act's title is the only part that may shrink, so it truncates
+    // first; the provision and the date keep their width.
+    expect(classesOf("provision-card-act").contains("truncate")).toBe(true);
+    expect(classesOf("provision-card-act").contains("min-w-0")).toBe(true);
+    for (const slot of ["provision-card-label", "provision-card-date"]) {
+      expect(classesOf(slot).contains("shrink-0")).toBe(true);
+      expect(classesOf(slot).contains("truncate")).toBe(false);
+    }
+    expect(
+      header.querySelector('[data-slot="provision-card-label"]')?.textContent,
+    ).toBe(FIRST_CITATION);
+    expect(
+      header.querySelector('[data-slot="provision-card-act"]')?.textContent,
+    ).toBe("1/2026 Sb., Test Act");
+    expect(
+      header.querySelector('[data-slot="provision-card-date"]')?.textContent,
+    ).toBe(WORDING_VERSION_LABEL);
+  });
+
+  test("drops the hierarchy line when it would not fit on one line", async () => {
+    // Happy DOM lays nothing out: a line is as wide as its text, at 8px a
+    // character, in a card 320px wide.
+    const own = {
+      clientWidth: Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "clientWidth",
+      ),
+      scrollWidth: Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "scrollWidth",
+      ),
+    };
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.textContent.length * 8;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get: () => 320,
+    });
+    try {
+      const SHORT = "Část první";
+      const LONG =
+        "Hlava druhá o řízení před soudem prvního stupně a o jeho přípravě";
+      const placed = anchors.map((anchor, index) => ({
+        ...anchor,
+        target: {
+          ...anchor.target,
+          preview:
+            anchor.target.preview === null
+              ? null
+              : {
+                  ...anchor.target.preview,
+                  headings: [
+                    {
+                      anchorId: "place",
+                      level: 1,
+                      text: index === 0 ? LONG : SHORT,
+                    },
+                  ],
+                },
+        },
+      }));
+      const view = await renderDecision(true, placed);
+      const trails = [
+        ...view.container.querySelectorAll<HTMLElement>(
+          '[data-slot="provision-card-trail"]',
+        ),
+      ];
+      expect(
+        trails.map((trail) => [
+          trail.textContent,
+          Object.hasOwn(trail.dataset, "clipped"),
+        ]),
+      ).toEqual([
+        [SHORT, false],
+        [LONG, true],
+        [SHORT, false],
+      ]);
+    } finally {
+      for (const [name, descriptor] of Object.entries(own)) {
+        Reflect.deleteProperty(HTMLElement.prototype, name);
+        if (descriptor !== undefined) {
+          Object.defineProperty(HTMLElement.prototype, name, descriptor);
+        }
+      }
+    }
+  });
+
+  test("the icon button opens the provision", async () => {
+    const view = await renderDecision();
+    const peek = await openPeek(view, FIRST_CITATION);
+    const open = within(peek).getByRole("button", {
+      name: messages.statutes.openProvision,
+    });
+    expect(open.textContent).toBe("");
+    fireEvent.click(open);
+    const target =
+      anchors.find(
+        (anchor) => anchor.target.payload.provisionLabel === FIRST_CITATION,
+      )?.target ?? panic("No anchor for the first citation");
+    expect(
+      useInspectorTabsStore
+        .getState()
+        .tabs.some(
+          (tab) => tab.id === createProvisionViewTab(target.payload).id,
+        ),
+    ).toBe(true);
   });
 });

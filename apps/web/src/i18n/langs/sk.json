@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
     "provisionHistoryEarliest": "Najstaršie zachované znenie.",
     "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
     "provisionHistoryLoadOlder": "Načítajte staršie znenia a porovnajte ich.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
+    "showCitedPartOnly": "Zobraziť len citovanú časť",
+    "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {

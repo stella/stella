@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Podsumuj, jak sądy stosują ten przepis",
     "provisionAskSummarizePrompt": "Podsumuj, jak sądy stosują {subject}, i przywołaj orzeczenia, na których się opierasz.",
     "provisionDetailsFor": "Szczegóły: {provision}",
+    "provisionEffectiveFrom": "obowiązuje od {date}",
     "provisionHistoryEarliest": "Najstarsza dostępna wersja.",
     "provisionHistoryEmpty": "Brak zapisanych wersji tego przepisu.",
     "provisionHistoryLoadOlder": "Wczytaj starsze wersje, aby je porównać.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
+    "showCitedPartOnly": "Pokaż tylko cytowaną część",
+    "showFullProvision": "Pokaż cały przepis",
     "showInText": "Pokaż w tekście",
     "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {

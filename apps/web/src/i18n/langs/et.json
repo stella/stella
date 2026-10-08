@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Võta kokku, kuidas kohtud seda sätet kohaldavad",
     "provisionAskSummarizePrompt": "Võta kokku, kuidas kohtud kohaldavad sätet {subject}, viidates lahenditele, millele tugined.",
     "provisionDetailsFor": "{provision} üksikasjad",
+    "provisionEffectiveFrom": "kehtib alates {date}",
     "provisionHistoryEarliest": "Varaseim teadaolev redaktsioon.",
     "provisionHistoryEmpty": "Selle sätte kohta ei ole ühtegi redaktsiooni.",
     "provisionHistoryLoadOlder": "Laadi vanemad redaktsioonid võrdlemiseks.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
+    "showCitedPartOnly": "Näita ainult viidatud osa",
+    "showFullProvision": "Näita kogu sätet",
     "showInText": "Näita tekstis",
     "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
     "status": {

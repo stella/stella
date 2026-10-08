@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Resumir como os tribunais aplicam este dispositivo",
     "provisionAskSummarizePrompt": "Resuma como os tribunais aplicam {subject}, citando as decisões em que se basear.",
     "provisionDetailsFor": "Detalhes de {provision}",
+    "provisionEffectiveFrom": "em vigor desde {date}",
     "provisionHistoryEarliest": "Versão mais antiga disponível.",
     "provisionHistoryEmpty": "Não há nenhuma versão deste dispositivo.",
     "provisionHistoryLoadOlder": "Carregue versões anteriores para comparar.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
+    "showCitedPartOnly": "Mostrar apenas a parte citada",
+    "showFullProvision": "Mostrar o dispositivo completo",
     "showInText": "Mostrar no texto",
     "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {

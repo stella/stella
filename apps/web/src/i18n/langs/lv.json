@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Apkopot, kā tiesas piemēro šo normu",
     "provisionAskSummarizePrompt": "Apkopo, kā tiesas piemēro {subject}, un atsaucies uz nolēmumiem, uz kuriem balsties.",
     "provisionDetailsFor": "{provision} informācija",
+    "provisionEffectiveFrom": "spēkā no {date}",
     "provisionHistoryEarliest": "Senākā zināmā redakcija.",
     "provisionHistoryEmpty": "Šai normai nav nevienas redakcijas.",
     "provisionHistoryLoadOlder": "Ielādējiet vecākas redakcijas, lai tās salīdzinātu.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} ({country} tiesību akti)",
     "searchLabel": "Meklēt tiesību aktos",
     "searchPlaceholder": "Numurs, nosaukums vai virsraksts, piem. 89/2012 Sb.",
+    "showCitedPartOnly": "Rādīt tikai citēto daļu",
+    "showFullProvision": "Rādīt visu normu",
     "showInText": "Rādīt tekstā",
     "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {

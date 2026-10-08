@@ -12,7 +12,7 @@ import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
-import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
+import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallback-legal-anchors";
 import { provisionOccurrenceContexts } from "@/features/case-law/provision-anchors";

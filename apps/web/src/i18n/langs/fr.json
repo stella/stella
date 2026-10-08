@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Résumer l’application de cette disposition par les juridictions",
     "provisionAskSummarizePrompt": "Résume la façon dont les juridictions appliquent {subject}, en citant les décisions retenues.",
     "provisionDetailsFor": "Détails de {provision}",
+    "provisionEffectiveFrom": "en vigueur depuis le {date}",
     "provisionHistoryEarliest": "Version la plus ancienne disponible.",
     "provisionHistoryEmpty": "Aucune version de cette disposition n'est disponible.",
     "provisionHistoryLoadOlder": "Charger des versions antérieures pour les comparer.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (législation : {country})",
     "searchLabel": "Rechercher dans la législation",
     "searchPlaceholder": "Numéro, nom ou intitulé, p. ex. 89/2012 Sb.",
+    "showCitedPartOnly": "Afficher seulement la partie citée",
+    "showFullProvision": "Afficher toute la disposition",
     "showInText": "Afficher dans le texte",
     "statedWindow": "Dates indiquées par l'éditeur : {range}",
     "status": {

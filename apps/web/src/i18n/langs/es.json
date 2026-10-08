@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Resumir cómo aplican los tribunales este precepto",
     "provisionAskSummarizePrompt": "Resume cómo aplican los tribunales {subject}, citando las resoluciones en las que te bases.",
     "provisionDetailsFor": "Detalles de {provision}",
+    "provisionEffectiveFrom": "en vigor desde el {date}",
     "provisionHistoryEarliest": "Versión más antigua disponible.",
     "provisionHistoryEmpty": "No consta ninguna versión de este precepto.",
     "provisionHistoryLoadOlder": "Cargue versiones anteriores para compararlas.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
+    "showCitedPartOnly": "Mostrar solo la parte citada",
+    "showFullProvision": "Mostrar la disposición completa",
     "showInText": "Ver en el texto",
     "statedWindow": "Fechas indicadas por el editor: {range}",
     "status": {

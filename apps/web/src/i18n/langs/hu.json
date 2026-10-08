@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
     "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
     "provisionDetailsFor": "{provision} részletei",
+    "provisionEffectiveFrom": "{date} óta hatályos",
     "provisionHistoryEarliest": "A legkorábbi ismert szövegváltozat.",
     "provisionHistoryEmpty": "Ehhez a rendelkezéshez nincs nyilvántartott szövegváltozat.",
     "provisionHistoryLoadOlder": "Töltsön be korábbi változatokat az összehasonlításhoz.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
+    "showCitedPartOnly": "Csak az idézett rész megjelenítése",
+    "showFullProvision": "A teljes rendelkezés megjelenítése",
     "showInText": "Megjelenítés a szövegben",
     "statedWindow": "A kiadó által megadott dátumok: {range}",
     "status": {

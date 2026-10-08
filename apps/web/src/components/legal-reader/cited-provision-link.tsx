@@ -1,14 +1,12 @@
 import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { PanelRightIcon } from "@stll/ui/icons";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -17,38 +15,41 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
 import {
   citedProvisionClick,
   CITED_PROVISION_CLICK,
   informativeProvisionTrail,
+  PROVISION_CARD_SCOPE,
+  provisionCardLabels,
+  provisionCardPassage,
+  provisionCardScope,
 } from "@/components/legal-reader/cited-provision-link.logic";
+import type {
+  CitedProvisionTarget,
+  ProvisionCardPassage,
+} from "@/components/legal-reader/cited-provision-link.logic";
+import {
+  ProvisionCardHeader,
+  ProvisionTrailLine,
+} from "@/components/legal-reader/provision-card-header";
 import { ReaderInsetBox } from "@/components/legal-reader/reader-inset-box";
-import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
-import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
-import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
+import {
+  keepReadingPosition,
+  readerScrollOwner,
+} from "@/components/legal-reader/reader-position";
+import {
+  provisionInVersionOptions,
+  provisionPreviewOptions,
+} from "@/features/statutes/queries/provision-preview";
 import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
-import { formatValidityDate } from "@/features/statutes/statute-format";
+import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-
-export type CitedProvisionTarget = {
-  /** The consolidation the reference was made against, in the statute reader. */
-  document: {
-    country: string;
-    eli: string | null;
-    id: string;
-    slug: string | null;
-    versionValidFrom: string | null;
-  };
-  payload: ProvisionViewPayload;
-  /**
-   * The wording the reference's own list already carried, when it did. A
-   * target without one reads its provision when the card opens.
-   */
-  preview: ProvisionPreviewData | null;
-};
+import {
+  useQueryView,
+  useQueryViewError,
+  useQueryViewErrors,
+} from "@/lib/use-query-view";
 
 type CitedProvisionLinkProps = {
   children: ReactNode;
@@ -56,39 +57,52 @@ type CitedProvisionLinkProps = {
   provision: CitedProvisionTarget;
 };
 
-type ProvisionWordingArgs = {
-  documentId: string;
+const citationPreviewOptions = ({ document, payload }: CitedProvisionTarget) =>
+  provisionPreviewOptions({
+    anchor: payload.anchorId,
+    citedAnchor: payload.highlightAnchorId,
+    documentId: document.id,
+  });
+
+type CitedWordingsArgs = {
+  citations: readonly CitedProvisionTarget[];
   /** False while nothing is showing the wording, so nothing is read for it. */
   enabled: boolean;
-  preview: ProvisionPreviewData | null;
-  provision: ProvisionViewPayload;
 };
 
 /**
- * The wording one citation points at. The preview and the paragraph card ask
- * under the same key, so unfolding a citation the reader has already hovered
- * costs no second read.
+ * The wording each citation points at: the one the decision's list carried,
+ * or a read of its own. The hover card and the paragraph card ask under the
+ * same key, so unfolding a citation the reader has already hovered costs no
+ * second read. A read that failed or found nothing answers null.
  */
-const useProvisionWording = ({
-  documentId,
-  enabled,
-  preview,
-  provision,
-}: ProvisionWordingArgs) => {
-  const dataQuery = useQuery({
-    ...provisionPreviewOptions({
-      anchor: provision.anchorId,
-      citedAnchor: provision.highlightAnchorId,
-      documentId,
-    }),
-    enabled: enabled && preview === null,
+const useCitedWordings = ({ citations, enabled }: CitedWordingsArgs) => {
+  const reads = useQueries({
+    queries: citations.map((target) => ({
+      ...citationPreviewOptions(target),
+      enabled: enabled && target.preview === null,
+    })),
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
-  const { isPending } = dataQuery;
-  const data = dataView.type === "items" ? dataView.items : undefined;
-
-  return { isPending, wording: preview ?? data };
+  const views = reads.map((read) => queryView(read));
+  useQueryViewErrors(views);
+  return citations.map((target, index) => {
+    if (target.preview !== null) {
+      return { target, wording: target.preview };
+    }
+    const view = views.at(index) ?? panic("A citation without its read");
+    switch (view.type) {
+      case "items":
+        return { target, wording: view.items };
+      case "pending":
+        return { target, wording: undefined };
+      case "empty":
+      case "error":
+        return { target, wording: null };
+      default:
+        view satisfies never;
+        return panic("Unhandled provision wording read");
+    }
+  });
 };
 
 const ProvisionWordingSkeleton = () => (
@@ -98,170 +112,233 @@ const ProvisionWordingSkeleton = () => (
   </span>
 );
 
-const OpenCitedProvisionButton = ({
-  provision,
-}: {
-  provision: ProvisionViewPayload;
-}) => {
+const ProvisionTextUnavailable = () => {
   const t = useTranslations();
-  const inspector = useInspectorView();
   return (
-    <Button
-      aria-label={t("statutes.openProvision")}
-      className="ms-auto shrink-0"
-      onClick={() => inspector.open(createProvisionViewTab(provision))}
-      size="icon-xs"
-      variant="ghost"
+    <span
+      className="reader-chrome text-muted-foreground text-xs"
+      data-slot="provision-card-unavailable"
     >
-      <PanelRightIcon aria-hidden="true" className="size-3.5" />
-    </Button>
+      {t("statutes.provisionTextUnavailable")}
+    </span>
   );
 };
 
-type ProvisionCardBody =
-  | { type: "pending" }
-  | { type: "unavailable" }
-  | { type: "wording"; wording: ProvisionPreviewData };
-
-/**
- * What a card shows under its row. A failed read, a version that does not
- * carry the provision, and a provision with no text in it all say that the
- * text is not available rather than leaving the card empty.
- */
-const provisionCardBody = ({
-  isPending,
-  wording,
-}: {
-  isPending: boolean;
-  wording: ProvisionPreviewData | null | undefined;
-}): ProvisionCardBody => {
-  if (wording === undefined) {
-    return isPending ? { type: "pending" } : { type: "unavailable" };
-  }
-  if (wording === null || wording.blocks.length === 0) {
-    return { type: "unavailable" };
-  }
-  return { type: "wording", wording };
+type ProvisionWordingProps = {
+  blocks: ProvisionPreviewData["blocks"];
+  /** Blocks a citation of a part names, marked beside the rest. */
+  cited: ReadonlySet<string>;
+  language: string | null;
 };
 
-const ProvisionCardWording = ({ body }: { body: ProvisionCardBody }) => {
-  const t = useTranslations();
-  switch (body.type) {
+/**
+ * Wording in the reader's own flow. It is never a scroller of its own: the
+ * reader keeps one scroll, and a long provision makes the card taller.
+ */
+const ProvisionWording = ({
+  blocks,
+  cited,
+  language,
+}: ProvisionWordingProps) => (
+  <span
+    className="reader-body text-foreground flex flex-col gap-2 text-sm leading-relaxed text-pretty"
+    data-slot="provision-card-wording"
+    lang={language ?? undefined}
+  >
+    {blocks.map((block) => (
+      <span
+        className={cn(
+          cited.has(block.id) && "border-primary/50 border-s-[3px] ps-2.5",
+        )}
+        data-cited={cited.has(block.id) ? "" : undefined}
+        key={block.id}
+      >
+        {block.text}
+      </span>
+    ))}
+  </span>
+);
+
+const PassageBody = ({ passage }: { passage: ProvisionCardPassage }) => {
+  switch (passage.type) {
     case "pending":
       return <ProvisionWordingSkeleton />;
-    case "unavailable":
-      return (
-        <span
-          className="reader-chrome text-muted-foreground text-xs"
-          data-slot="provision-card-unavailable"
-        >
-          {t("statutes.provisionTextUnavailable")}
-        </span>
-      );
-    case "wording":
-      return (
-        <span
-          className="reader-body text-foreground flex max-h-64 flex-col gap-2 overflow-y-auto text-sm leading-relaxed text-pretty"
-          lang={body.wording.language}
-        >
-          {body.wording.blocks.map((block) => (
-            <span key={block.id}>{block.text}</span>
-          ))}
-        </span>
+    case "passage":
+      return passage.blocks.length === 0 ? (
+        <ProvisionTextUnavailable />
+      ) : (
+        <ProvisionWording
+          blocks={passage.blocks}
+          cited={passage.cited}
+          language={passage.language}
+        />
       );
     default:
-      body satisfies never;
-      return panic("Unhandled provision card body");
+      passage satisfies never;
+      return panic("Unhandled provision card passage");
   }
 };
 
-type CitedProvisionCardProps = {
-  /** False while nothing shows the card, so nothing is read for it. */
-  enabled: boolean;
-  /** What the reader calls the provision: the citation as written. */
+/** Where the provision sits, minus what its label already says. */
+const provisionTrail = ({
+  label,
+  passage,
+  wording,
+}: {
   label: string;
-  provision: CitedProvisionTarget;
+  passage: ProvisionCardPassage;
+  wording: ProvisionPreviewData | null | undefined;
+}) =>
+  passage.type === "pending" || wording === null || wording === undefined
+    ? []
+    : informativeProvisionTrail({
+        label,
+        places: wording.headings.map(({ text }) => text),
+      });
+
+type FullProvisionProps = {
+  citations: readonly CitedProvisionTarget[];
+  /** The cited parts, shown until the whole provision has been read. */
+  passage: ProvisionCardPassage;
 };
 
+const NOTHING_CITED: ReadonlySet<string> = new Set();
+
 /**
- * One cited provision, compact: a single row naming it, dating the wording
- * and opening it, then where it sits when the label does not already say so,
- * then its wording. A version that does not carry the provision says so
- * rather than drawing an empty card. Every surface that shows a cited
- * provision's wording, inline or peeked, draws this.
+ * The whole provision around the cited parts, read when the reader asks
+ * for it. Until it answers, and if it cannot, the cited parts stay as they
+ * were.
  */
-const CitedProvisionCard = ({
-  enabled,
-  label,
-  provision,
-}: CitedProvisionCardProps) => {
+const FullProvisionWording = ({ citations, passage }: FullProvisionProps) => {
+  const first = citations.at(0) ?? panic("A provision card without citations");
+  const read = useQuery(
+    provisionInVersionOptions({
+      anchor: first.payload.anchorId,
+      documentId: first.document.id,
+    }),
+  );
+  const view = useQueryView(read);
+  useQueryViewError(view);
+  const whole = view.type === "items" ? view.items : null;
+  if (whole === null || whole.blocks.length === 0) {
+    return (
+      <>
+        <PassageBody passage={passage} />
+        {view.type === "pending" && <ProvisionWordingSkeleton />}
+      </>
+    );
+  }
+  return (
+    <ProvisionWording
+      blocks={whole.blocks}
+      cited={passage.type === "passage" ? passage.cited : NOTHING_CITED}
+      language={whole.language}
+    />
+  );
+};
+
+const FULL_PROVISION = { cited: "cited", full: "full" } as const;
+type FullProvisionState = keyof typeof FULL_PROVISION;
+
+/**
+ * One cited provision under the paragraph that cites it: one header row,
+ * where the provision sits when that fits on a line, then each cited part
+ * in full and, on request, the rest of the provision around them. Every
+ * citation of the provision in the paragraph shares the card.
+ */
+export const CitedProvisionExpansion = ({
+  citations,
+}: {
+  citations: readonly CitedProvisionTarget[];
+}) => {
   const t = useTranslations();
   const format = useFormatter();
-  const { isPending, wording } = useProvisionWording({
-    documentId: provision.document.id,
-    enabled,
-    preview: provision.preview,
-    provision: provision.payload,
+  const [shown, setShown] = useState<FullProvisionState>(FULL_PROVISION.cited);
+  const first = citations.at(0) ?? panic("A provision card without citations");
+  const wordings = useCitedWordings({ citations, enabled: true });
+  const passage = provisionCardPassage(wordings);
+  const label = format.list(provisionCardLabels(citations), {
+    style: "short",
+    type: "unit",
   });
-  const date = formatValidityDate(provision.document.versionValidFrom, format);
-  const trail = informativeProvisionTrail({
-    label,
-    places: [
-      provision.payload.statuteTitle,
-      ...(wording?.headings.map(({ text }) => text) ?? []),
-    ],
-  });
-  const body = provisionCardBody({ isPending, wording });
+  const firstWording = wordings.at(0)?.wording;
+  const foldable =
+    provisionCardScope(citations) === PROVISION_CARD_SCOPE.parts &&
+    passage.type === "passage" &&
+    passage.blocks.length > 0;
+
+  const onToggle = (event: MouseEvent<HTMLButtonElement>) => {
+    const toggle = event.currentTarget;
+    keepReadingPosition(
+      { anchor: toggle, scroller: readerScrollOwner(toggle) },
+      () => {
+        setShown((current) =>
+          current === FULL_PROVISION.full
+            ? FULL_PROVISION.cited
+            : FULL_PROVISION.full,
+        );
+      },
+    );
+  };
 
   return (
-    <>
-      <span
-        className="reader-chrome flex min-w-0 items-center gap-1.5"
-        data-slot="provision-card-header"
-      >
-        <BidiText as="span" className="min-w-0 truncate text-sm font-medium">
-          {label}
-        </BidiText>
-        <span aria-hidden="true" className="text-muted-foreground text-xs">
-          ·
-        </span>
-        <span className="text-muted-foreground shrink-0 text-xs">
-          {date === null
-            ? t("statutes.wordingVersionUnknown")
-            : t("statutes.inForceSince", { date })}
-        </span>
-        <OpenCitedProvisionButton provision={provision.payload} />
-      </span>
-      {trail.length > 0 && (
-        <BidiText
-          as="span"
-          className="reader-chrome text-muted-foreground truncate text-xs"
-          lang={wording?.language}
-        >
-          {trail.join(" › ")}
-        </BidiText>
+    <ReaderInsetBox
+      className="my-2 flex flex-col gap-1.5"
+      data-reader-chrome=""
+      data-slot="provision-card"
+      density="compact"
+    >
+      <ProvisionCardHeader label={label} provision={first.payload} />
+      <ProvisionTrailLine
+        language={firstWording?.language}
+        trail={provisionTrail({ label, passage, wording: firstWording })}
+      />
+      {foldable && shown === FULL_PROVISION.full ? (
+        <FullProvisionWording citations={citations} passage={passage} />
+      ) : (
+        <PassageBody passage={passage} />
       )}
-      <ProvisionCardWording body={body} />
+      {foldable && (
+        <span className="reader-chrome self-start">
+          <Button
+            aria-expanded={shown === FULL_PROVISION.full}
+            onClick={onToggle}
+            size="xs"
+            variant="link"
+          >
+            {shown === FULL_PROVISION.full
+              ? t("statutes.showCitedPartOnly")
+              : t("statutes.showFullProvision")}
+          </Button>
+        </span>
+      )}
+    </ReaderInsetBox>
+  );
+};
+
+/** The hover card's content, read only while the card is open. */
+const CitedProvisionPeek = ({
+  enabled,
+  provision,
+}: {
+  enabled: boolean;
+  provision: CitedProvisionTarget;
+}) => {
+  const wordings = useCitedWordings({ citations: [provision], enabled });
+  const passage = provisionCardPassage(wordings);
+  const wording = wordings.at(0)?.wording;
+  const label = provision.payload.provisionLabel;
+  return (
+    <>
+      <ProvisionCardHeader label={label} provision={provision.payload} />
+      <ProvisionTrailLine
+        language={wording?.language}
+        trail={provisionTrail({ label, passage, wording })}
+      />
+      <PassageBody passage={passage} />
     </>
   );
 };
-
-/** Rendered by the paragraph owner, never by its inline citation link. */
-export const CitedProvisionExpansion = ({
-  label,
-  provision,
-}: {
-  label: string;
-  provision: CitedProvisionTarget;
-}) => (
-  <ReaderInsetBox
-    className="my-2 flex flex-col gap-1.5 px-3 py-2"
-    data-reader-chrome=""
-    data-slot="provision-card"
-  >
-    <CitedProvisionCard enabled label={label} provision={provision} />
-  </ReaderInsetBox>
-);
 
 /** Hover or a plain click peeks at wording without interrupting the sentence. */
 export const CitedProvisionLink = ({
@@ -310,11 +387,7 @@ export const CitedProvisionLink = ({
         {children}
       </PreviewCardTrigger>
       <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-1.5 p-3">
-        <CitedProvisionCard
-          enabled={previewOpen}
-          label={provision.payload.provisionLabel}
-          provision={provision}
-        />
+        <CitedProvisionPeek enabled={previewOpen} provision={provision} />
       </PreviewCardPopup>
     </PreviewCard>
   );

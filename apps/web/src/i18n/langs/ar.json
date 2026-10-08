@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
     "provisionDetailsFor": "تفاصيل {provision}",
+    "provisionEffectiveFrom": "نافذ منذ {date}",
     "provisionHistoryEarliest": "أقدم صيغة متاحة.",
     "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
     "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
+    "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
+    "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {

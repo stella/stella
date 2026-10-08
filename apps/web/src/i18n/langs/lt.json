@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Apibendrinti, kaip teismai taiko šią nuostatą",
     "provisionAskSummarizePrompt": "Apibendrink, kaip teismai taiko {subject}, ir nurodyk sprendimus, kuriais remiesi.",
     "provisionDetailsFor": "{provision} informacija",
+    "provisionEffectiveFrom": "galioja nuo {date}",
     "provisionHistoryEarliest": "Seniausia žinoma redakcija.",
     "provisionHistoryEmpty": "Šios nuostatos redakcijų nėra.",
     "provisionHistoryLoadOlder": "Įkelkite senesnes redakcijas palyginimui.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
+    "showCitedPartOnly": "Rodyti tik cituojamą dalį",
+    "showFullProvision": "Rodyti visą nuostatą",
     "showInText": "Rodyti tekste",
     "statedWindow": "Leidėjo nurodytos datos: {range}",
     "status": {

@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Shrnout, jak soudy toto ustanovení používají",
     "provisionAskSummarizePrompt": "Shrň, jak soudy používají {subject}, a cituj rozhodnutí, ze kterých vycházíš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
     "provisionHistoryEarliest": "Nejstarší dochované znění.",
     "provisionHistoryEmpty": "K tomuto ustanovení není dochováno žádné znění.",
     "provisionHistoryLoadOlder": "Načtěte starší znění a porovnejte je.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
+    "showCitedPartOnly": "Zobrazit jen citovanou část",
+    "showFullProvision": "Zobrazit celé ustanovení",
     "showInText": "Zobrazit v textu",
     "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {

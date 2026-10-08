@@ -4740,6 +4740,7 @@
     "provisionAskSummarize": "Summarize how courts apply this provision",
     "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.",
     "provisionDetailsFor": "Details of {provision}",
+    "provisionEffectiveFrom": "in force since {date}",
     "provisionHistoryEarliest": "Earliest wording on record.",
     "provisionHistoryEmpty": "No wording of this provision is on record.",
     "provisionHistoryLoadOlder": "Load older versions to compare wordings.",
@@ -4752,6 +4753,8 @@
     "searchAskPrompt": "{query} (legislation of {country})",
     "searchLabel": "Search statutes",
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.",
+    "showCitedPartOnly": "Show cited part only",
+    "showFullProvision": "Show full provision",
     "showInText": "Show in the text",
     "statedWindow": "Dates stated by the publisher: {range}",
     "status": {

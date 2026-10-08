@@ -16,6 +16,26 @@ import type { DecisionProvisionAnchor } from "./use-decision-provision-anchors";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
+/**
+ * A card whose wording the decision's list did not carry reads it itself.
+ * Reads wait for `answerReads` so a test can let the card draw its
+ * placeholder first, and answer with the wording `readAnswer` gives.
+ */
+const originalFetch = globalThis.fetch;
+let readGate = Promise.withResolvers<undefined>();
+const answerReads = () => {
+  readGate.resolve(undefined);
+};
+let readAnswer: (url: string) => unknown = () => null;
+globalThis.fetch = Object.assign(
+  async (input: RequestInfo | URL) => {
+    const url = input instanceof Request ? input.url : String(input);
+    await readGate.promise;
+    return Response.json(readAnswer(url));
+  },
+  { preconnect: () => undefined },
+);
+
 // Happy DOM has ranges but no CSS Custom Highlight API; the find paints
 // through it, so a registry stands in for the browser's.
 class ReaderHighlight extends Set<Range> {
@@ -67,6 +87,8 @@ const registerScroller = (scroller: HTMLElement) => {
   }
   scrollers.add(scroller);
   scrollTops.set(scroller, 0);
+  // The reader's one scroll owner, as the page and the inspector style it.
+  scroller.style.overflowY = "auto";
   Object.defineProperty(scroller, "scrollTop", {
     configurable: true,
     get: () => scrollTops.get(scroller) ?? 0,
@@ -107,7 +129,7 @@ Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
 };
 
 const { useRef } = await import("react");
-const { act, cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -118,14 +140,23 @@ const { DecisionText } = await import("./decision-text");
 const { InspectorFindBar, useInspectorFind } =
   await import("@/components/inspector/inspector-find");
 const { ReaderProvisionModeToggle } =
-  await import("@/components/legal-reader/reader-provision-mode-toggle");
+  await import("@/features/case-law/components/reader-provision-mode-toggle");
 const { useReaderProvisionMode } =
   await import("@/hooks/use-reader-provision-mode");
 const { browserStorage } = await import("@/lib/account/browser-storage");
+const { verticalScrollContainers } =
+  await import("@/components/legal-reader/scroll-owner.test-fixtures");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { toSafeId } = await import("@/lib/safe-id");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
+
+/** Scrolling ends any hold a toggle left on a reader, with its timer. */
+const releaseHolds = () => {
+  for (const scroller of scrollers) {
+    scroller.dispatchEvent(new Event("wheel"));
+  }
+};
 
 afterEach(async () => {
   await act(async () => {
@@ -135,12 +166,17 @@ afterEach(async () => {
     client.clear();
   }
   clients.length = 0;
+  releaseHolds();
   scrollers.clear();
   highlights.clear();
   browserStorage("local")?.clear();
+  readerAnchors = anchors;
+  readGate = Promise.withResolvers<undefined>();
+  readAnswer = () => null;
 });
 
 afterAll(async () => {
+  globalThis.fetch = originalFetch;
   await sleep(0);
   await GlobalRegistrator.unregister();
 });
@@ -301,6 +337,9 @@ const anchors = [
   }),
 ];
 
+/** What the readers cite; a test that needs other citations swaps it. */
+let readerAnchors = anchors;
+
 /** A comment drawn in the text under the passage, as the inspector does. */
 const MID_NOTE = new Map([
   [
@@ -351,7 +390,7 @@ const Reader = ({ name }: { name: string }) => {
             expandProvisions={provisions.expandProvisions}
             isHydrated
             notesByAnchorId={MID_NOTE}
-            provisionAnchors={anchors}
+            provisionAnchors={readerAnchors}
           />
         </div>
       </div>
@@ -435,7 +474,7 @@ const toggleKind = (toggle: HTMLElement): ToggleKind => {
 
 const toggleName = (toggle: HTMLElement, index: number) =>
   `${toggleKind(toggle)} ${String(index)}: ${
-    toggle.getAttribute("aria-label") ?? toggle.textContent ?? ""
+    toggle.getAttribute("aria-label") ?? toggle.textContent
   }`;
 
 /** Opens or closes, the way a reader's click does. */
@@ -599,6 +638,7 @@ describe("in-reader toggles keep the reader's place", () => {
       await act(async () => {
         cleanup();
       });
+      releaseHolds();
       scrollers.clear();
       highlights.clear();
       browserStorage("local")?.clear();
@@ -629,5 +669,218 @@ describe("in-reader toggles keep the reader's place", () => {
     ).toBe(2);
     expect(contentTop(scroller, block)).toBeGreaterThan(topBefore);
     expectStill(watched, toggle, "expand");
+  });
+});
+
+const provisionToggle = () =>
+  pageToggles().find((candidate) => toggleKind(candidate) === "pressed") ??
+  panic("The provision toggle was not rendered");
+
+type WordingOptions = {
+  anchorId: string;
+  citedAnchorId: string | null;
+  lines: readonly string[];
+};
+
+/** The wording a read answers, one block per line. */
+const wordingOf = ({ anchorId, citedAnchorId, lines }: WordingOptions) => ({
+  anchorId,
+  blocks: lines.map((line) => ({
+    anchorId: `${anchorId}-${line}`,
+    id: `${anchorId}-${line}`,
+    text: `Wording ${line} of ${anchorId}.`,
+  })),
+  citedAnchorId,
+  documentId: toSafeId<"legislationDocument">(
+    "c7bbc901-27a1-4d00-b75a-111111111111",
+  ),
+  heading: null,
+  headings: [],
+  language: "cs",
+});
+
+const PENDING_SELECTOR = '[data-slot="provision-card-pending"]';
+
+const nothingPending = () => {
+  for (const name of READERS) {
+    expect(
+      readerParts(name).scroller.querySelector(PENDING_SELECTOR),
+    ).toBeNull();
+  }
+};
+
+describe("a reader keeps its place while cards keep settling", () => {
+  // The card above the passage has no wording yet: it draws a placeholder
+  // when the cards open and its taller wording when the read answers.
+  const unreadAbove = anchors.map((anchor) =>
+    anchor.target.payload.anchorId === "par_7"
+      ? { ...anchor, target: { ...anchor.target, preview: null } }
+      : anchor,
+  );
+
+  test.each(["auto", "none"])(
+    "a card whose wording arrives after the expand leaves the passage still (overflow-anchor: %s)",
+    async (overflowAnchor) => {
+      readerAnchors = unreadAbove;
+      readAnswer = () =>
+        wordingOf({
+          anchorId: "par_7",
+          citedAnchorId: null,
+          lines: ["one", "two", "three", "four", "five", "six"],
+        });
+      await renderReaders();
+      for (const name of READERS) {
+        readerParts(name).scroller.style.overflowAnchor = overflowAnchor;
+      }
+      const toggle = provisionToggle();
+      scrollToMiddle(toggle);
+      const watched = watch(toggle);
+      await activate(toggle);
+      const { citation, scroller } = readerParts("page");
+      expect(scroller.querySelector(PENDING_SELECTOR)).not.toBeNull();
+      expectStill(watched, toggle, "placeholder");
+
+      const block =
+        citation.closest("[data-anchor]") ??
+        panic("The citation sits outside any block");
+      const topWithPlaceholder = contentTop(scroller, block);
+      await act(async () => {
+        answerReads();
+        await sleep(0);
+      });
+      await waitFor(nothingPending);
+      await act(async () => {
+        await sleep(0);
+      });
+      // The wording is taller than its placeholder, so the passage did get
+      // pushed down and holding it took a correction.
+      expect(contentTop(scroller, block)).toBeGreaterThan(topWithPlaceholder);
+      expectStill(watched, toggle, "wording");
+
+      // Scrolling ends the hold and hands anchoring back as it was.
+      for (const name of READERS) {
+        const reader = readerParts(name).scroller;
+        fireEvent.wheel(reader);
+        expect(reader.style.overflowAnchor).toBe(overflowAnchor);
+      }
+    },
+  );
+});
+
+describe("a card shows the cited part and, on request, the whole provision", () => {
+  const PART = "par_31-odst_4";
+  const FULL_LINES = ["odst_1", "odst_2", "odst_3", "odst_4", "odst_5"];
+  // The mid paragraph cites one part of § 31; its list carried that part.
+  const citedPart = anchors.map((anchor) =>
+    anchor.target.payload.anchorId === "par_31"
+      ? {
+          ...anchor,
+          target: {
+            ...anchor.target,
+            payload: { ...anchor.target.payload, highlightAnchorId: PART },
+            preview: wordingOf({
+              anchorId: "par_31",
+              citedAnchorId: PART,
+              lines: ["odst_4"],
+            }),
+          },
+        }
+      : anchor,
+  );
+
+  const openEverything = async () => {
+    readerAnchors = citedPart;
+    readAnswer = () =>
+      wordingOf({ anchorId: "par_31", citedAnchorId: null, lines: FULL_LINES });
+    answerReads();
+    await renderReaders();
+    await activate(provisionToggle());
+    const { scroller } = readerParts("page");
+    const fold = within(scroller).getByRole("button", {
+      name: messages.statutes.showFullProvision,
+    });
+    const card =
+      fold.closest('[data-slot="provision-card"]') ??
+      panic("The fold control sits outside its card");
+    return { card, fold, scroller };
+  };
+
+  const blockTexts = (card: Element, selector: string) =>
+    [...card.querySelectorAll(selector)].map((block) => block.textContent);
+
+  test("showing the whole provision and folding it back leave the pressed control where it was", async () => {
+    const { card, fold, scroller } = await openEverything();
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      blockTexts(card, '[data-slot="provision-card-wording"] > *'),
+    ).toEqual(["Wording odst_4 of par_31."]);
+
+    scroller.scrollTop = contentTop(scroller, fold) - VIEW_PX / 3;
+    const before = offsetOf(fold);
+    await activate(fold);
+    await waitFor(() => {
+      expect(
+        blockTexts(card, '[data-slot="provision-card-wording"] > *'),
+      ).toHaveLength(FULL_LINES.length);
+    });
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(fold.getAttribute("aria-expanded")).toBe("true");
+    expect(fold.textContent).toBe(messages.statutes.showCitedPartOnly);
+    // The parts before the cited one were drawn above the control.
+    expect(Math.abs(offsetOf(fold) - before)).toBeLessThanOrEqual(
+      POSITION_TOLERANCE_PX,
+    );
+    expect(blockTexts(card, "[data-cited]")).toEqual([
+      "Wording odst_4 of par_31.",
+    ]);
+
+    await activate(fold);
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      blockTexts(card, '[data-slot="provision-card-wording"] > *'),
+    ).toEqual(["Wording odst_4 of par_31."]);
+    expect(Math.abs(offsetOf(fold) - before)).toBeLessThanOrEqual(
+      POSITION_TOLERANCE_PX,
+    );
+    expect(fold.ownerDocument.activeElement).toBe(fold);
+  });
+
+  test("nothing in the text scrolls but the reader, with every card and its whole provision open", async () => {
+    const { card, fold } = await openEverything();
+    await activate(fold);
+    await waitFor(() => {
+      expect(
+        card.querySelectorAll('[data-slot="provision-card-wording"] > *'),
+      ).toHaveLength(FULL_LINES.length);
+    });
+    for (const name of READERS) {
+      const { scroller } = readerParts(name);
+      expect(
+        scroller.querySelector('[data-slot="provision-card"]'),
+      ).not.toBeNull();
+      expect(verticalScrollContainers(scroller)).toEqual([scroller]);
+    }
+  });
+
+  test("the scroll assertion finds a scroller nested in the text", async () => {
+    await renderReaders();
+    const page = readerParts("page").scroller.ownerDocument;
+    const root = page.createElement("div");
+    root.style.overflowY = "auto";
+    const nested = page.createElement("span");
+    nested.className = "max-h-64 md:overflow-y-auto";
+    const sideways = page.createElement("span");
+    sideways.className = "overflow-x-auto";
+    const styled = page.createElement("span");
+    styled.style.overflowY = "scroll";
+    root.append(nested, sideways, styled);
+    page.body.append(root);
+    expect(verticalScrollContainers(root)).toEqual([root, nested, styled]);
+    root.remove();
   });
 });

@@ -27,7 +27,6 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { ReaderProvisionModeToggle } from "@/components/legal-reader/reader-provision-mode-toggle";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 import {
@@ -54,6 +53,7 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { DecisionMainViewAction } from "@/features/case-law/components/decision-main-view-action";
+import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";

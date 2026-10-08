@@ -290,7 +290,6 @@
     "apps/web/src/components/inspector/playbook-facet.tsx": 4,
     "apps/web/src/components/inspector/versions-facet.tsx": 1,
     "apps/web/src/components/jurisdiction-picker.tsx": 1,
-    "apps/web/src/components/legal-reader/cited-provision-link.tsx": 1,
     "apps/web/src/components/legal-reader/document-ast-text.tsx": 1,
     "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx": 1,
     "apps/web/src/components/notification-bell.tsx": 1,
