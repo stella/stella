@@ -45,6 +45,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["local:module-loader"],
   },
   {
+    path: "apps/web/src/runtime.ts",
+    class: "package-owned-client",
+    reason:
+      "Loads the emitted web server entry through the bounded local loader.",
+    transports: ["local:module-loader"],
+  },
+  {
     path: "apps/api/scripts/lib/enumerate-safe-handlers.ts",
     class: "operator-configured-infrastructure",
     reason: "Loads handler modules inside the repository handlers directory.",

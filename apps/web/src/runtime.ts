@@ -1,17 +1,34 @@
+import { panic } from "better-result";
 import { env } from "bun";
+import { fileURLToPath } from "node:url";
 
 import {
   createStartRuntime,
   serveStartRuntime,
   verifyServerModuleGraph,
 } from "@stll/start-runtime";
-
-import serverEntry from "./server/server.js";
+import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
 
 const DEFAULT_PORT = 3002;
 const DEFAULT_HOST = "0.0.0.0";
 const SERVER_DIRECTORY_URL = new URL("server/", import.meta.url);
 const CLIENT_DIRECTORY_URL = new URL("client/", import.meta.url);
+// The server entry is a build output next to this file, so it is loaded at runtime
+// from the server directory rather than imported statically.
+const loadedServerEntry = await loadLocalModule({
+  root: fileURLToPath(SERVER_DIRECTORY_URL),
+  modulePath: "server.js",
+});
+const serverEntry = loadedServerEntry.isErr()
+  ? panic("Cannot load the web server entry", loadedServerEntry.error)
+  : loadedServerEntry.value;
+const handler =
+  typeof serverEntry === "object" &&
+  serverEntry !== null &&
+  "default" in serverEntry
+    ? serverEntry.default
+    : null;
+
 const CROSS_ORIGIN_ISOLATION_HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "credentialless",
@@ -19,7 +36,7 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
 
 const runtime = createStartRuntime({
   clientDirectoryUrl: CLIENT_DIRECTORY_URL,
-  handler: serverEntry,
+  handler,
   responseHeaders: CROSS_ORIGIN_ISOLATION_HEADERS,
 });
 
