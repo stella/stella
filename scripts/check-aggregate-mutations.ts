@@ -386,9 +386,11 @@ const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
     ts.forEachChild(node, collectVariables);
   };
   collectVariables(source);
+  // Visited bindings are declarations, not names: nested callbacks commonly
+  // shadow one parameter name, while a real alias cycle revisits a node.
   const isRouteReceiver = (
     node: ts.Expression,
-    visited = new Set<string>(),
+    visited = new Set<ts.Node>(),
   ): boolean => {
     if (
       ts.isAsExpression(node) ||
@@ -409,12 +411,15 @@ const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
     ) {
       return isRouteReceiver(node.expression.expression, visited);
     }
-    if (!ts.isIdentifier(node) || visited.has(node.text)) {
+    if (!ts.isIdentifier(node)) {
       return false;
     }
-    visited.add(node.text);
     const initializer = variables.get(node.text);
     if (initializer !== undefined) {
+      if (visited.has(initializer)) {
+        return false;
+      }
+      visited.add(initializer);
       return isRouteReceiver(initializer, visited);
     }
     let ancestor = node.parent;
@@ -427,6 +432,10 @@ const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
             parameter.name.text === node.text,
         )
       ) {
+        if (visited.has(ancestor)) {
+          return false;
+        }
+        visited.add(ancestor);
         const parent = ancestor.parent;
         if (
           ts.isCallExpression(parent) &&
@@ -1334,6 +1343,7 @@ const appendInterceptorRegistrations = ({
     node.expression.name.text === "onRequest" &&
     isRouteReceiver(node.expression.expression)
   ) {
+    const interceptorPrefix = routePrefix(node.expression.expression);
     const collectInterceptor = (argument: ts.Node) => {
       if (ts.isCallExpression(argument)) {
         const expression = argument.expression;
@@ -1348,7 +1358,7 @@ const appendInterceptorRegistrations = ({
         }
         if (target?.startsWith(`${API}handlers/`)) {
           registrations.push({
-            key: `${file}|INTERCEPT|${routePrefix(node.expression.expression)}|${target}`,
+            key: `${file}|INTERCEPT|${interceptorPrefix}|${target}`,
             file,
             line:
               source.getLineAndCharacterOfPosition(argument.getStart(source))
