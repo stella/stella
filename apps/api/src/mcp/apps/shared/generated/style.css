@@ -1007,6 +1007,9 @@
   .min-h-1 {
     min-height: var(--spacing);
   }
+  .min-h-3 {
+    min-height: calc(var(--spacing) * 3);
+  }
   .min-h-3\.5 {
     min-height: calc(var(--spacing) * 3.5);
   }
