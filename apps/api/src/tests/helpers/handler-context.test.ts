@@ -10,6 +10,7 @@ import {
   type AuditEvent,
   type AuditRecorder,
 } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
@@ -77,7 +78,8 @@ describe("handler contexts require explicit collaborators", () => {
         safeDb: NO_DB,
         scopedDb: NO_DB,
       });
-      expect(async () => context[type](async () => undefined)).toThrow(
+      // The sentinel panics synchronously, before the callback can run.
+      expect(() => context[type](async () => undefined)).toThrow(
         "NO_DB path accessed the database",
       );
     },
@@ -126,6 +128,36 @@ describe("handler contexts require explicit collaborators", () => {
     });
     expect(await endpoint.handler(context)).toEqual({ recorded: true });
     expect(events).toEqual([event]);
+  });
+
+  test("a workspace handler takes its recorder from the factory", async () => {
+    const direct = auditRecorderDouble();
+    const scoped = auditRecorderDouble();
+    const workspaceIds: (SafeId<"workspace"> | null | undefined)[] = [];
+    const endpoint = createSafeHandler(
+      {
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* ({ recordAuditEvent }) {
+        expect(recordAuditEvent).toBe(scoped);
+        return Result.ok({ recorded: true });
+      },
+    );
+    const context = createTestHandlerContext<
+      Parameters<typeof endpoint.handler>[0]
+    >({
+      audit: direct,
+      createAuditRecorder: (opts) => {
+        workspaceIds.push(opts?.workspaceId);
+        return scoped;
+      },
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+    });
+    expect(await endpoint.handler(context)).toEqual({ recorded: true });
+    expect(workspaceIds).toHaveLength(1);
   });
 
   test("an explicit scoped factory receives its own events", async () => {

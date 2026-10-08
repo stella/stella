@@ -316,7 +316,7 @@ export const createTransactionRecorder = ({
       ) {
         continue;
       }
-      if (resolveAdvisory === NO_ADVISORY_LOCKS) {
+      if (typeof resolveAdvisory !== "function") {
         panic("Advisory locks require an explicit aggregate resolver");
       }
       trace.events.push({
