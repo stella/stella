@@ -19,6 +19,7 @@ import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/gue
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { MatterIcon } from "@/components/matter-icon";
+import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
@@ -562,9 +563,15 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                       className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
                       role="alert"
                     >
-                      <p className="text-muted-foreground text-xs leading-snug">
-                        {t("errors.api.server")}
-                      </p>
+                      {analysisState.providerDiagnostic === undefined ? (
+                        <p className="text-muted-foreground text-xs leading-snug">
+                          {t("errors.api.server")}
+                        </p>
+                      ) : (
+                        <ProviderDiagnosticMessage
+                          diagnostic={analysisState.providerDiagnostic}
+                        />
+                      )}
                       <Button
                         onClick={() => {
                           detached(generate(), "decision-workspace.generate");

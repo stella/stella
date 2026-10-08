@@ -11,6 +11,7 @@ import type {
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   resolveStellaSandboxRun,
@@ -26,6 +27,7 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -201,6 +203,7 @@ import {
   providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
+import { createProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
@@ -1486,7 +1489,22 @@ const runChatAttempt = async function* ({
     ],
   });
 
-  yield* stream;
+  for await (const chunk of stream) {
+    if (chunk.type !== EventType.RUN_ERROR) {
+      yield chunk;
+      continue;
+    }
+    const diagnostic = createProviderDiagnostic({
+      model,
+      evidence: providerDetailFromRunErrorChunk(chunk),
+    });
+    yield diagnostic === undefined
+      ? chunk
+      : {
+          ...chunk,
+          metadata: { ...chunk.metadata, providerDiagnostic: diagnostic },
+        };
+  }
 };
 
 /**
@@ -1803,7 +1821,20 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
     message: kind,
     code: kind,
     ...(usage === undefined ? {} : { usage }),
+    ...(providerDiagnosticFromChunk(chunk) === undefined
+      ? {}
+      : {
+          metadata: { providerDiagnostic: providerDiagnosticFromChunk(chunk) },
+        }),
   };
+};
+
+const providerDiagnosticFromChunk = (chunk: RunErrorChunk) => {
+  const parsed = v.safeParse(
+    providerDiagnosticSchema,
+    chunk.metadata?.["providerDiagnostic"],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 type AwaitingInteraction = Extract<
@@ -2307,6 +2338,9 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
     outcome: {
       type: "failed",
       error: classifyRunErrorChunk(sourceChunk),
+      ...(providerDiagnosticFromChunk(chunk) === undefined
+        ? {}
+        : { providerDiagnostic: providerDiagnosticFromChunk(chunk) }),
     } as const satisfies ChatTurnOutcome,
   };
 };

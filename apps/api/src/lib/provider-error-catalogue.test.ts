@@ -4,30 +4,17 @@ import {
   PROVIDER_SETUP_ERROR_CATALOGUE,
   PROVIDER_SETUP_ERROR_CODE,
 } from "@stll/api-contract/provider-setup";
-import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
+
+import { PROVIDER_SETUP_ERROR_FIXTURES as fixtures } from "@/api/tests/fixtures/provider-setup-errors";
 
 import { identifyProviderSetupError } from "./provider-error-catalogue";
-
-const fixtures = {
-  [PROVIDER_SETUP_ERROR_CODE.anthropicWorkspaceRequired]: {
-    provider: "anthropic",
-    error: {
-      type: "invalid_request_error",
-      message:
-        "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use.",
-    },
-  },
-} as const satisfies Record<
-  ProviderSetupErrorCode,
-  Parameters<typeof identifyProviderSetupError>[0]
->;
 
 describe("provider setup error catalogue", () => {
   for (const code of Object.values(PROVIDER_SETUP_ERROR_CODE)) {
     test(`identifies the recorded ${code} response and supplies a fix`, () => {
       expect(identifyProviderSetupError(fixtures[code])).toBe(code);
       const guidance = PROVIDER_SETUP_ERROR_CATALOGUE[code];
-      expect(guidance.field).toBe("anthropicWorkspaceId");
+      expect(guidance.field).toBeTruthy();
       expect(new URL(guidance.url).protocol).toBe("https:");
     });
   }
@@ -67,4 +54,53 @@ describe("provider setup error catalogue", () => {
       }),
     ).toBeUndefined();
   });
+});
+
+test("structured provider codes win over translated diagnostic messages", () => {
+  for (const [code, fixture] of Object.entries(fixtures)) {
+    if (
+      fixture.provider === "anthropic" &&
+      (code === PROVIDER_SETUP_ERROR_CODE.anthropicWorkspaceRequired ||
+        code === PROVIDER_SETUP_ERROR_CODE.anthropicKeyDisabled ||
+        code === PROVIDER_SETUP_ERROR_CODE.anthropicSubscriptionToken)
+    ) {
+      continue;
+    }
+    expect(
+      identifyProviderSetupError({
+        provider: fixture.provider,
+        error: { ...fixture.error, message: "Translated diagnostic" },
+      }),
+    ).toBe(code);
+  }
+});
+
+test("recognizes Google IP restrictions and ignores other structured reasons", () => {
+  const error = {
+    code: 403,
+    message: "Diagnostic",
+    details: [
+      {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        reason: "API_KEY_IP_ADDRESS_BLOCKED",
+      },
+    ],
+  };
+  expect(identifyProviderSetupError({ provider: "google", error })).toBe(
+    PROVIDER_SETUP_ERROR_CODE.googleKeyRestricted,
+  );
+  expect(
+    identifyProviderSetupError({
+      provider: "google",
+      error: {
+        ...error,
+        details: [
+          {
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            reason: "OTHER_ERROR",
+          },
+        ],
+      },
+    }),
+  ).toBeUndefined();
 });

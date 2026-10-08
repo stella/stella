@@ -74,6 +74,7 @@ import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contr
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { registerProviderDiagnosticCredentials } from "@/api/lib/provider-diagnostic";
 import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
@@ -1945,7 +1946,7 @@ const resolveByokTextModel = ({
   assertTanStackBYOKModelRoleSupport({ provider, modelId, role });
 
   const factory = getCachedFactory(providerConfig);
-  return buildResolvedTextModel({
+  const resolved = buildResolvedTextModel({
     adapter: factory(modelId),
     keySource: "byok",
     provider,
@@ -1956,6 +1957,8 @@ const resolveByokTextModel = ({
     reasoningEffort,
     useRoleReasoningDefault,
   });
+  registerProviderDiagnosticCredentials(resolved, [providerConfig.apiKey]);
+  return resolved;
 };
 
 /**

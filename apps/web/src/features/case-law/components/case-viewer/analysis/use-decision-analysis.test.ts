@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type {
   AnalysisHeading,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
 import { parseAnalysisResponse } from "@/features/case-law/queries/decision-analysis";
+import { toAPIError } from "@/lib/errors/api";
 
 import { analysisStateFromQuery } from "./use-decision-analysis";
 
@@ -114,4 +117,36 @@ describe("decision analysis query state", () => {
       }),
     ).toEqual({ status: "error" });
   });
+});
+
+test("decision analysis diagnostics survive stored failure and HTTP failure state", () => {
+  const diagnostic = {
+    provider: "openai",
+    code: PROVIDER_SETUP_ERROR_CODE.openaiInsufficientQuota,
+    message: "Insufficient quota. Full billing reason.",
+  } satisfies ProviderDiagnostic;
+  const parsed = parseAnalysisResponse({
+    status: "error",
+    providerDiagnostic: diagnostic,
+  });
+  expect(parsed).toEqual({ status: "error", providerDiagnostic: diagnostic });
+  expect(
+    analysisStateFromQuery({
+      hasQueryError: false,
+      isFetching: false,
+      result: { kind: "error", providerDiagnostic: diagnostic },
+    }),
+  ).toEqual({ status: "error", providerDiagnostic: diagnostic });
+  const error = toAPIError({
+    status: 429,
+    value: { message: "Refused", providerDiagnostic: diagnostic },
+  });
+  expect(
+    analysisStateFromQuery({
+      hasQueryError: true,
+      isFetching: false,
+      result: undefined,
+      queryError: error,
+    }),
+  ).toEqual({ status: "error", providerDiagnostic: diagnostic });
 });

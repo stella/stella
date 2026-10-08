@@ -9,6 +9,7 @@ import type {
   SafeOutboundFetchResponse,
   SafeOutboundHeaders,
 } from "@/api/lib/safe-outbound-fetch";
+import { PROVIDER_SETUP_ERROR_FIXTURES } from "@/api/tests/fixtures/provider-setup-errors";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -544,3 +545,41 @@ test("retains a full short diagnostic from a large error response", async () => 
     error: `OpenAI rejected the key (HTTP 403): ${message}`,
   });
 });
+
+type ProbeCatalogueFixture =
+  (typeof PROVIDER_SETUP_ERROR_FIXTURES)[keyof typeof PROVIDER_SETUP_ERROR_FIXTURES];
+
+const assertCatalogueProbe = async (
+  code: string,
+  fixture: ProbeCatalogueFixture,
+) => {
+  nextResponse = {
+    kind: "ok",
+    status: 400,
+    body:
+      fixture.provider === "bedrock" ? fixture.error : { error: fixture.error },
+  };
+  const result = await probeProvider({
+    provider: fixture.provider,
+    apiKey:
+      code === "ai_config_anthropic_subscription_token"
+        ? "sk-ant-oat-fixture"
+        : "fixture-key",
+    ...(fixture.provider === "azure_foundry"
+      ? { endpoint: "https://fixture.openai.azure.com" }
+      : {}),
+  });
+  expect(result).toMatchObject({ valid: false, code });
+  if (result.valid) {
+    throw new TypeError("Expected fixture rejection");
+  }
+  if (code !== "ai_config_anthropic_subscription_token") {
+    expect(result.error).toContain(fixture.error.message);
+  }
+};
+
+for (const [code, fixture] of Object.entries(PROVIDER_SETUP_ERROR_FIXTURES)) {
+  test(`probe returns catalogue code ${code} with its full provider reason`, async () => {
+    await assertCatalogueProbe(code, fixture);
+  });
+}

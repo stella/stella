@@ -9,6 +9,7 @@ import { panic, Result } from "better-result";
  * checked against one source.
  */
 import type { AIErrorKind } from "@stll/api-contract";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import { isNonNullObject } from "@stll/template-conditions/path";
@@ -531,6 +532,7 @@ export const aiHandlerError = (
           code: error.code,
           kind: error.kind,
           requestId: error.requestId,
+          providerDiagnostic: error.providerDiagnostic,
           facts:
             error.providerStatus === undefined
               ? undefined
@@ -550,7 +552,7 @@ export const aiHandlerError = (
 
 type AIErrorStatusBody = {
   status: HandlerErrorStatusCode;
-  body: { message: string };
+  body: { message: string; providerDiagnostic?: ProviderDiagnostic };
 };
 
 /**
@@ -566,6 +568,12 @@ export const aiErrorStatusBody = (
   const handlerError = aiHandlerError(error, fallback);
   return {
     status: handlerError.status,
-    body: { message: handlerError.message },
+    body: {
+      message: handlerError.message,
+      ...(handlerError instanceof ProviderCallError &&
+      handlerError.providerDiagnostic !== undefined
+        ? { providerDiagnostic: handlerError.providerDiagnostic }
+        : {}),
+    },
   };
 };

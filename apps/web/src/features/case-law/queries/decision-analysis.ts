@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   type DecisionAnalysis,
@@ -10,16 +11,18 @@ import {
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { apiUrl } from "@/lib/api-url";
 import { STALE_TIME } from "@/lib/consts";
+import { toAPIError } from "@/lib/errors/api";
+import { parseProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
 type AnalysisResponse =
   | { status: "done"; analysis: DecisionAnalysis }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
-  | { status: "error" };
+  | { status: "error"; providerDiagnostic?: ProviderDiagnostic };
 
 export type AnalysisQueryResult =
   | { kind: "done"; analysis: DecisionAnalysis }
   | { kind: "generating"; tree: DecisionAnalysis["tree"] }
-  | { kind: "error" };
+  | { kind: "error"; providerDiagnostic?: ProviderDiagnostic };
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -53,7 +56,13 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "error") {
-    return { status: "error" };
+    const diagnostic = value["providerDiagnostic"];
+    return {
+      status: "error",
+      ...(diagnostic === undefined
+        ? {}
+        : { providerDiagnostic: parseProviderDiagnostic(diagnostic) }),
+    };
   }
 
   return null;
@@ -84,12 +93,22 @@ export type DecisionAnalysisKey = {
   decisionUpdatedAt: PublicCaseLawDecision["updatedAt"];
 };
 
+export type DecisionAnalysisRequestKey = DecisionAnalysisKey & {
+  organizationId: string;
+};
+
 export const decisionAnalysisOptions = ({
   decisionId,
   decisionUpdatedAt,
-}: DecisionAnalysisKey) =>
+  organizationId,
+}: DecisionAnalysisRequestKey) =>
   queryOptions({
-    queryKey: ["case-law-decision-analysis", decisionId, { decisionUpdatedAt }],
+    queryKey: [
+      "case-law-decision-analysis",
+      organizationId,
+      decisionId,
+      { decisionUpdatedAt },
+    ],
     queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
       const response = await fetchWithTimeout(
         apiUrl(`/case/decisions/${decisionId}/analysis`),
@@ -101,6 +120,9 @@ export const decisionAnalysisOptions = ({
       );
 
       const data: unknown = await response.json();
+      if (!response.ok) {
+        throw toAPIError({ status: response.status, value: data });
+      }
       const parsed = parseAnalysisResponse(data);
 
       if (!parsed) {
@@ -113,7 +135,12 @@ export const decisionAnalysisOptions = ({
       if (parsed.status === "generating") {
         return { kind: "generating", tree: parsed.tree };
       }
-      return { kind: "error" };
+      return {
+        kind: "error",
+        ...(parsed.providerDiagnostic === undefined
+          ? {}
+          : { providerDiagnostic: parsed.providerDiagnostic }),
+      };
     },
     refetchInterval: ({ state }) =>
       isTerminal(state.data) ? false : POLL_INTERVAL_MS,

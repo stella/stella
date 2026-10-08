@@ -9,6 +9,7 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type {
   AnalysisGenerating,
   PersistedDecisionAnalysis,
@@ -22,6 +23,10 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  analysisFailureStore,
+  AnalysisFailureStoreError,
+} from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
   analysisStore,
@@ -30,6 +35,7 @@ import {
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createDetachedModelActionStarter,
@@ -146,6 +152,22 @@ const runGeneration = async ({
       decisionId,
     });
     aiAnalytics.captureError(error);
+    const delivered = await Result.tryPromise(() =>
+      analysisFailureStore().write(
+        { organizationId, decisionId, fingerprint: input.fingerprint },
+        error instanceof ProviderCallError
+          ? error.providerDiagnostic
+          : undefined,
+      ),
+    );
+    if (Result.isError(delivered)) {
+      captureError(
+        new AnalysisFailureStoreError({
+          message: "Could not record analysis generation failure",
+        }),
+        { source: "case-law-analysis-failure-write", decisionId },
+      );
+    }
     await analysisStore()
       .clear({ decisionId, sentinel })
       .catch((cleanupError: unknown) => {
@@ -160,11 +182,10 @@ const runGeneration = async ({
   }
 };
 
-type GenerateAnalysisResponse = {
-  status: "done" | "error" | "generating";
-  analysis?: PersistedDecisionAnalysis;
-  error?: string;
-};
+type GenerateAnalysisResponse =
+  | { status: "done"; analysis: PersistedDecisionAnalysis }
+  | { status: "generating" }
+  | { status: "error"; error: string; providerDiagnostic?: ProviderDiagnostic };
 
 type GenerateAnalysisOptions = {
   /** Admits a background significance refresh. */
@@ -271,6 +292,38 @@ export const generateAnalysis = async ({
     });
   }
 
+  const failure = await Result.tryPromise({
+    try: async () =>
+      await analysisFailureStore().take({
+        organizationId,
+        decisionId,
+        fingerprint: input.fingerprint,
+      }),
+    catch: () => {
+      const error = new HandlerError({
+        status: 503,
+        message: "Analysis failure delivery is unavailable",
+      });
+      captureError(error, {
+        source: "case-law-analysis-failure-read",
+        decisionId,
+      });
+      return error;
+    },
+  });
+  if (Result.isError(failure)) {
+    return Result.err(failure.error);
+  }
+  if (failure.value !== null) {
+    return Result.ok({
+      status: "error",
+      error: "Analysis generation failed",
+      ...(failure.value.providerDiagnostic === undefined
+        ? {}
+        : { providerDiagnostic: failure.value.providerDiagnostic }),
+    });
+  }
+
   // AI availability is checked only on the path that actually invokes the
   // model: the stored and in-flight reads above must stay accessible when
   // the fast role is unavailable (a pre-existing bug ran this check before
@@ -336,7 +389,9 @@ const config = {
     "when there is none yet. Returns status done with the stored analysis, " +
     "generating while a run is in flight (poll until it is done), or error " +
     "when the decision is unknown, its text could not be parsed, or no " +
-    "analysis prompt exists for its language. " +
+    "analysis prompt exists for its language, or a background run failed. " +
+    "Background failure details are delivered once to the initiating organization; " +
+    "an explicit next request may retry. " +
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },

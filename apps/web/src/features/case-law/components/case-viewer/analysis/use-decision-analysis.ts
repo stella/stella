@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 /**
  * Hook to manage decision analysis state.
  *
@@ -6,28 +8,28 @@
  * retry failures.
  */
 
-import { useQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
-
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import {
   type AnalysisQueryResult,
-  type DecisionAnalysisKey,
+  type DecisionAnalysisRequestKey,
   decisionAnalysisOptions,
 } from "@/features/case-law/queries/decision-analysis";
 import { detached } from "@/lib/detached";
+import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 
 export type AnalysisState =
   | { status: "idle" }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
   | { status: "done"; analysis: DecisionAnalysis }
-  | { status: "error" };
+  | { status: "error"; providerDiagnostic?: ProviderDiagnostic };
 
 type AnalysisQuerySnapshot = {
   hasQueryError: boolean;
   isFetching: boolean;
   result: AnalysisQueryResult | undefined;
+  queryError?: unknown;
 };
 
 /** Resolve retained query data into one unambiguous reader state. */
@@ -35,6 +37,7 @@ export const analysisStateFromQuery = ({
   hasQueryError,
   isFetching,
   result,
+  queryError,
 }: AnalysisQuerySnapshot): Exclude<AnalysisState, { status: "idle" }> => {
   // TanStack Query retains the settled error result while a manual refetch is
   // in flight. Fetching must win, otherwise Retry appears to do nothing and
@@ -50,19 +53,31 @@ export const analysisStateFromQuery = ({
       case "generating":
         return { status: "generating", tree: result.tree };
       case "error":
-        return { status: "error" };
+        return {
+          status: "error",
+          ...(result.providerDiagnostic === undefined
+            ? {}
+            : { providerDiagnostic: result.providerDiagnostic }),
+        };
       default:
         result satisfies never;
         return panic(`Unhandled analysis result: ${String(result)}`);
     }
   }
 
-  return hasQueryError
-    ? { status: "error" }
-    : { status: "generating", tree: [] };
+  if (!hasQueryError) {
+    return { status: "generating", tree: [] };
+  }
+  const diagnostic = providerDiagnosticFromThrown(queryError);
+  return {
+    status: "error",
+    ...(diagnostic === undefined ? {} : { providerDiagnostic: diagnostic }),
+  };
 };
 
-type UseDecisionAnalysisOptions = DecisionAnalysisKey & { enabled: boolean };
+type UseDecisionAnalysisOptions = DecisionAnalysisRequestKey & {
+  enabled: boolean;
+};
 
 export const useDecisionAnalysis = ({
   enabled,
@@ -103,6 +118,7 @@ export const useDecisionAnalysis = ({
       hasQueryError: query.isError,
       isFetching: query.isFetching,
       result: query.data,
+      queryError: query.error,
     });
   })();
 

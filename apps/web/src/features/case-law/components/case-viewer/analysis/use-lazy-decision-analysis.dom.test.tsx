@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import type {
@@ -171,7 +172,10 @@ describe("shared lazy decision analysis", () => {
     );
     const client = clientWithAvailability();
     client.setQueryData(
-      decisionAnalysisOptions(key).queryKey,
+      decisionAnalysisOptions({
+        ...key,
+        organizationId: user.activeOrganizationId,
+      }).queryKey,
       () =>
         ({
           kind: "done",
@@ -300,5 +304,26 @@ describe("shared lazy decision analysis", () => {
       ).toBe(false);
       expect(requests.length).toBe(1);
     },
+  );
+});
+
+test("lazy analysis retains provider guidance data from an async failed response", async () => {
+  const diagnostic = {
+    provider: "openai",
+    code: PROVIDER_SETUP_ERROR_CODE.openaiInsufficientQuota,
+    message: "Quota refused. Complete provider reason.",
+  };
+  respondToAnalysis(async () =>
+    Response.json({ status: "error", providerDiagnostic: diagnostic }),
+  );
+  const client = clientWithAvailability();
+  const mounted = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper: wrapperFor({ client }),
+  });
+  await waitFor(() =>
+    expect(mounted.result.current.state).toEqual({
+      status: "error",
+      providerDiagnostic: diagnostic,
+    }),
   );
 });

@@ -95,6 +95,7 @@ const newQueryClient = () =>
 const analysisOfReadDecision = async (queryClient: QueryClient) => {
   const decision = await queryClient.query(decisionOptions(DECISION_ID));
   return decisionAnalysisOptions({
+    organizationId: "test-organization",
     decisionId: DECISION_ID,
     decisionUpdatedAt: decision.updatedAt,
   });
@@ -160,4 +161,28 @@ describe("decision analysis query", () => {
 
     expect(reads.analysisReads()).toBe(3);
   });
+});
+
+test("provider diagnostics in analysis cache are isolated by active organization", () => {
+  const client = newQueryClient();
+  const identity = { decisionId: DECISION_ID, decisionUpdatedAt: VERSION_1 };
+  const first = decisionAnalysisOptions({
+    ...identity,
+    organizationId: "first-organization",
+  });
+  const second = decisionAnalysisOptions({
+    ...identity,
+    organizationId: "second-organization",
+  });
+  client.setQueryData(first.queryKey, {
+    kind: "error",
+    providerDiagnostic: {
+      provider: "anthropic",
+      code: null,
+      message: "Private setup failure",
+    },
+  });
+  expect(client.getQueryData(second.queryKey)).toBeUndefined();
+  expect(first.queryKey).not.toEqual(second.queryKey);
+  client.clear();
 });

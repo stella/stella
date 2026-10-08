@@ -1,4 +1,5 @@
 import type { AIErrorKind } from "@stll/api-contract";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import {
@@ -51,7 +52,10 @@ type ProviderCallErrorOptions = {
   kind: AIErrorKind;
   facts?: { status: number; isRetryable?: boolean } | undefined;
   requestId?: string | undefined;
+  providerDiagnostic?: ProviderDiagnostic | undefined;
 };
+
+const diagnostics = new WeakMap<ProviderCallError, ProviderDiagnostic>();
 
 export class ProviderCallError extends HandlerError {
   declare code?: ProviderCallErrorCode | undefined;
@@ -61,6 +65,10 @@ export class ProviderCallError extends HandlerError {
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
 
+  get providerDiagnostic(): ProviderDiagnostic | undefined {
+    return diagnostics.get(this);
+  }
+
   constructor({
     model,
     status,
@@ -68,6 +76,7 @@ export class ProviderCallError extends HandlerError {
     kind,
     facts,
     requestId,
+    providerDiagnostic,
   }: ProviderCallErrorOptions) {
     super({
       message: PROVIDER_CALL_ERROR_MESSAGE,
@@ -84,6 +93,9 @@ export class ProviderCallError extends HandlerError {
             },
           }),
     });
+    if (providerDiagnostic !== undefined) {
+      diagnostics.set(this, providerDiagnostic);
+    }
     this.name = "ProviderCallError";
     this.provider = model.provider;
     this.keySource = model.keySource;

@@ -35,6 +35,8 @@ process.env["REDIS_URL"] = UNREACHABLE_REDIS_URL;
 const { createRedisClient } = await import("@/api/lib/redis-client");
 const { chargeMcpReadBytes, closeMcpReadFenceRedis } =
   await import("@/api/lib/rate-limit/mcp-read-fence");
+const { createAnalysisFailureStore, AnalysisFailureStoreError } =
+  await import("@/api/lib/case-law/analysis-failure");
 const { toSafeId } = await import("@/api/lib/branded-types");
 const { Result } = await import("better-result");
 const { RedisRateLimitContext } =
@@ -361,3 +363,31 @@ test(
   },
   SETTLE_BUDGET_MS,
 );
+
+test("organization-scoped analysis failures fail explicitly during a real Valkey outage", async () => {
+  const client = createRedisClient({
+    storeClass: "cache",
+    overrides: { connectionTimeout: 100, enableOfflineQueue: false },
+  });
+  const store = createAnalysisFailureStore({
+    createRedis: () => client,
+    commandTimeoutMs: 100,
+  });
+  const scope = {
+    organizationId: toSafeId<"organization">("outage_analysis_org"),
+    decisionId: toSafeId<"caseLawDecision">("outage_analysis_decision"),
+    fingerprint: "outage-fixture",
+  };
+  try {
+    const written = await settle(store.write(scope, undefined));
+    const read = await settle(store.take(scope));
+    for (const result of [written, read]) {
+      expect(result.status).toBe("error");
+      if (result.status === "error") {
+        expect(AnalysisFailureStoreError.is(result.error)).toBe(true);
+      }
+    }
+  } finally {
+    client.close();
+  }
+});

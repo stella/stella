@@ -1,12 +1,12 @@
+import { Result } from "better-result";
+
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 /**
  * Lightweight provider key health-check. Calls the provider's
  * own auth/list-models endpoint (no token cost). Used pre-save
  * in BYOK flows so the user gets a green/red signal before
  * committing the config.
  */
-
-import { Result } from "better-result";
-
 import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 
 import { env } from "@/api/env";
@@ -164,11 +164,9 @@ const providerProbeFailure = ({
     };
   }
 
-  const error = parseJsonBody(response)?.["error"];
-  const code = identifyProviderSetupError({
-    provider,
-    error: isRecord(error) ? error : undefined,
-  });
+  const parsed = parseJsonBody(response);
+  const error = isRecord(parsed?.["error"]) ? parsed["error"] : parsed;
+  const code = identifyProviderSetupError({ provider, error });
   const rejected =
     provider === "azure_foundry" || provider === "huggingface"
       ? "key or endpoint"
@@ -208,6 +206,14 @@ export const probeProvider = async ({
   timeoutMs = DEFAULT_VALIDATION_TIMEOUT_MS,
   fetchBytes = safeOutboundFetchBytes,
 }: ProbeProviderOptions): Promise<ProviderProbeResult> => {
+  if (provider === "anthropic" && apiKey.startsWith("sk-ant-oat")) {
+    return {
+      valid: false,
+      code: PROVIDER_SETUP_ERROR_CODE.anthropicSubscriptionToken,
+      error:
+        "Anthropic: OAuth subscription tokens cannot authenticate API requests.",
+    };
+  }
   if (provider === "azure_foundry") {
     return await probeAzureFoundry({
       apiKey,
