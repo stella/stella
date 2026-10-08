@@ -29,6 +29,7 @@ import {
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -45,6 +46,7 @@ import {
   requiredTrimmedStringSchema,
   toFormErrors,
 } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   rateEntriesOptions,
   rateTablesOptions,
@@ -428,9 +430,9 @@ const RateEntriesView = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
-  const { data: entries } = useQuery(
-    rateEntriesOptions(workspaceId, rateTableId),
-  );
+  const entriesQuery = useQuery(rateEntriesOptions(workspaceId, rateTableId));
+  const entriesView = useQueryView(entriesQuery);
+  const entries = entriesView.type === "items" ? entriesView.items : undefined;
   const { data: org } = useSuspenseQuery(
     organizationOptions(activeOrganizationId),
   );
@@ -511,6 +513,7 @@ const RateEntriesView = ({
 
   return (
     <div className="flex flex-col gap-4">
+      <QueryViewFeedback view={entriesView} />
       <div className="flex items-center gap-2">
         <Button
           aria-label={t("common.back")}
@@ -619,7 +622,8 @@ const RateEntriesView = ({
           ))}
         </div>
       ) : (
-        !showForm && (
+        !showForm &&
+        (entriesView.type === "items" || entriesView.type === "empty") && (
           <div className="text-muted-foreground py-6 text-center text-sm">
             {t("billing.rates.noRateEntries")}
           </div>

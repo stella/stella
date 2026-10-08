@@ -67,6 +67,7 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   type LawScope,
   lawHomeDescriptor,
@@ -299,10 +300,13 @@ function LawHome() {
       : requestedScope;
 
   const { data: latest } = useSuspenseQuery(latestDecisionsOptions(scope));
-  const { data: shelf } = useQuery({
+  const shelfQuery = useQuery({
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
+  const shelfView = useQueryView(shelfQuery);
+  useQueryViewError(shelfView);
+  const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
   /**
    * The one dispatch every entry takes, whether typed and submitted or

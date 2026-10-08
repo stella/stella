@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   type AdmissionClass,
   createPublicCorpusAdmission,
@@ -36,12 +38,7 @@ const ask = async (
 
 const settled = async <T>(promise: Promise<T>) => {
   const marker = Symbol("pending");
-  const result = await Promise.race([
-    promise,
-    new Promise<typeof marker>((resolve) => {
-      setTimeout(() => resolve(marker), 5);
-    }),
-  ]);
+  const result = await Promise.race([promise, sleep(5).then(() => marker)]);
   return result === marker ? "pending" : result;
 };
 

@@ -5,8 +5,10 @@ import * as v from "valibot";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { detached } from "@/lib/detached";
+import { useQueryView } from "@/lib/use-query-view";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
 import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail";
 import { RunLauncher } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher";
@@ -93,7 +95,16 @@ function WorkflowsView({
       ? { kind: "list" }
       : { kind: "detail", runId: requestedRunId };
 
-  const { data, isPending } = useQuery(flowRunsOptions({ workspaceId }));
+  const dataQuery = useQuery(flowRunsOptions({ workspaceId }));
+  const { isPending } = dataQuery;
+  const dataView = useQueryView(dataQuery, {
+    isEmpty: (data) => "items" in data && data.items.length === 0,
+  });
+  const data = dataView.type === "items" ? dataView.items : undefined;
+
+  if (dataView.type === "error" && view.kind === "list") {
+    return <QueryViewFeedback view={dataView} />;
+  }
 
   if (view.kind === "detail") {
     return (
@@ -113,6 +124,7 @@ function WorkflowsView({
 
   return (
     <div className="flex h-full flex-col">
+      {dataView.type !== "pending" && <QueryViewFeedback view={dataView} />}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h1 className="text-sm font-medium">{t("common.workflows")}</h1>
       </div>

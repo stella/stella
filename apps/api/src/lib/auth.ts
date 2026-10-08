@@ -80,6 +80,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -151,6 +152,7 @@ import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -938,6 +940,33 @@ const oauthUiFragmentBridgePlugin = {
             authOrigin: env.BETTER_AUTH_URL,
             frontendUrl: env.FRONTEND_URL,
           });
+          await Promise.resolve();
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
+/**
+ * Logs each 4xx answer of an auth endpoint by its route pattern and protocol
+ * error code (`describeAuthRefusal`), so a failing token refresh is visible
+ * apart from every other refused call behind the catch-all auth route.
+ */
+const authRefusalLogPlugin = {
+  id: "stella-auth-refusal-log",
+  hooks: {
+    after: [
+      {
+        matcher: () => true,
+        handler: createAuthMiddleware(async (ctx) => {
+          const refusal = describeAuthRefusal({
+            path: ctx.path,
+            returned: ctx.context.returned,
+            body: ctx.body,
+          });
+          if (refusal.type === "refused") {
+            logger.warn("auth.request_refused", refusal.attributes);
+          }
           await Promise.resolve();
         }),
       },
@@ -1895,9 +1924,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           postLogin: {
             page: OAUTH_UI_ORGANIZATION_PATH,
             shouldRedirect: async ({
-              headers,
               scopes,
               session,
+              user,
             }): Promise<boolean> => {
               const needsOrganization = scopes.some(isMcpResourceScope);
               if (!needsOrganization) {
@@ -1913,14 +1942,22 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                 return false;
               }
 
-              const organizations: { id: string }[] =
-                await auth.api.listOrganizations({
-                  headers,
-                });
+              // Read the memberships directly: an internal call to the
+              // organization list endpoint carries no request method, so the
+              // account plugins' organization rules cannot tell it is a read.
+              // More than one membership always needs the picker.
+              const memberships = await readBounded(
+                rootDb
+                  .select({ organizationId: member.organizationId })
+                  .from(member)
+                  .where(eq(member.userId, user.id)),
+                1,
+              );
 
               return (
-                organizations.length !== 1 ||
-                organizations.at(0)?.id !== activeOrganizationId
+                memberships.type === "overflow" ||
+                memberships.rows.length !== 1 ||
+                memberships.rows.at(0)?.organizationId !== activeOrganizationId
               );
             },
             consentReferenceId: ({ scopes, session }) => {
@@ -1992,6 +2029,8 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         },
       ),
       oauthUiFragmentBridgePlugin,
+      // Last, so it records the answer every other hook has settled on.
+      authRefusalLogPlugin,
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {

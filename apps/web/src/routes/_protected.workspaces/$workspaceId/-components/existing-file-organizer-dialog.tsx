@@ -21,7 +21,6 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  LoaderCircleIcon,
   RotateCcwIcon,
   Rows3Icon,
   SparklesIcon,
@@ -29,6 +28,7 @@ import {
   TriangleAlertIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
@@ -720,7 +720,7 @@ export const ExistingFileOrganizerDialog = ({
               variant="outline"
             >
               {isGeneratingSuggestions ? (
-                <LoaderCircleIcon className="animate-spin" />
+                <Loader label={t("common.loading")} size="sm" />
               ) : (
                 <SparklesIcon />
               )}
@@ -752,8 +752,12 @@ const SummaryBar = ({ isGenerating, summary }: SummaryBarProps) => {
   return (
     <div className="bg-muted/40 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2 text-sm">
       {isGenerating ? (
-        <span className="text-muted-foreground flex items-center gap-2">
-          <LoaderCircleIcon className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("workspaces.importOrganizer.generating")}
         </span>
       ) : (

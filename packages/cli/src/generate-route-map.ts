@@ -633,11 +633,13 @@ const toolMetadata = ({
   listing: RegistryToolListing;
   annotation: ToolAnnotation | undefined;
 }) => {
+  const feature = annotation?.feature ?? listing.feature;
   const featureId = annotation?.featureId ?? listing.featureId;
   const additionalScopes = annotation?.additionalScopes;
   const requestTimeoutMs = annotation?.requestTimeoutMs;
   const scope = annotation ? scopeOf(annotation) : undefined;
   return {
+    ...(feature === undefined ? {} : { feature }),
     ...(featureId === undefined ? {} : { featureId }),
     ...(additionalScopes === undefined ? {} : { additionalScopes }),
     ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),

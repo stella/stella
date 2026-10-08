@@ -117,7 +117,7 @@ const getJwksFor = (issuer: string): JWTVerifyGetKey => {
  * to `issuer_not_enabled` (default deny). The allow-list ships empty, so
  * this returns undefined for every issuer until an operator trusts one.
  */
-export const findTrustedIssuer = async (
+const findTrustedIssuer = async (
   issuer: string,
 ): Promise<TrustedIssuerRow | undefined> => {
   const rows = await rootDb

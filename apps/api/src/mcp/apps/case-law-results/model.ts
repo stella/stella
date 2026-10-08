@@ -40,7 +40,7 @@ const resultRow = (
   courtAbbreviation: row.courtAbbreviation,
 });
 
-export const lookupRows = (items: LookupPage["items"]) => {
+const lookupRows = (items: LookupPage["items"]) => {
   const rows: ResultRow[] = [];
   const notices: string[] = [];
   for (const item of items) {

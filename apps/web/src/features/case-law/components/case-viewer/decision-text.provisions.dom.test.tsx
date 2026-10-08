@@ -7,6 +7,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { sleep } from "@stll/concurrency/sleep";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -38,9 +39,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await sleep(0);
   await GlobalRegistrator.unregister();
 });
 

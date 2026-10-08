@@ -25,7 +25,6 @@ import {
   InspectorDock,
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
-  useInspectorPaneWidth,
 } from "@stll/ui/inspector";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
@@ -55,7 +54,7 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
-import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
+import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { QuickEntry } from "@/components/quick-entry";
@@ -89,6 +88,7 @@ import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
@@ -215,12 +215,19 @@ export const ProtectedAppFrame = ({
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const { data: workspaceNavigation } = useChromeQuery(
-    workspacesNavigationOptions({
-      organizationId: inspectorBroadcastOrganizationId,
-      userId: inspectorBroadcastUserId,
-    }),
+  const workspaceNavigationView = useQueryView(
+    useChromeQuery(
+      workspacesNavigationOptions({
+        organizationId: inspectorBroadcastOrganizationId,
+        userId: inspectorBroadcastUserId,
+      }),
+    ),
   );
+  useQueryViewError(workspaceNavigationView);
+  const workspaceNavigation =
+    workspaceNavigationView.type === "items"
+      ? workspaceNavigationView.items
+      : undefined;
   const activeWorkspace = workspaceNavigation?.workspaces.find(
     ({ id }) => id === activeWorkspaceId,
   );
@@ -416,10 +423,15 @@ function ProtectedContent() {
     setChatMenuOpen(false);
   };
 
-  const { data: workspace } = useChromeQuery({
-    ...workspaceOptions(workspaceId ?? ""),
-    enabled: !!workspaceId,
-  });
+  const workspaceView = useQueryView(
+    useChromeQuery({
+      ...workspaceOptions(workspaceId ?? ""),
+      enabled: !!workspaceId,
+    }),
+  );
+  useQueryViewError(workspaceView);
+  const workspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (
     <div
       className="ms-auto flex shrink-0 items-center gap-0.5"
@@ -618,9 +630,9 @@ function WorkspaceInspectorSidePanel({
   // inspector's; this panel only supplies the sidebar's inline size.
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
-  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+  const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
+    openedFrom: "matter",
     sidebarWidth,
-    storageKey: inspectorPaneWidthStorageKey("matter"),
     viewportWidth,
   });
   // Re-run the offset effect once the new bundle applies: `loadedLang` (not

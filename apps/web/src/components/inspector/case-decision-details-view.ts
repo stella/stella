@@ -9,7 +9,7 @@ import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-
  */
 export const CASE_DECISION_DETAILS_VIEW = "case-law-decision-details";
 
-export const caseDecisionDetailsTabId = (decisionId: string): string =>
+const caseDecisionDetailsTabId = (decisionId: string): string =>
   `${CASE_DECISION_DETAILS_VIEW}:${decisionId}`;
 
 export type CaseDecisionDetailsViewTab = {

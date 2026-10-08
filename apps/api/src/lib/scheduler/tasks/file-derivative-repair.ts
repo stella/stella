@@ -159,7 +159,7 @@ type FileDerivativeTriage = {
  * authority; the SQL below only narrows the scan, and deliberately selects a
  * superset of what this returns.
  */
-export const triageFileDerivatives = (
+const triageFileDerivatives = (
   content: FileFieldContent,
 ): FileDerivativeTriage => {
   const triage: FileDerivativeTriage = { stuck: [], unrecognized: [] };

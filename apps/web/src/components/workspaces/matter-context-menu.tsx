@@ -335,7 +335,7 @@ export const useMatterActions = (
 
 // ── Rename state ─────────────────────────────────────────────
 
-export type RenameState =
+type RenameState =
   | { status: "idle" }
   | {
       status: "editing";
@@ -347,7 +347,7 @@ export type RenameState =
 
 // ── useMatterContextMenu (right-click menu primitive) ────────
 
-export type MatterContextMenuChildArgs = {
+type MatterContextMenuChildArgs = {
   rename: RenameState;
   /** True while the right-click menu is open, so the consumer can keep
    *  the source visually highlighted for the duration of the menu. */
@@ -492,7 +492,7 @@ type AddMemberDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export const AddMemberDialog = ({
+const AddMemberDialog = ({
   workspaceId,
   open,
   onOpenChange,

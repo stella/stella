@@ -3,6 +3,7 @@ import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -1323,10 +1324,11 @@ test("CI result rejects a failed check leg after independent guards finish", () 
   }
 });
 
-test("a failed dependency cannot pass with cancelled siblings or supersession evidence", () => {
-  const gates: ExpectedResultGate[] = [];
-  for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
-    for (const failedJob of resultJob.needs) {
+test.each(resultJob.needs)(
+  "failed %s cannot pass with cancelled siblings or supersession evidence",
+  (failedJob) => {
+    const gates: ExpectedResultGate[] = [];
+    for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
       for (const cancellationEvidence of ["missing", "superseded"] as const) {
         const results = Object.fromEntries(
           resultJob.needs.map((job) => [job, "cancelled"]),
@@ -1340,9 +1342,9 @@ test("a failed dependency cannot pass with cancelled siblings or supersession ev
         });
       }
     }
-  }
-  expectResultGates(gates);
-});
+    expectResultGates(gates);
+  },
+);
 
 test("a self-cancelled merge group fails even when GitHub marks the failing job cancelled", () => {
   for (const cancellationEvidence of ["missing", "superseded"] as const) {
@@ -1492,6 +1494,50 @@ test("ci-result diagnoses timeouts before main-heavy cancellation or supersessio
     })),
   );
   expect(mutated.stdout).not.toContain("CI job timed out:");
+});
+
+test("a run that passes as superseded records no completion evidence", () => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-result-evidence-"));
+  try {
+    const cases = [
+      { label: "complete", results: {} },
+      ...resultJob.needs
+        .filter((job) => job !== "ci-plan")
+        .map((job) => ({ label: job, results: { [job]: "cancelled" } })),
+    ];
+    for (const { item, exitCode, stdout } of runBashBatch(cases, (entry) => {
+      const base = resultGateCase({
+        event: EVENT.pullRequest,
+        results: entry.results,
+        suiteDepth: SUITE_DEPTH.fast,
+        cancellationEvidence: "superseded",
+      });
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          GITHUB_OUTPUT: nodePath.join(directory, entry.label),
+          RUN_REQUIRED: "true",
+          COMPLETION_MARKER: "ci-completed-v5-fixture",
+          HEAD_SHA: "a".repeat(40),
+          BASE_SHA: "b".repeat(40),
+          HEAD_REPO_ID: "456",
+        },
+      };
+    })) {
+      expect(exitCode, item.label).toBe(0);
+      const output = nodePath.join(directory, item.label);
+      const written = existsSync(output) ? readFileSync(output, "utf-8") : "";
+      expect(written.includes("evidence="), item.label).toBe(
+        item.label === "complete",
+      );
+      if (item.label !== "complete") {
+        expect(stdout, item.label).toContain("superseded");
+      }
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
 });
 
 test("cancelled jobs retain failed-step evidence and cannot pass verified supersession", () => {
@@ -3942,6 +3988,28 @@ test("each folded service step follows its own dependency scope at PR depth", ()
   ]);
 });
 
+test("pull requests leave corpus engine suites to full-depth runs", () => {
+  const scopes = [
+    "postgres_suites_required",
+    "corpus_suites_required",
+    "valkey_suites_required",
+    "service_suites_pr_required",
+  ];
+  const changed = ["apps/api/src/handlers/example.test.ts"];
+  expect(runSelector(changed, scopes)).toEqual([
+    "true",
+    "false",
+    "true",
+    "true",
+  ]);
+  expect(runSelector(changed, scopes, "full", "false", "merge_group")).toEqual([
+    "true",
+    "true",
+    "true",
+    "true",
+  ]);
+});
+
 test("an empty full-depth diff preserves the original API service-suite selection", () => {
   const outputs = runChangedFilesStep({ suiteDepth: "full" });
   for (const scope of [
@@ -3969,8 +4037,15 @@ test("the production service-scope capture rejects crashed or malformed detector
     { mode: 0o755 },
   );
   try {
-    for (const { output, exit, expected } of [
+    for (const { output, exit, expected, event = "push", scopes = output } of [
       { output: "false true false false", exit: "0", expected: 0 },
+      {
+        output: "false true false false",
+        exit: "0",
+        expected: 0,
+        event: "pull_request",
+        scopes: "false false false false",
+      },
       { output: "false false false false", exit: "0", expected: 0 },
       { output: "true true true true", exit: "1", expected: 1 },
       { output: "", exit: "1", expected: 1 },
@@ -3999,6 +4074,7 @@ test("the production service-scope capture rejects crashed or malformed detector
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             DETECTOR_OUTPUT: output,
             DETECTOR_EXIT: exit,
+            EVENT_NAME: event,
             package_checks_required: "true",
           },
           stdout: "pipe",
@@ -4008,7 +4084,7 @@ test("the production service-scope capture rejects crashed or malformed detector
       expect(result.exitCode, `${exit}: ${output}`).toBe(expected);
       const stdout = new TextDecoder().decode(result.stdout);
       if (expected === 0) {
-        expect(stdout).toContain(`SCOPES=${output}`);
+        expect(stdout).toContain(`SCOPES=${scopes}`);
       } else {
         expect(stdout).not.toContain("SCOPES=");
       }
@@ -5274,5 +5350,36 @@ test("desktop browser detector failures and malformed output cannot skip the PR 
   )) {
     expect(exitCode, stderr).toBe(0);
     expect(stdout).toBe(item.expected);
+  }
+});
+
+test("Postgres PR required checks follow trust, run eligibility and the general opt-in", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const trusted of ["true", "false"]) {
+    for (const runRequired of ["true", "false"]) {
+      for (const prSwitch of ["on", "off", ""]) {
+        for (const scope of ["true", "false"]) {
+          const enabled =
+            trusted === "true" &&
+            runRequired === "true" &&
+            prSwitch === "on" &&
+            scope === "true";
+          expect(
+            evaluate(plan.outputs["postgres_pr_required"] ?? "", {
+              values: {
+                "github.event_name": EVENT.pullRequest,
+                "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
+                "steps.completed-depth.outputs.run_required": runRequired,
+                "steps.check.outputs.trusted": trusted,
+                "steps.changed-files.outputs.service_suites_pr_required": scope,
+              },
+            }),
+          ).toBe(enabled);
+        }
+      }
+    }
   }
 });
