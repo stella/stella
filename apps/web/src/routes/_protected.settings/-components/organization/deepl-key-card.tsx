@@ -16,10 +16,12 @@ import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon } from "@stll/ui/icons";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";
 import { deepLConfigOptions, deepLKeys } from "@/lib/deepl/queries";
 import { unwrapEden } from "@/lib/errors/api";
+import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const DeepLKeyCard = () => {
@@ -31,9 +33,12 @@ export const DeepLKeyCard = () => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const { data: deeplConfig } = useQuery(
+  const settingsQuery = useQuery(
     deepLConfigOptions({ organizationId: activeOrganizationId }),
   );
+  const settingsView = useQueryView(settingsQuery);
+  const deeplConfig =
+    settingsView.type === "items" ? settingsView.items : undefined;
 
   const [apiKey, setApiKey] = useState("");
 
@@ -61,8 +66,13 @@ export const DeepLKeyCard = () => {
   const canSave = apiKey.trim().length > 0 && !saveMutation.isPending;
   const removeLabel = tCommon("remove");
 
+  if (settingsView.type !== "items") {
+    return <QueryViewFeedback view={settingsView} />;
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <QueryViewFeedback view={settingsView} />
       <div>
         <h3 className="text-base font-medium">{t("title")}</h3>
         <p className="text-muted-foreground text-sm">{t("description")}</p>

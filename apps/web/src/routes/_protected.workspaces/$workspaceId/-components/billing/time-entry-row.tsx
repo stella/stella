@@ -130,7 +130,10 @@ export const TimeEntryRow = ({
         <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
           {isActive ? (
             <span className="flex items-center gap-1.5">
-              <span className="bg-success size-1.5 animate-pulse rounded-full" />
+              <span
+                aria-hidden="true"
+                className="bg-success size-1.5 rounded-full"
+              />
               {t("common.running")}
             </span>
           ) : (

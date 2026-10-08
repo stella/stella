@@ -16,7 +16,11 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -141,6 +145,7 @@ const settledAnswer = (alternatives: LegalAlternatives): ExpansionAnswer => ({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "case-law.search-expand" },
   description:
     "Propose legal-vocabulary alternatives for a case-law search's words: " +
     "the terms the jurisdiction's statutes and courts use for an everyday " +
@@ -165,6 +170,7 @@ const config = {
 const expandCaseLawSearch = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -262,6 +268,7 @@ const expandCaseLawSearch = createSafeRootHandler(
       try: async () =>
         await generateTanStackObjectForRole({
           dataClass: "customer",
+          admission: configuredModelAdmission({ modelAdmission }),
           role: "fast",
           serviceTier: "standard",
           orgAIConfig,

@@ -195,12 +195,14 @@ import {
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { providerErrorReason } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -273,6 +275,8 @@ type StreamChatProps = {
   /** What the client is shown of the history `messages` came from. */
   storedHistory: StoredHistory;
   organizationId: SafeId<"organization">;
+  /** The turn's admission: every model request of the turn carries it. */
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
@@ -316,6 +320,29 @@ type StreamChatProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
+
+/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+export class ChatTurnFailureResponse extends Response {
+  readonly failureCode: ChatTurnFailureCode;
+  readonly retryable: boolean;
+
+  constructor({
+    failureCode,
+    payload,
+    status,
+  }: {
+    failureCode: ChatTurnFailureCode;
+    payload: { code?: string; message: string };
+    status: 422 | 500;
+  }) {
+    super(JSON.stringify(payload), {
+      headers: { "Content-Type": "application/json" },
+      status,
+    });
+    this.failureCode = failureCode;
+    this.retryable = status >= 500;
+  }
+}
 
 export const pruneOrphanedToolParts = (
   messages: readonly ChatMessage[],
@@ -403,6 +430,7 @@ export const streamChat = async ({
   owningAssistantMessageId,
   onFinish,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   promptCacheKey,
@@ -502,6 +530,7 @@ export const streamChat = async ({
     dataClass: "customer",
     modelId: devModelId,
     organizationId,
+    admission: modelAdmission,
     orgAIConfig,
     managedAIResidency,
     reasoningEffort,
@@ -593,6 +622,7 @@ export const streamChat = async ({
     devModelId === undefined
       ? await resolveFallbackTextModel({
           organizationId,
+          modelAdmission,
           orgAIConfig,
           managedAIResidency,
           primaryModel,
@@ -622,6 +652,7 @@ export const streamChat = async ({
     externalMcpToolSource,
     fallbackModel,
     organizationId,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     primaryModel,
@@ -741,29 +772,6 @@ export const streamChat = async ({
 
   return { type: "streaming", response: run.produce(output) };
 };
-
-/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
-export class ChatTurnFailureResponse extends Response {
-  readonly failureCode: ChatTurnFailureCode;
-  readonly retryable: boolean;
-
-  constructor({
-    failureCode,
-    payload,
-    status,
-  }: {
-    failureCode: ChatTurnFailureCode;
-    payload: { code?: string; message: string };
-    status: 422 | 500;
-  }) {
-    super(JSON.stringify(payload), {
-      headers: { "Content-Type": "application/json" },
-      status,
-    });
-    this.failureCode = failureCode;
-    this.retryable = status >= 500;
-  }
-}
 
 const thirdPartyBoundaryRefusalResponse = (
   error: AnonymizationRefusal,
@@ -983,6 +991,7 @@ const projectMcpToolSourceSchemasForProvider = ({
 
 type ResolveFallbackTextModelProps = {
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
@@ -991,6 +1000,7 @@ type ResolveFallbackTextModelProps = {
 
 const resolveFallbackTextModel = async ({
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
@@ -1000,6 +1010,7 @@ const resolveFallbackTextModel = async ({
     const fallbackModel = await resolveTanStackTextModel({
       dataClass: "customer",
       organizationId,
+      admission: modelAdmission,
       orgAIConfig,
       managedAIResidency,
       role: "reasoning",
@@ -1106,6 +1117,7 @@ type RunChatAttemptsProps = {
   externalMcpToolSource: StellaMcpToolSource | undefined;
   fallbackModel: ResolvedTanStackTextModel | null;
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
@@ -1134,6 +1146,7 @@ const runChatAttempts = async function* ({
   externalMcpToolSource,
   fallbackModel,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
@@ -1166,6 +1179,7 @@ const runChatAttempts = async function* ({
     model: primaryModel,
     modelId: devModelId,
     organizationId,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     promptCacheKey,
@@ -1218,6 +1232,7 @@ const runChatAttempts = async function* ({
     model: fallbackModel,
     modelId: undefined,
     organizationId,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     promptCacheKey,
@@ -1253,6 +1268,7 @@ type RunChatAttemptProps = {
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
@@ -1288,6 +1304,7 @@ const runChatAttempt = async function* ({
   model,
   modelId,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   promptCacheKey,
@@ -1396,6 +1413,7 @@ const runChatAttempt = async function* ({
           model,
           modelId,
           organizationId,
+          modelAdmission,
           orgAIConfig,
           managedAIResidency,
           role,
@@ -1452,6 +1470,7 @@ const runChatAttempt = async function* ({
         model,
         modelId,
         organizationId,
+        modelAdmission,
         orgAIConfig,
         managedAIResidency,
         role,
@@ -1521,6 +1540,7 @@ type ChatRuntimeMiddlewareProps = {
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
+  modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   role: ChatAttemptRole;
@@ -1539,6 +1559,7 @@ const createChatRuntimeMiddleware = ({
   model,
   modelId,
   organizationId,
+  modelAdmission,
   orgAIConfig,
   managedAIResidency,
   role,
@@ -1612,6 +1633,7 @@ const createChatRuntimeMiddleware = ({
         messages: config.messages,
         modelId,
         organizationId,
+        admission: modelAdmission,
         orgAIConfig,
         managedAIResidency,
         role,
@@ -1743,7 +1765,11 @@ export const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 // service raised for a configuration state the caller can act on; only an
 // unanticipated shape is logged at ERROR severity and reported as a defect.
 // Fingerprint only — provider error messages can echo request content.
-const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
+const reportStreamFailure = (
+  error: unknown,
+  kind: AIErrorKind,
+  providerMessage?: string,
+): void => {
   if (isAnticipatedAIFailure(error, kind)) {
     return;
   }
@@ -1752,13 +1778,17 @@ const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
     kind,
     ...errorFingerprint(error),
     ...providerStatusFields(error),
+    // The template name only; the message itself can echo request content.
+    ...(providerMessage === undefined
+      ? {}
+      : { "error.provider.reason": providerErrorReason(providerMessage) }),
   });
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(error, kind);
+  reportStreamFailure(error, kind, chunk.message);
   const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
     type: EventType.RUN_ERROR,

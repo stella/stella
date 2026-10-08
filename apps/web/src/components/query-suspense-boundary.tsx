@@ -14,29 +14,6 @@ type QuerySuspenseBoundaryProps = PropsWithChildren<{
   resetKeys?: readonly unknown[] | undefined;
 }>;
 
-export const QuerySuspenseBoundary = ({
-  area,
-  children,
-  errorFallback,
-  onError,
-  resetKeys,
-  suspenseFallback,
-}: QuerySuspenseBoundaryProps) => (
-  <QueryErrorResetBoundary>
-    {({ reset }) => (
-      <QueryErrorBoundary
-        area={area}
-        fallback={errorFallback}
-        onError={onError}
-        onReset={reset}
-        resetKeys={resetKeys}
-      >
-        <Suspense fallback={suspenseFallback}>{children}</Suspense>
-      </QueryErrorBoundary>
-    )}
-  </QueryErrorResetBoundary>
-);
-
 type QueryErrorBoundaryProps = PropsWithChildren<{
   area: string;
   fallback: (props: { reset: () => void }) => ReactNode;
@@ -104,6 +81,29 @@ class QueryErrorBoundary extends Component<
     return this.props.children;
   }
 }
+
+export const QuerySuspenseBoundary = ({
+  area,
+  children,
+  errorFallback,
+  onError,
+  resetKeys,
+  suspenseFallback,
+}: QuerySuspenseBoundaryProps) => (
+  <QueryErrorResetBoundary>
+    {({ reset }) => (
+      <QueryErrorBoundary
+        area={area}
+        fallback={errorFallback}
+        onError={onError}
+        onReset={reset}
+        resetKeys={resetKeys}
+      >
+        <Suspense fallback={suspenseFallback}>{children}</Suspense>
+      </QueryErrorBoundary>
+    )}
+  </QueryErrorResetBoundary>
+);
 
 const resetKeysChanged = (
   prev: readonly unknown[] | undefined,

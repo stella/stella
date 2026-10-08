@@ -81,7 +81,7 @@ export const CLIPBOARD_ITEM_DRAG_TYPE =
 
 type ClipboardDragData = Record<string | symbol, unknown>;
 
-export type ClipboardTextSegment = {
+type ClipboardTextSegment = {
   match: boolean;
   start: number;
   text: string;

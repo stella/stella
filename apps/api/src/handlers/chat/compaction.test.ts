@@ -16,6 +16,7 @@ import {
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
 import { LIMITS } from "@/api/lib/limits";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 import {
   chatThreadNeedsCompaction,
@@ -455,6 +456,7 @@ Continue drafting the termination analysis.
         { role: "user", content: "latest request" },
       ],
       organizationId: toSafeId<"organization">("org_compaction"),
+      admission: testModelAdmission(toSafeId<"organization">("org_compaction")),
       orgAIConfig: null,
       managedAIResidency: "eu",
       preserveTokens: 20,

@@ -42,7 +42,7 @@ export const revokeBeforeCreate = () => {
 export const staleAliasCleanup = () => {
   let url = "blob:old";
   const staleUrl = url;
-  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak, eslint/no-useless-assignment -- fixture: pre-creation alias cannot dispose the new assigned value
+  // oxlint-disable-next-line no-object-url-leak/no-object-url-leak, no-useless-assignment -- fixture: pre-creation alias cannot dispose the new assigned value
   url = URL.createObjectURL(blob);
   URL.revokeObjectURL(staleUrl);
 };
@@ -108,7 +108,7 @@ export const sharedLoopBindingTimerCleanup = () => {
   for (const currentBlob of blobs) {
     // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: deferred cleanup closes over a shared binding overwritten by the loop
     url = URL.createObjectURL(currentBlob);
-    // oxlint-disable-next-line eslint/no-loop-func -- fixture: unsafe shared capture is the rule behavior under test
+    // oxlint-disable-next-line no-loop-func -- fixture: unsafe shared capture is the rule behavior under test
     const cleanup = () => URL.revokeObjectURL(url);
     setTimeout(cleanup, 1000);
   }
@@ -154,7 +154,7 @@ export const replacedLogicalAnd = () => {
 export const repeatedLoopWithPostCleanup = () => {
   let url = "blob:initial";
   for (const currentBlob of blobs)
-    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak, eslint/curly -- fixture: unbraced loop exposes the post-loop cleanup false proof
+    // oxlint-disable-next-line no-object-url-leak/no-object-url-leak, curly -- fixture: unbraced loop exposes the post-loop cleanup false proof
     url = URL.createObjectURL(currentBlob);
   URL.revokeObjectURL(url);
 };
@@ -175,13 +175,13 @@ export const outerContinueBypassesCleanup = () => {
 // MUST flag: labeled control targeting the creation loop also bypasses the
 // current iteration's cleanup.
 export const labeledBreakBypassesCleanup = () => {
-  // oxlint-disable-next-line eslint/no-labels -- fixture: labeled outer-loop exit is the control-flow shape under test
+  // oxlint-disable-next-line no-labels -- fixture: labeled outer-loop exit is the control-flow shape under test
   creationLoop: for (const currentBlob of blobs) {
     // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: labeled break exits before cleanup
     const url = URL.createObjectURL(currentBlob);
     for (const candidate of blobs) {
       if (condition && candidate === currentBlob) {
-        // oxlint-disable-next-line eslint/no-labels -- fixture: labeled break targets the creation loop
+        // oxlint-disable-next-line no-labels -- fixture: labeled break targets the creation loop
         break creationLoop;
       }
     }
@@ -190,13 +190,13 @@ export const labeledBreakBypassesCleanup = () => {
 };
 
 export const labeledContinueBypassesCleanup = () => {
-  // oxlint-disable-next-line eslint/no-labels -- fixture: labeled outer-loop continue is the control-flow shape under test
+  // oxlint-disable-next-line no-labels -- fixture: labeled outer-loop continue is the control-flow shape under test
   creationLoop: for (const currentBlob of blobs) {
     // oxlint-disable-next-line no-object-url-leak/no-object-url-leak -- fixture: labeled continue skips cleanup
     const url = URL.createObjectURL(currentBlob);
     for (const candidate of blobs) {
       if (condition && candidate === currentBlob) {
-        // oxlint-disable-next-line eslint/no-labels -- fixture: labeled continue targets the creation loop
+        // oxlint-disable-next-line no-labels -- fixture: labeled continue targets the creation loop
         continue creationLoop;
       }
     }

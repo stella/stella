@@ -47,17 +47,16 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
     try {
       // Compare-and-set on a still-null slug: a concurrent writer may have
       // filled this row, in which case we leave its slug untouched.
-      // oxlint-disable-next-line arrow-body-style -- block body carries the audit-skip directive the require-audit-on-mutation rule scans for
-      const updated = await db((tx) => {
+      const updated = await db((tx) =>
         // audit: skip — backfills a derived public slug, not user-facing state
-        return tx
+        tx
           .update(caseLawDecisions)
           .set({ slug })
           .where(
             and(eq(caseLawDecisions.id, row.id), isNull(caseLawDecisions.slug)),
           )
-          .returning({ id: caseLawDecisions.id });
-      });
+          .returning({ id: caseLawDecisions.id }),
+      );
 
       return updated.length > 0;
     } catch (error) {

@@ -9,6 +9,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 /** Words shown on either side of the citation. */
@@ -52,19 +53,20 @@ export const useCitationPassage = ({
   }
 
   const ast = parseDocumentAst(decision.documentAst);
-  const passage =
-    ast === null
-      ? null
-      : findCitationPassage({
-          blocks: ast.blocks,
-          citationText: citation.citationText,
-          sectionText:
-            citation.sectionIndex === undefined || decision.sections === null
-              ? undefined
-              : decision.sections.find(
-                  (section) => section.index === citation.sectionIndex,
-                )?.text,
-        });
+  const passage = findCitationPassage({
+    blocks: visibleDecisionBlocks(
+      ast,
+      decision.caseNumberType,
+      decision.fulltext,
+    ),
+    citationText: citation.citationText,
+    sectionText:
+      citation.sectionIndex === undefined || decision.sections === null
+        ? undefined
+        : decision.sections.find(
+            (section) => section.index === citation.sectionIndex,
+          )?.text,
+  });
 
   return passage === null
     ? { passage: null, status: "absent" }

@@ -148,7 +148,7 @@ test("every pinned seed names an existing test using its explicit property id", 
     const file = key.slice(0, separator);
     const id = key.slice(separator + 2);
     expect(id.length).toBeGreaterThan(0);
-    expect(file).toMatch(/^(apps|packages)\/.+\.test\.tsx?$/u);
+    expect(file).toMatch(/^(apps|packages|scripts)\/.+\.test\.tsx?$/u);
     expect(file.split("/")).not.toContain("..");
     const source = readFileSync(path.join(REPO_ROOT, file), "utf-8");
     expect(propertyIds(file, source).has(id)).toBe(true);

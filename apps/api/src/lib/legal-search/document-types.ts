@@ -1,3 +1,4 @@
+// parser-output-unchanged: decisionSectionSchema is now private; validation and document output are unchanged.
 import * as v from "valibot";
 
 export const DECISION_SECTION_TYPES = [
@@ -19,14 +20,12 @@ export type DecisionSection = {
   text: string;
 };
 
-export const decisionSectionSchema: v.GenericSchema<DecisionSection> = v.object(
-  {
-    index: v.number(),
-    type: v.picklist(DECISION_SECTION_TYPES),
-    title: v.nullable(v.string()),
-    text: v.string(),
-  },
-);
+const decisionSectionSchema: v.GenericSchema<DecisionSection> = v.object({
+  index: v.number(),
+  type: v.picklist(DECISION_SECTION_TYPES),
+  title: v.nullable(v.string()),
+  text: v.string(),
+});
 
 export const persistedDecisionSectionsSchema = v.nullable(
   v.array(decisionSectionSchema),

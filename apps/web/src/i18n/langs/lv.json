@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Izvēlēties sarakstu",
+      "createList": "Izveidot sarakstu",
       "evidenceList": "Fakti no",
       "noLists": "Šai lietai nav sarakstu.",
       "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, zero {# vienumu dzēsts} one {# vienums dzēsts} other {# vienumi dzēsti}}",
     "description": "Apraksts",
     "details": "Detaļas",
+    "detailsHiddenFeatureUnavailable": "Detalizēta informācija ir paslēpta: funkcija nav iespējota",
     "disconnect": "Atvienot",
     "dismiss": "Noraidīt",
     "displayName": "Attēlojamais vārds",
@@ -2368,6 +2370,7 @@
       "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",
       "encryptedContent": "Šifrēta dokumenta saturu nevar izgūt. Noņemiet failam paroli un mēģiniet vēlreiz.",
       "filePropertyTypeImmutable": "Faila īpašības tipu nevar mainīt. Saglabājiet pašreizējo tipu; citām vērtībām izveidojiet pielāgotu īpašību.",
+      "fileSecurityRejected": "Drošības pārbaude noraidīja failu. Noņemiet atzīmēto saturu un augšupielādējiet attīrītu kopiju.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "hostedCheckoutOpen": "Šai organizācijai jau ir atvērta apmaksa. Pabeidziet to vai sāciet jaunu pēc tās derīguma beigām.",
       "hostedSubscriptionLive": "Šai organizācijai jau ir abonements. Mainiet to sadaļā “Pārvaldīt mitināto lietojumu”.",
@@ -5340,7 +5343,6 @@
       "noLanguagesFound": "Valodas nav atrastas",
       "notConfigured": "DeepL nav konfigurēts šai organizācijai. Lai iespējotu tulkošanu, organizācijas iestatījumos pievienojiet DeepL API atslēgu.",
       "outputLabel": "Tulkojuma veids",
-      "progress": "Tulkošanas progress",
       "progressCount": "Pabeigts {completed} no {total}",
       "providerUnavailable": "Tulkošanas pakalpojums nav pieejams. Mēģiniet vēlāk vēlreiz vai sazinieties ar administratoru.",
       "runFailed": "Tulkojumu neizdevās pabeigt.",
@@ -5472,14 +5474,8 @@
     "exportToCsv": "Eksportēt uz CSV",
     "fields": {
       "calculating": "Aprēķina...",
-      "currencyLabel": "Valūta (neobligāti)",
-      "currencyPlaceholder": "piem., USD, EUR",
-      "editFieldValue": "Rediģēt lauka vērtību",
       "errored": "Kļūda",
-      "fieldValueLabel": "Lauka vērtība",
-      "fieldValuePlaceholder": "Ievadiet lauka vērtību",
       "formatNotSupported": "Formāts netiek atbalstīts",
-      "numberPlaceholder": "Ievadiet skaitli",
       "selectAValue": "Izvēlieties vērtību",
       "selectValues": "Izvēlieties vērtības"
     },

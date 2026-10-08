@@ -1,9 +1,13 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
+import { compareCodeUnit } from "@stll/collation";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
+import { VERIFICATION_RUN_ERROR_CODES } from "@/api/lib/lists/verification/contract";
 import {
   ANONYMIZATION_REFUSAL_REASONS,
   ANONYMIZATION_REFUSAL_SITES,
@@ -13,9 +17,58 @@ import {
   emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
+  emitVerificationRunFailureMetric,
+  REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import type { RequestClass } from "@/api/lib/observability/request-metrics";
+
+test("verification failures emit bounded class metrics and structured events", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    for (const errorCode of VERIFICATION_RUN_ERROR_CODES) {
+      emitVerificationRunFailureMetric(errorCode);
+    }
+    const records = lines.map((line) =>
+      v.parse(
+        v.looseObject({ errorCode: v.picklist(VERIFICATION_RUN_ERROR_CODES) }),
+        JSON.parse(line),
+      ),
+    );
+    expect(records).toHaveLength(4);
+    expect(
+      records.map((record) => record.errorCode).toSorted(compareCodeUnit),
+    ).toEqual([
+      "access_revoked",
+      "extraction_failed",
+      "grading_failed",
+      "no_text",
+    ]);
+    for (const record of records) {
+      expect(record).toEqual({
+        event: `list_verification_run.${record.errorCode}`,
+        errorCode: record.errorCode,
+        VerificationRunFailures: 1,
+        _aws: {
+          Timestamp: expect.any(Number),
+          CloudWatchMetrics: [
+            {
+              Namespace: "Stella/Api",
+              Dimensions: [["errorCode"]],
+              Metrics: [{ Name: "VerificationRunFailures", Unit: "Count" }],
+            },
+          ],
+        },
+      });
+    }
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
 
 describe("buildRequestDurationRecord", () => {
   const base = {
@@ -26,22 +79,30 @@ describe("buildRequestDurationRecord", () => {
     timestamp: 1_700_000_000_000,
   };
 
+  const extracted = (requestClass: RequestClass) => {
+    const built = buildRequestDurationRecord({ ...base, requestClass });
+    if (built.type !== "extracted") {
+      return panic(`Expected an extracted metric for ${requestClass}`);
+    }
+    return built.record;
+  };
+
   test("emits a valid EMF directive CloudWatch can extract", () => {
-    const record = buildRequestDurationRecord(base);
+    const record = extracted("ai");
     const directive = record._aws.CloudWatchMetrics[0];
 
     // EMF contract: every metric/dimension name referenced in the
     // directive must exist as a root member, or CloudWatch silently
     // drops the metric.
-    expect(directive?.Namespace).toBe("Stella/Api");
-    expect(directive?.Dimensions).toEqual([["class"]]);
-    expect(directive?.Metrics).toEqual([
+    expect(directive.Namespace).toBe("Stella/Api");
+    expect(directive.Dimensions).toEqual([["class"]]);
+    expect(directive.Metrics).toEqual([
       { Name: "RequestDuration", Unit: "Milliseconds" },
     ]);
-    for (const dimension of directive?.Dimensions.flat() ?? []) {
+    for (const dimension of directive.Dimensions.flat()) {
       expect(record).toHaveProperty(dimension);
     }
-    for (const metric of directive?.Metrics ?? []) {
+    for (const metric of directive.Metrics) {
       expect(record).toHaveProperty(metric.Name);
     }
     expect(record._aws.Timestamp).toBe(base.timestamp);
@@ -50,14 +111,23 @@ describe("buildRequestDurationRecord", () => {
   });
 
   test("rounds duration to an integer millisecond value", () => {
-    expect(buildRequestDurationRecord(base).RequestDuration).toBe(1235);
+    expect(buildRequestDurationRecord(base).record.RequestDuration).toBe(1235);
   });
 
-  test("class dimension distinguishes ai from crud", () => {
-    expect(buildRequestDurationRecord(base).class).toBe("ai");
-    expect(
-      buildRequestDurationRecord({ ...base, requestClass: "crud" }).class,
-    ).toBe("crud");
+  test("every request class is logged; only alarmed classes extract a metric", () => {
+    const dispositions = REQUEST_CLASSES.map((requestClass) => {
+      const built = buildRequestDurationRecord({ ...base, requestClass });
+      expect(built.record.class).toBe(requestClass);
+      expect(built.record.RequestDuration).toBe(1235);
+      expect("_aws" in built.record).toBe(built.type === "extracted");
+      return [requestClass, built.type];
+    });
+    expect(Object.fromEntries(dispositions)).toEqual({
+      ai: "extracted",
+      crud: "extracted",
+      search: "extracted",
+      batch: "log_only",
+    });
   });
 });
 

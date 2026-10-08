@@ -48,7 +48,7 @@ export const courtTierValueSql = (tier: SQL): SQL =>
     / ${sql.raw(String(HIGHEST_COURT_TIER - LOWEST_COURT_TIER))}::float8)`;
 
 /** What the deciding court adds to a lexical score: `weight * tierValue`. */
-export const courtTierBlendSql = (tier: SQL): SQL =>
+const courtTierBlendSql = (tier: SQL): SQL =>
   sql`(${sql.raw(String(DEFAULT_COURT_TIER_WEIGHT))} * ${courtTierValueSql(tier)})`;
 
 /**

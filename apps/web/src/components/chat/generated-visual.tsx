@@ -37,8 +37,16 @@ import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
-import type { VisualInteraction } from "./generated-visual.logic";
-import { parseVisualHostMessage } from "./generated-visual.logic";
+import type {
+  VisualFrameHandshake,
+  VisualInteraction,
+} from "./generated-visual.logic";
+import {
+  activateVisual,
+  advanceVisualHandshake,
+  pendingVisualHandshake,
+  parseVisualHostMessage,
+} from "./generated-visual.logic";
 import { createVisualShellSession } from "./visual-shell-session";
 
 type GeneratedVisualProps = {
@@ -51,6 +59,32 @@ type GeneratedVisualFrameProps = Omit<GeneratedVisualProps, "part"> & {
   part: v.InferOutput<typeof generatedVisualPartSchema>;
 };
 
+// Tracks the current shell handshake and moves the view to preview when it
+// settles. Any document load after that (a reload, or another document in the
+// frame) also returns the view to preview.
+const useFrameHandshake = (
+  setInteraction: (interaction: VisualInteraction) => void,
+) => {
+  const handshake = useRef<VisualFrameHandshake>(pendingVisualHandshake());
+  return {
+    restart: () => {
+      handshake.current = pendingVisualHandshake();
+    },
+    advance: (event: "load" | "delivered") => {
+      if (handshake.current.status === "settled") {
+        if (event === "load") {
+          setInteraction({ status: "preview" });
+        }
+        return;
+      }
+      handshake.current = advanceVisualHandshake(handshake.current, event);
+      if (handshake.current.status === "settled") {
+        setInteraction({ status: "preview" });
+      }
+    },
+  };
+};
+
 const GeneratedVisualFrame = ({
   part,
   organizationId,
@@ -60,8 +94,9 @@ const GeneratedVisualFrame = ({
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(320);
   const [interaction, setInteraction] = useState<VisualInteraction>({
-    status: "preview",
+    status: "loading",
   });
+  const handshake = useFrameHandshake(setInteraction);
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const { insertPastedTextIntoThread } = useChatEditorManager();
   const { open: openDecision } = useOpenDecisionTab();
@@ -103,6 +138,7 @@ const GeneratedVisualFrame = ({
   const attachFrame = useLatestCallback((element: HTMLIFrameElement | null) => {
     frame.current = element;
     if (element !== null) {
+      handshake.restart();
       element.src = shell.beginLoad();
     }
   });
@@ -124,6 +160,16 @@ const GeneratedVisualFrame = ({
         },
       })
     ) {
+      handshake.advance("delivered");
+      return;
+    }
+    if (shell.isReloadedShell({ event, frameWindow })) {
+      const element = frame.current;
+      if (element !== null) {
+        handshake.restart();
+        setInteraction({ status: "loading" });
+        element.src = shell.beginLoad();
+      }
       return;
     }
     if (!shell.isReady()) {
@@ -198,12 +244,16 @@ const GeneratedVisualFrame = ({
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [receive]);
-  const loadShell = () => {
-    setInteraction({ status: "preview" });
-    const element = frame.current;
-    if (element !== null) {
-      element.src = shell.beginLoad();
+  const activate = () => {
+    const next = activateVisual(interaction, frame.current?.contentWindow);
+    if (next === interaction) {
+      return;
     }
+    setInteraction(next);
+    requestAnimationFrame(() => frame.current?.focus());
+  };
+  const loadShell = () => {
+    handshake.advance("load");
   };
   if (page.isError) {
     return <p role="status">{t("chat.richContentUnavailable")}</p>;
@@ -235,13 +285,11 @@ const GeneratedVisualFrame = ({
         <Button
           size="sm"
           variant="outline"
+          disabled={interaction.status === "loading"}
           onClick={(event) => {
-            const activatedFrame = frame.current?.contentWindow;
-            if (!event.nativeEvent.isTrusted || !activatedFrame) {
-              return;
+            if (event.nativeEvent.isTrusted) {
+              activate();
             }
-            setInteraction({ status: "interactive", activatedFrame });
-            requestAnimationFrame(() => frame.current?.focus());
           }}
         >
           {t("chat.activateGeneratedView")}
@@ -254,22 +302,20 @@ const GeneratedVisualFrame = ({
           referrerPolicy="no-referrer"
           sandbox="allow-scripts"
           onLoad={loadShell}
-          inert={interaction.status === "preview"}
+          inert={interaction.status !== "interactive"}
           className="block w-full border-0"
           style={{ height }}
         />
-        {interaction.status === "preview" && (
+        {interaction.status !== "interactive" && (
           <button
             type="button"
             className="absolute inset-0 cursor-pointer"
             aria-label={t("chat.activateGeneratedView")}
+            disabled={interaction.status === "loading"}
             onClick={(event) => {
-              const activatedFrame = frame.current?.contentWindow;
-              if (!event.nativeEvent.isTrusted || !activatedFrame) {
-                return;
+              if (event.nativeEvent.isTrusted) {
+                activate();
               }
-              setInteraction({ status: "interactive", activatedFrame });
-              requestAnimationFrame(() => frame.current?.focus());
             }}
           />
         )}

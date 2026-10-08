@@ -1,9 +1,9 @@
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 
 type AtlaskitDraggableOptions = Parameters<typeof draggable>[0];
 

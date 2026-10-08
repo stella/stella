@@ -7,6 +7,7 @@ import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { LIMITS } from "@/api/lib/limits";
 import {
   authorizeSkillInstallScope,
@@ -148,9 +149,12 @@ const importSkillsFromUrls = createSafeRootHandler(
     const failed = [...deduplicated.failed];
     const { items } = deduplicated;
     const fetchContext = createSkillPackageFetchContext({
-      deadlineAt:
-        Temporal.Now.instant().epochMilliseconds + SKILL_IMPORT_TIMEOUT_MS,
-      maxRequests: SKILL_IMPORT_MAX_REQUESTS,
+      permit: grantThirdPartyOutboundPermit(),
+      limits: {
+        deadlineAt:
+          Temporal.Now.instant().epochMilliseconds + SKILL_IMPORT_TIMEOUT_MS,
+        maxRequests: SKILL_IMPORT_MAX_REQUESTS,
+      },
     });
     const importAt = async (index: number): Promise<void> => {
       const item = items.at(index);

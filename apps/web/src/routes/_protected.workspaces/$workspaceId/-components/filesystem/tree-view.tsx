@@ -7,11 +7,7 @@ import {
   useState,
 } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-  monitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -73,6 +69,10 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getFileSizeDisplay } from "@/lib/file-size";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
@@ -786,7 +786,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }
 
   return (
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
     <div
       className="flex h-full flex-1 flex-col overflow-hidden p-2"
       onClick={(e) => {

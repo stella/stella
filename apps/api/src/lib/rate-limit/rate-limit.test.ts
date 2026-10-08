@@ -26,6 +26,104 @@ const RATE_LIMIT_OPTIONS = {
   skip: () => false,
 } as const satisfies Omit<RateLimitOptions, "context">;
 
+class TrackingRateLimitContext implements RateLimitContext {
+  readonly decrementedKeys: string[] = [];
+  readonly incrementedKeys: string[] = [];
+  killCount = 0;
+  private readonly counts = new Map<string, number>();
+  private duration = WINDOW_MS;
+
+  decrement(key: string): void {
+    this.decrementedKeys.push(key);
+    const count = this.counts.get(key) ?? 0;
+    this.counts.set(key, Math.max(0, count - 1));
+  }
+
+  increment(key: string, duration = this.duration, requestTime = Date.now()) {
+    this.incrementedKeys.push(key);
+    const count = (this.counts.get(key) ?? 0) + 1;
+    this.counts.set(key, count);
+    return {
+      count,
+      nextReset: new Date(requestTime + duration),
+      start: requestTime,
+    };
+  }
+
+  init({ duration }: RateLimitContextConfig): void {
+    this.duration = duration;
+  }
+
+  kill(): void {
+    this.killCount += 1;
+    this.counts.clear();
+  }
+}
+
+class FakeRedisClient {
+  private readonly state: FakeRedisState;
+
+  constructor(state: FakeRedisState) {
+    this.state = state;
+  }
+
+  async send(command: string, args: string[]): Promise<unknown> {
+    if (command === "DEL") {
+      return this.state.entries.delete(requiredArg(args, 0)) ? 1 : 0;
+    }
+    if (command !== "EVAL") {
+      throw new TypeError(`Unexpected Redis command: ${command}`);
+    }
+
+    const script = requiredArg(args, 0);
+    const key = requiredArg(args, 2);
+    if (script.includes('redis.call("HSET"')) {
+      return this.increment(
+        key,
+        Number(requiredArg(args, 3)),
+        requiredArg(args, 4),
+      );
+    }
+    if (script.includes('redis.call("HDEL"')) {
+      return this.decrement(key, requiredArg(args, 3));
+    }
+    throw new TypeError("Unexpected Redis script");
+  }
+
+  private increment(
+    key: string,
+    durationMs: number,
+    attemptId: string,
+  ): [number, number] {
+    const current = this.state.entries.get(key);
+    if (current === undefined || current.expiresAt <= this.state.now) {
+      this.state.entries.set(key, {
+        attempts: new Set([attemptId]),
+        count: 1,
+        expiresAt: this.state.now + durationMs,
+      });
+      return [1, durationMs];
+    }
+    current.count += 1;
+    current.attempts.add(attemptId);
+    return [current.count, current.expiresAt - this.state.now];
+  }
+
+  private decrement(key: string, attemptId: string): number {
+    const current = this.state.entries.get(key);
+    if (
+      current === undefined ||
+      current.count <= 0 ||
+      !current.attempts.has(attemptId)
+    ) {
+      return current?.count ?? 0;
+    }
+    current.attempts.delete(attemptId);
+    current.count -= 1;
+    return current.count;
+  }
+}
+
 describe("RedisRateLimitContext", () => {
   test("keeps one refund identity per request while sharing the counter key", async () => {
     const { context, generator } = createRedisRateLimit({
@@ -702,40 +800,6 @@ describe("RedisRateLimitContext", () => {
   });
 });
 
-class TrackingRateLimitContext implements RateLimitContext {
-  readonly decrementedKeys: string[] = [];
-  readonly incrementedKeys: string[] = [];
-  killCount = 0;
-  private readonly counts = new Map<string, number>();
-  private duration = WINDOW_MS;
-
-  decrement(key: string): void {
-    this.decrementedKeys.push(key);
-    const count = this.counts.get(key) ?? 0;
-    this.counts.set(key, Math.max(0, count - 1));
-  }
-
-  increment(key: string, duration = this.duration, requestTime = Date.now()) {
-    this.incrementedKeys.push(key);
-    const count = (this.counts.get(key) ?? 0) + 1;
-    this.counts.set(key, count);
-    return {
-      count,
-      nextReset: new Date(requestTime + duration),
-      start: requestTime,
-    };
-  }
-
-  init({ duration }: RateLimitContextConfig): void {
-    this.duration = duration;
-  }
-
-  kill(): void {
-    this.killCount += 1;
-    this.counts.clear();
-  }
-}
-
 const createTrackingRateLimitedApp = ({
   context,
   max,
@@ -772,70 +836,6 @@ const createFakeRedisState = (): FakeRedisState => ({
   entries: new Map(),
   now: 1000,
 });
-
-class FakeRedisClient {
-  private readonly state: FakeRedisState;
-
-  constructor(state: FakeRedisState) {
-    this.state = state;
-  }
-
-  async send(command: string, args: string[]): Promise<unknown> {
-    if (command === "DEL") {
-      return this.state.entries.delete(requiredArg(args, 0)) ? 1 : 0;
-    }
-    if (command !== "EVAL") {
-      throw new TypeError(`Unexpected Redis command: ${command}`);
-    }
-
-    const script = requiredArg(args, 0);
-    const key = requiredArg(args, 2);
-    if (script.includes('redis.call("HSET"')) {
-      return this.increment(
-        key,
-        Number(requiredArg(args, 3)),
-        requiredArg(args, 4),
-      );
-    }
-    if (script.includes('redis.call("HDEL"')) {
-      return this.decrement(key, requiredArg(args, 3));
-    }
-    throw new TypeError("Unexpected Redis script");
-  }
-
-  private increment(
-    key: string,
-    durationMs: number,
-    attemptId: string,
-  ): [number, number] {
-    const current = this.state.entries.get(key);
-    if (current === undefined || current.expiresAt <= this.state.now) {
-      this.state.entries.set(key, {
-        attempts: new Set([attemptId]),
-        count: 1,
-        expiresAt: this.state.now + durationMs,
-      });
-      return [1, durationMs];
-    }
-    current.count += 1;
-    current.attempts.add(attemptId);
-    return [current.count, current.expiresAt - this.state.now];
-  }
-
-  private decrement(key: string, attemptId: string): number {
-    const current = this.state.entries.get(key);
-    if (
-      current === undefined ||
-      current.count <= 0 ||
-      !current.attempts.has(attemptId)
-    ) {
-      return current?.count ?? 0;
-    }
-    current.attempts.delete(attemptId);
-    current.count -= 1;
-    return current.count;
-  }
-}
 
 const requiredArg = (args: string[], index: number): string => {
   const value = args.at(index);

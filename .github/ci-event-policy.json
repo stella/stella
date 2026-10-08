@@ -1,5 +1,6 @@
 {
   "jobs": {
+    "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
@@ -67,7 +68,9 @@
     "marketing-screenshots.yml/check": "main",
     "marketing-screenshots.yml/update": "main",
     "model-catalog-check.yml/model-catalog-check": "main",
+    "ci-pr-pilot-metrics.yml/metrics": "main",
     "network-baseline-record.yml/build": "main",
+    "network-baseline-record.yml/deliver": "main",
     "network-baseline-record.yml/record": "main",
     "network-baseline-request.yml/request": "pr-fast",
     "typecheck-base.yml/record": "main",
@@ -108,6 +111,7 @@
     "ci.yml/ci-generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
     "ci.yml/parser-version-guard": "pr-fast",
+    "ci.yml/ci-checks-docs": "pr-fast",
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
@@ -116,7 +120,7 @@
     "ci.yml/code-quality-api": "pr-fast",
     "ci.yml/code-quality-web": "pr-fast",
     "ci.yml/code-quality-rest": "pr-fast",
-    "ci.yml/service-suites": "queue",
+    "ci.yml/service-suites": "pr-opt-in",
     "ci.yml/migration-upgrade-rehearsal": "queue",
     "ci.yml/release-typecheck": "queue",
     "ci.yml/fix-tests-on-base": "pr-opt-in",
@@ -178,5 +182,6 @@
       "role": "analysis",
       "cancelInProgress": true
     }
-  }
+  },
+  "periodicJobs": ["ci.yml/release-typecheck"]
 }

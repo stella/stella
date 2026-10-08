@@ -436,9 +436,9 @@ const CoverageGlobe = ({
  * overlap it.
  */
 const Headline = ({ children }: PropsWithChildren) => (
-  <p className="text-7xl font-semibold tracking-tight tabular-nums">
+  <div className="text-7xl font-semibold tracking-tight tabular-nums">
     {children}
-  </p>
+  </div>
 );
 
 /**

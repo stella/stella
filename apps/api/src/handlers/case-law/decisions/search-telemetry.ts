@@ -112,7 +112,7 @@ export const CASE_LAW_SEARCH_DB_READ = {
   sourceRegistry: "sourceRegistry",
 } as const;
 
-export type CaseLawSearchDbRead =
+type CaseLawSearchDbRead =
   (typeof CASE_LAW_SEARCH_DB_READ)[keyof typeof CASE_LAW_SEARCH_DB_READ];
 
 /**
@@ -130,7 +130,7 @@ const DB_READ_ATTRIBUTE = {
   sourceRegistry: "dbSourceRegistryMs",
 } as const satisfies Record<CaseLawSearchDbRead, string>;
 
-export type CaseLawSearchDbTiming = {
+type CaseLawSearchDbTiming = {
   /** How many reads the request made, over all the named kinds. */
   reads: number;
   msByRead: Record<CaseLawSearchDbRead, number>;

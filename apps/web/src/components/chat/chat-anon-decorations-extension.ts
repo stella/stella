@@ -28,14 +28,14 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 
-export const CHAT_ANON_DECORATIONS_NAME = "stllAnonDecorations";
+const CHAT_ANON_DECORATIONS_NAME = "stllAnonDecorations";
 
 type ChatAnonDecorationsStorage = {
   pairs: readonly ChatAnonPair[];
 };
 
 declare module "@tiptap/core" {
-  // oxlint-disable-next-line consistent-type-definitions -- module augmentation requires interface for declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface for declaration merging
   interface Storage {
     [CHAT_ANON_DECORATIONS_NAME]: ChatAnonDecorationsStorage;
   }

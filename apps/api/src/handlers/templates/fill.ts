@@ -48,12 +48,13 @@ type FillProps = {
 /** Serialize a preflight `HandlerError` to the same JSON body the framework
  *  preflight returns (message plus the 402 usage detail), for this route's
  *  raw-Response download path. */
-const usageRejectionResponse = (
-  error: HandlerError<402 | 403 | 500>,
-): Response =>
+const usageRejectionResponse = (error: HandlerError): Response =>
   new Response(
     JSON.stringify({
+      ...(error.code ? { code: error.code } : {}),
       message: error.message,
+      ...(error.hint ? { hint: error.hint } : {}),
+      ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
       ...(error.usage
         ? {
             reason: error.usage.reason,

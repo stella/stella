@@ -257,17 +257,16 @@ const recordFailedRedactionAudit = async ({
 }: FailedRedactionAuditOptions): Promise<void> => {
   const errorMessage =
     error instanceof Error ? error.message : "Unknown corpus redaction error";
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — this insert IS the append-only failed erasure audit row
-    return tx.insert(caseLawIndexJobs).values({
+    tx.insert(caseLawIndexJobs).values({
       decisionId,
       operation: "redact",
       status: "failed",
       contentHash: null,
       errorMessage: errorMessage.slice(0, 2048),
-    });
-  });
+    }),
+  );
 };
 
 /** What the fencing transaction settled. */
@@ -563,10 +562,9 @@ export const redactCaseLawDecision = async ({
   // erasure retains exact retry targets while the row tombstone already
   // blocks every reader.
   if (corpusErasure.type !== "incomplete" && rawErasure.type !== "incomplete") {
-    // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-    await scopedDb((tx) => {
+    await scopedDb((tx) =>
       // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
-      return tx
+      tx
         .update(caseLawDecisions)
         .set({
           textS3Key: null,
@@ -575,8 +573,8 @@ export const redactCaseLawDecision = async ({
           sourceRawS3Key: null,
           sourceRawContentType: null,
         })
-        .where(eq(caseLawDecisions.id, decisionId));
-    });
+        .where(eq(caseLawDecisions.id, decisionId)),
+    );
   }
 
   if (corpusErasure.type === "incomplete") {
@@ -605,17 +603,16 @@ export const redactCaseLawDecision = async ({
       .filter((part) => part !== null)
       .join("; ")
       .slice(0, 2048) || null;
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — this insert IS the append-only erasure audit row
-    return tx.insert(caseLawIndexJobs).values({
+    tx.insert(caseLawIndexJobs).values({
       decisionId,
       operation: "redact",
       status: "succeeded",
       contentHash: null,
       detail,
-    });
-  });
+    }),
+  );
 
   return Result.ok({
     type: "redacted",

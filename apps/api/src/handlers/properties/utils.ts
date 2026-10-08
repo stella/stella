@@ -1,18 +1,12 @@
-import type { Err } from "better-result";
-import { Result } from "better-result";
 import { deepEquals } from "bun";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type {
   AIModelTool,
   ManualInputTool,
   PropertyContent,
 } from "@/api/db/schema-validators";
-import { arrayOrEmpty } from "@/api/lib/array";
-import type { SafeId } from "@/api/lib/branded-types";
-import { LIMITS } from "@/api/lib/limits";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 type PropertyForComparison = {
@@ -69,101 +63,4 @@ export const comparePropertiesForStale = ({
   const sortedNew = sortDeep(normalizeDeps(newProperty));
 
   return !deepEquals(sortedOld, sortedNew);
-};
-
-type ValidatePropertyInputsProps = {
-  safeDb: SafeDb;
-  propertyId: string;
-  workspaceId: SafeId<"workspace">;
-  proposedInputs: string[];
-};
-
-export const validatePropertyInputs = async function* ({
-  safeDb,
-  propertyId,
-  workspaceId,
-  proposedInputs,
-}: ValidatePropertyInputsProps): AsyncGenerator<
-  Err<never, SafeDbError>,
-  Result<void, string[]>,
-  unknown
-> {
-  const workspaceProperties = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.properties.findMany({
-        where: {
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { id: true },
-        limit: LIMITS.propertiesCount,
-        with: {
-          dependencies: {
-            columns: {
-              dependsOnPropertyId: true,
-            },
-          },
-        },
-      }),
-    ),
-  );
-
-  const dependencyGraph = new Map<string, string[]>();
-  for (const property of workspaceProperties) {
-    // Skip existing dependencies of the current property (we'll replace them)
-    if (property.id === propertyId) {
-      continue;
-    }
-
-    dependencyGraph.set(
-      property.id,
-      property.dependencies.map((d) => d.dependsOnPropertyId),
-    );
-  }
-
-  // Add the proposed inputs for the current property
-  dependencyGraph.set(propertyId, proposedInputs);
-
-  // DFS to detect if there's a path from any proposed input back to propertyId
-  const detectCycle = (
-    startId: string,
-    visited: Set<string>,
-    path: string[],
-  ): string[] | null => {
-    if (startId === propertyId) {
-      return [...path, propertyId];
-    }
-
-    if (visited.has(startId)) {
-      return null;
-    }
-
-    visited.add(startId);
-    path.push(startId);
-
-    const storedInputs = dependencyGraph.get(startId);
-    const inputs = arrayOrEmpty(storedInputs);
-    for (const inputId of inputs) {
-      const cycle = detectCycle(inputId, visited, path);
-      if (cycle) {
-        return cycle;
-      }
-    }
-
-    path.pop();
-    return null;
-  };
-
-  for (const inputId of proposedInputs) {
-    if (inputId === propertyId) {
-      return Result.err([propertyId, propertyId]);
-    }
-
-    const cycle = detectCycle(inputId, new Set(), [propertyId]);
-
-    if (cycle) {
-      return Result.err(cycle);
-    }
-  }
-
-  return Result.ok();
 };
