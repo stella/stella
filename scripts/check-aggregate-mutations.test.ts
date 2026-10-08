@@ -482,7 +482,7 @@ describe("aggregate mutation route coverage", () => {
         `import { Result } from "better-result"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { renewExample } from "@/api/services/example-lock"; const existing = createSafeHandler({}, async function* () { const renewed = yield* Result.await(${yielded}); return Result.ok(renewed); }); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
       sources.set(
         service,
-        `${lockImport} export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await runInTransaction(db, async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
+        `import { Result } from "better-result"; ${lockImport} export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await db.transaction(async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
       );
       for (const yielded of [
         "await renewExample({ db })",
@@ -493,18 +493,42 @@ describe("aggregate mutation route coverage", () => {
       }
       sources.set(
         service,
-        `${lockImport} export const renewExample = async (tx) => { await runInTransaction(db, async function (tx) { ${acquisition} }); };`,
+        `${lockImport} export const renewExample = async (db) => { await db.transaction(async function (tx) { ${acquisition} }); };`,
       );
       expect(enumerate(sources).at(0)?.declared).toBe(true);
       for (const detached of [
         `setTimeout(async () => { ${acquisition} }, 0);`,
-        `runInTransaction(db, async (tx) => { ${acquisition} });`,
+        `await setTimeout(async () => { ${acquisition} }, 0);`,
+        `await runInTransaction(db, async (tx) => { ${acquisition} });`,
+        `db.transaction(async (tx) => { ${acquisition} });`,
+        `await Result.tryPromise({ catch: async () => { ${acquisition} } });`,
         `const later = async (tx) => { ${acquisition} };`,
       ]) {
         sources.set(
           service,
-          `${lockImport} export const renewExample = async (tx) => { ${detached} };`,
+          `import { Result } from "better-result"; ${lockImport} export const renewExample = async (db) => { ${detached} };`,
         );
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+    });
+
+    test("a local binding shadowing a locking helper does not count", () => {
+      const sources = setup();
+      sources.set(
+        service,
+        `${lockImport} export const lockExample = async (tx) => { ${acquisition} };`,
+      );
+      const imports =
+        'import { lockExample } from "@/api/services/example-lock";';
+      for (const body of [
+        "const lockExample = async () => {}; await safeDb(async (tx) => { await lockExample(tx); });",
+        "await safeDb(async (tx) => { const lockExample = async () => {}; await lockExample(tx); });",
+        "await safeDb(async (lockExample) => { await lockExample(tx); });",
+        "if (ready) { var lockExample = async () => {}; } await lockExample(tx);",
+      ]) {
+        sources.set(module, handlerModule({ imports, body }));
         expect(() => enumerate(sources)).toThrow(
           "must await withAggregateLock",
         );
