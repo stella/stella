@@ -110,23 +110,30 @@ export const reduceOpenRouterInput = (payload: unknown): unknown => {
 };
 
 const fetchInput = async (url: string): Promise<unknown> => {
-  const result = await Result.tryPromise({
-    try: async () => {
-      const response = await fetch(url, {
-        headers: { accept: "application/json" },
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!response.ok) {
-        throw new CatalogSnapshotError({
-          message: `${url} responded ${response.status}`,
+  const result = Result.flatten(
+    await Result.tryPromise({
+      try: async () => {
+        const response = await fetch(url, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(30_000),
         });
-      }
-      const payload: unknown = await response.json();
-      return payload;
-    },
-    catch: (cause) =>
-      new CatalogSnapshotError({ message: `Could not refresh ${url}`, cause }),
-  });
+        if (!response.ok) {
+          return Result.err(
+            new CatalogSnapshotError({
+              message: `${url} responded ${response.status}`,
+            }),
+          );
+        }
+        const payload: unknown = await response.json();
+        return Result.ok(payload);
+      },
+      catch: (cause) =>
+        new CatalogSnapshotError({
+          message: `Could not refresh ${url}`,
+          cause,
+        }),
+    }),
+  );
   if (Result.isError(result)) {
     return panic(result.error.message, result.error);
   }
