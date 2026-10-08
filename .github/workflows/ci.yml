@@ -91,7 +91,7 @@ jobs:
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
-      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
+      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
