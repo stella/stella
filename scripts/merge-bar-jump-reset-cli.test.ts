@@ -27,8 +27,9 @@ test.each([
   { scenario: "failure", status: "not-reset", exit: 0 },
   { scenario: "unknown", status: "not-reset", exit: 0 },
   { scenario: "later-manual", status: "not-reset", exit: 0 },
-  { scenario: "truncated", status: "", exit: 1 },
-  { scenario: "duplicated-page", status: "", exit: 1 },
+  // Unreadable evidence is unavailable: classification fails closed.
+  { scenario: "truncated", status: "not-reset", exit: 0 },
+  { scenario: "duplicated-page", status: "not-reset", exit: 0 },
   { scenario: "head-moved", status: "", exit: 1 },
   { scenario: "dry-unseeded", status: "not-reset", exit: 0 },
 ])(
@@ -135,6 +136,11 @@ if (endpoint === "graphql") {
         stderr: "pipe",
       });
       expect(result.exitCode, result.stderr.toString()).toBe(exit);
+      if (scenario === "truncated" || scenario === "duplicated-page") {
+        expect(result.stderr.toString()).toContain(
+          "jump-reset evidence unavailable",
+        );
+      }
       if (exit === 0) {
         expect(JSON.parse(result.stdout.toString())).toMatchObject({
           status,
