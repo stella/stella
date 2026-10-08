@@ -2332,15 +2332,14 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
   ) {
     panic("Unhandled TanStack failed stream event");
   }
+  const providerDiagnostic = providerDiagnosticFromChunk(chunk);
   return {
     chunk,
     usage: tokenUsageFromTerminalChunk(chunk),
     outcome: {
       type: "failed",
       error: classifyRunErrorChunk(sourceChunk),
-      ...(providerDiagnosticFromChunk(chunk) === undefined
-        ? {}
-        : { providerDiagnostic: providerDiagnosticFromChunk(chunk) }),
+      ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
     } as const satisfies ChatTurnOutcome,
   };
 };

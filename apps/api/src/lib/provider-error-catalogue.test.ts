@@ -57,7 +57,8 @@ describe("provider setup error catalogue", () => {
 });
 
 test("structured provider codes win over translated diagnostic messages", () => {
-  for (const [code, fixture] of Object.entries(fixtures)) {
+  for (const code of Object.values(PROVIDER_SETUP_ERROR_CODE)) {
+    const fixture = fixtures[code];
     if (
       fixture.provider === "anthropic" &&
       (code === PROVIDER_SETUP_ERROR_CODE.anthropicWorkspaceRequired ||

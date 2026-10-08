@@ -12,10 +12,23 @@ import {
   registerProviderDiagnosticCredentials,
 } from "./provider-diagnostic";
 
-test("every catalogue fixture reaches runtime guidance without retaining raw telemetry evidence", () => {
-  for (const [code, fixture] of Object.entries(PROVIDER_SETUP_ERROR_FIXTURES)) {
+test("every catalogue fixture reaches guidance and supported runtime adapters keep evidence private", () => {
+  for (const code of Object.values(PROVIDER_SETUP_ERROR_CODE)) {
+    const fixture = PROVIDER_SETUP_ERROR_FIXTURES[code];
+    const model = { provider: fixture.provider, keySource: "byok" } as const;
+    expect(
+      createProviderDiagnostic({ model, evidence: { error: fixture.error } }),
+    ).toEqual({
+      provider: fixture.provider,
+      code,
+      message: fixture.error.message,
+    });
+    // Azure setup is supported by the probe, but has no runtime text adapter.
+    if (model.provider === "azure_foundry") {
+      continue;
+    }
     const error = createProviderCallError({
-      model: { provider: fixture.provider, keySource: "byok" },
+      model: { provider: model.provider, keySource: model.keySource },
       status: 502,
       evidence: { error: fixture.error },
     });

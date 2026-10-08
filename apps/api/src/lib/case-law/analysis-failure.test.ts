@@ -83,11 +83,11 @@ test("failures are isolated by organization, decision, and input fingerprint and
     providerDiagnostic: diagnostic,
   });
   expect(deliveries.at(1)).toEqual(deliveries.at(0));
-  expect((await store.read(scope)).unwrap()).toEqual(deliveries.at(0));
   const failure = deliveries.at(0);
   if (failure === undefined || failure === null) {
     panic("Expected recorded failure");
   }
+  expect((await store.read(scope)).unwrap()).toEqual(failure);
   expect((await store.clear(scope, failure.failureId)).unwrap()).toBe(true);
   expect((await store.read(scope)).unwrap()).toBeNull();
   expect(redis.calls.at(0)?.args.at(0)).toContain("{");
@@ -122,8 +122,8 @@ for (const malformed of [
       }),
     });
     const result = await store.read(scope);
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
       expect(result.error).toBeInstanceOf(AnalysisFailureStoreError);
     }
   });
@@ -146,8 +146,8 @@ test("read and write outages fail explicitly without an in-process delivery fall
     await store.read(scope),
     await store.clear(scope, Bun.randomUUIDv7()),
   ]) {
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
       expect(result.error).toBeInstanceOf(AnalysisFailureStoreError);
     }
   }
@@ -162,8 +162,8 @@ test("a stalled connection is bounded by the command timeout", async () => {
     }),
   });
   const result = await store.read(scope);
-  expect(Result.isError(result)).toBe(true);
-  if (Result.isError(result)) {
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
     expect(result.error).toBeInstanceOf(AnalysisFailureStoreError);
   }
 });

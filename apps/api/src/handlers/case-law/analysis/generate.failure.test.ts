@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -13,7 +14,7 @@ import { createProviderCallError } from "@/api/lib/errors/provider-call-failure"
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
-import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import * as generation from "@/api/lib/tanstack-ai-generate";
 import {
   installRecordingAnalytics,
@@ -39,7 +40,7 @@ const orgAIConfig = {
   decision: null,
 } satisfies OrgAIConfig;
 
-const owners = (stored: unknown = null) => {
+const owners = (stored: PersistedDecisionAnalysis | null = null) => {
   const resolution = {
     kind: "resolved",
     decision: {
@@ -66,7 +67,7 @@ const owners = (stored: unknown = null) => {
       fingerprint,
     },
     anchorIds: [],
-  } as const satisfies AnalysisInputResolution;
+  } satisfies AnalysisInputResolution;
   spyOn(inputOwner, "resolveAnalysisInput").mockResolvedValue(resolution);
   let held: unknown = null;
   const store = {
@@ -122,13 +123,13 @@ for (const status of ["done", "generating"] as const) {
   test(`stored ${status} analysis bypasses failure coordination`, async () => {
     const stored =
       status === "done"
-        ? {
+        ? ({
             version: 2,
             generatedAt: "2026-09-01T12:00:00.000Z",
             model: "fixture",
             inputFingerprint: fingerprint,
             tree: [],
-          }
+          } satisfies PersistedDecisionAnalysis)
         : analysisSentinel(fingerprint, new Date());
     owners(stored);
     spyOn(analysisOwner, "storesAnalyses").mockReturnValue(false);
@@ -202,7 +203,11 @@ test("two polls retain the same terminal failure and make no model calls", async
   ).mockRejectedValue(
     new HandlerError({ status: 503, message: "Unexpected model call" }),
   );
-  const startModelAction = mock(runBackground);
+  let starts = 0;
+  const startModelAction: DetachedModelActionStarter = async (work) => {
+    starts++;
+    return await runBackground(work);
+  };
   for (let poll = 0; poll < 2; poll++) {
     expect(
       (await generateAnalysis({ ...options, startModelAction })).unwrap(),
@@ -213,7 +218,7 @@ test("two polls retain the same terminal failure and make no model calls", async
     });
   }
   expect(model).toHaveBeenCalledTimes(0);
-  expect(startModelAction).toHaveBeenCalledTimes(0);
+  expect(starts).toBe(0);
   expect(commands).toEqual(["SET", "GET", "GET"]);
 });
 
@@ -320,7 +325,10 @@ const runBackground: DetachedModelActionStarter = async ({
   background,
 }) => {
   const admitted = {
-    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    admission: admitFixtureModelDispatch({
+      organizationId,
+      actionKind: "case-law.analysis",
+    }),
     signal: AbortSignal.timeout(1000),
   };
   const sentinel = await start(admitted);
