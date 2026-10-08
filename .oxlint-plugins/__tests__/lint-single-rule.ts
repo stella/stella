@@ -179,7 +179,7 @@ export const runSingleRule = async (
       `oxlint failed without reporting the requested rule:\n${output}`,
     );
   }
-  const coveragePath = process.env["OXLINT_RULE_COVERAGE_PATH"];
+  const coveragePath = process.env.OXLINT_RULE_COVERAGE_PATH;
   if (coveragePath !== undefined) {
     appendFileSync(
       coveragePath,
