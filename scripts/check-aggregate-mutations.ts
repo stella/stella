@@ -20,6 +20,7 @@ const MUTATIONS = new Set(["post", "put", "patch", "delete", "all"]);
 const baselineSchema = v.array(
   v.object({
     key: v.string(),
+    count: v.pipe(v.number(), v.integer(), v.minValue(1)),
     reason: v.pipe(v.string(), v.trim(), v.minLength(1)),
   }),
 );
@@ -439,6 +440,191 @@ const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
     return false;
   };
   return isRouteReceiver;
+};
+
+type RouteTextOptions = {
+  node: ts.Expression;
+  file: string;
+  access: SourceAccess;
+  visited?: ReadonlySet<string>;
+};
+const resolveRouteText = ({
+  node,
+  file,
+  access,
+  visited = new Set<string>(),
+}: RouteTextOptions): string | undefined => {
+  const resolved = access.resolveValue({ node, file });
+  if (resolved === undefined) {
+    return undefined;
+  }
+  if (ts.isStringLiteralLike(resolved.node)) {
+    return resolved.node.text;
+  }
+  const key = `${resolved.file}:${resolved.node.pos}:${resolved.node.end}`;
+  if (visited.has(key)) {
+    return undefined;
+  }
+  const next = new Set(visited);
+  next.add(key);
+  if (ts.isTemplateExpression(resolved.node)) {
+    let text = resolved.node.head.text;
+    for (const span of resolved.node.templateSpans) {
+      const value = resolveRouteText({
+        node: span.expression,
+        file: resolved.file,
+        access,
+        visited: next,
+      });
+      if (value === undefined) {
+        return undefined;
+      }
+      text += value + span.literal.text;
+    }
+    return text;
+  }
+  if (
+    ts.isBinaryExpression(resolved.node) &&
+    resolved.node.operatorToken.kind === ts.SyntaxKind.PlusToken
+  ) {
+    const left = resolveRouteText({
+      node: resolved.node.left,
+      file: resolved.file,
+      access,
+      visited: next,
+    });
+    const right = resolveRouteText({
+      node: resolved.node.right,
+      file: resolved.file,
+      access,
+      visited: next,
+    });
+    return left === undefined || right === undefined ? undefined : left + right;
+  }
+  return undefined;
+};
+
+type RoutePrefixOptions = {
+  source: ts.SourceFile;
+  file: string;
+  access: SourceAccess;
+};
+const createRoutePrefix = ({ source, file, access }: RoutePrefixOptions) => {
+  const variables = new Map<string, ts.Expression>();
+  const collect = (node: ts.Node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      variables.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  const literal = (node: ts.Expression, owner = file): string => {
+    const text = resolveRouteText({ node, file: owner, access });
+    if (text === undefined) {
+      panic(`Dynamic aggregate route prefix in ${file}: ${node.getText()}`);
+    }
+    return text;
+  };
+  const constructorPrefix = (node: ts.NewExpression): string => {
+    const options = node.arguments?.at(0);
+    if (options === undefined) {
+      return "";
+    }
+    const resolved = access.resolveValue({ node: options, file });
+    if (
+      resolved === undefined ||
+      !ts.isObjectLiteralExpression(resolved.node)
+    ) {
+      panic(`Dynamic aggregate router options in ${file}`);
+    }
+    for (const property of resolved.node.properties) {
+      if (
+        ts.isSpreadAssignment(property) ||
+        ts.isComputedPropertyName(property.name)
+      ) {
+        panic(`Dynamic aggregate router options in ${file}`);
+      }
+      if (property.name.text !== "prefix") {
+        continue;
+      }
+      if (ts.isPropertyAssignment(property)) {
+        return literal(property.initializer, resolved.file);
+      }
+      if (ts.isShorthandPropertyAssignment(property)) {
+        return literal(property.name, resolved.file);
+      }
+      panic(`Unsupported aggregate router prefix in ${file}`);
+    }
+    return "";
+  };
+  const prefix = (node: ts.Expression, visited = new Set<string>()): string => {
+    if (
+      ts.isAsExpression(node) ||
+      ts.isParenthesizedExpression(node) ||
+      ts.isNonNullExpression(node)
+    ) {
+      return prefix(node.expression, visited);
+    }
+    if (ts.isNewExpression(node)) {
+      return constructorPrefix(node);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression)
+    ) {
+      return prefix(node.expression.expression, visited);
+    }
+    if (!ts.isIdentifier(node) || visited.has(node.text)) {
+      panic(
+        `Unresolved aggregate route prefix in ${file}: ${node.getText(source)}`,
+      );
+    }
+    visited.add(node.text);
+    let ancestor = node.parent;
+    while (!ts.isSourceFile(ancestor)) {
+      if (
+        (ts.isArrowFunction(ancestor) || ts.isFunctionExpression(ancestor)) &&
+        ancestor.parameters.some(
+          (parameter) =>
+            ts.isIdentifier(parameter.name) &&
+            parameter.name.text === node.text,
+        )
+      ) {
+        const call = ancestor.parent;
+        if (
+          ts.isCallExpression(call) &&
+          ts.isPropertyAccessExpression(call.expression)
+        ) {
+          const outer = prefix(call.expression.expression, visited);
+          if (call.expression.name.text === "group") {
+            const group = call.arguments.at(0);
+            if (group === undefined) {
+              panic(`Missing aggregate route group prefix in ${file}`);
+            }
+            return joinRoutePath(outer, literal(group));
+          }
+          return outer;
+        }
+      }
+      ancestor = ancestor.parent;
+    }
+    const initializer = variables.get(node.text);
+    if (initializer === undefined) {
+      panic(`Missing aggregate route prefix receiver in ${file}: ${node.text}`);
+    }
+    return prefix(initializer, visited);
+  };
+  return prefix;
+};
+const joinRoutePath = (prefix: string, local: string): string => {
+  if (prefix === "") {
+    return local;
+  }
+  return `${prefix.replace(/\/$/u, "")}/${local.replace(/^\//u, "")}`;
 };
 
 type BindingOptions = {
@@ -1067,6 +1253,7 @@ type RouteContext = {
   identity: (handler: ts.Expression) => string;
   declarationCall: (node: ts.CallExpression) => boolean;
   isRouteReceiver: (node: ts.Expression) => boolean;
+  routePrefix: (node: ts.Expression) => string;
 };
 type RegistrationOptions = { node: ts.CallExpression; context: RouteContext };
 const appendMutationRegistration = ({
@@ -1074,9 +1261,10 @@ const appendMutationRegistration = ({
   context: {
     source,
     file,
-    access: { resolveValue },
+    access,
     registrations,
     isRouteReceiver,
+    routePrefix,
     identity,
     declarationCall,
     declared,
@@ -1091,13 +1279,20 @@ const appendMutationRegistration = ({
     const handler = node.arguments.at(1);
     // SQL delete(table) and ordinary collections are not route registrations.
     if (handler !== undefined && route !== undefined) {
-      const resolved = resolveValue({ node: route, file });
-      if (resolved === undefined || !ts.isStringLiteralLike(resolved.node)) {
+      const localPath = resolveRouteText({
+        node: route,
+        file,
+        access,
+      });
+      if (localPath === undefined) {
         panic(
           `Dynamic mutation route path in ${file}: ${route.getText(source)}`,
         );
       }
-      const localPath = resolved.node.text;
+      const resolvedPath = joinRoutePath(
+        routePrefix(node.expression.expression),
+        localPath,
+      );
       const actual =
         ts.isCallExpression(handler) && declarationCall(handler)
           ? handler.arguments.at(0)
@@ -1108,7 +1303,7 @@ const appendMutationRegistration = ({
       const handlerIdentity = identity(actual);
       const method = node.expression.name.text.toUpperCase();
       registrations.push({
-        key: `${file}|${method}|${localPath}|${handlerIdentity}`,
+        key: `${file}|${method}|${resolvedPath}|${handlerIdentity}`,
         file,
         line:
           source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
@@ -1122,11 +1317,19 @@ const appendMutationRegistration = ({
 
 const appendInterceptorRegistrations = ({
   node,
-  context: { source, file, bindings, registrations },
+  context: {
+    source,
+    file,
+    bindings,
+    registrations,
+    routePrefix,
+    isRouteReceiver,
+  },
 }: RegistrationOptions) => {
   if (
     ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.name.text === "onRequest"
+    node.expression.name.text === "onRequest" &&
+    isRouteReceiver(node.expression.expression)
   ) {
     const collectInterceptor = (argument: ts.Node) => {
       if (ts.isCallExpression(argument)) {
@@ -1142,7 +1345,7 @@ const appendInterceptorRegistrations = ({
         }
         if (target?.startsWith(`${API}handlers/`)) {
           registrations.push({
-            key: `${file}|INTERCEPT|${target}`,
+            key: `${file}|INTERCEPT|${routePrefix(node.expression.expression)}|${target}`,
             file,
             line:
               source.getLineAndCharacterOfPosition(argument.getStart(source))
@@ -1170,6 +1373,7 @@ const enumerateModuleRegistrations = (context: RouteContext) => {
     registrations,
     bindings,
     isRouteReceiver,
+    routePrefix,
   } = context;
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)) {
@@ -1184,7 +1388,8 @@ const enumerateModuleRegistrations = (context: RouteContext) => {
       }
       if (
         ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "use"
+        node.expression.name.text === "use" &&
+        isRouteReceiver(node.expression.expression)
       ) {
         const collectProducer = (argument: ts.Node) => {
           if (ts.isIdentifier(argument)) {
@@ -1210,7 +1415,7 @@ const enumerateModuleRegistrations = (context: RouteContext) => {
           .map((argument) => argument.getText(source).replace(/\s+/gu, " "))
           .join("|");
         registrations.push({
-          key: `${file}|GENERIC|${signature}`,
+          key: `${file}|GENERIC|${node.expression.expression.getText(source)}|${signature}`,
           file,
           line:
             source.getLineAndCharacterOfPosition(node.getStart(source)).line +
@@ -1236,7 +1441,7 @@ const enumerateModuleRegistrations = (context: RouteContext) => {
         const handler = node.arguments.at(0);
         if (handler !== undefined) {
           registrations.push({
-            key: `${file}|MOUNT|${handler.getText(source)}`,
+            key: `${file}|MOUNT|${routePrefix(node.expression.expression)}|${handler.getText(source)}`,
             file,
             line:
               source.getLineAndCharacterOfPosition(node.getStart(source)).line +
@@ -1304,6 +1509,7 @@ export const enumerateAggregateMutations = (
       identity,
       declared,
       declarationCall,
+      routePrefix: createRoutePrefix({ source, file, access }),
     });
   }
   return registrations.toSorted((a, b) => compareCodeUnit(a.key, b.key));
@@ -1319,26 +1525,40 @@ export const checkAggregateMutationCoverage = ({
   previous: MutationBaseline;
 }): string[] => {
   const errors: string[] = [];
-  const current = new Map(baseline.map((entry) => [entry.key, entry.reason]));
-  const prior = new Map(previous.map((entry) => [entry.key, entry.reason]));
+  const current = new Map(baseline.map((entry) => [entry.key, entry]));
+  const prior = new Map(previous.map((entry) => [entry.key, entry]));
   if (current.size !== baseline.length) {
     errors.push("Duplicate aggregate mutation baseline entries");
   }
-  const needed = new Set(
-    registrations.filter((route) => !route.declared).map((route) => route.key),
+  const needed = new Map(
+    aggregateMutationBaseline(registrations).map((entry) => [entry.key, entry]),
   );
   for (const entry of baseline) {
     if (entry.reason.trim() === "") {
       errors.push(`Reason required: ${entry.key}`);
     }
+    if (!Number.isSafeInteger(entry.count) || entry.count <= 0) {
+      errors.push(`Positive integer registration count required: ${entry.key}`);
+    }
     if (!needed.has(entry.key)) {
       errors.push(`Stale aggregate mutation baseline entry: ${entry.key}`);
     }
-    if (prior.get(entry.key) !== entry.reason) {
+    const priorEntry = prior.get(entry.key);
+    if (
+      priorEntry === undefined ||
+      priorEntry.reason !== entry.reason ||
+      entry.count > priorEntry.count
+    ) {
       errors.push(`Aggregate mutation baseline may only shrink: ${entry.key}`);
     }
+    const actualCount = needed.get(entry.key)?.count;
+    if (actualCount !== undefined && actualCount !== entry.count) {
+      errors.push(
+        `Aggregate mutation registration count mismatch: ${entry.key} (actual ${actualCount}, baseline ${entry.count})`,
+      );
+    }
   }
-  for (const key of needed) {
+  for (const key of needed.keys()) {
     if (!current.has(key)) {
       errors.push(`Undeclared aggregate mutation: ${key}`);
     }
@@ -1357,6 +1577,30 @@ const legacyReason = (route: MutationRegistration) => {
     default:
       return `Existing ${route.method} route ${route.handler} awaits ownership declaration at its handler boundary.`;
   }
+};
+
+export const aggregateMutationBaseline = (
+  registrations: readonly MutationRegistration[],
+): MutationBaseline => {
+  const rows = new Map<string, MutationBaseline[number]>();
+  for (const route of registrations) {
+    if (route.declared) {
+      continue;
+    }
+    const existing = rows.get(route.key);
+    if (existing !== undefined) {
+      existing.count += 1;
+      continue;
+    }
+    rows.set(route.key, {
+      key: route.key,
+      count: 1,
+      reason: legacyReason(route),
+    });
+  }
+  return [...rows.values()].toSorted((left, right) =>
+    compareCodeUnit(left.key, right.key),
+  );
 };
 
 const aggregateMutationComparisonCommit = () => {
@@ -1406,13 +1650,7 @@ if (import.meta.main) {
     }
     writeFileSync(
       path.join(ROOT, BASELINE),
-      `${JSON.stringify(
-        registrations
-          .filter((route) => !route.declared)
-          .map((route) => ({ key: route.key, reason: legacyReason(route) })),
-        null,
-        2,
-      )}\n`,
+      `${JSON.stringify(aggregateMutationBaseline(registrations), null, 2)}\n`,
     );
   } else {
     const baseline = v.parse(
@@ -1427,19 +1665,19 @@ if (import.meta.main) {
     const previous =
       base.status === 0
         ? v.parse(baselineSchema, JSON.parse(base.stdout))
-        : enumerateAggregateMutations((file) => {
-            const result = spawnSync(
-              "git",
-              ["show", `${comparisonCommit}:${file}`],
-              {
-                cwd: ROOT,
-                encoding: "utf-8",
-              },
-            );
-            return result.status === 0 ? result.stdout : undefined;
-          })
-            .filter((route) => !route.declared)
-            .map((route) => ({ key: route.key, reason: legacyReason(route) }));
+        : aggregateMutationBaseline(
+            enumerateAggregateMutations((file) => {
+              const result = spawnSync(
+                "git",
+                ["show", `${comparisonCommit}:${file}`],
+                {
+                  cwd: ROOT,
+                  encoding: "utf-8",
+                },
+              );
+              return result.status === 0 ? result.stdout : undefined;
+            }),
+          );
     const errors = checkAggregateMutationCoverage({
       registrations,
       baseline,

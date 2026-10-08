@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  aggregateMutationBaseline,
   checkAggregateMutationCoverage,
   enumerateAggregateMutations,
 } from "./check-aggregate-mutations";
@@ -26,12 +27,10 @@ const fixture = (registration: string) =>
 const enumerate = (sources: Map<string, string>) =>
   enumerateAggregateMutations((file) => sources.get(file));
 const legacy = (registrations: ReturnType<typeof enumerate>) =>
-  registrations
-    .filter((entry) => !entry.declared)
-    .map((entry) => ({
-      key: entry.key,
-      reason: "Existing fixture awaits ownership declaration.",
-    }));
+  aggregateMutationBaseline(registrations).map((entry) => ({
+    ...entry,
+    reason: "Existing fixture awaits ownership declaration.",
+  }));
 
 describe("aggregate mutation route coverage", () => {
   test("a planted mutation outside the inventory fails", () => {
@@ -50,6 +49,86 @@ describe("aggregate mutation route coverage", () => {
         previous: baseline,
       }),
     ).toEqual([expect.stringContaining("Undeclared aggregate mutation:")]);
+  });
+
+  test("a copied legacy registration in another group requires its own resolved path", () => {
+    const original = enumerate(
+      fixture(
+        'group("/one", (app) => app.post("/existing", existing.handler))',
+      ),
+    );
+    const baseline = legacy(original);
+    const changed = enumerate(
+      fixture(
+        'group("/one", (app) => app.post("/existing", existing.handler)).group("/two", (app) => app.post("/existing", existing.handler))',
+      ),
+    );
+    expect(changed.map((entry) => entry.key)).toEqual([
+      expect.stringContaining("|POST|/one/existing|"),
+      expect.stringContaining("|POST|/two/existing|"),
+    ]);
+    expect(
+      checkAggregateMutationCoverage({
+        registrations: changed,
+        baseline,
+        previous: baseline,
+      }),
+    ).toEqual([expect.stringContaining("Undeclared aggregate mutation:")]);
+  });
+  test("identical registration copies cannot reuse a baseline count", () => {
+    const original = enumerate(fixture('post("/existing", existing.handler)'));
+    const baseline = legacy(original);
+    const changed = enumerate(
+      fixture(
+        'post("/existing", existing.handler).post("/existing", existing.handler)',
+      ),
+    );
+    expect(
+      checkAggregateMutationCoverage({
+        registrations: changed,
+        baseline,
+        previous: baseline,
+      }),
+    ).toEqual([expect.stringContaining("count")]);
+    expect(
+      checkAggregateMutationCoverage({
+        registrations: changed,
+        baseline: legacy(changed),
+        previous: baseline,
+      }),
+    ).toEqual([expect.stringContaining("may only shrink")]);
+    expect(
+      checkAggregateMutationCoverage({
+        registrations: original,
+        baseline,
+        previous: legacy(changed),
+      }),
+    ).toEqual([]);
+  });
+  test("router and nested group prefixes compose", () => {
+    const sources = fixture(
+      'group("/inner", (app) => app.group("/child", (nested) => nested.post("/existing", existing.handler)))',
+    );
+    sources.set(
+      routes,
+      String(sources.get(routes)).replace(
+        "new Elysia()",
+        'new Elysia({prefix: "/router"})',
+      ),
+    );
+    const original = enumerate(sources);
+    expect(original.at(0)?.key).toContain(
+      "|POST|/router/inner/child/existing|",
+    );
+  });
+  test("unresolved group prefixes fail closed", () => {
+    expect(() =>
+      enumerate(
+        fixture(
+          'group(dynamic, (app) => app.post("/existing", existing.handler))',
+        ),
+      ),
+    ).toThrow("Dynamic aggregate route prefix");
   });
 
   test("new baseline rows and changed reasons cannot grandfather a route", () => {
