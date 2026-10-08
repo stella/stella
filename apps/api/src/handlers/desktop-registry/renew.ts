@@ -96,12 +96,11 @@ const renewDesktopAccount = createSafePublicHandler(
   },
 );
 
-// The renewal owner takes desktopMembership then desktopCredential through
-// the aggregate lock owner inside its own transaction; this route holds none.
+// The renewal owner locks desktopMembership then desktopCredential through
+// the aggregate lock owner inside its own transaction.
 declareAggregateMutation(renewDesktopAccount.handler, {
-  type: "independent",
-  reason:
-    "Delegates to the desktop renewal owner, which locks membership and credential through the aggregate lock owner.",
+  type: "aggregate",
+  aggregates: ["desktopMembership", "desktopCredential"],
 });
 
 export default renewDesktopAccount;
