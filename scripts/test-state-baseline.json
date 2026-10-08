@@ -654,6 +654,11 @@
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
+  "apps/web/src/components/chat/chat-thread-messages-playbook.dom.test.tsx": {
+    "count": 3,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
   "apps/web/src/components/chat/chat-thread-messages.test.tsx": {
     "count": 3,
     "owner": "ai",
