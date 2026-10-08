@@ -274,6 +274,7 @@ export const RequestSecretCard = ({
     if (
       decision === "provide" &&
       saveForFuture &&
+      secretTarget !== undefined &&
       secretTarget.connector.responseDisposition === "normal" &&
       normalConnectionAction !== "replace-with-receipt-only"
     ) {
