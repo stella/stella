@@ -37,6 +37,7 @@ export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
 export const FEATURE_REGISTRY = defineFeatureRegistry({
   [LEGAL_LISTS_FEATURE_ID]: {
     enrolment: "invitation",
+    deploymentFeature: "FEATURE_LEGAL_LISTS",
     ownership: {
       handlerDirectories: ["apps/api/src/handlers/lists"],
       tableSchemaFiles: [],

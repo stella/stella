@@ -5,6 +5,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { envFeatureAccess } from "@/api/env-feature-access";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import { decideFeatureAccess } from "@/api/lib/feature-access/policy";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
@@ -24,13 +25,17 @@ export const resolveScopedFeatureIds = async ({
   if (userId === null) {
     return [];
   }
-  const candidates = Object.keys(FEATURE_REGISTRY).filter((id) =>
-    [...featurePrerequisiteClosure(FEATURE_REGISTRY, id)].every(
-      (required) =>
-        envFeatureAccess.API_FEATURE_ACCESS_GRANTS[required]?.some(
-          (grant) => grant.organizationId === organizationId,
-        ) === true,
-    ),
+  // The same deployment decision as the request snapshot: a feature whose
+  // routes the deployment hides admits nothing through row policies.
+  const candidates = Object.keys(FEATURE_REGISTRY).filter(
+    (id) =>
+      isFeatureDeployed(FEATURE_REGISTRY, id) &&
+      [...featurePrerequisiteClosure(FEATURE_REGISTRY, id)].every(
+        (required) =>
+          envFeatureAccess.API_FEATURE_ACCESS_GRANTS[required]?.some(
+            (grant) => grant.organizationId === organizationId,
+          ) === true,
+      ),
   );
   if (candidates.length === 0) {
     return [];
@@ -68,6 +73,7 @@ export const resolveScopedFeatureIds = async ({
         userId,
         user,
         membership: true,
+        deploymentEnabled: isFeatureDeployed(FEATURE_REGISTRY, featureId),
       }).status === "enabled",
   );
 };
