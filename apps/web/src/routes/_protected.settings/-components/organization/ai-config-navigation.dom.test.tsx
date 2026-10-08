@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
 
 import messages from "@/i18n/langs/en.json";
@@ -24,7 +26,15 @@ const savedConfig = {
   providers: [
     { provider: "google", apiKeyMasked: "AIza****1234", region: "global" },
   ],
-  overrideModels: null,
+  overrideModels: {
+    chat: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.chat },
+    fast: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.fast },
+    reasoning: {
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.reasoning,
+    },
+    pdf: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.pdf },
+  },
   decision: null,
 } satisfies OrganizationAIConfig;
 globalThis.fetch = Object.assign(
@@ -90,7 +100,7 @@ const mount = async (initialConfig: OrganizationAIConfig = config) => {
   });
   const destination = router.createRoute({
     getParentRoute: () => root,
-    path: "/left",
+    path: "/settings",
     component: () => <p>{messages.common.done}</p>,
   });
   const appRouter = router.createRouter({
@@ -128,7 +138,7 @@ test("leaving AI provider settings with a dirty key prompts before navigation", 
   dirtyKey();
   expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
   await act(async () => {
-    void appRouter.navigate({ to: "/left" });
+    void appRouter.navigate({ to: "/settings" });
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(screen.getByText(messages.common.unsavedLeaveConfirm)).toBeDefined();
@@ -139,7 +149,7 @@ test("leaving clean AI provider settings proceeds without a prompt", async () =>
   const appRouter = await mount();
   expect(hasUnsavedWork()).toBe(false);
   await act(async () => {
-    await appRouter.navigate({ to: "/left" });
+    await appRouter.navigate({ to: "/settings" });
   });
   expect(await screen.findByText(messages.common.done)).toBeDefined();
   expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -172,7 +182,7 @@ test("saving the key clears the navigation prompt", async () => {
   ).toBe(true);
   expect(hasUnsavedWork()).toBe(false);
   await act(async () => {
-    await appRouter.navigate({ to: "/left" });
+    await appRouter.navigate({ to: "/settings" });
   });
   expect(await screen.findByText(messages.common.done)).toBeDefined();
   expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -182,7 +192,7 @@ test("cancelling the leave prompt retains the edited key and settings route", as
   const appRouter = await mount();
   dirtyKey();
   await act(async () => {
-    void appRouter.navigate({ to: "/left" });
+    void appRouter.navigate({ to: "/settings" });
   });
   const dialog = await screen.findByRole("alertdialog");
   expect(Object.hasOwn(dialog.dataset, "open")).toBe(true);
@@ -217,7 +227,11 @@ test("removing one saved provider posts only the remaining stored credentials", 
     name: messages.organization.aiConfig.removeProvider,
   });
   expect(removeButtons).toHaveLength(2);
-  fireEvent.click(removeButtons[1]);
+  const removeButton = removeButtons.at(1);
+  if (removeButton === undefined) {
+    panic("The second provider must have a remove control");
+  }
+  fireEvent.click(removeButton);
   expect(
     requests.filter(
       (request) => request.method === "POST" || request.method === "DELETE",
@@ -286,13 +300,22 @@ test("saving one dirty row preserves the other key and its leave prompt", async 
   );
   expect(inputs).toHaveLength(2);
   const otherKey = `sk-ant-api03-${"b".repeat(32)}5678`;
-  fireEvent.change(inputs[0], { target: { value: GOOGLE_KEY } });
-  fireEvent.change(inputs[1], { target: { value: otherKey } });
+  const googleInput = inputs.at(0);
+  const anthropicInput = inputs.at(1);
+  if (googleInput === undefined || anthropicInput === undefined) {
+    panic("Both provider key inputs must be present");
+  }
+  fireEvent.change(googleInput, { target: { value: GOOGLE_KEY } });
+  fireEvent.change(anthropicInput, { target: { value: otherKey } });
   const saveButtons = screen.getAllByRole("button", {
     name: messages.common.save,
   });
   expect(saveButtons).toHaveLength(2);
-  fireEvent.click(saveButtons[0]);
+  const saveButton = saveButtons.at(0);
+  if (saveButton === undefined) {
+    panic("The Google provider must have a save control");
+  }
+  fireEvent.click(saveButton);
   await screen.findByText(messages.organization.aiConfig.savedVerified);
   expect(screen.getByText("AIza****1234")).toBeDefined();
   expect(
@@ -310,7 +333,7 @@ test("saving one dirty row preserves the other key and its leave prompt", async 
   expect(writes.at(0)?.body).not.toContain(otherKey);
   expect(writes.at(0)?.body).not.toContain('"provider":"anthropic"');
   await act(async () => {
-    void appRouter.navigate({ to: "/left" });
+    void appRouter.navigate({ to: "/settings" });
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(appRouter.state.location.pathname).toBe("/settings/organization");

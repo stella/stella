@@ -6,7 +6,7 @@ import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 
 import type { TranslationKey } from "@/i18n/types";
 
-export const PROVIDER_SETUP_GUIDANCE = {
+const PROVIDER_SETUP_GUIDANCE = {
   [PROVIDER_SETUP_ERROR_CODE.anthropicWorkspaceRequired]: {
     guidance: "organization.aiConfig.anthropicWorkspaceRequired",
     linkLabel: "organization.aiConfig.anthropicWorkspaces",

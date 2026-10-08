@@ -419,5 +419,5 @@ function providerRowErrorMessage(error: unknown, fallback: string): string {
   if (APIError.is(error)) {
     return error.rawMessage ?? error.message;
   }
-  return error instanceof Error ? error.message : fallback;
+  return fallback;
 }

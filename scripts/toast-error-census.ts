@@ -19,7 +19,7 @@ const collectToastBindings = (source: ts.SourceFile) => {
   const declarations = new Map<string, SourceBinding[]>();
   const declare = (name: string, value: ts.Node, declaration: ts.Node) => {
     let scope = declaration.parent;
-    while (scope.parent && !ts.isBlock(scope) && !ts.isSourceFile(scope)) {
+    while (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
       scope = scope.parent;
     }
     const bindings = declarations.get(name) ?? [];
@@ -28,8 +28,8 @@ const collectToastBindings = (source: ts.SourceFile) => {
   };
   const resolve = (identifier: ts.Identifier) => {
     const bindings = declarations.get(identifier.text) ?? [];
-    let scope: ts.Node | undefined = identifier.parent;
-    while (scope) {
+    let scope = identifier.parent;
+    while (!ts.isSourceFile(scope)) {
       const binding = bindingAtScope(bindings, scope);
       if (binding) {
         return binding.value;
@@ -46,7 +46,7 @@ const collectToastBindings = (source: ts.SourceFile) => {
       }
       scope = scope.parent;
     }
-    return undefined;
+    return bindingAtScope(bindings, scope)?.value;
   };
   const collect = (node: ts.Node) => {
     if (

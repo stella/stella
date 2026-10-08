@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 3,
+  "reason": "Provider configuration shares one Anthropic header owner, one typed setup-error classifier, and one credential-text sanitizer reused by probes and feedback."
+}
