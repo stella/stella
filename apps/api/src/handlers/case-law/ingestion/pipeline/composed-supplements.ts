@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sanitizeErrorForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -73,12 +74,13 @@ export const absorbComposedSupplementRows = async ({
         return Result.isError(rehomed.value) ? rehomed.value.error : null;
       })();
       if (rehomeError !== null) {
+        const safeError = sanitizeErrorForOutput(rehomeError);
         logger.error(SUPPLEMENT_ABSORB_FAILED, {
           sourceId,
           judgmentId,
           sourceDocumentId,
-          ...errorSystemFields(rehomeError),
-          "error.detail": wrappedErrorDetail(rehomeError),
+          ...errorSystemFields(safeError),
+          "error.detail": wrappedErrorDetail(safeError),
         });
         return [sourceDocumentId];
       }
@@ -91,14 +93,15 @@ export const absorbComposedSupplementRows = async ({
         observationOrder,
       });
       if (Result.isError(absorbed)) {
+        const safeError = sanitizeErrorForOutput(absorbed.error);
         logger.error(SUPPLEMENT_ABSORB_FAILED, {
           sourceId,
           judgmentId,
           sourceDocumentId,
-          ...errorSystemFields(absorbed.error),
-          "error.detail": wrappedErrorDetail(absorbed.error),
+          ...errorSystemFields(safeError),
+          "error.detail": wrappedErrorDetail(safeError),
         });
-        captureError(absorbed.error, {
+        captureError(safeError, {
           sourceId,
           step: "absorbComposedSupplementRows",
         });

@@ -12,7 +12,11 @@
 
 import { Result } from "better-result";
 
-import type { FailureGrade } from "@stll/errors";
+import {
+  sanitizeErrorForOutput,
+  sanitizeQueryErrorText,
+  type FailureGrade,
+} from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {
@@ -159,6 +163,8 @@ const observe = (
   { sink, ctx, request, escalation }: ObserveFailureOptions,
 ): void => {
   const evidence = readEvidence(error);
+  const outputError = sanitizeErrorForOutput(error);
+  const outputEvidence = readEvidence(outputError);
   const grading: FailureGrading = gradeFailure(evidence, sink, {
     requestAborted: request?.signal.aborted,
   });
@@ -167,9 +173,9 @@ const observe = (
   const attributes: LoggerAttributes = {
     ...context.accepted,
     ...requestFields(request),
-    ...errorFields(evidence),
+    ...errorFields(outputEvidence),
     ...failureFields(grading, sink),
-    "failure.policy": policy.source,
+    "failure.policy": sanitizeQueryErrorText(policy.source),
     ...(context.rejected > 0
       ? { "failure.ctx_rejected": context.rejected }
       : {}),
@@ -198,7 +204,7 @@ const observe = (
     logger.warn(sink.event, attributes);
   }
   if (policy.capture) {
-    captureObservedError(error, {
+    captureObservedError(outputError, {
       context: context.accepted,
       request,
       observation: grading,

@@ -24,8 +24,10 @@ const run = async (): Promise<void> => {
   }
 };
 
-// oxlint-disable-next-line no-raw-error-output/no-raw-error-output -- fixture proves arbitrary rejection callback bindings cannot reach logger sinks
-void runQuery().catch((error) => logger.error("query.failed", { error }));
+void runQuery().catch((error: unknown) => {
+  // oxlint-disable-next-line no-raw-error-output/no-raw-error-output -- fixture proves arbitrary rejection callback bindings cannot reach logger sinks
+  logger.error("query.failed", { error });
+});
 
 declare const logger: {
   error: (event: string, fields: Record<string, unknown>) => void;

@@ -42,6 +42,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { sanitizeErrorForOutput } from "@stll/errors";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_OUTCOME,
@@ -1686,7 +1687,7 @@ const assertPdfBody = (bytes: Uint8Array): void => {
   });
   logger.warn(
     "case_law.ingestion.sk_document_parse_failed",
-    skDocumentErrorDiagnostics(error),
+    skDocumentErrorDiagnostics(sanitizeErrorForOutput(error)),
   );
   throw error;
 };

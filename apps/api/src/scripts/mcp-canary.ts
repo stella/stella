@@ -15,6 +15,7 @@ import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
+import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -447,7 +448,7 @@ const inspectNotificationStream = async (
         reader.read().then(
           ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
           (error: unknown) => {
-            console.error(
+            printError(
               `[mcp-canary] stream read failed: ${describeProbeFailure(error)}`,
             );
             return "read_failed" as const;
@@ -2175,7 +2176,7 @@ if (import.meta.main) {
     // headers, and the token rides in one of them.
     const message =
       error instanceof Error ? error.constructor.name : "unknown error";
-    console.error(`[mcp-canary] probe run failed (${message}).`);
+    printError(`[mcp-canary] probe run failed (${message}).`);
     process.exitCode = 1;
   });
 }

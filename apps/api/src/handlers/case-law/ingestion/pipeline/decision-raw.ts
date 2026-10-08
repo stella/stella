@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { sanitizeErrorForOutput } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -132,6 +134,7 @@ export const acquireSourceRawArtifact = async ({
   }
 
   const rawWriteFailed = (error: unknown) => {
+    const safeError = sanitizeErrorForOutput(error);
     if (!existing) {
       // New decision: hold the page's cursor and retry the slice.
       // Inserting with sourceRawS3Key: null would set sourceHash,
@@ -146,11 +149,11 @@ export const acquireSourceRawArtifact = async ({
       logger.error("case_law.ingestion.source_raw_write_failed", {
         sourceId,
         caseNumber: result.caseNumber,
-        ...errorSystemFields(error),
-        ...pgErrorFields(error),
-        "error.detail": wrappedErrorDetail(error),
+        ...errorSystemFields(safeError),
+        ...pgErrorFields(safeError),
+        "error.detail": wrappedErrorDetail(safeError),
       });
-      captureError(error, { sourceId, step: "uploadSourceRaw" });
+      captureError(safeError, { sourceId, step: "uploadSourceRaw" });
 
       return {
         type: "retry",
@@ -162,7 +165,7 @@ export const acquireSourceRawArtifact = async ({
       } as const;
     }
 
-    captureError(error, { sourceId, step: "uploadSourceRaw" });
+    captureError(safeError, { sourceId, step: "uploadSourceRaw" });
 
     // Update: preserve existing S3 key and DO NOT advance sourceHash.
     // If we wrote the new hash with the old key, the hash mismatch
