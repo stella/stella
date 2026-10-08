@@ -10,6 +10,7 @@ import {
   APIError,
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
+  getOAuthState,
 } from "better-auth/api";
 import {
   emailOTP,
@@ -80,6 +81,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -133,10 +135,15 @@ import {
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
+  createMicrosoftProfileMapper,
   createSocialIdentityValidation,
-  isVerifiedMicrosoftIdentity,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
 } from "@/api/lib/auth/social-identity-policy";
+import {
+  classifySocialCallback,
+  socialCallbackErrorUrl,
+  socialSignInProvider,
+} from "@/api/lib/auth/social-sign-in-outcome";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -947,6 +954,64 @@ const oauthUiFragmentBridgePlugin = {
   },
 } satisfies BetterAuthPlugin;
 
+/**
+ * Logs each social callback's outcome (`classifySocialCallback`) as
+ * `auth.social_sign_in`, after the two-factor redirect has settled the
+ * response the browser receives.
+ */
+const socialSignInOutcomePlugin = {
+  id: "stella-social-sign-in-outcome",
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          isSocialSignInCallbackPath(ctx.path),
+        handler: createAuthMiddleware(async (ctx) => {
+          logger.info("auth.social_sign_in", {
+            outcome: classifySocialCallback(
+              ctx.context.returned,
+              socialCallbackErrorUrl(
+                await getOAuthState(),
+                ctx.context.options.onAPIError?.errorURL ??
+                  `${ctx.context.baseURL}/error`,
+                ctx.context.baseURL,
+              ),
+            ),
+            provider: socialSignInProvider(ctx.params?.["id"]),
+          });
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
+/**
+ * Logs each 4xx answer of an auth endpoint by its route pattern and protocol
+ * error code (`describeAuthRefusal`), so a failing token refresh is visible
+ * apart from every other refused call behind the catch-all auth route.
+ */
+const authRefusalLogPlugin = {
+  id: "stella-auth-refusal-log",
+  hooks: {
+    after: [
+      {
+        matcher: () => true,
+        handler: createAuthMiddleware(async (ctx) => {
+          const refusal = describeAuthRefusal({
+            path: ctx.path,
+            returned: ctx.context.returned,
+            body: ctx.body,
+          });
+          if (refusal.type === "refused") {
+            logger.warn("auth.request_refused", refusal.attributes);
+          }
+          await Promise.resolve();
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -1729,15 +1794,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
               tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-              mapProfileToUser: env.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM
-                ? (profile) => ({
-                    emailVerified: isVerifiedMicrosoftIdentity({
-                      profile,
-                      email: profile.email,
-                      tenantId: env.MICROSOFT_AUTH_TENANT_ID,
-                    }),
-                  })
-                : undefined,
+              mapProfileToUser: createMicrosoftProfileMapper(
+                env.MICROSOFT_AUTH_TENANT_ID,
+              ),
             },
           }
         : {}),
@@ -1857,6 +1916,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
+      // After the two-factor redirect, so it counts the response the browser
+      // actually receives.
+      socialSignInOutcomePlugin,
       organizationPlugin,
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
@@ -2002,6 +2064,8 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         },
       ),
       oauthUiFragmentBridgePlugin,
+      // Last, so it records the answer every other hook has settled on.
+      authRefusalLogPlugin,
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {

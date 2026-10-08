@@ -4239,6 +4239,10 @@
     "seconds": 0.641086,
     "source": "estimated"
   },
+  "src/lib/auth/auth-refusal-log.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/auth-response-cookies.test.ts": {
     "seconds": 0.673137,
     "source": "estimated"
@@ -4313,6 +4317,10 @@
   },
   "src/lib/auth/social-identity-policy.test.ts": {
     "seconds": 0.541877,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-sign-in-outcome.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/auth/third-party-outbound-permit.test.ts": {
@@ -9300,6 +9308,14 @@
     "source": "estimated"
   },
   "src/lib/flows/sync-flow-schedule-trigger.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/analysis/generate.read-budget.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/observability/event-loop-delay.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }

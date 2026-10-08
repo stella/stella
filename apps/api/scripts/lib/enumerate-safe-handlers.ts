@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
 
 import {
   isServiceClassification,
@@ -283,7 +284,14 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
     }
     let mod: unknown;
     try {
-      mod = await import(abs);
+      const loaded = await loadLocalModule({
+        root: path.join(REPO_ROOT, "apps/api/src/handlers"),
+        modulePath: abs,
+      });
+      if (loaded.isErr()) {
+        throw loaded.error;
+      }
+      mod = loaded.value;
     } catch (error) {
       importErrors.push({
         id,
