@@ -643,6 +643,14 @@ const UNMIGRATED_PUBLISHER_READERS = [
 const OWNERSHIP_DECLARATIONS = [
   STATUS_TRANSITION_OWNERSHIP,
   {
+    id: "aggregate-lock",
+    capability: "Acquiring transaction aggregate locks",
+    owner: ["apps/api/src/lib/db/aggregate-lock.ts"],
+    summary:
+      "One registry orders aggregate acquisitions within the caller's transaction. The confine-aggregate-lock rule and exact-site inventory reject raw acquisitions outside the owner; existing sites remain in a reasoned shrinking baseline. Mutation route enumeration requires a declaration or a legacy entry.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "deferred-document-source-ownership",
     capability: "Owning deferred document writes",
     owner: ["apps/api/src/lib/legal-search/sk-document-backfill.ts"],

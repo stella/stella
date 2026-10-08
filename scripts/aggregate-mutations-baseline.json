@@ -1,0 +1,1794 @@
+[
+  {
+    "key": "apps/api/src/handlers/agent-auth/routes.ts|POST|/agent/event/notify|async (ctx) => { // RFC 8935: a SET receiver acknowledges with 202 Accepted. ctx.set.status = 202; return await agentEventsHandler.handler(ctx); }",
+    "reason": "Existing POST route async (ctx) => { // RFC 8935: a SET receiver acknowledges with 202 Accepted. ctx.set.status = 202; return await agentEventsHandler.handler(ctx); } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/agent-auth/routes.ts|POST|/agent/identity/claim|apps/api/src/handlers/agent-auth/claim.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/agent-auth/claim.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/agent-auth/routes.ts|POST|/agent/identity/confirm|apps/api/src/handlers/agent-auth/confirm.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/agent-auth/confirm.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/agent-auth/routes.ts|POST|/agent/identity|apps/api/src/handlers/agent-auth/identity.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/agent-auth/identity.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/agent-auth/routes.ts|POST|/agent/token|apps/api/src/handlers/agent-auth/token.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/agent-auth/token.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/ai-autocomplete/routes.ts|POST|/stream|apps/api/src/handlers/ai-autocomplete/stream.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/ai-autocomplete/stream.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/ai-config/routes.ts|POST|/validate-provider|apps/api/src/handlers/ai-config/validate-provider.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/ai-config/validate-provider.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/personal/organization/revoke|apps/api/src/handlers/api-keys/personal/revoke-organization.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/personal/revoke-organization.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/personal/policy|apps/api/src/handlers/api-keys/personal/policy.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/personal/policy.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/personal/revoke|apps/api/src/handlers/api-keys/personal/revoke.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/personal/revoke.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/personal/rotate|apps/api/src/handlers/api-keys/personal/rotate.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/personal/rotate.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/personal|apps/api/src/handlers/api-keys/personal/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/personal/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/revoke|apps/api/src/handlers/api-keys/revoke.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/revoke.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/rotate|apps/api/src/handlers/api-keys/rotate.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/rotate.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/api-keys/routes.ts|POST|/|apps/api/src/handlers/api-keys/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/api-keys/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/bilingual-translations/routes.ts|POST|/prepare|apps/api/src/handlers/bilingual-translations/prepare.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/bilingual-translations/prepare.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/bilingual-translations/routes.ts|POST|/runs|apps/api/src/handlers/bilingual-translations/create-run.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/bilingual-translations/create-run.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/billing-codes/routes.ts|DELETE|/|apps/api/src/handlers/billing-codes/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/billing-codes/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/billing-codes/routes.ts|PATCH|/|apps/api/src/handlers/billing-codes/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/billing-codes/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/billing-codes/routes.ts|PUT|/|apps/api/src/handlers/billing-codes/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/billing-codes/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/public-routes.ts|POST|/decisions/search|apps/api/src/handlers/case-law/public-routes.ts#searchDecisions.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/public-routes.ts#searchDecisions.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/research/routes.ts|DELETE|/columns/:columnId|apps/api/src/handlers/case-law/research/columns-delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/case-law/research/columns-delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/research/routes.ts|PATCH|/columns/:columnId|apps/api/src/handlers/case-law/research/columns-update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/case-law/research/columns-update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/research/routes.ts|POST|/answers/lookup|apps/api/src/handlers/case-law/research/answers-lookup.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/research/answers-lookup.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/research/routes.ts|POST|/answers/run|apps/api/src/handlers/case-law/research/answers-run.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/research/answers-run.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/research/routes.ts|POST|/columns/suggest-prompt|apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/research/routes.ts|POST|/columns|apps/api/src/handlers/case-law/research/columns-create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/research/columns-create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/research/routes.ts|PUT|/columns/order|apps/api/src/handlers/case-law/research/columns-reorder.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/case-law/research/columns-reorder.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/routes.ts|DELETE|/:linkId|apps/api/src/handlers/case-law/matter-links/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/case-law/matter-links/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/routes.ts|POST|/batch|apps/api/src/handlers/case-law/matter-links/batch/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/matter-links/batch/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/routes.ts|POST|/decisions/search/expand|apps/api/src/handlers/case-law/decisions/search-expand.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/decisions/search-expand.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/routes.ts|POST|/decisions/search/refine|apps/api/src/handlers/case-law/decisions/search-refine.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/decisions/search-refine.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/case-law/routes.ts|POST|/|apps/api/src/handlers/case-law/matter-links/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/case-law/matter-links/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/catalogue/routes.ts|POST|/install-skill|apps/api/src/handlers/catalogue/install.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/catalogue/install.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|DELETE|/threads/:threadId|apps/api/src/handlers/chat/threads/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/chat/threads/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|PATCH|/threads/:threadId/model|apps/api/src/handlers/chat/update-thread-model.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/chat/update-thread-model.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|PATCH|/threads/:threadId/title|apps/api/src/handlers/chat/threads/rename.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/chat/threads/rename.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|PATCH|/threads/:threadId|apps/api/src/handlers/chat/threads/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/chat/threads/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/improve-prompt|apps/api/src/handlers/chat/improve-prompt.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/improve-prompt.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/template-thread/rotate|apps/api/src/handlers/chat/rotate-template-thread.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/rotate-template-thread.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/template-thread|apps/api/src/handlers/chat/resolve-template-thread.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/resolve-template-thread.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/threads/:threadId/export|apps/api/src/handlers/chat/export/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/export/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/threads/:threadId/fork|apps/api/src/handlers/chat/fork/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/fork/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/threads/:threadId/recap|apps/api/src/handlers/chat/get-thread-recap.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/get-thread-recap.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/threads/:threadId/suggested-prompts|apps/api/src/handlers/chat/get-suggested-prompts.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/get-suggested-prompts.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/threads/:threadId/title/suggest|apps/api/src/handlers/chat/suggest-thread-title.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/suggest-thread-title.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/threads/:threadId/turns/:turnId/cancel|apps/api/src/handlers/chat/turns/cancel.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/turns/cancel.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/workspaces/:workspaceId/file-thread|apps/api/src/handlers/chat/resolve-file-thread.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/resolve-file-thread.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/chat/routes.ts|POST|/|apps/api/src/handlers/chat/send-message.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/chat/send-message.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|DELETE|/:categoryId|apps/api/src/handlers/clauses/categories/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/clauses/categories/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|DELETE|/:clauseId/variants/:variantId|apps/api/src/handlers/clauses/variants/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/clauses/variants/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|DELETE|/:clauseId|apps/api/src/handlers/clauses/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/clauses/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/:categoryId|apps/api/src/handlers/clauses/categories/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/clauses/categories/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/:clauseId/variants/:variantId|apps/api/src/handlers/clauses/variants/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/clauses/variants/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/:clauseId/versions/:versionId/restore|apps/api/src/handlers/clauses/versions/restore.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/clauses/versions/restore.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/:clauseId/versions/:versionId/summarize|apps/api/src/handlers/clauses/versions/summarize.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/clauses/versions/summarize.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/:clauseId|apps/api/src/handlers/clauses/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/clauses/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/ai-rewrite|apps/api/src/handlers/clauses/rewrite.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/clauses/rewrite.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/import|apps/api/src/handlers/clauses/import.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/clauses/import.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|PUT|/:clauseId/variants|apps/api/src/handlers/clauses/variants/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/clauses/variants/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|PUT|/import|apps/api/src/handlers/clauses/import.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/clauses/import.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|PUT|/|apps/api/src/handlers/clauses/categories/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/clauses/categories/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/clauses/routes.ts|PUT|/|apps/api/src/handlers/clauses/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/clauses/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|DELETE|/|apps/api/src/handlers/contacts/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/contacts/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/business-registries/checks|apps/api/src/handlers/contacts/business-registries/check.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/business-registries/check.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/extract-from-procuracao|apps/api/src/handlers/contacts/extract-procuracao.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/extract-procuracao.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/import/inspect|apps/api/src/handlers/contacts/import-inspect.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/import-inspect.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/import/preview|apps/api/src/handlers/contacts/import-preview.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/import-preview.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/import/validate|apps/api/src/handlers/contacts/import-validate.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/import-validate.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/procuracao-upload|apps/api/src/handlers/contacts/presign-procuracao.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/presign-procuracao.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/sanctions/monitoring|apps/api/src/handlers/contacts/sanctions/monitoring/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/sanctions/monitoring/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/sanctions/reviews|apps/api/src/handlers/contacts/sanctions/reviews/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/sanctions/reviews/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/|apps/api/src/handlers/contacts/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/contacts/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|PUT|/import|apps/api/src/handlers/contacts/import.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/contacts/import.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/contacts/routes.ts|PUT|/|apps/api/src/handlers/contacts/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/contacts/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/desktop-presence/routes.ts|POST|/|apps/api/src/handlers/desktop-presence/report.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/desktop-presence/report.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/desktop-registry/routes.ts|POST|/grant|apps/api/src/handlers/desktop-registry/grant.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/desktop-registry/grant.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/desktop-registry/routes.ts|POST|/redeem-link|apps/api/src/handlers/desktop-registry/redeem-link.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/desktop-registry/redeem-link.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/desktop-registry/routes.ts|POST|/request|apps/api/src/handlers/desktop-registry/request.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/desktop-registry/request.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/dev/routes.ts|POST|/clean|async (ctx) => { const orgId = ctx.session.activeOrganizationId; await ctx.scopedDb(async (tx) => { // audit: skip — dev-only org-nuke endpoint; not deployed to prod // Delete in dependency order. // 1. Time entries and workspace contacts (org-scoped) await tx.delete(timeEntries).where(eq(timeEntries.organizationId, orgId)); await tx .delete(workspaceContacts) .where(eq(workspaceContacts.organizationId, orgId)); // 2. Property dependencies (no org FK; resolve via // properties -> workspaces). The restrict FK on // dependsOnPropertyId blocks workspace cascade. const orgPropertyIds = tx .select({ id: properties.id }) .from(properties) .innerJoin(workspaces, eq(properties.workspaceId, workspaces.id)) .where(eq(workspaces.organizationId, orgId)); await tx .delete(propertyDependencies) .where(inArray(propertyDependencies.propertyId, orgPropertyIds)); await tx .delete(propertyDependencies) .where( inArray(propertyDependencies.dependsOnPropertyId, orgPropertyIds), ); // 3. Workspaces (cascades entities, versions, fields, // properties, views) await tx.delete(workspaces).where(eq(workspaces.organizationId, orgId)); // 4. Contacts await tx.delete(contacts).where(eq(contacts.organizationId, orgId)); }); return { ok: true }; }",
+    "reason": "Existing POST route async (ctx) => { const orgId = ctx.session.activeOrganizationId; await ctx.scopedDb(async (tx) => { // audit: skip — dev-only org-nuke endpoint; not deployed to prod // Delete in dependency order. // 1. Time entries and workspace contacts (org-scoped) await tx.delete(timeEntries).where(eq(timeEntries.organizationId, orgId)); await tx .delete(workspaceContacts) .where(eq(workspaceContacts.organizationId, orgId)); // 2. Property dependencies (no org FK; resolve via // properties -> workspaces). The restrict FK on // dependsOnPropertyId blocks workspace cascade. const orgPropertyIds = tx .select({ id: properties.id }) .from(properties) .innerJoin(workspaces, eq(properties.workspaceId, workspaces.id)) .where(eq(workspaces.organizationId, orgId)); await tx .delete(propertyDependencies) .where(inArray(propertyDependencies.propertyId, orgPropertyIds)); await tx .delete(propertyDependencies) .where( inArray(propertyDependencies.dependsOnPropertyId, orgPropertyIds), ); // 3. Workspaces (cascades entities, versions, fields, // properties, views) await tx.delete(workspaces).where(eq(workspaces.organizationId, orgId)); // 4. Contacts await tx.delete(contacts).where(eq(contacts.organizationId, orgId)); }); return { ok: true }; } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/dev/routes.ts|POST|/clear-cache|() => { rmSync(VITE_CACHE_DIR, { recursive: true, force: true }); return { ok: true }; }",
+    "reason": "Existing POST route () => { rmSync(VITE_CACHE_DIR, { recursive: true, force: true }); return { ok: true }; } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/dev/routes.ts|POST|/public-law-connection|apps/api/src/handlers/dev/public-law-connection.ts#startPublicLawConnection",
+    "reason": "Existing POST route apps/api/src/handlers/dev/public-law-connection.ts#startPublicLawConnection awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/dev/routes.ts|POST|/rebuild-search|async (ctx) => { await getSearchMaintenance().rebuildIndex(ctx.session.activeOrganizationId); await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId); return { ok: true }; }",
+    "reason": "Existing POST route async (ctx) => { await getSearchMaintenance().rebuildIndex(ctx.session.activeOrganizationId); await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId); return { ok: true }; } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/dev/routes.ts|POST|/seed-firm-knowledge|async (ctx) => { const apiOrigin = getDevApiOrigin(ctx.server?.port); const userId = ctx.user.id; const organizationId = ctx.body?.organizationId === undefined ? ctx.session.activeOrganizationId : await resolveMemberDevOrganization(ctx.body.organizationId, userId); if (organizationId === null) { return ctx.status(403, \"Organization membership not found\"); } const parameters = { matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS, replaceIncomplete: ctx.body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace, ...(ctx.body?.selectionSeed === undefined ? {} : { selectionSeed: ctx.body.selectionSeed }), } satisfies FirmKnowledgeSeedParameters; if (firmKnowledgeInFlight) { const job = firmKnowledgeJobId === null ? null : firmKnowledgeJobs.get(firmKnowledgeJobId); if ( job === null || !isReusableFirmKnowledgeJob(job, { organizationId, parameters, userId, }) ) { return ctx.status(409, \"A firm-knowledge seed is already running\"); } return getFirmKnowledgeJobResponse(job); } const startedAt = Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }); const job = firmKnowledgeJobs.create({ organizationId, parameters, startedAt, userId, }); firmKnowledgeJobId = job.id; firmKnowledgeInFlight = (async () => { try { const seedSession = await mintDevSeedSession({ organizationId, userId, }); const { seedFirmKnowledge } = await import(\"../../../scripts/seed-firm-knowledge\"); await seedFirmKnowledge({ apiOrigin, cookie: seedSession.cookie, matters: job.parameters.matters, replaceIncomplete: job.parameters.replaceIncomplete, ...(job.parameters.selectionSeed === undefined ? {} : { selectionSeed: job.parameters.selectionSeed }), }); firmKnowledgeJobs.update(job.id, { status: \"succeeded\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), } satisfies FirmKnowledgeSeedStatus); } catch (error: unknown) { firmKnowledgeJobs.update(job.id, { status: \"failed\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), message: getErrorMessage(error), } satisfies FirmKnowledgeSeedStatus); } finally { firmKnowledgeInFlight = null; firmKnowledgeJobId = null; } })(); return getFirmKnowledgeJobResponse(job); }",
+    "reason": "Existing POST route async (ctx) => { const apiOrigin = getDevApiOrigin(ctx.server?.port); const userId = ctx.user.id; const organizationId = ctx.body?.organizationId === undefined ? ctx.session.activeOrganizationId : await resolveMemberDevOrganization(ctx.body.organizationId, userId); if (organizationId === null) { return ctx.status(403, \"Organization membership not found\"); } const parameters = { matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS, replaceIncomplete: ctx.body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace, ...(ctx.body?.selectionSeed === undefined ? {} : { selectionSeed: ctx.body.selectionSeed }), } satisfies FirmKnowledgeSeedParameters; if (firmKnowledgeInFlight) { const job = firmKnowledgeJobId === null ? null : firmKnowledgeJobs.get(firmKnowledgeJobId); if ( job === null || !isReusableFirmKnowledgeJob(job, { organizationId, parameters, userId, }) ) { return ctx.status(409, \"A firm-knowledge seed is already running\"); } return getFirmKnowledgeJobResponse(job); } const startedAt = Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }); const job = firmKnowledgeJobs.create({ organizationId, parameters, startedAt, userId, }); firmKnowledgeJobId = job.id; firmKnowledgeInFlight = (async () => { try { const seedSession = await mintDevSeedSession({ organizationId, userId, }); const { seedFirmKnowledge } = await import(\"../../../scripts/seed-firm-knowledge\"); await seedFirmKnowledge({ apiOrigin, cookie: seedSession.cookie, matters: job.parameters.matters, replaceIncomplete: job.parameters.replaceIncomplete, ...(job.parameters.selectionSeed === undefined ? {} : { selectionSeed: job.parameters.selectionSeed }), }); firmKnowledgeJobs.update(job.id, { status: \"succeeded\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), } satisfies FirmKnowledgeSeedStatus); } catch (error: unknown) { firmKnowledgeJobs.update(job.id, { status: \"failed\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), message: getErrorMessage(error), } satisfies FirmKnowledgeSeedStatus); } finally { firmKnowledgeInFlight = null; firmKnowledgeJobId = null; } })(); return getFirmKnowledgeJobResponse(job); } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/dev/routes.ts|POST|/seed|(ctx) => { const orgId = ctx.session.activeOrganizationId; const userId = ctx.user.id; if (!seedInFlight) { const startedAt = Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }); seedStatus = { status: \"running\", startedAt }; seedInFlight = (async () => { try { const { seed } = await import(\"../../../scripts/seed-dev\"); await seed(orgId, userId); seedStatus = { status: \"succeeded\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), }; } catch (error: unknown) { seedStatus = { status: \"failed\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), message: getErrorMessage(error), }; } finally { seedInFlight = null; } })(); } return seedStatus; }",
+    "reason": "Existing POST route (ctx) => { const orgId = ctx.session.activeOrganizationId; const userId = ctx.user.id; if (!seedInFlight) { const startedAt = Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }); seedStatus = { status: \"running\", startedAt }; seedInFlight = (async () => { try { const { seed } = await import(\"../../../scripts/seed-dev\"); await seed(orgId, userId); seedStatus = { status: \"succeeded\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), }; } catch (error: unknown) { seedStatus = { status: \"failed\", startedAt, finishedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3, }), message: getErrorMessage(error), }; } finally { seedInFlight = null; } })(); } return seedStatus; } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-reviews/passages-routes.ts|POST|/passages|apps/api/src/handlers/document-reviews/read-passages.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-reviews/read-passages.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-reviews/routes.ts|PATCH|/findings/:findingId|apps/api/src/handlers/document-reviews/decide-finding.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/document-reviews/decide-finding.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-reviews/routes.ts|POST|/parties|apps/api/src/handlers/document-reviews/parties.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-reviews/parties.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-reviews/routes.ts|POST|/positions/stream|apps/api/src/handlers/document-reviews/propose-positions-stream.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-reviews/propose-positions-stream.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-reviews/routes.ts|POST|/positions|apps/api/src/handlers/document-reviews/propose-positions.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-reviews/propose-positions.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-reviews/routes.ts|POST|/runs|apps/api/src/handlers/document-reviews/create-run.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-reviews/create-run.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-translations/routes.ts|POST|/prepare|apps/api/src/handlers/document-translations/prepare.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-translations/prepare.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-translations/routes.ts|POST|/runs|apps/api/src/handlers/document-translations/runs/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-translations/runs/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-types/routes.ts|DELETE|/:documentTypeId|apps/api/src/handlers/document-types/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/document-types/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-types/routes.ts|PATCH|/:documentTypeId|apps/api/src/handlers/document-types/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/document-types/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-types/routes.ts|POST|/reorder|apps/api/src/handlers/document-types/reorder.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-types/reorder.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/document-types/routes.ts|POST|/|apps/api/src/handlers/document-types/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/document-types/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/documents/routes.ts|POST|/document/:documentId/compare|apps/api/src/handlers/documents/compare.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/documents/compare.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/docx-suggestions/routes.ts|PATCH|/entity/:entityId/reject-pending|apps/api/src/handlers/docx-suggestions/reject-pending.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/docx-suggestions/reject-pending.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/docx-suggestions/routes.ts|PATCH|/entity/:entityId/suggestion/:suggestionId/resolve|apps/api/src/handlers/docx-suggestions/resolve.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/docx-suggestions/resolve.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/docx-suggestions/routes.ts|PATCH|/entity/:entityId/suggestion/:suggestionId/revert|apps/api/src/handlers/docx-suggestions/revert.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/docx-suggestions/revert.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/docx-suggestions/routes.ts|PUT|/entity/:entityId|apps/api/src/handlers/docx-suggestions/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/docx-suggestions/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-handoffs/:handoffId/opened|async ({ body, params, request }) => await acknowledgeDesktopEditHandoffOpenedHandler({ body, params, request, })",
+    "reason": "Existing POST route async ({ body, params, request }) => await acknowledgeDesktopEditHandoffOpenedHandler({ body, params, request, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-handoffs/redeem|async ({ body, request, server }) => await redeemDesktopEditHandoffHandler( { body, request, server }, dependencies, )",
+    "reason": "Existing POST route async ({ body, request, server }) => await redeemDesktopEditHandoffHandler( { body, request, server }, dependencies, ) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/checkpoint|async ({ body, params, request, server }) => await checkpointDesktopEditSessionHandler({ body, sessionId: params.sessionId, request, server, })",
+    "reason": "Existing POST route async ({ body, params, request, server }) => await checkpointDesktopEditSessionHandler({ body, sessionId: params.sessionId, request, server, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/finalize|async ({ body, params, request, server }) => await finalizeDesktopEditSessionHandler({ body, sessionId: params.sessionId, request, server, })",
+    "reason": "Existing POST route async ({ body, params, request, server }) => await finalizeDesktopEditSessionHandler({ body, sessionId: params.sessionId, request, server, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/respond-takeover|async ({ body, params, request, server }) => await respondDesktopEditTakeoverHandler({ body, sessionId: params.sessionId, request, server, })",
+    "reason": "Existing POST route async ({ body, params, request, server }) => await respondDesktopEditTakeoverHandler({ body, sessionId: params.sessionId, request, server, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts|POST|/pdf-signing-handoffs/redeem|apps/api/src/handlers/entities/pdf-signing-sessions-route.ts#redeemPdfSigningHandoff.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/pdf-signing-sessions-route.ts#redeemPdfSigningHandoff.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts|POST|/pdf-signing-sessions/:sessionId/cancel|apps/api/src/handlers/entities/pdf-signing-cancel.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/pdf-signing-cancel.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts|POST|/pdf-signing-sessions/:sessionId/certificate|apps/api/src/handlers/entities/pdf-signing-certificate.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/pdf-signing-certificate.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts|POST|/pdf-signing-sessions/:sessionId/signature|apps/api/src/handlers/entities/pdf-signing-signature.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/pdf-signing-signature.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|DELETE|/entity/:entityId/versions/:versionId|apps/api/src/handlers/entities/versions/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/entities/versions/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|DELETE|/|apps/api/src/handlers/entities/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/entities/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|PATCH|/entity/:entityId/versions/:versionId/description|apps/api/src/handlers/entities/versions/description/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/entities/versions/description/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|PATCH|/entity/:entityId/versions/:versionId/label|apps/api/src/handlers/entities/versions/label/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/entities/versions/label/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|PATCH|/move|apps/api/src/handlers/entities/move.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/entities/move.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|PATCH|/rename|apps/api/src/handlers/entities/rename.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/entities/rename.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/bilingual|apps/api/src/handlers/entities/bilingual/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/bilingual/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/check-stamp|apps/api/src/handlers/entities/stamps/check.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/stamps/check.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/clip|apps/api/src/handlers/entities/clip.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/clip.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/copy-to-workspace|apps/api/src/handlers/entities/copy.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/copy.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/create-from-legal-source|apps/api/src/handlers/entities/from-legal-source/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/from-legal-source/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/desktop-edit-handoffs|apps/api/src/handlers/entities/desktop-edit-handoffs.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/desktop-edit-handoffs.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/desktop-edit-sessions/open|apps/api/src/handlers/entities/open-desktop-edit-session.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/open-desktop-edit-session.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/desktop-edit-sessions/release|apps/api/src/handlers/entities/release-desktop-edit-lock.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/release-desktop-edit-lock.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/desktop-edit-sessions/request-takeover|apps/api/src/handlers/entities/request-desktop-edit-takeover.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/request-desktop-edit-takeover.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/duplicate|apps/api/src/handlers/entities/duplicate.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/duplicate.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/entity/:entityId/ocr|apps/api/src/handlers/entities/ocr/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/ocr/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/entity/:entityId/versions/:versionId/restore|apps/api/src/handlers/entities/versions/restore.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/versions/restore.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/entity/:entityId/versions/:versionId/summarize|apps/api/src/handlers/entities/versions/summarize.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/versions/summarize.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/filesystem-tree|apps/api/src/handlers/entities/filesystem-tree/get.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/filesystem-tree/get.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/folio-collab-rooms/checkpoint|apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/folio-collab-rooms/join|apps/api/src/handlers/entities/join-folio-collab-room.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/join-folio-collab-room.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/folio-collab-rooms/publish-version|apps/api/src/handlers/entities/publish-folio-collab-version.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/publish-folio-collab-version.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/group-counts|apps/api/src/handlers/entities/read-group-counts.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/read-group-counts.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/kanban-group|apps/api/src/handlers/entities/read-kanban-group.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/read-kanban-group.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/organize-suggestions|apps/api/src/handlers/entities/placements/suggest.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/placements/suggest.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/pdf-signing-handoffs|apps/api/src/handlers/entities/pdf-signing-handoffs.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/pdf-signing-handoffs.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/pdf-signing-sessions/:sessionId/cancel|apps/api/src/handlers/entities/pdf-signing-sessions.ts#cancelPdfSigningSession.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/pdf-signing-sessions.ts#cancelPdfSigningSession.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/property-facets|apps/api/src/handlers/entities/read-property-facets.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/read-property-facets.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/query-window|apps/api/src/handlers/entities/window/list.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/window/list.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/query|apps/api/src/handlers/entities/list.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/list.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/upload-generated-document|apps/api/src/handlers/entities/upload.ts#uploadGeneratedDocument.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/upload.ts#uploadGeneratedDocument.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/upload-version|apps/api/src/handlers/entities/versions/upload.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/versions/upload.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|POST|/upload|apps/api/src/handlers/entities/upload.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entities/upload.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|PUT|/blank-document-from-style-set|apps/api/src/handlers/entities/create-document-from-style-set.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/entities/create-document-from-style-set.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|PUT|/blank-document|apps/api/src/handlers/entities/blank-document/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/entities/blank-document/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entities/routes.ts|PUT|/|apps/api/src/handlers/entities/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/entities/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entity-views/routes.ts|DELETE|/:viewId|apps/api/src/handlers/entity-views/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/entity-views/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entity-views/routes.ts|PATCH|/:viewId|apps/api/src/handlers/entity-views/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/entity-views/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entity-views/routes.ts|POST|/query-window|apps/api/src/handlers/entity-views/rows/list.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entity-views/rows/list.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entity-views/routes.ts|POST|/reorder|apps/api/src/handlers/entity-views/reorder.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/entity-views/reorder.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/entity-views/routes.ts|PUT|/|apps/api/src/handlers/entity-views/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/entity-views/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/expenses/routes.ts|DELETE|/|apps/api/src/handlers/expenses/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/expenses/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/expenses/routes.ts|PATCH|/|apps/api/src/handlers/expenses/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/expenses/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/expenses/routes.ts|PUT|/|apps/api/src/handlers/expenses/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/expenses/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/feedback/routes.ts|POST|/feedback|async ({ body, request, server }) => { // The route schema requires `body` to be a string at runtime; a non-string // here means the schema was bypassed by a future refactor. if (typeof body !== \"string\") { panic(\"feedback intake body bypassed t.String schema\"); } return await receivePublicFeedback({ rawBody: body, clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), }); }",
+    "reason": "Existing POST route async ({ body, request, server }) => { // The route schema requires `body` to be a string at runtime; a non-string // here means the schema was bypassed by a future refactor. if (typeof body !== \"string\") { panic(\"feedback intake body bypassed t.String schema\"); } return await receivePublicFeedback({ rawBody: body, clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), }); } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/feedback/routes.ts|POST|/|apps/api/src/handlers/feedback/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/feedback/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/fields/routes.ts|PATCH|/kanban-placement|apps/api/src/handlers/fields/kanban-placement/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/fields/kanban-placement/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/fields/routes.ts|PATCH|/metadata-batch|apps/api/src/handlers/fields/column-flag/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/fields/column-flag/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/fields/routes.ts|PATCH|/metadata|apps/api/src/handlers/fields/cell-metadata/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/fields/cell-metadata/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/fields/routes.ts|POST|/|apps/api/src/handlers/fields/upsert.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/fields/upsert.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/files/routes.ts|PATCH|/document-properties/:fieldId|apps/api/src/handlers/files/routes.ts#updateDocumentPropertiesEndpoint.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/files/routes.ts#updateDocumentPropertiesEndpoint.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/files/routes.ts|POST|/email-attachment/:fieldId/:attachmentId/save|apps/api/src/handlers/files/email-attachment/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/files/email-attachment/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/flows/routes.ts|DELETE|/:flowId|apps/api/src/handlers/flows/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/flows/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/flows/routes.ts|POST|/|apps/api/src/handlers/flows/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/flows/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/flows/routes.ts|PUT|/:flowId|apps/api/src/handlers/flows/update.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/flows/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/flows/run-route.ts|POST|/:runId/cancel|apps/api/src/handlers/flows/runs/cancel.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/flows/runs/cancel.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/flows/run-route.ts|POST|/:runId/review|apps/api/src/handlers/flows/runs/review.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/flows/runs/review.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/flows/run-route.ts|POST|/|apps/api/src/handlers/flows/runs/start.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/flows/runs/start.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/folio-collab/routes.ts|POST|/authorize|apps/api/src/handlers/folio-collab/authorize.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/folio-collab/authorize.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/folio-collab/routes.ts|POST|/heartbeat|apps/api/src/handlers/folio-collab/heartbeat.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/folio-collab/heartbeat.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/folio-collab/routes.ts|POST|/refresh-token|apps/api/src/handlers/folio-collab/refresh-token.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/folio-collab/refresh-token.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/folio-collab/routes.ts|POST|/snapshot/load|apps/api/src/handlers/folio-collab/snapshot-load.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/folio-collab/snapshot-load.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/folio-collab/routes.ts|POST|/snapshot/store|apps/api/src/handlers/folio-collab/snapshot-store.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/folio-collab/snapshot-store.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/hosted-usage-webhook/routes.ts|POST|/webhook|async ({ request, body }) => { // The route schema below requires `body` to be a string at // runtime — Elysia rejects anything else before this handler // runs. The narrowing is here so TypeScript sees `string` for // the call below; a non-string at this point means the schema // was bypassed by a future refactor and we'd rather crash // visibly than run HMAC verification over a coerced \"\". if (typeof body !== \"string\") { panic(\"hosted usage webhook body bypassed t.String schema\"); } return await receiveHostedUsageWebhook({ request, body }); }",
+    "reason": "Existing POST route async ({ request, body }) => { // The route schema below requires `body` to be a string at // runtime — Elysia rejects anything else before this handler // runs. The narrowing is here so TypeScript sees `string` for // the call below; a non-string at this point means the schema // was bypassed by a future refactor and we'd rather crash // visibly than run HMAC verification over a coerced \"\". if (typeof body !== \"string\") { panic(\"hosted usage webhook body bypassed t.String schema\"); } return await receiveHostedUsageWebhook({ request, body }); } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|DELETE|/:invoiceId/entries|apps/api/src/handlers/invoices/entries/remove.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/invoices/entries/remove.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|DELETE|/:invoiceId/lines/:lineId|apps/api/src/handlers/invoices/lines/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/invoices/lines/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|DELETE|/:invoiceId|apps/api/src/handlers/invoices/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/invoices/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|PATCH|/:invoiceId/lines/:lineId|apps/api/src/handlers/invoices/lines/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/invoices/lines/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|PATCH|/:invoiceId|apps/api/src/handlers/invoices/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/invoices/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|POST|/:invoiceId/entries|apps/api/src/handlers/invoices/entries/add.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/invoices/entries/add.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|POST|/:invoiceId/lines|apps/api/src/handlers/invoices/lines/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/invoices/lines/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|POST|/:invoiceId/pdf|apps/api/src/handlers/invoices/pdf/export.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/invoices/pdf/export.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|POST|/:invoiceId/transition|apps/api/src/handlers/invoices/transition.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/invoices/transition.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/invoices/routes.ts|PUT|/|apps/api/src/handlers/invoices/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/invoices/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/legal-reader/routes.ts|DELETE|/annotations/:annotationId|apps/api/src/handlers/legal-reader/annotations/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/legal-reader/annotations/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/legal-reader/routes.ts|PATCH|/annotations/:annotationId|apps/api/src/handlers/legal-reader/annotations/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/legal-reader/annotations/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/legal-reader/routes.ts|POST|/annotations|apps/api/src/handlers/legal-reader/annotations/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/legal-reader/annotations/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/legislation/corpus-routes.ts|POST|/search|apps/api/src/handlers/legislation/search.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/legislation/search.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/legislation/public-routes.ts|POST|/statutes/resolve|apps/api/src/handlers/legislation/public-routes.ts#resolveStatutes.handler",
+    "reason": "Existing POST route apps/api/src/handlers/legislation/public-routes.ts#resolveStatutes.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|PATCH|/items|apps/api/src/handlers/lists/items/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/lists/items/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|PATCH|/|apps/api/src/handlers/lists/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/lists/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/columns|apps/api/src/handlers/lists/columns/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/columns/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/generation-candidates/accept|apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/generation-candidates/reject|apps/api/src/handlers/lists/generation-candidates/rejection/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/generation-candidates/rejection/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/generation-candidates|apps/api/src/handlers/lists/generation-candidates/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/generation-candidates/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/generations|apps/api/src/handlers/lists/generations/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/generations/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/item-comments|apps/api/src/handlers/lists/items/comments/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/items/comments/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/item-reviews|apps/api/src/handlers/lists/items/reviews/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/items/reviews/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/item-sources|apps/api/src/handlers/lists/items/sources/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/items/sources/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|POST|/sections|apps/api/src/handlers/lists/sections/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/sections/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/routes.ts|PUT|/|apps/api/src/handlers/lists/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/lists/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/verification-routes.ts|PATCH|/item-sources|apps/api/src/handlers/lists/items/sources/verification/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/lists/items/sources/verification/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/verification-routes.ts|POST|/claim-reviews/bulk|apps/api/src/handlers/lists/verifications/claim-reviews/bulk/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/verifications/claim-reviews/bulk/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/verification-routes.ts|POST|/claim-reviews|apps/api/src/handlers/lists/verifications/claim-reviews/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/verifications/claim-reviews/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/verification-routes.ts|POST|/verifications/latest|apps/api/src/handlers/lists/verifications/latest/list.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/verifications/latest/list.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/verification-routes.ts|POST|/verifications|apps/api/src/handlers/lists/verifications/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/lists/verifications/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/lists/verification-routes.ts|PUT|/item-fact-details|apps/api/src/handlers/lists/items/fact-details/update.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/lists/items/fact-details/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|DELETE|/connections/:connectionId|apps/api/src/handlers/mcp-connectors/delete-connection.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/mcp-connectors/delete-connection.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|DELETE|/connectors/:slug|apps/api/src/handlers/mcp-connectors/delete-connector.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/mcp-connectors/delete-connector.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|PATCH|/connections/:connectionId|apps/api/src/handlers/mcp-connectors/update-connection.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/mcp-connectors/update-connection.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|PATCH|/native-tools/:slug|apps/api/src/handlers/mcp-connectors/update-native-tool.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/mcp-connectors/update-native-tool.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|POST|/connections|apps/api/src/handlers/mcp-connectors/create-connection.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/mcp-connectors/create-connection.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|POST|/connectors/:slug/approve-authorization|apps/api/src/handlers/mcp-connectors/approve-authorization.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/mcp-connectors/approve-authorization.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|POST|/connectors/:slug/connect|apps/api/src/handlers/mcp-connectors/connect.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/mcp-connectors/connect.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|POST|/connectors/probe|apps/api/src/handlers/mcp-connectors/probe-connector.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/mcp-connectors/probe-connector.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp-connectors/routes.ts|POST|/connectors|apps/api/src/handlers/mcp-connectors/create-connector.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/mcp-connectors/create-connector.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp-anonymized|async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), mode: \"anonymized\", }, request, set, })",
+    "reason": "Existing ALL route async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), mode: \"anonymized\", }, request, set, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp-documents|async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), mode: \"documents\", }, request, set, })",
+    "reason": "Existing ALL route async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), mode: \"documents\", }, request, set, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp-law|async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), mode: \"law\", }, request, set, })",
+    "reason": "Existing ALL route async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), mode: \"law\", }, request, set, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/mcp/routes-core.ts|ALL|/mcp|async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), }, request, set, })",
+    "reason": "Existing ALL route async ({ request, server, set }) => await handleMcpTransportRoute({ options: { clientIp: resolveRateLimitClientAddress({ request, server: server ?? null, }), }, request, set, }) awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/me/routes.ts|DELETE|/oauth-connections/:consentId|apps/api/src/handlers/me/disconnect-oauth-connection.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/me/disconnect-oauth-connection.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/me/routes.ts|PATCH|/guide-progress|apps/api/src/handlers/me/update-guide-progress.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/me/update-guide-progress.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/me/routes.ts|POST|/send-otp|apps/api/src/handlers/me/send-otp.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/me/send-otp.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/me/routes.ts|POST|/send-otp|apps/api/src/handlers/me/two-factor-send-manage-otp.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/me/two-factor-send-manage-otp.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/me/routes.ts|POST|/verify|apps/api/src/handlers/me/verify-delete.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/me/verify-delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/memories/routes.ts|PATCH|/:memoryId|apps/api/src/handlers/memories/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/memories/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/memories/routes.ts|POST|/firm|apps/api/src/handlers/memories/create-firm.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/memories/create-firm.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/memories/routes.ts|POST|/|apps/api/src/handlers/memories/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/memories/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/notifications/routes.ts|PATCH|/:notificationId/read|apps/api/src/handlers/notifications/read.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/notifications/read.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/notifications/routes.ts|POST|/announcements|apps/api/src/handlers/notifications/announce.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/notifications/announce.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/notifications/routes.ts|POST|/read-all|apps/api/src/handlers/notifications/read-all.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/notifications/read-all.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/number-series/routes.ts|PATCH|/:numberSeriesId|apps/api/src/handlers/number-series/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/number-series/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/number-series/routes.ts|POST|/:numberSeriesId/archive|apps/api/src/handlers/number-series/archive.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/number-series/archive.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/number-series/routes.ts|POST|/:numberSeriesId/default|apps/api/src/handlers/number-series/default/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/number-series/default/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/number-series/routes.ts|POST|/|apps/api/src/handlers/number-series/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/number-series/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|DELETE|/ai-config|apps/api/src/handlers/organization-settings/delete-ai-config.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/organization-settings/delete-ai-config.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|DELETE|/business-registry-credentials|apps/api/src/handlers/organization-settings/business-registry-credentials.ts#deleteBusinessRegistryCredential.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/organization-settings/business-registry-credentials.ts#deleteBusinessRegistryCredential.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|DELETE|/correspondence/allowed-senders/:senderId/scope|apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/remove.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/remove.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|DELETE|/correspondence/allowed-senders/:senderId|apps/api/src/handlers/organization-settings/correspondence/allowed-senders/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/organization-settings/correspondence/allowed-senders/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|DELETE|/deepl|apps/api/src/handlers/organization-settings/delete-deepl-key.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/organization-settings/delete-deepl-key.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|DELETE|/feature-enrolments/:featureId|apps/api/src/handlers/organization-settings/feature-enrolments/unenrol.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/organization-settings/feature-enrolments/unenrol.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|DELETE|/web-search-key|apps/api/src/handlers/organization-settings/delete-web-search-key.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/organization-settings/delete-web-search-key.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/ai-config|apps/api/src/handlers/organization-settings/update-ai-config.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/update-ai-config.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/business-registry-credentials|apps/api/src/handlers/organization-settings/business-registry-credentials.ts#saveBusinessRegistryCredential.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/business-registry-credentials.ts#saveBusinessRegistryCredential.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/correspondence/allowed-senders/:senderId/scope|apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/add.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/correspondence/allowed-senders/scope/add.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/correspondence/allowed-senders|apps/api/src/handlers/organization-settings/correspondence/allowed-senders/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/correspondence/allowed-senders/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/deepl|apps/api/src/handlers/organization-settings/update-deepl-key.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/update-deepl-key.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/practice-jurisdictions|apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/preview|apps/api/src/handlers/organization-settings/preview.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/preview.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/sanctions-monitoring|apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/web-search-key|apps/api/src/handlers/organization-settings/update-web-search-key.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/update-web-search-key.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/|apps/api/src/handlers/organization-settings/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/organization-settings/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|PUT|/anonymization-blacklist|apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/organization-settings/routes.ts|PUT|/feature-enrolments/:featureId|apps/api/src/handlers/organization-settings/feature-enrolments/enrol.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/organization-settings/feature-enrolments/enrol.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/routes.ts|DELETE|/:playbookId|apps/api/src/handlers/playbooks/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/playbooks/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/routes.ts|POST|/:playbookId/approve|apps/api/src/handlers/playbooks/approve.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/playbooks/approve.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/routes.ts|POST|/:playbookId/versions/:version/restore|apps/api/src/handlers/playbooks/versions/restore.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/playbooks/versions/restore.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/routes.ts|POST|/from-run|apps/api/src/handlers/playbooks/from-run/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/playbooks/from-run/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/routes.ts|POST|/from-starter|apps/api/src/handlers/playbooks/from-starter/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/playbooks/from-starter/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/routes.ts|POST|/|apps/api/src/handlers/playbooks/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/playbooks/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/routes.ts|PUT|/:playbookId|apps/api/src/handlers/playbooks/update.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/playbooks/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/run-route.ts|POST|/:playbookId/run|apps/api/src/handlers/playbooks/run.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/playbooks/run.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/playbooks/run-route.ts|POST|/auto-run|apps/api/src/handlers/playbooks/applicable/run.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/playbooks/applicable/run.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/properties/routes.ts|DELETE|/|apps/api/src/handlers/properties/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/properties/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/properties/routes.ts|POST|/preview|apps/api/src/handlers/properties/preview.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/properties/preview.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/properties/routes.ts|POST|/suggest-prompt|apps/api/src/handlers/properties/prompt/suggest.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/properties/prompt/suggest.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/properties/routes.ts|POST|/|apps/api/src/handlers/properties/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/properties/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/properties/routes.ts|PUT|/batch|apps/api/src/handlers/properties/batch/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/properties/batch/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/properties/routes.ts|PUT|/|apps/api/src/handlers/properties/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/properties/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/rates/routes.ts|DELETE|/:rateTableId/entries|apps/api/src/handlers/rates/entries/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/rates/entries/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/rates/routes.ts|DELETE|/|apps/api/src/handlers/rates/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/rates/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/rates/routes.ts|PATCH|/:rateTableId/entries|apps/api/src/handlers/rates/entries/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/rates/entries/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/rates/routes.ts|PATCH|/|apps/api/src/handlers/rates/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/rates/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/rates/routes.ts|PUT|/:rateTableId/entries|apps/api/src/handlers/rates/entries/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/rates/entries/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/rates/routes.ts|PUT|/arrangement|apps/api/src/handlers/rates/arrangement/update.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/rates/arrangement/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/rates/routes.ts|PUT|/|apps/api/src/handlers/rates/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/rates/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/reports/routes.ts|POST|/export|apps/api/src/handlers/reports/views/export.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/reports/views/export.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/reports/routes.ts|POST|/templates/clone-builtin|apps/api/src/handlers/reports/builtins/clone.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/reports/builtins/clone.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/sanctions/public-routes.ts|POST|/search|apps/api/src/handlers/sanctions/public-routes.ts#search.handler",
+    "reason": "Existing POST route apps/api/src/handlers/sanctions/public-routes.ts#search.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/saved-searches/routes.ts|DELETE|/:savedSearchId|apps/api/src/handlers/saved-searches/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/saved-searches/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/saved-searches/routes.ts|PATCH|/:savedSearchId|apps/api/src/handlers/saved-searches/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/saved-searches/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/saved-time-narratives/routes.ts|DELETE|/:id|apps/api/src/handlers/saved-time-narratives/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/saved-time-narratives/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/saved-time-narratives/routes.ts|PATCH|/:id|apps/api/src/handlers/saved-time-narratives/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/saved-time-narratives/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/saved-time-narratives/routes.ts|POST|/|apps/api/src/handlers/saved-time-narratives/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/saved-time-narratives/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/search/routes.ts|POST|/facets|apps/api/src/handlers/search/routes.ts#searchFacetsEndpoint.handler",
+    "reason": "Existing POST route apps/api/src/handlers/search/routes.ts#searchFacetsEndpoint.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/search/routes.ts|POST|/preview|apps/api/src/handlers/search/preview.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/search/preview.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/search/routes.ts|POST|/refine|apps/api/src/handlers/search/routes.ts#refineSearchEndpoint.handler",
+    "reason": "Existing POST route apps/api/src/handlers/search/routes.ts#refineSearchEndpoint.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/search/routes.ts|POST|/summary/chat|apps/api/src/handlers/search/routes.ts#searchSummaryChatEndpoint.handler",
+    "reason": "Existing POST route apps/api/src/handlers/search/routes.ts#searchSummaryChatEndpoint.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/search/routes.ts|POST|/summary|apps/api/src/handlers/search/routes.ts#summarizeSearchEndpoint.handler",
+    "reason": "Existing POST route apps/api/src/handlers/search/routes.ts#summarizeSearchEndpoint.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/search/routes.ts|POST|/|apps/api/src/handlers/search/routes.ts#searchEndpoint.handler",
+    "reason": "Existing POST route apps/api/src/handlers/search/routes.ts#searchEndpoint.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/seller-profiles/routes.ts|PATCH|/:sellerProfileId|apps/api/src/handlers/seller-profiles/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/seller-profiles/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/seller-profiles/routes.ts|POST|/:sellerProfileId/archive|apps/api/src/handlers/seller-profiles/archive.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/seller-profiles/archive.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/seller-profiles/routes.ts|POST|/:sellerProfileId/default|apps/api/src/handlers/seller-profiles/default/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/seller-profiles/default/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/seller-profiles/routes.ts|POST|/|apps/api/src/handlers/seller-profiles/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/seller-profiles/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/sharepoint/routes.ts|DELETE|/connection|apps/api/src/handlers/sharepoint/disconnect.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/sharepoint/disconnect.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/sharepoint/routes.ts|POST|/connect|apps/api/src/handlers/sharepoint/connect.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/sharepoint/connect.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/sharepoint/routes.ts|PUT|/enablement|apps/api/src/handlers/sharepoint/set-enablement.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/sharepoint/set-enablement.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/signals/routes.ts|POST|/:signalId/acceptances|apps/api/src/handlers/signals/acceptances/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/signals/acceptances/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/signals/routes.ts|POST|/:signalId/assignments|apps/api/src/handlers/signals/assignments/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/signals/assignments/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/signals/routes.ts|POST|/:signalId/dismissals|apps/api/src/handlers/signals/dismissals/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/signals/dismissals/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/signals/routes.ts|POST|/:signalId/snoozes|apps/api/src/handlers/signals/snoozes/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/signals/snoozes/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/signals/routes.ts|POST|/requests|apps/api/src/handlers/signals/requests/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/signals/requests/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|DELETE|/:skillId/comments/:commentId|apps/api/src/handlers/skills/comments/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/skills/comments/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|DELETE|/:skillId/proposals/:proposalId|apps/api/src/handlers/skills/proposals/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/skills/proposals/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|DELETE|/:skillId/resources|apps/api/src/handlers/skills/resources/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/skills/resources/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|DELETE|/:skillId|apps/api/src/handlers/skills/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/skills/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|PATCH|/:skillId/comments/:commentId|apps/api/src/handlers/skills/comments/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/skills/comments/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|PATCH|/:skillId/proposals/:proposalId|apps/api/src/handlers/skills/proposals/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/skills/proposals/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|PATCH|/:skillId/resources|apps/api/src/handlers/skills/resources/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/skills/resources/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|PATCH|/:skillId|apps/api/src/handlers/skills/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/skills/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/comments|apps/api/src/handlers/skills/comments/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/comments/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/proposals/:proposalId/review|apps/api/src/handlers/skills/proposals/review.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/proposals/review.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/proposals/from-comments|apps/api/src/handlers/skills/proposals/from-comments/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/proposals/from-comments/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/proposals|apps/api/src/handlers/skills/proposals/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/proposals/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/resources/rename|apps/api/src/handlers/skills/resources/rename.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/resources/rename.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/resources/rewrite|apps/api/src/handlers/skills/resources/rewrite.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/resources/rewrite.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/resources/upload|apps/api/src/handlers/skills/resources/upload.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/resources/upload.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/:skillId/resources|apps/api/src/handlers/skills/resources/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/resources/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/discover-url|apps/api/src/handlers/skills/discover.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/discover.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/from-blueprint|apps/api/src/handlers/skills/from-blueprint/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/from-blueprint/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/generate-draft|apps/api/src/handlers/skills/drafts/generate.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/drafts/generate.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/import-urls|apps/api/src/handlers/skills/import.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/import.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/import-url|apps/api/src/handlers/skills/from-url/import.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/from-url/import.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/upload|apps/api/src/handlers/skills/upload.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/upload.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/skills/routes.ts|POST|/|apps/api/src/handlers/skills/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/skills/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/smoke/routes.ts|POST|/session|async ({ request }) => { if (!isAuthorizedSmokeCaller(request.headers.get(\"x-smoke-secret\"))) { return notAvailable(); } // Parsed only after the secret check, so an unauthenticated caller // cannot tell a bad parameter from a missing route. const principal = parseSmokePrincipal( new URL(request.url).searchParams.get(\"principal\"), ); if (principal === null) { return new Response(\"Unknown smoke principal\", { status: 400 }); } const smokeSession = await mintSmokeSession(principal); logger.info(\"smoke.session_minted\", { \"smoke.principal\": principal, \"smoke.expires_at\": smokeSession.expiresAt, }); return smokeSession; }",
+    "reason": "Existing POST route async ({ request }) => { if (!isAuthorizedSmokeCaller(request.headers.get(\"x-smoke-secret\"))) { return notAvailable(); } // Parsed only after the secret check, so an unauthenticated caller // cannot tell a bad parameter from a missing route. const principal = parseSmokePrincipal( new URL(request.url).searchParams.get(\"principal\"), ); if (principal === null) { return new Response(\"Unknown smoke principal\", { status: 400 }); } const smokeSession = await mintSmokeSession(principal); logger.info(\"smoke.session_minted\", { \"smoke.principal\": principal, \"smoke.expires_at\": smokeSession.expiresAt, }); return smokeSession; } awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/style-sets/routes.ts|DELETE|/:styleSetId|apps/api/src/handlers/style-sets/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/style-sets/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/style-sets/routes.ts|POST|/:styleSetId/editor|apps/api/src/handlers/style-sets/from-editor/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/style-sets/from-editor/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/style-sets/routes.ts|POST|/:styleSetId/source|apps/api/src/handlers/style-sets/replace.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/style-sets/replace.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/style-sets/routes.ts|POST|/:styleSetId|apps/api/src/handlers/style-sets/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/style-sets/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/style-sets/routes.ts|POST|/editor/preview|apps/api/src/handlers/style-sets/preview-from-editor.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/style-sets/preview-from-editor.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/style-sets/routes.ts|PUT|/editor|apps/api/src/handlers/style-sets/from-editor/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/style-sets/from-editor/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/style-sets/routes.ts|PUT|/|apps/api/src/handlers/style-sets/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/style-sets/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|DELETE|/assignees|apps/api/src/handlers/tasks/assignees/remove.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/tasks/assignees/remove.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|DELETE|/links|apps/api/src/handlers/tasks/entity-links/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/tasks/entity-links/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|PATCH|/|apps/api/src/handlers/tasks/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/tasks/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|POST|/assignees/move|apps/api/src/handlers/tasks/assignees/move.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/tasks/assignees/move.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|POST|/assignees|apps/api/src/handlers/tasks/assignees/add.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/tasks/assignees/add.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|POST|/calendar|apps/api/src/handlers/tasks/calendar/list.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/tasks/calendar/list.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|POST|/links|apps/api/src/handlers/tasks/entity-links/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/tasks/entity-links/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/tasks/routes.ts|PUT|/|apps/api/src/handlers/tasks/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/tasks/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/template-packs/routes.ts|POST|/:packId/install|apps/api/src/handlers/template-packs/installs/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/template-packs/installs/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/template-packs/routes.ts|POST|/visibility|apps/api/src/handlers/template-packs/visibility/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/template-packs/visibility/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/template-recipes/routes.ts|DELETE|/:recipeId|apps/api/src/handlers/template-recipes/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/template-recipes/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/template-recipes/routes.ts|PUT|/|apps/api/src/handlers/template-recipes/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/template-recipes/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|DELETE|/:categoryId|apps/api/src/handlers/templates/categories/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/templates/categories/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|DELETE|/:templateId/clauses/:linkId|apps/api/src/handlers/templates/clauses/unlink.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/templates/clauses/unlink.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|DELETE|/:templateId|apps/api/src/handlers/templates/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/templates/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|DELETE|/lookup-formats/:formatId|apps/api/src/handlers/templates/lookup-formats/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/templates/lookup-formats/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|PATCH|/:templateId/clauses/:linkId|apps/api/src/handlers/templates/clause-slots/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/templates/clause-slots/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:categoryId|apps/api/src/handlers/templates/categories/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/categories/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/clauses/:linkId/sync|apps/api/src/handlers/templates/clauses/sync.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/clauses/sync.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/clauses/sync|apps/api/src/handlers/templates/outdated-clauses/sync.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/outdated-clauses/sync.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/decide-conditions|apps/api/src/handlers/templates/condition-decisions/get.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/condition-decisions/get.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/document|apps/api/src/handlers/templates/document/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/document/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/fill-preview|apps/api/src/handlers/templates/fills/preview.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/fills/preview.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/fill-to/:workspaceId|apps/api/src/handlers/templates/fills/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/fills/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/fill|apps/api/src/handlers/templates/fills/download.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/fills/download.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/prefill|apps/api/src/handlers/templates/prefill.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/prefill.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId/versions/:versionId/summarize|apps/api/src/handlers/templates/versions/summarize.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/versions/summarize.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/:templateId|apps/api/src/handlers/templates/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/discover|apps/api/src/handlers/templates/discover.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/discover.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/fill|apps/api/src/handlers/templates/fill.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/fill.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/lookup-formats/default|apps/api/src/handlers/templates/lookup-formats/default/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/lookup-formats/default/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/lookup-formats/my-default|apps/api/src/handlers/templates/lookup-formats/my-default/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/lookup-formats/my-default/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/lookup-formats|apps/api/src/handlers/templates/lookup-formats/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/lookup-formats/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/lookup-preview|apps/api/src/handlers/templates/lookups/preview.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/lookups/preview.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/prepare|apps/api/src/handlers/templates/prepare.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/prepare.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|POST|/suggest-fields|apps/api/src/handlers/templates/fields/suggest.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/templates/fields/suggest.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|PUT|/:templateId/clauses|apps/api/src/handlers/templates/clauses/link.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/templates/clauses/link.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|PUT|/blank|apps/api/src/handlers/templates/blank/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/templates/blank/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|PUT|/style-set|apps/api/src/handlers/templates/from-style-set/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/templates/from-style-set/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|PUT|/styles|apps/api/src/handlers/templates/from-styles/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/templates/from-styles/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|PUT|/|apps/api/src/handlers/templates/categories/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/templates/categories/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/templates/routes.ts|PUT|/|apps/api/src/handlers/templates/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/templates/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/approval-queue/routes.ts|POST|/approval-queue/return|apps/api/src/handlers/time-entries/approval-queue/return.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-entries/approval-queue/return.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/approval-queue/routes.ts|POST|/approve|apps/api/src/handlers/time-entries/approval-queue/approve.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-entries/approval-queue/approve.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/internal/routes.ts|POST|/|apps/api/src/handlers/time-entries/internal/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-entries/internal/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/me/routes.ts|PUT|/daily-target|apps/api/src/handlers/time-entries/me/daily-target/update.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/time-entries/me/daily-target/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/members/routes.ts|PUT|/:userId/daily-target|apps/api/src/handlers/time-entries/members/daily-target/update.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/time-entries/members/daily-target/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|DELETE|/batch|apps/api/src/handlers/time-entries/batch/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/time-entries/batch/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|DELETE|/|apps/api/src/handlers/time-entries/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/time-entries/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|PATCH|/|apps/api/src/handlers/time-entries/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/time-entries/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|POST|/batch|apps/api/src/handlers/time-entries/batch/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-entries/batch/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|POST|/polish-narrative|apps/api/src/handlers/time-entries/polish-narrative.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-entries/polish-narrative.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|POST|/split|apps/api/src/handlers/time-entries/split.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-entries/split.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|POST|/suggestions/decisions|apps/api/src/handlers/time-entries/suggestions/decisions/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-entries/suggestions/decisions/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-entries/routes.ts|PUT|/|apps/api/src/handlers/time-entries/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/time-entries/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-timers/routes.ts|DELETE|/:id|apps/api/src/handlers/time-timers/discard.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/time-timers/discard.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-timers/routes.ts|PATCH|/:id|apps/api/src/handlers/time-timers/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/time-timers/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-timers/routes.ts|POST|/:id/confirm|apps/api/src/handlers/time-timers/confirm.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-timers/confirm.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-timers/routes.ts|POST|/:id/pause|apps/api/src/handlers/time-timers/pause.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-timers/pause.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-timers/routes.ts|POST|/:id/resume|apps/api/src/handlers/time-timers/resume.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-timers/resume.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-timers/routes.ts|POST|/admin/:id/stop|apps/api/src/handlers/time-timers/admin/stop.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-timers/admin/stop.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/time-timers/routes.ts|POST|/start|apps/api/src/handlers/time-timers/start.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/time-timers/start.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/uploads/routes.ts|POST|/:uploadId/abort|apps/api/src/handlers/uploads/delete.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/uploads/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/uploads/routes.ts|POST|/:uploadId/finalize|apps/api/src/handlers/uploads/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/uploads/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/uploads/routes.ts|POST|/entity-create/preflight|apps/api/src/handlers/uploads/preflight-entity-create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/uploads/preflight-entity-create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/uploads/routes.ts|POST|/entity-create/tree|apps/api/src/handlers/uploads/entity-create-tree.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/uploads/entity-create-tree.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/uploads/routes.ts|POST|/presign|apps/api/src/handlers/uploads/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/uploads/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/usage/routes.ts|DELETE|/assignments|apps/api/src/handlers/usage/unassign-seat.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/usage/unassign-seat.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/usage/routes.ts|POST|/assignments|apps/api/src/handlers/usage/assign-seat.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/usage/assign-seat.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/usage/routes.ts|POST|/hosted/management|apps/api/src/handlers/usage/create-hosted-management.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/usage/create-hosted-management.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/usage/routes.ts|POST|/hosted/setup|apps/api/src/handlers/usage/create-hosted-setup.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/usage/create-hosted-setup.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/vat-rates/routes.ts|PATCH|/:vatRateId|apps/api/src/handlers/vat-rates/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/vat-rates/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/vat-rates/routes.ts|POST|/:vatRateId/archive|apps/api/src/handlers/vat-rates/archive.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/vat-rates/archive.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/vat-rates/routes.ts|POST|/|apps/api/src/handlers/vat-rates/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/vat-rates/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/view-templates/routes.ts|DELETE|/:templateId|apps/api/src/handlers/view-templates/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/view-templates/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/views/routes.ts|DELETE|/|apps/api/src/handlers/views/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/views/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/views/routes.ts|POST|/convert|apps/api/src/handlers/views/convert.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/views/convert.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/views/routes.ts|POST|/reorder|apps/api/src/handlers/views/reorder.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/views/reorder.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/views/routes.ts|POST|/|apps/api/src/handlers/views/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/views/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/views/routes.ts|PUT|/|apps/api/src/handlers/views/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/views/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/work-obligations/routes.ts|PATCH|/:entityId|apps/api/src/handlers/work-obligations/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/work-obligations/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/work-obligations/routes.ts|POST|/:entityId/acknowledge|apps/api/src/handlers/work-obligations/acknowledgements/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/work-obligations/acknowledgements/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/work-obligations/routes.ts|POST|/:entityId/transition|apps/api/src/handlers/work-obligations/transition.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/work-obligations/transition.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|DELETE|/anonymization-allowlist/:entryId|apps/api/src/handlers/workspaces/anonymization-allowlist/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/workspaces/anonymization-allowlist/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|DELETE|/anonymization-terms/:entryId|apps/api/src/handlers/workspaces/anonymization-terms/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/workspaces/anonymization-terms/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|DELETE|/contacts/:workspaceContactId|apps/api/src/handlers/workspaces/contacts/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/workspaces/contacts/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|DELETE|/correspondence/address|apps/api/src/handlers/workspaces/correspondence/address/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/workspaces/correspondence/address/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|DELETE|/members/:userId|apps/api/src/handlers/workspaces/members/remove.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/workspaces/members/remove.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|DELETE|/|apps/api/src/handlers/workspaces/delete.ts.handler",
+    "reason": "Existing DELETE route apps/api/src/handlers/workspaces/delete.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|PATCH|/correspondence/:correspondenceId|apps/api/src/handlers/workspaces/correspondence/update.ts.handler",
+    "reason": "Existing PATCH route apps/api/src/handlers/workspaces/correspondence/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/:workspaceId/unarchive|apps/api/src/handlers/workspaces/unarchive.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/unarchive.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/active|apps/api/src/handlers/workspaces/update-active.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/update-active.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/archive|apps/api/src/handlers/workspaces/archive.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/archive.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/bounding-boxes|apps/api/src/handlers/workspaces/generate-bounding-boxes.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/generate-bounding-boxes.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/cell-retry|apps/api/src/handlers/workspaces/cells/retry.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/cells/retry.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/correspondence/address|apps/api/src/handlers/workspaces/correspondence/address/create.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/correspondence/address/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/duplicate|apps/api/src/handlers/workspaces/duplicate.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/duplicate.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/infosoud/import-agenda|apps/api/src/handlers/workspaces/infosoud-import-agenda.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/infosoud-import-agenda.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/infosoud/lookup|apps/api/src/handlers/workspaces/infosoud-lookup.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/infosoud-lookup.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/justifications/query|apps/api/src/handlers/workspaces/justifications/list.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/justifications/list.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/workflow/start|apps/api/src/handlers/workspaces/workflow/start.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/workflow/start.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/workflow/target-count|apps/api/src/handlers/workspaces/workflow/targets/count.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/workflow/targets/count.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|POST|/|apps/api/src/handlers/workspaces/update.ts.handler",
+    "reason": "Existing POST route apps/api/src/handlers/workspaces/update.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|PUT|/anonymization-allowlist|apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|PUT|/anonymization-terms|apps/api/src/handlers/workspaces/anonymization-terms/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/workspaces/anonymization-terms/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|PUT|/contacts|apps/api/src/handlers/workspaces/contacts/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/workspaces/contacts/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|PUT|/members|apps/api/src/handlers/workspaces/members/add.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/workspaces/members/add.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/handlers/workspaces/routes.ts|PUT|/|apps/api/src/handlers/workspaces/create.ts.handler",
+    "reason": "Existing PUT route apps/api/src/handlers/workspaces/create.ts.handler awaits ownership declaration at its handler boundary."
+  },
+  {
+    "key": "apps/api/src/lib/rate-limit/tenant-action-boundary.ts|GENERIC|route.method|route.path|{ type: routeType(route) }",
+    "reason": "Derived rate-limit classification router built from the existing route table; no handler execution."
+  },
+  {
+    "key": "apps/api/src/server.ts|INTERCEPT|apps/api/src/handlers/mcp-app-sandbox/routes.ts#handleMcpAppSandboxRequest",
+    "reason": "Request dispatch is owned by apps/api/src/handlers/mcp-app-sandbox/routes.ts#handleMcpAppSandboxRequest; its transport boundary requires separate ownership enumeration."
+  },
+  {
+    "key": "apps/api/src/server.ts|INTERCEPT|apps/api/src/handlers/mcp/routes-core.ts#handleMcpPreflightRequest",
+    "reason": "Request dispatch is owned by apps/api/src/handlers/mcp/routes-core.ts#handleMcpPreflightRequest; its transport boundary requires separate ownership enumeration."
+  },
+  {
+    "key": "apps/api/src/server.ts|INTERCEPT|apps/api/src/handlers/visual-sandbox/routes.ts#handleVisualSandboxRequest",
+    "reason": "Request dispatch is owned by apps/api/src/handlers/visual-sandbox/routes.ts#handleVisualSandboxRequest; its transport boundary requires separate ownership enumeration."
+  },
+  {
+    "key": "apps/api/src/server.ts|MOUNT|getAuth().handler",
+    "reason": "Better Auth owns generated authentication mutations behind the mounted request handler."
+  }
+]
