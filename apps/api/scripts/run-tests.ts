@@ -41,7 +41,6 @@ import {
   snapshotKey,
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
-import durations from "./test-durations.json";
 import {
   API_TEST_SHARD_ENV,
   restrictApiTestFiles,
@@ -58,7 +57,11 @@ import {
   TestProcessSupervisor,
   testProcessBudgets,
 } from "./test-process-supervisor";
-import { durationSeconds, testFileDurationWeights } from "./test-timings";
+import {
+  API_TEST_DURATIONS_FILE_ENV,
+  loadTestDurationWeights,
+  testFileDurationWeights,
+} from "./test-timings";
 
 const PROPERTY_FLAG = "--property";
 const TEST_ROOT_SET = new Set<string>(TEST_ROOTS);
@@ -79,9 +82,13 @@ const allTestPaths = restrictApiTestFiles(
   listApiTestPaths(apiRoot),
   process.env["API_TEST_FILES"],
 );
+const durationWeights = loadTestDurationWeights({
+  files: allTestPaths,
+  path: process.env[API_TEST_DURATIONS_FILE_ENV],
+});
 const { testPaths, shard } = selectApiTestFiles({
   files: allTestPaths,
-  durations,
+  durations: durationWeights,
   shardValue: process.env[API_TEST_SHARD_ENV],
 });
 if (shard !== null) {
@@ -332,7 +339,7 @@ const composedBatches = await planApiTestBatches({
 });
 const plannedBatches = orderBatchesForLanes(
   composedBatches.flatMap((group) => planBatches(group)),
-  testFileDurationWeights(allTestPaths, durationSeconds(durations)),
+  testFileDurationWeights(allTestPaths, durationWeights),
 );
 
 const testProcessEnv: Record<string, string | undefined> = {

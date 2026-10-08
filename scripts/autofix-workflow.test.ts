@@ -436,19 +436,6 @@ describe("changed-file autofix boundary", () => {
     for (const unsafe of ["--fix-suggestions", "--fix-dangerously"]) {
       expect(fix).not.toContain(unsafe);
     }
-    const restriction = job.slice(restrictionStep, pushStep);
-    const durationGuard = restriction.indexOf(
-      'scripts/check-autofix-test-durations.ts --base "$BASE_SHA" --head "$HEAD_SHA"',
-    );
-    expect(durationGuard).toBeGreaterThanOrEqual(0);
-    expect(durationGuard).toBeLessThan(
-      restriction.indexOf(
-        'if [[ "$WEIGHTS_ALLOWED" == apps/api/scripts/test-durations.json ]]; then',
-      ),
-    );
-    expect(restriction).toContain(
-      `WEIGHTS_ALLOWED: \${{ steps.weights.outputs.allowed }}`,
-    );
     expect(job.slice(restrictionStep, pushStep)).toContain(
       'excludes+=(":(exclude,literal)$path")',
     );
@@ -472,7 +459,7 @@ describe("changed-file autofix boundary", () => {
     expect(plan).toBeGreaterThan(availability);
     expect(job).toContain(`ready: \${{ steps.planner.outputs.ready }}`);
     expect(scope).toContain(
-      "scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/check-autofix-test-durations.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
+      "scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
     );
     expect(scope).toContain('git cat-file -e "HEAD:$path"');
     expect(scope).toContain('echo "ready=false" >> "$GITHUB_OUTPUT"');

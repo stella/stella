@@ -88,6 +88,8 @@ jobs:
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
+      api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
+      api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
@@ -1175,6 +1177,29 @@ jobs:
         id: pilot-plan
         if: steps.completed-depth.outputs.run_required != 'false' && steps.pilot.outputs.coverage_profile == 'pilot-fast-v1'
         run: bun scripts/ci-pr-pilot-plan.ts .github/workflows/ci.yml >> "$GITHUB_OUTPUT"
+
+      - name: Restore API test durations
+        id: api-test-duration-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
+          restore-keys: api-test-durations-
+
+      - name: Resolve API test durations
+        id: api-test-durations
+        env:
+          MATCHED_KEY: ${{ steps.api-test-duration-cache.outputs.cache-matched-key }}
+        run: |
+          key="$MATCHED_KEY"
+          [[ -n "$key" ]] || key="api-test-durations-$GITHUB_RUN_ID"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if [[ -f "$RUNNER_TEMP/api-test-durations.json" ]]; then
+            echo "hash=$(sha256sum "$RUNNER_TEMP/api-test-durations.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "hash=missing" >> "$GITHUB_OUTPUT"
+          fi
+          echo "API_TEST_DURATIONS_FILE=$RUNNER_TEMP/api-test-durations.json" >> "$GITHUB_ENV"
 
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -2808,13 +2833,6 @@ jobs:
           bun test apps/api/scripts/chat-mutation-matrix.test.ts
           bun apps/api/scripts/chat-mutation-matrix.ts --check
 
-      - name: API test duration weights
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # A test file without a duration weight fails here, on the pull request
-        # that adds it and on each merge-queue entry. The API shards run after
-        # merge and weight such a file by the median with a warning instead.
-        run: bun apps/api/scripts/refresh-test-durations.ts --check
-
       - name: Desktop Rust inputs
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The desktop native test task's turbo.json inputs, the files Rust
@@ -3263,6 +3281,7 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/network-baseline-scope.test.ts
+          scripts/api-test-durations-workflow.test.ts
           scripts/autofix-workflow.test.ts
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
@@ -3274,7 +3293,7 @@ jobs:
 
       - name: Test autofix decision boundaries
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
-        run: bun test scripts/check-autofix-test-durations.test.ts scripts/autofix-protected-paths.test.ts
+        run: bun test scripts/autofix-protected-paths.test.ts
 
       # The fixture executes the installed linter and native compiler.
       - name: Test type-aware autofix
@@ -3511,6 +3530,13 @@ jobs:
           submodules: true
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
+      - name: Restore planned API test durations
+        if: startsWith(matrix.shard, 'api-')
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: ${{ needs.ci-plan.outputs.api_test_durations_key }}
+
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -3589,6 +3615,7 @@ jobs:
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
           API_TEST_FILES: ${{ needs.ci-plan.outputs.api_test_files }}
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
+          API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -3613,19 +3640,6 @@ jobs:
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
-
-      - name: Check API test duration drift
-        if: >-
-          !cancelled()
-          && startsWith(matrix.shard, 'api-')
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-        env:
-          API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
-        run: |
-          # A Turbo cache hit executes no test process and emits no new timings.
-          if [[ -d "$API_TEST_TIMINGS_DIR" ]]; then
-            bun apps/api/scripts/refresh-test-durations.ts --check "$API_TEST_TIMINGS_DIR"
-          fi
 
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
@@ -3717,6 +3731,46 @@ jobs:
               ...context.repo,
               run_id: context.runId,
             });
+
+  api-test-durations:
+    needs: [ci-plan, ci-tests]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && needs.ci-tests.result == 'success'
+      && needs.ci-plan.outputs.api_test_shards != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: true
+          bun-version-file: "package.json"
+
+      - name: Download API test timings
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: api-test-timings-api-*
+          path: ${{ runner.temp }}/api-test-timings
+          merge-multiple: true
+
+      - name: Aggregate API test durations
+        run: bun apps/api/scripts/refresh-test-durations.ts --write "$RUNNER_TEMP/api-test-durations.json" "$RUNNER_TEMP/api-test-timings"
+
+      - name: Save API test durations
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
 
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.

@@ -1358,9 +1358,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_SCOPE_UNKNOWN",
   "API_TEST_ARTIFACT_DIR",
   "API_TEST_CHILD_TIMEOUT_MS",
+  // Optional main-measured weights; pass-through avoids changing Turbo's test cache key.
+  "API_TEST_DURATIONS_FILE",
   "API_TEST_FILES",
-  // Native Bun whole-file timing artifacts and optional drift measurements.
-  "API_TEST_MEASUREMENTS",
   "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",
   "API_TEST_TIMINGS_DIR",

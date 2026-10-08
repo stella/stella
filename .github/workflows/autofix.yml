@@ -223,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/check-autofix-test-durations.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi
@@ -327,22 +327,6 @@ jobs:
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
         run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
 
-      - name: Add missing API test weights
-        id: weights
-        shell: bash
-        run: |
-          set -euo pipefail
-          missing=()
-          while IFS= read -r -d '' path; do
-            if [[ "$path" == apps/api/*.test.ts || "$path" == apps/api/*.test.tsx ]]; then
-              missing+=("${path#apps/api/}")
-            fi
-          done < "$RUNNER_TEMP/autofix-added-paths"
-          if (( ${#missing[@]} > 0 )); then
-            bun apps/api/scripts/refresh-test-durations.ts --add-missing "${missing[@]}"
-            echo "allowed=apps/api/scripts/test-durations.json" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Fix changed files
         shell: bash
         run: |
@@ -364,8 +348,6 @@ jobs:
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue
             fi
-            # The append-only weight fixer owns this output's bytes.
-            [[ "$path" != apps/api/scripts/test-durations.json ]] || continue
             protected_path=false
             for pattern in "${protected[@]}"; do
               if [[ "$path" == $pattern ]]; then
@@ -403,7 +385,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
-          WEIGHTS_ALLOWED: ${{ steps.weights.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -441,12 +422,7 @@ jobs:
           done < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
-          # Validate independently of every changed-path and output grant.
-          bun scripts/check-autofix-test-durations.ts --base "$BASE_SHA" --head "$HEAD_SHA"
           excludes=()
-          if [[ "$WEIGHTS_ALLOWED" == apps/api/scripts/test-durations.json ]]; then
-            excludes+=(":(exclude,literal)apps/api/scripts/test-durations.json")
-          fi
           for path in "${changed[@]}"; do
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue

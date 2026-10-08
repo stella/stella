@@ -746,7 +746,7 @@
     },
     "@stll/api#test:property": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
-      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_MEASUREMENTS"],
+      "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
       "cache": false
     },
     "@stll/api#test": {
@@ -758,7 +758,7 @@
         "API_TEST_ARTIFACT_DIR",
         "API_TEST_LANES",
         "API_TEST_TIMINGS_DIR",
-        "API_TEST_MEASUREMENTS"
+        "API_TEST_DURATIONS_FILE"
       ],
       "inputs": [
         "$TURBO_DEFAULT$",

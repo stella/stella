@@ -4,39 +4,25 @@ import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { formattedLikeRepository } from "../../../scripts/generated-artifacts";
-import { listApiTestPaths } from "./api-test-plan";
-import durations from "./test-durations.json";
-import {
-  assertTestDurations,
-  MISSING_TEST_DURATION,
-  readDurationWeights,
-  readTimingArtifact,
-  TEST_DURATION_SOURCE,
-} from "./test-timings";
-
-// Bootstrap estimates allocate a batch's unreported setup equally across its
-// files, added to each file's reported body time. New files reserve the median
-// live setup-inclusive weight (at least one second) until CI measures them.
-// Native timing artifacts replace estimates with measured whole-file seconds.
-// Download api-test-timings-* artifacts from a successful merge-group/main run,
-// then run --write <downloaded-artifact-directory>... and commit the result.
-// CI reports measured drift as warnings; it never refreshes committed weights.
+import type { readDurationWeights } from "./test-timings";
+import { readTimingArtifact, TEST_DURATION_SOURCE } from "./test-timings";
 
 /** Later artifacts replace earlier measurements; output order is canonical. */
-export const refreshedTestDurations = (
-  previous: unknown,
-  artifacts: readonly string[],
-) => {
-  const refreshed = readDurationWeights(previous);
+export const refreshedTestDurations = (artifacts: readonly string[]) => {
+  const refreshed = new Map<string, number>();
   for (const artifact of artifacts) {
     for (const [file, seconds] of Object.entries(
       readTimingArtifact(artifact),
     )) {
-      refreshed[file] = { seconds, source: TEST_DURATION_SOURCE.measured };
+      refreshed.set(file, seconds);
     }
   }
-  return refreshed;
+  return Object.fromEntries(
+    Array.from(refreshed, ([file, seconds]) => [
+      file,
+      { seconds, source: TEST_DURATION_SOURCE.measured },
+    ]),
+  );
 };
 
 export const serializeTestDurations = (
@@ -55,91 +41,12 @@ export const serializeTestDurations = (
     2,
   )}\n`;
 
-type EstimateMissingTestDurationsOptions = {
-  files: readonly string[];
-  previous: ReturnType<typeof readDurationWeights>;
-};
-
-export const estimateMissingTestDurations = ({
-  files,
-  previous,
-}: EstimateMissingTestDurationsOptions) => {
-  const weights = files
-    .flatMap((file) =>
-      previous[file] === undefined ? [] : [previous[file].seconds],
-    )
-    .toSorted((a, b) => a - b);
-  const estimate = Math.max(1, weights.at(Math.floor(weights.length / 2)) ?? 1);
-  return Object.fromEntries(
-    files.map((file) => [
-      file,
-      previous[file] ?? {
-        seconds: estimate,
-        source: TEST_DURATION_SOURCE.estimated,
-      },
-    ]),
-  );
-};
-
-/** Append estimates without reserializing, rounding or deleting existing entries. */
-export const addMissingTestDurations = (
-  text: string,
-  files: readonly string[],
-) => {
-  const previous = readDurationWeights(JSON.parse(text));
-  const missing = files.filter((file) => previous[file] === undefined);
-  if (missing.length === 0) {
-    return text;
-  }
-  const estimated = estimateMissingTestDurations({ files, previous });
-  const additions = Object.fromEntries(
-    Object.entries(estimated).filter(([file]) => previous[file] === undefined),
-  );
-  const closing = text.lastIndexOf("}");
-  const prefix = text.slice(0, closing).trimEnd();
-  const entries = serializeTestDurations(additions).slice(2, -3);
-  return `${prefix}${Object.keys(previous).length > 0 ? "," : ""}\n${entries}\n${text.slice(closing)}`;
-};
-
-/**
- * Without timings, --check is the pull-request gate; with a shard's timings it
- * runs after merge, where drift and gaps are advisory.
- */
-export const missingTestDurationMode = (timingInputs: readonly string[]) =>
-  timingInputs.length === 0
-    ? MISSING_TEST_DURATION.fail
-    : MISSING_TEST_DURATION.warn;
-
 if (import.meta.main) {
-  const [mode, ...inputs] = process.argv.slice(2);
-  if (mode !== "--write" && mode !== "--check" && mode !== "--add-missing") {
+  const [mode, destination, ...inputs] = process.argv.slice(2);
+  if (mode !== "--write" || destination === undefined || inputs.length === 0) {
     panic(
-      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write|--check [timings.json|directory]... | --add-missing [API-relative test path]...",
+      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write <destination.json> <timings.json|directory>...",
     );
-  }
-  if (mode === "--add-missing") {
-    const destination = new URL("test-durations.json", import.meta.url);
-    const text = readFileSync(destination, "utf-8");
-    const files = listApiTestPaths(path.resolve(import.meta.dirname, ".."));
-    for (const input of inputs) {
-      if (!files.includes(input)) {
-        panic(`Not a live API test path: ${input}`);
-      }
-    }
-    const previous = readDurationWeights(JSON.parse(text));
-    const updated = addMissingTestDurations(
-      text,
-      files.filter(
-        (file) =>
-          inputs.length === 0 ||
-          inputs.includes(file) ||
-          previous[file] !== undefined,
-      ),
-    );
-    if (updated !== text) {
-      writeFileSync(destination, updated);
-    }
-    process.exit(0);
   }
   const artifacts = inputs.flatMap((input) =>
     input.endsWith(".json")
@@ -153,40 +60,11 @@ if (import.meta.main) {
               compareCodeUnit(a, b),
           ),
   );
-  const measurements = refreshedTestDurations(
-    {},
+  const durations = refreshedTestDurations(
     artifacts.map((file) => readFileSync(file, "utf-8")),
   );
-  const files = listApiTestPaths(path.resolve(import.meta.dirname, ".."));
-  if (mode === "--check") {
-    assertTestDurations({
-      files,
-      durations: readDurationWeights(durations),
-      missing: missingTestDurationMode(inputs),
-      measurements: Object.fromEntries(
-        Object.entries(measurements).map(([file, entry]) => [
-          file,
-          entry.seconds,
-        ]),
-      ),
-    });
-    console.log(
-      `API test durations cover ${files.length} files; reviewed available measurements`,
-    );
-  } else {
-    const liveDurations = estimateMissingTestDurations({
-      files,
-      previous: { ...readDurationWeights(durations), ...measurements },
-    });
-    writeFileSync(
-      new URL("test-durations.json", import.meta.url),
-      await formattedLikeRepository(
-        serializeTestDurations(liveDurations),
-        "json",
-      ),
-    );
-    console.log(
-      `Refreshed API test durations from ${artifacts.length} artifacts`,
-    );
-  }
+  writeFileSync(destination, serializeTestDurations(durations));
+  console.log(
+    `Aggregated API test durations from ${artifacts.length} artifacts`,
+  );
 }
