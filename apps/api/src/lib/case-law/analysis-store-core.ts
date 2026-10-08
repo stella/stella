@@ -39,7 +39,7 @@ import {
  */
 export type AnalysisRowWriter = Pick<
   Transaction,
-  "delete" | "insert" | "select" | "update"
+  "delete" | "execute" | "select" | "update"
 >;
 
 type AnalysisClaim = AnalysisStoreKey & {
@@ -111,8 +111,9 @@ export type AnalysisStore = {
    */
   clear: (release: AnalysisRelease) => Promise<void>;
   /**
-   * Records how this run failed under its reader's key, then releases its
-   * sentinel. The record sits apart from the shared row, so another reader's
+   * Releases this run's sentinel and, in the same statement, records how the
+   * run failed under its reader's key; a run that no longer holds its
+   * sentinel writes neither. The record sits apart from the shared row, so another reader's
    * run on the same decision neither replaces nor clears it: the reader whose
    * key failed is told so until it asks to run again, while every other
    * reader runs with its own key.
@@ -129,10 +130,14 @@ export type AnalysisStore = {
 /**
  * How a run gives the row back: its exact sentinel, and only that, becomes
  * nothing. A replacement run that took over a stale sentinel holds a
- * different value and is left alone. A failed run first files its failure
- * under its reader key (sweeping a bounded batch of expired records), so a
- * poll between the two statements still sees the sentinel, never a row with
- * neither.
+ * different value and is left alone.
+ *
+ * A failed run files its failure in the same statement that releases the
+ * sentinel, and only when that release takes: a run whose sentinel was
+ * superseded (a re-parse, a takeover) writes nothing, so it can never
+ * overwrite the failure of the run that replaced it with an older input. One
+ * statement, so no poll sees the row released without the failure filed.
+ * Then a bounded batch of expired records is swept.
  */
 const releaseRun = async (
   db: AnalysisRowWriter,
@@ -145,36 +150,48 @@ const releaseRun = async (
   },
 ): Promise<void> => {
   // audit: skip — analysis run bookkeeping; no user-facing record changes
-  if (failure !== undefined) {
-    const { keyTag, record } = failure;
+  if (failure === undefined) {
     await db
-      .insert(caseLawAnalysisFailures)
-      .values({ decisionId, keyTag, ...record })
-      .onConflictDoUpdate({
-        target: [
-          caseLawAnalysisFailures.decisionId,
-          caseLawAnalysisFailures.keyTag,
-        ],
-        set: record,
-      });
-    const expiredBefore = new Date(
-      record.recordedAt.getTime() - ANALYSIS_FAILURE_HOLD_MS,
-    );
-    await db
-      .delete(caseLawAnalysisFailures)
+      .update(caseLawDecisions)
+      .set({ analysis: null })
       .where(
-        sql`(${caseLawAnalysisFailures.decisionId}, ${caseLawAnalysisFailures.keyTag}) IN (SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures" WHERE "recorded_at" < ${expiredBefore.toISOString()}::timestamptz ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH})`,
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
+          sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
+        ),
       );
+    return;
   }
+  const { keyTag, record } = failure;
+  const recordedAt = record.recordedAt.toISOString();
+  // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
+  await db.execute(sql`
+    WITH released AS (
+      UPDATE "case_law_decisions" SET "analysis" = NULL
+      WHERE "id" = ${decisionId}::uuid
+        AND "analysis" = ${JSON.stringify(sentinel)}::text::jsonb
+      RETURNING "id"
+    )
+    INSERT INTO "case_law_analysis_failures"
+      ("decision_id", "key_tag", "input_fingerprint", "code", "key_source", "provider", "recorded_at")
+    SELECT "id", ${keyTag}, ${record.inputFingerprint}, ${record.code},
+      ${record.keySource}, ${record.provider}, ${recordedAt}::timestamptz
+    FROM released
+    ON CONFLICT ("decision_id", "key_tag") DO UPDATE SET
+      "input_fingerprint" = EXCLUDED."input_fingerprint",
+      "code" = EXCLUDED."code",
+      "key_source" = EXCLUDED."key_source",
+      "provider" = EXCLUDED."provider",
+      "recorded_at" = EXCLUDED."recorded_at"
+  `);
+  const expiredBefore = new Date(
+    record.recordedAt.getTime() - ANALYSIS_FAILURE_HOLD_MS,
+  );
   await db
-    .update(caseLawDecisions)
-    .set({ analysis: null })
+    .delete(caseLawAnalysisFailures)
     .where(
-      and(
-        eq(caseLawDecisions.id, decisionId),
-        // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
-        sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
-      ),
+      sql`(${caseLawAnalysisFailures.decisionId}, ${caseLawAnalysisFailures.keyTag}) IN (SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures" WHERE "recorded_at" < ${expiredBefore.toISOString()}::timestamptz ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH})`,
     );
 };
 

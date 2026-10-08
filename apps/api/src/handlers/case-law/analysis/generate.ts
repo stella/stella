@@ -470,6 +470,7 @@ export const generateAnalysis = async ({
         failure,
         fingerprint: input.fingerprint,
         now: new Date(),
+        reader,
       })
     ) {
       return Result.ok(failureResponse(failure));

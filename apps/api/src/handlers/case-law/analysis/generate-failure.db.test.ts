@@ -20,6 +20,7 @@ import {
   getOutputTokenLimit,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import {
@@ -34,6 +35,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_FAILURE_HOLD_MS,
+  analysisFailureKeyTag,
   analysisFailureRecord,
 } from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
@@ -89,6 +91,19 @@ const googleKey = {
     fast: { provider: "google", modelId: "gemini-3.8-flash" },
     pdf: { provider: "google", modelId: "gemini-3.8-flash" },
     reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
+  },
+  decision: null,
+} satisfies OrgAIConfig;
+
+/** The same organization after it moved its fast role to another provider. */
+const anthropicKey = {
+  providers: [
+    { provider: "google", apiKey: "test-api-key" },
+    { provider: "anthropic", apiKey: "test-api-key" },
+  ],
+  overrideModels: {
+    ...googleKey.overrideModels,
+    fast: { provider: "anthropic", modelId: "claude-haiku-4-5-20251001" },
   },
   decision: null,
 } satisfies OrgAIConfig;
@@ -277,6 +292,16 @@ describe("a failed analysis run", () => {
     return row?.analysis ?? null;
   };
 
+  const holdRow = async (
+    decisionId: SafeId<"caseLawDecision">,
+    sentinel: AnalysisGenerating,
+  ) => {
+    await db
+      .update(caseLawDecisions)
+      .set({ analysis: sentinel })
+      .where(eq(caseLawDecisions.id, decisionId));
+  };
+
   const failureRows = async (decisionId: SafeId<"caseLawDecision">) =>
     await db
       .select({
@@ -388,19 +413,98 @@ describe("a failed analysis run", () => {
     expect(await failureRows(decisionId)).toHaveLength(2);
   });
 
+  test("a superseded run's failure never replaces the failure of the run that replaced it", async () => {
+    const decisionId = await insertDecision();
+    // A first failing run files the record the read derives the current
+    // input fingerprint from.
+    await read({ decisionId, model: fakeGoogle(["cut-off"]).model });
+    const [first] = await db
+      .select({ inputFingerprint: caseLawAnalysisFailures.inputFingerprint })
+      .from(caseLawAnalysisFailures)
+      .where(eq(caseLawAnalysisFailures.decisionId, decisionId));
+    if (first === undefined) {
+      throw new Error("expected a failure record");
+    }
+    const current = first.inputFingerprint;
+    const store = createDbAnalysisStore(db);
+    const keyTag = analysisFailureKeyTag(
+      { source: "organization", organizationId: ORG_A, provider: "google" },
+      decisionId,
+    );
+    const failureOf = (
+      code: "failed" | "timed_out",
+      fingerprint: string,
+      now: Date,
+    ) =>
+      analysisFailureRecord({
+        code,
+        fingerprint,
+        now,
+        reader: {
+          source: "organization",
+          organizationId: ORG_A,
+          provider: "google",
+        },
+      });
+
+    // A run over an earlier parse, then the replacement over the current one
+    // that took the row over.
+    const now = new Date();
+    const superseded = analysisSentinel("e".repeat(64), now);
+    const replacement = analysisSentinel(current, now);
+    await holdRow(decisionId, replacement);
+
+    // The replacement fails first; the superseded run settles after it.
+    await store.fail({
+      decisionId,
+      keyTag,
+      sentinel: replacement,
+      failure: failureOf("timed_out", current, now),
+    });
+    await store.fail({
+      decisionId,
+      keyTag,
+      sentinel: superseded,
+      failure: failureOf("failed", "e".repeat(64), now),
+    });
+
+    expect(await failureRows(decisionId)).toEqual([
+      expect.objectContaining({ code: "timed_out" }),
+    ]);
+    const poll = await read({ decisionId, model: fakeGoogle([]).model });
+    expect(poll.response).toMatchObject({ status: "error", code: "timed_out" });
+    expect(poll.starts).toBe(0);
+  });
+
+  test("an organization that switched its provider after a failed run runs on the new one", async () => {
+    const decisionId = await insertDecision();
+    await read({ decisionId, model: fakeGoogle(["cut-off"]).model });
+
+    const switched = await read({
+      decisionId,
+      model: fakeGoogle(["valid"]).model,
+      orgAIConfig: anthropicKey,
+    });
+
+    expect(switched).toEqual({ response: { status: "generating" }, starts: 1 });
+  });
+
   test("recording a failure sweeps records past their hold, and keeps fresh ones", async () => {
     const expiredDecision = await insertDecision();
     const freshDecision = await insertDecision();
     const now = new Date();
     const store = createDbAnalysisStore(db);
-    const recordFor = (
+    // Each run holds its decision's row, as a claimed run does.
+    const recordFor = async (
       decisionId: SafeId<"caseLawDecision">,
       recordedAt: Date,
-    ) =>
-      store.fail({
+    ) => {
+      const sentinel = analysisSentinel(FINGERPRINT, recordedAt);
+      await holdRow(decisionId, sentinel);
+      await store.fail({
         decisionId,
         keyTag: "platform",
-        sentinel: analysisSentinel(FINGERPRINT, recordedAt),
+        sentinel,
         failure: analysisFailureRecord({
           code: "failed",
           fingerprint: FINGERPRINT,
@@ -408,6 +512,7 @@ describe("a failed analysis run", () => {
           reader: { source: "platform" },
         }),
       });
+    };
 
     await recordFor(
       expiredDecision,

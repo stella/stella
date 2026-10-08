@@ -80,8 +80,10 @@ const memoryAnalysisStore: AnalysisStore = {
     await Promise.resolve();
   },
   fail: async ({ decisionId, failure, keyTag, sentinel }) => {
-    memoryFailures.set(memoryFailureKey(decisionId, keyTag), failure);
+    // Only the run that still holds the row files its failure; a superseded
+    // run writes nothing (as the row store's single statement does).
     if (memoryAnalyses.get(decisionId) === sentinel) {
+      memoryFailures.set(memoryFailureKey(decisionId, keyTag), failure);
       memoryAnalyses.delete(decisionId);
     }
     await Promise.resolve();

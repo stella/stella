@@ -51,6 +51,7 @@ describe("a failed run's record", () => {
         ),
         fingerprint: CURRENT,
         now: NOW,
+        reader: ORG_KEY,
       }),
     ).toBe(true);
   });
@@ -61,6 +62,7 @@ describe("a failed run's record", () => {
         failure: recordedAt(new Date(NOW.getTime() - ANALYSIS_FAILURE_HOLD_MS)),
         fingerprint: CURRENT,
         now: NOW,
+        reader: ORG_KEY,
       }),
     ).toBe(false);
   });
@@ -71,6 +73,18 @@ describe("a failed run's record", () => {
         failure: recordedAt(NOW),
         fingerprint: PREVIOUS,
         now: NOW,
+        reader: ORG_KEY,
+      }),
+    ).toBe(false);
+  });
+
+  test("a failure no longer holds once the organization runs a different provider", () => {
+    expect(
+      failureStillHolds({
+        failure: recordedAt(NOW),
+        fingerprint: CURRENT,
+        now: NOW,
+        reader: { ...ORG_KEY, provider: "anthropic" },
       }),
     ).toBe(false);
   });

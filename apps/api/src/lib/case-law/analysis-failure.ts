@@ -87,16 +87,24 @@ export const analysisFailureRecord = ({
 
 /**
  * Whether a stored failure still answers its reader for the document as it
- * reads now: over the same input, and within its hold.
+ * reads now: over the same input, within its hold, and with the key the
+ * reader would run with today. An organization that switched its provider
+ * since the failure runs on the new one rather than hearing the old one's
+ * failure.
  */
 export const failureStillHolds = ({
   failure,
   fingerprint,
   now,
+  reader,
 }: {
   failure: AnalysisFailureRecord;
   fingerprint: AnalysisInputFingerprint;
   now: Date;
+  reader: AnalysisReaderKey;
 }): boolean =>
   failure.inputFingerprint === fingerprint &&
+  failure.keySource === reader.source &&
+  failure.provider ===
+    (reader.source === "organization" ? reader.provider : null) &&
   now.getTime() - failure.recordedAt.getTime() < ANALYSIS_FAILURE_HOLD_MS;
