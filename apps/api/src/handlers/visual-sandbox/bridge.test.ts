@@ -64,7 +64,7 @@ describe("visual frame bridge", () => {
       origin: "https://web.example.test",
       data: render,
     });
-    expect(onRender).toHaveBeenCalledExactlyOnceWith({ ...render, links: [] });
+    expect(onRender.mock.calls).toEqual([[{ ...render, links: [] }]]);
   });
 
   test("forwards validated themes only from the pinned host after a valid render", () => {
@@ -135,7 +135,7 @@ describe("visual frame bridge", () => {
     expect(onTheme).not.toHaveBeenCalled();
     expect(onGuestMessage).not.toHaveBeenCalled();
     handle({ source: parentWindow, origin: "https://web.example.test", data });
-    expect(onTheme).toHaveBeenCalledExactlyOnceWith(theme);
+    expect(onTheme.mock.calls).toEqual([[theme]]);
   });
 
   test("pins the first valid parent origin and returns validated guest messages to it", () => {

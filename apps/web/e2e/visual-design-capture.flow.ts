@@ -130,7 +130,7 @@ const captureVisualDesign = async ({
   const prepareCapture = async () => {
     await expect
       .poll(
-        () =>
+        async () =>
           outer.evaluate((element) => {
             const section = element.closest("section");
             const message = element.closest("[data-chat-message-id]");
@@ -170,7 +170,7 @@ const captureVisualDesign = async ({
       return names.map((name) => style.getPropertyValue(name).trim());
     }, tokens);
     await expect
-      .poll(() =>
+      .poll(async () =>
         guest.locator("html").evaluate((element, names) => {
           const style = getComputedStyle(element);
           return names.map((name) => style.getPropertyValue(name).trim());
@@ -190,7 +190,9 @@ const captureVisualDesign = async ({
   );
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "light");
   await prepareCapture();
-  await expect.poll(() => viewportRatio(chart)).toBeGreaterThanOrEqual(0.25);
+  await expect
+    .poll(async () => viewportRatio(chart))
+    .toBeGreaterThanOrEqual(0.25);
   await snap("visual-design-light-desktop", { waitFor: selector });
 
   // Change the preference in place: the existing chart must repaint without
@@ -203,7 +205,9 @@ const captureVisualDesign = async ({
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "dark");
   await expect(outer).toHaveAttribute("src", initialSrc ?? "");
   await prepareCapture();
-  await expect.poll(() => viewportRatio(chart)).toBeGreaterThanOrEqual(0.25);
+  await expect
+    .poll(async () => viewportRatio(chart))
+    .toBeGreaterThanOrEqual(0.25);
   await snap("visual-design-dark-desktop", { waitFor: selector });
 
   await page.evaluate((key) => {
@@ -220,12 +224,14 @@ const captureVisualDesign = async ({
   // The wrapping statistics can put the chart below the mobile overview.
   // Capture its own viewport as well so the palette and labels are reviewable.
   await alignGuestSection("#chart");
-  await expect.poll(() => viewportRatio(chart)).toBeGreaterThanOrEqual(0.6);
+  await expect
+    .poll(async () => viewportRatio(chart))
+    .toBeGreaterThanOrEqual(0.6);
   await snap("visual-design-light-mobile-chart", { waitFor: selector });
   await alignGuestSection("#ranking");
   const firstRankingButton = guest.locator("#ranking .stella-button").first();
   await expect
-    .poll(() => viewportRatio(firstRankingButton))
+    .poll(async () => viewportRatio(firstRankingButton))
     .toBeGreaterThanOrEqual(0.6);
   await snap("visual-design-light-mobile-ranking", { waitFor: selector });
 };

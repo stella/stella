@@ -12,13 +12,25 @@ test("guest applies only validated theme updates from its captured parent", () =
     { source: {}, data },
     { source: null, data },
     { source: parentWindow, data: null },
-    { source: parentWindow, data: { ...data, theme: { ...theme, variables: { "--foreground": "url(https://example.test)" } } } },
-    { source: parentWindow, data: { ...data, theme: { ...theme, variables: { "--other": "white" } } } },
+    {
+      source: parentWindow,
+      data: {
+        ...data,
+        theme: {
+          ...theme,
+          variables: { "--foreground": "url(https://example.test)" },
+        },
+      },
+    },
+    {
+      source: parentWindow,
+      data: { ...data, theme: { ...theme, variables: { "--other": "white" } } },
+    },
     { source: parentWindow, data: { ...data, extra: true } },
   ]) {
     receive(event);
   }
   expect(onTheme).not.toHaveBeenCalled();
   receive({ source: parentWindow, data });
-  expect(onTheme).toHaveBeenCalledExactlyOnceWith(theme);
+  expect(onTheme.mock.calls).toEqual([[theme]]);
 });

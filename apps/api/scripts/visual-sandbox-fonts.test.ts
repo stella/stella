@@ -15,7 +15,9 @@ test("visual font faces embed the app's exact font bytes and preserve typography
     source.replace(/url\([^)]*\)/gu, "url(FONT)"),
   );
   const sources = [...source.matchAll(/url\([^)]*\)/gu)];
-  const faces = [...embedded.matchAll(/url\("data:font\/woff2;base64,([^"]+)"\)/gu)];
+  const faces = [
+    ...embedded.matchAll(/url\("data:font\/woff2;base64,([^"]+)"\)/gu),
+  ];
   expect(faces.length).toBe(sources.length);
   expect(faces.length).toBeGreaterThan(0);
 

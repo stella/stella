@@ -1,6 +1,5 @@
 import { VISUAL_DATA_SCRIPT_ID } from "@stll/api-contract/generated-visual";
 import { VISUAL_GUEST_MARKER_ATTRIBUTE } from "@stll/api-contract/visual-sandbox";
-
 import {
   VISUAL_THEME_SCRIPT_ID,
   type VisualTheme,
@@ -31,7 +30,7 @@ type ComposeVisualDocumentOptions = {
   data: unknown;
   runtime: string;
   policy: string;
-  theme?: VisualTheme;
+  theme?: VisualTheme | undefined;
 };
 
 export const composeVisualDocument = ({

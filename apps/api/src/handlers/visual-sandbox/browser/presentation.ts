@@ -41,13 +41,17 @@ export const installVisualPresentation = (document: Document) => {
 };
 
 export const applyVisualTheme = (document: Document, theme: VisualTheme) => {
-  let style = document.getElementById("stella-theme");
+  let style = document.querySelector("#stella-theme");
   if (style === null) {
     style = document.createElement("style");
     style.id = "stella-theme";
     document.head.prepend(style);
   }
   // The caller validates host messages with the shared theme schema.
-  style.textContent = `:root{color-scheme:${theme.appearance};${Object.entries(theme.variables).map(([name, value]) => `${name}:${value}`).join(";")}}`;
+  style.textContent = `:root{color-scheme:${theme.appearance};${Object.entries(
+    theme.variables,
+  )
+    .map(([name, value]) => `${name}:${value}`)
+    .join(";")}}`;
   document.defaultView?.dispatchEvent(new Event("stella-theme-change"));
 };

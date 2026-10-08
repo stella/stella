@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
-import { buildVisualFontFaces } from "./visual-sandbox-fonts";
 import { VISUAL_RUNTIME_BUILD_OPTIONS } from "./visual-sandbox-build-options";
+import { buildVisualFontFaces } from "./visual-sandbox-fonts";
 
 const root = path.resolve(
   import.meta.dirname,

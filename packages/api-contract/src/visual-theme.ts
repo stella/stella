@@ -38,7 +38,10 @@ const visualThemeValueSchema = v.pipe(
 // vocabulary and delimiter refusal prevent declarations from escaping :root.
 export const visualThemeSchema = v.strictObject({
   appearance: v.picklist(["light", "dark"]),
-  variables: v.record(v.picklist(VISUAL_THEME_VARIABLES), visualThemeValueSchema),
+  variables: v.record(
+    v.picklist(VISUAL_THEME_VARIABLES),
+    visualThemeValueSchema,
+  ),
 });
 
 export type VisualTheme = v.InferOutput<typeof visualThemeSchema>;

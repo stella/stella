@@ -1,10 +1,9 @@
 import * as v from "valibot";
 
-import { visualThemeSchema } from "./visual-theme";
-
 import { safeIdSchema } from "./safe-id";
 import { VISUAL_PREVIEW_TOOL_NAME } from "./visual-preview";
 import { visualLinkSchema, VISUAL_SANDBOX_LIMITS } from "./visual-sandbox";
+import { visualThemeSchema } from "./visual-theme";
 
 export const GENERATED_VISUAL_LIMITS = {
   dataBytes: 1024 * 1024,

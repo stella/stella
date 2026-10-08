@@ -23,10 +23,9 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 
-import { useTheme } from "@/components/theme-provider";
-
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import { useTheme } from "@/components/theme-provider";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -106,19 +105,29 @@ const GeneratedVisualFrame = ({
       element.src = shell.beginLoad();
     }
   });
-  const readTheme = useLatestCallback(() => readVisualTheme({
-    style: getComputedStyle(document.documentElement),
-    appearance: document.documentElement.classList.contains("dark") ? "dark" : "light",
-  }));
+  const readTheme = useLatestCallback(() =>
+    readVisualTheme({
+      style: getComputedStyle(document.documentElement),
+      appearance: document.documentElement.classList.contains("dark")
+        ? "dark"
+        : "light",
+    }),
+  );
   const syncTheme = useLatestCallback(() => {
     if (shell.isReady()) {
-      frame.current?.contentWindow?.postMessage({ kind: "theme", theme: readTheme() }, "*");
+      frame.current?.contentWindow?.postMessage(
+        { kind: "theme", theme: readTheme() },
+        "*",
+      );
     }
   });
   useExternalSyncEffect(() => {
     syncTheme();
     const observer = new MutationObserver(syncTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
     return () => observer.disconnect();
   }, [resolvedTheme, palette, syncTheme]);
   const receive = useLatestCallback((event: MessageEvent<unknown>) => {
@@ -238,7 +247,10 @@ const GeneratedVisualFrame = ({
     queryStart >= 0 && (fragmentStart < 0 || queryStart < fragmentStart);
   const queryEnd = fragmentStart < 0 ? confirmUrl?.length : fragmentStart;
   return (
-    <section aria-label={t("chat.generatedView")} className="w-full min-w-0 space-y-1.5">
+    <section
+      aria-label={t("chat.generatedView")}
+      className="w-full min-w-0 space-y-1.5"
+    >
       <header className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-xs">
         <span className="shrink-0">{t("chat.generatedView")}</span>
         <span aria-hidden="true">·</span>

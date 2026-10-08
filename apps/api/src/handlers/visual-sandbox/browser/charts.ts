@@ -153,7 +153,7 @@ type MountTreemapOptions = {
 
 const treemapCategories = (
   model: ReturnType<typeof createTreemapModel>,
-  categoryField: VisualTreemapColor["field"] | null,
+  categoryField: NonNullable<VisualTreemapColor["field"]> | null,
 ): string[] => {
   if (categoryField === "tier") {
     return [...COURT_TIER_LABELS];

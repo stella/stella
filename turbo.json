@@ -670,7 +670,7 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
-        "$TURBO_ROOT$/apps/web/public/fonts/*.woff2"
+        "$TURBO_ROOT$/apps/web/public/fonts/**"
       ]
     },
     "@stll/api#typecheck": {
@@ -772,7 +772,7 @@
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
-        "$TURBO_ROOT$/apps/web/public/fonts/*.woff2",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/ownership/**",

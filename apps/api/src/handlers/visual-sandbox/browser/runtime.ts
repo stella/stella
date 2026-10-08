@@ -10,7 +10,6 @@ import {
   VISUAL_SANDBOX_LIMITS,
   visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
-
 import {
   VISUAL_THEME_SCRIPT_ID,
   visualThemeSchema,
@@ -189,7 +188,13 @@ const bootOuter = (runtime: string) => {
       latestTheme = theme;
       inner.title = title;
       // safe-html: sanitizeVisualHtml output validated at the message boundary, composed with Stella's bundled runtime and fixed policy.
-      inner.srcdoc = composeVisualDocument({ html, data, runtime, policy, theme });
+      inner.srcdoc = composeVisualDocument({
+        html,
+        data,
+        runtime,
+        policy,
+        theme,
+      });
     },
     onTheme: (theme) => {
       latestTheme = theme;

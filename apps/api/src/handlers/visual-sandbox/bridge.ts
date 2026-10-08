@@ -3,7 +3,6 @@ import * as v from "valibot";
 import { visualRenderMessageSchema } from "@stll/api-contract/generated-visual";
 import { createVisualActionGate } from "@stll/api-contract/visual-bridge-policy";
 import { visualGuestMessageSchema } from "@stll/api-contract/visual-sandbox";
-
 import {
   visualThemeMessageSchema,
   type VisualTheme,
