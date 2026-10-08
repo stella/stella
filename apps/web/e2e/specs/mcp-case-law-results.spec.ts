@@ -868,8 +868,12 @@ for (const theme of ["light", "dark"] as const) {
       await reference.focus();
       await page.keyboard.press("Tab");
       await expect(trigger).toBeFocused();
+      // The fixture row carries both host actions: the app link, then the source.
+      const actions = row.getByRole("button");
       await page.keyboard.press("Tab");
-      await expect(row.getByRole("button").last()).toBeFocused();
+      await expect(actions.nth(-2)).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(actions.last()).toBeFocused();
       await row.locator(".snippet").click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await row.locator('[data-slot="tooltip-trigger"]').first().click();
