@@ -82,8 +82,7 @@ export const classifyJumpReset = ({
   // out or unfinished job is real evidence and rules a reset out. Without a
   // failed step anywhere, a summary job's failure is the cancellation itself.
   const jobs = evidence.jobs.filter(
-    (job) =>
-      job.conclusion !== "skipped" && !SUMMARY_JOBS.has(job.name ?? ""),
+    (job) => job.conclusion !== "skipped" && !SUMMARY_JOBS.has(job.name ?? ""),
   );
   if (
     jobs.some(
