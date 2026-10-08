@@ -16,10 +16,10 @@ export const applyDecisionParagraphLanding = (
     case "anchor":
     case "invalid":
     case "text-unavailable":
-      return;
+      return undefined;
     case "not-found":
       container.scrollTo({ top: 0, behavior: "instant" });
-      return;
+      return undefined;
     case "range":
       break;
     default:

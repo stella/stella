@@ -264,7 +264,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   useExternalSyncEffect(() => {
     const container = mainRef.current;
     if (container === null) {
-      return;
+      return undefined;
     }
     return applyDecisionParagraphLanding(container, paragraphLanding);
   }, [paragraphLanding]);

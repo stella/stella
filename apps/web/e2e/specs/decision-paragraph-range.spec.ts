@@ -108,10 +108,10 @@ test.describe("court paragraph deep links", () => {
       "Paragraphs 48-53 highlighted.",
     );
     await expect
-      .poll(() => reader.evaluate((element) => element.scrollTop))
+      .poll(async () => reader.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
     await expect
-      .poll(() =>
+      .poll(async () =>
         first.evaluate((element) => {
           const viewport = element
             .closest(".reader-scroll")
@@ -173,7 +173,7 @@ test.describe("court paragraph deep links", () => {
         6,
       );
       await expect
-        .poll(() => reader.evaluate((element) => element.scrollTop))
+        .poll(async () => reader.evaluate((element) => element.scrollTop))
         .toBeGreaterThan(0);
 
       await page.evaluate((hash) => {
@@ -187,7 +187,7 @@ test.describe("court paragraph deep links", () => {
         0,
       );
       await expect
-        .poll(() => reader.evaluate((element) => element.scrollTop))
+        .poll(async () => reader.evaluate((element) => element.scrollTop))
         .toBe(0);
     });
   }
