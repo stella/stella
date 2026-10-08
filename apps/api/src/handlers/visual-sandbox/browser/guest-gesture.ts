@@ -49,7 +49,7 @@ export const createVisualGestureGate = ({
   // click with no key press before it, such as one from assistive
   // technology, is a gesture of its own.
   const observe = (event: GestureEvent) => {
-    if (event.isTrusted !== true) {
+    if (!event.isTrusted) {
       return;
     }
     const current = now();
