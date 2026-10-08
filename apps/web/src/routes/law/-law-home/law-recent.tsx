@@ -29,7 +29,7 @@ import {
   useLawRecent,
   type LawRecentEntry,
   type LawRecentFilter,
-} from "@/lib/law-search-history";
+} from "@/lib/law-search-history/law-search-history";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const FILTER_OPTIONS = {

@@ -23,7 +23,7 @@ export type DocumentVersionUploadFileMetadata = {
   size: number;
 };
 
-// These build the input for `invoke_capability`, whose params speak the public
+// These build the input for `write_capability`, whose params speak the public
 // vocabulary: the container a caller holds as a `workspaceId` goes on the wire
 // as `matterId`. Callers pass the id they have; the rename happens here, once.
 export type DocumentVersionUploadReservationInput = {

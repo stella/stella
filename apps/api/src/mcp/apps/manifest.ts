@@ -2,6 +2,7 @@ import {
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
   FILE_COMPARISON_TRANSPORT,
 } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "./resource-uri";
 
@@ -13,7 +14,7 @@ export const MCP_APPS = [
     type: "host-approved-mutation",
     reason:
       "Existing browser upload workflow; host approves capability writes.",
-    callableTools: ["invoke_capability"],
+    callableTools: [MCP_CAPABILITY_EXECUTORS.write],
   },
   {
     directory: "file-comparison",

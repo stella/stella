@@ -122,7 +122,7 @@ describe("MCP tool registry", () => {
     }
   });
 
-  test("documents projection contains document tools and only invoke capability", () => {
+  test("documents projection contains document tools and only the write executor", () => {
     const projectedNames = new Set(
       DOCUMENTS_MCP_TOOL_DEFINITIONS.map((tool) => tool.name),
     );
@@ -133,9 +133,9 @@ describe("MCP tool registry", () => {
     for (const tool of DOCUMENT_TOOL_SET.definitions) {
       expect(projectedNames).toContain(tool.name);
     }
-    expect(projectedNames).toContain("invoke_capability");
+    expect(projectedNames).toContain("write_capability");
     for (const toolName of capabilityNames) {
-      if (toolName !== "invoke_capability") {
+      if (toolName !== "write_capability") {
         expect(projectedNames).not.toContain(toolName);
       }
     }
@@ -143,7 +143,7 @@ describe("MCP tool registry", () => {
     for (const toolName of projectedNames) {
       expect(
         DOCUMENT_TOOL_SET.definitions.some((tool) => tool.name === toolName) ||
-          toolName === "invoke_capability",
+          toolName === "write_capability",
       ).toBe(true);
     }
   });
