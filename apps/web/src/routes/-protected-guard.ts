@@ -126,22 +126,8 @@ export const loadProtectedContext = async ({
 export const prefetchProtectedShell = async ({
   context,
 }: {
-  context: { queryClient: QueryClient } & Awaited<
-    ReturnType<typeof loadProtectedContext>
-  >;
+  context: { queryClient: QueryClient };
 }) =>
-  await Promise.all([
-    prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
-      getAnalytics().captureError(error);
-    }),
-    prefetchRouteQuery(
-      context.queryClient,
-      organizationSettingsOptions({
-        organizationId: context.user.activeOrganizationId,
-        userId: context.user.id,
-      }),
-      (error) => {
-        getAnalytics().captureError(error);
-      },
-    ),
-  ]);
+  await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
+    getAnalytics().captureError(error);
+  });

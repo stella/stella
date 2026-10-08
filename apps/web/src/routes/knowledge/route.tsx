@@ -23,10 +23,8 @@ export const Route = createFileRoute("/knowledge")({
   beforeLoad: async (args) =>
     guarded ? await loadProtectedContext(args) : { user: undefined },
   loader: async (args) => {
-    if (guarded && args.context.user !== undefined) {
-      await prefetchProtectedShell({
-        context: { ...args.context, user: args.context.user },
-      });
+    if (guarded) {
+      await prefetchProtectedShell(args);
     }
   },
   head: () => ({
