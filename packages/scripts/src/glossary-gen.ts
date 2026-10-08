@@ -18,6 +18,9 @@ import path from "node:path";
 
 import type { UiLocale } from "@stll/locales";
 
+const TERMINOLOGY_FILE = "TERMINOLOGY.md";
+export const CI_MARKDOWN_READER_INPUTS = [path.join("**", TERMINOLOGY_FILE)];
+
 // All 12 non-English locales.
 export type Locale = Exclude<UiLocale, "en">;
 
@@ -394,7 +397,7 @@ if (import.meta.main) {
     const checkOnly = args.includes("--check");
 
     const glossaryPath = path.resolve(i18nDir, "glossary.json");
-    const terminologyPath = path.resolve(i18nDir, "TERMINOLOGY.md");
+    const terminologyPath = path.resolve(i18nDir, TERMINOLOGY_FILE);
 
     const glossary = parseGlossary(await Bun.file(glossaryPath).text());
     const existing = await Bun.file(terminologyPath).text();

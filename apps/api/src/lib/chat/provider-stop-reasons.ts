@@ -86,6 +86,8 @@ const ANTHROPIC = {
 const GOOGLE = {
   STOP: "ended",
   MAX_TOKENS: "length",
+  // Resuming needs a continuation token in another request.
+  CONTINUATION: "unfinished",
   SAFETY: "content_filter",
   RECITATION: "content_filter",
   BLOCKLIST: "content_filter",

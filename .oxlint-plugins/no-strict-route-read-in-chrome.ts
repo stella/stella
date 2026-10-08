@@ -23,7 +23,14 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Scope this rule with `overrides.files` in oxlint.config.ts for chrome
 // modules; route and page content stays free to read strictly.
 
-import { getImportedName, isIdentifier } from "./utils.ts";
+import {
+  isAstNode,
+  isIdentifier,
+  isIdentifierReference,
+  resolveImportedExpression,
+  resolveVariable,
+  unwrapExpression,
+} from "./utils.ts";
 
 const ROUTER_MODULE = "@tanstack/react-router";
 
@@ -76,57 +83,44 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const getRouteApiAliases = new Set();
-        const routeApiBindings = new Set();
-        const strictReadAliases = new Map();
+        const isRouteApiBinding = (identifier) => {
+          const variable = resolveVariable(context, identifier);
+          // Reassignment does not erase the strict route API acquired by this
+          // binding; inspect its declarations without trusting the name.
+          return (
+            variable?.defs.some((definition) => {
+              if (
+                definition.type !== "Variable" ||
+                !isAstNode(definition.node) ||
+                definition.node.type !== "VariableDeclarator" ||
+                !isIdentifier(definition.node.id)
+              ) {
+                return false;
+              }
+              const initializer = unwrapExpression(definition.node.init);
+              if (initializer?.type !== "CallExpression") {
+                return false;
+              }
+              const factory = resolveImportedExpression(
+                context,
+                initializer.callee,
+              );
+              return (
+                factory?.source === ROUTER_MODULE &&
+                factory.imported === "getRouteApi"
+              );
+            }) ?? false
+          );
+        };
 
         return {
-          before() {
-            getRouteApiAliases.clear();
-            routeApiBindings.clear();
-            strictReadAliases.clear();
-          },
-          ImportDeclaration(node) {
-            if (node.source.value !== ROUTER_MODULE) {
-              return;
-            }
-            for (const specifier of node.specifiers) {
-              if (specifier.type !== "ImportSpecifier") {
-                continue;
-              }
-              const imported = getImportedName(specifier);
-              if (imported === "getRouteApi") {
-                getRouteApiAliases.add(specifier.local.name);
-                continue;
-              }
-              if (imported && STRICT_ROUTE_READS.has(imported)) {
-                strictReadAliases.set(specifier.local.name, imported);
-              }
-            }
-          },
-
-          VariableDeclarator(node) {
-            if (!isIdentifier(node.id)) {
-              return;
-            }
-            const init = node.init;
-            if (
-              init?.type !== "CallExpression" ||
-              !isIdentifier(init.callee) ||
-              !getRouteApiAliases.has(init.callee.name)
-            ) {
-              return;
-            }
-            routeApiBindings.add(node.id.name);
-          },
-
           CallExpression(node) {
             const callee = node.callee;
             if (
               callee.type === "MemberExpression" &&
               !callee.computed &&
-              isIdentifier(callee.object) &&
-              routeApiBindings.has(callee.object.name) &&
+              isIdentifierReference(callee.object) &&
+              isRouteApiBinding(callee.object) &&
               isIdentifier(callee.property) &&
               STRICT_ROUTE_READS.has(callee.property.name)
             ) {
@@ -134,7 +128,11 @@ export default eslintCompatPlugin({
               return;
             }
 
-            if (!isIdentifier(callee) || !strictReadAliases.has(callee.name)) {
+            const hook = resolveImportedExpression(context, callee);
+            if (
+              hook?.source !== ROUTER_MODULE ||
+              !STRICT_ROUTE_READS.has(hook.imported)
+            ) {
               return;
             }
 

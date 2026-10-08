@@ -2,6 +2,7 @@ import { PDF } from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 import {
   applySignature,
@@ -28,6 +29,7 @@ import {
 } from "@/api/tests/helpers/timestamp-token";
 
 const keyPool = createTestRsaKeyPool();
+const permit = grantThirdPartyOutboundPermit();
 beforeEach(() => keyPool.reset());
 
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
@@ -112,6 +114,7 @@ describe("two-phase PDF signing", () => {
     const { bytes: signed } = await settled(
       applySignature({
         ...invocation,
+        permit,
         expectedDigestHex: digestHex,
         signature,
         certificateChainComplete: true,
@@ -199,6 +202,7 @@ describe("two-phase PDF signing", () => {
     const rejected = await settled(
       applySignature({
         ...invocation,
+        permit,
         expectedDigestHex: otherDigestHex,
         signature,
         certificateChainComplete: true,
@@ -238,6 +242,7 @@ describe("two-phase PDF signing", () => {
     const applied = await settled(
       applySignature({
         ...invocation,
+        permit,
         expectedDigestHex: digestHex,
         signature,
         certificateChainComplete: true,
@@ -305,8 +310,9 @@ describe("two-phase PDF signing", () => {
       const crl = await createTestCrl(issuing, leafRevoked ? [leaf] : []);
       const rootCrl = await createTestCrl(root);
       const fetched: string[] = [];
-      const revocationProvider = createTrackedRevocationProvider(
-        async ({ url }) => {
+      const revocationProvider = createTrackedRevocationProvider({
+        permit,
+        fetcher: async ({ url }) => {
           fetched.push(url);
           if (!crlServed) {
             return null;
@@ -316,7 +322,7 @@ describe("two-phase PDF signing", () => {
           }
           return url === CRL_URL ? crl : null;
         },
-      );
+      });
 
       const invocation = {
         ...(await buildInvocation()).invocation,
@@ -354,6 +360,7 @@ describe("two-phase PDF signing", () => {
         const applied = await settled(
           applySignature({
             ...invocation,
+            permit,
             certificateChainComplete: chainComplete,
             expectedDigestHex: digestHex,
             revocationProvider,
@@ -588,6 +595,7 @@ describe("two-phase PDF signing", () => {
     const applied = await settled(
       applySignature({
         ...noId,
+        permit,
         certificateChainComplete: true,
         expectedDigestHex: digestHex,
         signature,
@@ -674,6 +682,7 @@ describe("two-phase PDF signing", () => {
       return await settled(
         applySignature({
           ...invocation,
+          permit,
           certificateChainComplete: true,
           expectedDigestHex: digestHex,
           signature,

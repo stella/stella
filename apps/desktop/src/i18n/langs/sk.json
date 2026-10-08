@@ -251,6 +251,8 @@
     "link": "Odkaz",
     "local": "Miestne",
     "memoryOnly": "Šifrované úložisko nie je dostupné. História schránky a nastavenia vylúčených aplikácií zostanú len do ukončenia stella desktop.",
+    "moveGroupEarlier": "Posunúť doľava",
+    "moveGroupLater": "Posunúť doprava",
     "moreOptions": "Ďalšie možnosti",
     "noResults": "Žiadne zodpovedajúce výstrižky",
     "noResultsDescription": "Chcete namiesto toho vyhľadať „{query}“ v registroch?",

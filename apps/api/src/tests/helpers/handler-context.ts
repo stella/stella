@@ -13,7 +13,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabaseTransaction } from "@/api/tests/security/test-utils";
 
@@ -81,7 +80,12 @@ const DEFAULT_WORKSPACE_ID = toSafeId<"workspace">("workspace_test");
 const DEFAULT_ORGANIZATION_ID = toSafeId<"organization">("org_test");
 const DEFAULT_USER_ID = toSafeId<"user">("user_test");
 
-const noopAuditRecorder: AuditRecorder = auditRecorderDouble();
+// Audited paths must choose a recorder explicitly, just as database paths
+// must supply their database collaborator.
+const unconfiguredAuditRecorder: AuditRecorder = () =>
+  panic(
+    "createTestHandlerContext: no audit recorder provided; configure recordAuditEvent/createAuditRecorder in overrides",
+  );
 
 // A handler that reaches for the database without the test providing one is a
 // test bug, not an empty result: fail loudly instead of silently returning
@@ -98,8 +102,8 @@ const createBaseContext = (): BaseTestHandlerContext => ({
   user: { id: DEFAULT_USER_ID, email: "standard@example.test" },
   safeDb: unconfiguredDb,
   scopedDb: unconfiguredDb,
-  recordAuditEvent: noopAuditRecorder,
-  createAuditRecorder: () => noopAuditRecorder,
+  recordAuditEvent: unconfiguredAuditRecorder,
+  createAuditRecorder: () => unconfiguredAuditRecorder,
   getActiveWorkspaceIds: async () =>
     await Promise.resolve([DEFAULT_WORKSPACE_ID]),
   getAccessibleWorkspaces: async () =>
@@ -135,9 +139,22 @@ export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   overrides: TestHandlerContextOverrides = {},
 ): TContext => {
   const base = createBaseContext();
+  // One configured recorder serves both entry points: workspace handlers
+  // rebind `recordAuditEvent` from `createAuditRecorder`, so configuring only
+  // one of them must still reach the test's recorder. Only a context with
+  // neither stays unconfigured.
+  const { recordAuditEvent, createAuditRecorder } = overrides;
   return asTestRaw<TContext>({
     ...base,
     ...overrides,
+    recordAuditEvent:
+      recordAuditEvent ??
+      (createAuditRecorder
+        ? createAuditRecorder({ workspaceId: null })
+        : base.recordAuditEvent),
+    createAuditRecorder:
+      createAuditRecorder ??
+      (recordAuditEvent ? () => recordAuditEvent : base.createAuditRecorder),
     // Merge identity details and replace authority as one value.
     memberRole: overrides.memberRole ?? base.memberRole,
     session: { ...base.session, ...overrides.session },

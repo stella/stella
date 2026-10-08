@@ -1,9 +1,23 @@
-# Stella browser extension
+# stella browser extension
 
 Chrome-only Manifest V3 extension for approved browser actions from stella chat.
 It uses the current Chrome profile, so a controlled tab shares the user's normal
 signed-in website sessions. The extension does not expose cookies, raw HTML,
 downloads, or arbitrary JavaScript.
+
+## Release package
+
+Stable product tags (`vX.Y.Z`) build a production Chrome ZIP in the existing
+release workflow and attach `stella-extension-chrome-X.Y.Z.zip` to the GitHub
+release. The manifest version comes from the repository `VERSION`, verified
+against the tag; the packaged manifest must trust exactly the production
+origins. Prerelease tags do not produce a store package. Store submission is
+manual. Historical tags predating `scripts/release-zip.sh` skip the extension
+asset when rerun; tags supporting it must pass the packaging checks.
+
+`bun --filter @stll/extension zip` builds the same ZIP locally. Development
+and staging builds use the product's numeric version too; `version_name`
+preserves any prerelease label.
 
 ## Local installation
 
@@ -18,7 +32,10 @@ downloads, or arbitrary JavaScript.
 ## Trust boundary
 
 The bridge content script runs only on the configured stella origins. The
-default list is the hosted stella origins; a self-hosted deployment sets
+default list is the hosted production stella origins; `build:staging` builds
+an extension that trusts only the hosted staging app instead, and `build`
+checks that the release manifest never names staging. The controlled tab
+never loads any hosted stella, trusted or not. A self-hosted deployment sets
 `WXT_STELLA_ORIGINS` at build time to a comma-separated list of exact HTTPS
 origins:
 

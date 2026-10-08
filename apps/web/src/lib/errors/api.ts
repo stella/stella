@@ -1,6 +1,7 @@
 import { isTaggedError, TaggedError } from "better-result";
 
 import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
@@ -138,6 +139,8 @@ const CODE_ERROR_KEYS = {
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   [ENCRYPTED_CONTENT_ERROR_CODE]: "errors.apiCodes.encryptedContent",
+  [API_FILE_SECURITY_REJECTED_ERROR_CODE]:
+    "errors.apiCodes.fileSecurityRejected",
   forbidden: "errors.apiCodes.forbidden",
   [HOSTED_CHECKOUT_REFUSAL_CODE.checkoutOpen]:
     "errors.apiCodes.hostedCheckoutOpen",

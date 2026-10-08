@@ -13,12 +13,21 @@ import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor"
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
+import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
 
 const cancellationJobSchema = (canonical: object) =>
   v.pipe(
     v.looseObject({
       permissions: v.optional(v.record(v.string(), v.string())),
-      steps: v.array(v.looseObject({ name: v.string() })),
+      steps: v.pipe(
+        v.unknown(),
+        v.transform((steps) =>
+          flattenWorkflowSteps(steps).filter(
+            (step) => !isWorkflowBarrier(step),
+          ),
+        ),
+        v.array(v.looseObject({ name: v.string() })),
+      ),
     }),
     v.transform((job) => {
       if (
@@ -35,7 +44,7 @@ const cancellationJobSchema = (canonical: object) =>
       return { ...job, permissions, steps: job.steps.slice(0, -1) };
     }),
   );
-const jobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
+const headJobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
 const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const removalSchema = v.array(
   v.object({ name: v.string(), reason: v.pipe(v.string(), v.minLength(1)) }),
@@ -52,7 +61,11 @@ const processBudgetWorkflowSchema = v.looseObject({
       env: processBudgetEnvSchema,
       "timeout-minutes": v.optional(v.unknown()),
       steps: v.optional(
-        v.array(v.looseObject({ env: processBudgetEnvSchema })),
+        v.pipe(
+          v.unknown(),
+          v.transform(flattenWorkflowSteps),
+          v.array(v.looseObject({ env: processBudgetEnvSchema })),
+        ),
       ),
     }),
   ),
@@ -249,10 +262,10 @@ const preparationSteps = new Set([
   "Restore generated sources",
 ]);
 const prerequisites = new Set([...setupPrerequisites, ...preparationSteps]);
-const partitions = partitionIds.map((id) => v.parse(jobSchema, jobs[id]));
+const partitions = partitionIds.map((id) => v.parse(headJobSchema, jobs[id]));
 const readBaseline = (
   source: v.InferOutput<typeof workflowSchema>["jobs"],
-  schema = jobSchema,
+  schema = headJobSchema,
 ) => {
   if (source["ci-checks"] !== undefined) {
     for (const id of partitionIds) {
@@ -264,7 +277,7 @@ const readBaseline = (
 };
 const baseline = readBaseline(baseJobs, baseJobSchema);
 
-type Step = v.InferOutput<typeof jobSchema>["steps"][number];
+type Step = v.InferOutput<typeof headJobSchema>["steps"][number];
 // A full commit SHA pin is version metadata that dependency updates bump; the
 // action path, the fact that it is pinned, and everything else about the step
 // must stay intact. A branch or tag ref is left as written, so moving a step
@@ -428,13 +441,37 @@ const documentationScope = (step: Step): Step => {
   return { ...step, if: step["if"].replace(` && (${PACKAGE_SCOPE})`, "") };
 };
 
+// Per-test limits change scheduling budgets, not the check command or its inputs.
+const withoutTestTimeout = (step: Step): Step => {
+  const run = step["run"];
+  if (typeof run !== "string") {
+    return step;
+  }
+  return {
+    ...step,
+    run: run.replaceAll(
+      /^(\s*bun (?:test|scripts\/run-unlisted-script-tests\.ts)) --timeout(?:=| )\d+\b/gmu,
+      "$1",
+    ),
+  };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
+    .map(withoutTestTimeout)
     .map(withoutStepId)
+    .map((step) => {
+      const { background, ...check } = step;
+      if (background !== true) {
+        return step;
+      }
+      const { id: _id, ...command } = check;
+      return command;
+    })
     .map(withoutActionRef)
     .toSorted((left, right) => compareCodeUnit(left.name, right.name));
 
@@ -444,7 +481,8 @@ const conditionTokens = (condition: string) =>
     .replaceAll(/'(?:[^']|'')*'|\s+/gu, (token) =>
       token.startsWith("'") ? token : " ",
     )
-    .trim();
+    .trim()
+    .replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
@@ -478,17 +516,26 @@ const expectScope = ({ current, base }: ScopeOptions) => {
     }
   }
   expect(migrated).toEqual(originalScope);
-  if (condition === originalCondition) {
+  // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
+  // is exercised separately by the depth contract's true/false census. A
+  // merge base may already carry the completion guard, so strip it from both.
+  const freshScope = (value: unknown) => {
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    return (
+      /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
+        .exec(tokens)
+        ?.at(1) ?? tokens
+    );
+  };
+  const fresh = freshScope(condition);
+  const original = freshScope(originalCondition);
+  if (fresh === original || fresh === `${original} && ${PACKAGE_SCOPE}`) {
     return;
   }
-  // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
-  // may change their scope; every token of the base condition stays intact.
   const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
-    conditionTokens(v.parse(v.string(), condition)),
+    fresh,
   );
-  expect(wrapped?.at(1)).toBe(
-    conditionTokens(v.parse(v.string(), originalCondition)),
-  );
+  expect(wrapped?.at(1)).toBe(original);
 };
 
 type CoverageOptions = {
@@ -518,7 +565,7 @@ const expectCoverage = ({ current, base, removed }: CoverageOptions) => {
 // removing another leg's protection implicitly.
 const baselineIds = baseJobs["ci-checks"] ? ["ci-checks"] : partitionIds;
 const legSteps = (
-  legs: readonly v.InferOutput<typeof jobSchema>[],
+  legs: readonly v.InferOutput<typeof headJobSchema>[],
   ids: readonly string[],
 ) =>
   legs.flatMap(({ steps }, index) => {
@@ -576,7 +623,7 @@ test("CI legs normalize only the complete canonical cancellation tail and its pe
     permissions: { contents: "read", actions: "write" },
     steps: [guard, cancellation],
   };
-  expect(v.parse(jobSchema, job)).toEqual(base);
+  expect(v.parse(headJobSchema, job)).toEqual(base);
   for (const changed of [
     { ...cancellation, if: "failure()" },
     { ...cancellation, uses: "actions/github-script@main" },
@@ -584,21 +631,21 @@ test("CI legs normalize only the complete canonical cancellation tail and its pe
     { ...cancellation, with: { ...cancellation.with, script: "exit 0" } },
     { ...cancellation, "continue-on-error": true },
   ]) {
-    expect(v.parse(jobSchema, { ...job, steps: [guard, changed] })).not.toEqual(
-      base,
-    );
+    expect(
+      v.parse(headJobSchema, { ...job, steps: [guard, changed] }),
+    ).not.toEqual(base);
   }
   expect(
-    v.parse(jobSchema, { ...job, steps: [cancellation, guard] }),
+    v.parse(headJobSchema, { ...job, steps: [cancellation, guard] }),
   ).not.toEqual(base);
   expect(() =>
-    v.parse(jobSchema, {
+    v.parse(headJobSchema, {
       ...job,
       permissions: { contents: "read", actions: "read" },
     }),
   ).toThrow("toBe");
   expect(
-    v.parse(jobSchema, {
+    v.parse(headJobSchema, {
       ...job,
       permissions: { ...job.permissions, contents: "write" },
     }),
@@ -671,10 +718,23 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       });
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
+      const reordered = new Set(
+        steps
+          .filter((step) => step["background"] === true)
+          .map(({ name }) => name),
+      );
+      if (partitionIds.at(index) === "ci-checks-rest") {
+        reordered.add("Prepare environment");
+        reordered.add("Content delivery declarations");
+        reordered.add("Test release image CI gate");
+      }
       expect(
         steps
           .filter(
-            ({ name }) => baseNames.has(name) && !preparationSteps.has(name),
+            ({ name }) =>
+              baseNames.has(name) &&
+              !preparationSteps.has(name) &&
+              !reordered.has(name),
           )
           .map(({ name }) => name),
       ).toEqual(
@@ -682,6 +742,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
           .filter(
             ({ name }) =>
               !preparationSteps.has(name) &&
+              !reordered.has(name) &&
               !newRemovals.some((removed) => removed.name === name),
           )
           .map(({ name }) => name),
@@ -760,6 +821,74 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("package scope narrows check legs while retaining baseline trust and completion gates", () => {
+  const trust =
+    "inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' )";
+  for (const completion of [false, true]) {
+    const wrap = (scope: string) =>
+      completion
+        ? `needs.ci-plan.outputs.run_required != 'false' && (${scope})`
+        : scope;
+    const base = {
+      if: wrap(trust),
+      needs: ["ci-plan", "ci-generated-sources"],
+    };
+    const narrowed = { ...base, if: wrap(`${trust} && ${PACKAGE_SCOPE}`) };
+    expectScope({ base, current: narrowed });
+    expectScope({ base: narrowed, current: narrowed });
+    for (const suffix of [
+      " || true",
+      " && needs.ci-plan.outputs.other == 'true'",
+      ` && ${PACKAGE_SCOPE} && needs.ci-plan.outputs.unapproved == 'true'`,
+      " && needs.ci-plan.outputs.package_checks_required != 'true'",
+    ]) {
+      expect(() =>
+        expectScope({
+          base,
+          current: { ...base, if: wrap(`${trust}${suffix}`) },
+        }),
+      ).toThrow("Expected:");
+    }
+    if (completion) {
+      for (const invalid of [
+        wrap(
+          `${trust.replace("inputs.heavy_only != true && ", "")} && ${PACKAGE_SCOPE}`,
+        ),
+      ]) {
+        expect(() =>
+          expectScope({ base, current: { ...base, if: invalid } }),
+        ).toThrow("Expected:");
+      }
+    }
+  }
+});
+
+test("fresh scope compares either completion wrapper while retaining the underlying condition", () => {
+  const trusted = "needs.ci-plan.outputs.trusted == 'true'";
+  const heavy = `inputs.heavy_only != true && (${trusted})`;
+  const completion = (scope: string) =>
+    `needs.ci-plan.outputs.run_required != 'false' && (${scope})`;
+  for (const scope of [trusted, heavy]) {
+    for (const baseScope of [scope, completion(scope)]) {
+      for (const currentScope of [scope, completion(scope)]) {
+        expectScope({ base: { if: baseScope }, current: { if: currentScope } });
+      }
+      for (const invalid of [
+        "true",
+        completion("true"),
+        completion(completion(scope)),
+        completion(scope).replace("!= 'false'", "== 'false'"),
+        completion(`${scope} && needs.ci-plan.outputs.unapproved == 'true'`),
+        ...(scope === heavy ? [trusted, completion(trusted)] : []),
+      ]) {
+        expect(() =>
+          expectScope({ base: { if: baseScope }, current: { if: invalid } }),
+        ).toThrow("Expected:");
+      }
+    }
+  }
 });
 
 test("CI check scope migrates only the complete producer handoff and preserves an existing handoff", () => {
@@ -997,6 +1126,186 @@ test("unrelated jobs may use unnamed steps or reusable workflows", () => {
   expect(readBaseline(parsed.jobs)).toEqual(partitions);
 });
 
+test("the check census preserves nested commands and their failure conditions", () => {
+  const step = {
+    name: "Independent guard",
+    if: "!cancelled() && steps.install.outcome == 'success'",
+    run: "bun test scripts/ci-plan.test.ts",
+  };
+  const serial = v.parse(headJobSchema, { steps: [step] });
+  const concurrent = v.parse(headJobSchema, {
+    steps: [
+      {
+        parallel: [{ parallel: [{ ...step, id: "guard", background: true }] }],
+      },
+      { "wait-all": null },
+    ],
+  });
+  expect(ownedSteps(concurrent.steps)).toEqual(ownedSteps(serial.steps));
+  expect(concurrent.steps.at(0)?.["if"]).toBe(step.if);
+  expect(
+    ownedSteps(
+      v.parse(headJobSchema, {
+        steps: [{ parallel: [{ ...step, run: "exit 0" }] }],
+      }).steps,
+    ),
+  ).not.toEqual(ownedSteps(serial.steps));
+});
+
+test("repository backgrounds are bounded and joined before failure cancellation", () => {
+  const raw = v.parse(v.object({ steps: v.unknown() }), jobs["ci-checks-rest"]);
+  const steps = flattenWorkflowSteps(raw.steps);
+  const firstBackground = steps.findIndex(
+    (step) => step["background"] === true,
+  );
+  expect(firstBackground).toBeGreaterThan(0);
+  for (const name of [
+    "Checkout",
+    "Setup Bun",
+    "Install dependencies",
+    "Download generated sources",
+    "Restore generated sources",
+    "Prepare route network manifest",
+    "Restore route network baseline",
+    "Prepare environment",
+    "Content delivery declarations",
+  ]) {
+    const index = steps.findIndex((step) => step["name"] === name);
+    expect(index, name).toBeGreaterThanOrEqual(0);
+    expect(index, name).toBeLessThan(firstBackground);
+    expect(steps.at(index)?.["background"], name).toBeUndefined();
+  }
+  const pending = new Set<string>();
+  let launched = 0;
+  for (const step of steps) {
+    if (step["background"] === true) {
+      const id = v.parse(v.string(), step["id"]);
+      expect(pending.has(id), id).toBe(false);
+      pending.add(id);
+      launched++;
+      expect(pending.size).toBeLessThanOrEqual(2);
+      expect(step["continue-on-error"]).toBeUndefined();
+      continue;
+    }
+    if (isWorkflowBarrier(step)) {
+      expect(pending.size).toBeGreaterThan(0);
+      expect(step["if"]).toBeUndefined();
+      expect(step["continue-on-error"]).toBeUndefined();
+      if ("wait" in step) {
+        const ids = v.parse(v.array(v.string()), step["wait"]);
+        for (const id of ids) {
+          expect(pending.delete(id), id).toBe(true);
+        }
+      } else {
+        expect(Object.keys(step).toSorted()).toEqual(["name", "wait-all"]);
+        pending.clear();
+      }
+      continue;
+    }
+    if (step["name"] === "Cancel failed merge-group run") {
+      expect(pending.size).toBe(0);
+    }
+  }
+  expect(launched).toBe(6);
+  expect(pending.size).toBe(0);
+});
+
+const CONTENDED_TEST_TIMEOUTS = {
+  "Test capability shard merge and package parity": 400_000,
+  "Test remaining repository scripts": 35_000,
+  "Test release image CI gate": 50_000,
+  "Test api scripts": 12_000,
+  "Test CLI runtime package parity": 80_000,
+  "Playwright config scope": 5000,
+} as const;
+
+const backgroundTimeoutSteps = (raw: unknown): Step[] =>
+  v.parse(
+    v.array(v.looseObject({ name: v.string() })),
+    v.parse(v.array(v.record(v.string(), v.unknown())), raw).flatMap((step) =>
+      "parallel" in step
+        ? flattenWorkflowSteps(step["parallel"]).map((child) => ({
+            ...child,
+            background: true,
+          }))
+        : [step],
+    ),
+  );
+
+const assertExplicitBackgroundTestTimeouts = (steps: readonly Step[]) => {
+  for (const step of steps) {
+    const run = step["run"];
+    if (typeof run !== "string") {
+      continue;
+    }
+    const invocations = [...run.matchAll(/\bbun test\b[^\n]*/gu)];
+    if (step["background"] === true) {
+      for (const invocation of invocations) {
+        expect(invocation[0], step.name).toMatch(
+          /\bbun test --timeout(?:=| )[1-9]\d*\b/u,
+        );
+      }
+    }
+  }
+};
+
+const assertBackgroundTestTimeouts = (steps: readonly Step[]) => {
+  assertExplicitBackgroundTestTimeouts(steps);
+  for (const [name, timeout] of Object.entries(CONTENDED_TEST_TIMEOUTS)) {
+    const step = steps.find((entry) => entry.name === name);
+    expect(step, name).toBeDefined();
+    expect(step?.["run"], name).toContain(`--timeout ${timeout}`);
+  }
+};
+
+test("background Bun tests declare measured contention budgets without changing checks", () => {
+  const steps = backgroundTimeoutSteps(
+    v.parse(v.object({ steps: v.unknown() }), jobs["ci-checks-rest"]).steps,
+  );
+  assertBackgroundTestTimeouts(steps);
+  for (const name of Object.keys(CONTENDED_TEST_TIMEOUTS)) {
+    const missing = steps.map((step) =>
+      step.name === name && typeof step["run"] === "string"
+        ? { ...step, run: step["run"].replace(/ --timeout \d+\b/gu, "") }
+        : step,
+    );
+    expect(() => assertBackgroundTestTimeouts(missing)).toThrow(name);
+  }
+  expect(
+    withoutTestTimeout({
+      name: "Check",
+      run: "bun test --timeout 35000 scripts/example.test.ts",
+    }),
+  ).toEqual({ name: "Check", run: "bun test scripts/example.test.ts" });
+  expect(
+    withoutTestTimeout({ name: "Check", run: "echo --timeout 35000" }),
+  ).toEqual({ name: "Check", run: "echo --timeout 35000" });
+});
+
+test("implicit nested parallel tests cannot omit their contention timeout", () => {
+  const command = {
+    name: "Nested test",
+    run: "bun test scripts/example.test.ts",
+  };
+  expect(() =>
+    assertExplicitBackgroundTestTimeouts(
+      backgroundTimeoutSteps([{ parallel: [{ parallel: [command] }] }]),
+    ),
+  ).toThrow(command.name);
+  assertExplicitBackgroundTestTimeouts(
+    backgroundTimeoutSteps([
+      {
+        parallel: [
+          {
+            ...command,
+            run: "bun test --timeout 5000 scripts/example.test.ts",
+          },
+        ],
+      },
+    ]),
+  );
+});
+
 const expectContinuation = (steps: readonly Step[], leg: string) => {
   const installIndex = steps.findIndex(
     ({ name }) => name === "Install dependencies",
@@ -1204,7 +1513,7 @@ type SimulateLegOptions = {
   lockfileScope: "true" | "false";
 };
 const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
-  const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+  const { steps } = v.parse(headJobSchema, jobs["ci-checks-rest"]);
   const outcomes: Record<string, { outcome: string }> = {};
   const results: Record<string, string> = {};
   let failed = false;
@@ -1267,6 +1576,27 @@ test("an unrelated pre-install failure still runs planned safety, installation a
   }
 });
 
+test("a failed background guard leaves every other planned check runnable", () => {
+  const { steps } = v.parse(headJobSchema, jobs["ci-checks-rest"]);
+  for (const background of steps.filter(
+    (step) => step["background"] === true,
+  )) {
+    const results = simulateRestLeg({
+      failures: [background.name],
+      lockfileScope: "true",
+    });
+    expect(results[background.name]).toBe("failure");
+    for (const step of steps) {
+      if (step.name === background.name) {
+        continue;
+      }
+      expect(results[step.name], `${background.name} → ${step.name}`).toBe(
+        "success",
+      );
+    }
+  }
+});
+
 test("a failed planned safety guard prevents installation and every post-install guard", () => {
   for (const guard of preInstallGuards.keys()) {
     const results = simulateRestLeg({
@@ -1275,7 +1605,7 @@ test("a failed planned safety guard prevents installation and every post-install
     });
     expect(results[guard]).toBe("failure");
     expect(results["Install dependencies"]).toBe("skipped");
-    const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+    const { steps } = v.parse(headJobSchema, jobs["ci-checks-rest"]);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",
     );
@@ -1330,7 +1660,7 @@ test("continued guard conditions preserve every previously runnable plan outcome
             panic("CI check leg has no identifier");
           }
           const originals = v.parse(
-            jobSchema,
+            headJobSchema,
             baseJobs["ci-checks"] ?? baseJobs[id],
           ).steps;
           const outcomes = Object.fromEntries(
@@ -1487,28 +1817,46 @@ test("documentation policy widens only its package gate and retains successful i
   }
 });
 
-test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
+const expectCancellationNormalization = (
+  schema: typeof headJobSchema,
+  candidateJobs: Record<string, unknown>,
+) => {
   for (const id of partitionIds) {
-    const raw = v.parse(
-      v.looseObject({ steps: v.array(v.looseObject({ name: v.string() })) }),
-      baseJobs[id],
+    const original = v.parse(
+      v.looseObject({ steps: v.unknown() }),
+      candidateJobs[id],
     );
-    const normalized = v.parse(baseJobSchema, baseJobs[id]);
-    expect(normalized.steps).toEqual(raw.steps.slice(0, -1));
-    const tail = raw.steps.at(-1);
+    const leaves = flattenWorkflowSteps(original.steps).filter(
+      (step) => !isWorkflowBarrier(step),
+    );
+    const normalized = v.parse(schema, original);
+    // The wider leaves are the subject of Bun’s typed equality matcher.
+    expect(leaves.slice(0, -1)).toEqual(normalized.steps);
+    const tail = leaves.at(-1);
     if (!tail) {
-      panic("Baseline cancellation tail unavailable");
+      panic("Workflow cancellation tail unavailable");
     }
-    const original = v.parse(v.record(v.string(), v.unknown()), baseJobs[id]);
-    const mutated = {
-      ...original,
-      steps: [
-        ...raw.steps.slice(0, -1),
-        { ...tail, "continue-on-error": true },
-      ],
-    };
-    expect(v.parse(baseJobSchema, mutated).steps).toEqual(mutated.steps);
+    const mutated = structuredClone(original);
+    const changedTail = flattenWorkflowSteps(mutated.steps).findLast(
+      (step) => !isWorkflowBarrier(step),
+    );
+    if (!changedTail) {
+      panic("Cloned workflow cancellation tail unavailable");
+    }
+    changedTail["continue-on-error"] = true;
+    expect([
+      ...leaves.slice(0, -1),
+      { ...tail, "continue-on-error": true },
+    ]).toEqual(v.parse(schema, mutated).steps);
   }
+};
+
+test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
+  expectCancellationNormalization(baseJobSchema, baseJobs);
+});
+
+test("head cancellation normalization is valid as the next base and rejects changed tails", () => {
+  expectCancellationNormalization(headJobSchema, jobs);
 });
 
 test("already hydrated merge-base jobs retain their generated manifest environment", () => {

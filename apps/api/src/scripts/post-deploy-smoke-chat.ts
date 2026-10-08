@@ -25,6 +25,7 @@ import { TaggedError } from "better-result";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -784,11 +785,6 @@ export const describeChatSendFailure = (
     : `${String(status)} ${truncate(body)}`;
 
 const isSuccess = (status: number): boolean => status >= 200 && status < 300;
-
-const sleep = async (ms: number): Promise<void> =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 const provisionAIConfig = async (
   request: SmokeRequest,

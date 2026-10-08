@@ -251,6 +251,8 @@
     "link": "Hivatkozás",
     "local": "Helyi",
     "memoryOnly": "A titkosított tárhely nem érhető el. A vágólap előzményei és a kizárt alkalmazások beállításai csak a stella desktop bezárásáig maradnak meg.",
+    "moveGroupEarlier": "Mozgatás balra",
+    "moveGroupLater": "Mozgatás jobbra",
     "moreOptions": "További lehetőségek",
     "noResults": "Nincs egyező kivágás",
     "noResultsDescription": "Szeretné inkább a nyilvántartásokban keresni ezt: „{query}”?",

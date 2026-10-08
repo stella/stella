@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { sleep } from "@stll/concurrency/sleep";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
@@ -58,36 +59,31 @@ const invalidAskUserInput = {
  */
 let finishFailure: Promise<unknown> = Promise.resolve(undefined);
 const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
-  finishFailure = new Promise((resolve) => {
-    setTimeout(() => {
-      void Promise.resolve()
-        .then(async () => {
-          await onFinish({
-            outcome: { type: "completed" },
-            responseMessage: attachTerminalTurnOutcome({
-              message: toPersistableChatMessage({
-                id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-                parts: [
-                  {
-                    arguments: JSON.stringify(invalidAskUserInput),
-                    id: "ask-user-invalid",
-                    input: invalidAskUserInput,
-                    name: ASK_USER_TOOL_NAME,
-                    state: "input-complete",
-                    type: "tool-call",
-                  },
-                ],
-                role: "assistant",
-              }),
-              turnOutcome: { type: "completed" },
-            }),
-          });
-          return null;
-        })
-        .catch((error: unknown) => error)
-        .then(resolve);
-    }, 0);
-  });
+  finishFailure = sleep(0)
+    .then(async () => {
+      await onFinish({
+        outcome: { type: "completed" },
+        responseMessage: attachTerminalTurnOutcome({
+          message: toPersistableChatMessage({
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [
+              {
+                arguments: JSON.stringify(invalidAskUserInput),
+                id: "ask-user-invalid",
+                input: invalidAskUserInput,
+                name: ASK_USER_TOOL_NAME,
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          }),
+          turnOutcome: { type: "completed" },
+        }),
+      });
+      return null;
+    })
+    .catch((error: unknown) => error);
   return {
     type: "streaming",
     response: new Response("stream started", {

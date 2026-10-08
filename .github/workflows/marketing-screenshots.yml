@@ -106,6 +106,21 @@ jobs:
     environment: release-app
 
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Validate inputs
         env:
           BRANCH: ${{ inputs.ref }}
@@ -147,7 +162,7 @@ jobs:
           BRANCH: ${{ inputs.ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}" --silent 2> /dev/null; then
+          if ! bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}" --silent; then
             echo "::error::Branch ${BRANCH} does not exist in ${GITHUB_REPOSITORY}"
             exit 1
           fi
@@ -204,7 +219,7 @@ jobs:
       # belongs to a person, and a signed-commits rule would otherwise block
       # their pull request on this one commit.
       - name: Push regenerated baselines
-        uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: append

@@ -251,6 +251,8 @@
     "link": "Saite",
     "local": "Lokāli",
     "memoryOnly": "Šifrētā krātuve nav pieejama. Starpliktuves vēsture un izslēgto lietotņu iestatījumi tiks saglabāti tikai līdz stella desktop aizvēršanai.",
+    "moveGroupEarlier": "Pārvietot pa kreisi",
+    "moveGroupLater": "Pārvietot pa labi",
     "moreOptions": "Vairāk iespēju",
     "noResults": "Nav atbilstošu izgriezumu",
     "noResultsDescription": "Vai tā vietā meklēt “{query}” reģistros?",

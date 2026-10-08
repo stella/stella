@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 /**
  * The words behind reference passages, by id.
  *
@@ -9,8 +10,6 @@
  * request rather than twenty.
  */
 
-import { useMemo } from "react";
-
 import {
   keepPreviousData,
   queryOptions,
@@ -18,6 +17,7 @@ import {
 } from "@tanstack/react-query";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -42,10 +42,10 @@ export type ReferencePassageTexts = {
 
 /** The ids as the cache reads them: deduplicated and ordered, so two surfaces
  *  quoting the same passages in different orders share one entry. */
-export const passageTextIds = (ids: readonly string[]): string[] =>
+const passageTextIds = (ids: readonly string[]): string[] =>
   [...new Set(ids)].toSorted();
 
-export const documentReviewPassageTextKeys = {
+const documentReviewPassageTextKeys = {
   all: ["document-review-passage-texts"] as const,
   list: (ids: readonly string[]) =>
     [...documentReviewPassageTextKeys.all, ids] as const,
@@ -55,10 +55,7 @@ const fetchPassageTexts = async (
   ids: readonly string[],
   signal: AbortSignal,
 ) => {
-  const batches: string[][] = [];
-  for (let start = 0; start < ids.length; start += PASSAGE_READ_BATCH) {
-    batches.push(ids.slice(start, start + PASSAGE_READ_BATCH));
-  }
+  const batches = chunkItems(ids, PASSAGE_READ_BATCH);
   const pages = await Promise.all(
     batches.map(async (batch) =>
       unwrapEden(
@@ -88,7 +85,7 @@ const textByIdOf = (
  * that list is the question: a proposal that has streamed twelve positions is
  * asking something the answer for eleven does not contain.
  */
-export const documentReviewPassageTextsOptions = (ids: readonly string[]) => {
+const documentReviewPassageTextsOptions = (ids: readonly string[]) => {
   const keyIds = passageTextIds(ids);
   return queryOptions({
     queryKey: documentReviewPassageTextKeys.list(keyIds),

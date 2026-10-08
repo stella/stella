@@ -3,13 +3,24 @@
  * failed, the list it checked against, and claim counts per verdict state.
  */
 
-import { sql } from "drizzle-orm";
+import { Result } from "better-result";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { legalListClaims, legalListVerificationRuns } from "@/api/db/schema";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import {
+  fields,
+  legalListClaims,
+  legalListVerificationRuns,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
 import type { ClaimState } from "@/api/lib/lists/verification/contract";
+import { createCursorPage } from "@/api/lib/pagination";
+import type { Page } from "@/api/lib/pagination";
+import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 
 const stateFilterCount = (state: ClaimState): SQL<number> =>
   sql<number>`count(${legalListClaims.id}) filter (where ${legalListClaims.state} = ${state})::int`;
@@ -92,3 +103,199 @@ export const UNPROJECTED_RUN_SUMMARY_COLUMNS = [
   "modelRef",
   "startedAt",
 ] as const satisfies readonly (keyof RunRow)[];
+
+const runCursor = createTimestampIdCursorCodec({
+  column: legalListVerificationRuns.createdAt,
+  brandId: brandPersistedListVerificationRunId,
+});
+
+type ListRunSummariesArgs = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
+  cursor: string | undefined;
+  limit: number;
+};
+
+export const listRunSummaries = async ({
+  safeDb,
+  workspaceId,
+  entityId,
+  fileFieldId,
+  cursor: cursorToken,
+  limit,
+}: ListRunSummariesArgs): Promise<
+  Result<
+    Page<ReturnType<typeof serializeRunSummary>>,
+    HandlerError<400> | SafeDbError
+  >
+> => {
+  const cursor =
+    cursorToken === undefined ? null : runCursor.decode(cursorToken);
+  if (cursorToken !== undefined && cursor === null) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid cursor" }),
+    );
+  }
+  const cursorCondition =
+    cursor === null
+      ? undefined
+      : runCursor.keysetAfter({
+          cursor,
+          idColumn: legalListVerificationRuns.id,
+          direction: "descending",
+        });
+
+  const result = await safeDb((tx) =>
+    tx
+      .select({
+        ...RUN_SUMMARY_COLUMNS,
+        createdAtCursor: runCursor.cursorValue.as("created_at_cursor"),
+        ...CLAIM_COUNT_COLUMNS,
+      })
+      .from(legalListVerificationRuns)
+      // Grouping on the run's primary key keeps the keyset page intact:
+      // LIMIT applies to groups, so a run with many claims is one row.
+      .leftJoin(
+        legalListClaims,
+        and(
+          eq(legalListClaims.runId, legalListVerificationRuns.id),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      // A file field is a row of one entity version. A run belongs to
+      // the document, so every run whose field sits on the same property
+      // of this entity is part of its history.
+      .where(
+        and(
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+          eq(legalListVerificationRuns.entityId, entityId),
+          inArray(
+            legalListVerificationRuns.fileFieldId,
+            tx
+              .select({ id: fields.id })
+              .from(fields)
+              .where(
+                and(
+                  eq(fields.workspaceId, workspaceId),
+                  eq(
+                    fields.propertyId,
+                    tx
+                      .select({ propertyId: fields.propertyId })
+                      .from(fields)
+                      .where(
+                        and(
+                          eq(fields.workspaceId, workspaceId),
+                          eq(fields.id, fileFieldId),
+                        ),
+                      ),
+                  ),
+                ),
+              ),
+          ),
+          cursorCondition,
+        ),
+      )
+      .groupBy(legalListVerificationRuns.id)
+      .orderBy(
+        desc(legalListVerificationRuns.createdAt),
+        desc(legalListVerificationRuns.id),
+      )
+      .limit(limit + 1),
+  );
+
+  return result.map((rows) => {
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (run) => runCursor.encode(run.createdAtCursor, run.id),
+    });
+    return { ...page, items: page.items.map(serializeRunSummary) };
+  });
+};
+
+type ListLatestRunSummariesArgs = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  documents: readonly {
+    entityId: SafeId<"entity">;
+    fileFieldId: SafeId<"field">;
+  }[];
+};
+
+export const listLatestRunSummaries = async ({
+  safeDb,
+  workspaceId,
+  documents,
+}: ListLatestRunSummariesArgs) => {
+  // A run belongs to one file of a document, so two files of one document
+  // each have their own latest run.
+  const entityIds = [...new Set(documents.map((doc) => doc.entityId))];
+  const namedFiles = or(
+    ...documents.map((doc) =>
+      and(
+        eq(legalListVerificationRuns.entityId, doc.entityId),
+        eq(legalListVerificationRuns.fileFieldId, doc.fileFieldId),
+      ),
+    ),
+  );
+  return safeDb(async (tx) => {
+    // Newest run per file: DISTINCT ON walks the document index
+    // `(workspace_id, entity_id, file_field_id, created_at DESC)` once
+    // per named file.
+    const latest = await tx
+      .selectDistinctOn(
+        [
+          legalListVerificationRuns.entityId,
+          legalListVerificationRuns.fileFieldId,
+        ],
+        { ...RUN_SUMMARY_COLUMNS },
+      )
+      .from(legalListVerificationRuns)
+      .where(
+        and(
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+          inArray(legalListVerificationRuns.entityId, entityIds),
+          namedFiles,
+        ),
+      )
+      .orderBy(
+        asc(legalListVerificationRuns.entityId),
+        asc(legalListVerificationRuns.fileFieldId),
+        desc(legalListVerificationRuns.createdAt),
+        desc(legalListVerificationRuns.id),
+      )
+      .limit(documents.length);
+    if (latest.length === 0) {
+      return [];
+    }
+    const counts = await tx
+      .select({ runId: legalListClaims.runId, ...CLAIM_COUNT_COLUMNS })
+      .from(legalListClaims)
+      .where(
+        and(
+          eq(legalListClaims.workspaceId, workspaceId),
+          inArray(
+            legalListClaims.runId,
+            latest.map((run) => run.id),
+          ),
+        ),
+      )
+      .groupBy(legalListClaims.runId)
+      .limit(latest.length);
+    const countsByRun = new Map(counts.map((row) => [row.runId, row]));
+    return latest.map((run) => {
+      const count = countsByRun.get(run.id);
+      return serializeRunSummary({
+        ...run,
+        supported: count?.supported ?? 0,
+        tension: count?.tension ?? 0,
+        contradicted: count?.contradicted ?? 0,
+        nocover: count?.nocover ?? 0,
+        notverifiable: count?.notverifiable ?? 0,
+        recordconflict: count?.recordconflict ?? 0,
+      });
+    });
+  });
+};

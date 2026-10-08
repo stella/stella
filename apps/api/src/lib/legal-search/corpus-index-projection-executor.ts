@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
 import { streamWithConcurrency } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -119,7 +120,7 @@ const mapSequentially = async <Input, Output>(
   return mapSequentially(values, operation, index + 1, outputs);
 };
 
-export const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
+const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
 
 type ExecuteCorpusProjectionAppendCycleOptions<
   Family extends CorpusProjectionIntentLease["family"],
@@ -141,7 +142,7 @@ type ExecuteCorpusProjectionAppendCycleOptions<
 };
 
 /** Wall-clock milliseconds per phase, summed over the cycle, for the caller's logs. */
-export type CorpusProjectionAppendCycleTiming = {
+type CorpusProjectionAppendCycleTiming = {
   reservationMs: number;
   materialReadMs: number;
   /**
@@ -756,15 +757,10 @@ const confirmProjectionAppend = async ({
   indexId,
   entries,
 }: ConfirmProjectionAppendOptions): Promise<Result<void, CorpusIndexError>> => {
-  for (
-    let offset = 0;
-    offset < entries.length;
-    offset += CORPUS_PROJECTION_DELETE_MAX_REVISIONS
-  ) {
-    const batch = entries.slice(
-      offset,
-      offset + CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-    );
+  for (const batch of chunkItems(
+    entries,
+    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  )) {
     const census = await censusCorpusProjectionRevisions({
       client,
       indexId,

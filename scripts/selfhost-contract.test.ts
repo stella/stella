@@ -209,7 +209,10 @@ describe("self-host production environment", () => {
         "config",
         "--quiet",
       ],
-      env: isolatedEnvironment,
+      env: {
+        ...isolatedEnvironment,
+        DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
+      },
       stderr: "pipe",
       stdout: "pipe",
     });

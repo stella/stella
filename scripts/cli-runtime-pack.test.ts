@@ -51,6 +51,10 @@ const EXPORTED_PATHS = [
   // Historical base revisions still import the root metadata.
   "scripts/generated-files.ts",
 ];
+// The exported tree is parameterized; bind its source scope to the same
+// export inventory so unresolved scans retain named package checks.
+export const CI_MARKDOWN_READER_INPUTS = EXPORTED_PATHS;
+
 const RUNTIME_GENERATOR =
   GENERATORS.find(({ id }) => id === "cli-runtime") ??
   panic("the generator manifest has no cli-runtime entry");
@@ -553,6 +557,21 @@ describe("generated imports", () => {
     expect(specifierCandidates("a/src/x.ts", "../generated/data.json")).toEqual(
       ["a/generated/data.json"],
     );
+    for (const suffix of [
+      "logic",
+      "gen",
+      "generated",
+      "query",
+      "custom.name",
+    ]) {
+      const target = `a/src/generated/y.${suffix}`;
+      expect(
+        specifierCandidates("a/src/x.ts", `./generated/y.${suffix}`),
+      ).toContain(`${target}.ts`);
+    }
+    expect(specifierCandidates("a/src/x.ts", "./generated/y.ts")).toEqual([
+      "a/src/generated/y.ts",
+    ]);
     expect(specifierCandidates("a/src/x.ts", "./generated/y")).toEqual([
       "a/src/generated/y.ts",
       "a/src/generated/y.tsx",

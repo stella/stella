@@ -11,6 +11,7 @@ import {
   DEFAULT_SEARCH_SORT,
 } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   caseLawDecisions,
@@ -113,8 +114,7 @@ beforeAll(
     // Insert in bounded batches; the fixture has several thousand rows.
     const decisions = [...rows, ...singletons];
     const batchSize = 500;
-    for (let offset = 0; offset < decisions.length; offset += batchSize) {
-      const batch = decisions.slice(offset, offset + batchSize);
+    for (const batch of chunkItems(decisions, batchSize)) {
       await db.insert(caseLawDecisions).values(batch);
       await db.insert(caseLawSearchDocuments).values(
         batch.map(({ id, language }) => ({
@@ -203,6 +203,7 @@ test.each([undefined, "cs", "en"])(
     );
     const payload = {
       facets: {
+        courtYear: null,
         court: [],
         year: [],
         decisionType: [],

@@ -50,6 +50,13 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
   "upstream_unavailable",
+  /**
+   * The case-law and legislation search index could not be reached (refused
+   * or reset connection, failed DNS lookup, timeout, or a 502/503/504 from
+   * the gateway in front of it). Nothing in the call caused it; resending the
+   * same call once the index is back succeeds.
+   */
+  "search_index_unavailable",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
   /** An unexpected server-side failure; details are not leaked to the caller. */

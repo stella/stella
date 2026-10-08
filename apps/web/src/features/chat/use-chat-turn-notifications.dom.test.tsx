@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { browserStorage, deviceStorage } from "@/lib/account/browser-storage";
 
 import type { ChatTurnPhase } from "./turn-notifications.logic";
 
@@ -61,7 +62,7 @@ beforeEach(() => {
   instances.length = 0;
   permission = "granted";
   pageInSight = false;
-  localStorage.clear();
+  browserStorage("local")?.clear();
 });
 afterEach(cleanup);
 afterAll(async () => {
@@ -152,7 +153,38 @@ describe("setChatTurnNotificationsEnabled", () => {
 
     expect(await setChatTurnNotificationsEnabled(true)).toBe("denied");
     expect(
-      localStorage.getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
+      deviceStorage("local").getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
+    ).toBeNull();
+  });
+
+  test("reports an opt-in the browser cannot store as unsupported", async () => {
+    const previous = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const full: Storage = {
+      length: 0,
+      clear: () => undefined,
+      getItem: () => null,
+      key: () => null,
+      removeItem: () => undefined,
+      setItem: () => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError");
+      },
+    };
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: full,
+    });
+
+    try {
+      expect(await setChatTurnNotificationsEnabled(true)).toBe("unsupported");
+    } finally {
+      if (previous === undefined) {
+        Reflect.deleteProperty(window, "localStorage");
+      } else {
+        Object.defineProperty(window, "localStorage", previous);
+      }
+    }
+    expect(
+      deviceStorage("local").getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
     ).toBeNull();
   });
 
@@ -161,7 +193,7 @@ describe("setChatTurnNotificationsEnabled", () => {
 
     expect(await setChatTurnNotificationsEnabled(false)).toBe("off");
     expect(
-      localStorage.getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
+      deviceStorage("local").getItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY),
     ).toBeNull();
   });
 

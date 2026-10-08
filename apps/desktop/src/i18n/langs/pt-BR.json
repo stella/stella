@@ -251,6 +251,8 @@
     "link": "Link",
     "local": "Local",
     "memoryOnly": "O armazenamento criptografado está indisponível. O histórico da área de transferência e as configurações de aplicativos excluídos serão mantidos apenas até o stella desktop ser encerrado.",
+    "moveGroupEarlier": "Mover para a esquerda",
+    "moveGroupLater": "Mover para a direita",
     "moreOptions": "Mais opções",
     "noResults": "Nenhum recorte correspondente",
     "noResultsDescription": "Deseja pesquisar “{query}” nos registros?",

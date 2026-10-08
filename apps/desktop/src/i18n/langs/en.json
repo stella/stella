@@ -251,6 +251,8 @@
     "link": "Link",
     "local": "Local",
     "memoryOnly": "Encrypted storage is unavailable. Clipboard history and excluded-app settings will be kept only until stella desktop quits.",
+    "moveGroupEarlier": "Move left",
+    "moveGroupLater": "Move right",
     "moreOptions": "More options",
     "noResults": "No matching clips",
     "noResultsDescription": "Search registries for “{query}” instead?",

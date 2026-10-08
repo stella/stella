@@ -251,6 +251,8 @@
     "link": "Nuoroda",
     "local": "Vietinė",
     "memoryOnly": "Šifruota saugykla nepasiekiama. Iškarpinės istorija ir neįtrauktų programų nustatymai bus laikomi tik iki stella desktop uždarymo.",
+    "moveGroupEarlier": "Perkelti į kairę",
+    "moveGroupLater": "Perkelti į dešinę",
     "moreOptions": "Daugiau parinkčių",
     "noResults": "Atitinkančių iškarpų nėra",
     "noResultsDescription": "Ar norite „{query}“ ieškoti registruose?",

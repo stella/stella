@@ -1,3 +1,5 @@
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
+
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 
 type FeatureDefinition = {
@@ -11,7 +13,13 @@ type FeatureDefinition = {
     conditionalModules?: readonly string[];
     dispatchModules?: readonly (
       | { type: "registry"; module: string; registry: string }
-      | { type: "admitted"; module: string; admission: string }
+      | {
+          type: "admitted";
+          module: string;
+          admission: string;
+          /** Where the admission comes from; the MCP feature gate by default. */
+          specifier?: string;
+        }
     )[];
   };
 };
@@ -20,8 +28,25 @@ export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
 export const SELF_SERVE_FEATURE_IDS = ["time-billing"] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
+export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
 
 export const FEATURE_REGISTRY = {
+  [GENERATED_VIEWS_FEATURE_ID]: {
+    enrolment: "invitation",
+    deploymentFeature: "FEATURE_GENERATED_VIEWS",
+    ownership: {
+      handlerDirectories: [],
+      tableSchemaFiles: [],
+      coreModules: ["apps/api/src/handlers/chat/tools/show-visual-tools.ts"],
+      dispatchModules: [
+        {
+          type: "admitted",
+          module: "apps/api/src/handlers/chat/tools/chat-tools.ts",
+          admission: "isMcpDescriptorFeatureEnabled",
+        },
+      ],
+    },
+  },
   "time-billing": {
     enrolment: "self-serve",
     deploymentFeature: "FEATURE_TIME_BILLING",
@@ -60,6 +85,14 @@ export const FEATURE_REGISTRY = {
             "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts",
           admission: "isMcpDescriptorFeatureEnabled",
         },
+        {
+          // The review organization reset seeds time-billing sample data
+          // only where the deployment offers the feature.
+          type: "admitted",
+          module: "apps/api/src/lib/review-organization/time-billing-seed.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
       ],
     },
   },
@@ -96,6 +129,10 @@ export const FEATURE_REGISTRY = {
   >;
 
 export type FeatureId = keyof typeof FEATURE_REGISTRY;
+
+export const CHAT_ONLY_FEATURE_TOOL_DEFINITIONS = [
+  { name: VISUAL_PREVIEW_TOOL_NAME, featureId: GENERATED_VIEWS_FEATURE_ID },
+] as const satisfies readonly { name: string; featureId: FeatureId }[];
 
 type SelfServeFeatureId = {
   [

@@ -251,6 +251,8 @@
     "link": "Lien",
     "local": "Local",
     "memoryOnly": "Le stockage chiffré est indisponible. L’historique du presse-papiers et les réglages des applications exclues seront conservés uniquement jusqu’à la fermeture de stella desktop.",
+    "moveGroupEarlier": "Déplacer vers la gauche",
+    "moveGroupLater": "Déplacer vers la droite",
     "moreOptions": "Plus d’options",
     "noResults": "Aucun extrait correspondant",
     "noResultsDescription": "Voulez-vous plutôt rechercher « {query} » dans les registres ?",

@@ -14,6 +14,8 @@
  * Tailwind v4 is a peer dependency, and this file assumes its default theme
  * is already in scope (the palettes derive from `--color-*-500`).
  */
+@import "./inline-rename.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

@@ -19,7 +19,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { integration: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
@@ -30,10 +30,9 @@ const updateMcpConnection = createSafeRootHandler(
   config,
   async function* ({ body, params: requestParams, safeDb, session, user }) {
     const updated = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
+      safeDb((tx) =>
         // audit: skip — per-user MCP connection enable/disable toggle; the connector itself is SOC 2-audited at create-connector / delete-connector.
-        return tx
+        tx
           .update(mcpUserConnections)
           .set({
             enabled: body.enabled,
@@ -53,8 +52,8 @@ const updateMcpConnection = createSafeRootHandler(
             id: mcpUserConnections.id,
             enabled: mcpUserConnections.enabled,
             status: mcpUserConnections.status,
-          });
-      }),
+          }),
+      ),
     );
 
     const connection = updated.at(0);

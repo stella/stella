@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -122,7 +121,6 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     ["eslint(max-params)", "eslint/max-params"],
     ["react(no-children-prop)", "react/no-children-prop"],
     ["eslint(no-unexpected-multiline)", "eslint/no-unexpected-multiline"],
-    ["eslint(no-use-before-define)", "eslint/no-use-before-define"],
   ]);
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
@@ -160,8 +158,6 @@ test("a backlog file drops a size limit to its ceiling, other rules to off", () 
   ]);
 });
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
-
 const DIAGNOSTICS = [
   { code: "shadcn(no-restyle)", filename: "apps/web/src/z.tsx" },
   { code: "shadcn(no-restyle)", filename: "apps/web/src/Z.tsx" },
@@ -172,12 +168,6 @@ const DIAGNOSTICS = [
   { code: "shadcn(no-restyle)", filename: "apps/web/src/hooks.tsx" },
   { code: "shadcn(no-restyle)", filename: "apps/web/src/hooks.tsx" },
   { code: "eslint(max-params)", filename: "apps/api/src/b.ts" },
-  { code: "eslint(no-use-before-define)", filename: "apps/api/src/b.ts" },
-  { code: "eslint(no-use-before-define)", filename: "./apps/api/src/b.ts" },
-  {
-    code: "eslint(no-use-before-define)",
-    filename: path.join(REPOSITORY_ROOT, "apps/api/src/b.ts"),
-  },
   { code: "unicorn(no-null)", filename: "apps/api/src/b.ts" },
 ];
 
@@ -224,7 +214,6 @@ test("the serialized baseline is byte-identical in any report order", () => {
       "apps/web/src/z.tsx": 1,
     },
     "eslint/max-params": { "apps/api/src/b.ts": 1 },
-    "eslint/no-use-before-define": { "apps/api/src/b.ts": 3 },
   });
   expect(Object.keys(parsed)).toEqual([...DESIGN_LINT_BACKLOG_RULES]);
   expect(Object.keys(parsed["shadcn/no-restyle"])).toEqual([

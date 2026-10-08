@@ -29,6 +29,8 @@ const defaultCaseLawSourceRow = () =>
     checkpointObservationOrder: 0n,
     ingestionLeaseToken: null,
     ingestionLeaseExpiresAt: null,
+    ingestionLeasePurpose: "ingestion",
+    decisionMergeEpoch: 0n,
     config: {},
     descriptor: null,
     reportedTotal: null,
