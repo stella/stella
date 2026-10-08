@@ -2,7 +2,7 @@
 //! committed together. A remembered document-edit profile is not a login.
 
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tauri::{Emitter, State, WebviewWindow};
 use tokio::sync::Mutex;
 
@@ -12,7 +12,36 @@ use crate::types::{
 };
 
 pub const CHANGED_EVENT: &str = "desktop-account-changed";
+const ACCOUNT_PROTOCOL_HEADER: &str = "X-Stella-Desktop-Account-Protocol";
 pub type AccountState = Arc<Mutex<AccountStore>>;
+
+// All bearer requests and rotations share one lease, across every desktop window.
+pub async fn lock_requests() -> tokio::sync::MutexGuard<'static, ()> {
+  static REQUESTS: OnceLock<Mutex<()>> = OnceLock::new();
+  REQUESTS.get_or_init(|| Mutex::new(())).lock().await
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PendingRotation {
+  successor_key: String,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy)]
+enum StorageFault {
+  Save,
+  ClearRotation,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+pub struct AccountFixture {
+  saved: Option<LinkedAccount>,
+  pending: Option<PendingRotation>,
+  expired: bool,
+  fault: Option<StorageFault>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkOutcome {
@@ -35,6 +64,8 @@ pub struct LinkedAccount {
 struct AccountPolicy {
   key_prefix: String,
   credential_lifetime_seconds: i64,
+  rotation_interval_seconds: u64,
+  link_protocol: u32,
 }
 
 fn policy() -> AccountPolicy {
@@ -87,13 +118,6 @@ impl LinkedAccount {
       account: self.account,
       identity: self.identity,
       expires_at: self.credential.expires_at,
-    }
-  }
-
-  pub(crate) fn request_auth(&self) -> crate::registry::RegistryRequestAuth<'_> {
-    crate::registry::RegistryRequestAuth {
-      api_base_url: &self.api_base_url,
-      credential_key: &self.credential.key,
     }
   }
 }
@@ -152,6 +176,8 @@ pub enum AccountStore {
   Memory(Option<LinkedAccount>),
   #[cfg(test)]
   ReadOnly(Option<LinkedAccount>),
+  #[cfg(test)]
+  Fixture(AccountFixture),
 }
 
 impl AccountStore {
@@ -166,6 +192,8 @@ impl AccountStore {
         .transpose(),
       #[cfg(test)]
       Self::Memory(account) | Self::ReadOnly(account) => Ok(account.clone()),
+      #[cfg(test)]
+      Self::Fixture(fixture) => Ok(fixture.saved.clone()),
     }
   }
 
@@ -178,7 +206,8 @@ impl AccountStore {
       Self::Keychain => {
         let value = serde_json::to_string(&account)
           .map_err(|_| "Could not save desktop account")?;
-        crate::keychain::store_account_connection(value).await
+        crate::keychain::store_account_connection(value).await?;
+        crate::keychain::clear_account_expired().await
       }
       #[cfg(test)]
       Self::Memory(saved) => {
@@ -187,6 +216,15 @@ impl AccountStore {
       }
       #[cfg(test)]
       Self::ReadOnly(_) => Err("Could not save desktop account".into()),
+      #[cfg(test)]
+      Self::Fixture(fixture) => {
+        if matches!(fixture.fault, Some(StorageFault::Save)) {
+          return Err("Account save unavailable".into());
+        }
+        fixture.saved = Some(account);
+        fixture.expired = false;
+        Ok(())
+      }
     }
   }
 
@@ -204,6 +242,89 @@ impl AccountStore {
       }
       #[cfg(test)]
       Self::ReadOnly(_) => Err("Could not remove desktop account".into()),
+      #[cfg(test)]
+      Self::Fixture(fixture) => {
+        *fixture = AccountFixture::default();
+        Ok(())
+      }
+    }
+  }
+
+  async fn pending(&self) -> Result<Option<PendingRotation>, String> {
+    match self {
+      Self::Keychain => crate::keychain::get_account_rotation()
+        .await?
+        .map(|value| {
+          serde_json::from_str(&value)
+            .map_err(|_| "Account rotation is unreadable".to_string())
+        })
+        .transpose(),
+      #[cfg(test)]
+      Self::Fixture(fixture) => Ok(fixture.pending.clone()),
+      #[cfg(test)]
+      Self::Memory(_) | Self::ReadOnly(_) => Ok(None),
+    }
+  }
+
+  async fn stage(&mut self, pending: Option<PendingRotation>) -> Result<(), String> {
+    match self {
+      Self::Keychain => {
+        crate::keychain::set_account_rotation(
+          pending
+            .map(|value| {
+              serde_json::to_string(&value)
+                .map_err(|_| "Could not stage account rotation".to_string())
+            })
+            .transpose()?,
+        )
+        .await
+      }
+      #[cfg(test)]
+      Self::Fixture(fixture) => {
+        if pending.is_none()
+          && matches!(fixture.fault, Some(StorageFault::ClearRotation))
+        {
+          return Err("Rotation cleanup unavailable".into());
+        }
+        fixture.pending = pending;
+        Ok(())
+      }
+      #[cfg(test)]
+      Self::Memory(_) => {
+        if pending.is_none() {
+          Ok(())
+        } else {
+          Err("Account rotation storage unavailable".into())
+        }
+      }
+      #[cfg(test)]
+      Self::ReadOnly(_) => Err("Account rotation storage unavailable".into()),
+    }
+  }
+
+  async fn expired(&self) -> Result<bool, String> {
+    match self {
+      Self::Keychain => crate::keychain::account_expired().await,
+      #[cfg(test)]
+      Self::Fixture(fixture) => Ok(fixture.expired),
+      #[cfg(test)]
+      Self::Memory(_) | Self::ReadOnly(_) => Ok(false),
+    }
+  }
+
+  async fn expire(&mut self) -> Result<(), String> {
+    match self {
+      Self::Keychain => crate::keychain::mark_account_expired().await,
+      #[cfg(test)]
+      Self::Fixture(fixture) => {
+        *fixture = AccountFixture {
+          expired: true,
+          ..AccountFixture::default()
+        };
+        Ok(())
+      }
+      #[cfg(test)]
+      Self::Memory(_) | Self::ReadOnly(_) => self.clear().await,
     }
   }
 }
@@ -215,10 +336,316 @@ pub async fn current(state: &AccountState) -> Result<Option<LinkedAccount>, Stri
     .as_ref()
     .is_some_and(|saved| !is_live_expiry(&saved.credential.expires_at))
   {
-    store.clear().await?;
+    if store.pending().await?.is_some() {
+      return Err("Account renewal requires recovery".into());
+    }
+    store.expire().await?;
     return Ok(None);
   }
   Ok(saved)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RenewalReply {
+  expires_at: String,
+  identity: DesktopAccountIdentity,
+}
+
+enum RenewalFailure {
+  Rejected,
+  Throttled,
+  Unavailable(String),
+}
+
+#[derive(Clone, Copy)]
+enum RecoveryMode {
+  ProbeOnly,
+  Foreground,
+  Disconnect,
+}
+
+trait RenewalTransport {
+  async fn send(
+    &self,
+    account: &LinkedAccount,
+    successor: Option<&str>,
+  ) -> Result<RenewalReply, RenewalFailure>;
+}
+
+struct HttpRenewal;
+impl RenewalTransport for HttpRenewal {
+  async fn send(
+    &self,
+    account: &LinkedAccount,
+    successor: Option<&str>,
+  ) -> Result<RenewalReply, RenewalFailure> {
+    let body = match successor {
+      Some(key) => serde_json::json!({"type":"rotate", "successorKey":key}),
+      None => serde_json::json!({"type":"probe"}),
+    };
+    match crate::registry::renewal_request(
+      crate::registry::RegistryRequestAuth {
+        api_base_url: &account.api_base_url,
+        credential_key: &account.credential.key,
+      },
+      body,
+    )
+    .await
+    {
+      Ok(value) => serde_json::from_value(value).map_err(|_| {
+        RenewalFailure::Unavailable("Account renewal response is invalid".into())
+      }),
+      Err(message) if message == crate::registry::not_connected() => {
+        Err(RenewalFailure::Rejected)
+      }
+      Err(message) if message == crate::registry::rate_limited() => {
+        Err(RenewalFailure::Throttled)
+      }
+      Err(message) => Err(RenewalFailure::Unavailable(message)),
+    }
+  }
+}
+
+fn validate_renewal_reply(
+  account: &LinkedAccount,
+  reply: &RenewalReply,
+) -> Result<(), String> {
+  if reply.identity.user_id != account.identity.user_id
+    || reply.identity.organization_id != account.identity.organization_id
+  {
+    return Err("Account renewal identity changed".into());
+  }
+  if !is_live_expiry(&reply.expires_at) {
+    return Err("Account renewal expiry is invalid".into());
+  }
+  Ok(())
+}
+
+async fn commit_rotation(
+  store: &mut AccountStore,
+  mut account: LinkedAccount,
+  pending: PendingRotation,
+  reply: RenewalReply,
+) -> Result<LinkedAccount, String> {
+  validate_renewal_reply(&account, &reply)?;
+  account.credential = DesktopAccountCredential {
+    key: pending.successor_key,
+    expires_at: reply.expires_at,
+  };
+  store.save(account.clone()).await?;
+  store.stage(None).await?;
+  Ok(account)
+}
+
+// A successor is durable before CAS. On an unknown result, probe it first;
+// a timeout never authorizes a retry with an invalidated predecessor.
+async fn recover_rotation(
+  store: &mut AccountStore,
+  account: LinkedAccount,
+  transport: &impl RenewalTransport,
+  mode: RecoveryMode,
+) -> Result<LinkedAccount, String> {
+  let Some(pending) = store.pending().await? else {
+    return Ok(account);
+  };
+  let candidate = LinkedAccount {
+    api_base_url: account.api_base_url.clone(),
+    web_origin: account.web_origin.clone(),
+    account: account.account.clone(),
+    identity: account.identity.clone(),
+    credential: DesktopAccountCredential {
+      key: pending.successor_key.clone(),
+      expires_at: account.credential.expires_at.clone(),
+    },
+  };
+  match transport.send(&candidate, None).await {
+    Ok(reply) => commit_rotation(store, account, pending, reply).await,
+    Err(RenewalFailure::Unavailable(message)) => Err(message),
+    Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
+    Err(RenewalFailure::Rejected) => {
+      if matches!(mode, RecoveryMode::ProbeOnly) {
+        return Err("Account renewal needs foreground recovery".into());
+      }
+      if matches!(mode, RecoveryMode::Disconnect) {
+        return match transport.send(&account, None).await {
+          // Keep the journal: a timed-out rotation can still commit, so
+          // disconnect revokes the successor too before clearing.
+          Ok(reply) => {
+            validate_renewal_reply(&account, &reply)?;
+            Ok(account)
+          }
+          Err(RenewalFailure::Unavailable(message)) => Err(message),
+          Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
+          // A timed-out rotation can commit between the two probes; adopt a
+          // live successor so disconnect revokes it instead of orphaning it.
+          Err(RenewalFailure::Rejected) => match transport.send(&candidate, None).await
+          {
+            Ok(reply) => commit_rotation(store, account, pending, reply).await,
+            Err(RenewalFailure::Unavailable(message)) => Err(message),
+            Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
+            Err(RenewalFailure::Rejected) => {
+              store.clear().await?;
+              Err(crate::registry::not_connected())
+            }
+          },
+        };
+      }
+      match transport.send(&account, Some(&pending.successor_key)).await {
+        Ok(reply) => commit_rotation(store, account, pending, reply).await,
+        Err(RenewalFailure::Unavailable(message)) => Err(message),
+        Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
+        // A timed-out rotation can commit between the first probe and this
+        // retry; only both generations being rejected ends the link.
+        Err(RenewalFailure::Rejected) => match transport.send(&candidate, None).await {
+          Ok(reply) => commit_rotation(store, account, pending, reply).await,
+          Err(RenewalFailure::Unavailable(message)) => Err(message),
+          Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
+          Err(RenewalFailure::Rejected) => {
+            if is_live_expiry(&account.credential.expires_at) {
+              store.clear().await?;
+            } else {
+              store.expire().await?;
+            }
+            Err(crate::registry::not_connected())
+          }
+        },
+      }
+    }
+  }
+}
+
+async fn rotate_account(
+  store: &mut AccountStore,
+  account: LinkedAccount,
+  successor_key: String,
+  transport: &impl RenewalTransport,
+) -> Result<LinkedAccount, String> {
+  let pending = PendingRotation { successor_key };
+  store.stage(Some(pending.clone())).await?;
+  match transport.send(&account, Some(&pending.successor_key)).await {
+    Ok(reply) => commit_rotation(store, account, pending, reply).await,
+    Err(RenewalFailure::Unavailable(message)) => Err(message),
+    // The API refused before rotating, so the current key stays live.
+    Err(RenewalFailure::Throttled) => {
+      store.stage(None).await?;
+      Ok(account)
+    }
+    Err(RenewalFailure::Rejected) => {
+      store.clear().await?;
+      Err(crate::registry::not_connected())
+    }
+  }
+}
+
+pub struct AccountRequest {
+  account: LinkedAccount,
+  _lease: tokio::sync::MutexGuard<'static, ()>,
+}
+impl AccountRequest {
+  pub(crate) fn request_auth(&self) -> crate::registry::RegistryRequestAuth<'_> {
+    crate::registry::RegistryRequestAuth {
+      api_base_url: &self.api_base_url,
+      credential_key: &self.credential.key,
+    }
+  }
+  #[cfg(test)]
+  pub(crate) async fn fixture(account: LinkedAccount) -> Self {
+    Self {
+      account,
+      _lease: lock_requests().await,
+    }
+  }
+}
+
+impl std::ops::Deref for AccountRequest {
+  type Target = LinkedAccount;
+  fn deref(&self) -> &LinkedAccount {
+    &self.account
+  }
+}
+
+async fn load_account_for_request(
+  state: &AccountState,
+  mode: RecoveryMode,
+) -> Result<Option<LinkedAccount>, String> {
+  let mut store = state.lock().await;
+  let Some(saved) = store.load().await? else {
+    return Ok(None);
+  };
+  let saved = recover_rotation(&mut store, saved, &HttpRenewal, mode).await?;
+  if !is_live_expiry(&saved.credential.expires_at) {
+    store.expire().await?;
+    return Ok(None);
+  }
+  Ok(Some(saved))
+}
+
+async fn load_request_account(
+  state: &AccountState,
+  mode: RecoveryMode,
+) -> Result<Option<AccountRequest>, String> {
+  let lease = lock_requests().await;
+  Ok(
+    load_account_for_request(state, mode)
+      .await?
+      .map(|account| AccountRequest {
+        account,
+        _lease: lease,
+      }),
+  )
+}
+
+pub async fn request_account(
+  state: &AccountState,
+) -> Result<Option<AccountRequest>, String> {
+  load_request_account(state, RecoveryMode::ProbeOnly).await
+}
+
+pub async fn foreground_account(
+  state: &AccountState,
+) -> Result<Option<AccountRequest>, String> {
+  let Some(mut request) = load_request_account(state, RecoveryMode::Foreground).await?
+  else {
+    return Ok(None);
+  };
+  // Presence never calls this owner. Pace interactive bursts without an idle timer.
+  static LAST_USE: OnceLock<Mutex<Option<std::time::Instant>>> = OnceLock::new();
+  let mut last_use = LAST_USE.get_or_init(|| Mutex::new(None)).lock().await;
+  let interval = std::time::Duration::from_secs(policy().rotation_interval_seconds);
+  if last_use.is_some_and(|last| last.elapsed() < interval) {
+    return Ok(Some(request));
+  }
+  let mut store = state.lock().await;
+  let successor = format!(
+    "{}{}{}",
+    policy().key_prefix,
+    random_secret()?,
+    random_secret()?
+  );
+  request.account =
+    rotate_account(&mut store, request.account.clone(), successor, &HttpRenewal)
+      .await?;
+  *last_use = Some(std::time::Instant::now());
+  Ok(Some(request))
+}
+
+pub async fn expired(state: &AccountState) -> Result<bool, String> {
+  state.lock().await.expired().await
+}
+
+#[tauri::command]
+pub async fn account_record_use(
+  app: tauri::AppHandle,
+  window: WebviewWindow,
+  state: State<'_, AccountState>,
+) -> Result<(), String> {
+  if !matches!(window.label(), "main" | "clipboard" | "clipboard-editor") {
+    return Err("account activity is not available in this window".into());
+  }
+  let _account = foreground_account(&state).await?;
+  notify(&app);
+  Ok(())
 }
 
 async fn prepare_replacement(
@@ -252,6 +679,7 @@ pub async fn link(
   expected_identity: &DesktopAccountIdentity,
 ) -> Result<LinkOutcome, String> {
   let pending = LinkedAccount::from_request(request, web_origin)?;
+  let _lease = lock_requests().await;
   // Do not publish a profile for a credential the API has not accepted.
   let mut store = state.lock().await;
   let outcome = prepare_replacement(&mut store, &pending).await?;
@@ -272,6 +700,7 @@ pub async fn link(
   {
     return Err("Desktop account connection does not match".into());
   }
+  store.stage(None).await?;
   store.save(account).await?;
   Ok(LinkOutcome::Linked)
 }
@@ -310,10 +739,13 @@ pub async fn account_get_state(
   state: State<'_, AccountState>,
 ) -> Result<DesktopAccountSnapshot, String> {
   require_account_window(&window)?;
-  Ok(current(&state).await?.map_or(
-    DesktopAccountSnapshot::Disconnected,
-    LinkedAccount::snapshot,
-  ))
+  if let Some(saved) = current(&state).await? {
+    return Ok(saved.snapshot());
+  }
+  if state.lock().await.expired().await? {
+    return Ok(DesktopAccountSnapshot::Expired);
+  }
+  Ok(DesktopAccountSnapshot::Disconnected)
 }
 
 #[tauri::command]
@@ -323,22 +755,50 @@ pub async fn account_disconnect(
   state: State<'_, AccountState>,
 ) -> Result<(), String> {
   require_account_window(&window)?;
+  let _lease = lock_requests().await;
+  let account = match load_account_for_request(&state, RecoveryMode::Disconnect).await {
+    Ok(account) => account,
+    Err(error) if error == crate::registry::not_connected() => None,
+    Err(error) => return Err(error),
+  };
+  if let Some(saved) = &account {
+    let pending = state.lock().await.pending().await?;
+    let mut keys = vec![saved.credential.key.clone()];
+    keys.extend(pending.map(|pending| pending.successor_key));
+    revoke_generations(keys, |key| async move {
+      crate::registry::request(
+        crate::registry::RegistryRequestAuth {
+          api_base_url: &saved.api_base_url,
+          credential_key: &key,
+        },
+        serde_json::json!({"type":"revoke"}),
+      )
+      .await
+      .map(|_| ())
+    })
+    .await?;
+  }
   let mut store = state.lock().await;
-  if let Some(saved) = store.load().await? {
-    match crate::registry::request(
-      saved.request_auth(),
-      serde_json::json!({"type":"revoke"}),
-    )
-    .await
-    {
-      Ok(_) => {}
+  store.clear().await?;
+  drop(store);
+  notify(&app);
+  Ok(())
+}
+
+// Revokes every credential generation that may be live. A rejected key is
+// already dead; any other failure keeps local storage so disconnect can retry.
+async fn revoke_generations<F, Fut>(keys: Vec<String>, revoke: F) -> Result<(), String>
+where
+  F: Fn(String) -> Fut,
+  Fut: std::future::Future<Output = Result<(), String>>,
+{
+  for key in keys {
+    match revoke(key).await {
+      Ok(()) => {}
       Err(error) if error == crate::registry::not_connected() => {}
       Err(error) => return Err(error),
     }
   }
-  store.clear().await?;
-  drop(store);
-  notify(&app);
   Ok(())
 }
 
@@ -390,12 +850,14 @@ fn new_browser_connection(
   let verifier_hash = hex::encode(Sha256::digest(verifier.as_bytes()));
   let mut url = reqwest::Url::parse(&format!("{web_origin}/settings/account/desktop"))
     .map_err(|_| "Could not start desktop connection".to_string())?;
+  let protocol = policy().link_protocol.to_string();
   let params = reqwest::Url::parse_with_params(
     "https://localhost",
     [
       ("correlationId", correlation_id.as_str()),
       ("verifierHash", verifier_hash.as_str()),
       ("portSecret", port_secret.as_str()),
+      ("protocol", protocol.as_str()),
     ],
   )
   .map_err(|_| "Could not start desktop connection".to_string())?;
@@ -723,7 +1185,7 @@ async fn redeem_browser_connection(
     correlation_id,
   } = pending;
   let state = app.state::<AccountState>();
-  let saved = current(&state).await?;
+  let saved = foreground_account(&state).await?;
   if let Some(saved) = &saved
     && (saved.api_base_url != api_base_url
       || saved.identity.user_id != expected_identity.user_id
@@ -741,6 +1203,7 @@ async fn redeem_browser_connection(
     .map_err(|_| "Desktop connection is unavailable")?;
   let mut redeem_request = client
     .post(format!("{api_base_url}/v1/desktop-registry/redeem-link"))
+    .header(ACCOUNT_PROTOCOL_HEADER, policy().link_protocol.to_string())
     .json(&RedeemLinkRequest {
       correlation_id: &correlation_id,
       verifier: &verifier,
@@ -756,6 +1219,9 @@ async fn redeem_browser_connection(
     .await
     .map_err(|_| "Desktop connection is unavailable")?;
   drop(verifier);
+  if response.status() == reqwest::StatusCode::UPGRADE_REQUIRED {
+    return Err("Update stella desktop".into());
+  }
   if !response.status().is_success() {
     return Err("Desktop connection was not accepted".into());
   }
@@ -821,6 +1287,7 @@ async fn redeem_browser_connection(
     }
   };
   let credential_key = request.credential.key.clone();
+  drop(saved);
   if let Err(error) = link(&state, request, &web_origin, &expected_identity).await {
     crate::registry::request(
       crate::registry::RegistryRequestAuth {
@@ -908,7 +1375,11 @@ mod tests {
         .query_pairs()
         .into_owned()
         .collect();
-    assert_eq!(fields.len(), 3);
+    assert_eq!(fields.len(), 4);
+    assert_eq!(
+      fields.get("protocol"),
+      Some(&policy().link_protocol.to_string())
+    );
     assert_eq!(
       fields.get("correlationId"),
       Some(&connection.correlation_id)
@@ -1233,5 +1704,609 @@ mod tests {
       }))
       .is_err()
     );
+  }
+
+  struct QueuedRenewal {
+    replies: std::sync::Mutex<
+      std::collections::VecDeque<Result<RenewalReply, RenewalFailure>>,
+    >,
+    requests: std::sync::Mutex<Vec<(String, Option<String>)>>,
+  }
+
+  impl QueuedRenewal {
+    fn new(replies: Vec<Result<RenewalReply, RenewalFailure>>) -> Self {
+      Self {
+        replies: std::sync::Mutex::new(replies.into()),
+        requests: std::sync::Mutex::new(Vec::new()),
+      }
+    }
+
+    fn requests(&self) -> Vec<(String, Option<String>)> {
+      self.requests.lock().unwrap().clone()
+    }
+  }
+
+  impl RenewalTransport for QueuedRenewal {
+    async fn send(
+      &self,
+      account: &LinkedAccount,
+      successor: Option<&str>,
+    ) -> Result<RenewalReply, RenewalFailure> {
+      self
+        .requests
+        .lock()
+        .unwrap()
+        .push((account.credential.key.clone(), successor.map(str::to_owned)));
+      self
+        .replies
+        .lock()
+        .unwrap()
+        .pop_front()
+        .expect("unexpected renewal request")
+    }
+  }
+
+  fn renewal_reply(account: &LinkedAccount) -> RenewalReply {
+    RenewalReply {
+      expires_at: (chrono::Utc::now()
+        + chrono::Duration::seconds(policy().credential_lifetime_seconds))
+      .to_rfc3339(),
+      identity: account.identity.clone(),
+    }
+  }
+
+  fn rotation_fixture(account: LinkedAccount) -> AccountStore {
+    AccountStore::Fixture(AccountFixture {
+      saved: Some(account),
+      pending: Some(PendingRotation {
+        successor_key: "stella_dr_successor".into(),
+      }),
+      expired: false,
+      fault: None,
+    })
+  }
+
+  async fn assert_rotation_pending(store: &AccountStore, original: &LinkedAccount) {
+    assert_eq!(
+      serde_json::to_value(store.load().await.unwrap().unwrap()).unwrap(),
+      serde_json::to_value(original).unwrap()
+    );
+    assert_eq!(
+      store.pending().await.unwrap().unwrap().successor_key,
+      "stella_dr_successor"
+    );
+    assert!(!store.expired().await.unwrap());
+  }
+
+  #[tokio::test]
+  async fn lost_rotation_response_survives_restart_and_only_probes_the_successor() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = AccountStore::Fixture(AccountFixture {
+      saved: Some(original.clone()),
+      ..AccountFixture::default()
+    });
+    let transport = QueuedRenewal::new(vec![Err(RenewalFailure::Unavailable(
+      "lost response".into(),
+    ))]);
+    assert!(
+      rotate_account(
+        &mut store,
+        original.clone(),
+        "stella_dr_successor".into(),
+        &transport
+      )
+      .await
+      .is_err()
+    );
+    assert_eq!(
+      transport.requests(),
+      vec![(
+        "stella_dr_original".into(),
+        Some("stella_dr_successor".into())
+      )]
+    );
+    assert_rotation_pending(&store, &original).await;
+    let mut restarted = AccountStore::Fixture(AccountFixture {
+      saved: store.load().await.unwrap(),
+      pending: store.pending().await.unwrap(),
+      expired: store.expired().await.unwrap(),
+      fault: None,
+    });
+    let recovery = QueuedRenewal::new(vec![Ok(renewal_reply(&original))]);
+    let recovered = recover_rotation(
+      &mut restarted,
+      original.clone(),
+      &recovery,
+      RecoveryMode::ProbeOnly,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+      recovery.requests(),
+      vec![("stella_dr_successor".into(), None)]
+    );
+    assert_eq!(recovered.credential.key, "stella_dr_successor");
+    assert_eq!(
+      restarted.load().await.unwrap().unwrap().credential.key,
+      "stella_dr_successor"
+    );
+    assert!(restarted.pending().await.unwrap().is_none());
+    assert_eq!(recovered.account.email, original.account.email);
+    assert!(is_live_expiry(&recovered.credential.expires_at));
+  }
+
+  #[tokio::test]
+  async fn unknown_successor_probe_never_retries_the_original_in_any_recovery_mode() {
+    for mode in [
+      RecoveryMode::ProbeOnly,
+      RecoveryMode::Foreground,
+      RecoveryMode::Disconnect,
+    ] {
+      let original = fixture("stella_dr_original", 60);
+      let mut store = rotation_fixture(original.clone());
+      let transport = QueuedRenewal::new(vec![Err(RenewalFailure::Unavailable(
+        "probe unavailable".into(),
+      ))]);
+      assert_eq!(
+        recover_rotation(&mut store, original.clone(), &transport, mode)
+          .await
+          .err()
+          .as_deref(),
+        Some("probe unavailable")
+      );
+      assert_eq!(
+        transport.requests(),
+        vec![("stella_dr_successor".into(), None)]
+      );
+      assert_rotation_pending(&store, &original).await;
+    }
+  }
+
+  #[tokio::test]
+  async fn definite_successor_rejection_permits_the_foreground_original_transition() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Ok(renewal_reply(&original)),
+    ]);
+    let recovered =
+      recover_rotation(&mut store, original, &transport, RecoveryMode::Foreground)
+        .await
+        .unwrap();
+    assert_eq!(
+      transport.requests(),
+      vec![
+        ("stella_dr_successor".into(), None),
+        (
+          "stella_dr_original".into(),
+          Some("stella_dr_successor".into())
+        ),
+      ]
+    );
+    assert_eq!(recovered.credential.key, "stella_dr_successor");
+    assert!(store.pending().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn throttled_rotation_keeps_the_current_key_and_drops_the_successor() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = AccountStore::Fixture(AccountFixture {
+      saved: Some(original.clone()),
+      ..AccountFixture::default()
+    });
+    let transport = QueuedRenewal::new(vec![Err(RenewalFailure::Throttled)]);
+    let kept = rotate_account(
+      &mut store,
+      original.clone(),
+      "stella_dr_successor".into(),
+      &transport,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+      transport.requests(),
+      vec![(
+        "stella_dr_original".into(),
+        Some("stella_dr_successor".into())
+      )]
+    );
+    assert_eq!(kept.credential.key, original.credential.key);
+    assert_eq!(
+      store.load().await.unwrap().unwrap().credential.key,
+      original.credential.key
+    );
+    assert!(store.pending().await.unwrap().is_none());
+    assert!(!store.expired().await.unwrap());
+    assert!(policy().rotation_interval_seconds > 0);
+  }
+
+  #[tokio::test]
+  async fn throttled_recovery_keeps_the_pending_successor() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Throttled),
+    ]);
+    assert_eq!(
+      recover_rotation(
+        &mut store,
+        original.clone(),
+        &transport,
+        RecoveryMode::Foreground
+      )
+      .await
+      .err(),
+      Some(crate::registry::rate_limited())
+    );
+    assert_rotation_pending(&store, &original).await;
+  }
+
+  #[tokio::test]
+  async fn foreground_recovery_adopts_a_successor_committed_during_the_retry() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+      Ok(renewal_reply(&original)),
+    ]);
+    let recovered =
+      recover_rotation(&mut store, original, &transport, RecoveryMode::Foreground)
+        .await
+        .unwrap();
+    assert_eq!(
+      transport.requests(),
+      vec![
+        ("stella_dr_successor".into(), None),
+        (
+          "stella_dr_original".into(),
+          Some("stella_dr_successor".into())
+        ),
+        ("stella_dr_successor".into(), None),
+      ]
+    );
+    assert_eq!(recovered.credential.key, "stella_dr_successor");
+    assert_eq!(
+      store.load().await.unwrap().unwrap().credential.key,
+      "stella_dr_successor"
+    );
+    assert!(store.pending().await.unwrap().is_none());
+    assert!(!store.expired().await.unwrap());
+  }
+
+  #[tokio::test]
+  async fn foreground_recovery_clears_only_after_both_generations_are_rejected() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+    ]);
+    assert_eq!(
+      recover_rotation(&mut store, original, &transport, RecoveryMode::Foreground)
+        .await
+        .err(),
+      Some(crate::registry::not_connected())
+    );
+    assert_eq!(transport.requests().len(), 3);
+    assert!(store.load().await.unwrap().is_none());
+    assert!(store.pending().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn background_recovery_cannot_rotate_or_revive_a_rejected_successor() {
+    for seconds in [60, -60] {
+      let original = fixture("stella_dr_original", seconds);
+      let mut store = rotation_fixture(original.clone());
+      let transport = QueuedRenewal::new(vec![Err(RenewalFailure::Rejected)]);
+      assert!(
+        recover_rotation(
+          &mut store,
+          original.clone(),
+          &transport,
+          RecoveryMode::ProbeOnly
+        )
+        .await
+        .is_err()
+      );
+      assert_eq!(
+        transport.requests(),
+        vec![("stella_dr_successor".into(), None)]
+      );
+      assert_rotation_pending(&store, &original).await;
+    }
+  }
+
+  #[tokio::test]
+  async fn disconnect_recovers_the_original_by_probe_without_rotating_it() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Ok(renewal_reply(&original)),
+    ]);
+    let recovered = recover_rotation(
+      &mut store,
+      original.clone(),
+      &transport,
+      RecoveryMode::Disconnect,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+      transport.requests(),
+      vec![
+        ("stella_dr_successor".into(), None),
+        ("stella_dr_original".into(), None)
+      ]
+    );
+    assert_eq!(recovered.credential.key, original.credential.key);
+    assert_eq!(
+      store.load().await.unwrap().unwrap().credential.key,
+      original.credential.key
+    );
+    // The journal stays until disconnect has revoked the successor too.
+    assert_eq!(
+      store.pending().await.unwrap().unwrap().successor_key,
+      "stella_dr_successor"
+    );
+  }
+
+  #[tokio::test]
+  async fn disconnect_revokes_a_successor_committed_after_recovery() {
+    let calls = std::sync::Mutex::new(Vec::new());
+    let result = revoke_generations(
+      vec!["stella_dr_original".into(), "stella_dr_successor".into()],
+      |key| {
+        calls.lock().unwrap().push(key.clone());
+        async move {
+          if key == "stella_dr_original" {
+            Err(crate::registry::not_connected())
+          } else {
+            Ok(())
+          }
+        }
+      },
+    )
+    .await;
+    assert!(result.is_ok());
+    assert_eq!(
+      *calls.lock().unwrap(),
+      vec![
+        "stella_dr_original".to_string(),
+        "stella_dr_successor".to_string()
+      ]
+    );
+  }
+
+  #[tokio::test]
+  async fn disconnect_keeps_storage_when_a_successor_revoke_is_unavailable() {
+    let result = revoke_generations(
+      vec!["stella_dr_original".into(), "stella_dr_successor".into()],
+      |key| async move {
+        if key == "stella_dr_successor" {
+          Err("network unavailable".to_string())
+        } else {
+          Ok(())
+        }
+      },
+    )
+    .await;
+    assert_eq!(result.err(), Some("network unavailable".to_string()));
+  }
+
+  #[tokio::test]
+  async fn disconnect_adopts_a_successor_committed_between_the_probes() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+      Ok(renewal_reply(&original)),
+    ]);
+    let recovered =
+      recover_rotation(&mut store, original, &transport, RecoveryMode::Disconnect)
+        .await
+        .unwrap();
+    assert_eq!(
+      transport.requests(),
+      vec![
+        ("stella_dr_successor".into(), None),
+        ("stella_dr_original".into(), None),
+        ("stella_dr_successor".into(), None),
+      ]
+    );
+    assert_eq!(recovered.credential.key, "stella_dr_successor");
+    assert_eq!(
+      store.load().await.unwrap().unwrap().credential.key,
+      "stella_dr_successor"
+    );
+    assert!(store.pending().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn disconnect_clears_only_after_both_generations_are_rejected() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+    ]);
+    assert_eq!(
+      recover_rotation(&mut store, original, &transport, RecoveryMode::Disconnect)
+        .await
+        .err(),
+      Some(crate::registry::not_connected())
+    );
+    assert_eq!(transport.requests().len(), 3);
+    assert!(store.load().await.unwrap().is_none());
+    assert!(store.pending().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn invalid_renewal_identity_or_expiry_preserves_the_original_and_journal() {
+    for (invalid, mode) in [
+      "user",
+      "organization",
+      "malformed-expiry",
+      "expired",
+      "unbounded-expiry",
+    ]
+    .into_iter()
+    .flat_map(|invalid| {
+      [
+        (invalid, RecoveryMode::Foreground),
+        (invalid, RecoveryMode::Disconnect),
+      ]
+    }) {
+      let original = fixture("stella_dr_original", 60);
+      let mut reply = renewal_reply(&original);
+      match invalid {
+        "user" => reply.identity.user_id = "other-user".into(),
+        "organization" => reply.identity.organization_id = "other-organization".into(),
+        "malformed-expiry" => reply.expires_at = "not-a-date".into(),
+        "expired" => {
+          reply.expires_at =
+            (chrono::Utc::now() - chrono::Duration::seconds(60)).to_rfc3339()
+        }
+        "unbounded-expiry" => {
+          reply.expires_at = (chrono::Utc::now()
+            + chrono::Duration::seconds(
+              policy().credential_lifetime_seconds + CLOCK_SKEW_SECONDS + 60,
+            ))
+          .to_rfc3339()
+        }
+        _ => unreachable!(),
+      }
+      let mut store = rotation_fixture(original.clone());
+      let replies = if matches!(mode, RecoveryMode::Disconnect) {
+        vec![Err(RenewalFailure::Rejected), Ok(reply)]
+      } else {
+        vec![Ok(reply)]
+      };
+      let transport = QueuedRenewal::new(replies);
+      assert!(
+        recover_rotation(&mut store, original.clone(), &transport, mode)
+          .await
+          .is_err()
+      );
+      let expected = if matches!(mode, RecoveryMode::Disconnect) {
+        vec![
+          ("stella_dr_successor".into(), None),
+          ("stella_dr_original".into(), None),
+        ]
+      } else {
+        vec![("stella_dr_successor".into(), None)]
+      };
+      assert_eq!(transport.requests(), expected);
+      assert_rotation_pending(&store, &original).await;
+    }
+  }
+
+  #[tokio::test]
+  async fn staging_failure_prevents_any_rotation_network_request() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = AccountStore::ReadOnly(Some(original.clone()));
+    let transport = QueuedRenewal::new(vec![]);
+    assert!(
+      rotate_account(
+        &mut store,
+        original.clone(),
+        "stella_dr_successor".into(),
+        &transport
+      )
+      .await
+      .is_err()
+    );
+    assert!(transport.requests().is_empty());
+    assert_eq!(
+      store.load().await.unwrap().unwrap().credential.key,
+      original.credential.key
+    );
+  }
+
+  #[tokio::test]
+  async fn expiration_keeps_only_a_marker_and_explicit_disconnect_resets_it() {
+    let original = fixture("stella_dr_original", -60);
+    let state = Arc::new(Mutex::new(AccountStore::Fixture(AccountFixture {
+      saved: Some(original),
+      ..AccountFixture::default()
+    })));
+    assert!(current(&state).await.unwrap().is_none());
+    assert!(expired(&state).await.unwrap());
+    let mut store = state.lock().await;
+    assert!(store.load().await.unwrap().is_none());
+    assert!(store.pending().await.unwrap().is_none());
+    let AccountStore::Fixture(fixture) = &*store else {
+      panic!("fixture store required")
+    };
+    assert!(fixture.saved.is_none());
+    assert!(fixture.pending.is_none());
+    store.clear().await.unwrap();
+    assert!(!store.expired().await.unwrap());
+    assert!(store.load().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn storage_failure_after_server_rotation_preserves_restart_recovery() {
+    for fault in [StorageFault::Save, StorageFault::ClearRotation] {
+      let original = fixture("stella_dr_original", 60);
+      let mut store = AccountStore::Fixture(AccountFixture {
+        saved: Some(original.clone()),
+        fault: Some(fault),
+        ..AccountFixture::default()
+      });
+      let transport = QueuedRenewal::new(vec![Ok(renewal_reply(&original))]);
+      assert!(
+        rotate_account(
+          &mut store,
+          original.clone(),
+          "stella_dr_successor".into(),
+          &transport
+        )
+        .await
+        .is_err()
+      );
+      assert_eq!(
+        store.pending().await.unwrap().unwrap().successor_key,
+        "stella_dr_successor"
+      );
+      let saved = store.load().await.unwrap().unwrap();
+      assert_eq!(
+        saved.credential.key,
+        if matches!(fault, StorageFault::Save) {
+          "stella_dr_original"
+        } else {
+          "stella_dr_successor"
+        }
+      );
+      let mut restarted = AccountStore::Fixture(AccountFixture {
+        saved: Some(saved.clone()),
+        pending: store.pending().await.unwrap(),
+        ..AccountFixture::default()
+      });
+      let probe = QueuedRenewal::new(vec![Ok(renewal_reply(&original))]);
+      let recovered =
+        recover_rotation(&mut restarted, saved, &probe, RecoveryMode::ProbeOnly)
+          .await
+          .unwrap();
+      assert_eq!(recovered.credential.key, "stella_dr_successor");
+      assert_eq!(probe.requests(), vec![("stella_dr_successor".into(), None)]);
+      assert!(restarted.pending().await.unwrap().is_none());
+    }
+  }
+  #[test]
+  fn account_link_protocol_matches_the_api_policy_and_advertised_capability() {
+    assert!(
+      crate::types::BRIDGE_CAPABILITIES
+        .contains(&format!("account-link.v{}", policy().link_protocol).as_str())
+    );
+    let source =
+      include_str!("../../../../packages/api-contract/src/desktop-registry.ts");
+    assert!(source.contains(&format!("\"{ACCOUNT_PROTOCOL_HEADER}\"")));
   }
 }

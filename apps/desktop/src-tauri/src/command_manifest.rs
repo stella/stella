@@ -2,6 +2,7 @@ macro_rules! with_stella_commands {
   ($consumer:ident) => {
     $consumer! {
       account::account_get_state => "account_get_state",
+      account::account_record_use => "account_record_use",
       account::account_disconnect => "account_disconnect",
       commands::get_state => "get_state",
       registry::registry_copy => "registry_copy",
