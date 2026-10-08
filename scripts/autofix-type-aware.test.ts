@@ -224,6 +224,11 @@ const projectCases = [
     invalid: false,
   },
   {
+    name: "nested sibling project below the nearest conventional config",
+    layout: "nested-sibling",
+    invalid: false,
+  },
+  {
     name: "ancestor project covers nested sources",
     layout: "ancestor",
     invalid: false,
@@ -282,9 +287,12 @@ process.exit(result.exitCode);
       JSON.stringify({ compilerOptions: { types: [] } }),
     );
     const emptyProject = { extends: "./fixture-base.json", files: [] };
-    const directory = layout === "ancestor" ? "nested/" : "";
+    const directory =
+      layout === "ancestor" || layout === "nested-sibling" ? "nested/" : "";
     if (directory) {
       mkdirSync(path.join(root, directory));
+    }
+    if (layout === "ancestor") {
       writeFileSync(
         path.join(root, directory, "tsconfig.json"),
         JSON.stringify({ extends: "../fixture-base.json", files: [] }),
@@ -315,9 +323,23 @@ process.exit(result.exitCode);
       path.join(root, "tsconfig.json"),
       JSON.stringify(nearestProject),
     );
+    const rootSiblingEmpty =
+      layout === "uncovered" || layout === "nested-sibling";
     const siblingProject = JSON.stringify(
-      layout === "uncovered" ? emptyProject : config,
+      rootSiblingEmpty ? emptyProject : config,
     );
+    if (layout === "nested-sibling") {
+      // Only a non-conventional config beside the sources covers them; there
+      // is no nested tsconfig.json between them and the empty root config.
+      writeFileSync(
+        path.join(root, directory, "tsconfig.plugins.json"),
+        JSON.stringify({
+          extends: "../fixture-base.json",
+          compilerOptions,
+          files: ["oxlint.config.ts", "other.ts"],
+        }),
+      );
+    }
     if (layout === "symlinked-sibling") {
       // The sibling project is a symlink to a config the name filter alone
       // would not pick up.
@@ -353,8 +375,12 @@ process.exit(result.exitCode);
       expect(output).toContain("TS2322");
     } else {
       expect(result.exitCode, output).toBe(0);
+      const coveringProjects: Partial<Record<typeof layout, string>> = {
+        nearest: "tsconfig.json",
+        "nested-sibling": "nested/tsconfig.plugins.json",
+      };
       const project =
-        layout === "nearest" ? "tsconfig.json" : "tsconfig.oxlint-plugins.json";
+        coveringProjects[layout] ?? "tsconfig.oxlint-plugins.json";
       expect(output).toContain(`Autofix types checked: ${project} (2 targets)`);
       const checked = readFileSync(
         path.join(root, "compiler-projects"),
@@ -370,7 +396,10 @@ process.exit(result.exitCode);
       if (layout !== "nearest") {
         expectedProjects.push(project);
       }
-      expect(checked).toEqual(expectedProjects);
+      // The nested sibling is found before any root config is compiled.
+      expect(checked).toEqual(
+        layout === "nested-sibling" ? [project] : expectedProjects,
+      );
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

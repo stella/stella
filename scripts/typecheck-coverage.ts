@@ -565,7 +565,9 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
     if (nearest === null) {
       panic(`Autofix source has no TypeScript project: ${file}`);
     }
-    let directory = path.posix.dirname(nearest);
+    // Start beside the source: a sibling config can sit below the nearest
+    // conventional one.
+    let directory = path.posix.dirname(file);
     const tried: string[] = [];
     let coveringProject: string | undefined;
     while (coveringProject === undefined) {
