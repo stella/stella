@@ -771,7 +771,7 @@ if (!databaseUrl || !runPostgresTests) {
                     },
                   ]);
                   if (path === "native-repair") {
-                    expect<unknown>(result).toEqual(rows.map(({ id }) => id));
+                    expect(result).toEqual(rows.map(({ id }) => id));
                   }
                   if (path === "dispatch") {
                     expect(result).toEqual(
