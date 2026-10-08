@@ -217,7 +217,7 @@ export const MatterCard = ({
               previewView.type === "error" ||
               (previewView.type === "items" &&
                 previewView.refetchError !== undefined)) && (
-              <PreviewCardPopup className="p-3" sideOffset={8}>
+              <PreviewCardPopup sideOffset={8}>
                 <QueryViewFeedback view={previewView} />
               </PreviewCardPopup>
             )}
