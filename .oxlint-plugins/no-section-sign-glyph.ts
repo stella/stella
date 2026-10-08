@@ -23,14 +23,17 @@ const LONE_SECTION_SIGN =
 
 const isLoneSectionSign = (value: string) => LONE_SECTION_SIGN.test(value);
 
-const isBlankText = (child: unknown) =>
+// Whitespace text and JSX comments render nothing next to the glyph.
+const rendersNothing = (child: unknown) =>
   isAstNode(child) &&
-  child.type === "JSXText" &&
-  typeof child.value === "string" &&
-  child.value.trim() === "";
+  ((child.type === "JSXText" &&
+    typeof child.value === "string" &&
+    child.value.trim() === "") ||
+    (child.type === "JSXExpressionContainer" &&
+      isAstNode(child.expression) &&
+      child.expression.type === "JSXEmptyExpression"));
 
-// A child is the element's whole content only when every sibling is
-// whitespace: "§ <a>10</a>" and {"§"} 10 are legal references split across
+// A child is the element's whole content only when no sibling renders: "§ <a>10</a>" and {"§"} 10 are legal references split across
 // children, not a placeholder.
 const isOnlyChild = (node: { parent?: unknown }) => {
   const { parent } = node;
@@ -42,7 +45,7 @@ const isOnlyChild = (node: { parent?: unknown }) => {
     return true;
   }
   return parent.children.every(
-    (child: unknown) => child === node || isBlankText(child),
+    (child: unknown) => child === node || rendersNothing(child),
   );
 };
 

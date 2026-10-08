@@ -45,3 +45,9 @@ test("rejects the glyph surrounded only by whitespace children", async () => {
     ),
   ).toEqual([3]);
 });
+
+test("ignores JSX comments next to the glyph", async () => {
+  expect(await lint('const mark = <div>{/* the logo */}{"§"}</div>;')).toEqual([
+    1,
+  ]);
+});
