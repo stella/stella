@@ -248,6 +248,8 @@
     "link": "Link",
     "local": "Kohalik",
     "memoryOnly": "Krüpteeritud salvestusruum pole saadaval. Lõikepuhvri ajalugu ja välistatud rakenduste seaded säilivad ainult stella desktop sulgemiseni.",
+    "moveGroupEarlier": "Liiguta vasakule",
+    "moveGroupLater": "Liiguta paremale",
     "moreOptions": "Rohkem valikuid",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsDescription": "Kas soovite otsida „{query}” hoopis registritest?",

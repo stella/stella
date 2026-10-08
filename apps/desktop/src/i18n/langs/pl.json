@@ -248,6 +248,8 @@
     "link": "Link",
     "local": "Lokalnie",
     "memoryOnly": "Zaszyfrowana pamięć jest niedostępna. Historia schowka i ustawienia wykluczonych aplikacji zostaną zachowane tylko do zamknięcia stella desktop.",
+    "moveGroupEarlier": "Przesuń w lewo",
+    "moveGroupLater": "Przesuń w prawo",
     "moreOptions": "Więcej opcji",
     "noResults": "Brak pasujących wycinków",
     "noResultsDescription": "Czy zamiast tego wyszukać „{query}” w rejestrach?",

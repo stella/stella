@@ -592,6 +592,25 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "catalogue-pinned-facts",
+    outputKind: "committed",
+    outputs: ["packages/catalogue/upstream/pinned-content.gen.json"],
+    inputs: [
+      "packages/catalogue/entries/**",
+      "packages/catalogue/scripts/check-pinned-content.ts",
+      "packages/catalogue/scripts/pinned-content-facts.ts",
+      "packages/catalogue/scripts/pinned-content-upstream.ts",
+      "packages/skills/src/loader.ts",
+      "packages/skills/src/resource-kinds.ts",
+      "packages/skills/src/package-limits.ts",
+      "packages/skills/package.json",
+    ],
+    write: ["bun", "--filter", "@stll/catalogue", "refresh-pinned"],
+    check: ["bun", "--filter", "@stll/catalogue", "check-pinned"],
+    autofix: false,
+    after: ["catalogue"],
+  },
+  {
     id: "catalogue",
     outputKind: "committed",
     outputs: [

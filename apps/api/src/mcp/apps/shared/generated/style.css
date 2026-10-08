@@ -433,6 +433,9 @@
   .inset-y-0 {
     inset-block: 0px;
   }
+  .inset-y-1 {
+    inset-block: var(--spacing);
+  }
   .-start-1 {
     inset-inline-start: calc(var(--spacing) * -1);
   }
@@ -1073,6 +1076,12 @@
   }
   .w-\(--sidebar-width\) {
     width: var(--sidebar-width);
+  }
+  .w-0 {
+    width: 0px;
+  }
+  .w-0\.5 {
+    width: calc(var(--spacing) * 0.5);
   }
   .w-1 {
     width: var(--spacing);

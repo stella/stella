@@ -1,19 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  reorderWorkspaceViewIds,
-  toWorkspaceViewDropPosition,
-} from "./view-switcher.logic";
+import { reorderInlineIds, toInlineDropPosition } from "./inline-reorder";
 
 const IDS = ["overview", "table", "files", "kanban", "calendar"] as const;
 const POSITIONS = ["before", "after"] as const;
 
-describe("workspace view reordering", () => {
+describe("inline reordering", () => {
   test("keeps every view exactly once and lands beside the target", () => {
     for (const draggedId of IDS) {
       for (const targetId of IDS) {
         for (const position of POSITIONS) {
-          const reordered = reorderWorkspaceViewIds({
+          const reordered = reorderInlineIds({
             ids: IDS,
             draggedId,
             targetId,
@@ -38,7 +35,7 @@ describe("workspace view reordering", () => {
 
   test("returns null for no-op and stale identities", () => {
     expect(
-      reorderWorkspaceViewIds({
+      reorderInlineIds({
         ids: IDS,
         draggedId: "table",
         targetId: "overview",
@@ -46,7 +43,7 @@ describe("workspace view reordering", () => {
       }),
     ).toBeNull();
     expect(
-      reorderWorkspaceViewIds({
+      reorderInlineIds({
         ids: IDS,
         draggedId: "deleted",
         targetId: "table",
@@ -56,10 +53,10 @@ describe("workspace view reordering", () => {
   });
 
   test("mirrors physical edges in rtl", () => {
-    expect(toWorkspaceViewDropPosition("right", "ltr")).toBe("after");
-    expect(toWorkspaceViewDropPosition("left", "ltr")).toBe("before");
-    expect(toWorkspaceViewDropPosition("right", "rtl")).toBe("before");
-    expect(toWorkspaceViewDropPosition("left", "rtl")).toBe("after");
-    expect(toWorkspaceViewDropPosition("top", "ltr")).toBeNull();
+    expect(toInlineDropPosition("right", "ltr")).toBe("after");
+    expect(toInlineDropPosition("left", "ltr")).toBe("before");
+    expect(toInlineDropPosition("right", "rtl")).toBe("before");
+    expect(toInlineDropPosition("left", "rtl")).toBe("after");
+    expect(toInlineDropPosition("top", "ltr")).toBeNull();
   });
 });

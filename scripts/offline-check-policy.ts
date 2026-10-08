@@ -199,6 +199,28 @@ export const offlineCheckViolations = (
   return violations;
 };
 
+// Each snapshot acquisition has one owner; the shared fetch package owns its transport.
+const snapshotTransportOwners = new Set([
+  "packages/scripts/src/model-catalog-snapshot.ts",
+  "packages/catalogue/scripts/pinned-content-upstream.ts",
+  "packages/fetch/src/index.ts",
+]);
+const isRawFetchCall = (node: ts.Node): boolean => {
+  if (!ts.isCallExpression(node)) {
+    return false;
+  }
+  const expression = node.expression;
+  if (ts.isIdentifier(expression)) {
+    return ["fetch", "fetchWithTimeout"].includes(expression.text);
+  }
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === "fetch" &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === "globalThis"
+  );
+};
+
 const forbiddenBunMembers = new Set([
   "fetch",
   "connect",
@@ -292,6 +314,15 @@ export const offlineImportGraphViolations = ({
       pending.push(resolved.value);
     };
     const visit = (node: ts.Node): void => {
+      if (
+        isRawFetchCall(node) &&
+        !snapshotTransportOwners.has(path.relative(sourceRoot, file))
+      ) {
+        violation(
+          file,
+          "Raw fetch must remain in the snapshot transport owner",
+        );
+      }
       if (
         ts.isPropertyAccessExpression(node) &&
         isBunGlobal(node.expression) &&
