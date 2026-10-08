@@ -14,6 +14,7 @@ export default {
     "Registered chains enforce rank order. Selected-row acquisitions compose the registered identity and tenant " +
     "predicate before locking; caller predicates can only narrow it and caller locking clauses are rejected. " +
     "Returned physical identity and tenant scope are checked against registered projected columns. " +
+    "Successful locking-query execution retains the declared identity conservatively, even when no rows return. " +
     "The owner closes transaction histories, links savepoint levels, merges acquired locks on release, " +
     "and discards them on rollback. The confinement rule and exact-site inventory " +
     "reject raw acquisitions and transaction boundaries outside the owner; " +

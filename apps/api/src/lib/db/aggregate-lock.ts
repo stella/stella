@@ -1162,6 +1162,10 @@ export const withAggregateRowQuery = async <Row>(
         ? { ...options.lockConfig, noWait: true }
         : options.lockConfig,
     );
+    // PostgreSQL may lock a snapshot-matching row and omit it after rechecking
+    // an updated predicate. The owner-scoped key bounds the locks to this identity.
+    // https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE
+    retainLock(queryHistory, requested);
     const projected = rows.map((row) => projectedRowValues(row, projection));
     // The query already holds these locks, even when its returned rows fail validation.
     for (const row of projected) {

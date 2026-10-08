@@ -142,33 +142,60 @@ describe("aggregate queries preserve their decisive read", () => {
     });
   });
 
-  test("a missing selected row records no lock rank", async () => {
-    await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
-      const result = await withAggregateRowQuery({
-        ...workspaceIdentity,
-        tx,
-        mode: "update",
-        where: eq(workspaces.name, "absent projection"),
-        select: (queryTx) =>
-          queryTx
-            .select({
-              id: workspaces.id,
-              organizationId: workspaces.organizationId,
-            })
-            .from(workspaces),
-      });
-      expect(result).toEqual({ status: "missing", rows: [] });
-      expect(
-        await withAggregateLock({
-          aggregate: "organization",
-          id: organizationId,
-          mode: "update",
+  test.each(["block", "nowait"] as const)(
+    "a missing %s query conservatively records the declared identity and mode",
+    async (wait) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        const result = await withAggregateRowQuery({
+          ...workspaceIdentity,
           tx,
-        }),
-      ).toEqual({ status: "locked" });
-    });
-  });
+          wait,
+          mode: "key share",
+          where: eq(workspaces.name, "absent projection"),
+          select: (queryTx) =>
+            queryTx
+              .select({
+                id: workspaces.id,
+                organizationId: workspaces.organizationId,
+              })
+              .from(workspaces),
+        });
+        expect(result).toEqual({ status: "missing", rows: [] });
+        expect(
+          await rejectionOf(
+            withAggregateLock({
+              aggregate: "organization",
+              id: organizationId,
+              mode: "update",
+              tx,
+            }),
+          ),
+        ).toMatchObject({ message: "Aggregate lock rank inversion" });
+        expect(
+          await rejectionOf(
+            withAggregateLock({
+              ...workspaceIdentity,
+              tx,
+              mode: "update",
+            }),
+          ),
+        ).toMatchObject({
+          message:
+            "Take the strongest aggregate row mode first; use NOWAIT for upgrades",
+        });
+        await withAggregateSavepoint(tx, async (child) => {
+          expect(
+            await withAggregateLock({
+              ...workspaceIdentity,
+              tx: child,
+              mode: "key share",
+            }),
+          ).toEqual({ status: "locked" });
+        });
+      });
+    },
+  );
 
   test("additional predicates cannot select another physical identity", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
@@ -189,13 +216,15 @@ describe("aggregate queries preserve their decisive read", () => {
         }),
       ).toEqual({ status: "missing", rows: [] });
       expect(
-        await withAggregateLock({
-          aggregate: "organization",
-          id: organizationId,
-          tx,
-          mode: "update",
-        }),
-      ).toEqual({ status: "locked" });
+        await rejectionOf(
+          withAggregateLock({
+            aggregate: "organization",
+            id: organizationId,
+            tx,
+            mode: "update",
+          }),
+        ),
+      ).toMatchObject({ message: "Aggregate lock rank inversion" });
     });
   });
 

@@ -240,12 +240,23 @@ if (!databaseUrl || !enabled) {
                 );
               }
               expect(acquisition.rows).toEqual([]);
-              // A missing workspace must not consume rank or poison the parent.
+              // Empty results still conservatively retain the declared workspace rank.
+              expect(
+                await rejectionOf(
+                  withAggregateLock({
+                    aggregate: "organization",
+                    id: otherOrganizationId,
+                    mode: "update",
+                    tx,
+                  }),
+                ),
+              ).toMatchObject({ message: "Aggregate lock rank inversion" });
               expect(
                 await withAggregateLock({
                   aggregate: "organization",
                   id: otherOrganizationId,
                   mode: "update",
+                  wait: "nowait",
                   tx,
                 }),
               ).toEqual({ status: "locked" });
