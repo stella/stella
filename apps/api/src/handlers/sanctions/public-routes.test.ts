@@ -82,6 +82,32 @@ const clearScreen = () =>
   );
 
 describe("anonymous sanctions search", () => {
+  test("one warming list among others still asks for a retry", async () => {
+    const now = new Date("2026-09-29T12:00:00.000Z");
+    const warming = unavailableSanctionsScreening({
+      reason: "warming",
+      practiceJurisdictions: [],
+      now,
+    });
+    const { app } = appWith(
+      mock<typeof screenSanctionsSubject>(async () =>
+        Result.ok({
+          ...warming,
+          lists: warming.lists.map((list, index) =>
+            index === 0 ? list : { ...list, reason: "load-failed" as const },
+          ),
+        }),
+      ),
+    );
+    const response = await app.handle(
+      request({ type: "organization", name: "Example Trading" }),
+    );
+    const body = asTestRaw<{ retryAfterSeconds: number | null }>(
+      await response.json(),
+    );
+    expect(body.retryAfterSeconds).toBe(SANCTIONS_WARMING_RETRY_AFTER_SECONDS);
+  });
+
   test.each([
     {
       reason: "warming",

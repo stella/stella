@@ -389,8 +389,10 @@ export const createPublicSanctionsScreening = ({
     } as const);
 
   const screenPublic: typeof screenSanctionsSubject = async (props) => {
-    // The warmup is indexing for a moment: answer from what is on file
-    // instead of queueing behind it, and ask again shortly.
+    // The warmup holds the only matcher while it indexes one edition: every
+    // list answers "warming" (ask again shortly) rather than queueing behind
+    // the build, including lists already loaded. Freshness still comes from
+    // what is on file.
     if (warmer.holdsMatcher()) {
       // Bounded like a matcher lease: the freshness read alone must not hold
       // the request past its deadline.
@@ -475,6 +477,17 @@ export const createPublicSanctionsScreening = ({
     );
     if (result.status === "completed") {
       return result.value;
+    }
+    // Queued behind an index build that began after this request looked:
+    // the lists are loading, not failing.
+    if (result.cause === "deadline" && warmer.holdsMatcher()) {
+      return Result.ok(
+        unavailableSanctionsScreening({
+          reason: "warming",
+          practiceJurisdictions: props.practiceJurisdictions,
+          now: props.now,
+        }),
+      );
     }
     reportFailure({
       stage: "whole-screening",

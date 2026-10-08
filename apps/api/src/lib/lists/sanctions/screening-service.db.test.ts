@@ -1284,6 +1284,79 @@ test("an edition asked for in the instant a pass ends still loads without anothe
   }
 });
 
+test("a request that times out queued behind an index build answers warming without a failure report", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const evicted = new Set<SanctionsSource>();
+  const readGate = Promise.withResolvers<undefined>();
+  const indexing = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const state = { gateReads: false, queueNext: false };
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      ...pool,
+      run: async <T>(
+        work: (session: SanctionsMatcherSession) => Promise<T>,
+        options?: { deadlineMs?: number; onSettled?: () => void },
+      ): Promise<MatcherWorkOutcome<T>> => {
+        if (
+          options?.deadlineMs === SANCTIONS_WARM_STALL_MS &&
+          state.gateReads
+        ) {
+          indexing.resolve(undefined);
+          await release.promise;
+        } else if (state.queueNext) {
+          // This request looked before the build began, then waited behind it.
+          state.queueNext = false;
+          readGate.resolve(undefined);
+          await indexing.promise;
+          return { status: "unavailable", cause: "deadline" };
+        }
+        return await pool.run(
+          async (session) =>
+            await work({
+              ...session,
+              hasEdition: (source, editionId) =>
+                !evicted.has(source) && session.hasEdition(source, editionId),
+            }),
+          options,
+        );
+      },
+    },
+    clock,
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    loadEntries: async (options) => {
+      const entries = await loadEditionEntries(options);
+      if (state.gateReads && entries.at(0)?.source === "uk") {
+        await readGate.promise;
+      }
+      return entries;
+    },
+  });
+  try {
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await publicScreen.warmupSettled();
+    state.gateReads = true;
+    evicted.add("uk");
+    await publicScreen(publicProps("A Completely Distant Name"));
+    state.queueNext = true;
+    const answer = (
+      await publicScreen(publicProps("A Completely Distant Name"))
+    ).unwrap();
+    expect(answer.lists.every(({ reason }) => reason === "warming")).toBe(true);
+    expect(reports.filter(({ stage }) => stage === "whole-screening")).toEqual(
+      [],
+    );
+  } finally {
+    readGate.resolve(undefined);
+    release.resolve(undefined);
+    await pool.close();
+  }
+});
+
 test.each(["entries-read", "short-read"] as const)(
   "one list failing on %s does not block the other six and retries with backoff",
   async (fault) => {
