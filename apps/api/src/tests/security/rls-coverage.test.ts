@@ -62,6 +62,36 @@ const privilegesForTable = (
     .map((p) => p.privilege)
     .toSorted();
 
+type RestrictivePolicy = {
+  table_name: string;
+  policy_name: string;
+  command: string;
+  using_expr: string | null;
+  check_expr: string | null;
+};
+
+/** The one restrictive policy allowed to admit rows: the entity feature fence. */
+const ENTITY_FEATURE_POLICY_NAME = "workspace_entity_feature";
+const ENTITY_FEATURE_FENCE =
+  /EXISTS \(\s*SELECT 1\s+FROM (?:public\.)?(?:entities e|entity_versions v|fields f)\s|app\.enabled_features/u;
+
+/** Every other restrictive policy is a deny; widening one must fail coverage. */
+const restrictivePolicyViolation = (
+  policy: RestrictivePolicy,
+): string | undefined => {
+  const name = `${policy.table_name}.${policy.policy_name}`;
+  const expr = policy.command === "a" ? policy.check_expr : policy.using_expr;
+  if (policy.policy_name !== ENTITY_FEATURE_POLICY_NAME) {
+    return expr === "false" ? undefined : `${name} must deny: ${expr}`;
+  }
+  if (policy.using_expr !== policy.check_expr) {
+    return `${name} must fence reads and writes alike`;
+  }
+  return expr !== null && ENTITY_FEATURE_FENCE.test(expr)
+    ? undefined
+    : `${name} must fence through the entity owner: ${expr}`;
+};
+
 beforeAll(
   async () => {
     const fixture = await getRlsFixture();
@@ -79,6 +109,39 @@ afterAll(async () => {
 // ════════════════════════════════════════════════════════
 
 describe("policy coverage", () => {
+  test("restrictive policies stay denies unless they are the entity feature fence", () => {
+    const deny = {
+      table_name: "entities",
+      policy_name: "entities_deny_delete",
+      command: "d",
+      using_expr: "false",
+      check_expr: null,
+    };
+    expect(restrictivePolicyViolation(deny)).toBeUndefined();
+    expect(
+      restrictivePolicyViolation({ ...deny, using_expr: "true" }),
+    ).toBeDefined();
+
+    const fence = {
+      table_name: "correspondence",
+      policy_name: ENTITY_FEATURE_POLICY_NAME,
+      command: "*",
+      using_expr:
+        "CASE WHEN (source_entity_id IS NULL) THEN true ELSE (EXISTS ( SELECT 1\n   FROM entities e\n  WHERE (e.id = correspondence.source_entity_id))) END",
+      check_expr: null,
+    };
+    const fenced = { ...fence, check_expr: fence.using_expr };
+    expect(restrictivePolicyViolation(fenced)).toBeUndefined();
+    expect(restrictivePolicyViolation(fence)).toBeDefined();
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        using_expr: "true",
+        check_expr: "true",
+      }),
+    ).toBeDefined();
+  });
+
   // Tables exempt from RLS
   const EXEMPT = new Set([
     "invitation", // auth table, no RLS
@@ -329,8 +392,7 @@ describe("policy coverage", () => {
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (!pol.permissive) {
-          // Restrictive policies narrow the grants supplied by the tenant policies.
-          expect(expr).toBeTruthy();
+          expect(restrictivePolicyViolation(pol)).toBeUndefined();
           continue;
         }
         expect(expr).toContain("workspace_id");
