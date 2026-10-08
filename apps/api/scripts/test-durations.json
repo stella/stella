@@ -3859,6 +3859,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/visual-sandbox/browser/presentation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/visual-sandbox/browser/shell-ready.test.ts": {
     "seconds": 1,
     "source": "estimated"

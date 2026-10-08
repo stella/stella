@@ -40,11 +40,14 @@ export const installVisualPresentation = (document: Document) => {
   document.head.prepend(style);
 };
 
+// Authored markup may reuse any id, so the runtime keeps its own reference.
+const themeStyles = new WeakMap<Document, HTMLStyleElement>();
+
 export const applyVisualTheme = (document: Document, theme: VisualTheme) => {
-  let style = document.querySelector("#stella-theme");
-  if (style === null) {
+  let style = themeStyles.get(document);
+  if (style === undefined) {
     style = document.createElement("style");
-    style.id = "stella-theme";
+    themeStyles.set(document, style);
     document.head.prepend(style);
   }
   // The caller validates host messages with the shared theme schema.
