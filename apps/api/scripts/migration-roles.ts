@@ -31,20 +31,55 @@ export const rolesCreatedBy = (sql: string): string[] =>
       match.at(1)?.toLowerCase() ?? panic("CREATE ROLE matched without a name"),
   );
 
-/**
- * Whether a migration creates `role` only when it is missing: inside a block
- * that first checks `pg_roles` for that name, so running it against a server
- * that already has the role does not fail.
- */
-const createsRoleIfMissing = (sql: string, role: string): boolean =>
-  new RegExp(
-    String.raw`NOT\s+EXISTS\s*\(\s*SELECT\b[^;]*?\bFROM\s+(?:pg_catalog\.)?pg_roles\b[^;]*?\brolname\s*=\s*'${role}'`,
-    "iu",
-  ).test(withoutComments(sql));
+const ROLE_GUARD = new RegExp(
+  String.raw`\bIF\s+NOT\s+EXISTS\s*\(\s*SELECT\b[^;]*?\bFROM\s+(?:pg_catalog\.)?pg_roles\b[^;]*?\brolname\s*=\s*'${ROLE_NAME.replaceAll('"?', "")}'[^;]*?\bTHEN\b`,
+  "giu",
+);
+// `END IF` comes first so the `IF` inside it never opens a block; an opener
+// is an `IF ... THEN` with no statement end between, which skips
+// `CREATE TABLE IF NOT EXISTS ...;`.
+const BLOCK_EDGE = /\bEND\s+IF\b|\bIF\b[^;]*?\bTHEN\b/giu;
 
-/** Roles a migration creates without first checking that they are missing. */
-export const unguardedRolesCreatedBy = (sql: string): string[] =>
-  rolesCreatedBy(sql).filter((role) => !createsRoleIfMissing(sql, role));
+type GuardedSpan = { role: string; start: number; end: number };
+
+/** The body of each `IF NOT EXISTS (... pg_roles ... rolname = 'x') THEN ... END IF`. */
+const roleGuardSpans = (sql: string): GuardedSpan[] =>
+  [...sql.matchAll(ROLE_GUARD)].flatMap((guard) => {
+    const role =
+      guard.at(1)?.toLowerCase() ?? panic("role guard matched without a name");
+    const start = guard.index + guard[0].length;
+    let depth = 1;
+    for (const edge of sql.slice(start).matchAll(BLOCK_EDGE)) {
+      depth += /^END/iu.test(edge[0]) ? -1 : 1;
+      if (depth === 0) {
+        return [{ role, start, end: start + edge.index }];
+      }
+    }
+    return [];
+  });
+
+/**
+ * Roles a migration creates without first checking that they are missing.
+ * Each `CREATE ROLE` counts as guarded only when it sits inside the body of a
+ * conditional that checks `pg_roles` for that same name, so running the
+ * migration against a server that already has the role does not fail.
+ */
+export const unguardedRolesCreatedBy = (sql: string): string[] => {
+  const code = withoutComments(sql);
+  const guards = roleGuardSpans(code);
+  return [...code.matchAll(CREATE_ROLE)].flatMap((creation) => {
+    const role =
+      creation.at(1)?.toLowerCase() ??
+      panic("CREATE ROLE matched without a name");
+    const guarded = guards.some(
+      (guard) =>
+        guard.role === role &&
+        creation.index > guard.start &&
+        creation.index < guard.end,
+    );
+    return guarded ? [] : [role];
+  });
+};
 
 type MigrationRoles = { migration: string; roles: string[] };
 

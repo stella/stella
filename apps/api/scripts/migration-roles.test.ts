@@ -67,6 +67,39 @@ describe("roles the migrations create", () => {
     ).toEqual(["other_role"]);
   });
 
+  test("a check counts only for the CREATE ROLE inside its own conditional", () => {
+    // A bare existence check guards nothing.
+    expect(
+      unguardedRolesCreatedBy(`SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'fixture_reader');
+CREATE ROLE fixture_reader NOLOGIN;`),
+    ).toEqual(["fixture_reader"]);
+    // A guarded creation does not cover a later unconditional one.
+    expect(
+      unguardedRolesCreatedBy(`${GUARDED}--> statement-breakpoint
+CREATE ROLE fixture_reader NOLOGIN;`),
+    ).toEqual(["fixture_reader"]);
+    // A creation before the conditional is not inside it.
+    expect(
+      unguardedRolesCreatedBy(`CREATE ROLE fixture_reader NOLOGIN;--> statement-breakpoint
+${GUARDED}`),
+    ).toEqual(["fixture_reader"]);
+    // Nested conditionals and an IF NOT EXISTS table inside the block keep
+    // the creation inside the guard.
+    expect(
+      unguardedRolesCreatedBy(`DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'fixture_reader') THEN
+    CREATE TABLE IF NOT EXISTS fixture_table (id int);
+    IF current_setting('server_version_num')::int > 150000 THEN
+      PERFORM 1;
+    END IF;
+    CREATE ROLE fixture_reader NOLOGIN;
+  END IF;
+END
+$$;`),
+    ).toEqual([]);
+  });
+
   test("collects every migration's roles from a migrations directory", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "migration-roles-"));
     try {
