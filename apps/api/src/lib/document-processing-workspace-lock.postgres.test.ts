@@ -771,7 +771,9 @@ if (!databaseUrl || !runPostgresTests) {
                     },
                   ]);
                   if (path === "native-repair") {
-                    expect(result).toEqual(rows.map(({ id }) => id));
+                    // `result` is the wrapper's open generic; compare it as data.
+                    const repairedIds: unknown = result;
+                    expect(repairedIds).toEqual(rows.map(({ id }) => id));
                   }
                   if (path === "dispatch") {
                     expect(result).toEqual(
