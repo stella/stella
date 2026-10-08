@@ -23,7 +23,10 @@ import { composeVisualDocument } from "../srcdoc";
 import { parseVisualOuterConfig, whenVisualDocumentReady } from "./boot";
 import { createVisualCharts } from "./charts";
 import { createVisualGuestApi } from "./guest-api";
-import { createVisualGestureGate } from "./guest-gesture";
+import {
+  captureGestureEventReader,
+  createVisualGestureGate,
+} from "./guest-gesture";
 import { createVisualThemeHandler } from "./guest-theme";
 import { isolateVisualGuest } from "./isolation";
 import { applyVisualTheme, installVisualPresentation } from "./presentation";
@@ -39,6 +42,11 @@ const bootGuest = (): void => {
   const send = channel.port1.postMessage.bind(channel.port1);
   const gesture = createVisualGestureGate({
     now: performance.now.bind(performance),
+    readEvent: captureGestureEventReader({
+      event: Event.prototype,
+      uiEvent: UIEvent.prototype,
+      keyboardEvent: KeyboardEvent.prototype,
+    }),
   });
   gesture.listen(window);
   try {
