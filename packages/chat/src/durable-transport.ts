@@ -310,18 +310,27 @@ export const createDurableChatTransport = <
             // A log can close or expire between the probe and join.
             const body: unknown = await response.json();
             const parsed = v.safeParse(chatTurnResumeProbeSchema, body);
-            if (!parsed.success || parsed.output.type !== "transcript") {
+            if (!parsed.success || parsed.output.type === "running") {
               throw new ChatReconnectError({
                 code: "invalid-response",
                 message: "Invalid chat rejoin response.",
               });
             }
-            return terminalChatResponse({
-              runId,
-              resume: parsed.output.resumeSnapshot,
-              onTranscript,
-              onReconnectChange,
-            });
+            switch (parsed.output.type) {
+              case "preparing":
+                // Another viewer began a continuation after the probe. Retry
+                // read-only within the reconnect window: probe, then join.
+                return undefined;
+              case "transcript":
+                return terminalChatResponse({
+                  runId,
+                  resume: parsed.output.resumeSnapshot,
+                  onTranscript,
+                  onReconnectChange,
+                });
+              default:
+                return panic(parsed.output satisfies never);
+            }
           }
           onReconnectChange(false);
           return response;

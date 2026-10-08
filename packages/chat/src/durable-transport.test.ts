@@ -578,6 +578,87 @@ describe("durable chat transport", () => {
     expect(errors.at(0)?.message).toBe("Invalid chat rejoin response.");
     expect(reloads).toBe(0);
   });
+
+  /** A running probe, then joins answered by `join`; counts every request. */
+  const preparingJoin = (join: (attempt: number) => Response, step: number) => {
+    const counts = { joins: 0, posts: 0, probes: 0, waits: 0 };
+    const errors: ChatReconnectError[] = [];
+    let elapsed = 0;
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method !== "GET") {
+            counts.posts += 1;
+            return response(0, undefined);
+          }
+          counts.joins += 1;
+          return join(counts.joins);
+        },
+        { preconnect: () => undefined },
+      ),
+      probe: async () => {
+        counts.probes += 1;
+        return { type: "running", turnId: "turn-rejoin", runId: RUN_ID };
+      },
+      onReconnectChange: () => undefined,
+      onTranscript: () => undefined,
+      onError: (error) => {
+        errors.push(error);
+      },
+      now: () => elapsed,
+      wait: async () => {
+        counts.waits += 1;
+        elapsed += step;
+      },
+      random: () => 0,
+    });
+    return { counts, errors, transport };
+  };
+
+  test("a join that finds a continuation preparing re-probes and joins again without sending", async () => {
+    const { counts, errors, transport } = preparingJoin(
+      (attempt) =>
+        attempt === 1
+          ? Response.json({ type: "preparing", turnId: "turn-rejoin" })
+          : response(0, undefined),
+      1000,
+    );
+    const chunks = await collect(transport.connection.joinRun(RUN_ID));
+    expect(chunks.at(-1)).toMatchObject({
+      type: "RUN_FINISHED",
+      runId: RUN_ID,
+    });
+    expect(errors).toEqual([]);
+    expect(counts).toEqual({ joins: 2, posts: 0, probes: 2, waits: 1 });
+  });
+
+  test("a continuation that stays preparing ends in the bounded reconnect timeout", async () => {
+    const { counts, errors, transport } = preparingJoin(
+      () => Response.json({ type: "preparing", turnId: "turn-rejoin" }),
+      60_000,
+    );
+    const failure = await rejectionOf(
+      collect(transport.connection.joinRun(RUN_ID)),
+    );
+    // The SDK wraps a failed fetch; the transport's error is in the chain.
+    const causes = (error: unknown): unknown[] =>
+      error instanceof Error ? [error, ...causes(error.cause)] : [];
+    expect(
+      causes(failure).filter(
+        (cause) =>
+          cause instanceof ChatReconnectError &&
+          cause.message === "Chat reconnection timed out.",
+      ),
+    ).toHaveLength(1);
+    expect(errors).toEqual([]);
+    // Joins at 0, 60s, 120s and 180s; the window closes before a fifth.
+    expect(counts).toEqual({ joins: 4, posts: 0, probes: 4, waits: 3 });
+  });
   test("loader lifecycle refreshes changed server truth once and retains the same parked turn", async () => {
     const parkedSnapshot = {
       resumeState: { threadId: THREAD_ID, runId: RUN_ID },
