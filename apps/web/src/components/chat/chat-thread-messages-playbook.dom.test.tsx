@@ -94,7 +94,9 @@ test("opens the playbook an approved save wrote", async () => {
                   onAskUserSubmit={() => {}}
                   onCreateDocumentResolve={() => {}}
                   onOpenCreatedDocument={() => {}}
-                  onOpenPlaybook={(playbookId) => opened.push(playbookId)}
+                  onOpenPlaybook={(playbookId) => {
+                    opened.push(playbookId);
+                  }}
                   streamdownComponents={{
                     a: ({ children, ...props }) => <a {...props}>{children}</a>,
                   }}

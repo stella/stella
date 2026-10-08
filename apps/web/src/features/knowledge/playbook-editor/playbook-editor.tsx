@@ -70,13 +70,7 @@ import {
   resolvePositionSources,
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
-import {
-  discardParkedPlaybookPane,
-  parkPlaybookPane,
-  readParkedPlaybookPane,
-  completeParkedPlaybookPaneSave,
-  registerPlaybookPaneLeaveGuard,
-} from "@/features/knowledge/playbook-editor/playbook-pane-parking";
+import { readParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
 import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
@@ -121,6 +115,8 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
+
+import { usePlaybookPaneLifecycle } from "./use-playbook-pane-lifecycle";
 
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
 // Saves from a chat in this browser invalidate the detail at once; this
@@ -539,7 +535,7 @@ const seedFromServer = ({ server, isNew }: SeedFromServerArgs): FormSeed => {
     approvedAt: server.approvedAt,
     openIds: new Set(positions.slice(0, 1).map((p) => p.sourceId)),
     revealedIds: new Set(),
-    requiresLeaveConfirmation: false,
+    leaveState: "saved",
     scrollTop: 0,
   };
 };
@@ -636,7 +632,9 @@ const PlaybookEditorForm = ({
   const undoToastIdsRef = useRef<string[]>([]);
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveRequest, setSaveRequest] = useState<SaveRequestState>("idle");
+  const [saveRequest, setSaveRequest] = useState<SaveRequestState>(() =>
+    initial.leaveState === "save-failed" ? "failed" : "idle",
+  );
   // A playbook being deleted takes no more autosaves.
   const deletingRef = useRef(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -718,7 +716,7 @@ const PlaybookEditorForm = ({
     ...(host.type === "page"
       ? { guard: "confirm-navigation" }
       : { guard: "unload" }),
-    isDirty,
+    isDirty: host.type === "page" && isDirty,
   });
 
   const onBack = host.type === "page" ? host.onBack : null;
@@ -1114,6 +1112,7 @@ const PlaybookEditorForm = ({
     setSaving(true);
     const { outcome } = await queueSave(draft);
     setSaving(false);
+    setSaveRequest(outcome.type === "saved" ? "idle" : "failed");
     switch (outcome.type) {
       case "saved":
         stellaToast.add({
@@ -1139,6 +1138,7 @@ const PlaybookEditorForm = ({
     queueSave,
     flushOnLeave: queueFinalDraft,
     hasPendingSave,
+    pendingSaveCount,
   } = usePlaybookSaveQueue({ updatedAt, sendSave });
 
   const isAutosaveDue = () =>
@@ -1154,7 +1154,7 @@ const PlaybookEditorForm = ({
     if (!isAutosaveDue()) {
       return;
     }
-    setSaveRequest("in-flight");
+    setSaveRequest((current) => (current === "failed" ? current : "in-flight"));
     const { outcome, isLatest } = await queueSave(draft);
     switch (outcome.type) {
       case "saved":
@@ -1170,7 +1170,7 @@ const PlaybookEditorForm = ({
         panic(`Unhandled save outcome: ${String(outcome)}`);
     }
     if (isLatest) {
-      setSaveRequest(outcome.type === "failed" ? "failed" : "idle");
+      setSaveRequest(outcome.type === "saved" ? "idle" : "failed");
     }
   };
 
@@ -1188,67 +1188,23 @@ const PlaybookEditorForm = ({
    * Saves the draft as the pane unmounts, after any save still in flight.
    * The status line is gone by then, so a failure is a toast.
    */
-  const flushOnLeave = async (parkedState: ParkedPlaybookPane | null) => {
-    const request = queueFinalDraft({
-      draft,
-      isDirty,
-      canSaveDraft:
-        !deletingRef.current &&
-        autosaves &&
-        !nameMissing &&
-        invalidIds.length === 0,
-    });
+  const flushOnLeave = async (canSaveDraft: boolean) => {
+    const request = await queueFinalDraft({ draft, isDirty, canSaveDraft });
     if (request === null) {
-      return;
+      return null;
     }
-    const { outcome } = await request;
+    const { outcome } = request;
+    setSaveRequest(outcome.type === "saved" ? "idle" : "failed");
     if (outcome.type !== "saved") {
       notifySaveFailed(outcome.error);
-      return;
     }
-    if (host.type === "pane" && parkedState !== null) {
-      completeParkedPlaybookPaneSave({
-        tabId: host.tabId,
-        parkedState,
-        updatedAt: outcome.updatedAt,
-      });
-    }
+    return outcome;
   };
 
-  const requiresLeaveConfirmation = useLatestCallback(
-    () => isDirty && (!autosaves || nameMissing || invalidIds.length > 0),
-  );
-
-  useMountEffect(() => {
-    if (host.type !== "pane" || playbookId === null) {
-      return;
-    }
-    return registerPlaybookPaneLeaveGuard({
-      tabId: host.tabId,
-      playbookId,
-      shouldConfirm: requiresLeaveConfirmation,
-    });
-  });
-
-  // The pane unmounts whenever another inspector tab is opened or the pane
-  // is minimized. It saves what it can, and parks the rest unless the tab
-  // itself was closed.
-  const leavePane = useLatestCallback(() => {
-    if (host.type !== "pane" || playbookId === null) {
-      return;
-    }
-    scheduleAutosave.cancel();
-    // Undo restores a position into this form, so its toasts go with it.
-    for (const toastId of undoToastIdsRef.current) {
-      stellaToast.close(toastId);
-    }
-    if (!host.isTabOpen(host.tabId)) {
-      discardParkedPlaybookPane(host.tabId);
-      detached(flushOnLeave(null), "playbook-editor.flush-on-leave");
-      return;
-    }
-    const parkedState = {
-      playbookId,
+  const leavePane = usePlaybookPaneLifecycle({
+    host,
+    playbookId,
+    state: {
       draft,
       updatedAt,
       baseline,
@@ -1256,15 +1212,17 @@ const PlaybookEditorForm = ({
       approvedAt,
       openIds,
       revealedIds,
-      requiresLeaveConfirmation: requiresLeaveConfirmation(),
-      scrollTop: scrollTopRef.current,
-    };
-    parkPlaybookPane({
-      tabId: host.tabId,
-      isTabOpen: host.isTabOpen,
-      state: parkedState,
-    });
-    detached(flushOnLeave(parkedState), "playbook-editor.flush-on-leave");
+    },
+    isDirty,
+    pendingSaveCount,
+    saveFailed: saveRequest === "failed",
+    autosaves,
+    canSave,
+    nameMissing,
+    invalidCount: invalidIds.length,
+    isDeleting: () => deletingRef.current,
+    readScrollTop: () => scrollTopRef.current,
+    flush: flushOnLeave,
   });
 
   useMountEffect(() => {
@@ -1274,7 +1232,13 @@ const PlaybookEditorForm = ({
     if (host.type === "pane" && isDirty && autosaves) {
       scheduleAutosave();
     }
-    return () => leavePane();
+    return () => {
+      scheduleAutosave.cancel();
+      for (const toastId of undoToastIdsRef.current) {
+        stellaToast.close(toastId);
+      }
+      leavePane();
+    };
   });
 
   /**

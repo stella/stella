@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -25,7 +25,7 @@ export const usePlaybookDetailSaveSubscription = ({
   const handleSaved = useLatestCallback(onSaved);
   useMountEffect(() => {
     if (queryKey === null) {
-      return;
+      return undefined;
     }
     const cache = queryClient.getQueryCache();
     const detailQuery = cache.find({ queryKey, exact: true });
@@ -67,8 +67,10 @@ export const usePlaybookSaveQueue = ({
   sendSave,
 }: SaveQueueOptions) => {
   const inFlightSaveRef = useRef<Promise<SaveOutcome> | null>(null);
+  const [pendingSaveCount, setPendingSaveCount] = useState(0);
 
   const queueSave = async (savedDraft: PlaybookDraft) => {
+    setPendingSaveCount((count) => count + 1);
     const previous = inFlightSaveRef.current;
     const tokenAtCall = updatedAt;
     const request = (async (): Promise<SaveOutcome> => {
@@ -78,7 +80,7 @@ export const usePlaybookSaveQueue = ({
           ? before.updatedAt
           : tokenAtCall;
       const result = await Result.tryPromise({
-        try: () => sendSave({ savedDraft, expectedUpdatedAt }),
+        try: async () => await sendSave({ savedDraft, expectedUpdatedAt }),
         catch: (error) => error,
       });
       return Result.isError(result)
@@ -93,13 +95,14 @@ export const usePlaybookSaveQueue = ({
       const outcome = await request;
       return { outcome, isLatest: inFlightSaveRef.current === request };
     } finally {
+      setPendingSaveCount((count) => count - 1);
       if (inFlightSaveRef.current === request) {
         inFlightSaveRef.current = null;
       }
     }
   };
 
-  const flushOnLeave = ({
+  const flushOnLeave = async ({
     draft,
     isDirty,
     canSaveDraft,
@@ -109,12 +112,13 @@ export const usePlaybookSaveQueue = ({
     if (!canSaveDraft || (!isDirty && inFlightSaveRef.current === null)) {
       return null;
     }
-    return queueSave(draft);
+    return await queueSave(draft);
   };
 
   return {
     queueSave,
     flushOnLeave,
+    pendingSaveCount,
     hasPendingSave: () => inFlightSaveRef.current !== null,
   };
 };

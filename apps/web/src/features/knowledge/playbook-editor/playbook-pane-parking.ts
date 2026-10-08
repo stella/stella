@@ -1,13 +1,40 @@
+import { Result } from "better-result";
 import { create } from "zustand";
-import { createStore } from "zustand/vanilla";
 
 import type {
   PlaybookBaseline,
   PlaybookDraft,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
+import { detached } from "@/lib/detached";
 import type { PlaybookApprovalStatus } from "@/lib/knowledge/playbook-types";
 
 import { resolveSavedPlaybookState } from "./playbook-editor-sync.logic";
+
+export type PaneDraftState =
+  | "saved"
+  | "dirty-autosaveable"
+  | "dirty-unsaveable"
+  | "save-failed";
+
+type ResolvePaneDraftStateArgs = {
+  isDirty: boolean;
+  canAutosave: boolean;
+  saveFailed: boolean;
+};
+
+export const resolvePaneDraftState = ({
+  isDirty,
+  canAutosave,
+  saveFailed,
+}: ResolvePaneDraftStateArgs): PaneDraftState => {
+  if (!isDirty) {
+    return "saved";
+  }
+  if (saveFailed) {
+    return "save-failed";
+  }
+  return canAutosave ? "dirty-autosaveable" : "dirty-unsaveable";
+};
 
 /**
  * The pane editor unmounts whenever the user opens another inspector tab or
@@ -29,7 +56,7 @@ export type ParkedPlaybookPane = {
   openIds: ReadonlySet<string>;
   revealedIds: ReadonlySet<string>;
   scrollTop: number;
-  requiresLeaveConfirmation: boolean;
+  leaveState: PaneDraftState;
 };
 
 const useParkedPlaybookPanes = create<
@@ -96,11 +123,36 @@ export const completeParkedPlaybookPaneSave = ({
       baseline: persisted.baseline,
       status: "draft",
       approvedAt: null,
-      requiresLeaveConfirmation: false,
+      leaveState: "saved",
     } satisfies ParkedPlaybookPane;
     return {
       ...current,
       [tabId]: { ...tab, [parkedState.playbookId]: savedState },
+    };
+  }, true);
+};
+
+type MarkParkedPlaybookPaneSaveFailedArgs = {
+  tabId: string;
+  parkedState: ParkedPlaybookPane;
+};
+
+export const markParkedPlaybookPaneSaveFailed = ({
+  tabId,
+  parkedState,
+}: MarkParkedPlaybookPaneSaveFailedArgs) => {
+  useParkedPlaybookPanes.setState((current) => {
+    const tab = current[tabId];
+    if (tab?.[parkedState.playbookId] !== parkedState) {
+      return current;
+    }
+    const failedState = {
+      ...parkedState,
+      leaveState: "save-failed",
+    } satisfies ParkedPlaybookPane;
+    return {
+      ...current,
+      [tabId]: { ...tab, [parkedState.playbookId]: failedState },
     };
   }, true);
 };
@@ -118,29 +170,38 @@ export const discardParkedPlaybookPane = (tabId: string) => {
 type PaneLeaveGuardArgs = {
   tabId: string;
   playbookId: string;
-  shouldConfirm: () => boolean;
+  leaveState: PaneDraftState;
+  saveBeforeLeave: () => Promise<boolean>;
 };
 
-type PaneLeaveGuards = Record<string, Record<string, () => boolean>>;
+type PaneLeaveGuard = Pick<
+  PaneLeaveGuardArgs,
+  "leaveState" | "saveBeforeLeave"
+>;
+type PaneLeaveGuards = Readonly<
+  Record<string, Readonly<Record<string, PaneLeaveGuard>>>
+>;
 
-const paneLeaveGuards = createStore<PaneLeaveGuards>(() => ({}));
+const usePaneLeaveGuards = create<PaneLeaveGuards>(() => ({}));
 
 export const registerPlaybookPaneLeaveGuard = ({
   tabId,
   playbookId,
-  shouldConfirm,
+  leaveState,
+  saveBeforeLeave,
 }: PaneLeaveGuardArgs) => {
-  paneLeaveGuards.setState(
+  const registration = { leaveState, saveBeforeLeave };
+  usePaneLeaveGuards.setState(
     (current) => ({
       ...current,
-      [tabId]: { ...current[tabId], [playbookId]: shouldConfirm },
+      [tabId]: { ...current[tabId], [playbookId]: registration },
     }),
     true,
   );
   return () => {
-    paneLeaveGuards.setState((current) => {
+    usePaneLeaveGuards.setState((current) => {
       const tab = current[tabId];
-      if (tab?.[playbookId] !== shouldConfirm) {
+      if (tab?.[playbookId] !== registration) {
         return current;
       }
       const remaining = Object.fromEntries(
@@ -156,6 +217,20 @@ export const registerPlaybookPaneLeaveGuard = ({
   };
 };
 
+export const usePlaybookPaneHasUnsavedWork = () => {
+  const liveDirty = usePaneLeaveGuards((tabs) =>
+    Object.values(tabs).some((panes) =>
+      Object.values(panes).some(({ leaveState }) => leaveState !== "saved"),
+    ),
+  );
+  const parkedDirty = useParkedPlaybookPanes((tabs) =>
+    Object.values(tabs).some((panes) =>
+      Object.values(panes).some(({ leaveState }) => leaveState !== "saved"),
+    ),
+  );
+  return liveDirty || parkedDirty;
+};
+
 type PaneLeaveRequest = {
   tabId: string;
   playbookId: string;
@@ -164,40 +239,146 @@ type PaneLeaveRequest = {
 
 type PaneLeaveState =
   | { type: "idle" }
-  | ({ type: "confirm" } & PaneLeaveRequest);
+  | ({ type: "waiting" } & PaneLeaveRequest)
+  | ({
+      type: "confirm";
+      phase: "ready" | "saving";
+      leaveState: "dirty-unsaveable" | "save-failed";
+      saveBeforeLeave: (() => Promise<boolean>) | null;
+    } & PaneLeaveRequest);
 
 export const usePlaybookPaneLeave = create<PaneLeaveState>(() => ({
   type: "idle",
 }));
+
+let pendingLeaveCleanup: (() => void) | null = null;
+
+export const cancelPlaybookPaneLeave = () => {
+  pendingLeaveCleanup?.();
+  pendingLeaveCleanup = null;
+  usePlaybookPaneLeave.setState({ type: "idle" }, true);
+};
 
 export const requestPlaybookPaneLeave = ({
   tabId,
   playbookId,
   proceed,
 }: PaneLeaveRequest) => {
-  const liveGuard = paneLeaveGuards.getState()[tabId]?.[playbookId];
-  const shouldConfirm = liveGuard
-    ? liveGuard()
-    : (readParkedPlaybookPane(tabId, playbookId)?.requiresLeaveConfirmation ??
-      false);
-  if (!shouldConfirm) {
+  cancelPlaybookPaneLeave();
+  const liveGuard = usePaneLeaveGuards.getState()[tabId]?.[playbookId];
+  const leaveState =
+    liveGuard?.leaveState ??
+    readParkedPlaybookPane(tabId, playbookId)?.leaveState ??
+    "saved";
+  const confirm = (state: "dirty-unsaveable" | "save-failed") => {
+    usePlaybookPaneLeave.setState(
+      {
+        type: "confirm",
+        phase: "ready",
+        leaveState: state,
+        tabId,
+        playbookId,
+        proceed,
+        saveBeforeLeave:
+          usePaneLeaveGuards.getState()[tabId]?.[playbookId]?.saveBeforeLeave ??
+          null,
+      },
+      true,
+    );
+  };
+  if (leaveState === "saved") {
     proceed();
     return;
   }
-  usePlaybookPaneLeave.setState(
-    { type: "confirm", tabId, playbookId, proceed },
-    true,
-  );
-};
-
-export const cancelPlaybookPaneLeave = () => {
-  usePlaybookPaneLeave.setState({ type: "idle" }, true);
-};
-
-export const confirmPlaybookPaneLeave = () => {
-  const request = usePlaybookPaneLeave.getState();
-  cancelPlaybookPaneLeave();
-  if (request.type === "confirm") {
-    request.proceed();
+  if (leaveState !== "dirty-autosaveable") {
+    confirm(leaveState);
+    return;
   }
+  const waitingRequest = {
+    type: "waiting",
+    tabId,
+    playbookId,
+    proceed,
+  } as const satisfies PaneLeaveState;
+  usePlaybookPaneLeave.setState(waitingRequest, true);
+  if (liveGuard !== undefined) {
+    const saveAndLeave = async () => {
+      const result = await Result.tryPromise({
+        try: liveGuard.saveBeforeLeave,
+        catch: (error) => error,
+      });
+      if (usePlaybookPaneLeave.getState() !== waitingRequest) {
+        return;
+      }
+      if (Result.isError(result) || !result.value) {
+        confirm("save-failed");
+        return;
+      }
+      cancelPlaybookPaneLeave();
+      proceed();
+    };
+    detached(saveAndLeave(), "playbook-pane.save-before-leave");
+    return;
+  }
+  const followParkedSave = () => {
+    if (usePlaybookPaneLeave.getState() !== waitingRequest) {
+      return;
+    }
+    const state = readParkedPlaybookPane(tabId, playbookId);
+    if (state?.leaveState === "dirty-autosaveable") {
+      return;
+    }
+    pendingLeaveCleanup?.();
+    pendingLeaveCleanup = null;
+    if (state === null) {
+      cancelPlaybookPaneLeave();
+      return;
+    }
+    if (state.leaveState !== "saved") {
+      confirm(state.leaveState);
+      return;
+    }
+    cancelPlaybookPaneLeave();
+    proceed();
+  };
+  pendingLeaveCleanup = useParkedPlaybookPanes.subscribe(followParkedSave);
+  followParkedSave();
+};
+
+export const confirmPlaybookPaneLeave = async () => {
+  const request = usePlaybookPaneLeave.getState();
+  if (request.type !== "confirm" || request.phase === "saving") {
+    return;
+  }
+  if (request.leaveState !== "save-failed") {
+    cancelPlaybookPaneLeave();
+    request.proceed();
+    return;
+  }
+  if (request.saveBeforeLeave === null) {
+    return;
+  }
+  const savingRequest = {
+    type: "confirm",
+    phase: "saving",
+    leaveState: request.leaveState,
+    tabId: request.tabId,
+    playbookId: request.playbookId,
+    proceed: request.proceed,
+    saveBeforeLeave: request.saveBeforeLeave,
+  } as const satisfies PaneLeaveState;
+  usePlaybookPaneLeave.setState(savingRequest, true);
+  const result = await Result.tryPromise({
+    try: request.saveBeforeLeave,
+    catch: (error) => error,
+  });
+  if (usePlaybookPaneLeave.getState() !== savingRequest) {
+    return;
+  }
+  if (Result.isError(result) || !result.value) {
+    usePlaybookPaneLeave.setState(request, true);
+    return;
+  }
+  cancelPlaybookPaneLeave();
+  request.proceed();
 };

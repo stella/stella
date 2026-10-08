@@ -14,6 +14,8 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render, fireEvent, act } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { createRootRoute, createRouter, createMemoryHistory, RouterProvider } =
+  await import("@tanstack/react-router");
 const { createInspectorTabsSlice } =
   await import("@/components/inspector/inspector-tabs-slice");
 const { PlaybookPaneLeaveConfirmation } =
@@ -59,10 +61,7 @@ const openPlaybook = (
   });
 };
 
-const parkedState = (
-  playbookId: string,
-  requiresLeaveConfirmation = false,
-): ParkedPlaybookPane => {
+const parkedState = (playbookId: string, dirty = false): ParkedPlaybookPane => {
   const draft = {
     name: `Draft ${playbookId}`,
     description: "Unsaved description",
@@ -74,23 +73,32 @@ const parkedState = (
   return {
     playbookId,
     draft,
-    baseline: createPlaybookBaseline({ ...draft, description: "" }),
+    baseline: createPlaybookBaseline(
+      dirty ? { ...draft, description: "" } : draft,
+    ),
     updatedAt: "2026-10-08T08:00:00.000Z",
     status: "approved",
     approvedAt: "2026-10-08T08:00:00.000Z",
     openIds: new Set(),
     revealedIds: new Set(),
     scrollTop: 42,
-    requiresLeaveConfirmation,
+    leaveState: dirty ? "dirty-unsaveable" : "saved",
   };
 };
 
-const renderConfirmation = () =>
-  render(
+const renderConfirmation = async () => {
+  const root = createRootRoute({ component: PlaybookPaneLeaveConfirmation });
+  const router = createRouter({
+    routeTree: root,
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  await router.load();
+  return render(
     <IntlProvider locale="en" messages={messages}>
-      <PlaybookPaneLeaveConfirmation />
+      <RouterProvider router={router} />
     </IntlProvider>,
   );
+};
 
 const park = (
   store: ReturnType<typeof makeStore>,
@@ -127,10 +135,11 @@ test("closing a dirty pane keeps the tab when cancelled and closes only after co
     registerPlaybookPaneLeaveGuard({
       tabId: "close-dirty",
       playbookId: "approved-playbook",
-      shouldConfirm: () => true,
+      leaveState: "dirty-unsaveable",
+      saveBeforeLeave: async () => true,
     }),
   );
-  const view = renderConfirmation();
+  const view = await renderConfirmation();
   await act(async () => {
     store.getState().closeTab("close-dirty");
   });
@@ -160,7 +169,7 @@ test("a model retarget confirms another playbook while preserving the parked dra
   const second = parkedState("second");
   park(store, tabId, first);
   park(store, tabId, second);
-  const view = renderConfirmation();
+  const view = await renderConfirmation();
   const retarget = () =>
     store.getState().updateView({
       id: tabId,
@@ -252,11 +261,12 @@ const assertBulkCloseConfirmation = async ({
     registerPlaybookPaneLeaveGuard({
       tabId: "bulk-dirty",
       playbookId: "dirty-playbook",
-      shouldConfirm: () => true,
+      leaveState: "dirty-unsaveable",
+      saveBeforeLeave: async () => true,
     }),
   );
   const originalIds = store.getState().tabs.map((tab) => tab.id);
-  const view = renderConfirmation();
+  const view = await renderConfirmation();
   await act(async () => {
     close(store);
   });
@@ -312,10 +322,11 @@ test("closeAll obtains fresh confirmation for a dirty tab opened while confirmat
     registerPlaybookPaneLeaveGuard({
       tabId: "race-original",
       playbookId: "original-playbook",
-      shouldConfirm: () => true,
+      leaveState: "dirty-unsaveable",
+      saveBeforeLeave: async () => true,
     }),
   );
-  const view = renderConfirmation();
+  const view = await renderConfirmation();
   await act(async () => {
     store.getState().closeAll();
   });
@@ -325,7 +336,8 @@ test("closeAll obtains fresh confirmation for a dirty tab opened while confirmat
     registerPlaybookPaneLeaveGuard({
       tabId: "race-late",
       playbookId: "late-playbook",
-      shouldConfirm: () => true,
+      leaveState: "dirty-unsaveable",
+      saveBeforeLeave: async () => true,
     }),
   );
   const expectedPrompts = ["race-original", "race-original", "race-late"];
@@ -402,11 +414,12 @@ const ParkedSaveHarness = ({
       isDirty: hasPlaybookDraftChanges({ baseline, current: draft }),
       canSaveDraft: true,
     });
-    if (request === null) {
-      return;
-    }
     requests.push(
-      request.then(({ outcome }) => {
+      request.then((result) => {
+        if (result === null) {
+          return null;
+        }
+        const { outcome } = result;
         if (outcome.type === "saved") {
           completeParkedPlaybookPaneSave({
             tabId,
@@ -426,15 +439,16 @@ test("a hidden pane's completed flush refreshes its baseline so reopening follow
   tabIds.add(tabId);
   const seed = {
     ...parkedState("saved-playbook", true),
+    leaveState: "dirty-autosaveable",
     status: "draft",
     approvedAt: null,
   } as const satisfies ParkedPlaybookPane;
   const response = Promise.withResolvers<SaveOutcome>();
   const sent: SendSaveArgs[] = [];
   const requests: Promise<unknown>[] = [];
-  const sendSave = (args: SendSaveArgs) => {
+  const sendSave = async (args: SendSaveArgs) => {
     sent.push(args);
-    return response.promise;
+    return await response.promise;
   };
   const server = {
     draft: seed.baseline.draft,
@@ -466,7 +480,7 @@ test("a hidden pane's completed flush refreshes its baseline so reopening follow
     updatedAt: savedAt,
     status: "draft",
     approvedAt: null,
-    requiresLeaveConfirmation: false,
+    leaveState: "saved",
   });
   expect(saved?.baseline).toEqual(createPlaybookBaseline(seed.draft));
   const newerServer = {

@@ -323,9 +323,9 @@ export const latchedSeedGate = (
  * new copy instead of using the old one. Resolves to the fresh detail, or
  * null if the refetch did not complete.
  */
-export const refetchSupersededDetail = async <TData, TError>(
+export const refetchSupersededDetail = async <TData>(
   queryClient: QueryClient,
-  queryKey: DataTag<QueryKey, TData, TError>,
+  queryKey: DataTag<QueryKey, TData, unknown>,
 ): Promise<TData | null> => {
   await queryClient.invalidateQueries({ queryKey, exact: true });
   const state = queryClient.getQueryState(queryKey);

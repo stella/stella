@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 
@@ -95,7 +95,7 @@ export type InspectorRailIconProps<P> = {
 
 export type InspectorRailLabelProps<P> = {
   tab: InspectorViewTab<P>;
-  renderLabel: (label: string) => ReactNode;
+  renderLabel: (label: string) => ReactElement;
 };
 
 export type InspectorViewRegistration<P = unknown> = {
@@ -121,7 +121,7 @@ export type InspectorViewRegistration<P = unknown> = {
     | ((args: {
         tabId: string;
         payload: P;
-        nextPayload: unknown | null;
+        nextPayload: unknown;
         proceed: () => void;
       }) => void)
     | undefined;

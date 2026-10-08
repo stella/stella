@@ -59,14 +59,15 @@ const EditorHarness = ({
       isDirty: draft.name !== initialDraft.name,
       canSaveDraft: true,
     });
-    if (request !== null) {
-      requests.push(
-        request.then(({ outcome }) => {
-          outcomes.push(outcome);
-          return outcome;
-        }),
-      );
-    }
+    requests.push(
+      request.then((saved) => {
+        if (saved === null) {
+          return null;
+        }
+        outcomes.push(saved.outcome);
+        return saved.outcome;
+      }),
+    );
   });
   useMountEffect(() => () => leave());
   return (
