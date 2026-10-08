@@ -103,6 +103,15 @@ export type SearchCursor = {
    * Absent before any window has moved.
    */
   excludedGroups?: readonly string[] | undefined;
+  /**
+   * Results ranked ahead of this cursor in its window, carried by a cursor
+   * that descends from a page addressed by offset. Such a page ranked deeper
+   * than a first page's round cap reaches, so the continuation has to replay
+   * the window as deep again, or it could not get back to its own boundary.
+   * Absent on every other cursor, which keeps the fixed cap, and dropped when
+   * the window moves.
+   */
+  replayDepth?: number | undefined;
 };
 
 type CorpusIndexRanking<TContext> = {
@@ -309,30 +318,35 @@ export const emptyCorpusIndexScan = (): CorpusIndexScanReport => ({
 const PASSAGE_OVER_FETCH = 4;
 
 type ScanRoundCapInput = {
-  /** Ranked results the page passes over (its offset). */
-  skip: number;
+  /**
+   * Ranked results in front of the page that the scan has to rank as well:
+   * its offset, or the replay depth its cursor carries.
+   */
+  ahead: number;
   limit: number;
 };
 
 /**
  * Engine round trips a scan may spend on one page.
  *
- * Every page without an offset keeps the fixed cap. A page addressed by
- * offset has to rank every result in front of it as well, and one result can
- * cost up to `PASSAGE_OVER_FETCH` passages of scan, so its cap grows with the
- * depth it reaches. That depth is bounded at the API boundary
- * (`LIMITS.caseLawResultDepthMax`), which bounds the rounds with it.
+ * A page with nothing to rank in front of it keeps the fixed cap. A page
+ * addressed by offset ranks every result in front of it as well, and so does
+ * a continuation of one (its cursor's replay depth), and one result can cost
+ * up to `PASSAGE_OVER_FETCH` passages of scan, so the cap grows with the depth
+ * the page reaches. An offset is bounded at the API boundary
+ * (`LIMITS.caseLawResultDepthMax`); a continuation that keeps descending is
+ * bounded by the scan's own passage budget (`scanBudget`).
  */
 export const corpusIndexScanRoundCap = ({
+  ahead,
   limit,
-  skip,
 }: ScanRoundCapInput): number =>
-  skip === 0
+  ahead === 0
     ? LIMITS.corpusIndexSearchMaxRounds
     : Math.max(
         LIMITS.corpusIndexSearchMaxRounds,
         Math.ceil(
-          ((skip + limit) * PASSAGE_OVER_FETCH) /
+          ((ahead + limit) * PASSAGE_OVER_FETCH) /
             LIMITS.corpusIndexSearchCandidateLimit,
         ),
       );
@@ -707,6 +721,11 @@ type ResolveCorpusSearchCursorOptions = {
   lastScannedId: string | null;
   ranking: Pick<CorpusIndexRanking<unknown>, "groups">;
   unseenScoreUpperBound: (nextLexicalScore: number) => number;
+  /**
+   * Results ranked ahead of the next cursor, when the page descends from one
+   * addressed by offset; null for every other page.
+   */
+  nextReplayDepth: number | null;
 };
 
 // The window itself moves only when the round cap ended the scan. The cap
@@ -735,6 +754,7 @@ const resolveCorpusSearchCursor = ({
   lastScannedId,
   ranking,
   unseenScoreUpperBound,
+  nextReplayDepth,
 }: ResolveCorpusSearchCursorOptions): ResolvedCorpusSearchCursor => {
   const complete = (nextCursor: SearchCursor | null) => ({
     nextCursor,
@@ -748,7 +768,8 @@ const resolveCorpusSearchCursor = ({
       return complete(null);
     }
     // Still inside this window: the groups earlier windows showed stay
-    // excluded, and this window's own are behind the cursor.
+    // excluded, and this window's own are behind the cursor. A page that
+    // ranked past the fixed cap tells its continuation how deep to replay.
     return complete(
       withGroups(
         {
@@ -756,6 +777,7 @@ const resolveCorpusSearchCursor = ({
           id: lastEmitted.id,
           sort,
           windowStart,
+          ...(nextReplayDepth === null ? {} : { replayDepth: nextReplayDepth }),
         },
         [...carriedGroups],
       ),
@@ -800,6 +822,17 @@ const resolveCorpusSearchCursor = ({
   );
 };
 
+/**
+ * Results the scan ranks in front of a page's first row: its offset, or the
+ * replay depth its cursor carries. A page is placed by one or the other.
+ */
+const rankedAhead = (skip: number, parsedCursor: SearchCursor | null) => {
+  if (skip > 0 && parsedCursor !== null) {
+    panic("A search page is placed by its cursor or by its offset, not both");
+  }
+  return skip + (parsedCursor?.replayDepth ?? 0);
+};
+
 const readPositionSearchPage = async <TContext>({
   hitDispositions,
   observer,
@@ -811,7 +844,10 @@ const readPositionSearchPage = async <TContext>({
   parsedCursor,
   skip = 0,
   scanTransport = NATIVE_SCAN_TRANSPORT,
-  maxRounds = corpusIndexScanRoundCap({ limit, skip }),
+  maxRounds = corpusIndexScanRoundCap({
+    ahead: rankedAhead(skip, parsedCursor),
+    limit,
+  }),
   snippetFields,
   extractId,
   extractSnippet,
@@ -820,11 +856,7 @@ const readPositionSearchPage = async <TContext>({
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   CorpusIndexSearchPageResult<TContext>
 > => {
-  if (skip > 0 && parsedCursor !== null) {
-    panic("A search page is placed by its cursor or by its offset, not both");
-  }
-  // How deep into the ranking this page ends: the scan proves its order up to
-  // here, and the page is the last `limit` of it.
+  const ahead = rankedAhead(skip, parsedCursor);
   const reach = skip + limit;
   const candidates: ScoredCandidate[] = [];
   const scores = scanScoreRecorder();
@@ -1000,6 +1032,7 @@ const readPositionSearchPage = async <TContext>({
     lastScannedId,
     ranking,
     unseenScoreUpperBound,
+    nextReplayDepth: ahead === 0 ? null : ahead + pageRanked.length,
   });
 
   const snippets = await readPageSnippets({

@@ -571,6 +571,42 @@ test("a cursor carrying a phase and a ranking mode round-trips both", () => {
   }
 });
 
+test("a continuation of an offset page round-trips how deep it replays", () => {
+  for (const rankingMode of [undefined, ...CORPUS_INDEX_RANKING_MODES]) {
+    const cursor = {
+      score: 0.5,
+      id: DECISION_ID,
+      sort: "relevance",
+      windowStart: 0,
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      target: TARGET_A,
+      replayDepth: LIMITS.caseLawResultDepthMax,
+      ...(rankingMode === undefined ? {} : { rankingMode }),
+    } as const;
+    const encoded = encodeCorpusSearchCursor(cursor);
+
+    expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+    // It never carries groups, so the cap with groups covers it.
+    expect(encoded.length).toBeLessThanOrEqual(
+      CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    );
+  }
+});
+
+test("a replay depth is refused outside the first window, beside groups, or when not a count", () => {
+  for (const payload of [
+    `900:none:relevance:n500:${DECISION_ID}`,
+    `0:none:relevance:xAbC_1-:n500:${DECISION_ID}`,
+    `0:none:relevance:n0:${DECISION_ID}`,
+    `0:none:relevance:n:${DECISION_ID}`,
+    `0:none:relevance:n-5:${DECISION_ID}`,
+    `0:none:relevance:n500:r-off:${DECISION_ID}`,
+    `0:none:relevance:n500:n500:${DECISION_ID}`,
+  ]) {
+    expect(decodeCorpusSearchCursor(encodeCursor(0.5, payload))).toBeNull();
+  }
+});
+
 test("optional segments are refused when repeated, reordered or unknown", () => {
   const phase = phaseSegment(STRICT_PHASE);
   for (const optional of [

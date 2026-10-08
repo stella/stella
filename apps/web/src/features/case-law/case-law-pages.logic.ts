@@ -83,11 +83,17 @@ type CaseLawLandingPageInput = {
 
 /**
  * The page a navigation lands on: the page it named when that page holds
- * rows, otherwise the deepest page before it that does. An estimate can
- * overstate the results, so an empty page steps back to the last page the
- * count fills, and on until a page with rows answers. Each step is one read
- * and the walk never goes deeper than the page named, which the depth bound
- * already caps.
+ * rows, otherwise the deepest page before it that does.
+ *
+ * The count says where to look first, but an estimate can overstate or
+ * understate the results and a listing may not be counted at all, so the
+ * last page with rows is searched for between the deepest page known to hold
+ * rows (the first, until a read says otherwise) and the shallowest page known
+ * to be empty. A page holding fewer rows than a full page is the last one, so
+ * the search stops there. Reads are sequential by nature, each deciding the
+ * next, and number at most two plus the halvings between the first page and
+ * the page named, which the depth bound caps. An outage proves nothing about
+ * which pages exist, so it keeps the page the navigation named.
  */
 export const caseLawLandingPage = async ({
   pageSize,
@@ -95,17 +101,39 @@ export const caseLawLandingPage = async ({
   total,
   wanted,
 }: CaseLawLandingPageInput): Promise<number> => {
-  let page = wanted;
-  while (page > 1) {
-    // Sequential by nature: whether to read the page before this one depends
-    // on this one coming back empty.
-    const rows = await rowsOn(page);
-    if (rows === null || rows > 0) {
-      return page;
-    }
-    page = caseLawPageBeforeEnd({ emptyPage: page, pageSize, total });
+  if (wanted <= 1) {
+    return 1;
   }
-  return 1;
+  const wantedRows = await rowsOn(wanted);
+  if (wantedRows === null || wantedRows > 0) {
+    return wanted;
+  }
+  /** Deepest page known to hold rows; the first stands in until one is read. */
+  let holding = 1;
+  /** Shallowest page known to be empty. */
+  let empty = wanted;
+  const suggested = caseLawPageBeforeEnd({
+    emptyPage: wanted,
+    pageSize,
+    total,
+  });
+  let probe =
+    suggested > holding ? suggested : Math.floor((holding + empty) / 2);
+  while (probe > holding && probe < empty) {
+    const rows = await rowsOn(probe);
+    if (rows === null) {
+      return wanted;
+    }
+    if (rows === 0) {
+      empty = probe;
+    } else if (rows < pageSize) {
+      return probe;
+    } else {
+      holding = probe;
+    }
+    probe = Math.floor((holding + empty) / 2);
+  }
+  return holding;
 };
 
 type CaseLawPageRestInput = {

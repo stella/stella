@@ -4,6 +4,7 @@ import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
 import {
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
+  type SearchTotal,
 } from "@stll/api-contract/search";
 
 import { PUBLIC_LAW_PAGE_SIZES } from "@/components/public-law-table/public-law-pagination.logic";
@@ -17,45 +18,90 @@ import {
   caseLawPageRest,
 } from "./case-law-pages.logic";
 
+const PAGE_SIZE = 50;
+
+type SearchOverInput = {
+  /** How many results the search really holds. */
+  realResults: number;
+  /** What its first page reported. */
+  total: SearchTotal;
+};
+
 /**
- * A search whose estimate says 1,000 results while 120 exist: at 50 a page,
- * pages 1 to 3 hold rows and every page after is empty. Records each page it
- * was asked for.
+ * A search holding `realResults` at 50 a page, whatever its count says.
+ * Records each page it was asked for.
  */
-const overstatedSearch = () => {
-  const realResults = 120;
-  const pageSize = 50;
+const searchOver = ({ realResults, total }: SearchOverInput) => {
   const reads: number[] = [];
   return {
     reads,
-    pageSize,
-    total: { type: SEARCH_TOTAL_TYPE.ESTIMATE, count: 1000 } as const,
+    pageSize: PAGE_SIZE,
+    total,
     rowsOn: async (page: number) => {
       reads.push(page);
       return Math.max(
         0,
-        Math.min(pageSize, realResults - (page - 1) * pageSize),
+        Math.min(PAGE_SIZE, realResults - (page - 1) * PAGE_SIZE),
       );
     },
   };
 };
 
+const estimated = (count: number) =>
+  ({ type: SEARCH_TOTAL_TYPE.ESTIMATE, count }) as const satisfies SearchTotal;
+
 describe("an empty numbered jump", () => {
-  test("lands on the deepest page that holds rows", async () => {
-    const search = overstatedSearch();
+  test("lands on the deepest page that holds rows when the estimate overstates", async () => {
+    const search = searchOver({ realResults: 120, total: estimated(1000) });
 
-    const landed = await caseLawLandingPage({ ...search, wanted: 8 });
-
-    expect(landed).toBe(3);
-    // Read 8, stepped back to what the count fills and further, never past
-    // the page named.
-    expect(search.reads.at(0)).toBe(8);
+    expect(await caseLawLandingPage({ ...search, wanted: 8 })).toBe(3);
     expect(search.reads.every((page) => page <= 8)).toBe(true);
-    expect(search.reads.at(-1)).toBe(3);
+  });
+
+  test("lands on the deepest page that holds rows when the estimate understates", async () => {
+    // The estimate fills two pages; the third exists too.
+    const search = searchOver({ realResults: 120, total: estimated(60) });
+
+    expect(await caseLawLandingPage({ ...search, wanted: 8 })).toBe(3);
+  });
+
+  test("an uncounted listing finds its last page rather than the first", async () => {
+    const search = searchOver({
+      realResults: 120,
+      total: SEARCH_TOTAL_NOT_COUNTED,
+    });
+
+    expect(await caseLawLandingPage({ ...search, wanted: 8 })).toBe(3);
+  });
+
+  test("lands on the last page with rows whatever the count said", async () => {
+    const deepest = 20;
+    for (const realResults of [0, 1, 49, 50, 51, 120, 150, 999]) {
+      const lastWithRows = Math.max(1, Math.ceil(realResults / PAGE_SIZE));
+      for (const total of [
+        SEARCH_TOTAL_NOT_COUNTED,
+        estimated(1),
+        estimated(realResults),
+        estimated(1000),
+      ]) {
+        for (let wanted = 1; wanted <= deepest; wanted += 1) {
+          const search = searchOver({ realResults, total });
+          // Sequential by design: each case's reads are its own.
+          const landed = await caseLawLandingPage({ ...search, wanted });
+
+          expect(landed).toBe(Math.min(wanted, lastWithRows));
+          expect(search.reads.every((page) => page <= wanted)).toBe(true);
+          // One read of the page named, the count's guess, then halvings.
+          expect(search.reads.length).toBeLessThanOrEqual(
+            2 + Math.ceil(Math.log2(deepest)),
+          );
+        }
+      }
+    }
   });
 
   test("a page with rows is kept after one read", async () => {
-    const search = overstatedSearch();
+    const search = searchOver({ realResults: 120, total: estimated(1000) });
 
     expect(await caseLawLandingPage({ ...search, wanted: 2 })).toBe(2);
     expect(search.reads).toEqual([2]);
@@ -63,9 +109,9 @@ describe("an empty numbered jump", () => {
 
   test("an outage keeps the page the link named", async () => {
     const landed = await caseLawLandingPage({
-      pageSize: 50,
+      pageSize: PAGE_SIZE,
       rowsOn: async () => null,
-      total: { type: SEARCH_TOTAL_TYPE.ESTIMATE, count: 1000 },
+      total: estimated(1000),
       wanted: 8,
     });
 

@@ -1705,13 +1705,79 @@ describe("a page addressed by offset", () => {
       Array.from({ length: limit }, (_, index) => documentId(skip + index)),
     );
     expect(page.scan.rounds).toBeLessThanOrEqual(
-      corpusIndexScanRoundCap({ limit, skip }),
+      corpusIndexScanRoundCap({ ahead: skip, limit }),
+    );
+  });
+
+  test("following the cursor of a deep offset page continues where the cursor chain does", async () => {
+    // Every decision matched four passages, so the deep page ranked well past
+    // what a first page's fixed round cap scans.
+    const passagesPerDocument = 4;
+    const documents = LIMITS.caseLawResultDepthMax + 200;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+    const continuations = 3;
+
+    // The pure cursor chain, from the first page to past the offset page. Its
+    // pages are not all `limit` long (a capped window ends on a short page),
+    // so it is compared decision by decision rather than page by page.
+    const reachedByChain = skip + limit + continuations * limit;
+    const chain: string[] = [];
+    let chainCursor: SearchCursor | null = null;
+    for (let page = 0; page < 100 && chain.length < reachedByChain; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: chainCursor,
+        skip: 0,
+      });
+      chain.push(...read.pageRanked.map((hit) => hit.id));
+      if (read.nextCursor === null) {
+        break;
+      }
+      chainCursor = read.nextCursor;
+    }
+    const chainAfterOffsetPage = chain.slice(skip + limit, reachedByChain);
+    expect(chainAfterOffsetPage).toHaveLength(continuations * limit);
+
+    // The offset page, then its own cursor followed.
+    const offsetPage = await readOffsetPage({ limit, skip });
+    expect(offsetPage.nextCursor?.replayDepth).toBe(skip + limit);
+    const followed: string[][] = [];
+    let cursor = offsetPage.nextCursor;
+    for (let page = 0; page < continuations; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      followed.push(read.pageRanked.map((hit) => hit.id));
+      cursor = read.nextCursor;
+    }
+
+    expect(followed.flat()).toEqual(chainAfterOffsetPage);
+    expect(followed.flat()).toEqual(
+      Array.from({ length: continuations * limit }, (_, index) =>
+        documentId(skip + limit + index),
+      ),
+    );
+  });
+
+  test("a continuation of an offset page replays as deep as its cursor says", () => {
+    expect(corpusIndexScanRoundCap({ ahead: 500, limit: 20 })).toBeGreaterThan(
+      LIMITS.corpusIndexSearchMaxRounds,
     );
   });
 
   test("a page without an offset keeps the fixed round cap", () => {
     for (const limit of [1, 20, LIMITS.caseLawSearchPageSizeMax]) {
-      expect(corpusIndexScanRoundCap({ limit, skip: 0 })).toBe(
+      expect(corpusIndexScanRoundCap({ ahead: 0, limit })).toBe(
         LIMITS.corpusIndexSearchMaxRounds,
       );
     }

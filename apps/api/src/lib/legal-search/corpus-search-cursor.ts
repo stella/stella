@@ -30,10 +30,10 @@ import { panic, Result } from "better-result";
  * A cursor without a target was built against groups under their manifests'
  * contracts only, so it cannot continue a read whose target has one.
  *
- * Three more optional segments may follow the target, always in this order
+ * Four more optional segments may follow the target, always in this order
  * and each at most once:
  *
- *     base64("<score>:<windowStart>:<dictionary>:<sort>[:<target>][:x<tokens>][:p<phase>][:r-<mode>]:<id>")
+ *     base64("<score>:<windowStart>:<dictionary>:<sort>[:<target>][:x<tokens>][:p<phase>][:r-<mode>][:n<depth>]:<id>")
  *
  *   - `x<tokens>`: a continuation that moved past a capped scan window of a
  *     ranker that folds hits into groups carries the groups earlier windows
@@ -49,9 +49,15 @@ import { panic, Result } from "better-result";
  *   - `r-<mode>`: an experimental session carries `r-off` or `r-bm25-ratio`.
  *     The effective mode survives fallback and every continuation; existing
  *     position cursors omit it and remain position cursors.
+ *   - `n<depth>`: a cursor descending from a page addressed by offset carries
+ *     how many results its window ranks ahead of it
+ *     (`SearchCursor.replayDepth`), so the continuation replays the window as
+ *     deep as that page did. It lives in the first window only, where no
+ *     group has been excluded yet, so it never travels with `x<tokens>` and
+ *     the bound with groups covers it.
  *
  * Each optional segment is identified by its opening characters: a target is
- * lowercase hex, and `x`, `p` and `r` are not hex digits nor prefixes of each
+ * lowercase hex, and `x`, `p`, `r` and `n` are not hex digits nor prefixes of each
  * other, so no segment reads as another. A repeated or out-of-order segment
  * is malformed. A replica that predates a segment refuses such a cursor as
  * malformed rather than misreading it.
@@ -158,6 +164,9 @@ const RANKING_MODE_MAX_CHARS =
   RANKING_MODE_PREFIX.length +
   Math.max(...CORPUS_INDEX_RANKING_MODES.map((mode) => mode.length));
 const PHASE_SEGMENT_PREFIX = "p";
+const REPLAY_DEPTH_PREFIX = "n";
+/** A replay depth on the wire: a decimal count, bounded like a window rank. */
+const REPLAY_DEPTH_PATTERN = /^n(\d{1,10})$/u;
 const PHASE_FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/u;
 
 const phaseIdentityFields = {
@@ -352,18 +361,30 @@ export const encodeCorpusSearchCursor = ({
   windowStart,
   phase,
   rankingMode,
+  replayDepth,
 }: CorpusSearchCursor): string => {
   const groups = serializeExcludedGroups(excludedGroups);
+  if (
+    replayDepth !== undefined &&
+    (groups !== null ||
+      !Number.isInteger(replayDepth) ||
+      replayDepth < 1 ||
+      !REPLAY_DEPTH_PATTERN.test(`${REPLAY_DEPTH_PREFIX}${replayDepth}`))
+  ) {
+    return panic(
+      "A replay depth is a positive count carried only in the first window",
+    );
+  }
   return encodeCursor(
     score,
-    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${phase === undefined ? "" : `${serializePhase(phase)}:`}${rankingMode === undefined ? "" : `${RANKING_MODE_PREFIX}${rankingMode}:`}${id}`,
+    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${phase === undefined ? "" : `${serializePhase(phase)}:`}${rankingMode === undefined ? "" : `${RANKING_MODE_PREFIX}${rankingMode}:`}${replayDepth === undefined ? "" : `${REPLAY_DEPTH_PREFIX}${replayDepth}:`}${id}`,
   );
 };
 
 /** What the segments before the id say about the ranking a page came from. */
 type CursorRanking = Pick<
   SearchCursor,
-  "windowStart" | "sort" | "rankingMode" | "excludedGroups"
+  "windowStart" | "sort" | "rankingMode" | "excludedGroups" | "replayDepth"
 > & {
   dictionary: ExpansionDictionaryIdentity;
   target?: string | null;
@@ -375,6 +396,7 @@ type OptionalSegments = {
   excludedGroups: readonly string[];
   phase?: CorpusSearchPhase | undefined;
   rankingMode?: CorpusIndexRankingMode | undefined;
+  replayDepth?: number | undefined;
 };
 
 /**
@@ -387,6 +409,7 @@ const OPTIONAL_SEGMENT_KINDS = [
   "groups",
   "phase",
   "rankingMode",
+  "replayDepth",
 ] as const;
 type OptionalSegmentKind = (typeof OPTIONAL_SEGMENT_KINDS)[number];
 
@@ -403,7 +426,19 @@ const optionalSegmentKind = (segment: string): OptionalSegmentKind | null => {
   if (segment.startsWith(RANKING_MODE_PREFIX)) {
     return "rankingMode";
   }
+  if (segment.startsWith(REPLAY_DEPTH_PREFIX)) {
+    return "replayDepth";
+  }
   return null;
+};
+
+const parseReplayDepth = (segment: string): number | null => {
+  const digits = REPLAY_DEPTH_PATTERN.exec(segment)?.at(1);
+  if (digits === undefined) {
+    return null;
+  }
+  const depth = Number(digits);
+  return depth >= 1 ? depth : null;
 };
 
 const parseRankingMode = (segment: string): CorpusIndexRankingMode | null =>
@@ -460,6 +495,16 @@ const parseOptionalSegments = (
         parsed.rankingMode = rankingMode;
         break;
       }
+      case "replayDepth": {
+        const replayDepth = parseReplayDepth(segment);
+        // Only the first window carries a depth, and no group is excluded
+        // there yet.
+        if (replayDepth === null || parsed.excludedGroups.length > 0) {
+          return null;
+        }
+        parsed.replayDepth = replayDepth;
+        break;
+      }
       default: {
         kind satisfies never;
         return panic("Unhandled corpus cursor segment kind");
@@ -469,7 +514,7 @@ const parseOptionalSegments = (
   return parsed;
 };
 
-/** `<windowStart>:<dictionary>:<sort>[:<target>][:x<groups>][:p<phase>][:r-<mode>]`. */
+/** `<windowStart>:<dictionary>:<sort>[:<target>][:x<groups>][:p<phase>][:r-<mode>][:n<depth>]`. */
 const parseCurrentForm = (
   segments: readonly string[],
 ): CursorRanking | null => {
@@ -485,7 +530,10 @@ const parseCurrentForm = (
   ) {
     return null;
   }
-  const { phase, rankingMode, ...rest } = optional;
+  const { phase, rankingMode, replayDepth, ...rest } = optional;
+  if (replayDepth !== undefined && windowStart !== 0) {
+    return null;
+  }
   return {
     dictionary,
     windowStart,
@@ -493,6 +541,7 @@ const parseCurrentForm = (
     ...rest,
     ...(phase === undefined ? {} : { phase }),
     ...(rankingMode === undefined ? {} : { rankingMode }),
+    ...(replayDepth === undefined ? {} : { replayDepth }),
   };
 };
 
@@ -549,7 +598,8 @@ export const decodeCorpusSearchCursor = (
       }
       return cursorOf({ dictionary, windowStart, sort: DEFAULT_SEARCH_SORT });
     }
-    // The current form, with any ordered subset of the four optional segments.
+    // The current form, with any ordered subset of the optional segments
+    // (groups and a replay depth never travel together).
     case 4:
     case 5:
     case 6:
