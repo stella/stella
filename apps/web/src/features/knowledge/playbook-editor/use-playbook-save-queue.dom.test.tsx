@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import messages from "@/i18n/langs/en.json";
+
 import type { PlaybookDraft } from "./playbook-editor.logic";
 import type { SaveOutcome, SendSaveArgs } from "./use-playbook-save-queue";
 
@@ -13,6 +15,8 @@ const { useLatestCallback } = await import("@/hooks/use-latest-callback");
 const { usePlaybookSaveQueue, usePlaybookDetailSaveSubscription } =
   await import("./use-playbook-save-queue");
 const { QueryClient } = await import("@tanstack/react-query");
+const { Input } = await import("@stll/ui/input");
+const { knowledgeKeys } = await import("@/lib/knowledge/queries");
 
 const initialDraft = {
   name: "Original",
@@ -45,6 +49,7 @@ const EditorHarness = ({
       queueSave(draft).then(({ outcome }) => {
         outcomes.push(outcome);
         setResult(outcome.type);
+        return outcome;
       }),
     );
   };
@@ -55,19 +60,28 @@ const EditorHarness = ({
       canSaveDraft: true,
     });
     if (request !== null) {
-      requests.push(request.then(({ outcome }) => outcomes.push(outcome)));
+      requests.push(
+        request.then(({ outcome }) => {
+          outcomes.push(outcome);
+          return outcome;
+        }),
+      );
     }
   });
   useMountEffect(() => () => leave());
   return (
     <>
-      <input
-        aria-label="Name"
+      <Input
+        aria-label={messages.common.name}
         value={draft.name}
         onChange={(event) => setDraft({ ...draft, name: event.target.value })}
       />
-      <button onClick={save}>Save</button>
-      <button onClick={save}>Retry</button>
+      <button onClick={save} type="button">
+        {messages.common.save}
+      </button>
+      <button onClick={save} type="button">
+        {messages.common.retry}
+      </button>
       <output>{result}</output>
     </>
   );
@@ -108,12 +122,12 @@ test("reverting and closing during a save persists the final draft after the res
       }}
     />,
   );
-  fireEvent.change(view.getByLabelText("Name"), {
+  fireEvent.change(view.getByLabelText(messages.common.name), {
     target: { value: "Edited" },
   });
-  fireEvent.click(view.getByText("Save"));
+  fireEvent.click(view.getByText(messages.common.save));
   expect(sent.at(0)?.savedDraft.name).toBe("Edited");
-  fireEvent.change(view.getByLabelText("Name"), {
+  fireEvent.change(view.getByLabelText(messages.common.name), {
     target: { value: "Original" },
   });
   view.unmount();
@@ -146,12 +160,12 @@ test("Retry saves after a rejected request and leaves no failed request in the q
       }}
     />,
   );
-  fireEvent.click(view.getByText("Save"));
+  fireEvent.click(view.getByText(messages.common.save));
   await act(async () => {
     await Promise.all(requests);
   });
   expect(view.getByText("failed")).toBeDefined();
-  fireEvent.click(view.getByText("Retry"));
+  fireEvent.click(view.getByText(messages.common.retry));
   await act(async () => {
     await Promise.all(requests);
   });
@@ -176,7 +190,7 @@ test("closing a dirty form flushes it without waiting for a debounce", async () 
       }}
     />,
   );
-  fireEvent.change(view.getByLabelText("Name"), {
+  fireEvent.change(view.getByLabelText(messages.common.name), {
     target: { value: "Final draft" },
   });
   view.unmount();
@@ -191,7 +205,7 @@ test("a model save schedules work through the latest handler for the exact detai
   const client = new QueryClient({
     defaultOptions: { queries: { gcTime: Infinity } },
   });
-  const detailKey = ["playbook", "same"] as const;
+  const detailKey = knowledgeKeys.playbooks.detail("org", "same");
   client.setQueryData(detailKey, { status: "approved" });
   const scheduled: string[] = [];
   const DetailSubscriber = ({ phase }: { phase: string }) => {
@@ -205,7 +219,9 @@ test("a model save schedules work through the latest handler for the exact detai
   const view = render(<DetailSubscriber phase="idle" />);
   view.rerender(<DetailSubscriber phase="model-save" />);
   await act(async () => {
-    client.setQueryData(["playbook", "other"], { status: "draft" });
+    client.setQueryData(knowledgeKeys.playbooks.detail("org", "other"), {
+      status: "draft",
+    });
     await client.invalidateQueries({
       queryKey: detailKey,
       exact: true,

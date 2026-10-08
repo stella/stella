@@ -24,7 +24,9 @@ export const PlaybookPaneLeaveConfirmation = () => {
     <AlertDialog
       open={request.type === "confirm"}
       onOpenChange={(open) => {
-        if (!open) cancelPlaybookPaneLeave();
+        if (!open) {
+          cancelPlaybookPaneLeave();
+        }
       }}
     >
       <AlertDialogPopup>

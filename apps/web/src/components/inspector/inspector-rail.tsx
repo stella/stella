@@ -495,9 +495,12 @@ const VerticalTab = (props: VerticalTabProps) => {
     return <VerticalTabCell {...props} />;
   }
   return (
-    <RailLabel tab={tab}>
-      {(label) => <VerticalTabCell {...props} tab={{ ...tab, label }} />}
-    </RailLabel>
+    <RailLabel
+      renderLabel={(label) => (
+        <VerticalTabCell {...props} tab={{ ...tab, label }} />
+      )}
+      tab={tab}
+    />
   );
 };
 

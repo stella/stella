@@ -1,6 +1,7 @@
-import { useCallback, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
@@ -73,6 +74,7 @@ import {
   discardParkedPlaybookPane,
   parkPlaybookPane,
   readParkedPlaybookPane,
+  completeParkedPlaybookPaneSave,
   registerPlaybookPaneLeaveGuard,
 } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
@@ -219,6 +221,7 @@ export const PlaybookEditor = ({
   if (playbookId === null) {
     return (
       <PlaybookEditorForm
+        autosaveQueryKey={null}
         host={host}
         organizationId={organizationId}
         playbookId={null}
@@ -397,6 +400,7 @@ const PlaybookEditorLoader = ({
     <>
       {detailView.refetchError !== undefined && readFailure}
       <PlaybookEditorForm
+        autosaveQueryKey={host.type === "pane" ? detailOptions.queryKey : null}
         host={host}
         key={seedState.reloadKey}
         // Derived from the org's findings on every read, so it tracks the cache.
@@ -545,6 +549,7 @@ const seedFromServer = ({ server, isNew }: SeedFromServerArgs): FormSeed => {
 const SCOPE_ALL_VALUE = "__all__";
 
 type PlaybookEditorFormProps = {
+  autosaveQueryKey: QueryKey | null;
   organizationId: string;
   playbookId: string | null;
   /** The playbook as the server last returned it, passed on every render:
@@ -567,6 +572,7 @@ type PlaybookEditorFormProps = {
 };
 
 const PlaybookEditorForm = ({
+  autosaveQueryKey,
   organizationId,
   playbookId,
   server,
@@ -716,7 +722,7 @@ const PlaybookEditorForm = ({
   });
 
   const onBack = host.type === "page" ? host.onBack : null;
-  const requestBack = useCallback(() => {
+  const requestBack = useLatestCallback(() => {
     if (onBack === null) {
       return;
     }
@@ -725,7 +731,7 @@ const PlaybookEditorForm = ({
       return;
     }
     onBack();
-  }, [isDirty, onBack, setLeaveConfirmOpen]);
+  });
 
   // Publish the open playbook to the breadcrumb (Knowledge › Playbooks › Name)
   // and wire its list crumb back through the in-page back affordance. The
@@ -962,7 +968,7 @@ const PlaybookEditorForm = ({
           refetchSupersededDetail(
             queryClient,
             playbookDetailOptions(organizationId, playbookId).queryKey,
-          ).then(() => scheduleAutosave()),
+          ),
           "playbook-editor.refetch-for-rebase",
         );
       }
@@ -1174,10 +1180,7 @@ const PlaybookEditorForm = ({
 
   usePlaybookDetailSaveSubscription({
     queryClient,
-    queryKey:
-      host.type === "pane" && playbookId !== null
-        ? playbookDetailOptions(organizationId, playbookId).queryKey
-        : null,
+    queryKey: autosaveQueryKey,
     onSaved: scheduleAutosave,
   });
 
@@ -1185,7 +1188,7 @@ const PlaybookEditorForm = ({
    * Saves the draft as the pane unmounts, after any save still in flight.
    * The status line is gone by then, so a failure is a toast.
    */
-  const flushOnLeave = async () => {
+  const flushOnLeave = async (parkedState: ParkedPlaybookPane | null) => {
     const request = queueFinalDraft({
       draft,
       isDirty,
@@ -1201,6 +1204,14 @@ const PlaybookEditorForm = ({
     const { outcome } = await request;
     if (outcome.type !== "saved") {
       notifySaveFailed(outcome.error);
+      return;
+    }
+    if (host.type === "pane" && parkedState !== null) {
+      completeParkedPlaybookPaneSave({
+        tabId: host.tabId,
+        parkedState,
+        updatedAt: outcome.updatedAt,
+      });
     }
   };
 
@@ -1231,27 +1242,29 @@ const PlaybookEditorForm = ({
     for (const toastId of undoToastIdsRef.current) {
       stellaToast.close(toastId);
     }
-    detached(flushOnLeave(), "playbook-editor.flush-on-leave");
     if (!host.isTabOpen(host.tabId)) {
       discardParkedPlaybookPane(host.tabId);
+      detached(flushOnLeave(null), "playbook-editor.flush-on-leave");
       return;
     }
+    const parkedState = {
+      playbookId,
+      draft,
+      updatedAt,
+      baseline,
+      status,
+      approvedAt,
+      openIds,
+      revealedIds,
+      requiresLeaveConfirmation: requiresLeaveConfirmation(),
+      scrollTop: scrollTopRef.current,
+    };
     parkPlaybookPane({
       tabId: host.tabId,
       isTabOpen: host.isTabOpen,
-      state: {
-        playbookId,
-        draft,
-        updatedAt,
-        baseline,
-        status,
-        approvedAt,
-        openIds,
-        revealedIds,
-        requiresLeaveConfirmation: requiresLeaveConfirmation(),
-        scrollTop: scrollTopRef.current,
-      },
+      state: parkedState,
     });
+    detached(flushOnLeave(parkedState), "playbook-editor.flush-on-leave");
   });
 
   useMountEffect(() => {

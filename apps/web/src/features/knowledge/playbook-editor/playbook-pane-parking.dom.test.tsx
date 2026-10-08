@@ -6,7 +6,9 @@ import { immer } from "zustand/middleware/immer";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
 
+import type { PlaybookSnapshot } from "./playbook-editor-sync.logic";
 import type { ParkedPlaybookPane } from "./playbook-pane-parking";
+import type { SaveOutcome, SendSaveArgs } from "./use-playbook-save-queue";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render, fireEvent, act } =
@@ -23,8 +25,15 @@ const {
   registerPlaybookPaneLeaveGuard,
   cancelPlaybookPaneLeave,
   usePlaybookPaneLeave,
+  completeParkedPlaybookPaneSave,
 } = await import("./playbook-pane-parking");
-const { createPlaybookBaseline } = await import("./playbook-editor.logic");
+const { createPlaybookBaseline, hasPlaybookDraftChanges } =
+  await import("./playbook-editor.logic");
+const { resolveServerFollow, draftToAdopt } =
+  await import("./playbook-editor-sync.logic");
+const { usePlaybookSaveQueue } = await import("./use-playbook-save-queue");
+const { useMountEffect } = await import("@/hooks/use-effect");
+const { useState } = await import("react");
 const { PLAYBOOK_DRAFT_VIEW } =
   await import("@/lib/knowledge/playbook-draft-view");
 await import("./playbook-draft-view-registration");
@@ -98,8 +107,12 @@ const park = (
 
 afterEach(() => {
   cleanup();
-  for (const unregister of unregisterGuards.splice(0)) unregister();
-  for (const tabId of tabIds) discardParkedPlaybookPane(tabId);
+  for (const unregister of unregisterGuards.splice(0)) {
+    unregister();
+  }
+  for (const tabId of tabIds) {
+    discardParkedPlaybookPane(tabId);
+  }
   tabIds.clear();
   cancelPlaybookPaneLeave();
 });
@@ -215,76 +228,81 @@ test("parking drafts is isolated by both tab and playbook", () => {
   expect(readParkedPlaybookPane("tab-b", "second")).toBeNull();
 });
 
-for (const action of ["closeOthers", "closeAll"] as const) {
-  test(`${action} waits for a dirty playbook, cancellation preserves all tabs, and confirmation clears only closed parking`, async () => {
-    const store = makeStore();
-    openPlaybook(store, "bulk-dirty", "dirty-playbook");
-    openPlaybook(store, "bulk-clean", "clean-playbook");
-    openPlaybook(store, "bulk-kept", "kept-playbook");
-    const dirty = parkedState("dirty-playbook", true);
-    const clean = parkedState("clean-playbook");
-    const kept = parkedState("kept-playbook");
-    park(store, "bulk-dirty", dirty);
-    park(store, "bulk-dirty", parkedState("other-parked-playbook"));
-    park(store, "bulk-clean", clean);
-    park(store, "bulk-kept", kept);
-    unregisterGuards.push(
-      registerPlaybookPaneLeaveGuard({
-        tabId: "bulk-dirty",
-        playbookId: "dirty-playbook",
-        shouldConfirm: () => true,
-      }),
-    );
-    const originalIds = store.getState().tabs.map((tab) => tab.id);
-    const close = () => {
-      if (action === "closeOthers") {
-        store.getState().closeOthers("bulk-kept");
-        return;
-      }
-      store.getState().closeAll();
-    };
-    const view = renderConfirmation();
-    await act(async () => {
-      close();
-    });
-    expect(store.getState().tabs.map((tab) => tab.id)).toEqual(originalIds);
-    await act(async () => {
-      fireEvent.click(
-        view.getByRole("button", { name: messages.common.goBackToEditing }),
-      );
-    });
-    expect(store.getState().tabs.map((tab) => tab.id)).toEqual(originalIds);
-    expect(readParkedPlaybookPane("bulk-dirty", "dirty-playbook")).toEqual(
-      dirty,
-    );
-    expect(readParkedPlaybookPane("bulk-clean", "clean-playbook")).toEqual(
-      clean,
-    );
-    expect(readParkedPlaybookPane("bulk-kept", "kept-playbook")).toEqual(kept);
-    await act(async () => {
-      close();
-    });
-    await act(async () => {
-      fireEvent.click(
-        view.getByRole("button", { name: messages.common.leaveAndDiscard }),
-      );
-    });
-    expect(store.getState().tabs.map((tab) => tab.id)).toEqual(
-      action === "closeOthers" ? ["bulk-kept"] : [],
-    );
-    expect(store.getState().activeId).toBe(
-      action === "closeOthers" ? "bulk-kept" : null,
-    );
-    expect(readParkedPlaybookPane("bulk-dirty", "dirty-playbook")).toBeNull();
-    expect(
-      readParkedPlaybookPane("bulk-dirty", "other-parked-playbook"),
-    ).toBeNull();
-    expect(readParkedPlaybookPane("bulk-clean", "clean-playbook")).toBeNull();
-    expect(readParkedPlaybookPane("bulk-kept", "kept-playbook")).toEqual(
-      action === "closeOthers" ? kept : null,
+type BulkCloseConfirmationOptions = {
+  close: (store: ReturnType<typeof makeStore>) => void;
+  remainingIds: readonly string[];
+};
+
+const assertBulkCloseConfirmation = async ({
+  close,
+  remainingIds,
+}: BulkCloseConfirmationOptions) => {
+  const store = makeStore();
+  openPlaybook(store, "bulk-dirty", "dirty-playbook");
+  openPlaybook(store, "bulk-clean", "clean-playbook");
+  openPlaybook(store, "bulk-kept", "kept-playbook");
+  const dirty = parkedState("dirty-playbook", true);
+  const clean = parkedState("clean-playbook");
+  const kept = parkedState("kept-playbook");
+  park(store, "bulk-dirty", dirty);
+  park(store, "bulk-dirty", parkedState("other-parked-playbook"));
+  park(store, "bulk-clean", clean);
+  park(store, "bulk-kept", kept);
+  unregisterGuards.push(
+    registerPlaybookPaneLeaveGuard({
+      tabId: "bulk-dirty",
+      playbookId: "dirty-playbook",
+      shouldConfirm: () => true,
+    }),
+  );
+  const originalIds = store.getState().tabs.map((tab) => tab.id);
+  const view = renderConfirmation();
+  await act(async () => {
+    close(store);
+  });
+  expect(store.getState().tabs.map((tab) => tab.id)).toEqual(originalIds);
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: messages.common.goBackToEditing }),
     );
   });
-}
+  expect(store.getState().tabs.map((tab) => tab.id)).toEqual(originalIds);
+  expect(readParkedPlaybookPane("bulk-dirty", "dirty-playbook")).toEqual(dirty);
+  expect(readParkedPlaybookPane("bulk-clean", "clean-playbook")).toEqual(clean);
+  expect(readParkedPlaybookPane("bulk-kept", "kept-playbook")).toEqual(kept);
+  await act(async () => {
+    close(store);
+  });
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: messages.common.leaveAndDiscard }),
+    );
+  });
+  expect(store.getState().tabs.map((tab) => tab.id)).toEqual(remainingIds);
+  expect(store.getState().activeId).toBe(remainingIds.at(0) ?? null);
+  expect(readParkedPlaybookPane("bulk-dirty", "dirty-playbook")).toBeNull();
+  expect(
+    readParkedPlaybookPane("bulk-dirty", "other-parked-playbook"),
+  ).toBeNull();
+  expect(readParkedPlaybookPane("bulk-clean", "clean-playbook")).toBeNull();
+  expect(readParkedPlaybookPane("bulk-kept", "kept-playbook")).toEqual(
+    remainingIds.includes("bulk-kept") ? kept : null,
+  );
+};
+
+test("closing other tabs confirms dirty drafts and preserves the selected tab", async () => {
+  await assertBulkCloseConfirmation({
+    close: (store) => store.getState().closeOthers("bulk-kept"),
+    remainingIds: ["bulk-kept"],
+  });
+});
+
+test("closing all tabs confirms dirty drafts and clears every parked tab", async () => {
+  await assertBulkCloseConfirmation({
+    close: (store) => store.getState().closeAll(),
+    remainingIds: [],
+  });
+});
 
 test("closeAll obtains fresh confirmation for a dirty tab opened while confirmation was pending", async () => {
   const store = makeStore();
@@ -336,4 +354,169 @@ test("closeAll obtains fresh confirmation for a dirty tab opened while confirmat
     readParkedPlaybookPane("race-original", "original-playbook"),
   ).toBeNull();
   expect(readParkedPlaybookPane("race-late", "late-playbook")).toBeNull();
+});
+
+type ParkedSaveHarnessProps = {
+  tabId: string;
+  seed: ParkedPlaybookPane;
+  server: PlaybookSnapshot;
+  sendSave: (args: SendSaveArgs) => Promise<SaveOutcome>;
+  requests: Promise<unknown>[];
+};
+
+const ParkedSaveHarness = ({
+  tabId,
+  seed,
+  server,
+  sendSave,
+  requests,
+}: ParkedSaveHarnessProps) => {
+  const [initial] = useState(
+    () => readParkedPlaybookPane(tabId, seed.playbookId) ?? seed,
+  );
+  const follow = resolveServerFollow({
+    formUpdatedAt: initial.updatedAt,
+    serverUpdatedAt: server.updatedAt,
+    isDirty: hasPlaybookDraftChanges({
+      baseline: initial.baseline,
+      current: initial.draft,
+    }),
+  });
+  const adopted = draftToAdopt({
+    follow,
+    whenBehind: "rebase",
+    baseline: initial.baseline.draft,
+    local: initial.draft,
+    server: server.draft,
+  });
+  const draft = adopted ?? initial.draft;
+  const baseline =
+    adopted === null ? initial.baseline : createPlaybookBaseline(server.draft);
+  const updatedAt = adopted === null ? initial.updatedAt : server.updatedAt;
+  const { flushOnLeave } = usePlaybookSaveQueue({ updatedAt, sendSave });
+  useMountEffect(() => () => {
+    const parked = { ...initial, draft, baseline, updatedAt };
+    parkPlaybookPane({ tabId, state: parked, isTabOpen: () => true });
+    const request = flushOnLeave({
+      draft,
+      isDirty: hasPlaybookDraftChanges({ baseline, current: draft }),
+      canSaveDraft: true,
+    });
+    if (request === null) {
+      return;
+    }
+    requests.push(
+      request.then(({ outcome }) => {
+        if (outcome.type === "saved") {
+          completeParkedPlaybookPaneSave({
+            tabId,
+            parkedState: parked,
+            updatedAt: outcome.updatedAt,
+          });
+        }
+        return outcome;
+      }),
+    );
+  });
+  return <output>{draft.description}</output>;
+};
+
+test("a hidden pane's completed flush refreshes its baseline so reopening follows a newer same-field server edit", async () => {
+  const tabId = "completed-hidden-flush";
+  tabIds.add(tabId);
+  const seed = {
+    ...parkedState("saved-playbook", true),
+    status: "draft",
+    approvedAt: null,
+  } as const satisfies ParkedPlaybookPane;
+  const response = Promise.withResolvers<SaveOutcome>();
+  const sent: SendSaveArgs[] = [];
+  const requests: Promise<unknown>[] = [];
+  const sendSave = (args: SendSaveArgs) => {
+    sent.push(args);
+    return response.promise;
+  };
+  const server = {
+    draft: seed.baseline.draft,
+    updatedAt: seed.updatedAt,
+    status: "draft",
+    approvedAt: null,
+  } as const satisfies PlaybookSnapshot;
+  const view = render(
+    <ParkedSaveHarness
+      tabId={tabId}
+      seed={seed}
+      server={server}
+      sendSave={sendSave}
+      requests={requests}
+    />,
+  );
+  view.unmount();
+  expect(sent).toHaveLength(1);
+  const pending = readParkedPlaybookPane(tabId, seed.playbookId);
+  expect(pending).not.toBeNull();
+  expect(pending?.baseline).toBe(seed.baseline);
+  const savedAt = "2026-10-08T08:01:00.000Z";
+  await act(async () => {
+    response.resolve({ type: "saved", updatedAt: savedAt });
+    await Promise.all(requests);
+  });
+  const saved = readParkedPlaybookPane(tabId, seed.playbookId);
+  expect(saved).toMatchObject({
+    updatedAt: savedAt,
+    status: "draft",
+    approvedAt: null,
+    requiresLeaveConfirmation: false,
+  });
+  expect(saved?.baseline).toEqual(createPlaybookBaseline(seed.draft));
+  const newerServer = {
+    draft: {
+      ...seed.draft,
+      description: "Changed by another writer after the flush",
+    },
+    updatedAt: "2026-10-08T08:02:00.000Z",
+    status: "draft",
+    approvedAt: null,
+  } as const satisfies PlaybookSnapshot;
+  const reopened = render(
+    <ParkedSaveHarness
+      tabId={tabId}
+      seed={seed}
+      server={newerServer}
+      sendSave={sendSave}
+      requests={requests}
+    />,
+  );
+  expect(reopened.getByText(newerServer.draft.description)).toBeDefined();
+  reopened.unmount();
+  await act(async () => {
+    await Promise.all(requests);
+  });
+  expect(sent).toHaveLength(1);
+});
+
+test("a completed hidden save cannot recreate closed parking or replace a newer parked draft", () => {
+  const store = makeStore();
+  const tabId = "completed-save-identity";
+  openPlaybook(store, tabId, "playbook");
+  const original = parkedState("playbook", true);
+  park(store, tabId, original);
+  discardParkedPlaybookPane(tabId);
+  completeParkedPlaybookPaneSave({
+    tabId,
+    parkedState: original,
+    updatedAt: "2026-10-08T08:01:00.000Z",
+  });
+  expect(readParkedPlaybookPane(tabId, "playbook")).toBeNull();
+  const newer = {
+    ...original,
+    draft: { ...original.draft, description: "New unsaved draft" },
+  };
+  park(store, tabId, newer);
+  completeParkedPlaybookPaneSave({
+    tabId,
+    parkedState: original,
+    updatedAt: "2026-10-08T08:01:00.000Z",
+  });
+  expect(readParkedPlaybookPane(tabId, "playbook")).toBe(newer);
 });

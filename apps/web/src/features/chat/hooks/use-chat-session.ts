@@ -1192,7 +1192,9 @@ export const useChatSession = ({
       return;
     }
     const paneTabId = playbookPaneTabId;
-    playbookSaveSequenceRef.current += 1;
+    if (reconciliation.playbookId !== null) {
+      playbookSaveSequenceRef.current += 1;
+    }
     const sequence = playbookSaveSequenceRef.current;
     const requestedChat = chat;
     detached(

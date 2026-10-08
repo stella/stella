@@ -6,6 +6,8 @@ import type {
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import type { PlaybookApprovalStatus } from "@/lib/knowledge/playbook-types";
 
+import { resolveSavedPlaybookState } from "./playbook-editor-sync.logic";
+
 /**
  * The pane editor unmounts whenever the user opens another inspector tab or
  * minimizes the pane. Its state is parked here on unmount and restored on the
@@ -60,8 +62,46 @@ export const parkPlaybookPane = ({
 export const readParkedPlaybookPane = (
   tabId: string,
   playbookId: string,
-): ParkedPlaybookPane | null => {
-  return useParkedPlaybookPanes.getState()[tabId]?.[playbookId] ?? null;
+): ParkedPlaybookPane | null =>
+  useParkedPlaybookPanes.getState()[tabId]?.[playbookId] ?? null;
+
+type CompleteParkedPlaybookPaneSaveArgs = {
+  tabId: string;
+  parkedState: ParkedPlaybookPane;
+  updatedAt: string | null;
+};
+
+export const completeParkedPlaybookPaneSave = ({
+  tabId,
+  parkedState,
+  updatedAt,
+}: CompleteParkedPlaybookPaneSaveArgs) => {
+  useParkedPlaybookPanes.setState((current) => {
+    const tab = current[tabId];
+    if (tab?.[parkedState.playbookId] !== parkedState) {
+      return current;
+    }
+    const persisted = resolveSavedPlaybookState({
+      current: parkedState,
+      savedAt: updatedAt,
+      savedDraft: parkedState.draft,
+    });
+    if (persisted === parkedState) {
+      return current;
+    }
+    const savedState = {
+      ...parkedState,
+      updatedAt: persisted.updatedAt,
+      baseline: persisted.baseline,
+      status: "draft",
+      approvedAt: null,
+      requiresLeaveConfirmation: false,
+    } satisfies ParkedPlaybookPane;
+    return {
+      ...current,
+      [tabId]: { ...tab, [parkedState.playbookId]: savedState },
+    };
+  }, true);
 };
 
 export const discardParkedPlaybookPane = (tabId: string) => {

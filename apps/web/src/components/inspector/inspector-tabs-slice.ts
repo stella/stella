@@ -842,8 +842,9 @@ export const createInspectorTabsSlice = (
           return;
         }
         for (const tab of closingTabs) {
-          if (tab.type === "view")
+          if (tab.type === "view") {
             getInspectorView(tab.viewType)?.onClose?.(tab.id);
+          }
         }
         set((state) => {
           const target = state.tabs.find((tab) => tab.id === id);
@@ -909,8 +910,9 @@ export const createInspectorTabsSlice = (
           return;
         }
         for (const tab of closingTabs) {
-          if (tab.type === "view")
+          if (tab.type === "view") {
             getInspectorView(tab.viewType)?.onClose?.(tab.id);
+          }
         }
         set((state) => {
           const closingBound = state.tabs.find(isMainViewBoundTab);

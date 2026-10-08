@@ -326,7 +326,7 @@ export const PositionEditor = ({
         isDropTarget && "ring-primary ring-2",
       )}
       data-position-id={sourceId}
-      onBlur={(event) => {
+      onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) {
           onFocusLeave();
         }

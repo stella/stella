@@ -207,9 +207,10 @@ describe("playbook save cache reconciliation", () => {
     ).toBeNull();
     expect(handledToolCallIds.has("tool-call-1")).toBe(true);
 
-    for (const queryKey of PLAYBOOK_QUERY_KEYS) {
-      expect(isInvalidated(queryClient, queryKey)).toBe(false);
+    for (const queryKey of LIST_QUERY_KEYS) {
+      expect(isInvalidated(queryClient, queryKey)).toBe(true);
     }
+    expect(cachedData(queryClient, DETAIL_KEY)).toBeUndefined();
   });
 });
 
@@ -255,6 +256,55 @@ describe("the playbook pane after a save", () => {
 });
 
 describe("following a reconciled playbook save", () => {
+  test("reverse live completions refetch both writes while the pane stays on the newer call", async () => {
+    const queryClient = seededQueryClient();
+    const handledToolCallIds = new Set<string>();
+    let refetches = 0;
+    const unsubscribe = new QueryObserver(queryClient, {
+      queryKey: DETAIL_KEY,
+      queryFn: async () => ({ revision: ++refetches }),
+      staleTime: Infinity,
+    }).subscribe(() => undefined);
+    const followed: string[] = [];
+    const reconcileCompletion = async (olderState: string) => {
+      const reconciliation = reconcilePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: [
+          ...saveMessages({
+            output: { playbookId: PLAYBOOK_ID },
+            state: olderState,
+          }),
+          ...saveMessages({
+            output: { playbookId: "playbook-b" },
+            callNumber: 2,
+          }),
+        ],
+        organizationId: ORGANIZATION_ID,
+        playbookKeys: knowledgeKeys.playbooks,
+        queryClient,
+        source: "live",
+      });
+      expect(reconciliation).not.toBeNull();
+      if (reconciliation === null) {
+        throw new Error("Expected a newly completed save reconciliation");
+      }
+      await followReconciledPlaybookSave({
+        reconciliation,
+        isCurrent: () => true,
+        follow: (playbookId) => followed.push(playbookId),
+      });
+    };
+    await reconcileCompletion("input-complete");
+    expect(refetches).toBe(1);
+    expect(followed).toEqual(["playbook-b"]);
+    await reconcileCompletion("complete");
+    unsubscribe();
+    expect(refetches).toBe(2);
+    expect(cachedData(queryClient, DETAIL_KEY)).toEqual({ revision: 2 });
+    expect(followed).toEqual(["playbook-b"]);
+    expect(handledToolCallIds.has("tool-call-1")).toBe(true);
+  });
+
   test("a historical save refreshes caches without opening the pane", async () => {
     const queryClient = seededQueryClient();
     const reconciliation = reconcilePlaybookSaveToolCalls({

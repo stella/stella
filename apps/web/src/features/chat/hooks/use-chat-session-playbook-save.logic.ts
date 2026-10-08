@@ -18,15 +18,16 @@ type ReconcilePlaybookSaveToolCallsOptions = {
 };
 
 type PlaybookSaveReconciliation = {
-  playbookId: string;
+  playbookId: string | null;
   /** Settles when the playbook queries have refetched. */
   refetched: Promise<void>;
   source: "history" | "live";
 };
 
 /**
- * Returns the playbook the latest newly handled save wrote, with the refetch
- * it started, or null. The caller follows the save once `refetched` settles,
+ * Refetches for every newly handled save, including an older call that
+ * completes after a newer one. Only a new latest save names a pane target.
+ * The caller follows that target once `refetched` settles,
  * so the pane's label can read the fresh name.
  *
  * A chat save runs outside the playbooks page's own mutations, so every
@@ -47,11 +48,11 @@ export const reconcilePlaybookSaveToolCalls = ({
   queryClient,
   source,
 }: ReconcilePlaybookSaveToolCallsOptions): PlaybookSaveReconciliation | null => {
-  const playbookId = consumePlaybookSaveToolCalls({
+  const consumed = consumePlaybookSaveToolCalls({
     handledToolCallIds,
     messages,
   });
-  if (playbookId === null) {
+  if (consumed === null) {
     return null;
   }
   queryClient.removeQueries({
@@ -60,7 +61,7 @@ export const reconcilePlaybookSaveToolCalls = ({
       playbookKeys.isDetail(query.queryKey) && !query.isActive(),
   });
   return {
-    playbookId,
+    playbookId: consumed.playbookId,
     source,
     refetched: queryClient.invalidateQueries({
       queryKey: playbookKeys.all(organizationId),
@@ -122,7 +123,11 @@ export const followReconciledPlaybookSave = async ({
   follow,
 }: FollowReconciledPlaybookSaveOptions): Promise<void> => {
   await reconciliation.refetched;
-  if (reconciliation.source === "history" || !isCurrent()) {
+  if (
+    reconciliation.source === "history" ||
+    reconciliation.playbookId === null ||
+    !isCurrent()
+  ) {
     return;
   }
   follow(reconciliation.playbookId);

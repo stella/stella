@@ -1200,10 +1200,11 @@ export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
  * Consume the successful `save_playbook` calls this session has not handled,
- * returning the playbook the latest of them saved, or null if there was none.
+ * returning whether caches changed and the latest playbook to follow. A
+ * newly completed older call still changed caches even when a later call
+ * was already handled and must remain the pane's target.
  * A refused save returns an error envelope with no `playbookId`, and wrote
- * nothing, so it is not a reason to refetch. Older history paged in behind a
- * save already handled is consumed but not returned: nothing newer was saved.
+ * nothing, so it is not a reason to refetch.
  */
 export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds,
@@ -1211,8 +1212,9 @@ export const consumePlaybookSaveToolCalls = ({
 }: {
   handledToolCallIds: Set<string>;
   messages: readonly PlaybookSaveMessage[];
-}): string | null => {
+}): { playbookId: string | null } | null => {
   let latestPlaybookId: string | null = null;
+  let hasNewSaves = false;
 
   for (const message of messages) {
     if (message.role !== "assistant") {
@@ -1236,11 +1238,12 @@ export const consumePlaybookSaveToolCalls = ({
       }
 
       handledToolCallIds.add(part["id"]);
+      hasNewSaves = true;
       latestPlaybookId = part["output"]["playbookId"];
     }
   }
 
-  return latestPlaybookId;
+  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
 };
 
 /** The playbook a tool call saved, if it is a completed `save_playbook`

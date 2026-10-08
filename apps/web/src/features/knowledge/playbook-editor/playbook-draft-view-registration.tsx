@@ -40,7 +40,7 @@ const PlaybookDraftRailIcon = ({
 
 const PlaybookDraftRailLabel = ({
   tab,
-  children,
+  renderLabel,
 }: InspectorRailLabelProps<PlaybookDraftViewPayload>) => {
   const { activeOrganizationId } = useAuthenticatedUser();
   const detailView = useQueryView(
@@ -53,7 +53,7 @@ const PlaybookDraftRailLabel = ({
     detailView.type === "items" && "name" in detailView.items
       ? detailView.items.name
       : null;
-  return children(name !== null && name.trim() !== "" ? name : tab.label);
+  return renderLabel(name !== null && name.trim() !== "" ? name : tab.label);
 };
 
 const PlaybookDraftViewSlot = (

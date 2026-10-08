@@ -95,7 +95,7 @@ export type InspectorRailIconProps<P> = {
 
 export type InspectorRailLabelProps<P> = {
   tab: InspectorViewTab<P>;
-  children: (label: string) => ReactNode;
+  renderLabel: (label: string) => ReactNode;
 };
 
 export type InspectorViewRegistration<P = unknown> = {
@@ -231,13 +231,13 @@ export const registerInspectorView = <P>(
       });
     },
     railLabel: RailLabel
-      ? ({ tab, children }) => {
+      ? ({ tab, renderLabel }) => {
           if (!registration.validate(tab.payload)) {
-            return children(tab.label);
+            return renderLabel(tab.label);
           }
           return createElement(RailLabel, {
             tab: { ...tab, payload: tab.payload },
-            children,
+            renderLabel,
           });
         }
       : undefined,
