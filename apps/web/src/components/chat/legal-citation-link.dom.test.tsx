@@ -43,6 +43,7 @@ const { createCaseLawDecisionPath, createCaseLawDecisionRouteParams } =
   await import("@stll/api-contract/case-law-decision-route");
 const { SourceChips } = await import("./source-chips");
 const { StreamdownMentionLink } = await import("./streamdown-mention-link");
+const { LegalCitationLink } = await import("./legal-citation-link");
 const { messageComponents } =
   await import("@/components/ai-elements/message-response-components");
 const { AskUserCard } = await import("./ask-user-card");
@@ -597,3 +598,52 @@ test("a publisher alias with a canonical decision keeps the passage before the s
       .getAttribute("href"),
   ).toBe(primary.getAttribute("href"));
 });
+
+for (const explicitAnchorId of [undefined, "p-30"]) {
+  test(`a publisher alias opens its decision at the ${explicitAnchorId === undefined ? "anchor stored in its app URL" : "explicit anchor over the stored one"}`, async () => {
+    const publisher = "https://publisher.example.test/stored-anchor";
+    const internal = new URL(`${decisionPath}#p-12`, window.location.origin)
+      .href;
+    const view = await renderChat(
+      <LegalCitationLink
+        source={{
+          title: fullDecision.caseNumber,
+          url: publisher,
+          appUrl: internal,
+          sourceUrl: publisher,
+        }}
+        anchorId={explicitAnchorId}
+        interactive
+        appearance="inline"
+      >
+        {quotedPassage}
+      </LegalCitationLink>,
+      fullDecision,
+    );
+    const primary = await view.findByRole("button", {
+      name: decisionReference,
+    });
+    fireEvent.focus(primary);
+    const open = await screen.findByRole("link", {
+      name: messages.caseLaw.citation.openInStella,
+    });
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    open.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      const decisions = useInspectorTabsStore.getState().tabs.flatMap((tab) =>
+        tab.type === "view" && isCaseDecisionViewPayload(tab.payload)
+          ? [
+              {
+                decisionId: tab.payload.decisionId,
+                anchorId: tab.payload.anchorId,
+              },
+            ]
+          : [],
+      );
+      expect(decisions).toEqual([
+        { decisionId: documentId, anchorId: explicitAnchorId ?? "p-12" },
+      ]);
+    });
+  });
+}

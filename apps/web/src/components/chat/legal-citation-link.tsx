@@ -5,7 +5,7 @@ import type {
   ReactNode,
 } from "react";
 
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
@@ -194,6 +194,17 @@ const InteractiveLegalCitation = ({
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
 };
 
+// A publisher alias can carry its paragraph anchor only in the stored app URL.
+const readUrlAnchor = (href: string): string | undefined => {
+  const { hash } = new URL(href);
+  if (hash === "") {
+    return undefined;
+  }
+  return Result.try(() => decodeURIComponent(hash.slice(1))).unwrapOr(
+    undefined,
+  );
+};
+
 export const LegalCitationLink = (props: LegalCitationLinkProps) => {
   const appOrigins = new Set([
     new URL(env.VITE_PUBLIC_APP_URL).origin,
@@ -241,7 +252,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug);
     const decisionProps = {
       passage,
-      anchorId: props.anchorId,
+      anchorId: props.anchorId ?? readUrlAnchor(citation.url),
       readerUrl: citation.url,
       ...(citation.source_url === undefined
         ? {}
