@@ -172,6 +172,40 @@ const lines = (output: string): string[] =>
     .map((line) => line.trim())
     .filter(Boolean);
 
+// One complete compile of a candidate project. Its file list decides
+// membership even when the project has errors in sources the targets do not
+// use; the failure only matters for the project that covers a target.
+type ProjectCompile = { files: Set<string>; failure: string | undefined };
+const compileProject = (project: string): ProjectCompile => {
+  const command = [
+    process.execPath,
+    TSC_NATIVE,
+    "--noEmit",
+    "--pretty",
+    "false",
+    "--listFiles",
+    "-p",
+    project,
+  ];
+  const result = Bun.spawnSync(command, {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = result.stdout.toString();
+  return {
+    files: new Set(
+      lines(stdout)
+        .filter((line) => !/: error TS\d+:/u.test(line))
+        .map((source) => normalizeRepoPath(path.resolve(REPO_ROOT, source))),
+    ),
+    failure:
+      result.exitCode === 0
+        ? undefined
+        : `Command failed (${result.exitCode}): ${command.join(" ")}\n${result.stderr.toString()}${stdout}`,
+  };
+};
+
 const supplementalProjects = (typecheckCommand: string): string[] => {
   const projects: string[] = [];
   for (const match of typecheckCommand.matchAll(PROJECT_ARGUMENT)) {
@@ -495,7 +529,7 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
     panic("Autofix typecheck requires source files");
   }
   const projects = new Map<string, string[]>();
-  const checkedFiles = new Map<string, Set<string>>();
+  const compiled = new Map<string, ProjectCompile>();
   const directoryProjects = new Map<string, string[]>();
   for (const rawFile of files) {
     const file = normalizeRepoPath(
@@ -522,26 +556,17 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
       }
       for (const project of candidates) {
         tried.push(project);
-        let covered = checkedFiles.get(project);
-        if (covered === undefined) {
-          const output = run([
-            process.execPath,
-            TSC_NATIVE,
-            "--noEmit",
-            "--pretty",
-            "false",
-            "--listFiles",
-            "-p",
-            project,
-          ]);
-          covered = new Set(
-            lines(output).map((source) =>
-              normalizeRepoPath(path.resolve(REPO_ROOT, source)),
-            ),
-          );
-          checkedFiles.set(project, covered);
+        let compile = compiled.get(project);
+        if (compile === undefined) {
+          compile = compileProject(project);
+          compiled.set(project, compile);
         }
-        if (covered.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))) {
+        if (
+          compile.files.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))
+        ) {
+          if (compile.failure !== undefined) {
+            panic(compile.failure);
+          }
           coveringProject = project;
           break;
         }

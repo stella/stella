@@ -214,6 +214,11 @@ const projectCases = [
     invalid: true,
   },
   {
+    name: "unrelated errors in a nearer project do not stop the search",
+    layout: "sibling-after-broken-nearest",
+    invalid: false,
+  },
+  {
     name: "ancestor project covers nested sources",
     layout: "ancestor",
     invalid: false,
@@ -289,13 +294,22 @@ process.exit(result.exitCode);
         : "export const value: number = 1;",
     );
     writeFileSync(path.join(root, second), "export const other = 2;");
-    const config = {
-      compilerOptions: { strict: true, types: [], target: "ESNext" },
-      files: [file, second],
-    };
+    const compilerOptions = { strict: true, types: [], target: "ESNext" };
+    const config = { compilerOptions, files: [file, second] };
+    // The nearest project fails to compile on a file the targets do not need.
+    writeFileSync(
+      path.join(root, "broken.ts"),
+      'export const broken: number = "wrong";',
+    );
+    const nearestProject =
+      layout === "nearest"
+        ? config
+        : layout === "sibling-after-broken-nearest"
+          ? { compilerOptions, files: ["broken.ts"] }
+          : emptyProject;
     writeFileSync(
       path.join(root, "tsconfig.json"),
-      JSON.stringify(layout === "nearest" ? config : emptyProject),
+      JSON.stringify(nearestProject),
     );
     writeFileSync(
       path.join(root, "tsconfig.oxlint-plugins.json"),
