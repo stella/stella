@@ -188,6 +188,87 @@ describe("aggregate lock confinement", () => {
       }),
     ).toContainEqual(expect.stringContaining("may only shrink"));
   });
+  test("accepts a reviewed rekey of a changed existing acquisition only", () => {
+    const source = 'tx.select().from(items).for("update");';
+    const baseline = aggregateLockBaseline(aggregateLockSites(file, source));
+    const changed = aggregateLockBaseline(
+      aggregateLockSites(file, source.replace("update", "no key update")),
+    );
+    const from = baseline.at(0)?.fingerprint ?? "";
+    const to = changed.at(0)?.fingerprint ?? "";
+    const rekey = {
+      file,
+      from,
+      to,
+      reason: "weaker mode keeps FK inserts unblocked",
+    };
+    expect(
+      aggregateLockBaselineProblems({
+        actual: changed,
+        baseline: changed,
+        previous: baseline,
+        rekeys: [rekey],
+      }),
+    ).toEqual([]);
+    // A rekey never admits an extra acquisition: the replaced row must be gone.
+    const both = [...baseline, ...changed];
+    expect(
+      aggregateLockBaselineProblems({
+        actual: both,
+        baseline: both,
+        previous: baseline,
+        rekeys: [rekey],
+      }),
+    ).toContainEqual(expect.stringContaining("may only shrink"));
+    // One replaced row funds one replacement, never two.
+    const copied = aggregateLockBaseline(
+      aggregateLockSites(
+        file,
+        source.replace("update", "no key update") +
+          source.replace("update", "key share"),
+      ),
+    );
+    const second =
+      copied.find((row) => row.fingerprint !== to)?.fingerprint ?? "";
+    expect(
+      aggregateLockBaselineProblems({
+        actual: copied,
+        baseline: copied,
+        previous: baseline,
+        rekeys: [rekey, { ...rekey, to: second }],
+      }),
+    ).toContainEqual(expect.stringContaining("may only shrink"));
+    // The count may not grow, a reason is required, and the source must exist.
+    const doubled = aggregateLockBaseline(
+      aggregateLockSites(
+        file,
+        source.replace("update", "no key update").repeat(2),
+      ),
+    );
+    for (const rekeys of [
+      [rekey],
+      [{ ...rekey, reason: " " }],
+      [{ ...rekey, from: "missing" }],
+    ]) {
+      expect(
+        aggregateLockBaselineProblems({
+          actual: doubled,
+          baseline: doubled,
+          previous: baseline,
+          rekeys,
+        }),
+      ).toContainEqual(expect.stringContaining("may only shrink"));
+    }
+    expect(
+      aggregateLockBaselineProblems({
+        actual: changed,
+        baseline: changed,
+        previous: baseline,
+        rekeys: [{ ...rekey, reason: " " }],
+      }),
+    ).toContainEqual(expect.stringContaining("may only shrink"));
+  });
+
   test("enumerates transaction and session advisory and table locks", () => {
     for (const name of [
       "pg_advisory_lock",

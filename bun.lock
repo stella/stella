@@ -221,6 +221,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@atlaskit/pragmatic-drag-and-drop": "catalog:",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^3.0.0",
         "@stll/api-contract": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/concurrency": "workspace:*",
@@ -697,7 +698,9 @@
       },
       "devDependencies": {
         "@stll/concurrency": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
+        "@stll/stable-stringify": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },

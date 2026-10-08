@@ -1,17 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import { sleep } from "@stll/concurrency/sleep";
-import { stellaToast } from "@stll/ui/toast";
 
-import messages from "@/i18n/langs/en.json";
-import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
+GlobalRegistrator.register({ url: "http://localhost:3000/" });
+Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 
-GlobalRegistrator.register({ url: "http://localhost:3000" });
-let respondLatest: (request: Request) => Promise<Response> | Response = () => {
-  throw new TypeError("Unexpected status request");
-};
+const requests: Request[] = [];
+const unexpectedRequests: string[] = [];
+const answers: Response[] = [];
 const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
   Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -19,201 +17,236 @@ const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
       if (new URL(request.url).pathname.startsWith("/api/auth/")) {
         return Response.json(null);
       }
-      expect(request.method).toBe("POST");
-      expect(new URL(request.url).pathname).toContain("/verifications");
-      return await respondLatest(request);
+      if (
+        request.method === "POST" &&
+        new URL(request.url).pathname.endsWith("/verifications/latest")
+      ) {
+        return Response.json({ runs: [] });
+      }
+      if (
+        request.method !== "POST" ||
+        !new URL(request.url).pathname.endsWith("/verifications")
+      ) {
+        unexpectedRequests.push(`${request.method} ${request.url}`);
+        return panic(`Unexpected request: ${request.method} ${request.url}`);
+      }
+      requests.push(request);
+      const answer = answers.shift();
+      if (answer === undefined) {
+        return panic("No verification response seeded");
+      }
+      return answer;
     },
     { preconnect: () => undefined },
   ),
 );
+
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
+  await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
-const { act, cleanup, fireEvent, render, waitFor } =
-  await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
-const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { createTranslator } = await import("use-intl/core");
+const { stellaToast } = await import("@stll/ui/toast");
+const { DocumentVerifications } = await import("./document-verifications");
+const { latestVerificationsOptions } = await import("./queries");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { workspaceFilesOptions } =
   await import("@/lib/workspaces/queries/entities");
-const { DocumentVerifications } = await import("./document-verifications");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { setTranslator } = await import("@/i18n/translator");
+const english = (await import("@/i18n/langs/en.json")).default;
+const czech = (await import("@/i18n/langs/cs.json")).default;
+
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
 const listId = "019a0000-0000-7000-8000-000000000002";
-const document = {
+const target = {
   entityId: "019a0000-0000-7000-8000-000000000003",
-  fieldId: "019a0000-0000-7000-8000-000000000004",
-  name: "Service agreement",
-  fileName: "agreement.docx",
-  parentId: null,
-  mimeType:
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-} satisfies WorkspaceFile;
+  fileFieldId: "019a0000-0000-7000-8000-000000000004",
+};
+const runId = "019a0000-0000-7000-8000-000000000005";
 const clients: InstanceType<typeof QueryClient>[] = [];
-const mountDocuments = (
-  files: WorkspaceFile[],
-  role: "admin" | "external" | "intern" | "member" | "owner" = "admin",
-) => {
+const notice = spyOn(stellaToast, "add").mockReturnValue(
+  "verification-refusal",
+);
+
+const mountDocuments = (locale: "en" | "cs" = "en") => {
+  const messages = locale === "cs" ? czech : english;
+  setTranslator(createTranslator({ locale, messages }));
+  const opened: string[] = [];
   const client = new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: 0, staleTime: Infinity },
+      queries: { enabled: false, retry: false, gcTime: 0, staleTime: Infinity },
     },
   });
   clients.push(client);
-  client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, files);
-  client.setQueryData(roleOptions.queryKey, role);
-  return render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale="en" timeZone="UTC">
+  client.setQueryData(roleOptions.queryKey, "owner");
+  client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, [
+    {
+      entityId: target.entityId,
+      fieldId: target.fileFieldId,
+      name: "Drawdown statement",
+      fileName: "drawdown.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      parentId: null,
+    },
+  ]);
+  client.setQueryData(
+    latestVerificationsOptions({ workspaceId, documents: [target] }).queryKey,
+    new Map(),
+  );
+  render(
+    <IntlProvider locale={locale} messages={messages} timeZone="UTC">
+      <FormattingProvider locale={locale} timeZone="UTC">
         <QueryClientProvider client={client}>
           <DocumentVerifications
             workspaceId={workspaceId}
             listId={listId}
-            onOpenRun={() => undefined}
+            onOpenRun={(id) => {
+              opened.push(id);
+            }}
           />
         </QueryClientProvider>
       </FormattingProvider>
     </IntlProvider>,
   );
+  return { opened, messages };
 };
-const answerLatest = (
-  respond: (request: Request) => Promise<Response> | Response,
-) => {
-  respondLatest = respond;
-  fetchBoundary.mockClear();
-  return fetchBoundary;
-};
+
+const confirmation = () =>
+  Response.json(
+    {
+      code: "usage_confirmation_required",
+      message:
+        "This run's estimated size needs an explicit confirmation to start.",
+      confirmation: { estimatedUnits: 120, availableUnits: 500 },
+    },
+    { status: 428 },
+  );
+
 afterEach(() => {
   cleanup();
-  for (const client of clients.splice(0)) {
+  for (const client of clients) {
     client.clear();
   }
-  fetchBoundary.mockClear();
-  respondLatest = () => {
-    throw new TypeError("Unexpected status request");
-  };
+  clients.length = 0;
+  for (const request of requests) {
+    expect(request.method).toBe("POST");
+    expect(new URL(request.url).pathname).toBe(
+      `/v1/lists/${workspaceId}/verifications`,
+    );
+  }
+  requests.length = 0;
+  expect(unexpectedRequests).toEqual([]);
+  unexpectedRequests.length = 0;
+  answers.length = 0;
+  notice.mockClear();
+  setTranslator(createTranslator({ locale: "en", messages: english }));
 });
 afterAll(async () => {
-  // A settled mutation leaves React work scheduled; let it run while the DOM
-  // globals still exist.
+  // Let React's scheduled passive work finish before the DOM goes away.
   await act(async () => {
     await sleep(50);
   });
+  notice.mockRestore();
   fetchBoundary.mockRestore();
   await GlobalRegistrator.unregister();
 });
-test("an empty matter shows its document empty state without requesting statuses", () => {
-  const boundary = answerLatest(() => Response.json({ runs: [] }));
-  const view = mountDocuments([]);
-  expect(view.getByText(messages.avt.documents.empty)).toBeTruthy();
+
+test("a large document starts only after confirming its displayed estimate", async () => {
+  answers.push(confirmation(), Response.json({ runId }));
+  const { opened, messages } = mountDocuments();
+  fireEvent.click(screen.getByRole("button", { name: messages.common.verify }));
+  const dialog = await screen.findByRole("dialog");
   expect(
-    view.queryByRole("button", { name: messages.common.verify }),
+    within(dialog).getByText(messages.avt.documents.sizeConfirmTitle),
+  ).toBeTruthy();
+  expect(dialog.textContent).toContain("120");
+  expect(dialog.textContent).toContain("500");
+  expect(requests).toHaveLength(1);
+  expect(await requests.at(0)?.json()).toEqual({ listId, ...target });
+  expect(opened).toEqual([]);
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: messages.common.verify }),
+  );
+  await waitFor(() => expect(opened).toEqual([runId]));
+  expect(requests).toHaveLength(2);
+  expect(await requests.at(1)?.json()).toEqual({
+    listId,
+    ...target,
+    confirmedUnits: 120,
+  });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    screen.queryByText(messages.avt.documents.statusLoadFailed),
   ).toBeNull();
-  expect(boundary).not.toHaveBeenCalled();
-});
-test("pending statuses disable verification and show no unverified verdict", async () => {
-  const { promise: response, resolve: finish } =
-    Promise.withResolvers<Response>();
-  answerLatest(async () => response);
-  const view = mountDocuments([document]);
-  expect(
-    view
-      .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(true);
-  expect(view.queryByText(messages.avt.documents.notVerified)).toBeNull();
-  finish(Response.json({ runs: [] }));
-  await waitFor(() =>
-    expect(view.getByText(messages.avt.documents.notVerified)).toBeTruthy(),
-  );
-  expect(
-    view
-      .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(false);
-});
-test("a status error offers retry, keeps verification disabled, and recovers", async () => {
-  let failed = true;
-  const boundary = answerLatest(() =>
-    failed
-      ? Response.json({ message: "Status read failed" }, { status: 500 })
-      : Response.json({ runs: [] }),
-  );
-  const view = mountDocuments([document]);
-  await waitFor(() =>
-    expect(
-      view.getByText(messages.avt.documents.statusLoadFailed),
-    ).toBeTruthy(),
-  );
-  expect(
-    view
-      .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(true);
-  expect(view.queryByText(messages.avt.documents.notVerified)).toBeNull();
-  failed = false;
-  fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
-  await waitFor(() =>
-    expect(view.getByText(messages.avt.documents.notVerified)).toBeTruthy(),
-  );
-  expect(view.queryByText(messages.avt.documents.statusLoadFailed)).toBeNull();
-  expect(
-    view
-      .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(false);
-  expect(boundary).toHaveBeenCalledTimes(2);
-});
-test("a loaded document keeps verification disabled without update permission", async () => {
-  answerLatest(() => Response.json({ runs: [] }));
-  const view = mountDocuments([document], "external");
-  await waitFor(() =>
-    expect(view.getByText(messages.avt.documents.notVerified)).toBeTruthy(),
-  );
-  expect(
-    view
-      .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+  expect(notice).not.toHaveBeenCalled();
 });
 
-for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
-  test(`${code}: a limit refusal leaves the document available for a later verification`, async () => {
-    const toast = spyOn(stellaToast, "add").mockReturnValue("limit-toast");
-    try {
-      answerLatest((request) =>
-        new URL(request.url).pathname.endsWith("/latest")
-          ? Response.json({ runs: [] })
-          : Response.json(
-              { code, message: "Server English text", retryable: true },
-              { status: 429 },
-            ),
-      );
-      const view = mountDocuments([document]);
-      await waitFor(() =>
-        expect(view.getByText(messages.avt.documents.notVerified)).toBeTruthy(),
-      );
-      fireEvent.click(
-        view.getByRole("button", { name: messages.common.verify }),
-      );
-      const expected =
-        code === VERIFICATION_RUN_CAP_CODES.active
-          ? messages.errors.apiCodes.verificationActiveLimitReached
-          : messages.errors.apiCodes.verificationDailyLimitReached;
-      await waitFor(() =>
-        expect(toast).toHaveBeenCalledWith(
-          expect.objectContaining({ title: expected, type: "error" }),
-        ),
-      );
-      expect(
-        view
-          .getByRole("button", { name: messages.common.verify })
-          .hasAttribute("disabled"),
-      ).toBe(false);
-      expect(view.getByText(messages.avt.documents.notVerified)).toBeTruthy();
-      expect(
-        view.queryByRole("button", { name: messages.common.open }),
-      ).toBeNull();
-    } finally {
-      toast.mockRestore();
-    }
+test("cancelling a size confirmation abandons it and a fresh attempt needs confirmation again", async () => {
+  answers.push(confirmation(), confirmation());
+  const { opened, messages } = mountDocuments();
+  fireEvent.click(screen.getByRole("button", { name: messages.common.verify }));
+  fireEvent.click(
+    within(await screen.findByRole("dialog")).getByRole("button", {
+      name: messages.common.cancel,
+    }),
+  );
+  // Polled assertions compare booleans: a failing matcher on a DOM node
+  // pretty-prints the whole document and stalls the event loop.
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
+  expect(requests).toHaveLength(1);
+  expect(opened).toEqual([]);
+  fireEvent.click(screen.getByRole("button", { name: messages.common.verify }));
+  await screen.findByRole("dialog");
+  expect(requests).toHaveLength(2);
+  expect(await requests.at(1)?.json()).toEqual({ listId, ...target });
+  expect(opened).toEqual([]);
+});
+
+for (const refusal of [
+  {
+    name: "active run limit",
+    message: "This organization has reached its active verification limit.",
+  },
+  {
+    name: "daily run limit",
+    message: "This organization has reached its daily verification limit.",
+  },
+]) {
+  test(`the ${refusal.name} shows a localized refusal and permits another attempt`, async () => {
+    answers.push(
+      Response.json(
+        {
+          message: refusal.message,
+          retryable: true,
+          hint: "Retry later.",
+        },
+        { status: 429 },
+      ),
+      Response.json({ runId }),
+    );
+    const { opened, messages } = mountDocuments("cs");
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.verify }),
+    );
+    await waitFor(() => expect(notice).toHaveBeenCalledTimes(1));
+    expect(notice).toHaveBeenCalledWith({
+      title: messages.avt.runs.startFailed,
+      type: "error",
+    });
+    expect(opened).toEqual([]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(requests).toHaveLength(1);
+    const verify = screen.getByRole("button", { name: messages.common.verify });
+    expect(verify.getAttribute("aria-disabled")).not.toBe("true");
+    fireEvent.click(verify);
+    await waitFor(() => expect(opened).toEqual([runId]));
+    expect(
+      screen.queryByText(messages.avt.documents.statusLoadFailed),
+    ).toBeNull();
+    expect(requests).toHaveLength(2);
+    expect(await requests.at(1)?.json()).toEqual({ listId, ...target });
   });
 }
