@@ -1114,7 +1114,14 @@ const isJoinedTransactionCallback = ({
   callback,
   implementation: { body, source, file },
   access,
-}: TransactionCallbackOptions) => {
+  handlerSafeDb,
+}: TransactionCallbackOptions & {
+  /**
+   * Only a route handler's own destructured `safeDb` is the injected runner.
+   * In a followed callee the caller supplies it, so it never qualifies.
+   */
+  handlerSafeDb: boolean;
+}) => {
   const call = callback.parent;
   if (!ts.isCallExpression(call) || !isJoinedRunner({ call })) {
     return false;
@@ -1124,6 +1131,9 @@ const isJoinedTransactionCallback = ({
     return false;
   }
   if (expression.text === "safeDb" && call.arguments.at(0) === callback) {
+    if (!handlerSafeDb) {
+      return false;
+    }
     const handler = body.parent;
     return (
       (ts.isArrowFunction(handler) ||
@@ -1171,7 +1181,14 @@ const isJoinedInlineArgument = ({
   access,
 }: TransactionCallbackOptions): boolean => {
   const { source, file } = implementation;
-  if (isJoinedTransactionCallback({ callback, implementation, access })) {
+  if (
+    isJoinedTransactionCallback({
+      callback,
+      implementation,
+      access,
+      handlerSafeDb: false,
+    })
+  ) {
     return true;
   }
   const parent = callback.parent;
@@ -1272,6 +1289,7 @@ const awaitedAggregateNames = ({
             callback: node,
             implementation,
             access,
+            handlerSafeDb: true,
           }))
     ) {
       return;

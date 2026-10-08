@@ -531,10 +531,11 @@ describe("aggregate mutation route coverage", () => {
         handlerModule({
           imports:
             'import { renewExample } from "@/api/services/example-lock";',
-          body: "await renewExample(tx);",
+          body: "await renewExample({ safeDb: async () => {} });",
         }),
       );
       for (const callee of [
+        `${lockImport} export const renewExample = async ({ safeDb }) => { await safeDb(async (tx) => { ${acquisition} }); };`,
         `import { Result } from "better-result"; ${lockImport} export const renewExample = async (Result) => { await Result.tryPromise({ try: async () => { ${acquisition} } }); };`,
         `import { custom } from "@/api/lib/custom-db"; ${lockImport} export const renewExample = async () => { await custom.transaction(async (tx) => { ${acquisition} }); };`,
         `import { abortableTx } from "@/api/db/safe-db"; ${lockImport} export const renewExample = async (abortableTx) => { await abortableTx(db, async (tx) => { ${acquisition} }); };`,
