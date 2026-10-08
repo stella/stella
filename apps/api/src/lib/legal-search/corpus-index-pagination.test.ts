@@ -1624,10 +1624,16 @@ describe("a page addressed by offset", () => {
     skip: number;
     /** Citation authority per decision; none by default. */
     authorityById?: ReadonlyMap<string, number>;
+    /**
+     * Which shown decisions the ranker reports as groups a later window must
+     * leave out: none by default, or every one (each decision its own group).
+     */
+    carries?: "none" | "every";
   };
 
   const readOffsetPage = async ({
     authorityById = new Map(),
+    carries = "none",
     limit,
     parsedCursor = null,
     skip,
@@ -1647,15 +1653,17 @@ describe("a page addressed by offset", () => {
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) =>
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
-      // The production contract: leave out the groups the scope names. No
-      // decision here is folded with another, so none is reported to carry.
+      // The production contract: leave out the groups the scope names.
       rankCandidates: async (candidates, { excludedGroups }) => {
         const shown = candidates.filter(
           ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
         );
         return {
           context: null,
-          groups: [],
+          groups:
+            carries === "every"
+              ? shown.map(({ id }) => corpusSearchGroupToken(id))
+              : [],
           ranked: blendStableCitationAuthority({
             candidates: shown,
             authorityById: new Map(authorityById),
@@ -1897,6 +1905,56 @@ describe("a page addressed by offset", () => {
     // A short page here is not the end of the results.
     expect(page.reach).toBe(SEARCH_PAGE_REACH.SCAN_BUDGET);
     expect(page.nextCursor).toBeNull();
+  });
+
+  test("an offset page whose chain ran out of room for its exclusions does not read as the end of the results", async () => {
+    // Four passages a decision, so the chain's first window shows 225 of
+    // them, and every one is a group the next window must leave out: more
+    // than a cursor may carry, so the chain stops there with results left.
+    const passagesPerDocument = 4;
+    engineHits = Array.from(
+      { length: 2000 * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const firstWindow =
+      (LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit) /
+      passagesPerDocument;
+    expect(firstWindow).toBeGreaterThan(
+      LIMITS.corpusIndexSearchMaxExcludedGroups,
+    );
+    const limit = 20;
+    const skip = 300;
+    // The fixture reaches the fault: the page lies past the first window.
+    expect(skip).toBeGreaterThan(firstWindow);
+
+    const page = await readOffsetPage({ carries: "every", limit, skip });
+
+    expect(page.pageRanked).toEqual([]);
+    expect(page.stop).toEqual({ type: "budget", budget: "exclusion" });
+    // Not the end of the results: no cursor, and the page says it was not
+    // reached, so the web neither shows it as the last page nor lands back.
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.SCAN_BUDGET);
+    expect(page.nextCursor).toBeNull();
+    expect(page.paginationOutcome).toEqual({
+      type: "truncated",
+      reason: "exclusion_budget",
+    });
+  });
+
+  test("a page the scan read to the end of its hits is the end of the results", async () => {
+    engineHits = Array.from({ length: 30 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const page = await readOffsetPage({ limit: 20, skip: 20 });
+
+    expect(page.pageRanked).toHaveLength(10);
+    expect(page.stop).toEqual({ type: "exhausted" });
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
   });
 
   test("an offset page the scan placed reports that it did", async () => {
