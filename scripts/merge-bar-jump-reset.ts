@@ -28,9 +28,17 @@ export type JumpRecord = {
 };
 
 type CancelledJob = {
+  name?: string;
   conclusion: string | null;
   completedAt: string | null;
+  // A step concluded failure. Fail-fast cancels the run before the failing
+  // job concludes, so that job ends cancelled like its siblings.
+  failedStep?: boolean;
 };
+
+// Summary jobs run after a cancellation (`if: always()`) and fail because
+// the jobs they report were cancelled; their own result is not evidence.
+const SUMMARY_JOBS: ReadonlySet<string> = new Set(["ci-result"]);
 
 export type JumpResetEvidence =
   | { type: "unavailable" }
@@ -60,9 +68,18 @@ export const classifyJumpReset = ({
   if (evidence.type === "unavailable") {
     return { type: "not-reset" };
   }
+  // A failed step is a real failure whatever its job concluded, so it rules
+  // a reset out before any conclusion is read.
+  if (evidence.jobs.some((job) => job.failedStep === true)) {
+    return { type: "not-reset" };
+  }
   // Jobs that finished before the jump keep their success; a failed, timed
-  // out or unfinished job is real evidence and rules a reset out.
-  const jobs = evidence.jobs.filter((job) => job.conclusion !== "skipped");
+  // out or unfinished job is real evidence and rules a reset out. Without a
+  // failed step anywhere, a summary job's failure is the cancellation itself.
+  const jobs = evidence.jobs.filter(
+    (job) =>
+      job.conclusion !== "skipped" && !SUMMARY_JOBS.has(job.name ?? ""),
+  );
   if (
     jobs.some(
       (job) => job.conclusion !== "cancelled" && job.conclusion !== "success",

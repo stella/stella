@@ -3294,8 +3294,12 @@ const createGhGateway = ({
       if (runs === null || runs.length === 0) {
         return { type: "unavailable" };
       }
-      const jobs: { conclusion: string | null; completedAt: string | null }[] =
-        [];
+      const jobs: {
+        name?: string;
+        failedStep: boolean;
+        conclusion: string | null;
+        completedAt: string | null;
+      }[] = [];
       for (const run of runs) {
         if (
           readString(run, "head_sha") !== groupSha ||
@@ -3313,7 +3317,18 @@ const createGhGateway = ({
           return { type: "unavailable" };
         }
         for (const job of rows) {
+          const steps = job["steps"];
+          if (steps !== undefined && !Array.isArray(steps)) {
+            return { type: "unavailable" };
+          }
+          const name = job["name"];
           jobs.push({
+            ...(typeof name === "string" ? { name } : {}),
+            failedStep:
+              Array.isArray(steps) &&
+              steps.some(
+                (step) => readRecord(step, "step")["conclusion"] === "failure",
+              ),
             conclusion:
               job["conclusion"] === null ? null : readString(job, "conclusion"),
             completedAt:

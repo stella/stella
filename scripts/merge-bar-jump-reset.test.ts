@@ -66,6 +66,54 @@ describe("classifying merge queue cancellations", () => {
     ).toEqual({ type: "JUMP_RESET", cause: "jump-record", jump });
   });
 
+  test("fail-fast: a failed step in a cancelled job rules a reset out", () => {
+    // The failing job ends cancelled like its siblings; only the summary
+    // job concludes failure. The failed step is the evidence.
+    expect(
+      classify({
+        evidence: {
+          ...evidence,
+          jobs: [
+            { ...evidence.jobs[0], name: "e2e (1)", failedStep: true },
+            ...evidence.jobs,
+            {
+              name: "ci-result",
+              conclusion: "failure",
+              completedAt: jump.at,
+            },
+          ],
+        },
+      }),
+    ).toEqual({ type: "not-reset" });
+  });
+
+  test("a jump: every job cancelled and the summary job failing is a reset", () => {
+    expect(
+      classify({
+        evidence: {
+          ...evidence,
+          jobs: [
+            ...evidence.jobs,
+            {
+              name: "ci-result",
+              conclusion: "failure",
+              completedAt: jump.at,
+            },
+          ],
+        },
+      }),
+    ).toEqual({ type: "JUMP_RESET", cause: "jump-record", jump });
+  });
+
+  test("a force-cancel without a summary job is a reset only inside a jump window", () => {
+    expect(classify({})).toEqual({
+      type: "JUMP_RESET",
+      cause: "jump-record",
+      jump,
+    });
+    expect(classify({ jumps: [] })).toEqual({ type: "not-reset" });
+  });
+
   test("a group without a cancelled job is not a reset", () => {
     expect(
       classify({
