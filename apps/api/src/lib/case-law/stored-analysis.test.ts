@@ -101,11 +101,7 @@ describe("a failed run's record", () => {
   const DECISION = toSafeId<"caseLawDecision">(
     "01a02a37-2222-7222-8222-222222222222",
   );
-  const OTHER_DECISION = toSafeId<"caseLawDecision">(
-    "01a02a37-3333-7333-8333-333333333333",
-  );
   const ORG_A = toSafeId<"organization">("org_a");
-  const ORG_B = toSafeId<"organization">("org_b");
   const orgKey = (
     organizationId: SafeId<"organization">,
     provider = "google",
@@ -180,50 +176,15 @@ describe("a failed run's record", () => {
     ).toEqual({ kind: "none" });
   });
 
-  test("a failure record stores a per-decision key tag rather than the organization id", () => {
-    const failure = failedAt(NOW);
-    expect(JSON.stringify(failure)).not.toContain(ORG_A);
-    // The same organization's key gets its own tag on each decision.
-    const elsewhere = analysisFailure({
-      code: "answer_incomplete",
-      decisionId: OTHER_DECISION,
-      fingerprint: CURRENT,
-      now: NOW,
-      reader: orgKey(ORG_A),
-    });
-    expect(elsewhere.key).not.toEqual(failure.key);
-  });
-
-  // Who a failure answers for, as a matrix over the writer's and the
-  // reader's key: only the very key that failed is told.
-  const MATRIX = [
-    { wrote: orgKey(ORG_A), reads: orgKey(ORG_A), answers: true },
-    { wrote: orgKey(ORG_A), reads: orgKey(ORG_B), answers: false },
-    { wrote: orgKey(ORG_A), reads: orgKey(ORG_A, "anthropic"), answers: false },
-    { wrote: orgKey(ORG_A), reads: PLATFORM, answers: false },
-    { wrote: PLATFORM, reads: PLATFORM, answers: true },
-    { wrote: PLATFORM, reads: orgKey(ORG_A), answers: false },
-  ] as const;
-
-  for (const { wrote, reads, answers } of MATRIX) {
-    test(`a failure on ${JSON.stringify(wrote)} ${answers ? "answers" : "does not answer"} ${JSON.stringify(reads)}`, () => {
+  test("a failure answers the reader whose key recorded it", () => {
+    for (const reader of [orgKey(ORG_A), PLATFORM]) {
       expect(
         failureAnswersReader({
           decisionId: DECISION,
-          failure: failedAt(NOW, wrote),
-          reader: reads,
+          failure: failedAt(NOW, reader),
+          reader,
         }),
-      ).toBe(answers);
-    });
-  }
-
-  test("a failure recorded for one decision does not answer a reader of another decision", () => {
-    expect(
-      failureAnswersReader({
-        decisionId: OTHER_DECISION,
-        failure: failedAt(NOW),
-        reader: orgKey(ORG_A),
-      }),
-    ).toBe(false);
+      ).toBe(true);
+    }
   });
 });

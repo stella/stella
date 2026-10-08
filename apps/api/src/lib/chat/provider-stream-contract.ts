@@ -84,8 +84,8 @@ export const isOutputCeilingStopReport = ({
   code,
   message,
 }: {
-  code: unknown;
-  message: unknown;
+  code?: unknown;
+  message?: unknown;
 }): boolean =>
   code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
   (code === INCOMPLETE_RESPONSE_CODE && message === OUTPUT_CEILING_REASON);

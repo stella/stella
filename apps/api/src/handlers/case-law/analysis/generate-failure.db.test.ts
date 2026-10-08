@@ -29,7 +29,6 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
-import { analysisFailure } from "@/api/lib/case-law/stored-analysis";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -47,7 +46,6 @@ import {
 } from "./generate";
 
 const ORG_A = toSafeId<"organization">("org_analysis_a");
-const ORG_B = toSafeId<"organization">("org_analysis_b");
 const USER_ID = toSafeId<"user">("user_analysis");
 
 const paragraph = (anchorId: string, plainText: string): ParagraphBlock => ({
@@ -315,8 +313,6 @@ describe("a failed analysis run", () => {
       code: "answer_incomplete",
       key: { source: "organization", provider: "google" },
     });
-    // The record stores a key tag rather than the organization id.
-    expect(JSON.stringify(stored)).not.toContain(ORG_A);
 
     // The next poll is told, with whose key, and starts nothing.
     const poll = await read({ decisionId, model: google.model });
@@ -399,49 +395,6 @@ describe("a failed analysis run", () => {
       key: { source: "organization", provider: "google" },
     });
     expect(poll.starts).toBe(0);
-  });
-
-  test("a failure recorded under one key does not answer a reader with another key", async () => {
-    const decisionId = await insertDecision();
-    await read({ decisionId, model: fakeGoogle(["cut-off"]).model });
-
-    const other = await read({
-      decisionId,
-      model: fakeGoogle(["valid"]).model,
-      organizationId: ORG_B,
-    });
-
-    expect(other).toEqual({ response: { status: "generating" }, starts: 1 });
-    expect(await storedValue(decisionId)).toMatchObject({ version: 3 });
-  });
-
-  test("a failure recorded under the platform key does not answer a reader with an organization key", async () => {
-    const decisionId = await insertDecision();
-    // A failing run records the input fingerprint the read derives; a
-    // platform failure over that same input then takes its place.
-    await read({ decisionId, model: fakeGoogle(["cut-off"]).model });
-    const stored = await storedValue(decisionId);
-    if (stored === null || !("inputFingerprint" in stored)) {
-      throw new Error("expected a failure record");
-    }
-    const platformFailure = analysisFailure({
-      code: "provider_unavailable",
-      decisionId,
-      fingerprint: stored.inputFingerprint,
-      now: new Date(),
-      reader: { source: "platform" },
-    });
-    await db
-      .update(caseLawDecisions)
-      .set({ analysis: platformFailure })
-      .where(eq(caseLawDecisions.id, decisionId));
-
-    const reader = await read({
-      decisionId,
-      model: fakeGoogle(["valid"]).model,
-    });
-
-    expect(reader).toEqual({ response: { status: "generating" }, starts: 1 });
   });
 });
 

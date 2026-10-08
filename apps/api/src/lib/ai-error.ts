@@ -79,7 +79,12 @@ const STRUCTURED_OUTPUT_FAILURE_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> =
 const structuredOutputFailureKind = (
   error: Record<string, unknown>,
 ): AIErrorKind | null => {
-  if (isOutputCeilingStopReport(error)) {
+  if (
+    isOutputCeilingStopReport({
+      code: error["code"],
+      message: error["message"],
+    })
+  ) {
     return "output_incomplete";
   }
   const code = error["code"];
