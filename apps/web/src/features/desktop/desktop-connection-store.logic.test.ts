@@ -84,7 +84,9 @@ describe("desktop account connection", () => {
   test("an update-required refusal is retained without reporting a connection error", async () => {
     const { store, calls, errors, linked } = scriptedStore();
     const states: string[] = [];
-    const release = store.subscribe(() => states.push(store.getState().status));
+    const release = store.subscribe(() => {
+      states.push(store.getState().status);
+    });
     const attempt = store.connect();
     linked.resolve(Result.ok({ status: "update-required" }));
     expect(await attempt).toEqual({ status: "update-required" });

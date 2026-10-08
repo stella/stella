@@ -758,7 +758,7 @@ export const RegistrySearch = ({
           {connection?.status === "disconnected" ||
           connection?.status === "expired" ? (
             <Button className="min-h-11" onClick={connect}>
-              {connection?.status === "expired"
+              {connection.status === "expired"
                 ? settingsT("reconnectToStella")
                 : t("registryConnect")}
             </Button>
