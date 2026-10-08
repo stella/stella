@@ -101,9 +101,12 @@ export const useDecisionAnalysis = ({
   // replaces the cached failure, and the observer resumes polling from it.
   const retry = useMutation({
     mutationFn: async () =>
-      await queryClient.fetchQuery(
-        decisionAnalysisOptions({ ...key, retry: true }),
-      ),
+      // `staleTime: 0`: a cached failure, however fresh, never answers the
+      // reader's explicit request to run again.
+      await queryClient.fetchQuery({
+        ...decisionAnalysisOptions({ ...key, retry: true }),
+        staleTime: 0,
+      }),
   });
   const finishedAnalysis =
     query.data?.kind === "done" ? query.data.analysis : null;

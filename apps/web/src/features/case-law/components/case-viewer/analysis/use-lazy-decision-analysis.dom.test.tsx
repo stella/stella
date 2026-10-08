@@ -369,6 +369,60 @@ describe("shared lazy decision analysis", () => {
     ).toBe(true);
   });
 
+  test("Retry over a freshly cached failure still asks the server for a new run", async () => {
+    const failure = {
+      kind: "error",
+      error: {
+        kind: "failed",
+        code: "timed_out",
+        key: { source: "platform" },
+      },
+    } satisfies AnalysisQueryResult;
+    const retried = { value: false };
+    const requests = respondToAnalysis(async () => {
+      const latest = requests.at(-1);
+      if (latest && new URL(latest.url).searchParams.get("retry") === "true") {
+        retried.value = true;
+        return Response.json({ status: "generating" });
+      }
+      return Response.json(
+        retried.value
+          ? { status: "done", analysis }
+          : {
+              status: "error",
+              code: "timed_out",
+              error: "The AI model did not answer in time",
+              key: { source: "platform" },
+            },
+      );
+    });
+    const client = clientWithAvailability();
+    // A failure cached just now, under the production query options.
+    client.setQueryData(decisionAnalysisOptions(key).queryKey, failure);
+    const { result } = renderHook(() => useLazyDecisionAnalysis(eligible), {
+      wrapper: wrapperFor({ client }),
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("error"));
+    const before = requests.length;
+
+    await act(async () => {
+      result.current.generate();
+    });
+
+    await waitFor(() => expect(retried.value).toBe(true));
+    expect(
+      requests
+        .slice(before)
+        .some(
+          (request) =>
+            new URL(request.url).searchParams.get("retry") === "true",
+        ),
+    ).toBe(true);
+    await waitFor(() => expect(result.current.state.status).toBe("done"), {
+      timeout: 5000,
+    });
+  });
+
   test("a decision the server will never analyse offers no retry", async () => {
     const requests = respondToAnalysis(async () =>
       Response.json({
