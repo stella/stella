@@ -79,8 +79,7 @@ export const oauthConsentInfoSchema = v.object({
   redirectHosts: v.array(v.string()),
   clientIdHost: v.nullable(v.string()),
   unverified: v.boolean(),
-  // Web and API roll out separately: while the API is a release behind it
-  // omits the field, which reads as "no verified brand", never as an error.
+  // An omitted brand reads as "no verified brand", never as an error.
   verifiedBrand: v.optional(
     v.nullable(v.picklist(VERIFIED_OAUTH_CLIENT_BRANDS)),
     null,
