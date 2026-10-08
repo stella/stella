@@ -16,6 +16,8 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -26,6 +28,7 @@ import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
+  DEADLINE_DISPATCH_RECOVERY,
   pauseDocumentDeadlineScoutAfterGrantLoss,
   recoverDocumentDeadlineScoutDispatches,
   resumeDocumentDeadlineScoutsAfterGrant,
@@ -183,6 +186,90 @@ const fixture = async (db: GatedTestDb) =>
   });
 
 describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
+  test("a competing deadline claim waits for commit and then observes the claimed source", async () => {
+    await withGatedTestClients(
+      databaseUrl ?? panic("Missing PostgreSQL test URL"),
+      async ({ openClient }) => {
+        const holder = openClient({ max: 1 });
+        const contender = openClient({ max: 1 });
+        const observer = openClient({ max: 1 });
+        const f = await fixture(holder.db);
+        const source = f.sources.at(100) ?? panic("Missing admitted source");
+        const claimAt = new Date();
+        const claim = async (
+          tx: Pick<Transaction, "execute" | "rollback" | "select">,
+        ) =>
+          await mutateRecoveryClaim({
+            type: "deadline-claim",
+            tx,
+            table: documentProcessingRuns,
+            spec: DEADLINE_DISPATCH_RECOVERY,
+            sourceRunId: source.runId,
+            now: claimAt,
+            where: sql`${and(
+              eq(documentProcessingRuns.id, source.runId),
+              eq(documentProcessingRuns.status, "succeeded"),
+              eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+            )}`,
+          });
+        const sessionPid = async (db: GatedTestDb) => {
+          const result = await db.execute(sql`SELECT pg_backend_pid() AS pid`);
+          const pid = Number(result.at(0)?.["pid"]);
+          if (!Number.isSafeInteger(pid)) {
+            return panic("Missing database session identity");
+          }
+          return pid;
+        };
+        const holdingPid = await sessionPid(holder.db);
+        const waitingPid = await sessionPid(contender.db);
+        const ready = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const writer = withAggregateTransaction(holder.db, async (tx) => {
+          const claimed = await claim(tx);
+          expect(claimed.status).toBe("claimed");
+          if (claimed.status !== "claimed") {
+            return panic("Missing claim projection");
+          }
+          const row = claimed.run;
+          expect(row.id).toBe(source.runId);
+          expect(row.entityId).toBe(source.entityId);
+          expect(row.deadlineScoutClaimedAt).toEqual(claimAt);
+          expect(row.deadlineScoutClaimedAtToken).not.toBeNull();
+          expect(row.deadlineScoutAttemptCount).toBe(1);
+          ready.resolve(undefined);
+          await release.promise;
+        });
+        let competing: ReturnType<typeof claim> | undefined;
+        try {
+          await Promise.race([ready.promise, writer]);
+          competing = withAggregateTransaction(contender.db, claim);
+          await waitForBlockedPid(observer.sql, { waitingPid, holdingPid });
+          release.resolve(undefined);
+          expect(await competing).toEqual({ status: "stale_claim" });
+          await writer;
+          const persisted = (
+            await holder.db
+              .select({
+                status: documentProcessingRuns.deadlineScoutStatus,
+                attempts: documentProcessingRuns.deadlineScoutAttemptCount,
+              })
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, source.runId))
+          ).at(0);
+          expect(persisted).toEqual({ status: "running", attempts: 1 });
+        } finally {
+          release.resolve(undefined);
+          await Promise.allSettled(competing ? [writer, competing] : [writer]);
+          await holder.db
+            .delete(organization)
+            .where(eq(organization.id, f.organizationId));
+          await holder.db.delete(user).where(eq(user.id, f.admittedUserId));
+          await holder.db.delete(user).where(eq(user.id, f.pausedUserId));
+        }
+      },
+    );
+  });
+
   test("effect validation waits for admission before source locks and rejects a replacement claim", async () => {
     const previousFlag = env.FEATURE_SIGNALS;
     env.FEATURE_SIGNALS = true;

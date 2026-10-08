@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
@@ -10,6 +9,7 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { recordDeferredNoticeState } from "@/api/lib/db/recovery-bookkeeping/notices";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
@@ -149,18 +149,13 @@ export const fileFlowRunCompletionNotice = async (
       return [];
     }
     const actorUserId = await resolveActorUserId(current, tx);
-    // audit: skip — notification delivery-state bookkeeping; the run retains its outcome.
     if (!(await flowRunActorExists(actorUserId, tx))) {
-      await tx
-        .update(flowRuns)
-        .set({ recoveryState: "actor-removed" })
-        .where(
-          and(
-            eq(flowRuns.id, notice.runId),
-            eq(flowRuns.workspaceId, notice.workspaceId),
-            eq(flowRuns.status, "completed"),
-          ),
-        );
+      await recordDeferredNoticeState(tx, {
+        type: "actor-removed",
+        table: flowRuns,
+        runId: notice.runId,
+        workspaceId: notice.workspaceId,
+      });
       return [];
     }
     if (
@@ -173,32 +168,24 @@ export const fileFlowRunCompletionNotice = async (
       }))
     ) {
       // The completed source records only notices whose filing was deferred.
-      await tx
-        .update(flowRuns)
-        .set({ recoveryState: "completion-notice-pending" })
-        .where(
-          and(
-            eq(flowRuns.id, notice.runId),
-            eq(flowRuns.workspaceId, notice.workspaceId),
-            eq(flowRuns.status, "completed"),
-          ),
-        );
+      await recordDeferredNoticeState(tx, {
+        type: "completion-notice-pending",
+        table: flowRuns,
+        runId: notice.runId,
+        workspaceId: notice.workspaceId,
+      });
       return [];
     }
     const notificationPings = await createNotificationsInTransaction(
       [flowRunCompletedNotification({ ...notice, actorUserId })],
       tx,
     );
-    await tx
-      .update(flowRuns)
-      .set({ recoveryState: null })
-      .where(
-        and(
-          eq(flowRuns.id, notice.runId),
-          eq(flowRuns.workspaceId, notice.workspaceId),
-          eq(flowRuns.status, "completed"),
-        ),
-      );
+    await recordDeferredNoticeState(tx, {
+      type: "clear",
+      table: flowRuns,
+      runId: notice.runId,
+      workspaceId: notice.workspaceId,
+    });
     return notificationPings;
   });
   pingNotificationRecipients(pings);

@@ -9,6 +9,7 @@ import {
 import type { Transaction } from "@/api/db/root";
 import { pendingScoutEmissions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { mutateRecoveryReceipt } from "@/api/lib/db/recovery-bookkeeping/receipts";
 import { findSignalsBackgroundActor } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
@@ -59,22 +60,17 @@ export const emitInfoSoudHearingSignals = async ({
     organizationId,
     featureId: "signals",
   });
-  // audit: skip — derived emission intents commit with their audited hearing imports.
-  const recorded = await tx
-    .insert(pendingScoutEmissions)
-    .values(
-      inserted.map(({ entityId }) => ({
-        organizationId,
-        workspaceId,
-        sourceKind: "infosoud-hearing" as const,
-        sourceId: entityId,
-      })),
-    )
-    .onConflictDoNothing()
-    .returning({
-      sourceId: pendingScoutEmissions.sourceId,
-      nextAttemptAt: sql<string>`${pendingScoutEmissions.nextAttemptAt}::text`,
-    });
+  const recorded = await mutateRecoveryReceipt({
+    type: "create-hearing",
+    tx,
+    table: pendingScoutEmissions,
+    rows: inserted.map(({ entityId }) => ({
+      organizationId,
+      workspaceId,
+      sourceKind: "infosoud-hearing" as const,
+      sourceId: entityId,
+    })),
+  });
   if (
     (await findSignalsBackgroundActor({ tx, organizationId, workspaceId })) ===
     null
@@ -131,21 +127,21 @@ export const emitInfoSoudHearingSignals = async ({
   if (recorded.length === 0) {
     return;
   }
-  // audit: skip — derived intents settled atomically with their audited signals.
-  await tx
-    .delete(pendingScoutEmissions)
-    .where(
-      and(
-        eq(pendingScoutEmissions.organizationId, organizationId),
-        eq(pendingScoutEmissions.sourceKind, "infosoud-hearing"),
-        or(
-          ...recorded.map(({ sourceId, nextAttemptAt }) =>
-            and(
-              eq(pendingScoutEmissions.sourceId, sourceId),
-              sql`${pendingScoutEmissions.nextAttemptAt} = ${nextAttemptAt}::timestamptz`,
-            ),
+  await mutateRecoveryReceipt({
+    type: "dequeue-scout",
+    tx,
+    table: pendingScoutEmissions,
+    where: sql`${and(
+      eq(pendingScoutEmissions.organizationId, organizationId),
+      eq(pendingScoutEmissions.sourceKind, "infosoud-hearing"),
+      or(
+        ...recorded.map(({ sourceId, nextAttemptAt }) =>
+          and(
+            eq(pendingScoutEmissions.sourceId, sourceId),
+            sql`${pendingScoutEmissions.nextAttemptAt} = ${nextAttemptAt}::timestamptz`,
           ),
         ),
       ),
-    );
+    )}`,
+  });
 };

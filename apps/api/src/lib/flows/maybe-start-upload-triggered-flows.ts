@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { flowDefinitions, flowUploadTriggerIntents } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { mutateRecoveryReceipt } from "@/api/lib/db/recovery-bookkeeping/receipts";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   deriveFileExtension,
@@ -51,19 +52,18 @@ export const recordUploadTriggeredFlowIntents = async (
   if (matching.length === 0) {
     return;
   }
-  // audit: skip — derived delivery receipts; the owning document write is audited.
-  await tx
-    .insert(flowUploadTriggerIntents)
-    .values(
-      matching.map(({ id }) => ({
-        definitionId: id,
-        entityId,
-        workspaceId,
-        organizationId,
-        fileExtension: extension,
-      })),
-    )
-    .onConflictDoNothing();
+  await mutateRecoveryReceipt({
+    type: "create-upload",
+    tx,
+    table: flowUploadTriggerIntents,
+    rows: matching.map(({ id }) => ({
+      definitionId: id,
+      entityId,
+      workspaceId,
+      organizationId,
+      fileExtension: extension,
+    })),
+  });
 };
 
 /** Best-effort prompt dispatch; the scheduler owns recovery after crashes or revocation. */

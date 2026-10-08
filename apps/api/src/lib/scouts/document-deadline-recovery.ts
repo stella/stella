@@ -15,15 +15,14 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
+import { transitionRecoveryGrantState } from "@/api/lib/db/recovery-bookkeeping/grant-state";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
-import {
-  defineScopedTransitions,
-  transitionScopedCount,
-} from "@/api/lib/db/transitions";
+import { defineScopedTransitions } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueDocumentDeadlineScout } from "@/api/lib/document-processing-enqueue";
 import {
@@ -40,16 +39,16 @@ const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEADLINE_SCOUT_DISPATCH_CONCURRENCY = 4;
 
 // Recovery owns lease retirement and recoverable admission parking.
-const DEADLINE_DISPATCH_RECOVERY = defineScopedTransitions({
+export const DEADLINE_DISPATCH_RECOVERY = defineScopedTransitions({
   table: documentProcessingRuns,
   key: "id",
   scope: [],
   stateColumn: "deadlineScoutStatus",
   edges: {
     not_requested: [],
-    pending: ["awaiting_grant"],
+    pending: ["awaiting_grant", "running"],
     awaiting_grant: ["pending"],
-    running: ["pending", "awaiting_grant"],
+    running: ["pending", "awaiting_grant", "succeeded", "failed", "cancelled"],
     succeeded: [],
     failed: [],
     cancelled: [],
@@ -69,6 +68,9 @@ const DEADLINE_CENSUS_RECOVERY = defineScopedTransitions({
   },
   initial: [],
 });
+
+export type DeadlineDispatchRecoverySpec = typeof DEADLINE_DISPATCH_RECOVERY;
+export type DeadlineCensusRecoverySpec = typeof DEADLINE_CENSUS_RECOVERY;
 
 const deadlineMatterAdmission = (userId?: SafeId<"user">) =>
   backgroundFeatureActorExists({
@@ -93,8 +95,10 @@ export const resumeDocumentDeadlineScoutsAfterGrant = async ({
   if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
     return;
   }
-  await transitionScopedCount({
+  await transitionRecoveryGrantState({
+    type: "deadline",
     tx,
+    table: documentProcessingRuns,
     spec: DEADLINE_DISPATCH_RECOVERY,
     where: sql`${and(eq(documentProcessingRuns.organizationId, organizationId), deadlineMatterAdmission(userId))}`,
     options: {
@@ -102,9 +106,7 @@ export const resumeDocumentDeadlineScoutsAfterGrant = async ({
       to: "pending",
       set: { deadlineScoutErrorCode: null, updatedAt: new Date() },
     },
-    recordTransitionAuditEvent: (_tx, count) => {
-      logger.info("scout.document_deadlines.grant_resumed", { count });
-    },
+    log: { event: "scout.document_deadlines.grant_resumed" },
   });
 };
 
@@ -144,19 +146,19 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
     });
     const metadata = {
       deadlineScoutClaimedAt: null,
-      deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${claim.from === "running" ? 1 : 0}, 0)`,
       deadlineScoutErrorCode: "feature_not_granted",
       updatedAt: new Date(),
     };
     const parked = isDeploymentFeatureEnabled("FEATURE_SIGNALS")
-      ? await transitionScopedCount({
+      ? await transitionRecoveryGrantState({
+          type: "deadline",
           tx,
+          table: documentProcessingRuns,
           spec: DEADLINE_DISPATCH_RECOVERY,
           where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), claim.from === "running" ? timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken) : undefined, not(deadlineMatterAdmission()))}`,
           options: { from: [claim.from], to: "awaiting_grant", set: metadata },
-          recordTransitionAuditEvent: (_tx, count) => {
-            logger.info("scout.document_deadlines.grant_paused", { count });
-          },
+          log: { event: "scout.document_deadlines.grant_paused" },
+          attemptRefund: claim.from === "running" ? 1 : 0,
         })
       : 0;
     if (parked !== 0) {
@@ -166,14 +168,15 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
       return { status: "stale_claim" };
     }
     // A grant that committed before the lock keeps the rejected observation retryable under a new actor.
-    const retried = await transitionScopedCount({
+    const retried = await transitionRecoveryGrantState({
+      type: "deadline",
       tx,
+      table: documentProcessingRuns,
       spec: DEADLINE_DISPATCH_RECOVERY,
       where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken))}`,
       options: { from: ["running"], to: "pending", set: metadata },
-      recordTransitionAuditEvent: (_tx, count) => {
-        logger.info("scout.document_deadlines.admission_retry", { count });
-      },
+      log: { event: "scout.document_deadlines.admission_retry" },
+      attemptRefund: 1,
     });
     return { status: retried === 0 ? "stale_claim" : "settled" };
   });
@@ -252,16 +255,16 @@ const reconcileDeadlineAdmission = async ({
           organizationId,
           featureId: "signals",
         });
-        return await transitionScopedCount({
+        return await transitionRecoveryGrantState({
+          type: "deadline",
           tx,
+          table: documentProcessingRuns,
           spec: DEADLINE_DISPATCH_RECOVERY,
           where: sql`${and(inArray(documentProcessingRuns.id, ids), admission)}`,
           options: transition,
-          recordTransitionAuditEvent: (_tx, count) => {
-            logger.info("scout.document_deadlines.admission_reconciled", {
-              count,
-              direction,
-            });
+          log: {
+            event: "scout.document_deadlines.admission_reconciled",
+            direction,
           },
         });
       }),
@@ -333,8 +336,10 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
       : await withAggregateTransaction(
           database,
           async (tx) =>
-            await transitionScopedCount({
+            await mutateRecoveryClaim({
+              type: "deadline-expiry",
               tx,
+              table: documentProcessingRuns,
               spec: DEADLINE_DISPATCH_RECOVERY,
               where: sql`${and(
                 or(
@@ -352,20 +357,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
                 eq(documentProcessingRuns.deadlineScoutStatus, "running"),
                 lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
               )}`,
-              options: {
-                from: ["running"],
-                to: "pending",
-                set: {
-                  deadlineScoutClaimedAt: null,
-                  deadlineScoutErrorCode: "worker_lease_expired",
-                  updatedAt: new Date(),
-                },
-              },
-              recordTransitionAuditEvent: (_tx, count) => {
-                logger.info("scout.document_deadlines.dispatches_reclaimed", {
-                  count,
-                });
-              },
+              now: new Date(),
             }),
         );
 
@@ -396,8 +388,10 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
       : await withAggregateTransaction(
           database,
           async (tx) =>
-            await transitionScopedCount({
+            await mutateRecoveryClaim({
+              type: "scout-expiry",
               tx,
+              table: scoutRuns,
               spec: DEADLINE_CENSUS_RECOVERY,
               where: sql`${and(
                 or(
@@ -414,19 +408,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
                 eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
                 lt(scoutRuns.startedAt, staleBefore),
               )}`,
-              options: {
-                from: ["running"],
-                to: "failed",
-                set: {
-                  error: "worker_lease_expired",
-                  finishedAt: new Date(),
-                },
-              },
-              recordTransitionAuditEvent: (_tx, count) => {
-                logger.info("scout.document_deadlines.census_runs_expired", {
-                  count,
-                });
-              },
+              now: new Date(),
             }),
         );
 

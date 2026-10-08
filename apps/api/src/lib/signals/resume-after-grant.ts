@@ -1,4 +1,5 @@
 import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
@@ -11,12 +12,17 @@ type ResumeSignalsAfterGrantOptions = {
   userId: SafeId<"user">;
 };
 
+type ResumeSignalsAfterGrantDependencies = {
+  database: { transaction: ScopedDb };
+};
+
 /** Rechecks the committed grant and resumes only sources accessible to its principal. */
-export const resumeSignalsAfterGrant = async ({
-  organizationId,
-  userId,
-}: ResumeSignalsAfterGrantOptions): Promise<void> => {
-  await withAggregateTransaction(rootDb, async (tx) => {
+export const resumeSignalsAfterGrant = async (
+  { organizationId, userId }: ResumeSignalsAfterGrantOptions,
+  dependencies?: ResumeSignalsAfterGrantDependencies,
+): Promise<void> => {
+  const database = dependencies?.database ?? rootDb;
+  await withAggregateTransaction(database, async (tx) => {
     await lockFeatureRecoveryAdmission({
       tx,
       organizationId,

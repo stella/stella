@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
@@ -9,7 +9,7 @@ import {
 } from "@stll/api-contract/signals";
 
 import type { rootDb, Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb, ScopedTransaction } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -27,10 +27,8 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import {
-  timestampCasToken,
-  timestampMatchesCasToken,
-} from "@/api/lib/db/timestamp-cas";
+import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
+import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
@@ -42,7 +40,10 @@ import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-
 import { logger } from "@/api/lib/observability/logger";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { pauseDocumentDeadlineScoutAfterGrantLoss } from "@/api/lib/scouts/document-deadline-recovery";
+import {
+  DEADLINE_DISPATCH_RECOVERY,
+  pauseDocumentDeadlineScoutAfterGrantLoss,
+} from "@/api/lib/scouts/document-deadline-recovery";
 import type { DeadlineScoutClaimSettlement } from "@/api/lib/scouts/document-deadline-recovery";
 import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import {
@@ -92,38 +93,28 @@ type ClaimedRun = typeof documentProcessingRuns.$inferSelect & {
 };
 
 const claimRun = async (
-  db: Pick<DeadlineScoutDb, "update">,
+  db: Pick<ScopedTransaction, "execute" | "rollback" | "select">,
   sourceRunId: SafeId<"documentProcessingRun">,
 ): Promise<ClaimedRun | null> => {
   const now = new Date();
-  const claimed = await db
-    .update(documentProcessingRuns)
-    .set({
-      deadlineScoutAttemptCount: sql`${documentProcessingRuns.deadlineScoutAttemptCount} + 1`,
-      deadlineScoutClaimedAt: now,
-      deadlineScoutErrorCode: null,
-      deadlineScoutSkippedUntil: null,
-      deadlineScoutStatus: "running",
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(documentProcessingRuns.id, sourceRunId),
-        eq(documentProcessingRuns.status, "succeeded"),
-        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
-        deadlineScoutDue(now),
-      ),
-    )
-    .returning({
-      ...getTableColumns(documentProcessingRuns),
-      deadlineScoutClaimedAtToken: timestampCasToken(
-        documentProcessingRuns.deadlineScoutClaimedAt,
-      ),
-    });
-  const run = claimed.at(0);
-  if (!run) {
+  const claimed = await mutateRecoveryClaim({
+    type: "deadline-claim",
+    tx: db,
+    spec: DEADLINE_DISPATCH_RECOVERY,
+    sourceRunId,
+    table: documentProcessingRuns,
+    now,
+    where: sql`${and(
+      eq(documentProcessingRuns.id, sourceRunId),
+      eq(documentProcessingRuns.status, "succeeded"),
+      eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+      deadlineScoutDue(now),
+    )}`,
+  });
+  if (claimed.status === "stale_claim") {
     return null;
   }
+  const { run } = claimed;
   if (
     run.deadlineScoutClaimedAt === null ||
     run.deadlineScoutClaimedAtToken === null
@@ -310,7 +301,7 @@ const settledColumns = (settlement: DeadlineScanSettlement) => {
         errorCode: settlement.errorCode,
         skippedUntil: null,
         status: settlement.status,
-      };
+      } as const;
     default:
       settlement satisfies never;
       return panic("Unhandled deadline scan settlement");
@@ -322,35 +313,39 @@ export const settleDocumentDeadlineScoutClaim = async ({
   run,
   settlement,
 }: {
-  db: Pick<DeadlineScoutDb, "update">;
+  db:
+    | Pick<DeadlineScoutDb, "transaction">
+    | Pick<ScopedTransaction, "execute" | "rollback">;
   run: Pick<ClaimedRun, "id" | "deadlineScoutClaimedAtToken">;
   settlement: DeadlineScanSettlement;
 }): Promise<DeadlineScoutClaimSettlement> => {
   const { attemptRefund, errorCode, skippedUntil, status } =
     settledColumns(settlement);
-  // audit: skip - original-token settlement records the durable scout outcome and attempt bookkeeping.
-  const settled = await db
-    .update(documentProcessingRuns)
-    .set({
-      deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${attemptRefund}, 0)`,
-      deadlineScoutClaimedAt: null,
-      deadlineScoutErrorCode: errorCode,
-      deadlineScoutSkippedUntil: skippedUntil,
-      deadlineScoutStatus: status,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
+  const settle = async (tx: Pick<ScopedTransaction, "execute" | "rollback">) =>
+    await mutateRecoveryClaim({
+      type: "deadline-settlement",
+      tx,
+      spec: DEADLINE_DISPATCH_RECOVERY,
+      table: documentProcessingRuns,
+      now: new Date(),
+      status,
+      errorCode,
+      skippedUntil,
+      attemptRefund,
+      where: sql`${and(
         eq(documentProcessingRuns.id, run.id),
         eq(documentProcessingRuns.deadlineScoutStatus, "running"),
         timestampMatchesCasToken(
           documentProcessingRuns.deadlineScoutClaimedAt,
           run.deadlineScoutClaimedAtToken,
         ),
-      ),
-    )
-    .returning({ id: documentProcessingRuns.id });
-  return { status: settled.length === 0 ? "stale_claim" : "settled" };
+      )}`,
+    });
+  const settled =
+    "rollback" in db
+      ? await settle(db)
+      : await withAggregateTransaction(db, settle);
+  return { status: settled === 0 ? "stale_claim" : "settled" };
 };
 
 type RejectDeadlineObservationOptions = {

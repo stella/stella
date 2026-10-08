@@ -12,12 +12,17 @@ type ResumeFlowsAfterGrantOptions = {
   userId: SafeId<"user">;
 };
 
+type ResumeFlowsAfterGrantDependencies = Parameters<
+  typeof resumeFlowStepsAfterGrant
+>[1];
+
 /** Rechecks the committed grant and resumes only sources accessible to its principal. */
-export const resumeFlowsAfterGrant = async ({
-  organizationId,
-  userId,
-}: ResumeFlowsAfterGrantOptions): Promise<void> => {
-  await withAggregateTransaction(rootDb, async (tx) => {
+export const resumeFlowsAfterGrant = async (
+  { organizationId, userId }: ResumeFlowsAfterGrantOptions,
+  dependencies?: ResumeFlowsAfterGrantDependencies,
+): Promise<void> => {
+  const database = dependencies?.database ?? rootDb;
+  const admitted = await withAggregateTransaction(database, async (tx) => {
     await lockFeatureRecoveryAdmission({
       tx,
       organizationId,
@@ -31,7 +36,7 @@ export const resumeFlowsAfterGrant = async ({
         featureId: "flows",
       }))
     ) {
-      return;
+      return false;
     }
     await resumeUploadTriggersAfterGrant({
       tx,
@@ -39,13 +44,22 @@ export const resumeFlowsAfterGrant = async ({
       userId,
       now: new Date(),
     });
+    return true;
   });
+  if (!admitted) {
+    return;
+  }
   await repairFlowScheduleTriggers({
-    database: rootDb,
+    database,
     principal: { organizationId, userId },
   });
   await resumeFlowStepsAfterGrant(
     { organizationId, userId },
-    { database: rootDb },
+    {
+      database,
+      ...(dependencies?.enqueueStep === undefined
+        ? {}
+        : { enqueueStep: dependencies.enqueueStep }),
+    },
   );
 };

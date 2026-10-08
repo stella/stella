@@ -34,6 +34,7 @@ import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding-owner";
+import { pauseDocumentDeadlineScoutAfterGrantLoss } from "@/api/lib/scouts/document-deadline-recovery";
 import { settleDocumentDeadlineScoutClaim } from "@/api/lib/scouts/document-deadlines";
 import type { NewSignal } from "@/api/lib/signals/emit";
 import { runScout } from "@/api/lib/signals/scout";
@@ -487,16 +488,11 @@ describe.skipIf(!enabled)(
               expect(result.outcome).toBe("emitted");
               await regrant(writer.db, fixture);
               expect(
-                await settleDocumentDeadlineScoutClaim({
-                  db: reader.db,
-                  run: {
-                    id: sourceId,
-                    deadlineScoutClaimedAtToken: sourceToken,
-                  },
-                  settlement: {
-                    status: "awaiting_grant",
-                    errorCode: "feature_not_granted",
-                  },
+                await pauseDocumentDeadlineScoutAfterGrantLoss({
+                  database: reader.db,
+                  sourceRunId: sourceId,
+                  from: "running",
+                  claimedAtToken: sourceToken,
                 }),
               ).toEqual({ status: "stale_claim" });
               expect(

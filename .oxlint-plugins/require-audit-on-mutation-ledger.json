@@ -1668,13 +1668,6 @@
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
   {
-    "id": "apps/api/src/lib/scouts/document-deadlines.ts::claimRun",
-    "writes": {
-      "update:documentProcessingRuns": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/search/index-chat.ts::upsertChatMessageSearchDocuments",
     "writes": {
       "insert:chat_message_search_documents": 1

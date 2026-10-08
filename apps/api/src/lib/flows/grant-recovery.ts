@@ -7,6 +7,7 @@ type ResumeFlowsAfterGrantOptions = {
 };
 export const resumeFlowsAfterGrant = async (
   options: ResumeFlowsAfterGrantOptions,
+  dependencies?: Parameters<typeof resumeOwned>[1],
 ): Promise<void> => {
-  await resumeOwned(options);
+  await resumeOwned(options, dependencies);
 };

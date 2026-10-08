@@ -17,12 +17,13 @@ import {
   withAggregateRowQuery,
   withAggregateLock,
 } from "@/api/lib/db/aggregate-lock";
+import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
+import { transitionRecoveryGrantState } from "@/api/lib/db/recovery-bookkeeping/grant-state";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
@@ -36,7 +37,6 @@ import type {
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
-import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -193,8 +193,10 @@ const revalidateUploadIntent = async ({
     return undefined;
   })();
   if (reason !== undefined) {
-    await transitionScopedCount({
+    await transitionRecoveryGrantState({
+      type: "upload",
       tx,
+      table: flowUploadTriggerIntents,
       spec: UPLOAD_TRIGGER_TRANSITIONS,
       where: sql`${and(eq(flowUploadTriggerIntents.organizationId, definition.organizationId), eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId), eq(flowUploadTriggerIntents.definitionId, definitionId), eq(flowUploadTriggerIntents.entityId, entityId), eq(flowUploadTriggerIntents.status, "pending"), timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, receipt.retryAtToken))}`,
       options: {
@@ -202,9 +204,7 @@ const revalidateUploadIntent = async ({
         to: "skipped",
         set: { skipReason: reason },
       },
-      recordTransitionAuditEvent: (_tx, count) => {
-        logger.info("flow.upload_trigger_skipped", { count, reason });
-      },
+      log: { event: "flow.upload_trigger_skipped", reason },
     });
     return { type: "skipped", reason };
   }
@@ -240,22 +240,20 @@ const deferCappedUploadIntent = async ({
   claimToken,
   now,
 }: DeferCappedUploadIntentOptions): Promise<void> => {
-  // audit: skip — durable delivery retry bookkeeping; the source upload is audited.
-  await tx
-    .update(flowUploadTriggerIntents)
-    .set({
-      retryAt: new Date(startOfUtcDay(now).getTime() + DAY_IN_MS),
-    })
-    .where(
-      and(
-        eq(flowUploadTriggerIntents.organizationId, organizationId),
-        eq(flowUploadTriggerIntents.workspaceId, workspaceId),
-        eq(flowUploadTriggerIntents.definitionId, definitionId),
-        eq(flowUploadTriggerIntents.entityId, entityId),
-        eq(flowUploadTriggerIntents.status, "pending"),
-        timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
-      ),
-    );
+  await mutateRecoveryClaim({
+    type: "upload-defer",
+    tx,
+    table: flowUploadTriggerIntents,
+    retryAt: new Date(startOfUtcDay(now).getTime() + DAY_IN_MS),
+    where: sql`${and(
+      eq(flowUploadTriggerIntents.organizationId, organizationId),
+      eq(flowUploadTriggerIntents.workspaceId, workspaceId),
+      eq(flowUploadTriggerIntents.definitionId, definitionId),
+      eq(flowUploadTriggerIntents.entityId, entityId),
+      eq(flowUploadTriggerIntents.status, "pending"),
+      timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
+    )}`,
+  });
 };
 
 export const insertAutomatedFlowRunWithinCap = async ({

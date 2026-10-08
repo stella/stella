@@ -427,6 +427,57 @@ const hasCallSkipDirective = ({
   );
 };
 
+const RECOVERY_BOOKKEEPING_OWNER_PREFIX =
+  "apps/api/src/lib/db/recovery-bookkeeping/";
+
+const importsRecoveryBookkeeping = (
+  node: unknown,
+  relative: string,
+): boolean => {
+  if (!isAstNode(node) || !Array.isArray(node.body)) {
+    return false;
+  }
+  return node.body.some((statement) => {
+    if (
+      !isAstNode(statement) ||
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type" ||
+      !isAstNode(statement.source) ||
+      typeof statement.source.value !== "string"
+    ) {
+      return false;
+    }
+    const specifier = statement.source.value;
+    const target = specifier.startsWith("@/api/")
+      ? `apps/api/src/${specifier.slice("@/api/".length)}`
+      : path.posix.normalize(
+          path.posix.join(path.posix.dirname(relative), specifier),
+        );
+    return target.startsWith(RECOVERY_BOOKKEEPING_OWNER_PREFIX);
+  });
+};
+
+type BookkeepingDirectiveOptions = {
+  node: unknown;
+  relative: string;
+  count: number;
+};
+const bookkeepingDirectiveMessage = ({
+  node,
+  relative,
+  count,
+}: BookkeepingDirectiveOptions) => {
+  if (count === 0) {
+    return undefined;
+  }
+  if (relative.startsWith(RECOVERY_BOOKKEEPING_OWNER_PREFIX)) {
+    return count > 1 ? "bookkeepingOwnerDirectives" : undefined;
+  }
+  return importsRecoveryBookkeeping(node, relative)
+    ? "bookkeepingConsumerDirective"
+    : undefined;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "require-audit-on-mutation" },
   rules: {
@@ -462,6 +513,10 @@ export default eslintCompatPlugin({
             "or annotate the function with `// audit: skip - <reason>` (at " +
             "least three words) if the write legitimately needs no audit " +
             "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
+          bookkeepingConsumerDirective:
+            "Recovery bookkeeping consumers delegate derived writes to the closed class owner; they cannot carry their own audit skip directive.",
+          bookkeepingOwnerDirectives:
+            "A recovery bookkeeping owner has at most one audit skip directive for its closed operation set.",
           overBudget:
             "{{owner}} holds {{actual}} unaudited {{target}} writes; the " +
             "audit ledger allows {{budget}}. Add an audit emission in the " +
@@ -651,6 +706,14 @@ export default eslintCompatPlugin({
               ) {
                 skipDirectiveRanges.push(range);
               }
+            }
+            const messageId = bookkeepingDirectiveMessage({
+              node,
+              relative,
+              count: skipDirectiveRanges.length,
+            });
+            if (messageId !== undefined) {
+              context.report({ node, messageId });
             }
           },
           FunctionDeclaration: pushScope,

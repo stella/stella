@@ -1,9 +1,10 @@
 import { and, asc, eq, gt } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
+import type { ScopedTransaction } from "@/api/db/safe-db";
 import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { writeSearchBookkeeping } from "@/api/lib/db/recovery-bookkeeping/search";
 import { LIMITS } from "@/api/lib/limits";
 import type {
   RemoveEntityOptions,
@@ -14,7 +15,7 @@ import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-a
 const REINDEX_BATCH_SIZE = 100;
 
 type SearchMaintenanceDatabase = Pick<
-  Transaction,
+  ScopedTransaction,
   "select" | "query" | "delete" | "execute"
 >;
 
@@ -26,10 +27,12 @@ export const getSearchMaintenance = (
     entityId,
     workspaceId,
   }: RemoveEntityOptions): Promise<void> => {
-    // audit: skip - removes a derived search projection after its source entity deletion.
-    await database
-      .delete(searchDocuments)
-      .where(eq(searchDocuments.entityId, entityId));
+    await writeSearchBookkeeping({
+      type: "remove-entity",
+      db: database,
+      table: searchDocuments,
+      entityId,
+    });
 
     await syncWorkspaceSearchActivity(workspaceId, database);
   };

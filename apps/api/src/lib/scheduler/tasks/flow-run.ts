@@ -1,9 +1,9 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { schedulerJobs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { writeSchedulerBookkeeping } from "@/api/lib/db/recovery-bookkeeping/scheduler";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { isScheduledFlowDue } from "@/api/lib/flows/flow-trigger-logic";
@@ -60,14 +60,6 @@ const originalScheduleClaim = (job: SchedulerJob) => ({
   lockedBy: job.lockedBy ?? panic("Scheduled flow requires a scheduler lease"),
 });
 
-const originalScheduleClaimWhere = (job: SchedulerJob) => {
-  const claim = originalScheduleClaim(job);
-  return and(
-    eq(schedulerJobs.id, claim.jobId),
-    eq(schedulerJobs.lockedBy, claim.lockedBy),
-  );
-};
-
 type PersistScheduleSlotOptions = {
   db: SchedulerDb;
   job: SchedulerJob;
@@ -89,12 +81,13 @@ const persistScheduleSlot = async ({
           pendingClaimedAt: settlement.dueSlot.claimedAtDate().toISOString(),
         }
       : { definitionId };
-  // audit: skip — checkpoints or settles the validated slot under its lease; scheduler_job_runs records each attempt.
-  const changed = await db
-    .update(schedulerJobs)
-    .set({ payload })
-    .where(originalScheduleClaimWhere(job))
-    .returning({ id: schedulerJobs.id });
+  const changed = await writeSchedulerBookkeeping({
+    type: "checkpoint-slot",
+    db,
+    table: schedulerJobs,
+    ...originalScheduleClaim(job),
+    payload,
+  });
   return changed.length === 0
     ? ({ status: "stale" } as const)
     : ({ status: "persisted" } as const);
@@ -132,9 +125,12 @@ export const createScheduledFlowTask =
     if (!definition) {
       // Definition deleted without a sync (e.g. cascade from org deletion): drop
       // the orphaned scheduler row so it stops firing.
-      // audit: skip — scheduler bookkeeping for a definition that no longer
-      // exists; no user-owned record changes.
-      await db.delete(schedulerJobs).where(originalScheduleClaimWhere(job));
+      await writeSchedulerBookkeeping({
+        type: "delete-claimed-orphan",
+        db,
+        table: schedulerJobs,
+        ...originalScheduleClaim(job),
+      });
       logger.info("flow.schedule_definition_missing", { definitionId });
       return;
     }

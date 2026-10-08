@@ -15,12 +15,14 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
+import { transitionRecoveryGrantState } from "@/api/lib/db/recovery-bookkeeping/grant-state";
+import { mutateRecoveryReceipt } from "@/api/lib/db/recovery-bookkeeping/receipts";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
@@ -29,7 +31,6 @@ import {
 } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { failureSink } from "@/api/lib/observability/failure";
-import { logger as recoveryLogger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   brandPersistedDocumentReviewRunId,
@@ -113,26 +114,22 @@ const claimScoutReceipt = async ({
     eq(pendingScoutEmissions.sourceId, source.sourceId),
   );
   // A blocked recipient must not starve the rest of the bounded page.
-  // audit: skip — retry bookkeeping on a durable source intent; scheduler_job_runs records attempts.
   const claimedAt = new Date(now.getTime() + RETRY_INTERVAL_MS);
-  const claimed = await tx
-    .update(pendingScoutEmissions)
-    .set({ nextAttemptAt: claimedAt })
-    .where(
-      and(
-        sourceWhere,
-        eq(pendingScoutEmissions.status, "pending"),
-        timestampMatchesCasToken(
-          pendingScoutEmissions.nextAttemptAt,
-          source.nextAttemptAt,
-        ),
-        scoutEmissionActorExists(),
+  const claimed = await mutateRecoveryClaim({
+    type: "scout-claim",
+    tx,
+    table: pendingScoutEmissions,
+    nextAttemptAt: claimedAt,
+    where: sql`${and(
+      sourceWhere,
+      eq(pendingScoutEmissions.status, "pending"),
+      timestampMatchesCasToken(
+        pendingScoutEmissions.nextAttemptAt,
+        source.nextAttemptAt,
       ),
-    )
-    .returning({
-      sourceId: pendingScoutEmissions.sourceId,
-      claimToken: timestampCasToken(pendingScoutEmissions.nextAttemptAt),
-    });
+      scoutEmissionActorExists(),
+    )}`,
+  });
   const claim = claimed.at(0);
   return claim === undefined
     ? undefined
@@ -260,21 +257,20 @@ export const recoverScoutEmission: SchedulerTask = async ({
         if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
           return { status: "paused" as const };
         }
-        // audit: skip — derived emission intent settled atomically with its audited signal.
-        const removed = await tx
-          .delete(pendingScoutEmissions)
-          .where(
-            and(
-              claim.sourceWhere,
-              eq(pendingScoutEmissions.status, "pending"),
-              timestampMatchesCasToken(
-                pendingScoutEmissions.nextAttemptAt,
-                claim.claimToken,
-              ),
-              scoutEmissionActorExists(),
+        const removed = await mutateRecoveryReceipt({
+          type: "settle-scout",
+          tx,
+          table: pendingScoutEmissions,
+          where: sql`${and(
+            claim.sourceWhere,
+            eq(pendingScoutEmissions.status, "pending"),
+            timestampMatchesCasToken(
+              pendingScoutEmissions.nextAttemptAt,
+              claim.claimToken,
             ),
-          )
-          .returning({ sourceId: pendingScoutEmissions.sourceId });
+            scoutEmissionActorExists(),
+          )}`,
+        });
         return {
           status:
             removed.length === 0 ? ("stale" as const) : ("settled" as const),
@@ -284,7 +280,6 @@ export const recoverScoutEmission: SchedulerTask = async ({
     if (Result.isOk(recovery)) {
       continue;
     }
-    // audit: skip — preserves a retryable source and its sanitized failure after emission rolled back.
     // db-await-in-loop: retry the failed source independently after its emission transaction rolled back
     await withAggregateTransaction(db, async (tx) => {
       await lockFeatureRecoveryAdmission({
@@ -296,26 +291,24 @@ export const recoverScoutEmission: SchedulerTask = async ({
         return;
       }
       await lockScoutReceiptRows(tx, [source]);
-      // audit: skip — rollback left the original token; a newer delivery must win.
-      await tx
-        .update(pendingScoutEmissions)
-        .set({
-          nextAttemptAt: new Date(now.getTime() + RETRY_INTERVAL_MS),
-          lastError: errorTag(recovery.error.cause).slice(0, 128),
-        })
-        .where(
-          and(
-            eq(pendingScoutEmissions.organizationId, source.organizationId),
-            eq(pendingScoutEmissions.sourceKind, source.sourceKind),
-            eq(pendingScoutEmissions.sourceId, source.sourceId),
-            eq(pendingScoutEmissions.status, "pending"),
-            timestampMatchesCasToken(
-              pendingScoutEmissions.nextAttemptAt,
-              source.nextAttemptAt,
-            ),
-            scoutEmissionActorExists(),
+      await mutateRecoveryClaim({
+        type: "scout-retry",
+        tx,
+        table: pendingScoutEmissions,
+        nextAttemptAt: new Date(now.getTime() + RETRY_INTERVAL_MS),
+        lastError: errorTag(recovery.error.cause).slice(0, 128),
+        where: sql`${and(
+          eq(pendingScoutEmissions.organizationId, source.organizationId),
+          eq(pendingScoutEmissions.sourceKind, source.sourceKind),
+          eq(pendingScoutEmissions.sourceId, source.sourceId),
+          eq(pendingScoutEmissions.status, "pending"),
+          timestampMatchesCasToken(
+            pendingScoutEmissions.nextAttemptAt,
+            source.nextAttemptAt,
           ),
-        );
+          scoutEmissionActorExists(),
+        )}`,
+      });
     });
     observeFailure(recovery.error, {
       sink: SCOUT_EMISSION_FAILURE,
@@ -373,8 +366,10 @@ export const resumeScoutEmissionAfterGrant = async ({
     return;
   }
   await lockScoutReceiptRows(tx, rows);
-  await transitionScopedCount({
+  await transitionRecoveryGrantState({
+    type: "scout",
     tx,
+    table: pendingScoutEmissions,
     spec: SCOUT_EMISSION_TRANSITIONS,
     // sql-perf-allow: bounded by 100 preselected and prelocked exact (organization_id, source_kind, source_id) primary-key identities; actor subqueries only narrow those receipts.
     where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), scoutEmissionActorExists(userId), or(...rows.map((row) => and(eq(pendingScoutEmissions.sourceKind, row.sourceKind), eq(pendingScoutEmissions.sourceId, row.sourceId), timestampMatchesCasToken(pendingScoutEmissions.nextAttemptAt, row.nextAttemptAt)))))}`,
@@ -382,8 +377,7 @@ export const resumeScoutEmissionAfterGrant = async ({
       from: ["awaiting_grant"],
       to: "pending",
     },
-    recordTransitionAuditEvent: (_tx, count) =>
-      recoveryLogger.info("scout.emission_grant_resumed", { count }),
+    log: { event: "scout.emission_grant_resumed" },
   });
 };
 
@@ -474,24 +468,26 @@ const reconcileScoutEmissionGrantState = async ({
             ),
           ),
         );
-        await transitionScopedCount({
+        await transitionRecoveryGrantState({
+          type: "scout",
           tx,
+          table: pendingScoutEmissions,
           spec: SCOUT_EMISSION_TRANSITIONS,
           where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), identities, not(scoutEmissionActorExists()))}`,
           options: { from: ["pending"], to: "awaiting_grant" },
-          recordTransitionAuditEvent: (_tx, count) =>
-            recoveryLogger.info("scout.emission_awaiting_grant", { count }),
+          log: { event: "scout.emission_awaiting_grant" },
         });
-        await transitionScopedCount({
+        await transitionRecoveryGrantState({
+          type: "scout",
           tx,
+          table: pendingScoutEmissions,
           spec: SCOUT_EMISSION_TRANSITIONS,
           where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), identities, scoutEmissionActorExists())}`,
           options: {
             from: ["awaiting_grant"],
             to: "pending",
           },
-          recordTransitionAuditEvent: (_tx, count) =>
-            recoveryLogger.info("scout.emission_grant_repaired", { count }),
+          log: { event: "scout.emission_grant_repaired" },
         });
       }),
   });

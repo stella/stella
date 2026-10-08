@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
+import type { ScopedTransaction } from "@/api/db/safe-db";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
+import { writeSchedulerBookkeeping } from "@/api/lib/db/recovery-bookkeeping/scheduler";
 import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 
@@ -49,7 +50,7 @@ export const upsertSchedulerJob = async (
     schedule,
     task,
   }: SchedulerJobDefinition,
-  db: Pick<Transaction, "select" | "insert">,
+  db: Pick<ScopedTransaction, "select" | "insert">,
 ): Promise<void> => {
   const nextRunAt = computeNextRunAt(schedule);
   const [existingJob] = await db
@@ -65,27 +66,12 @@ export const upsertSchedulerJob = async (
     existingJob.task !== task ||
     !schedulerSchedulesEqual(existingJob.schedule, schedule);
 
-  // audit: skip - scheduler configuration is derived from its registered task or audited source.
-  await db
-    .insert(schedulerJobs)
-    .values({
-      description,
-      enabled,
-      id,
-      nextRunAt,
-      payload,
-      schedule,
-      task,
-    })
-    .onConflictDoUpdate({
-      target: schedulerJobs.id,
-      set: {
-        description,
-        enabled,
-        ...(shouldRefreshNextRunAt && { nextRunAt }),
-        ...(payloadUpdate === "replace" && { payload }),
-        schedule,
-        task,
-      },
-    });
+  await writeSchedulerBookkeeping({
+    type: "upsert",
+    db,
+    table: schedulerJobs,
+    values: { description, enabled, id, nextRunAt, payload, schedule, task },
+    refreshNextRunAt: shouldRefreshNextRunAt,
+    replacePayload: payloadUpdate === "replace",
+  });
 };

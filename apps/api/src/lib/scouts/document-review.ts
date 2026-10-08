@@ -14,6 +14,7 @@ import {
   pendingScoutEmissions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { mutateRecoveryReceipt } from "@/api/lib/db/recovery-bookkeeping/receipts";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
@@ -182,19 +183,19 @@ export const maybeEmitDocumentReviewSignal = async (
     organizationId: source.organizationId,
     featureId: "signals",
   });
-  // audit: skip — derived emission intent commits with the source review completion.
-  const recorded = await args.tx
-    .insert(pendingScoutEmissions)
-    .values({
-      organizationId: source.organizationId,
-      workspaceId: args.workspaceId,
-      sourceKind: "document-review",
-      sourceId: args.runId,
-    })
-    .onConflictDoNothing()
-    .returning({
-      nextAttemptAt: sql<string>`${pendingScoutEmissions.nextAttemptAt}::text`,
-    });
+  const recorded = await mutateRecoveryReceipt({
+    type: "create-review",
+    tx: args.tx,
+    table: pendingScoutEmissions,
+    rows: [
+      {
+        organizationId: source.organizationId,
+        workspaceId: args.workspaceId,
+        sourceKind: "document-review",
+        sourceId: args.runId,
+      },
+    ],
+  });
   const outcome = await emitDocumentReviewSignal(args);
   if (outcome === "paused") {
     return;
@@ -203,15 +204,15 @@ export const maybeEmitDocumentReviewSignal = async (
   if (!ownReceipt) {
     return;
   }
-  // audit: skip — derived intent settled atomically with its audited signal.
-  await args.tx
-    .delete(pendingScoutEmissions)
-    .where(
-      and(
-        eq(pendingScoutEmissions.organizationId, source.organizationId),
-        eq(pendingScoutEmissions.sourceKind, "document-review"),
-        eq(pendingScoutEmissions.sourceId, args.runId),
-        sql`${pendingScoutEmissions.nextAttemptAt} = ${ownReceipt.nextAttemptAt}::timestamptz`,
-      ),
-    );
+  await mutateRecoveryReceipt({
+    type: "dequeue-scout",
+    tx: args.tx,
+    table: pendingScoutEmissions,
+    where: sql`${and(
+      eq(pendingScoutEmissions.organizationId, source.organizationId),
+      eq(pendingScoutEmissions.sourceKind, "document-review"),
+      eq(pendingScoutEmissions.sourceId, args.runId),
+      sql`${pendingScoutEmissions.nextAttemptAt} = ${ownReceipt.nextAttemptAt}::timestamptz`,
+    )}`,
+  });
 };

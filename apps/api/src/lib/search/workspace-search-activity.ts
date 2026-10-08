@@ -1,23 +1,18 @@
-import { sql } from "drizzle-orm";
-
-import type { Transaction } from "@/api/db/root";
+import type { ScopedTransaction } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { writeSearchBookkeeping } from "@/api/lib/db/recovery-bookkeeping/search";
 
 // Projection maintenance is shared with workers that do not load request-time
 // feature admission or the full API environment.
-type SearchActivityDatabase = Pick<Transaction, "execute">;
+type SearchActivityDatabase = Pick<ScopedTransaction, "execute">;
 
 export const syncWorkspaceSearchActivity = async (
   workspaceId: SafeId<"workspace">,
   db: SearchActivityDatabase,
 ): Promise<void> => {
-  // audit: skip - refreshes a derived timestamp from already-audited workspace activity.
-  await db.execute(sql`
-    UPDATE workspace_search_documents wsd
-    SET updated_at = w.last_activity_at
-    FROM workspaces w
-    WHERE w.id = ${workspaceId}
-      AND wsd.workspace_id = w.id
-      AND wsd.updated_at < w.last_activity_at
-  `);
+  await writeSearchBookkeeping({
+    type: "sync-workspace-activity",
+    db,
+    workspaceId,
+  });
 };

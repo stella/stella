@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
@@ -10,6 +10,7 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { writeSchedulerBookkeeping } from "@/api/lib/db/recovery-bookkeeping/scheduler";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
@@ -64,8 +65,12 @@ export const syncFlowScheduleTriggerInTransaction = async ({
   const definition = acquired.rows.at(0);
   const jobId = flowScheduleJobId(definitionId);
   if (definition === undefined || definition.trigger.type !== "schedule") {
-    // audit: skip — removes derived scheduling for deleted or changed definitions.
-    await tx.delete(schedulerJobs).where(eq(schedulerJobs.id, jobId));
+    await writeSchedulerBookkeeping({
+      type: "delete-source",
+      db: tx,
+      table: schedulerJobs,
+      jobId,
+    });
     return;
   }
   const existing = (
@@ -167,27 +172,19 @@ const repairOrphanedFlowScheduleJobs = async ({
         logger.warn("flow.schedule_invalid_payload", { jobId: job.id });
         return [];
       }
-      return [
-        and(
-          eq(schedulerJobs.id, job.id),
-          eq(schedulerJobs.payload, job.payload),
-        ),
-      ];
+      return [{ id: job.id, payload: job.payload }];
     });
     if (originals.length > 0 && !signal?.aborted) {
       // db-await-in-loop: one exact-source orphan cleanup transaction per page.
       await withAggregateTransaction(database, async (tx) => {
-        // audit: skip — deletes only unchanged derived jobs whose source remains absent.
-        // sql-perf-allow: bounded by the exact scheduler primary keys selected in this cleanup page.
-        await tx
-          .delete(schedulerJobs)
-          .where(
-            and(
-              eq(schedulerJobs.task, FLOW_RUN_TASK),
-              missingDefinition,
-              or(...originals),
-            ),
-          );
+        await writeSchedulerBookkeeping({
+          type: "delete-orphans",
+          db: tx,
+          table: schedulerJobs,
+          definitions: flowDefinitions,
+          task: FLOW_RUN_TASK,
+          originals,
+        });
       });
     }
     if (page.nextCursor === null) {
