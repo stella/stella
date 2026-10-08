@@ -369,7 +369,9 @@ const seed = async (db: GatedTestDb) => {
         },
       });
       expect(errors.join("")).toBe("");
-      expect(exitCode).toBe(0);
+      // In-process, success leaves process.exitCode unset; the process then
+      // exits with code 0, which is what this asserts.
+      expect(exitCode ?? 0).toBe(0);
       expect(calls).toEqual([
         {
           name: "invoke_capability",
