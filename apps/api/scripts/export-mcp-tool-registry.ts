@@ -185,10 +185,7 @@ const submissionTools = Object.fromEntries(
       readOnlyJustification =
         "Deletes or writes off the selected record in the user’s private stella workspace.";
     }
-    if (
-      tool.name === "upload_document_version" ||
-      tool.name === "open_document_version_upload"
-    ) {
+    if (tool.name === "upload_document_version") {
       readOnlyJustification =
         "Starts or completes a private document-version upload in the user’s stella workspace.";
     }
@@ -209,6 +206,10 @@ const submissionTools = Object.fromEntries(
         "Stores the human-approved feedback report and delivers it to the maintainers configured by the deployment.";
     }
 
+    if ("nonDestructiveReason" in tool) {
+      readOnlyJustification = tool.nonDestructiveReason;
+    }
+
     let openWorldJustification = privateOpenWorldJustification;
     if (tool.annotations.openWorldHint) {
       openWorldJustification = externalOpenWorldJustification;
@@ -222,7 +223,9 @@ const submissionTools = Object.fromEntries(
         "Sends the approved report to the maintainer channels the deployment configures, which may include a public issue tracker.";
     }
 
-    let destructiveJustification = nonDestructiveJustification;
+    let destructiveJustification = tool.annotations.destructiveHint
+      ? "Can modify or replace existing stored data in the user’s private stella workspace."
+      : nonDestructiveJustification;
     if (behavior?.type === "always") {
       destructiveJustification =
         "Can irreversibly delete or write off the selected private record and requires explicit confirmation.";

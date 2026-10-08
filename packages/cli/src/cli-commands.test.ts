@@ -979,7 +979,15 @@ describe("value flags and validation (S3)", () => {
       toolPayload: { contactId: "c1" },
     }));
     const result = await runCli({
-      args: ["contact", "save", "--contact-id", "c1", "--first-name", "null"],
+      args: [
+        "contact",
+        "save",
+        "--contact-id",
+        "c1",
+        "--first-name",
+        "null",
+        "--yes",
+      ],
       url: server.url,
       token: WRITE,
     });
@@ -996,7 +1004,7 @@ describe("--input escape hatch (S3)", () => {
   test("--input '<json>' supplies the whole args object", async () => {
     const server = startMockServer(() => ({ toolPayload: { matterId: "m9" } }));
     const result = await runCli({
-      args: ["matter", "save", "--input", '{"name":"New Matter"}'],
+      args: ["matter", "save", "--input", '{"name":"New Matter"}', "--yes"],
       url: server.url,
       token: WRITE,
     });
@@ -1010,7 +1018,7 @@ describe("--input escape hatch (S3)", () => {
   test("--input - reads the object from stdin", async () => {
     const server = startMockServer(() => ({ toolPayload: { matterId: "m9" } }));
     const result = await runCli({
-      args: ["matter", "save", "--input", "-"],
+      args: ["matter", "save", "--input", "-", "--yes"],
       url: server.url,
       token: WRITE,
       stdin: '{"name":"From Stdin"}',
@@ -1030,7 +1038,7 @@ describe("--input escape hatch (S3)", () => {
     );
     await writeFile(file, '{"name":"From File"}');
     const result = await runCli({
-      args: ["matter", "save", "--input", `@${file}`],
+      args: ["matter", "save", "--input", `@${file}`, "--yes"],
       url: server.url,
       token: WRITE,
     });
@@ -1052,6 +1060,7 @@ describe("--input escape hatch (S3)", () => {
         '{"name":"FromJson"}',
         "--name",
         "FromFlag",
+        "--yes",
       ],
       url: server.url,
       token: WRITE,
@@ -1072,7 +1081,7 @@ describe("--input escape hatch (S3)", () => {
       isError: true,
     }));
     const result = await runCli({
-      args: ["matter", "save", "--input", '{"status":"bogus"}'],
+      args: ["matter", "save", "--input", '{"status":"bogus"}', "--yes"],
       url: server.url,
       token: WRITE,
     });
@@ -1424,6 +1433,7 @@ describe("template persistence discriminator split", () => {
         "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
+        "--yes",
       ],
       url: server.url,
       token: makeToken(["documents_write"]),
@@ -1460,6 +1470,7 @@ describe("template persistence discriminator split", () => {
         "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
+        "--yes",
       ],
       url: server.url,
       token: makeToken(["documents_write", "templates"]),

@@ -883,7 +883,7 @@
     },
     "annotations": {
       "title": "Set practice jurisdictions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -1364,7 +1364,7 @@
     },
     "annotations": {
       "title": "Save filled template",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -1428,7 +1428,7 @@
     },
     "annotations": {
       "title": "Create template",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -1807,7 +1807,7 @@
     },
     "annotations": {
       "title": "Configure template fields",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2023,7 +2023,7 @@
     },
     "annotations": {
       "title": "Save document",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2076,7 +2076,7 @@
     },
     "annotations": {
       "title": "Upload document version",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2256,7 +2256,7 @@
     },
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2634,7 +2634,7 @@
     },
     "annotations": {
       "title": "Set field value",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2695,7 +2695,7 @@
     },
     "annotations": {
       "title": "Save matter",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2951,7 +2951,7 @@
     },
     "annotations": {
       "title": "Save contact",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3502,7 +3502,7 @@
     },
     "annotations": {
       "title": "Save task",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3585,7 +3585,7 @@
     },
     "annotations": {
       "title": "Link contact to matter",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -3831,7 +3831,7 @@
     },
     "annotations": {
       "title": "Save clause",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4207,7 +4207,7 @@
     },
     "annotations": {
       "title": "Save playbook",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4239,7 +4239,7 @@
     },
     "annotations": {
       "title": "Run playbook",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4501,7 +4501,7 @@
     },
     "annotations": {
       "title": "Update reader annotation",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -4743,7 +4743,7 @@
     },
     "annotations": {
       "title": "Save time entry",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
