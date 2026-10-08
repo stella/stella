@@ -72,6 +72,10 @@ describe("the completed-search record", () => {
       },
     },
     earlyStopped: true,
+    // A filtered first page after another reader's: the facets whose query
+    // the toggle left alone came from the cache, one joined a call already in
+    // flight, and the rest went to the engine.
+    facetCache: { hits: 4, misses: 2, sharedFlights: 1 },
     facetMs: 96.3,
     hitsReturned: 20,
     indexMs: 88.6,
@@ -114,6 +118,9 @@ describe("the completed-search record", () => {
       hitsReturned: 20,
       indexMs: 89,
       facetMs: 96,
+      facetCacheHits: 4,
+      facetCacheMisses: 2,
+      facetCacheSharedFlights: 1,
       scanAndFacetsMs: 97,
       dbReads: 6,
       dbMs: 20,
@@ -185,12 +192,16 @@ describe("the completed-search record", () => {
         reads: 5,
         msByRead: { ...searchEvent.db.msByRead, sourceRegistry: 0 },
       },
+      facetCache: { hits: 0, misses: 0, sharedFlights: 0 },
       facetMs: 0,
       scanAndFacetsMs: 89.4,
     });
     const attributes = record.attributes ?? {};
 
     expect(attributes["facetMs"]).toBe(0);
+    expect(attributes["facetCacheHits"]).toBe(0);
+    expect(attributes["facetCacheMisses"]).toBe(0);
+    expect(attributes["facetCacheSharedFlights"]).toBe(0);
     expect(attributes["dbSourceRegistryMs"]).toBe(0);
     expect(attributes["scanAndFacetsMs"]).toBe(89);
     expect(Number(attributes["scanAndFacetsMs"])).toBeGreaterThanOrEqual(

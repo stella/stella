@@ -113,6 +113,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-sitemap-shard-refresh.ts",
     "Public legal corpus sitemap.",
   ),
+  "caseLaw.refreshSourceArrivals": platform(
+    "case-law-source-arrivals-refresh.ts",
+    "Public legal corpus aggregates.",
+  ),
   "chat.compactThreads": {
     authority: "member-run",
     module: `${TASKS}/chat-thread-compactor.ts`,
@@ -192,6 +196,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "legislation.backfillExpressionIds": platform(
     "legislation-expression-id-backfill.ts",
     "Public legal corpus maintenance.",
+  ),
+  "legislation.refreshFacetCounts": platform(
+    "legislation-facet-refresh.ts",
+    "Public legal corpus aggregates.",
   ),
   "legislation.refreshSitemapShards": platform(
     "statute-sitemap-shard-refresh.ts",
