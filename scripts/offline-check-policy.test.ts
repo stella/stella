@@ -182,8 +182,123 @@ test("the check preload denies every fetch invocation", () => {
   );
   expect(planted.exitCode).not.toBe(0);
   expect(planted.stderr.toString()).toContain(
-    "Offline check attempted a network fetch",
+    "network disabled in offline check",
   );
+});
+
+test.each([
+  [
+    "node:https.get",
+    "import https from 'node:https'; https.get('https://127.0.0.1:1');",
+  ],
+  [
+    "named node:https.get",
+    "import { get } from 'node:https'; get('https://127.0.0.1:1');",
+  ],
+  [
+    "node:http.request",
+    "import http from 'node:http'; http.request('http://127.0.0.1:1');",
+  ],
+  [
+    "node:http.get",
+    "import http from 'node:http'; http.get('http://127.0.0.1:1');",
+  ],
+  [
+    "node:https.request",
+    "import https from 'node:https'; https.request('https://127.0.0.1:1');",
+  ],
+  ["node:http.Agent", "import http from 'node:http'; new http.Agent();"],
+  ["node:https.Agent", "import https from 'node:https'; new https.Agent();"],
+  [
+    "node:http.globalAgent",
+    "import http from 'node:http'; http.globalAgent.createConnection({port: 1, host: '127.0.0.1'});",
+  ],
+  [
+    "node:http.ClientRequest",
+    "import http from 'node:http'; new http.ClientRequest('http://127.0.0.1:1');",
+  ],
+  [
+    "node:net.connect",
+    "import net from 'node:net'; net.connect(1, '127.0.0.1');",
+  ],
+  [
+    "node:net.createConnection",
+    "import net from 'node:net'; net.createConnection(1, '127.0.0.1');",
+  ],
+  [
+    "node:net.Socket.connect",
+    "import net from 'node:net'; new net.Socket().connect(1, '127.0.0.1');",
+  ],
+  [
+    "node:tls.connect",
+    "import tls from 'node:tls'; tls.connect(1, '127.0.0.1');",
+  ],
+  ["node:tls.TLSSocket", "import tls from 'node:tls'; new tls.TLSSocket();"],
+  [
+    "node:dns.lookup",
+    "import dns from 'node:dns'; dns.lookup('localhost', () => {});",
+  ],
+  [
+    "node:dns.resolve",
+    "import dns from 'node:dns'; dns.resolve('localhost', () => {});",
+  ],
+  [
+    "node:dns/promises.lookup",
+    "import dns from 'node:dns/promises'; await dns.lookup('localhost');",
+  ],
+  ["node:dns.Resolver", "import dns from 'node:dns'; new dns.Resolver();"],
+  [
+    "Bun.connect",
+    "await Bun.connect({hostname: '127.0.0.1', port: 1, socket: {data() {}}});",
+  ],
+  ["Bun.dns.lookup", "await Bun.dns.lookup('localhost');"],
+  ["Bun.udpSocket", "await Bun.udpSocket({port: 0});"],
+  ["WebSocket", "new WebSocket('ws://127.0.0.1:1');"],
+  [
+    "node:http2.connect",
+    "import http2 from 'node:http2'; http2.connect('http://127.0.0.1:1');",
+  ],
+  [
+    "node:dgram.createSocket",
+    "import dgram from 'node:dgram'; dgram.createSocket('udp4');",
+  ],
+])(
+  "offline check denies %s with the shared typed error",
+  (_transport, code) => {
+    const planted = runPreloaded(code, "--check");
+    expect(planted.exitCode).not.toBe(0);
+    expect(planted.stderr.toString()).toContain("OfflineCheckNetworkError");
+    expect(planted.stderr.toString()).toContain(
+      "network disabled in offline check",
+    );
+  },
+);
+
+test("offline check enumerates every DNS resolver and lookup entry point", () => {
+  const planted = runPreloaded(
+    `
+    import dns from 'node:dns';
+    import promises from 'node:dns/promises';
+    let denied = 0;
+    for (const target of [dns, promises, Bun.dns]) {
+      for (const key of Object.getOwnPropertyNames(target).filter(key => /^(?:lookup|resolve|reverse|prefetch)/u.test(key))) {
+        try {
+          target[key]('localhost', () => {});
+        } catch (error) {
+          if (error._tag !== 'OfflineCheckNetworkError' || error.message !== 'network disabled in offline check') throw error;
+          denied++;
+          continue;
+        }
+        throw new Error('DNS entry point allowed: ' + key);
+      }
+    }
+    console.log('DNS denials: ' + denied);
+  `,
+    "--check",
+  );
+  expect(planted.exitCode).not.toBe(0);
+  expect(planted.stderr.toString()).toBe("");
+  expect(planted.stdout.toString()).toMatch(/DNS denials: [1-9]\d*/u);
 });
 
 test("offline checks pass without transport and reject a planted network fetch before reaching upstream", () => {
@@ -199,7 +314,7 @@ test("offline checks pass without transport and reject a planted network fetch b
   );
   expect(planted.exitCode).not.toBe(0);
   expect(planted.stderr.toString()).toContain(
-    "Offline check attempted a network fetch",
+    "network disabled in offline check",
   );
   const swallowed = runPreloaded(
     "await Promise.resolve().then(() => fetch('https://example.invalid')).catch(() => {});",
