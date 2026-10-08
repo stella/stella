@@ -2074,7 +2074,7 @@ jobs:
           bun scripts/ratchet.ts --check
 
       - name: Public corpus admission proof
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun --cwd=apps/api src/scripts/check-public-corpus-audit.ts --check
       - name: Ratchet scanner invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

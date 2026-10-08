@@ -113,9 +113,9 @@ export type OwnershipEntry = {
 
 export const SCHEMA_INTROSPECTION = [
   {
-    path: "apps/api/src/scripts/check-public-corpus-audit.ts",
+    path: "apps/api/src/lib/db/public-corpus-audit/schema-catalog.ts",
     reason:
-      "Enumerates full-schema metadata for corpus admission verification without database operations.",
+      "Exports the static schema catalog for corpus admission verification without database operations.",
   },
   {
     path: "apps/api/scripts/generate-status-tables.ts",

@@ -569,7 +569,7 @@ export const NAMESPACE_IMPORT = "*";
 // The module a `require("m")`, `import("m")` or `await import("m")` loads.
 export const dynamicModuleSource = (
   node: unknown,
-  context?: ScopeContext,
+  context: ScopeContext,
 ): string | null => {
   const expression = unwrapExpression(node);
   if (!isAstNode(expression)) {
@@ -589,9 +589,6 @@ export const dynamicModuleSource = (
     expression.arguments.length === 1 &&
     isStringLiteral(expression.arguments[0])
   ) {
-    if (context === undefined) {
-      return null;
-    }
     const binding = resolveVariable(context, expression.callee);
     if (binding !== null && binding.defs.length !== 0) {
       return null;
