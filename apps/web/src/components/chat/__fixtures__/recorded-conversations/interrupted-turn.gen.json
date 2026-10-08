@@ -898,6 +898,10 @@
                     "promptTokens": 1,
                     "completionTokens": 1
                   },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
+                  },
                   "refContext": {
                     "refs": [],
                     "version": 2,

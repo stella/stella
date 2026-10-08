@@ -443,6 +443,10 @@
                     "promptTokens": 1,
                     "completionTokens": 1
                   },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
+                  },
                   "refContext": {
                     "refs": [],
                     "version": 2,
@@ -933,7 +937,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225627000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"messages\":[{\"createdAt\":\"2026-01-01T00:00:14.000Z\",\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"usage\":{\"totalTokens\":2,\"promptTokens\":1,\"completionTokens\":1},\"refContext\":{\"refs\":[],\"version\":2,\"entities\":[],\"workspaceScope\":[],\"unresolvedInputs\":[]},\"refEncoding\":\"persisted-resource-refs-v2\",\"turnOutcome\":{\"type\":\"cancelled\",\"reason\":\"superseded\"}},\"role\":\"assistant\",\"parts\":[{\"arguments\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"reason\\\":\\\"It decides the draft.\\\",\\\"question\\\":\\\"Which side?\\\"}]}\",\"id\":\"call-1\",\"metadata\":{\"stellaStepId\":\"call-1\"},\"name\":\"ask-user\",\"state\":\"error\",\"type\":\"tool-call\"}],\"content\":\"\"}],\"timestamp\":1767225628000}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"role\":\"assistant\",\"timestamp\":1767225629000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"delta\":\"Drafted\",\"timestamp\":1767225630000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"timestamp\":1767225631000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225632000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225627000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"messages\":[{\"createdAt\":\"2026-01-01T00:00:14.000Z\",\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"usage\":{\"totalTokens\":2,\"promptTokens\":1,\"completionTokens\":1},\"turnModel\":{\"model\":\"gpt-5.4-mini\",\"provider\":\"openai\"},\"refContext\":{\"refs\":[],\"version\":2,\"entities\":[],\"workspaceScope\":[],\"unresolvedInputs\":[]},\"refEncoding\":\"persisted-resource-refs-v2\",\"turnOutcome\":{\"type\":\"cancelled\",\"reason\":\"superseded\"}},\"role\":\"assistant\",\"parts\":[{\"arguments\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"reason\\\":\\\"It decides the draft.\\\",\\\"question\\\":\\\"Which side?\\\"}]}\",\"id\":\"call-1\",\"metadata\":{\"stellaStepId\":\"call-1\"},\"name\":\"ask-user\",\"state\":\"error\",\"type\":\"tool-call\"}],\"content\":\"\"}],\"timestamp\":1767225628000}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"role\":\"assistant\",\"timestamp\":1767225629000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"delta\":\"Drafted\",\"timestamp\":1767225630000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"timestamp\":1767225631000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225632000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200
           },
           "page": {
@@ -958,6 +962,10 @@
                     "totalTokens": 2,
                     "promptTokens": 1,
                     "completionTokens": 1
+                  },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
                   },
                   "refContext": {
                     "refs": [],
@@ -1005,6 +1013,10 @@
                     "totalTokens": 2,
                     "promptTokens": 1,
                     "completionTokens": 1
+                  },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
                   },
                   "refContext": {
                     "refs": [],
