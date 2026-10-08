@@ -29,3 +29,19 @@ test("allows legal text and parser data", async () => {
   expect(await lint('const text = <span title="§§ 2-4" />;')).toEqual([]);
   expect(await lint('const marker = "§";')).toEqual([]);
 });
+
+test("allows a legal reference split across children", async () => {
+  expect(
+    await lint('const ref = <span>§ <a href="/section/10">10</a></span>;'),
+  ).toEqual([]);
+  expect(await lint('const ref = <span>{"§"} 10</span>;')).toEqual([]);
+  expect(await lint("const ref = <span>§{number}</span>;")).toEqual([]);
+});
+
+test("rejects the glyph surrounded only by whitespace children", async () => {
+  expect(
+    await lint(
+      'const mark = (\n  <div className="mark">\n    {"§"}\n  </div>\n);',
+    ),
+  ).toEqual([3]);
+});

@@ -16,10 +16,35 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { isAstNode } from "./utils.ts";
+
 const LONE_SECTION_SIGN =
   /^\s*(?:§|\\u00a7|\\u\{a7\}|&sect;|&#167;|&#x0*a7;)+\s*$/iu;
 
 const isLoneSectionSign = (value: string) => LONE_SECTION_SIGN.test(value);
+
+const isBlankText = (child: unknown) =>
+  isAstNode(child) &&
+  child.type === "JSXText" &&
+  typeof child.value === "string" &&
+  child.value.trim() === "";
+
+// A child is the element's whole content only when every sibling is
+// whitespace: "§ <a>10</a>" and {"§"} 10 are legal references split across
+// children, not a placeholder.
+const isOnlyChild = (node: { parent?: unknown }) => {
+  const { parent } = node;
+  if (
+    !isAstNode(parent) ||
+    (parent.type !== "JSXElement" && parent.type !== "JSXFragment") ||
+    !Array.isArray(parent.children)
+  ) {
+    return true;
+  }
+  return parent.children.every(
+    (child: unknown) => child === node || isBlankText(child),
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-section-sign-glyph" },
@@ -39,7 +64,7 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           JSXText(node) {
-            if (isLoneSectionSign(node.value)) {
+            if (isLoneSectionSign(node.value) && isOnlyChild(node)) {
               context.report({ node, messageId: "loneSectionSign" });
             }
           },
@@ -55,6 +80,9 @@ export default eslintCompatPlugin({
           },
           JSXExpressionContainer(node) {
             const { expression } = node;
+            if (!isOnlyChild(node)) {
+              return;
+            }
             if (
               expression.type === "Literal" &&
               typeof expression.value === "string" &&
