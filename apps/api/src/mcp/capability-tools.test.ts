@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
@@ -2491,6 +2492,30 @@ describe("invoke_capability file-response gate (fix-6)", () => {
       payload: { ok: true },
       textFields: [],
     });
+  });
+
+  test("verification limit refusals preserve codes, recovery metadata and receipts", () => {
+    for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+      for (const retryable of [true, false]) {
+        const refusal = {
+          code,
+          message: "Verification run limit reached",
+          hint: "Check verification runs before starting another run.",
+          retryable,
+        };
+        const result = runWithRequestId("req_refusal", () =>
+          mapHandlerResult({
+            id: "documents.verifications.start",
+            access: "write",
+            result: new ElysiaCustomStatusResponse(429, refusal),
+          }),
+        );
+        expect(mappedError(result)).toMatchObject({
+          ...refusal,
+          requestId: "req_refusal",
+        });
+      }
+    }
   });
 
   test("admission refusals preserve the shared contract and request receipt", () => {
