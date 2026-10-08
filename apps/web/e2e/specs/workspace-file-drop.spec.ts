@@ -194,10 +194,13 @@ test.describe("workspace file drop", () => {
     await folderLabel.dblclick();
 
     const shellContent = page.locator('[data-slot="workspace-shell-content"]');
-    const addButton = shellContent.getByRole("button", {
-      exact: true,
-      name: "Add",
-    });
+    // The view switcher and sort toolbar also expose "Add" via aria-label, and
+    // the tree renders a hidden context-menu anchor; the real add menu is the
+    // visible button named by its own text.
+    const addButton = shellContent
+      .getByRole("button", { exact: true, name: "Add" })
+      .and(page.locator(":not([aria-label])"))
+      .filter({ visible: true });
     await addButton.focus();
     await page.keyboard.press("Enter");
     const uploadItem = page.getByRole("menuitem", {
