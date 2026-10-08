@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   generateTanStackTextForRole,
   streamTanStackObjectForRole,
@@ -160,6 +161,7 @@ const generateAtOutputCeiling = async ({
     finishPolicy,
     maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Rewrite it.",
     resolveTextModel: () => outputCeilingModel,
@@ -187,6 +189,7 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
     caching: noCaching,
     finishPolicy: "allow-incomplete",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Rewrite it.",
     resolveTextModel: () => model,
@@ -236,6 +239,7 @@ describe("TanStack completed-run canary", () => {
         caching: noCaching,
         finishPolicy: "require-complete",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: null,
         prompt: "Rewrite it.",
         resolveTextModel: () => model,
@@ -311,6 +315,7 @@ describe("TanStack output-ceiling canary", () => {
         caching: noCaching,
         maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: null,
         outputSchema: v.strictObject({ answer: v.string() }),
         prompt: "Extract the answer.",
