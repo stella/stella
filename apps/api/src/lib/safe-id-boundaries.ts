@@ -1,3 +1,4 @@
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { isUuid } from "@stll/uuid-codec";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -66,7 +67,7 @@ export const brandPersistedAiMemoryId = (
  * treats it as one.
  */
 export const brandDerivedPropertyId = (seed: string): SafeId<"property"> => {
-  const digest = new Bun.CryptoHasher("sha256").update(seed).digest("hex");
+  const digest = hashSha256Hex(seed);
   return toSafeId<"property">(
     `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`,
   );
@@ -80,7 +81,7 @@ export const brandDerivedPropertyId = (seed: string): SafeId<"property"> => {
 export const brandDerivedSampleId = <T extends SafeIdType>(
   seed: string,
 ): SafeId<T> => {
-  const hex = new Bun.CryptoHasher("sha256").update(seed).digest("hex");
+  const hex = hashSha256Hex(seed);
   const raw = `${hex.slice(0, 12)}5${hex.slice(13, 16)}8${hex.slice(17, 32)}`;
   return toSafeId<T>(
     `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20, 32)}`,
@@ -399,9 +400,7 @@ export const brandDerivedCorrespondenceDropId = (
   workspaceId: SafeId<"workspace">,
   deliveryKey: string,
 ): SafeId<"correspondenceDropLog"> => {
-  const hex = new Bun.CryptoHasher("sha256")
-    .update(`${workspaceId}:${deliveryKey}`)
-    .digest("hex");
+  const hex = hashSha256Hex(`${workspaceId}:${deliveryKey}`);
   return toSafeId<"correspondenceDropLog">(
     `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`,
   );

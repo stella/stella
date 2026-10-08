@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { MessageChannel, Worker } from "node:worker_threads";
 
@@ -14,6 +13,7 @@ import {
   MAX_SCREENING_WORK,
 } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -79,9 +79,6 @@ let db: ReturnType<typeof drizzle>;
 let requestDb: ScopedDb;
 const editionIds = new Map<SanctionsSource, string>();
 
-const sha256 = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
-
 const entry = (
   source: SanctionsSource,
   sourceId: string,
@@ -143,16 +140,16 @@ const seedSource = async (source: SanctionsSource) => {
   await db.insert(sanctionsEditions).values({
     id: toSafeId<"sanctionsEdition">(editionId),
     sourceId: source,
-    markerKey: sha256(`${source}:marker`),
+    markerKey: hashSha256Hex(`${source}:marker`),
     publishedAt: "2026-09-19",
     fileId: null,
-    contentHash: sha256(`${source}:content`),
+    contentHash: hashSha256Hex(`${source}:content`),
     entryCount: entries.length,
     state: "ready",
     activatedAt: VERIFIED_AT,
   });
   const payloads = entries.map((item) => ({
-    contentHash: sha256(JSON.stringify(item)),
+    contentHash: hashSha256Hex(JSON.stringify(item)),
     payload: item,
   }));
   await db.insert(sanctionsEntryPayloads).values(payloads);
@@ -185,10 +182,10 @@ const seedHeldEdition = async (
   await db.insert(sanctionsEditions).values({
     id,
     sourceId: source,
-    markerKey: sha256(`${source}:held-marker`),
+    markerKey: hashSha256Hex(`${source}:held-marker`),
     publishedAt: "2026-09-20",
     fileId: null,
-    contentHash: sha256(`${source}:held-content`),
+    contentHash: hashSha256Hex(`${source}:held-content`),
     entryCount: entries.length,
     state: "staging",
   });
@@ -196,7 +193,7 @@ const seedHeldEdition = async (
     entries.map((item) => ({
       editionId: id,
       sourceEntryId: item.sourceId,
-      contentHash: sha256(JSON.stringify(item)),
+      contentHash: hashSha256Hex(JSON.stringify(item)),
     })),
   );
   await db
