@@ -369,7 +369,8 @@ const seed = async (db: GatedTestDb) => {
         },
       });
       expect(errors.join("")).toBe("");
-      expect(exitCode).toBe(0);
+      // A successful leaf leaves process.exitCode unset, which exits 0.
+      expect(exitCode ?? 0).toBe(0);
       expect(calls).toEqual([
         {
           name: "invoke_capability",
