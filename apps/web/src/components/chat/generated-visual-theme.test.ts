@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
 
-import { readVisualTheme } from "./generated-visual-theme";
+import {
+  readVisualTheme,
+  readVisualThemeOrOmit,
+} from "./generated-visual-theme";
 
 const themeCss = await Bun.file(
   new URL("../../../../../packages/ui/src/styles/theme.css", import.meta.url),
@@ -50,5 +53,34 @@ describe("generated visual host theme", () => {
         style: { getPropertyValue: () => "", fontFamily: "sans-serif" },
       }),
     ).toThrow("Missing app visual theme token");
+  });
+
+  test("omits the theme and reports when a source token is missing", () => {
+    const reported: unknown[] = [];
+    const theme = readVisualThemeOrOmit({
+      appearance: "light",
+      style: {
+        getPropertyValue: (name) => (name === "--background" ? "" : "1px"),
+        fontFamily: "sans-serif",
+      },
+      report: (error) => reported.push(error),
+    });
+    expect(theme).toBeUndefined();
+    expect(reported).toHaveLength(1);
+    expect(String(reported[0])).toContain(
+      "Missing app visual theme token: --background",
+    );
+  });
+
+  test("returns the theme without reporting when every token is present", () => {
+    const reported: unknown[] = [];
+    const theme = readVisualThemeOrOmit({
+      appearance: "dark",
+      style: { getPropertyValue: () => "1px", fontFamily: "sans-serif" },
+      report: (error) => reported.push(error),
+    });
+    expect(theme?.appearance).toBe("dark");
+    expect(theme?.variables["--background"]).toBe("1px");
+    expect(reported).toEqual([]);
   });
 });

@@ -30,6 +30,7 @@ import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { browserApiRootUrl } from "@/lib/api-url";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -38,7 +39,7 @@ import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
-import { readVisualTheme } from "./generated-visual-theme";
+import { readVisualThemeOrOmit } from "./generated-visual-theme";
 import { parseVisualHostMessage } from "./generated-visual.logic";
 import { createVisualShellSession } from "./visual-shell-session";
 
@@ -105,20 +106,34 @@ const GeneratedVisualFrame = ({
       element.src = shell.beginLoad();
     }
   });
+  // A missing token stays missing until the app theme changes, so one report
+  // per view is enough.
+  const themeFailureReported = useRef(false);
   const readTheme = useLatestCallback(() =>
-    readVisualTheme({
+    readVisualThemeOrOmit({
       style: getComputedStyle(document.documentElement),
       appearance: document.documentElement.classList.contains("dark")
         ? "dark"
         : "light",
+      report: (error) => {
+        if (themeFailureReported.current) {
+          return;
+        }
+        themeFailureReported.current = true;
+        getAnalytics().captureError(error, {
+          type: "detached",
+          operation: "generated-visual.read-theme",
+        });
+      },
     }),
   );
   const syncTheme = useLatestCallback(() => {
-    if (shell.isReady()) {
-      frame.current?.contentWindow?.postMessage(
-        { kind: "theme", theme: readTheme() },
-        "*",
-      );
+    if (!shell.isReady()) {
+      return;
+    }
+    const theme = readTheme();
+    if (theme !== undefined) {
+      frame.current?.contentWindow?.postMessage({ kind: "theme", theme }, "*");
     }
   });
   useExternalSyncEffect(() => {
@@ -135,13 +150,14 @@ const GeneratedVisualFrame = ({
       return;
     }
     const frameWindow = frame.current?.contentWindow;
+    const theme = readTheme();
     if (
       shell.deliverRender({
         event,
         frameWindow,
         message: {
           type: "render",
-          theme: readTheme(),
+          ...(theme === undefined ? {} : { theme }),
           title: page.data.title,
           html: page.data.html,
           data: page.data.data,

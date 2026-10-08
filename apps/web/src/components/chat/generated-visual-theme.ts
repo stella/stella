@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -29,3 +29,24 @@ export const readVisualTheme = ({
   );
   return v.parse(visualThemeSchema, { appearance, variables });
 };
+
+type ReadVisualThemeOrOmitOptions = ReadVisualThemeOptions & {
+  report: (error: unknown) => void;
+};
+
+/**
+ * The app theme for a view, or none when the app's tokens cannot be read.
+ * The view then keeps its own fallback tokens and still renders; the failure
+ * is reported.
+ */
+export const readVisualThemeOrOmit = ({
+  report,
+  ...options
+}: ReadVisualThemeOrOmitOptions): VisualTheme | undefined =>
+  Result.try(() => readVisualTheme(options)).match({
+    ok: (theme) => theme,
+    err: (error) => {
+      report(error);
+      return undefined;
+    },
+  });
