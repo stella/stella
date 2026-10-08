@@ -4427,6 +4427,10 @@
     "seconds": 4.6,
     "source": "measured"
   },
+  "src/lib/business-registries/desktop/renewal.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/business-registries/desktop/revocation.db.test.ts": {
     "seconds": 1.835933,
     "source": "estimated"
@@ -9253,6 +9257,10 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/helpers/test-state.test.ts": {

@@ -836,6 +836,7 @@
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"
       ]
     },
