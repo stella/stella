@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { DEFAULT_OPENAI_DECISION_MODEL } from "@stll/api-contract/ai-decision-provider";
+import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
@@ -124,28 +125,7 @@ const sleepWithSignal = async (
   ms: number,
   signal?: AbortSignal,
 ): Promise<void> => {
-  const slept = new Promise<void>((resolve, reject) => {
-    const abort = () => {
-      clearTimeout(timer);
-      reject(
-        new SystemOneError({
-          kind: "aborted",
-          message: "OpenAI decision retry was cancelled",
-          cause: signal?.reason,
-        }),
-      );
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", abort);
-      resolve();
-    }, ms);
-    signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted) {
-      signal.removeEventListener("abort", abort);
-      abort();
-    }
-  });
-  await slept;
+  await ownerSleep(ms, signal === undefined ? {} : { signal });
 };
 
 const invalidResponse = (message: string) =>
