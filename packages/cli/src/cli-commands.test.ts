@@ -1,11 +1,9 @@
+import { panic } from "better-result";
 // End-to-end command tests (spec 051 S6): each MVP command is driven through the
 // real stricli-built CLI (`bun cli.ts ...`) against an in-process mock MCP
 // endpoint. `Bun.spawn` (async) is used, not `spawnSync`, so the in-process
 // `Bun.serve` can answer requests concurrently. No real network origin is hit.
-
-import { panic } from "better-result";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -403,7 +401,9 @@ describe("one-command document upload", () => {
         name: "agreement.txt",
         mimeType: "text/plain",
         size: Buffer.byteLength("agreement body"),
-        sha256Hex: createHash("sha256").update("agreement body").digest("hex"),
+        // Independent of the CLI helper: SHA-256 of "agreement body".
+        sha256Hex:
+          "e1312950a806cda855e53f603301c78c3c23ea486e1beca337731fdba766720a",
       },
       params: { matterId: "workspace-1" },
     });
