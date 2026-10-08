@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
-  "delta": 9,
-  "reason": "The extracted decision-reader workspace declares the existing rendering, font, validation, React peer and test/type dependencies at its new owning boundary. The DOM interaction test uses the existing pinned DOM registrar. All versions already exist in the monorepo; no new third-party package is introduced."
+  "delta": 10,
+  "reason": "The extracted decision-reader workspace declares the existing rendering, font, validation, React peer and test/type dependencies at its new owning boundary, plus fast-check for its property test (the property-test convention requires each workspace with fc.assert tests to declare it). The DOM interaction test uses the existing pinned DOM registrar. All versions already exist in the monorepo catalog; no new third-party package is introduced."
 }
