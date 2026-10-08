@@ -555,10 +555,6 @@ export const serializeDecisionModel = (
       return {
         provider: state.provider,
         ...(apiKey ? { apiKey } : {}),
-        ...(providerDraft.provider === "anthropic" &&
-        providerDraft.anthropicWorkspaceId !== undefined
-          ? { anthropicWorkspaceId: providerDraft.anthropicWorkspaceId.trim() }
-          : {}),
         modelId: state.modelId.trim(),
       };
     }

@@ -17,6 +17,7 @@ import {
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
 import { PROVIDER_DATA_POLICY } from "@/api/lib/chat/provider-data-policy";
+import { sanitizeCredentialText } from "@/api/lib/credential-text";
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
 import { identifyProviderSetupError } from "@/api/lib/provider-error-catalogue";
 import type {
@@ -27,7 +28,7 @@ import type {
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const DEFAULT_VALIDATION_TIMEOUT_MS = 5000;
-const PROBE_MAX_BYTES = 1_000_000;
+const PROBE_MAX_BYTES = 64 * 1024;
 type ProbeFetch = (opts: {
   body?: SafeOutboundFetchBody;
   headers?: SafeOutboundHeaders;
@@ -112,16 +113,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const parseJsonBody = (
   response: SafeOutboundFetchResponse,
 ): Record<string, unknown> | undefined => {
-  try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(response.body));
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  const result = Result.try((): unknown =>
+    JSON.parse(new TextDecoder().decode(response.body)),
+  );
+  return result.isOk() && isRecord(result.value) ? result.value : undefined;
 };
 
 const extractDetail = (
   response: SafeOutboundFetchResponse,
+  apiKey: string,
 ): string | undefined => {
   const body = parseJsonBody(response);
   if (!body) {
@@ -129,13 +129,13 @@ const extractDetail = (
   }
   const errorField = body["error"];
   if (typeof errorField === "string") {
-    return errorField;
+    return sanitizeCredentialText(errorField, [apiKey]).text;
   }
   if (isRecord(errorField) && typeof errorField["message"] === "string") {
-    return errorField["message"];
+    return sanitizeCredentialText(errorField["message"], [apiKey]).text;
   }
   if (typeof body["message"] === "string") {
-    return body["message"];
+    return sanitizeCredentialText(body["message"], [apiKey]).text;
   }
   return undefined;
 };
@@ -148,7 +148,7 @@ export type ProbeProviderOptions = {
   apiKey: string;
   permit: ThirdPartyOutboundPermit;
   provider: ProviderProbeValue;
-  anthropicWorkspaceId?: string;
+  anthropicWorkspaceId?: string | undefined;
   endpoint?: string;
   apiVersion?: string;
   expectedAzureDeployments?: readonly string[];
@@ -213,7 +213,7 @@ export const probeProvider = async ({
     return { valid: true };
   }
 
-  const detail = extractDetail(response.value);
+  const detail = extractDetail(response.value, apiKey);
   const error = parseJsonBody(response.value)?.["error"];
   const code = identifyProviderSetupError({
     provider,
@@ -273,7 +273,7 @@ const probeHuggingFace = async ({
     return { valid: true };
   }
 
-  const detail = extractDetail(response.value);
+  const detail = extractDetail(response.value, apiKey);
   return {
     valid: false,
     error: detail
@@ -327,7 +327,7 @@ const probeAzureFoundry = async ({
   }
 
   if (!response.value.ok) {
-    const detail = extractDetail(response.value);
+    const detail = extractDetail(response.value, apiKey);
     return {
       valid: false,
       error: detail

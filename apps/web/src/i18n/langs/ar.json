@@ -4043,8 +4043,8 @@
       "editProviders": "تعديل المزوّدين",
       "endpoint": "نقطة النهاية",
       "endpointDescription": "استخدم نقطة نهاية Azure OpenAI أو Azure Foundry ‏/openai/v1. تخزّن stella نقطة النهاية المُسوّاة.",
-      "invalidKeyFormat": "أدخل مفتاح API صالحًا لمزود {provider}.",
       "keepSavedKey": "الاحتفاظ بالمفتاح المحفوظ",
+      "keyFormatHint": "تنسيق هذا المفتاح غير معتاد لمزود {provider}. احفظه للتحقق منه لدى المزود.",
       "modelForRole": "نموذج {role}",
       "modelIdPlaceholder": "البحث عن النماذج",
       "modelsDescription": "اختر مزوّدًا ونموذجًا متعدد الوسائط واحدًا معروضًا لكل فئة من فئات الذكاء الاصطناعي.",
@@ -4078,7 +4078,9 @@
         "eu": "الاتحاد الأوروبي (europe-west4)",
         "global": "عالمي"
       },
+      "removeLastProviderConfirm": "هل تريد إزالة {provider}؟ سيؤدي ذلك أيضًا إلى إعادة تعيين الاختيارات المخصصة لنماذج الذكاء الاصطناعي.",
       "removeProvider": "إزالة المزوّد",
+      "removeProviderConfirm": "هل تريد إزالة {provider} وبيانات الاعتماد المحفوظة؟",
       "replaceKey": "استبدال المفتاح",
       "roles": {
         "chat": "دردشة",

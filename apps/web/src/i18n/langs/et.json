@@ -4043,8 +4043,8 @@
       "editProviders": "Muuda teenusepakkujaid",
       "endpoint": "Lõpp-punkt",
       "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. stella salvestab normaliseeritud endpointi.",
-      "invalidKeyFormat": "Sisestage teenuse {provider} kehtiv API-võti.",
       "keepSavedKey": "Hoia salvestatud võti alles",
+      "keyFormatHint": "Selle võtme vorming on teenusepakkuja {provider} puhul ebatavaline. Salvestage võti, et seda teenusepakkujaga kontrollida.",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
@@ -4078,7 +4078,9 @@
         "eu": "EL (europe-west4)",
         "global": "Globaalne"
       },
+      "removeLastProviderConfirm": "Kas eemaldada {provider}? See lähtestab ka kohandatud tehisintellektimudelite valikud.",
       "removeProvider": "Eemalda teenusepakkuja",
+      "removeProviderConfirm": "Kas eemaldada {provider} ja salvestatud autentimisandmed?",
       "replaceKey": "Asenda võti",
       "roles": {
         "chat": "Vestlus",

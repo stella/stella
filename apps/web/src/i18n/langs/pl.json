@@ -4043,8 +4043,8 @@
       "editProviders": "Edytuj dostawców",
       "endpoint": "Punkt końcowy",
       "endpointDescription": "Użyj endpointu Azure OpenAI lub Azure Foundry /openai/v1. stella zapisze znormalizowany endpoint.",
-      "invalidKeyFormat": "Wprowadź prawidłowy klucz API dostawcy {provider}.",
       "keepSavedKey": "Zachowaj zapisany klucz",
+      "keyFormatHint": "Ten klucz ma nietypowy format dla dostawcy {provider}. Zapisz go, aby sprawdzić go u dostawcy.",
       "modelForRole": "Model dla roli {role}",
       "modelIdPlaceholder": "Szukaj modeli",
       "modelsDescription": "Dla każdej kategorii AI wybierz dostawcę i jeden oferowany model multimodalny.",
@@ -4078,7 +4078,9 @@
         "eu": "UE (europe-west4)",
         "global": "Globalny"
       },
+      "removeLastProviderConfirm": "Usunąć {provider}? Spowoduje to również zresetowanie niestandardowego wyboru modeli AI.",
       "removeProvider": "Usuń dostawcę",
+      "removeProviderConfirm": "Usunąć {provider} i zapisane dane uwierzytelniające?",
       "replaceKey": "Zastąp klucz",
       "roles": {
         "chat": "Czat",

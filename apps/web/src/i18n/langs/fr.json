@@ -4043,8 +4043,8 @@
       "editProviders": "Modifier les fournisseurs",
       "endpoint": "Point de terminaison",
       "endpointDescription": "Utilisez le point de terminaison Azure OpenAI ou Azure Foundry /openai/v1. stella enregistre le point de terminaison normalisé.",
-      "invalidKeyFormat": "Saisissez une clé API valide pour {provider}.",
       "keepSavedKey": "Conserver la clé enregistrée",
+      "keyFormatHint": "Le format de cette clé est inhabituel pour {provider}. Enregistrez-la pour la vérifier auprès du fournisseur.",
       "modelForRole": "Modèle pour {role}",
       "modelIdPlaceholder": "Rechercher des modèles",
       "modelsDescription": "Choisissez un fournisseur et un modèle multimodal proposé pour chaque catégorie IA.",
@@ -4078,7 +4078,9 @@
         "eu": "UE (europe-west4)",
         "global": "Global"
       },
+      "removeLastProviderConfirm": "Supprimer {provider} ? Cela réinitialise également la sélection personnalisée des modèles d’IA.",
       "removeProvider": "Supprimer le fournisseur",
+      "removeProviderConfirm": "Supprimer {provider} et ses identifiants enregistrés ?",
       "replaceKey": "Remplacer la clé",
       "roles": {
         "chat": "Conversation",

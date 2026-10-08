@@ -4043,8 +4043,8 @@
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
       "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
-      "invalidKeyFormat": "Geben Sie einen gültigen API-Schlüssel für {provider} ein.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
+      "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
@@ -4078,7 +4078,9 @@
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeLastProviderConfirm": "{provider} entfernen? Dadurch wird auch die benutzerdefinierte Auswahl der KI-Modelle zurückgesetzt.",
       "removeProvider": "Provider entfernen",
+      "removeProviderConfirm": "{provider} und die gespeicherten Zugangsdaten entfernen?",
       "replaceKey": "Schlüssel ersetzen",
       "roles": {
         "chat": "Chat",

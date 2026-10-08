@@ -1,3 +1,5 @@
+import { sanitizeFeedbackSecrets } from "@/api/lib/credential-text";
+
 /**
  * Deterministic, regex-based redaction for agent-authored feedback text.
  *
@@ -19,7 +21,6 @@
 
 const REDACTED_EMAIL = "[redacted-email]";
 const REDACTED_ID = "[redacted-id]";
-const REDACTED_SECRET = "[redacted-secret]";
 const REDACTED_URL = "[redacted-url]";
 const REDACTED_IP = "[redacted-ip]";
 
@@ -57,21 +58,6 @@ const isPreservedPublicUrl = (url: URL): boolean => {
 
   return isPublicStellaHost(host);
 };
-
-// Three dot-separated base64url segments, each long enough to be a real token
-// (>= 10 chars), so version strings ("1.2.3") and IPv4 literals never match.
-const JWT_REGEX =
-  /\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/gu;
-
-// Long hex blob (>= 32 chars): API keys, hashes, un-hyphenated ids.
-const HEX_SECRET_REGEX = /\b[0-9a-fA-F]{32,}\b/gu;
-
-// Long base64url blob (>= 40 chars): opaque access tokens, secrets. The
-// base64url alphabet (no `+` or `/`) is used on purpose: including `/` would
-// let this pass swallow whole URL path segments, and modern tokens (GitHub
-// PATs, JWT parts, most API keys) are base64url anyway. A hex secret is caught
-// by HEX_SECRET_REGEX above.
-const BASE64_SECRET_REGEX = /\b[A-Za-z0-9_-]{40,}={0,2}/gu;
 
 // Absolute http(s) URL. Parentheses/brackets are valid path characters and are
 // intentionally included; unmatched closing wrappers and sentence punctuation
@@ -153,18 +139,9 @@ export const sanitizeFeedbackText = (input: string): SanitizeFeedbackResult => {
 
   let text = input;
 
-  text = text.replace(JWT_REGEX, () => {
-    bump();
-    return REDACTED_SECRET;
-  });
-  text = text.replace(HEX_SECRET_REGEX, () => {
-    bump();
-    return REDACTED_SECRET;
-  });
-  text = text.replace(BASE64_SECRET_REGEX, () => {
-    bump();
-    return REDACTED_SECRET;
-  });
+  const secrets = sanitizeFeedbackSecrets(text);
+  text = secrets.text;
+  redactions += secrets.redactions;
   text = text.replace(URL_REGEX, (match) => {
     const { core, trailing } = trimTrailingUrlPunctuation(match);
     let url: URL;

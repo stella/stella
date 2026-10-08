@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 
@@ -8,8 +10,8 @@ GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
 });
 const originalFetch = globalThis.fetch;
-const requests: string[] = [];
-const requestBodies: string[] = [];
+const requests: { method: string; url: string; body: string }[] = [];
+const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const config = {
   configured: false,
   instanceProvisioned: false,
@@ -28,12 +30,15 @@ const savedConfig = {
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
-    requests.push(`${init?.method ?? "GET"} ${url}`);
-    requestBodies.push(
-      input instanceof Request
-        ? await input.clone().text()
-        : await new Response(init?.body).text(),
-    );
+    const method =
+      init?.method ?? (input instanceof Request ? input.method : "GET");
+    let body = "";
+    if (init?.body !== undefined) {
+      body = await new Response(init.body).text();
+    } else if (input instanceof Request) {
+      body = await input.clone().text();
+    }
+    requests.push({ method, url, body });
     if (url.includes("organization-settings/ai-config")) {
       return Response.json(savedConfig);
     }
@@ -59,10 +64,11 @@ afterEach(() => {
   }
   clients.length = 0;
   requests.length = 0;
-  requestBodies.length = 0;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
+  cleanup();
+  await act(async () => await sleep(50));
   await GlobalRegistrator.unregister();
 });
 
@@ -114,7 +120,7 @@ const mount = async (initialConfig: OrganizationAIConfig = config) => {
 const dirtyKey = () =>
   fireEvent.change(
     screen.getByLabelText(messages.organization.aiConfig.apiKey),
-    { target: { value: `AIza${"a".repeat(31)}1234` } },
+    { target: { value: GOOGLE_KEY } },
   );
 
 test("leaving AI provider settings with a dirty key prompts before navigation", async () => {
@@ -144,11 +150,24 @@ test("saving the key clears the navigation prompt", async () => {
   dirtyKey();
   fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
   await screen.findByText(messages.organization.aiConfig.savedVerified);
+  expect(screen.getByText("AIza****1234")).toBeDefined();
+  expect(
+    screen.queryByLabelText(messages.organization.aiConfig.apiKey),
+  ).toBeNull();
+  expect(document.body.innerHTML).not.toContain(GOOGLE_KEY);
+  const writes = requests.filter(
+    ({ method }) => method === "POST" || method === "DELETE",
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes.at(0)?.method).toBe("POST");
+  expect(writes.at(0)?.body).toContain(
+    `"providers":${JSON.stringify([{ provider: "google", apiKey: GOOGLE_KEY, region: "global" }])}`,
+  );
   expect(
     requests.some(
       (request) =>
-        request.startsWith("POST ") &&
-        request.includes("organization-settings/ai-config"),
+        request.method === "POST" &&
+        request.url.includes("organization-settings/ai-config"),
     ),
   ).toBe(true);
   expect(hasUnsavedWork()).toBe(false);
@@ -178,7 +197,7 @@ test("cancelling the leave prompt retains the edited key and settings route", as
   expect(appRouter.state.location.pathname).toBe("/settings/organization");
   expect(
     screen.getByLabelText(messages.organization.aiConfig.apiKey),
-  ).toHaveProperty("value", `AIza${"a".repeat(31)}1234`);
+  ).toHaveProperty("value", GOOGLE_KEY);
   expect(hasUnsavedWork()).toBe(true);
 });
 
@@ -199,18 +218,24 @@ test("removing one saved provider posts only the remaining stored credentials", 
   });
   expect(removeButtons).toHaveLength(2);
   fireEvent.click(removeButtons[1]);
+  expect(
+    requests.filter(
+      (request) => request.method === "POST" || request.method === "DELETE",
+    ),
+  ).toEqual([]);
+  fireEvent.click(
+    await screen.findByRole("button", { name: messages.common.confirm }),
+  );
   await waitFor(() =>
     expect(screen.queryByText("sk-or-v1****5678") === null).toBe(true),
   );
   expect(screen.getByText("AIza****1234")).toBeDefined();
   const writes = requests.filter(
-    (request) => request.startsWith("POST ") || request.startsWith("DELETE "),
+    (request) => request.method === "POST" || request.method === "DELETE",
   );
   expect(writes).toHaveLength(1);
-  expect(writes.at(0)).toContain("POST ");
-  const body = requestBodies.at(
-    requests.findIndex((request) => request.startsWith("POST ")),
-  );
+  expect(writes.at(0)?.method).toBe("POST");
+  const body = writes.at(0)?.body;
   expect(body).toContain('"providers":[{"provider":"google"');
   expect(body).not.toContain('"provider":"openrouter"');
   expect(body).not.toContain("apiKeyMasked");
@@ -224,18 +249,69 @@ test("removing the last saved provider deletes the configuration", async () => {
       name: messages.organization.aiConfig.removeProvider,
     }),
   );
+  expect((await screen.findByRole("alertdialog")).textContent).toContain(
+    messages.organization.aiConfig.removeLastProviderConfirm.replace(
+      "{provider}",
+      "Google",
+    ),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.confirm }),
+  );
   await waitFor(() =>
     expect(screen.queryByText("AIza****1234") === null).toBe(true),
   );
   const writes = requests.filter(
-    (request) => request.startsWith("POST ") || request.startsWith("DELETE "),
+    (request) => request.method === "POST" || request.method === "DELETE",
   );
   expect(writes).toHaveLength(1);
-  expect(writes.at(0)).toContain("DELETE ");
+  expect(writes.at(0)?.method).toBe("DELETE");
   expect(
     screen.queryByRole("button", {
       name: messages.organization.aiConfig.removeProvider,
     }),
   ).toBeNull();
   expect(hasUnsavedWork()).toBe(false);
+});
+
+test("saving one dirty row preserves the other key and its leave prompt", async () => {
+  const appRouter = await mount();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.addProvider,
+    }),
+  );
+  const inputs = screen.getAllByLabelText(
+    messages.organization.aiConfig.apiKey,
+  );
+  expect(inputs).toHaveLength(2);
+  const otherKey = `sk-ant-api03-${"b".repeat(32)}5678`;
+  fireEvent.change(inputs[0], { target: { value: GOOGLE_KEY } });
+  fireEvent.change(inputs[1], { target: { value: otherKey } });
+  const saveButtons = screen.getAllByRole("button", {
+    name: messages.common.save,
+  });
+  expect(saveButtons).toHaveLength(2);
+  fireEvent.click(saveButtons[0]);
+  await screen.findByText(messages.organization.aiConfig.savedVerified);
+  expect(screen.getByText("AIza****1234")).toBeDefined();
+  expect(
+    screen.getByLabelText(messages.organization.aiConfig.apiKey),
+  ).toHaveProperty("value", otherKey);
+  expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
+  expect(hasUnsavedWork()).toBe(true);
+  const writes = requests.filter(
+    ({ method }) => method === "POST" || method === "DELETE",
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes.at(0)?.body).toContain(
+    `"providers":${JSON.stringify([{ provider: "google", apiKey: GOOGLE_KEY, region: "global" }])}`,
+  );
+  expect(writes.at(0)?.body).not.toContain(otherKey);
+  expect(writes.at(0)?.body).not.toContain('"provider":"anthropic"');
+  await act(async () => {
+    void appRouter.navigate({ to: "/left" });
+  });
+  expect(await screen.findByRole("alertdialog")).toBeDefined();
+  expect(appRouter.state.location.pathname).toBe("/settings/organization");
 });

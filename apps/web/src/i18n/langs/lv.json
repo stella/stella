@@ -4043,8 +4043,8 @@
       "editProviders": "Rediģēt pakalpojumu sniedzējus",
       "endpoint": "Galamērķis",
       "endpointDescription": "Izmantojiet Azure OpenAI vai Azure Foundry /openai/v1 galamērķi. stella saglabā normalizēto galamērķi.",
-      "invalidKeyFormat": "Ievadiet derīgu {provider} API atslēgu.",
       "keepSavedKey": "Paturēt saglabāto atslēgu",
+      "keyFormatHint": "Šai atslēgai ir neparasts formāts pakalpojuma sniedzējam {provider}. Saglabājiet to, lai sniedzējs to pārbaudītu.",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Meklēt modeļus",
       "modelsDescription": "Katrai AI kategorijai izvēlieties pakalpojumu sniedzēju un vienu piedāvāto multimodālo modeli.",
@@ -4078,7 +4078,9 @@
         "eu": "ES (europe-west4)",
         "global": "Globāls"
       },
+      "removeLastProviderConfirm": "Noņemt {provider}? Tiks atiestatīta arī pielāgotā AI modeļu izvēle.",
       "removeProvider": "Noņemt pakalpojumu sniedzēju",
+      "removeProviderConfirm": "Noņemt {provider} un saglabātos autentifikācijas datus?",
       "replaceKey": "Aizstāt atslēgu",
       "roles": {
         "chat": "Tērzēšana",

@@ -6,6 +6,7 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { consumeValidateProviderRateLimit } from "@/api/handlers/ai-config/validate-provider-rate-limit";
 import { supportsRegion } from "@/api/lib/ai-config";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
+import { ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/anthropic-config";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
@@ -19,7 +20,13 @@ import { logger } from "@/api/lib/observability/logger";
 export const validateProviderBody = t.Object({
   provider: t.UnionEnum(TANSTACK_AI_PROVIDERS),
   apiKey: t.String({ minLength: 1, maxLength: 512 }),
-  anthropicWorkspaceId: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
+  anthropicWorkspaceId: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 256,
+      pattern: ANTHROPIC_WORKSPACE_ID_PATTERN,
+    }),
+  ),
   region: t.Optional(
     t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
   ),

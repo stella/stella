@@ -3,6 +3,8 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { ProviderCredentialDraft } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 
@@ -10,7 +12,7 @@ GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
 });
 const { useState } = await import("react");
-const { cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { createProviderCredentialDraft } =
@@ -21,7 +23,11 @@ const labels = messages.organization.aiConfig;
 const VALID_KEY = `sk-or-v1-${"a".repeat(32)}1234`;
 const MASKED_KEY = "sk-or-v1****1234";
 afterEach(cleanup);
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => {
+  cleanup();
+  await act(async () => await sleep(50));
+  await GlobalRegistrator.unregister();
+});
 
 type MountOptions = {
   initial?: ProviderCredentialDraft[];
@@ -110,18 +116,15 @@ describe("BYOK provider rows", () => {
     await screen.findByText(labels.savedVerified);
     expect(saved).toHaveLength(1);
   });
-  test("invalid format stays editable and shows inline error without a request", () => {
+  test("unusual format is advisory and the provider still receives the key", async () => {
     const { saved } = mount();
     enterKey("invalid-key");
+    expect(screen.getByRole("note").textContent).toContain(
+      "Save to check it with the provider",
+    );
     saveWithButton();
-    expect(screen.getByRole("alert").textContent).toContain(
-      "Enter a valid OpenRouter API key.",
-    );
-    expect(saved).toEqual([]);
-    expect(screen.getByLabelText(labels.apiKey)).toHaveProperty(
-      "value",
-      "invalid-key",
-    );
+    await screen.findByText(labels.savedVerified);
+    expect(saved.at(0)?.apiKey).toBe("invalid-key");
   });
   test("provider refusal preserves its complete reason and leaves the key editable", async () => {
     const reason = `OpenRouter: key disabled. ${"Full provider explanation. ".repeat(30)}Final recovery instruction.`;
@@ -175,6 +178,11 @@ describe("BYOK provider rows", () => {
     fireEvent.click(
       screen.getByRole("button", { name: labels.removeProvider }),
     );
+    expect(removed).toEqual([]);
+    expect(await screen.findByRole("alertdialog")).toBeDefined();
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.confirm }),
+    );
     await waitFor(() => expect(screen.queryByText(MASKED_KEY)).toBeNull());
     expect(removed.at(0)?.provider).toBe("openrouter");
     expect(removed).toHaveLength(1);
@@ -186,6 +194,47 @@ describe("BYOK provider rows", () => {
     expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
     enterKey("");
     expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
+  });
+  test("a saved workspace ID can be edited while keeping the stored key", async () => {
+    const { saved } = mount({
+      initial: [
+        {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKeyMasked: "sk-ant-usr-****1234",
+          anthropicWorkspaceId: "wrkspc_old",
+          replacingKey: false,
+        },
+      ],
+    });
+    fireEvent.click(screen.getByRole("button", { name: labels.replaceKey }));
+    fireEvent.change(screen.getByLabelText(labels.anthropicWorkspaceId), {
+      target: { value: "wrkspc_new" },
+    });
+    expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
+    saveWithButton();
+    await screen.findByText(labels.savedVerified);
+    expect(saved.at(0)?.apiKey).toBe("");
+    expect(saved.at(0)?.anthropicWorkspaceId).toBe("wrkspc_new");
+  });
+  test("canceling removal preserves the saved row", async () => {
+    const { removed } = mount({
+      initial: [
+        {
+          ...createProviderCredentialDraft("openrouter"),
+          apiKeyMasked: MASKED_KEY,
+          replacingKey: false,
+        },
+      ],
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: labels.removeProvider }),
+    );
+    await screen.findByRole("alertdialog");
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.cancel }),
+    );
+    expect(removed).toEqual([]);
+    expect(screen.getByText(MASKED_KEY)).toBeDefined();
   });
   test("user-scoped Anthropic key displays workspace guidance with its exact provider error", async () => {
     mount({

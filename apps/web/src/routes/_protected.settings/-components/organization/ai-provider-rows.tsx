@@ -4,6 +4,15 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import {
+  AlertDialog,
+  AlertDialogPopup,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogClose,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -46,6 +55,7 @@ export const AIProviderRows = ({
   onChange,
   onSave,
   onRemove,
+  storedProviders = EMPTY_PROVIDERS,
 }: AIProviderRowsProps) => {
   const t = useTranslations("organization.aiConfig");
   return (
@@ -73,6 +83,19 @@ export const AIProviderRows = ({
             key={draft.provider}
             draft={draft}
             disabled={disabled}
+            removalImpact={
+              storedProviders.filter((provider) => provider.apiKeyMasked)
+                .length === 1
+                ? "configuration"
+                : "provider"
+            }
+            dirty={
+              draft.apiKey.length > 0 ||
+              draft.anthropicWorkspaceId !==
+                storedProviders.find(
+                  (saved) => saved.provider === draft.provider,
+                )?.anthropicWorkspaceId
+            }
             options={getAvailableProviderKeys({
               currentProvider: draft.provider,
               providers,
@@ -93,13 +116,15 @@ export const AIProviderRows = ({
   );
 };
 
+const EMPTY_PROVIDERS = [] as const;
+
 const KEY_FORMATS = {
   google: /^AIza[A-Za-z0-9_-]{35}$/u,
   anthropic: /^sk-ant-(?:api\d+|usr)-[A-Za-z0-9_-]+$/u,
   openai: /^sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}$/u,
   openrouter: /^sk-or-v1-[A-Za-z0-9_-]{20,}$/u,
   mistral: /^[A-Za-z0-9]{32}$/u,
-  bedrock: /^ABSK[A-Za-z0-9+/=_-]+$/u,
+  bedrock: /^(?:ABSK|bedrock-api-key-)[A-Za-z0-9+/=_-]+$/u,
 } as const satisfies Record<ProviderValue, RegExp>;
 
 type RowState =
@@ -110,6 +135,7 @@ type RowState =
 
 type AIProviderRowsProps = {
   providers: ProviderCredentialDraft[];
+  storedProviders?: readonly ProviderCredentialDraft[];
   disabled: boolean;
   onChange: (providers: ProviderCredentialDraft[]) => void;
   onSave: (provider: ProviderCredentialDraft) => Promise<void>;
@@ -118,6 +144,8 @@ type AIProviderRowsProps = {
 
 type AIProviderRowProps = {
   draft: ProviderCredentialDraft;
+  removalImpact: "provider" | "configuration";
+  dirty: boolean;
   disabled: boolean;
   options: ProviderValue[];
   onChange: (draft: ProviderCredentialDraft) => void;
@@ -127,6 +155,8 @@ type AIProviderRowProps = {
 
 function AIProviderRow({
   draft,
+  removalImpact,
+  dirty,
   disabled,
   options,
   onChange,
@@ -137,6 +167,9 @@ function AIProviderRow({
   const common = useTranslations("common");
   const translate = useTranslations();
   const [state, setState] = useState<RowState>({ status: "idle" });
+  const [removalState, setRemovalState] = useState<"idle" | "confirming">(
+    "idle",
+  );
   const editable = draft.replacingKey || !draft.apiKeyMasked;
   const pending = disabled || state.status === "saving";
   const workspaceGuidance = providerSetupGuidance(
@@ -152,16 +185,6 @@ function AIProviderRow({
     onChange(next);
   };
   const save = async () => {
-    if (!KEY_FORMATS[draft.provider].test(draft.apiKey.trim())) {
-      setState({
-        status: "error",
-        message: t("invalidKeyFormat", {
-          provider: PROVIDER_LABELS[draft.provider],
-        }),
-        guidance: "none",
-      });
-      return;
-    }
     setState({ status: "saving" });
     const result = await Result.tryPromise({
       try: async () => await onSave(draft),
@@ -183,6 +206,7 @@ function AIProviderRow({
     setState({ status: "verified" });
   };
   const remove = async () => {
+    setRemovalState("idle");
     setState({ status: "saving" });
     const result = await Result.tryPromise({
       try: async () => await onRemove(draft),
@@ -215,7 +239,7 @@ function AIProviderRow({
         {editable ? (
           <Select
             value={draft.provider}
-            disabled={pending}
+            disabled={pending || draft.apiKeyMasked !== undefined}
             onValueChange={(value) => {
               if (isProviderValue(value)) {
                 change(createProviderCredentialDraft(value));
@@ -293,7 +317,13 @@ function AIProviderRow({
           variant="ghost"
           aria-label={t("removeProvider")}
           disabled={pending}
-          onClick={() => detached(remove(), "ai-provider-row.remove")}
+          onClick={() => {
+            if (draft.apiKeyMasked) {
+              setRemovalState("confirming");
+              return;
+            }
+            detached(remove(), "ai-provider-row.remove");
+          }}
         >
           <Trash2Icon />
         </Button>
@@ -311,7 +341,14 @@ function AIProviderRow({
           />
         )}
       </form>
-      {editable && draft.apiKey.length > 0 && (
+      {editable &&
+        draft.apiKey.trim().length > 0 &&
+        !KEY_FORMATS[draft.provider].test(draft.apiKey.trim()) && (
+          <p className="text-muted-foreground text-xs" role="note">
+            {t("keyFormatHint", { provider: PROVIDER_LABELS[draft.provider] })}
+          </p>
+        )}
+      {editable && dirty && (
         <p className="text-muted-foreground text-xs">
           {common("unsavedChanges")}
         </p>
@@ -345,6 +382,35 @@ function AIProviderRow({
           <CopyActionButton text={state.message} />
         </div>
       )}
+      <AlertDialog
+        open={removalState === "confirming"}
+        onOpenChange={(open) => setRemovalState(open ? "confirming" : "idle")}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{common("confirmAction")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                removalImpact === "configuration"
+                  ? "removeLastProviderConfirm"
+                  : "removeProviderConfirm",
+                { provider: PROVIDER_LABELS[draft.provider] },
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {common("cancel")}
+            </AlertDialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => detached(remove(), "ai-provider-row.remove")}
+            >
+              {common("confirm")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </ListItem>
   );
 }

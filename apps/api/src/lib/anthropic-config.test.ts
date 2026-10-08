@@ -101,19 +101,25 @@ describe("Anthropic request configuration", () => {
     test(`the SDK sends the configured workspace on requests (${String(anthropicWorkspaceId)})`, async () => {
       const requests: Headers[] = [];
       const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-        async (_url, init) => {
-          requests.push(new Headers(init?.headers));
-          return new Response(
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "invalid_request_error",
-                message: "Recorded transport stop",
-              },
-            }),
-            { status: 400, headers: { "content-type": "application/json" } },
-          );
-        },
+        Object.assign(
+          async (
+            _url: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ) => {
+            requests.push(new Headers(init?.headers));
+            return new Response(
+              JSON.stringify({
+                type: "error",
+                error: {
+                  type: "invalid_request_error",
+                  message: "Recorded transport stop",
+                },
+              }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            );
+          },
+          { preconnect: globalThis.fetch.preconnect },
+        ),
       );
       const originalMockMode = env.USE_MOCK_AI;
       env.USE_MOCK_AI = false;

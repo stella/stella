@@ -1347,19 +1347,25 @@ describe("Anthropic workspace dispatch", () => {
   test("every model role receives workspace headers and changed workspace invalidates the cached factory", async () => {
     const requests: Headers[] = [];
     const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      async (_url, init) => {
-        requests.push(new Headers(init?.headers));
-        return new Response(
-          JSON.stringify({
-            type: "error",
-            error: {
-              type: "invalid_request_error",
-              message: "Recorded transport stop",
-            },
-          }),
-          { status: 400, headers: { "content-type": "application/json" } },
-        );
-      },
+      Object.assign(
+        async (
+          _url: Parameters<typeof globalThis.fetch>[0],
+          init?: RequestInit,
+        ) => {
+          requests.push(new Headers(init?.headers));
+          return new Response(
+            JSON.stringify({
+              type: "error",
+              error: {
+                type: "invalid_request_error",
+                message: "Recorded transport stop",
+              },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
     );
     clearByokAdapterCache();
     try {

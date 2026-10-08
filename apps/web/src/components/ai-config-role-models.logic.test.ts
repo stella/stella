@@ -19,6 +19,7 @@ import {
   isKnownModelSelectionForRole,
   isProviderRoleSupported,
   providerDraftsFromStoredProviders,
+  PROVIDER_KEYS,
   roleModelsFromOverrideModels,
   serializeDecisionModel,
   serializeOverrideModels,
@@ -330,6 +331,89 @@ describe("BYOK provider and model configuration", () => {
       },
     ]);
   });
+
+  test("serializes trimmed Anthropic credentials and workspace IDs", () => {
+    expect(
+      serializeProviderDrafts([
+        {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "  sk-ant-api03-fixture  ",
+          anthropicWorkspaceId: "  wrkspc_fixture  ",
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "anthropic",
+        apiKey: "sk-ant-api03-fixture",
+        anthropicWorkspaceId: "wrkspc_fixture",
+        region: "global",
+      },
+    ]);
+  });
+
+  test("an empty workspace ID explicitly clears Anthropic workspace scope while keeping the saved key", () => {
+    expect(
+      serializeProviderDrafts([
+        {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "  ",
+          apiKeyMasked: "sk-ant-api03****1234",
+          replacingKey: false,
+          anthropicWorkspaceId: "  ",
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "anthropic",
+        anthropicWorkspaceId: "",
+        region: "global",
+      },
+    ]);
+  });
+
+  test.each(PROVIDER_KEYS)(
+    "workspace scope serialization is provider-specific for %s",
+    (provider) => {
+      expect(
+        serializeProviderDrafts([
+          {
+            ...createProviderCredentialDraft(provider),
+            anthropicWorkspaceId: "  wrkspc_fixture  ",
+          },
+        ]),
+      ).toEqual([
+        {
+          provider,
+          ...(provider === "anthropic"
+            ? { anthropicWorkspaceId: "wrkspc_fixture" }
+            : {}),
+          region: "global",
+        },
+      ]);
+      expect(
+        serializeProviderDrafts([
+          {
+            ...createProviderCredentialDraft(provider),
+            anthropicWorkspaceId: "  ",
+          },
+        ]),
+      ).toEqual([
+        {
+          provider,
+          ...(provider === "anthropic" ? { anthropicWorkspaceId: "" } : {}),
+          region: "global",
+        },
+      ]);
+      expect(
+        serializeProviderDrafts([createProviderCredentialDraft(provider)]),
+      ).toEqual([
+        {
+          provider,
+          region: "global",
+        },
+      ]);
+    },
+  );
 
   test("accepts saved provider drafts without requiring key replacement", () => {
     expect(

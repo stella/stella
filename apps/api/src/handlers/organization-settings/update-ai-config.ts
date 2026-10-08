@@ -25,6 +25,7 @@ import {
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
 import { captureError } from "@/api/lib/analytics/capture";
+import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/anthropic-config";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -43,7 +44,12 @@ const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 const providerBody = t.Object({
   provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
   apiKey: t.Optional(t.String({ minLength: 1 })),
-  anthropicWorkspaceId: t.Optional(t.String({ maxLength: 256 })),
+  anthropicWorkspaceId: t.Optional(
+    t.String({
+      maxLength: 256,
+      pattern: OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN,
+    }),
+  ),
   region: t.Optional(
     t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
   ),
@@ -173,12 +179,7 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
-    const newKeyProviders = new Set<BYOKProvider>();
-    for (const provider of body.providers) {
-      if (provider.apiKey || provider.anthropicWorkspaceId !== undefined) {
-        newKeyProviders.add(provider.provider);
-      }
-    }
+    const newKeyProviders = changedProviderKeys(body.providers, existingConfig);
 
     const providersToValidate = providerResult.providers.filter(
       (providerConfig) =>
@@ -208,11 +209,13 @@ const updateAIConfig = createSafeRootHandler(
       return [`${providerConfig.provider}: ${result.error}`];
     });
 
-    const setupErrorCode = validationResults
-      .flatMap((result) =>
-        !result.valid && result.code !== undefined ? [result.code] : [],
-      )
-      .at(0);
+    const failedResults = validationResults.filter((result) => !result.valid);
+    const firstErrorCode = failedResults.at(0)?.code;
+    const setupErrorCode = failedResults.every(
+      (result) => result.code === firstErrorCode,
+    )
+      ? firstErrorCode
+      : undefined;
     if (failures.length > 0) {
       return Result.err(
         new HandlerError({
@@ -314,6 +317,30 @@ type ProviderConfigInput = {
   region?: DataRegion | undefined;
 };
 
+const changedProviderKeys = (
+  providers: readonly ProviderConfigInput[],
+  existingConfig: OrgAIConfig | undefined,
+) => {
+  const newKeyProviders = new Set<BYOKProvider>();
+  for (const provider of providers) {
+    const existingProvider = existingConfig?.providers.find(
+      (candidate) => candidate.provider === provider.provider,
+    );
+    const existingAnthropicWorkspaceId =
+      existingProvider?.provider === "anthropic"
+        ? existingProvider.anthropicWorkspaceId
+        : undefined;
+    const workspaceIdChanged =
+      provider.anthropicWorkspaceId !== undefined &&
+      (provider.anthropicWorkspaceId.trim() || undefined) !==
+        existingAnthropicWorkspaceId;
+    if (provider.apiKey || workspaceIdChanged) {
+      newKeyProviders.add(provider.provider);
+    }
+  }
+  return newKeyProviders;
+};
+
 type TanStackBYOKProviderConfig = OrgAIProviderConfig & {
   provider: BYOKProvider;
 };
@@ -382,10 +409,13 @@ const resolveProviderConfigs = (
         existingProvider?.provider === "anthropic"
           ? existingProvider.anthropicWorkspaceId
           : undefined;
-      const anthropicWorkspaceId =
-        providerInput.anthropicWorkspaceId === undefined
-          ? existingAnthropicWorkspaceId
-          : providerInput.anthropicWorkspaceId.trim() || undefined;
+      let anthropicWorkspaceId = providerInput.apiKey
+        ? undefined
+        : existingAnthropicWorkspaceId;
+      if (providerInput.anthropicWorkspaceId !== undefined) {
+        anthropicWorkspaceId =
+          providerInput.anthropicWorkspaceId.trim() || undefined;
+      }
       resolvedProviders.push({
         provider: "anthropic",
         apiKey,

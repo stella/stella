@@ -28,6 +28,7 @@ type SafeOutboundFetchCall = {
   url: URL;
   headers: Headers;
   method: string;
+  maxBytes: number;
 };
 
 type MockResponse =
@@ -51,7 +52,12 @@ const mockSafeOutboundFetchBytes = async (opts: {
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   const url = opts.url instanceof URL ? opts.url : new URL(opts.url);
   const headers = new Headers(opts.headers);
-  calls.push({ url, headers, method: opts.method ?? "GET" });
+  calls.push({
+    url,
+    headers,
+    method: opts.method ?? "GET",
+    maxBytes: opts.maxBytes,
+  });
 
   if (nextResponse.kind === "error") {
     return Result.err(
@@ -421,5 +427,34 @@ describe("Anthropic workspace-scoped provider checks", () => {
     expect(calls.at(0)?.headers.get("x-goog-api-key")).toBe(
       "google-fixture-key",
     );
+  });
+});
+
+test("provider diagnostics retain their full reason while echoed keys are removed", async () => {
+  const apiKey = "fixture-key-without-provider-prefix";
+  const message = `Key ${apiKey} rejected. ${"Provider reason ".repeat(40)}`;
+  nextResponse = {
+    kind: "ok",
+    status: 401,
+    body: { error: { type: "authentication_error", message } },
+  };
+  const result = await probeProvider({ provider: "anthropic", apiKey });
+  expect(result).toEqual({
+    valid: false,
+    error: `Anthropic rejected the key (HTTP 401): ${message.replace(apiKey, "[redacted-secret]")}`,
+  });
+});
+
+test("provider transport is bounded without shortening accepted diagnostic text", async () => {
+  const message = "Neutral full provider diagnostic ".repeat(1000);
+  nextResponse = { kind: "ok", status: 400, body: { error: { message } } };
+  const result = await probeProvider({
+    provider: "openai",
+    apiKey: "fixture-key",
+  });
+  expect(calls.at(0)?.maxBytes).toBe(64 * 1024);
+  expect(result).toMatchObject({
+    valid: false,
+    error: expect.stringContaining(message),
   });
 });

@@ -4043,8 +4043,8 @@
       "editProviders": "Upraviť poskytovateľov",
       "endpoint": "Endpoint",
       "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
-      "invalidKeyFormat": "Zadajte platný API kľúč pre {provider}.",
       "keepSavedKey": "Ponechať uložený kľúč",
+      "keyFormatHint": "Tento kľúč má pre {provider} nezvyčajný formát. Uložením ho overíte u poskytovateľa.",
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
       "modelsDescription": "Pre každú kategóriu AI vyberte poskytovateľa a jeden ponúkaný multimodálny model.",
@@ -4078,7 +4078,9 @@
         "eu": "EÚ (europe-west4)",
         "global": "Globálne"
       },
+      "removeLastProviderConfirm": "Odstrániť {provider}? Tým sa tiež obnoví predvolený výber modelov AI.",
       "removeProvider": "Odstrániť poskytovateľa",
+      "removeProviderConfirm": "Odstrániť {provider} aj uložené prihlasovacie údaje?",
       "replaceKey": "Nahradiť kľúč",
       "roles": {
         "chat": "Chat",

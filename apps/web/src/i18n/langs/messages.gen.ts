@@ -4046,8 +4046,8 @@ type Messages = {
       "editProviders": "Edit providers";
       "endpoint": "Endpoint";
       "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.";
-      "invalidKeyFormat": "Enter a valid {provider} API key.";
       "keepSavedKey": "Keep saved key";
+      "keyFormatHint": "This key has an unusual format for {provider}. Save to check it with the provider.";
       "modelForRole": "{role} model";
       "modelIdPlaceholder": "Search models";
       "modelsDescription": "Choose a provider and one offered multimodal model for each AI category.";
@@ -4081,7 +4081,9 @@ type Messages = {
         "eu": "EU (europe-west4)";
         "global": "Global";
       };
+      "removeLastProviderConfirm": "Remove {provider}? This also resets the custom AI model choices.";
       "removeProvider": "Remove provider";
+      "removeProviderConfirm": "Remove {provider} and its saved credential?";
       "replaceKey": "Replace key";
       "roles": {
         "chat": "Chat";

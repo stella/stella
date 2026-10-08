@@ -4043,8 +4043,8 @@
       "editProviders": "Szolgáltatók szerkesztése",
       "endpoint": "Végpont",
       "endpointDescription": "Használja az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A stella a normalizált végpontot menti.",
-      "invalidKeyFormat": "Adjon meg egy érvényes {provider} API-kulcsot.",
       "keepSavedKey": "Mentett kulcs megtartása",
+      "keyFormatHint": "Ez a kulcs a(z) {provider} esetében szokatlan formátumú. Mentse a szolgáltatónál történő ellenőrzéshez.",
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
       "modelsDescription": "Válasszon szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
@@ -4078,7 +4078,9 @@
         "eu": "EU (europe-west4)",
         "global": "Globális"
       },
+      "removeLastProviderConfirm": "Eltávolítja a(z) {provider} szolgáltatót? Ezzel az egyéni AI-modellválasztás is visszaáll az alapértelmezésre.",
       "removeProvider": "Szolgáltató eltávolítása",
+      "removeProviderConfirm": "Eltávolítja a(z) {provider} szolgáltatót és a mentett hitelesítő adatait?",
       "replaceKey": "Kulcs cseréje",
       "roles": {
         "chat": "Csevegés",

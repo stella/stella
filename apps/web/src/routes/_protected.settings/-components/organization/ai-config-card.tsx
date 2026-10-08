@@ -374,6 +374,7 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
   return (
     <div className="flex flex-col gap-4">
       <AIProviderRows
+        storedProviders={storedProviders}
         providers={providers}
         disabled={saveState === "saving"}
         onChange={setProviders}

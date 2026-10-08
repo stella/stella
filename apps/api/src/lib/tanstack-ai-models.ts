@@ -1372,7 +1372,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
       break;
     case "anthropic":
       hasher.update(config.anthropicWorkspaceId ?? "");
-      hasher.update(providerRegion(config));
+      hasher.update(providerRegion(config) ?? "global");
       break;
     case "google":
     case "openrouter":

@@ -317,7 +317,12 @@ describe("decision model in the stored blob", () => {
     });
     const config = await decryptAIConfig(organizationId, ciphertext, iv);
     expect(config.providers).toEqual([
-      { ...anthropicProviders[0], region: "global" },
+      {
+        provider: "anthropic",
+        apiKey: "sk-ant-usr-fixture",
+        anthropicWorkspaceId: "wrk_fixture",
+        region: "global",
+      },
     ]);
     expect(
       isOrgAIConfig({
