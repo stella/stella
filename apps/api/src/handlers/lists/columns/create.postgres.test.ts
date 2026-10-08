@@ -18,6 +18,7 @@ import {
   LIST_COLUMN_OVERFLOW_ERROR_CODE,
 } from "@/api/lib/lists/column-error-codes";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -107,6 +108,7 @@ if (!databaseUrl || !runPostgres) {
           })),
         );
         const baseContext = {
+          recordAuditEvent: auditRecorderDouble(),
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },
