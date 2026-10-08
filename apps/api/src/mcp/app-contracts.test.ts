@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
+import * as v from "valibot";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import {
@@ -275,6 +276,50 @@ describe("MCP app registry and contracts", () => {
     expect(view.results.at(0)).not.toHaveProperty("citationAuthority");
     expect(view.results.at(0)).not.toHaveProperty("url");
     expect(lookupView(APP_LOOKUP_FIXTURE)).not.toHaveProperty("resourceName");
+  });
+  test("publisher headnotes survive the MCP projection and absence is explicit", () => {
+    const first = APP_SEARCH_FIXTURE.results.at(0);
+    if (first === undefined) {
+      throw new Error("Missing search fixture");
+    }
+    for (const headnote of [first.headnote, null]) {
+      const parsed = v.parse(MCP_APP_OUTPUT_SCHEMAS.search_case_law, {
+        ...APP_SEARCH_FIXTURE,
+        results: [{ ...first, headnote }],
+      });
+      if (!("results" in parsed)) {
+        throw new Error("Expected projected search results");
+      }
+      expect(parsed.results.at(0)?.headnote).toEqual(headnote);
+      expect(parsed.results.at(0)?.keywords).toEqual(first.keywords);
+      const serialized = serializeToolResult(
+        untypedToolDataResult(parsed),
+        getStaticMcpToolOutputContract("search_case_law"),
+      );
+      expect(serialized.structuredContent).toEqual(parsed);
+      const view = searchView(parsed);
+      if (view.type !== "search") {
+        throw new Error("Expected search view");
+      }
+      expect(view.results.at(0)?.headnote).toEqual(
+        headnote ?? { type: "not_stated" },
+      );
+    }
+    const absent = searchView({
+      ...APP_SEARCH_FIXTURE,
+      results: [{ ...first, headnote: null, keywords: null }],
+    });
+    if (absent.type !== "search") {
+      throw new Error("Expected search view");
+    }
+    expect(absent.results.at(0)?.keywords).toBeNull();
+    const lookup = lookupView(APP_LOOKUP_FIXTURE);
+    if (lookup.type !== "lookup") {
+      throw new Error("Expected lookup view");
+    }
+    expect(
+      lookup.rows.every((row) => row.type === "lookup" && row.snippet === null),
+    ).toBe(true);
   });
   test("decision actions use only HTTP links from their own contract fields", () => {
     const first = APP_SEARCH_FIXTURE.results.at(0);

@@ -572,6 +572,8 @@ export const LIMITS = {
   caseLawYearFacetLimit: 200,
   /** One-row budget for the headnote a list row shows under the case number. */
   caseLawHeadnoteMaxChars: 240,
+  mcpCaseLawHeadnoteMaxChars: 4000,
+  mcpCaseLawSearchPageMaxChars: 60_000,
   /**
    * Terms of a publisher's classification one row draws as tags. A subject
    * index runs to dozens of terms on some sources, and a row is a hook, not

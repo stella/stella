@@ -44,6 +44,16 @@ export const APP_SEARCH_FIXTURE = {
       language: "cs",
       matchedQueries: [0],
       matchingPassages: 1,
+      keywords: {
+        type: "keywords" as const,
+        items: ["Náhrada škody", "Příčinná souvislost"],
+        omitted: 0,
+      },
+      headnote: {
+        type: "present" as const,
+        text: "Právo na náhradu škody vyžaduje posouzení příčinné souvislosti.",
+        truncated: false,
+      },
       snippet: "Náhrada škody: <b>právní jistota</b>.",
       sourceUrl: "https://example.test/decision",
     },

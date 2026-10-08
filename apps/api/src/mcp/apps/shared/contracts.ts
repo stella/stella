@@ -33,8 +33,12 @@ export const APP_SEARCH_SCHEMA = v.union([
     ...v.pick(search, ["nextCursor", "nextStep"]).entries,
     results: v.array(
       v.object(
-        v.pick(search.entries.results.item, [...identityFields, "snippet"])
-          .entries,
+        v.pick(search.entries.results.item, [
+          ...identityFields,
+          "snippet",
+          "headnote",
+          "keywords",
+        ]).entries,
       ),
     ),
     facets: v.nullable(

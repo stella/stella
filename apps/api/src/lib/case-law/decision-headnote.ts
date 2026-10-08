@@ -2,6 +2,14 @@ import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-t
 
 import { LIMITS } from "@/api/lib/limits";
 
+/** The MCP reading expands the same source text used by compact HTTP rows. */
+export const decisionHeadnoteMaxChars = (
+  presentation: "expanded" | undefined,
+) =>
+  presentation === "expanded"
+    ? LIMITS.mcpCaseLawHeadnoteMaxChars
+    : LIMITS.caseLawHeadnoteMaxChars;
+
 const WORD_SEGMENTER = new Intl.Segmenter("und", { granularity: "word" });
 
 /**
@@ -9,8 +17,10 @@ const WORD_SEGMENTER = new Intl.Segmenter("und", { granularity: "word" });
  * over-budget first word yields only the truncation mark; the explicit flag
  * still distinguishes the preview from complete publisher text.
  */
-export const truncateDecisionHeadnote = (text: string) => {
-  const max = LIMITS.caseLawHeadnoteMaxChars;
+export const truncateDecisionHeadnote = (
+  text: string,
+  max = LIMITS.caseLawHeadnoteMaxChars,
+) => {
   if (text.length <= max) {
     return { text, truncated: false };
   }
@@ -82,9 +92,14 @@ const collapseDecisionTerm = (raw: unknown): string | null => {
  * reading above rather than from a second one, so a row that shows the rest
  * continues the text it was showing instead of replacing it.
  */
-export const normalizeDecisionHeadnote = (raw: unknown) => {
+export const normalizeDecisionHeadnote = (
+  raw: unknown,
+  maxChars = LIMITS.caseLawHeadnoteMaxChars,
+) => {
   const collapsed = collapseDecisionHeadnote(raw);
-  return collapsed === null ? null : truncateDecisionHeadnote(collapsed);
+  return collapsed === null
+    ? null
+    : truncateDecisionHeadnote(collapsed, maxChars);
 };
 
 /**
