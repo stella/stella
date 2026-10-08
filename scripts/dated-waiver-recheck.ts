@@ -122,6 +122,12 @@ export const applyDocRechecks = (
     ts.forEachChild(node, visit);
   };
   visit(ast);
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    true,
+    ts.LanguageVariant.Standard,
+    source,
+  );
   const edits: SourceEdit[] = [];
   const additions: string[] = [];
   for (const decision of decisions) {
@@ -151,11 +157,15 @@ export const applyDocRechecks = (
         break;
       }
       case "available": {
-        // Exclusions are arguments to concat; include only their trailing comma.
-        const end = source.slice(object.end).match(/^\s*,/u);
+        // Scanner trivia includes comments between an argument and its comma.
+        scanner.setTextPos(object.end);
+        const token = scanner.scan();
         edits.push({
           start: object.getStart(ast),
-          end: object.end + (end?.at(0)?.length ?? 0),
+          end:
+            token === ts.SyntaxKind.CommaToken
+              ? scanner.getTextPos()
+              : object.end,
           text: "",
         });
         additions.push(
@@ -264,6 +274,43 @@ class GitHubRecheckError extends TaggedError("GitHubRecheckError")<{
   message: string;
 }> {}
 
+const MODULE_EXTENSIONS = new Set([
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".cts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+]);
+const validateGeneratedModules = (
+  files: Readonly<Record<string, string>>,
+): void => {
+  for (const [file, content] of Object.entries(files)) {
+    if (!MODULE_EXTENSIONS.has(path.extname(file))) {
+      continue;
+    }
+    const source = ts.createSourceFile(
+      file,
+      content,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const options = { allowJs: true, noLib: true, noResolve: true };
+    const host = ts.createCompilerHost(options);
+    host.getSourceFile = (name) => (name === file ? source : undefined);
+    const diagnostics = ts
+      .createProgram([file], options, host)
+      .getSyntacticDiagnostics(source);
+    if (diagnostics.length > 0) {
+      throw new GitHubRecheckError({
+        message: `Generated module has syntax diagnostics: ${file}: ${diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")).join("; ")}`,
+      });
+    }
+  }
+};
+
 const root = path.resolve(import.meta.dir, "..");
 const gh = async (
   args: readonly string[],
@@ -330,6 +377,7 @@ export const publishRecheck = async ({
   repo,
   request,
 }: PublishRecheckOptions): Promise<number | undefined> => {
+  validateGeneratedModules(files);
   if (repo !== "stella/stella") {
     panic("Dated-waiver publishing requires stella/stella");
   }

@@ -64,7 +64,11 @@ const declarations = (
       compilerOptions: { target: ts.ScriptTarget.ESNext },
       reportDiagnostics: true,
     });
-    expect(emitted.diagnostics ?? []).toEqual([]);
+    expect(
+      (emitted.diagnostics ?? []).map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, " "),
+      ),
+    ).toEqual([]);
     writeFileSync(
       file,
       `${emitted.outputText}\nconsole.log(JSON.stringify({ sources: DOC_SOURCES, exclusions: DOC_SOURCE_EXCLUSIONS }));`,
@@ -126,6 +130,41 @@ describe("documentation rechecks", () => {
       expect(
         renderRecheckBody([{ ...waiver, id: dependency }], [decision]),
       ).toContain("proposed source registration");
+    }
+  });
+
+  test("removal handles comment trivia before argument separators for each batch", () => {
+    for (const comment of [
+      " ",
+      " /* note, comma */ ",
+      " // note, comma\n",
+      " /* block */ // line\n",
+    ]) {
+      const commented = source.replace("}, {", () => `}${comment}, {`);
+      expect(declarations(commented).exclusions).toHaveLength(2);
+      for (const dependencies of [
+        ["example"],
+        ["other"],
+        ["example", "other"],
+      ]) {
+        const updated = applyDocRechecks(
+          commented,
+          dependencies.map((dependency) => ({
+            status: "available",
+            dependency,
+            url: `https://${dependency}.example/llms.txt`,
+          })),
+        );
+        const after = declarations(updated);
+        expect(after.exclusions.map((value) => value.dependency)).toEqual(
+          ["example", "other"].filter(
+            (dependency) => !dependencies.includes(dependency),
+          ),
+        );
+        expect(Object.keys(after.sources).toSorted()).toEqual(
+          dependencies.toSorted(),
+        );
+      }
     }
   });
 
@@ -320,6 +359,42 @@ describe("one recheck PR", () => {
     expect(await reconcileRecheckPr({ body: "new", github })).toBe(42);
     expect(pr.body).toBe("new");
     expect(creates).toBe(0);
+  });
+
+  test("syntax diagnostics refuse generated modules before any GitHub call", async () => {
+    const invalid =
+      'export const DOC_SOURCE_EXCLUSIONS = [].concat(, { dependency: "example" });';
+    for (const file of [
+      "fixture.ts",
+      "fixture.tsx",
+      "fixture.mts",
+      "fixture.cts",
+      "fixture.js",
+      "fixture.jsx",
+      "fixture.mjs",
+      "fixture.cjs",
+    ]) {
+      let calls = 0;
+      const failure = await rejectionOf(
+        publishRecheck({
+          baseSha: "base-sha",
+          baseFiles: {},
+          body: "checklist",
+          files: { [CHECKLIST_FILE]: "checklist", [file]: invalid },
+          repo: "stella/stella",
+          request: async () => {
+            calls++;
+            throw new TypeError("GitHub must not be contacted");
+          },
+        }),
+      );
+      expect(failure).toMatchObject({
+        message: expect.stringContaining(
+          `Generated module has syntax diagnostics: ${file}`,
+        ),
+      });
+      expect(calls).toBe(0);
+    }
   });
 
   test("a merged checklist with a still-due manual waiver publishes nothing", async () => {
