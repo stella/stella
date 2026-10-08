@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/observability/request-metrics";
 
 const errorUrl = "https://app.example.test/api/auth/error";
+const authBaseUrl = "https://app.example.test/api/auth";
 
 const redirectTo = (location: string) =>
   new APIError("FOUND", undefined, new Headers({ location }));
@@ -41,6 +42,7 @@ describe("social sign-in outcome", () => {
     const effective = socialCallbackErrorUrl(
       { callbackURL: "https://app.example.test/", errorURL: customErrorUrl },
       errorUrl,
+      authBaseUrl,
     );
     expect(effective).toBe(customErrorUrl);
     expect(
@@ -64,9 +66,26 @@ describe("social sign-in outcome", () => {
     ).toBe("completed");
   });
 
+  test("resolves a relative per-sign-in error destination", () => {
+    const effective = socialCallbackErrorUrl(
+      { errorURL: "/sign-in/failed" },
+      errorUrl,
+      authBaseUrl,
+    );
+    expect(effective).toBe("https://app.example.test/sign-in/failed");
+    expect(
+      classifySocialCallback(
+        redirectTo("/sign-in/failed?error=account_not_linked"),
+        effective,
+      ),
+    ).toBe("account_not_linked");
+  });
+
   test("falls back to the global error URL without a per-sign-in one", () => {
     for (const state of [null, undefined, {}, { errorURL: "" }, "x"]) {
-      expect(socialCallbackErrorUrl(state, errorUrl)).toBe(errorUrl);
+      expect(socialCallbackErrorUrl(state, errorUrl, authBaseUrl)).toBe(
+        errorUrl,
+      );
     }
   });
 

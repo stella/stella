@@ -972,6 +972,7 @@ const socialSignInOutcomePlugin = {
                 await getOAuthState(),
                 ctx.context.options.onAPIError?.errorURL ??
                   `${ctx.context.baseURL}/error`,
+                ctx.context.baseURL,
               ),
             ),
             socialSignInProvider(ctx.params?.["id"]),
