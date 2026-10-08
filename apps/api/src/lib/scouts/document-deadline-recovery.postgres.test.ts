@@ -11,6 +11,7 @@ import {
   featureEnrolments,
   fields,
   properties,
+  pendingScoutEmissions,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -21,6 +22,14 @@ import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { logger } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import {
+  RECOVER_SCOUT_EMISSION_TASK,
+  recoverScoutEmission,
+  resumeScoutEmissionAfterGrant,
+} from "@/api/lib/scheduler/tasks/scout-emission-recovery";
+import type { SchedulerJob } from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -179,6 +188,7 @@ const fixture = async (db: GatedTestDb) =>
     return {
       organizationId,
       admittedUserId,
+      admittedWorkspaceId,
       pausedUserId,
       pausedWorkspaceId,
       sources,
@@ -186,6 +196,194 @@ const fixture = async (db: GatedTestDb) =>
   });
 
 describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
+  test("recipient grant recovery leaves source-less review receipts for periodic repair", async () => {
+    const previousSignals = env.FEATURE_SIGNALS;
+    const previousReviews = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
+    env.FEATURE_SIGNALS = true;
+    env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const client = openClient();
+          const f = await fixture(client.db);
+          const sourceId = createSafeId<"documentReviewRun">();
+          try {
+            await client.db.insert(pendingScoutEmissions).values({
+              organizationId: f.organizationId,
+              workspaceId: f.admittedWorkspaceId,
+              sourceKind: "document-review",
+              sourceId,
+              status: "awaiting_grant",
+              nextAttemptAt: OLD,
+            });
+            await client.db.transaction(async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId: f.organizationId,
+                featureId: "signals",
+              });
+              await resumeScoutEmissionAfterGrant({
+                tx,
+                organizationId: f.organizationId,
+                userId: f.admittedUserId,
+              });
+            });
+            expect(
+              (
+                await client.db
+                  .select({
+                    status: pendingScoutEmissions.status,
+                    retryAt: pendingScoutEmissions.nextAttemptAt,
+                  })
+                  .from(pendingScoutEmissions)
+                  .where(eq(pendingScoutEmissions.sourceId, sourceId))
+              ).at(0),
+            ).toEqual({ status: "awaiting_grant", retryAt: OLD });
+            const now = new Date();
+            const job = {
+              id: "signals.scoutRecovery.source-less-test",
+              task: RECOVER_SCOUT_EMISSION_TASK,
+              description: null,
+              schedule: { type: "interval", everyMs: 60_000 },
+              payload: null,
+              enabled: true,
+              pausedBy: null,
+              pausedUntil: null,
+              pauseReason: null,
+              nextRunAt: now,
+              lastRunAt: null,
+              lastSuccessAt: null,
+              lastFailureAt: null,
+              lastError: null,
+              lockedAt: now,
+              lockedUntil: null,
+              lockedBy: "recovery-test",
+              createdAt: now,
+              updatedAt: now,
+            } as const satisfies SchedulerJob;
+            await recoverScoutEmission({
+              db: asTestRaw<typeof rootDb>(client.db),
+              dueAt: DueSlot.of(job),
+              job,
+              payload: null,
+              runId: createSafeId<"schedulerJobRun">(),
+              scheduleContinuation: () => undefined,
+              signal: new AbortController().signal,
+              logger,
+            });
+            expect(
+              await client.db
+                .select({ sourceId: pendingScoutEmissions.sourceId })
+                .from(pendingScoutEmissions)
+                .where(eq(pendingScoutEmissions.sourceId, sourceId)),
+            ).toEqual([]);
+          } finally {
+            await client.db
+              .delete(organization)
+              .where(eq(organization.id, f.organizationId));
+            await client.db.delete(user).where(eq(user.id, f.admittedUserId));
+            await client.db.delete(user).where(eq(user.id, f.pausedUserId));
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_SIGNALS = previousSignals;
+      env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousReviews;
+    }
+  });
+
+  test("deadline grant recovery resumes one exact page and preserves the remaining backlog", async () => {
+    const previousFlag = env.FEATURE_SIGNALS;
+    env.FEATURE_SIGNALS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const client = openClient();
+          const f = await fixture(client.db);
+          const skippedUntil = new Date(Date.now() + 60 * 60_000);
+          try {
+            await client.db.insert(workspaceMembers).values({
+              workspaceId: f.pausedWorkspaceId,
+              userId: f.admittedUserId,
+            });
+            await client.db
+              .update(documentProcessingRuns)
+              .set({
+                deadlineScoutStatus: "awaiting_grant",
+                deadlineScoutErrorCode: "feature_not_granted",
+                deadlineScoutSkippedUntil: skippedUntil,
+              })
+              .where(
+                eq(documentProcessingRuns.organizationId, f.organizationId),
+              );
+            const original = await client.db
+              .select({ id: documentProcessingRuns.id })
+              .from(documentProcessingRuns)
+              .where(
+                eq(documentProcessingRuns.organizationId, f.organizationId),
+              )
+              .orderBy(documentProcessingRuns.id);
+            const resume = async () =>
+              await client.db.transaction(async (tx) => {
+                await lockFeatureRecoveryAdmission({
+                  tx,
+                  organizationId: f.organizationId,
+                  featureId: "signals",
+                });
+                await resumeDocumentDeadlineScoutsAfterGrant({
+                  tx: asTestRaw<Transaction>(tx),
+                  organizationId: f.organizationId,
+                  userId: f.admittedUserId,
+                });
+              });
+            const read = async () =>
+              await client.db
+                .select({
+                  id: documentProcessingRuns.id,
+                  status: documentProcessingRuns.deadlineScoutStatus,
+                  skippedUntil:
+                    documentProcessingRuns.deadlineScoutSkippedUntil,
+                })
+                .from(documentProcessingRuns)
+                .where(
+                  eq(documentProcessingRuns.organizationId, f.organizationId),
+                )
+                .orderBy(documentProcessingRuns.id);
+            await resume();
+            const firstPage = await read();
+            expect(
+              firstPage
+                .filter((row) => row.status === "pending")
+                .map((row) => row.id),
+            ).toEqual(original.slice(0, 100).map((row) => row.id));
+            expect(firstPage.at(100)?.status).toBe("awaiting_grant");
+            expect(
+              firstPage.every(
+                (row) => row.skippedUntil?.getTime() === skippedUntil.getTime(),
+              ),
+            ).toBe(true);
+            await resume();
+            const drained = await read();
+            expect(drained).toHaveLength(101);
+            expect(drained.every((row) => row.status === "pending")).toBe(true);
+            await resume();
+            expect(await read()).toEqual(drained);
+          } finally {
+            await client.db
+              .delete(organization)
+              .where(eq(organization.id, f.organizationId));
+            await client.db.delete(user).where(eq(user.id, f.admittedUserId));
+            await client.db.delete(user).where(eq(user.id, f.pausedUserId));
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_SIGNALS = previousFlag;
+    }
+  });
+
   test("a competing deadline claim waits for commit and then observes the claimed source", async () => {
     await withGatedTestClients(
       databaseUrl ?? panic("Missing PostgreSQL test URL"),

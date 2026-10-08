@@ -22,8 +22,8 @@ const readSearchPreview = createSafeHandler(
           await readSearchPreviewHandler({
             scopedDb,
             workspaceId,
-            session,
-            user,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
           }),
       ),
     );

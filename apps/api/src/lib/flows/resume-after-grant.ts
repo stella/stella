@@ -53,6 +53,7 @@ export const resumeFlowsAfterGrant = async (
     database,
     principal: { organizationId, userId },
   });
+  // Post-commit enqueue is wake-only; the executor rechecks admission under the same grant lock.
   await resumeFlowStepsAfterGrant(
     { organizationId, userId },
     {

@@ -95,12 +95,40 @@ export const resumeDocumentDeadlineScoutsAfterGrant = async ({
   if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
     return;
   }
+  // Resumed rows leave the awaiting index; later calls advance through the
+  // ordered identity page while periodic repair owns any remaining backlog.
+  const rows = (
+    await readCursorPage(
+      tx
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.organizationId, organizationId),
+            eq(documentProcessingRuns.deadlineScoutStatus, "awaiting_grant"),
+            deadlineMatterAdmission(userId),
+          ),
+        )
+        .orderBy(asc(documentProcessingRuns.id)),
+      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
+    )
+  ).items;
+  if (rows.length === 0) {
+    return;
+  }
   await transitionRecoveryGrantState({
     type: "deadline",
     tx,
     table: documentProcessingRuns,
     spec: DEADLINE_DISPATCH_RECOVERY,
-    where: sql`${and(eq(documentProcessingRuns.organizationId, organizationId), deadlineMatterAdmission(userId))}`,
+    where: sql`${and(
+      eq(documentProcessingRuns.organizationId, organizationId),
+      inArray(
+        documentProcessingRuns.id,
+        rows.map((row) => row.id),
+      ),
+      deadlineMatterAdmission(userId),
+    )}`,
     options: {
       from: ["awaiting_grant"],
       to: "pending",

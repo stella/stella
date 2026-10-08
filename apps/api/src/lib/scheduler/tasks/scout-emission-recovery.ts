@@ -324,7 +324,7 @@ const scoutEmissionActorExists = (userId?: SafeId<"user">) => sql`CASE
       WHERE ${documentReviewRuns.id} = ${pendingScoutEmissions.sourceId}
         AND ${documentReviewRuns.workspaceId} = ${pendingScoutEmissions.workspaceId}
         AND ${documentReviewRuns.organizationId} = ${pendingScoutEmissions.organizationId}
-    ) THEN true ELSE EXISTS (
+    ) THEN ${userId === undefined} ELSE EXISTS (
       SELECT 1 FROM ${documentReviewRuns}
       WHERE ${documentReviewRuns.id} = ${pendingScoutEmissions.sourceId}
         AND ${documentReviewRuns.workspaceId} = ${pendingScoutEmissions.workspaceId}
