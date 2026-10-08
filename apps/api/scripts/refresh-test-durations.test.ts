@@ -5,16 +5,55 @@ import {
   serializeTestDurations,
 } from "./refresh-test-durations";
 
-test("aggregation prefers later artifacts and serializes canonically", () => {
-  const refreshed = refreshedTestDurations([
-    '{"version":1,"files":{"new":2300,"old":1000}}',
-    '{"version":1,"files":{"old":4000}}',
-  ]);
+const base = JSON.stringify({
+  deleted: { seconds: 9, source: "measured" },
+  unmeasured: { seconds: 1.5, source: "measured" },
+  replaced: { seconds: 1, source: "measured" },
+});
+
+test("aggregation carries live weights forward, replaces measurements, and drops deleted files", () => {
+  const refreshed = refreshedTestDurations(
+    ["new", "replaced", "unmeasured"],
+    base,
+    [
+      '{"version":1,"files":{"new":2300,"replaced":2000}}',
+      '{"version":1,"files":{"replaced":4000}}',
+    ],
+  );
   expect(refreshed).toEqual({
     new: { seconds: 2.3, source: "measured" },
-    old: { seconds: 4, source: "measured" },
+    replaced: { seconds: 4, source: "measured" },
+    unmeasured: { seconds: 1.5, source: "measured" },
   });
-  expect(serializeTestDurations(refreshed)).toBe(
-    '{\n  "new": {\n    "seconds": 2.3,\n    "source": "measured"\n  },\n  "old": {\n    "seconds": 4,\n    "source": "measured"\n  }\n}\n',
+});
+
+test("serialization is byte-stable for shuffled inputs", () => {
+  const first = refreshedTestDurations(
+    ["new", "replaced", "unmeasured"],
+    base,
+    ['{"version":1,"files":{"new":2300,"replaced":4000}}'],
   );
+  const shuffled = refreshedTestDurations(
+    ["unmeasured", "replaced", "new"],
+    JSON.stringify({
+      replaced: { seconds: 1, source: "measured" },
+      unmeasured: { seconds: 1.5, source: "measured" },
+      deleted: { seconds: 9, source: "measured" },
+    }),
+    ['{"version":1,"files":{"replaced":4000,"new":2300}}'],
+  );
+  expect(serializeTestDurations(shuffled)).toBe(serializeTestDurations(first));
+});
+
+test("an unreadable previous weights file is ignored, not fatal", () => {
+  for (const unreadable of [
+    "{",
+    '{"old":{"seconds":1,"source":"estimated"}}',
+  ]) {
+    expect(
+      refreshedTestDurations(["new"], unreadable, [
+        '{"version":1,"files":{"new":1000}}',
+      ]),
+    ).toEqual({ new: { seconds: 1, source: "measured" } });
+  }
 });
