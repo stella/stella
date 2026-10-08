@@ -95,6 +95,21 @@ const SHAPES: Record<string, ChatPart[]> = {
   ],
 };
 
+/** The Responses API input the real OpenAI adapter builds from `messages`. */
+const openAIResponsesInput = (messages: readonly ModelMessage[]): unknown[] => {
+  const adapter = createOpenaiChat("gpt-5.2", "test-key");
+  const convert: unknown = Reflect.get(adapter, "convertMessagesToInput");
+  if (typeof convert !== "function") {
+    return panic("The OpenAI adapter no longer converts messages to input");
+  }
+  const input: unknown = Reflect.apply(convert, adapter, [messages]);
+  if (!Array.isArray(input)) {
+    return panic("The OpenAI adapter returned a non-array input");
+  }
+  const items: unknown[] = input;
+  return items;
+};
+
 // A declined approval resumes the run: the request that continues it must
 // answer the declined call exactly once, with its own call id, before any
 // later item, for every shape the stored message can take.
@@ -134,24 +149,15 @@ describe("the request continuing a declined approval", () => {
       })) {
         // drain
       }
-      const adapter = createOpenaiChat("gpt-5.2", "test-key");
-      const convert: unknown = Reflect.get(adapter, "convertMessagesToInput");
-      if (typeof convert !== "function") {
-        return panic("The OpenAI adapter no longer converts messages to input");
-      }
-      const input: unknown = Reflect.apply(convert, adapter, [
+      const items = openAIResponsesInput(
         withReasoningBoundToProvider(sink[0] ?? [], "openai"),
-      ]);
+      );
       const problems = findTranscriptProblems({
         format: "openai-responses",
-        body: { input },
+        body: { input: items },
       });
       expect(sink).toHaveLength(1);
       expect(problems).toEqual([]);
-      if (!Array.isArray(input)) {
-        return panic("The OpenAI adapter returned a non-array input");
-      }
-      const items: unknown[] = input;
       const typeOf = (item: unknown): unknown =>
         typeof item === "object" && item !== null
           ? Reflect.get(item, "type")
