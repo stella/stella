@@ -10,6 +10,7 @@ import {
   APIError,
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
+  getOAuthState,
 } from "better-auth/api";
 import {
   emailOTP,
@@ -96,6 +97,10 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import {
+  EMAIL_OTP_ALLOWED_ATTEMPTS,
+  requireEmailOtpResetConfirmation,
+} from "@/api/lib/auth/email-otp-reset-confirmation";
 import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
   createOAuthConsentInfoPlugin,
@@ -138,6 +143,7 @@ import {
   isVerifiedMicrosoftIdentity,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
 } from "@/api/lib/auth/social-identity-policy";
+import { createSocialLinkHintPlugin } from "@/api/lib/auth/social-link-hint";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -1820,7 +1826,8 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         // is invalidated); change deliberately, not by dependency drift.
         otpLength: 6,
         expiresIn: 5 * 60,
-        allowedAttempts: 3,
+        allowedAttempts: EMAIL_OTP_ALLOWED_ATTEMPTS,
+        storeOTP: "plain",
         // Returning undefined falls back to the plugin's random generator
         // (`opts.generateOTP(...) || defaultOTPGenerator`), so every account
         // except the configured demo account keeps random codes.
@@ -2029,6 +2036,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         },
       ),
       oauthUiFragmentBridgePlugin,
+      createSocialLinkHintPlugin(getOAuthState),
       // Last, so it records the answer every other hook has settled on.
       authRefusalLogPlugin,
     ],
@@ -2080,6 +2088,12 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           }
         }
         await assertSelfhostEmailOtpAllowed(ctx.path);
+        const resetConfirmation = await requireEmailOtpResetConfirmation({
+          path: ctx.path,
+          body: ctx.body,
+          adapter: ctx.context.adapter,
+          internalAdapter: ctx.context.internalAdapter,
+        });
 
         const loopbackRegistration =
           resolveLoopbackClientRegistrationOverride(ctx);
@@ -2087,12 +2101,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           return loopbackRegistration;
         }
 
-        const authoritative =
-          await resolveAuthoritativeSessionForSensitiveAuthPath({
-            ctx,
-            resolveSession: async ({ path, request }) =>
-              await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
-          });
+        const authoritative = await resetConfirmation.andThenAsync(
+          async () =>
+            await resolveAuthoritativeSessionForSensitiveAuthPath({
+              ctx,
+              resolveSession: async ({ path, request }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+            }),
+        );
         // Better Auth rejects a request from a `before` hook by the APIError
         // it throws.
         if (Result.isError(authoritative)) {

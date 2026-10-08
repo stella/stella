@@ -156,6 +156,7 @@ export const createSocialIdentityValidation =
 
 export const SOCIAL_ACCOUNT_LINKING_OPTIONS = {
   enabled: true,
+  disableImplicitLinking: true,
   trustedProviders: [],
   allowDifferentEmails: false,
 } satisfies NonNullable<
