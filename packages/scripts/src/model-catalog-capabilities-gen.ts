@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 /**
  * Generates `packages/ai-catalog/src/capabilities.gen.ts` — the
  * per-model document-input, image-input, reasoning-effort, temperature policy and
@@ -27,7 +27,6 @@ import { panic } from "better-result";
  *
  * Usage:
  *   bun packages/scripts/src/model-catalog-capabilities-gen.ts --from-snapshot
- *   bun packages/scripts/src/model-catalog-capabilities-gen.ts --refresh
  *   bun packages/scripts/src/model-catalog-capabilities-gen.ts --check
  */
 import path from "node:path";
@@ -446,9 +445,9 @@ export const parseModelsDevCapabilities = (
   if (typeof body !== "object" || body === null) {
     return upstream;
   }
-  const wanted = new Set(Object.values(MODELS_DEV_KEY_BY_PROVIDER));
+  const wanted = Object.values(MODELS_DEV_KEY_BY_PROVIDER);
   for (const [providerKey, providerVal] of Object.entries(body)) {
-    if (!wanted.has(providerKey)) {
+    if (!wanted.some((provider) => provider === providerKey)) {
       continue;
     }
     if (
@@ -470,7 +469,23 @@ export const parseModelsDevCapabilities = (
   return upstream;
 };
 
+class UnsupportedCapabilityRefreshError extends TaggedError(
+  "UnsupportedCapabilityRefreshError",
+)<{
+  message: string;
+}> {}
+
 const main = async (): Promise<void> => {
+  if (Bun.argv.includes("--refresh")) {
+    console.error(
+      new UnsupportedCapabilityRefreshError({
+        message:
+          "Capability refresh requires `bun --filter @stll/ai-catalog gen:rates --refresh` followed by `bun --filter @stll/ai-catalog gen:capabilities --from-snapshot`.",
+      }),
+    );
+    process.exitCode = 1;
+    return;
+  }
   const checkOnly = Bun.argv.includes("--check");
   const { modelsDev, openRouter } = await loadModelCatalogSnapshot();
   const upstream = parseModelsDevCapabilities(modelsDev);

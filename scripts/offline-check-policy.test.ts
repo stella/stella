@@ -1,12 +1,22 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  symlinkSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  OfflineCheckPolicyError,
   catalogGeneratorNetworkViolations,
   enumerateOfflineChecks,
   offlineCheckExceptionGrowth,
+  offlineImportGraphViolations,
   offlineCheckViolations,
   parseOfflineCheckExceptions,
   usesOfflineCheckPreload,
@@ -34,8 +44,9 @@ test("new check invocations cannot bypass the offline preload in nested shell or
       jobs: { checks: { steps: [{ parallel: [{ run }] }] } },
     });
     expect(checks).toHaveLength(1);
+    const check = checks.at(0) ?? panic("Missing planted check invocation");
     expect(offlineCheckViolations(checks, [])).toEqual([
-      `Check must use the offline network preload: ${checks[0]?.command}`,
+      `Check must use the offline network preload: ${check.command}`,
     ]);
   }
   const protectedChecks = enumerateOfflineChecks(
@@ -327,4 +338,100 @@ test("offline checks pass without transport and reject a planted network fetch b
   );
   expect(refresh.exitCode).toBe(0);
   expect(refresh.stdout.toString()).toContain("refresh");
+});
+
+test.each([
+  "Bun.fetch('https://example.invalid')",
+  "Bun.connect({ hostname: 'localhost', port: 1 })",
+  "Bun.listen({ port: 1 })",
+  "Bun.spawn(['curl', 'https://example.invalid'])",
+  "Bun.spawnSync(['curl', 'https://example.invalid'])",
+  "Bun['fetch']('https://example.invalid')",
+  "const runtime = Bun; runtime.fetch('https://example.invalid')",
+  "import { exec } from 'node:child_process'; exec('curl https://example.invalid')",
+])(
+  "offline import closures reject a nested helper containing %s",
+  (transport) => {
+    const directory = mkdtempSync(path.join(tmpdir(), "offline-closure-"));
+    try {
+      const entry = path.join(directory, "check.ts");
+      writeFileSync(entry, "import './helper'; // --check\n");
+      writeFileSync(path.join(directory, "helper.ts"), "import './nested';\n");
+      writeFileSync(path.join(directory, "nested.ts"), transport);
+      const violations = offlineImportGraphViolations({
+        entries: [entry],
+        repositoryRoot: directory,
+      });
+      expect(violations).toHaveLength(1);
+      expect(violations.at(0)).toBeInstanceOf(OfflineCheckPolicyError);
+      expect(violations.at(0)?.message).toContain("nested.ts:");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test("offline closure follows workspace symlinks and excludes external packages", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-workspace-"));
+  try {
+    const entry = path.join(directory, "check.ts");
+    const workspace = path.join(directory, "packages/helper");
+    const modules = path.join(directory, "node_modules");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(modules);
+    writeFileSync(
+      path.join(workspace, "package.json"),
+      JSON.stringify({ name: "helper", exports: "./helper.ts" }),
+    );
+    writeFileSync(
+      path.join(workspace, "helper.ts"),
+      "export const request = Bun.fetch;",
+    );
+    symlinkSync(workspace, path.join(modules, "helper"), "dir");
+    writeFileSync(entry, "import 'helper';");
+    expect(
+      offlineImportGraphViolations({
+        entries: [entry],
+        repositoryRoot: directory,
+      }).at(0)?.message,
+    ).toContain("packages/helper/helper.ts: Bun.fetch");
+    writeFileSync(
+      path.join(workspace, "helper.ts"),
+      "// Bun.fetch()\nexport const text = 'Bun.spawn()';",
+    );
+    const external = path.join(modules, "external");
+    mkdirSync(external);
+    writeFileSync(
+      path.join(external, "package.json"),
+      JSON.stringify({ name: "external", exports: "./index.ts" }),
+    );
+    writeFileSync(
+      path.join(external, "index.ts"),
+      "Bun.fetch('https://example.invalid');",
+    );
+    writeFileSync(entry, "import 'helper'; import 'external';");
+    expect(
+      offlineImportGraphViolations({
+        entries: [entry],
+        repositoryRoot: directory,
+      }),
+    ).toEqual([]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("every protected blocking check has a transport-safe local import closure", () => {
+  const checks = enumerateOfflineChecks(
+    Bun.YAML.parse(
+      readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
+    ),
+  );
+  const entries = checks.flatMap((check) =>
+    check.protected ? [check.entry] : [],
+  );
+  expect(entries.length).toBeGreaterThan(0);
+  expect(
+    offlineImportGraphViolations({ entries, repositoryRoot: root }),
+  ).toEqual([]);
 });

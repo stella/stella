@@ -1,6 +1,8 @@
-import { TaggedError } from "better-result";
-import { readFileSync } from "node:fs";
+import { Result, TaggedError } from "better-result";
+import { readFileSync, realpathSync } from "node:fs";
+import { isBuiltin } from "node:module";
 import path from "node:path";
+import ts from "typescript";
 
 import {
   SOURCE_FILE,
@@ -8,25 +10,28 @@ import {
   parseBunFlags,
   programWords,
 } from "./install-free-ci";
+import { parseSource } from "./parse-memo";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
-class OfflineCheckPolicyError extends TaggedError("OfflineCheckPolicyError")<{
+export class OfflineCheckPolicyError extends TaggedError(
+  "OfflineCheckPolicyError",
+)<{
   message: string;
 }> {}
 
 export type OfflineCheckException = { command: string; reason: string };
-export type OfflineCheckCommand = { command: string; protected: boolean };
+export type OfflineCheckCommand = { command: string } & (
+  | { protected: true; entry: string }
+  | { protected: false }
+);
 const root = path.resolve(import.meta.dir, "..");
 const preload = path.join(root, "scripts/offline-network-preload.ts");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-export const usesOfflineCheckPreload = (
-  words: readonly string[],
-  cwd: string,
-) => {
+const offlineCheckEntry = (words: readonly string[], cwd: string) => {
   if (words.at(0) !== "bun") {
-    return false;
+    return undefined;
   }
   const relativeCwd = path.relative(root, cwd);
   const invocation = parseBunFlags({
@@ -36,20 +41,29 @@ export const usesOfflineCheckPreload = (
     stdin: undefined,
   });
   if (invocation.type !== "parsed") {
-    return false;
+    return undefined;
   }
   const entry = invocation.positional.at(0);
   // Package scripts launch their own process; verify its command separately.
-  return (
+  const protectedInvocation =
     invocation.filter === undefined &&
     invocation.dir === relativeCwd &&
     entry !== undefined &&
     SOURCE_FILE.test(entry) &&
-    invocation.preloads.some((target) => path.resolve(root, target) === preload)
-  );
+    invocation.preloads.some(
+      (target) => path.resolve(root, target) === preload,
+    );
+  return protectedInvocation && entry !== undefined
+    ? path.resolve(cwd, entry)
+    : undefined;
 };
 
-const protectsPackageCommand = (words: readonly string[]) => {
+export const usesOfflineCheckPreload = (
+  words: readonly string[],
+  cwd: string,
+) => offlineCheckEntry(words, cwd) !== undefined;
+
+const packageCheckEntry = (words: readonly string[]) => {
   const invocation = parseBunFlags({
     args: words.slice(1),
     context: { root, expanding: new Set() },
@@ -57,12 +71,12 @@ const protectsPackageCommand = (words: readonly string[]) => {
     stdin: undefined,
   });
   if (invocation.type !== "parsed") {
-    return false;
+    return undefined;
   }
   const name = invocation.filter;
   const script = invocation.positional.at(0);
   if (name === undefined || script === undefined || invocation.dir !== "") {
-    return false;
+    return undefined;
   }
   for (const file of new Bun.Glob("{apps,packages}/*/package.json").scanSync({
     cwd: root,
@@ -79,22 +93,21 @@ const protectsPackageCommand = (words: readonly string[]) => {
     }
     const command = manifest["scripts"][script];
     if (typeof command !== "string") {
-      return false;
+      return undefined;
     }
     const commands = lexShell(command).filter(
       (event) => event.type === "command",
     );
-    return (
-      commands.length === 1 &&
-      commands.every(({ words: packageWords }) =>
-        usesOfflineCheckPreload(
-          programWords(packageWords),
-          path.dirname(path.join(root, file)),
-        ),
-      )
+    const commandEntry = commands.at(0);
+    if (commands.length !== 1 || commandEntry === undefined) {
+      return undefined;
+    }
+    return offlineCheckEntry(
+      programWords(commandEntry.words),
+      path.dirname(path.join(root, file)),
     );
   }
-  return false;
+  return undefined;
 };
 
 /** Enumerate every check invocation, including shell substitutions and parallel groups. */
@@ -118,13 +131,16 @@ export const enumerateOfflineChecks = (
           continue;
         }
         const words = programWords(event.words);
-        checks.push({
-          command: JSON.stringify(words),
-          protected:
-            words.at(0) === "bun" &&
-            (usesOfflineCheckPreload(words, root) ||
-              protectsPackageCommand(words)),
-        });
+        const entry =
+          words.at(0) === "bun"
+            ? (offlineCheckEntry(words, root) ?? packageCheckEntry(words))
+            : undefined;
+        const command = JSON.stringify(words);
+        checks.push(
+          entry === undefined
+            ? { command, protected: false }
+            : { command, protected: true, entry },
+        );
       }
     }
   }
@@ -155,7 +171,7 @@ export const parseOfflineCheckExceptions = (
 };
 
 export const offlineCheckViolations = (
-  checks: readonly OfflineCheckCommand[],
+  checks: readonly { command: string; protected: boolean }[],
   exceptions: readonly OfflineCheckException[],
 ): string[] => {
   const violations: string[] = [];
@@ -178,6 +194,158 @@ export const offlineCheckViolations = (
     if (!raw.has(command)) {
       violations.push(`Stale offline check exception: ${command}`);
     }
+  }
+  return violations;
+};
+
+const forbiddenBunMembers = new Set([
+  "fetch",
+  "connect",
+  "listen",
+  "spawn",
+  "spawnSync",
+]);
+const isBunGlobal = (node: ts.Expression): boolean => {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return isBunGlobal(node.expression);
+  }
+  return (
+    (ts.isIdentifier(node) && node.text === "Bun") ||
+    (ts.isPropertyAccessExpression(node) &&
+      node.name.text === "Bun" &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "globalThis")
+  );
+};
+
+type OfflineImportGraphOptions = {
+  entries: readonly string[];
+  repositoryRoot: string;
+};
+/** Inspect the local closure, including workspace packages resolved through symlinks. */
+export const offlineImportGraphViolations = ({
+  entries,
+  repositoryRoot,
+}: OfflineImportGraphOptions) => {
+  const sourceRoot = realpathSync(repositoryRoot);
+  const pending = [...entries];
+  const visited = new Set<string>();
+  const violations: OfflineCheckPolicyError[] = [];
+  const violation = (file: string, detail: string) => {
+    violations.push(
+      new OfflineCheckPolicyError({
+        message: `Offline check import graph: ${path.relative(sourceRoot, file)}: ${detail}`,
+      }),
+    );
+  };
+  while (pending.length > 0) {
+    const candidate = pending.pop();
+    if (candidate === undefined) {
+      break;
+    }
+    const resolvedEntry = Result.try(() => realpathSync(candidate));
+    if (resolvedEntry.isErr()) {
+      violation(candidate, "Cannot read offline check source");
+      continue;
+    }
+    const file = resolvedEntry.value;
+    if (visited.has(file) || file.endsWith(".json")) {
+      continue;
+    }
+    visited.add(file);
+    const source = parseSource({
+      fileName: file,
+      text: readFileSync(file, "utf-8"),
+    });
+    const follow = (specifier: string) => {
+      if (specifier === "node:child_process" || specifier === "child_process") {
+        violation(file, "node:child_process is forbidden");
+        return;
+      }
+      if (
+        isBuiltin(specifier) ||
+        specifier === "bun" ||
+        specifier.startsWith("bun:")
+      ) {
+        return;
+      }
+      const resolved = Result.try(() =>
+        realpathSync(Bun.resolveSync(specifier, path.dirname(file))),
+      );
+      if (resolved.isErr()) {
+        violation(file, `Cannot resolve import ${specifier}`);
+        return;
+      }
+      const relative = path.relative(sourceRoot, resolved.value);
+      if (
+        relative.startsWith("..") ||
+        path.isAbsolute(relative) ||
+        relative.split(path.sep).includes("node_modules")
+      ) {
+        return;
+      }
+      pending.push(resolved.value);
+    };
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        isBunGlobal(node.expression) &&
+        forbiddenBunMembers.has(node.name.text)
+      ) {
+        violation(file, `Bun.${node.name.text} is forbidden`);
+      }
+      if (ts.isElementAccessExpression(node) && isBunGlobal(node.expression)) {
+        violation(file, "Computed access on Bun is forbidden");
+      }
+      if (
+        ts.isVariableDeclaration(node) &&
+        node.initializer &&
+        isBunGlobal(node.initializer)
+      ) {
+        // Aliasing or destructuring the global would hide transport member references.
+        violation(file, "Aliasing the Bun global is forbidden");
+      }
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteralLike(node.moduleSpecifier) &&
+        !(ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) &&
+        !(ts.isExportDeclaration(node) && node.isTypeOnly)
+      ) {
+        follow(node.moduleSpecifier.text);
+      }
+      if (
+        ts.isImportEqualsDeclaration(node) &&
+        !node.isTypeOnly &&
+        ts.isExternalModuleReference(node.moduleReference)
+      ) {
+        const target = node.moduleReference.expression;
+        if (target && ts.isStringLiteralLike(target)) {
+          follow(target.text);
+        } else {
+          violation(file, "Dynamic module target cannot be enumerated");
+        }
+      }
+      if (
+        ts.isCallExpression(node) &&
+        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(node.expression) &&
+            node.expression.text === "require"))
+      ) {
+        const target = node.arguments.at(0);
+        if (target && ts.isStringLiteralLike(target)) {
+          follow(target.text);
+        } else {
+          violation(file, "Dynamic module target cannot be enumerated");
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
   }
   return violations;
 };
@@ -235,9 +403,15 @@ if (import.meta.main) {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
   );
-  const violations = offlineCheckViolations(
-    enumerateOfflineChecks(workflow),
-    exceptions,
+  const checks = enumerateOfflineChecks(workflow);
+  const violations = offlineCheckViolations(checks, exceptions);
+  violations.push(
+    ...offlineImportGraphViolations({
+      entries: checks.flatMap((check) =>
+        check.protected ? [check.entry] : [],
+      ),
+      repositoryRoot: root,
+    }).map((error) => error.message),
   );
   const sources = new Map(
     [

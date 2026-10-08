@@ -99,6 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Rates owns acquisition of both shared inputs; capabilities stays offline.
           bun --filter @stll/ai-catalog gen:rates --refresh
           bun --filter @stll/ai-catalog gen:capabilities --from-snapshot
 

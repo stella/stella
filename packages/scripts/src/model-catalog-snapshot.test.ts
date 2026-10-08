@@ -135,3 +135,55 @@ describe("committed catalog inputs", () => {
     },
   );
 });
+
+test("capability refresh rejects before any fetch or write", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "capability-refresh-"));
+  try {
+    const monitor = path.join(directory, "monitor.ts");
+    await Bun.write(
+      monitor,
+      `
+      let fetches = 0;
+      let writes = 0;
+      globalThis.fetch = () => { fetches++; throw new Error('unexpected fetch'); };
+      Bun.write = () => { writes++; throw new Error('unexpected write'); };
+      process.on('exit', () => console.log(JSON.stringify({ fetches, writes })));
+    `,
+    );
+    const watched = [
+      path.join(MODEL_CATALOG_INPUT_DIR, "models.dev.gen.json"),
+      path.join(MODEL_CATALOG_INPUT_DIR, "openrouter.gen.json"),
+      ...generators.map(({ output }) =>
+        path.join(root, "packages/ai-catalog/src", output),
+      ),
+    ];
+    const before = await Promise.all(
+      watched.map((file) => Bun.file(file).text()),
+    );
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "--preload",
+        monitor,
+        path.join(import.meta.dir, "model-catalog-capabilities-gen.ts"),
+        "--refresh",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("UnsupportedCapabilityRefreshError");
+    expect(stderr).toContain("gen:rates --refresh");
+    expect(stderr).toContain("gen:capabilities --from-snapshot");
+    expect(stdout.trim()).toBe(JSON.stringify({ fetches: 0, writes: 0 }));
+    expect(
+      await Promise.all(watched.map((file) => Bun.file(file).text())),
+    ).toEqual(before);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
