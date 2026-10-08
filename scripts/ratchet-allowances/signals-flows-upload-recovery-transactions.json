@@ -1,6 +1,6 @@
 {
   "metric": "no-db-await-in-loop-suppressions",
   "file": "apps/api/src/lib/scheduler/tasks/upload-flow-trigger-recovery.ts",
-  "delta": 1,
-  "reason": "A bounded claimed upload page settles each original receipt in its own organization-admitted transaction. Each receipt must settle independently of a later failed dispatch; no external I/O occurs while the receipt lock is held."
+  "delta": 3,
+  "reason": "A bounded claimed upload page settles each original receipt in its own organization-admitted transaction. Each receipt must settle independently of a later failed dispatch; no external I/O occurs while the receipt lock is held. Two additional sequential owners cursor-drain every eligible grant-repair page and prelock exact composite receipt keys in deterministic order before multi-row transitions. Batch locks cannot replace ordered owner acquisitions, and retaining the grant lock prevents replay races."
 }

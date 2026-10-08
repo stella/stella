@@ -37,6 +37,7 @@ import {
   SANCTIONS_EDITION_FANOUT_TRANSITIONS,
   SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+import { SCOUT_EMISSION_TRANSITIONS } from "@/api/lib/signals/scout-emission-transitions";
 
 // Each table chooses an ownership category explicitly; new status tables must
 // choose a category or declare a managed spec before the total map compiles.
@@ -275,7 +276,7 @@ export const TRANSITIONS = {
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
-  pendingScoutEmissions: { unmanaged: UNMANAGED_REASONS.workerRun },
+  pendingScoutEmissions: SCOUT_EMISSION_TRANSITIONS,
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },

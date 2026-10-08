@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
-  "delta": 14,
-  "reason": "Fourteen derived delivery-bookkeeping directives cover durable upload/scout intents, original-token claim and settlement, grant parking/replay, scheduler due-slot retention, terminal typed skips, next-day cap retry, and atomic deadline claim completion. Source/import writes and emitted signals keep their transaction-bound audits; scheduler_job_runs and scout census rows record attempts. No feature data is returned by operational recorders."
+  "delta": 20,
+  "reason": "Twenty narrow derived-state directives cover recoverable upload/scout receipts, token-fenced claims, grant parking and replay, scheduler due slots and atomic schedule repair, deferred completion-notice outcomes, and search projection maintenance moved out of request-only readers. Primary entity/import/definition writes and emitted signals keep their owning transaction audits; scheduler runs and scout census rows retain attempts. Operational recorders return no feature data. The additional six directives replace moved legacy audit-ledger owners or cover newly required delivery/scheduling recovery state."
 }

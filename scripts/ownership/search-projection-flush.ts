@@ -74,8 +74,6 @@ export default {
       ...[
         "apps/api/src/handlers/dev/routes.ts",
         "apps/api/src/handlers/entities/delete.ts",
-        "apps/api/src/lib/document-processing-queue.ts",
-        "apps/api/src/lib/search/process-extraction.ts",
       ].map((path) => ({
         path,
         reason:

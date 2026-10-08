@@ -123,7 +123,6 @@ import {
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
-import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -2674,7 +2673,7 @@ const DEFAULT_RECONCILIATION_DEPENDENCIES = {
   broadcastWorkspaceResourceUpdated,
   enqueueDocumentProcessingRun,
   indexEntity: async (entityId: SafeId<"entity">) =>
-    await getSearchMaintenance().indexEntity(entityId),
+    await upsertSearchDocument(entityId),
   now: () => Temporal.Now.instant().epochMilliseconds,
   readRepairScanCursor: async () => await readRepairScanCursor(),
   readyRepairCursor: async () => await reconciliationRedis.ready(),

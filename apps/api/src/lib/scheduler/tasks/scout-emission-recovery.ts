@@ -20,10 +20,7 @@ import {
   timestampMatchesCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import {
-  defineScopedTransitions,
-  transitionScopedCount,
-} from "@/api/lib/db/transitions";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
@@ -42,6 +39,7 @@ import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { emitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
 import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
 import { toHearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
+import { SCOUT_EMISSION_TRANSITIONS } from "@/api/lib/signals/scout-emission-transitions";
 
 export const RECOVER_SCOUT_EMISSION_TASK =
   "signals.recoverScoutEmission" as const;
@@ -91,7 +89,7 @@ const lockScoutReceiptRows = async (
       mode: "update",
     });
     if (acquired.status === "busy") {
-      throw acquired.error;
+      panic("Blocking aggregate acquisition returned busy");
     }
   }
 };
@@ -326,15 +324,6 @@ export const recoverScoutEmission: SchedulerTask = async ({
   }
 };
 
-const SCOUT_EMISSION_GRANT_TRANSITIONS = defineScopedTransitions({
-  table: pendingScoutEmissions,
-  key: "sourceId",
-  scope: ["organizationId", "sourceKind"],
-  stateColumn: "status",
-  edges: { pending: ["awaiting_grant"], awaiting_grant: ["pending"] },
-  initial: [],
-});
-
 const scoutEmissionActorExists = (userId?: SafeId<"user">) => sql`CASE
   WHEN ${pendingScoutEmissions.sourceKind} = 'document-review' THEN
     CASE WHEN NOT EXISTS (
@@ -386,7 +375,7 @@ export const resumeScoutEmissionAfterGrant = async ({
   await lockScoutReceiptRows(tx, rows);
   await transitionScopedCount({
     tx,
-    spec: SCOUT_EMISSION_GRANT_TRANSITIONS,
+    spec: SCOUT_EMISSION_TRANSITIONS,
     // sql-perf-allow: bounded by 100 preselected and prelocked exact (organization_id, source_kind, source_id) primary-key identities; actor subqueries only narrow those receipts.
     where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), scoutEmissionActorExists(userId), or(...rows.map((row) => and(eq(pendingScoutEmissions.sourceKind, row.sourceKind), eq(pendingScoutEmissions.sourceId, row.sourceId), timestampMatchesCasToken(pendingScoutEmissions.nextAttemptAt, row.nextAttemptAt)))))}`,
     options: {
@@ -487,7 +476,7 @@ const reconcileScoutEmissionGrantState = async ({
         );
         await transitionScopedCount({
           tx,
-          spec: SCOUT_EMISSION_GRANT_TRANSITIONS,
+          spec: SCOUT_EMISSION_TRANSITIONS,
           where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), identities, not(scoutEmissionActorExists()))}`,
           options: { from: ["pending"], to: "awaiting_grant" },
           recordTransitionAuditEvent: (_tx, count) =>
@@ -495,7 +484,7 @@ const reconcileScoutEmissionGrantState = async ({
         });
         await transitionScopedCount({
           tx,
-          spec: SCOUT_EMISSION_GRANT_TRANSITIONS,
+          spec: SCOUT_EMISSION_TRANSITIONS,
           where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), identities, scoutEmissionActorExists())}`,
           options: {
             from: ["awaiting_grant"],

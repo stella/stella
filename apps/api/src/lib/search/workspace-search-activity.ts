@@ -1,18 +1,15 @@
 import { sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 
 // Projection maintenance is shared with workers that do not load request-time
 // feature admission or the full API environment.
-type SearchActivityDatabase = {
-  execute: (query: SQL) => Promise<unknown>;
-};
+type SearchActivityDatabase = Pick<Transaction, "execute">;
 
 export const syncWorkspaceSearchActivity = async (
   workspaceId: SafeId<"workspace">,
-  db: SearchActivityDatabase = rootDb,
+  db: SearchActivityDatabase,
 ): Promise<void> => {
   // audit: skip - refreshes a derived timestamp from already-audited workspace activity.
   await db.execute(sql`

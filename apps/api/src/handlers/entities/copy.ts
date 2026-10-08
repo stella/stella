@@ -674,12 +674,28 @@ const copyToWorkspaceHandler = async function* ({
   }
 
   // Sync search indexes
-  dependencies
-    .syncWorkspaceSearchActivity(targetWorkspaceId)
+  safeDb(
+    async (tx) =>
+      await dependencies.syncWorkspaceSearchActivity(targetWorkspaceId, tx),
+  )
+    .then((result) => {
+      if (result.isErr()) {
+        captureError(result.error);
+      }
+      return result;
+    })
     .catch(captureError);
   if (deleteSource) {
-    dependencies
-      .syncWorkspaceSearchActivity(sourceWorkspaceId)
+    safeDb(
+      async (tx) =>
+        await dependencies.syncWorkspaceSearchActivity(sourceWorkspaceId, tx),
+    )
+      .then((result) => {
+        if (result.isErr()) {
+          captureError(result.error);
+        }
+        return result;
+      })
       .catch(captureError);
   }
 

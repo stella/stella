@@ -89,7 +89,7 @@ const lockUploadReceiptRows = async (
       mode: "update",
     });
     if (acquired.status === "busy") {
-      throw acquired.error;
+      panic("Blocking aggregate acquisition returned busy");
     }
   }
 };
