@@ -3232,7 +3232,8 @@ const createGhGateway = ({
         let count: number | undefined;
         for (let page = 1; page <= PAGE_LIMIT; page += 1) {
           if (pagesRead >= PAGE_LIMIT) {
-            return unavailable("merge group evidence page budget exhausted");
+            unavailable("merge group evidence page budget exhausted");
+            return;
           }
           pagesRead += 1;
           if (page > 1) {
@@ -3250,10 +3251,12 @@ const createGhGateway = ({
             total < 0 ||
             !Array.isArray(items)
           ) {
-            return unavailable("incomplete merge group evidence");
+            unavailable("incomplete merge group evidence");
+            return;
           }
           if (count !== undefined && count !== total) {
-            return unavailable("merge group evidence changed during pagination");
+            unavailable("merge group evidence changed during pagination");
+            return;
           }
           count = total;
           for (const item of items) {
@@ -3265,19 +3268,21 @@ const createGhGateway = ({
               id <= 0 ||
               ids.has(id)
             ) {
-              return unavailable("invalid or duplicate merge group evidence id");
+              unavailable("invalid or duplicate merge group evidence id");
+              return;
             }
             ids.add(id);
             rows.push({ ...row, id });
           }
           if (items.length < 100) {
             if (rows.length !== count) {
-              return unavailable("truncated merge group evidence");
+              unavailable("truncated merge group evidence");
+              return;
             }
             return rows;
           }
         }
-        return unavailable("merge group evidence page budget exhausted");
+        unavailable("merge group evidence page budget exhausted");
       };
       const runs = readPages(
         `repos/${repo}/actions/runs?event=merge_group&head_sha=${encodeURIComponent(groupSha)}`,
