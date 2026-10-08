@@ -69,6 +69,9 @@ export const flowDefinitions = p.pgTable(
 );
 
 /** Upload-trigger receipts commit with the document and survive admission pauses. */
+const FLOW_UPLOAD_TRIGGER_UNSETTLED_STATUSES =
+  FLOW_UPLOAD_TRIGGER_INTENT_STATUSES.filter((status) => status !== "skipped");
+
 export const flowUploadTriggerIntents = p.pgTable(
   "flow_upload_trigger_intents",
   {
@@ -91,7 +94,12 @@ export const flowUploadTriggerIntents = p.pgTable(
     p.primaryKey({ columns: [table.definitionId, table.entityId] }),
     p.check(
       "flow_upload_trigger_intents_settlement_check",
-      sql`(${table.status} = 'pending' AND ${table.skipReason} IS NULL) OR
+      sql`(${table.status} IN (${sql.join(
+        FLOW_UPLOAD_TRIGGER_UNSETTLED_STATUSES.map((status) =>
+          sql.raw(`'${status}'`),
+        ),
+        sql`, `,
+      )}) AND ${table.skipReason} IS NULL) OR
         (${table.status} = 'skipped' AND ${table.skipReason} IS NOT NULL AND
           ${table.skipReason} IN (${sql.join(
             FLOW_UPLOAD_TRIGGER_SKIP_REASONS.map((reason) =>
@@ -126,6 +134,10 @@ export const flowUploadTriggerIntents = p.pgTable(
       .index("flow_upload_trigger_intents_retry_idx")
       .on(table.retryAt, table.definitionId, table.entityId)
       .where(sql`${table.status} = 'pending'`),
+    p
+      .index("flow_upload_trigger_intents_awaiting_grant_idx")
+      .on(table.organizationId, table.workspaceId)
+      .where(sql`${table.status} = 'awaiting_grant'`),
     ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
   ],
 );

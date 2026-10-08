@@ -37,6 +37,7 @@ export type {
 
 export const FLOW_UPLOAD_TRIGGER_INTENT_STATUSES = [
   "pending",
+  "awaiting_grant",
   "skipped",
 ] as const;
 export const FLOW_UPLOAD_TRIGGER_SKIP_REASONS = [

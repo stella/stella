@@ -173,6 +173,42 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "flows-grant-recovery",
+    capability: "Resuming retained flows work after a principal grant",
+    owner: ["apps/api/src/lib/flows/resume-after-grant.ts"],
+    summary:
+      "Rechecks live membership and grant under the admission lock, constrains sources to the principal's matters, and returns no feature data.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/flows/resume-after-grant"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/flows/grant-recovery.ts",
+          reason:
+            "Dispatches the committed self-serve grant to its void recovery owner.",
+        },
+      ],
+    },
+  },
+  {
+    id: "signals-grant-recovery",
+    capability: "Resuming retained signals work after a principal grant",
+    owner: ["apps/api/src/lib/signals/resume-after-grant.ts"],
+    summary:
+      "Rechecks live membership and grant under the admission lock, constrains sources to the principal's matters, and returns no feature data.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/signals/resume-after-grant"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/signals/grant-recovery.ts",
+          reason:
+            "Dispatches the committed self-serve grant to its void recovery owner.",
+        },
+      ],
+    },
+  },
+  {
     id: "personal-api-key-lifecycle",
     capability: "Managing member-owned credentials in the denied auth table",
     owner: ["apps/api/src/lib/machine-api-keys/personal-lifecycle.ts"],

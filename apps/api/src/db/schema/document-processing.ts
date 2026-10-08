@@ -38,6 +38,7 @@ export type DocumentProcessingStatus =
 export const DOCUMENT_DEADLINE_SCOUT_STATUSES = [
   "not_requested",
   "pending",
+  "awaiting_grant",
   "running",
   "succeeded",
   "failed",
@@ -302,6 +303,10 @@ export const documentProcessingRuns = p.pgTable(
       .on(table.updatedAt, table.id)
       .where(sql`${table.deadlineScoutStatus} = 'pending'`),
     p
+      .index("document_processing_runs_deadline_scout_awaiting_grant_idx")
+      .on(table.organizationId, table.workspaceId, table.id)
+      .where(sql`${table.deadlineScoutStatus} = 'awaiting_grant'`),
+    p
       .index("document_processing_runs_deadline_scout_running_idx")
       .on(table.deadlineScoutClaimedAt, table.id)
       .where(sql`${table.deadlineScoutStatus} = 'running'`),
@@ -386,6 +391,10 @@ export const documentProcessingRuns = p.pgTable(
           AND ${table.deadlineScoutErrorCode} IS NULL)
         OR (${table.deadlineScoutStatus} = 'pending'
           AND ${table.deadlineScoutClaimedAt} IS NULL)
+        OR (${table.deadlineScoutStatus} = 'awaiting_grant'
+          AND ${table.deadlineScoutClaimedAt} IS NULL
+          AND ${table.deadlineScoutErrorCode} IS NOT NULL
+          AND ${table.deadlineScoutErrorCode} = 'feature_not_granted')
         OR (${table.deadlineScoutStatus} = 'running'
           AND ${table.deadlineScoutClaimedAt} IS NOT NULL
           AND ${table.deadlineScoutErrorCode} IS NULL)

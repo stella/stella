@@ -143,6 +143,26 @@ export const FEATURE_REGISTRY = {
       dispatchModules: [
         {
           type: "admitted",
+          module: "apps/api/src/lib/signals/resume-after-grant.ts",
+          admission: "isBackgroundFeatureEnabled",
+          specifier: "@/api/lib/feature-access/background",
+        },
+        {
+          type: "operational",
+          module: "apps/api/src/lib/signals/grant-recovery.ts",
+          effects: ["record-recovery"],
+          owners: [
+            {
+              effect: "record-recovery",
+              module: "apps/api/src/lib/signals/resume-after-grant.ts",
+              exports: ["resumeSignalsAfterGrant"],
+            },
+          ],
+          reason:
+            "Resumes retained skips after a committed grant without returning feature data.",
+        },
+        {
+          type: "admitted",
           module: "apps/api/src/lib/feature-access/background.ts",
           admission: "isDeploymentFeatureEnabled",
           specifier: "@/api/lib/deployment-feature",
@@ -277,6 +297,26 @@ export const FEATURE_REGISTRY = {
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
       ],
       dispatchModules: [
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/flows/resume-after-grant.ts",
+          admission: "isBackgroundFeatureEnabled",
+          specifier: "@/api/lib/feature-access/background",
+        },
+        {
+          type: "operational",
+          module: "apps/api/src/lib/flows/grant-recovery.ts",
+          effects: ["record-recovery"],
+          owners: [
+            {
+              effect: "record-recovery",
+              module: "apps/api/src/lib/flows/resume-after-grant.ts",
+              exports: ["resumeFlowsAfterGrant"],
+            },
+          ],
+          reason:
+            "Resumes retained skips after a committed grant without returning feature data.",
+        },
         {
           type: "admitted",
           module: "apps/api/src/lib/feature-access/background.ts",

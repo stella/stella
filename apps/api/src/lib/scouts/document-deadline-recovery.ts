@@ -1,17 +1,18 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, not, sql } from "drizzle-orm";
 
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
   SCOUT_RUN_STATUS,
   scoutRuns,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   defineScopedTransitions,
   transitionScopedCount,
@@ -23,13 +24,15 @@ import {
   RECONCILE_BATCH_SIZE,
 } from "@/api/lib/document-processing-reconciliation-progress";
 import type { ReconciliationPhaseResult } from "@/api/lib/document-processing-reconciliation-progress";
+import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { logger } from "@/api/lib/observability/logger";
 import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 
 const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEADLINE_SCOUT_DISPATCH_CONCURRENCY = 4;
 
-// Recovery graphs expose only lease retirement; workers own every other edge.
+// Recovery owns lease retirement and recoverable admission parking.
 const DEADLINE_DISPATCH_RECOVERY = defineScopedTransitions({
   table: documentProcessingRuns,
   key: "id",
@@ -37,8 +40,9 @@ const DEADLINE_DISPATCH_RECOVERY = defineScopedTransitions({
   stateColumn: "deadlineScoutStatus",
   edges: {
     not_requested: [],
-    pending: [],
-    running: ["pending"],
+    pending: ["awaiting_grant"],
+    awaiting_grant: ["pending"],
+    running: ["pending", "awaiting_grant"],
     succeeded: [],
     failed: [],
     cancelled: [],
@@ -58,6 +62,199 @@ const DEADLINE_CENSUS_RECOVERY = defineScopedTransitions({
   },
   initial: [],
 });
+
+const deadlineMatterAdmission = (userId?: SafeId<"user">) =>
+  backgroundFeatureActorExists({
+    organizationId: documentProcessingRuns.organizationId,
+    workspaceId: documentProcessingRuns.workspaceId,
+    featureId: "signals",
+    ...(userId === undefined ? {} : { userId }),
+  });
+
+type ResumeDocumentDeadlineScoutsOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+/** The grant writer holds the organization admission lock before insertion and this resume. */
+export const resumeDocumentDeadlineScoutsAfterGrant = async ({
+  tx,
+  organizationId,
+  userId,
+}: ResumeDocumentDeadlineScoutsOptions): Promise<void> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    return;
+  }
+  await transitionScopedCount({
+    tx,
+    spec: DEADLINE_DISPATCH_RECOVERY,
+    where: sql`${and(eq(documentProcessingRuns.organizationId, organizationId), deadlineMatterAdmission(userId))}`,
+    options: {
+      from: ["awaiting_grant"],
+      to: "pending",
+      set: { deadlineScoutErrorCode: null, updatedAt: new Date() },
+    },
+    recordTransitionAuditEvent: (_tx, count) => {
+      logger.info("scout.document_deadlines.grant_resumed", { count });
+    },
+  });
+};
+
+type PauseDocumentDeadlineScoutOptions = {
+  database: Pick<typeof rootDb, "select" | "transaction">;
+  sourceRunId: SafeId<"documentProcessingRun">;
+  from: "pending" | "running";
+};
+
+/** The same lock as grant insertion closes check-then-park and regrant ordering races. */
+export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
+  database,
+  sourceRunId,
+  from,
+}: PauseDocumentDeadlineScoutOptions): Promise<void> => {
+  const source = (
+    await database
+      .select({ organizationId: documentProcessingRuns.organizationId })
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, sourceRunId))
+      .limit(1)
+  ).at(0);
+  if (!source) {
+    return;
+  }
+  await database.transaction(async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: source.organizationId,
+      featureId: "signals",
+    });
+    const metadata = {
+      deadlineScoutClaimedAt: null,
+      deadlineScoutSkippedUntil: null,
+      deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${from === "running" ? 1 : 0}, 0)`,
+      deadlineScoutErrorCode: "feature_not_granted",
+      updatedAt: new Date(),
+    };
+    const parked = isDeploymentFeatureEnabled("FEATURE_SIGNALS")
+      ? await transitionScopedCount({
+          tx,
+          spec: DEADLINE_DISPATCH_RECOVERY,
+          where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), not(deadlineMatterAdmission()))}`,
+          options: { from: [from], to: "awaiting_grant", set: metadata },
+          recordTransitionAuditEvent: (_tx, count) => {
+            logger.info("scout.document_deadlines.grant_paused", { count });
+          },
+        })
+      : 0;
+    if (parked !== 0 || from === "pending") {
+      return;
+    }
+    // A grant that committed before the lock keeps the rejected observation retryable under a new actor.
+    await transitionScopedCount({
+      tx,
+      spec: DEADLINE_DISPATCH_RECOVERY,
+      where: sql`${eq(documentProcessingRuns.id, sourceRunId)}`,
+      options: { from: ["running"], to: "pending", set: metadata },
+      recordTransitionAuditEvent: (_tx, count) => {
+        logger.info("scout.document_deadlines.admission_retry", { count });
+      },
+    });
+  });
+};
+
+type ReconcileDeadlineAdmissionOptions = {
+  database: typeof rootDb;
+  direction: "pause" | "resume";
+};
+
+const reconcileDeadlineAdmission = async ({
+  database,
+  direction,
+}: ReconcileDeadlineAdmissionOptions) => {
+  const admission =
+    direction === "pause"
+      ? not(deadlineMatterAdmission())
+      : deadlineMatterAdmission();
+  const sourceStatus = direction === "pause" ? "pending" : "awaiting_grant";
+  const transition =
+    direction === "pause"
+      ? ({
+          from: ["pending"],
+          to: "awaiting_grant",
+          set: {
+            deadlineScoutClaimedAt: null,
+            deadlineScoutSkippedUntil: null,
+            deadlineScoutErrorCode: "feature_not_granted",
+            updatedAt: new Date(),
+          },
+        } as const)
+      : ({
+          from: ["awaiting_grant"],
+          to: "pending",
+          set: { deadlineScoutErrorCode: null, updatedAt: new Date() },
+        } as const);
+  const candidates = await database
+    .select({
+      id: documentProcessingRuns.id,
+      organizationId: documentProcessingRuns.organizationId,
+    })
+    .from(documentProcessingRuns)
+    .where(
+      and(
+        eq(documentProcessingRuns.deadlineScoutStatus, sourceStatus),
+        admission,
+      ),
+    )
+    .orderBy(
+      asc(documentProcessingRuns.updatedAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(RECONCILE_BATCH_SIZE);
+  const organizations = new Map<
+    SafeId<"organization">,
+    SafeId<"documentProcessingRun">[]
+  >();
+  for (const row of candidates) {
+    const ids = organizations.get(row.organizationId);
+    if (ids) {
+      ids.push(row.id);
+    } else {
+      organizations.set(row.organizationId, [row.id]);
+    }
+  }
+  const counts = await mapWithConcurrency({
+    items: [...organizations],
+    limit: DEADLINE_SCOUT_DISPATCH_CONCURRENCY,
+    operation: async ([organizationId, ids]) =>
+      await database.transaction(async (tx) => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId,
+          featureId: "signals",
+        });
+        return await transitionScopedCount({
+          tx,
+          spec: DEADLINE_DISPATCH_RECOVERY,
+          where: sql`${and(inArray(documentProcessingRuns.id, ids), admission)}`,
+          options: transition,
+          recordTransitionAuditEvent: (_tx, count) => {
+            logger.info("scout.document_deadlines.admission_reconciled", {
+              count,
+              direction,
+            });
+          },
+        });
+      }),
+  });
+  return {
+    count: counts.reduce((total, count) => total + count, 0),
+    hasMore: cappedSelectionHasMore({
+      limit: RECONCILE_BATCH_SIZE,
+      selected: candidates.length,
+    }),
+  };
+};
 
 /** The two dependencies this sweep needs, so the scheduler can run it without
  *  assembling the whole reconciliation set and a test can drive it with a
@@ -186,12 +383,23 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
           },
         });
 
+  const parked = await reconcileDeadlineAdmission({
+    database,
+    direction: "pause",
+  });
+  // Admission-filtered repair recovers a committed grant whose post-commit hook never ran.
+  const resumed = await reconcileDeadlineAdmission({
+    database,
+    direction: "resume",
+  });
+
   const pending = await database
     .select({ sourceRunId: documentProcessingRuns.id })
     .from(documentProcessingRuns)
     .where(
       and(
         eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+        deadlineMatterAdmission(),
         deadlineScoutDue(new Date()),
       ),
     )
@@ -219,10 +427,14 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
     // Rows actually transitioned, not rows selected: a candidate another
     // sweep already reclaimed is not this sweep's effect.
     count:
+      parked.count +
+      resumed.count +
       reclaimedDispatchCount +
       failedCensusCount +
       results.filter(Result.isOk).length,
     hasMore:
+      parked.hasMore ||
+      resumed.hasMore ||
       cappedSelectionHasMore({
         limit: RECONCILE_BATCH_SIZE,
         selected: pending.length,

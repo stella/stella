@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import type { Job } from "bullmq";
-import { and, asc, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { flowDefinitions, flowRuns, workspaces } from "@/api/db/schema";
@@ -18,6 +18,7 @@ import {
   executeFlowStep,
   failFlowRunFromWorker,
 } from "@/api/lib/flows/flow-executor";
+import type { FlowStepExecutionOutcome } from "@/api/lib/flows/flow-executor";
 import { resolveActorUserId } from "@/api/lib/flows/flow-run-actor";
 import {
   enqueueFlowStep,
@@ -67,17 +68,17 @@ const executeAdmittedFlowStep = async ({
   job,
   signal,
   database,
-}: AdmittedFlowStepOptions) => {
+}: AdmittedFlowStepOptions): Promise<FlowStepExecutionOutcome> => {
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
     logger.info("flow.work_skipped", { reason: "deployment_disabled" });
-    return;
+    return { status: "paused" };
   }
   // Resolve tenant and actor from the durable run before granting model admission.
   const row = await database.query.flowRuns.findFirst({
     where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
   });
   if (!row || (row.status !== "pending" && row.status !== "running")) {
-    return;
+    return { status: "completed" };
   }
   const workspace = await database.query.workspaces.findFirst({
     where: { id: { eq: row.workspaceId } },
@@ -86,8 +87,10 @@ const executeAdmittedFlowStep = async ({
   const actor = await resolveActorUserId(row, database);
   if (!workspace || !actor) {
     // The executor refuses a run without tenant or actor before any step.
-    await executeFlowStep(job.data, signal, { admission: null, database });
-    return;
+    return await executeFlowStep(job.data, signal, {
+      admission: null,
+      database,
+    });
   }
   if (
     !(await isBackgroundFeatureEnabled({
@@ -101,9 +104,9 @@ const executeAdmittedFlowStep = async ({
       reason: "actor_not_granted",
       runId: row.id,
     });
-    return;
+    return { status: "paused" };
   }
-  await runBackgroundJob({
+  return await runBackgroundJob({
     actionKind: BACKGROUND_ACTION_KIND.flow,
     organizationId: workspace.organizationId,
     userId: actor,
@@ -139,7 +142,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
         );
       }, FLOW_STEP_JOB_TIMEOUT_MS);
       try {
-        await executeAdmittedFlowStep({
+        const outcome = await executeAdmittedFlowStep({
           job,
           signal: controller.signal,
           database: db,
@@ -147,6 +150,16 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
         // Surface a late abort so BullMQ marks the attempt failed rather than
         // completed if the signal fired after the last awaited call.
         controller.signal.throwIfAborted();
+        switch (outcome.status) {
+          case "paused":
+            logger.info("flow.step_paused", { runId: job.data.runId });
+            return outcome;
+          case "completed":
+            return outcome;
+          default:
+            outcome satisfies never;
+            return panic("Unknown flow step execution outcome");
+        }
       } finally {
         clearTimeout(timeoutHandle);
       }
@@ -219,8 +232,15 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   };
 };
 
+type FlowStepsGrantPrincipal = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
 type ReconcileOrphanedFlowRunsOptions = {
   batchSize?: number;
+  /** Regrant wakes only this principal's runs, including recent admission pauses. */
+  principal?: FlowStepsGrantPrincipal;
   /**
    * Only reconcile runs that last moved before this instant. The standing
    * sweep passes one so a run the queue is still working on is left alone;
@@ -250,6 +270,7 @@ type ReconcileOrphanedFlowRunsDependencies = {
 export const reconcileOrphanedFlowRuns = async (
   {
     batchSize = ORPHAN_SCAN_BATCH_SIZE,
+    principal,
     stalledBefore,
     signal,
   }: ReconcileOrphanedFlowRunsOptions,
@@ -290,6 +311,27 @@ export const reconcileOrphanedFlowRuns = async (
       .where(
         and(
           inArray(flowRuns.status, ["pending", "running"]),
+          principal === undefined
+            ? undefined
+            : and(
+                eq(workspaces.organizationId, principal.organizationId),
+                or(
+                  and(
+                    eq(sql`${flowRuns.triggerSource}->>'type'`, "manual"),
+                    eq(
+                      sql`${flowRuns.triggerSource}->>'userId'`,
+                      principal.userId,
+                    ),
+                  ),
+                  and(
+                    inArray(sql`${flowRuns.triggerSource}->>'type'`, [
+                      "schedule",
+                      "file-upload",
+                    ]),
+                    eq(flowDefinitions.createdByUserId, principal.userId),
+                  ),
+                ),
+              ),
           cursor === null ? undefined : gt(flowRuns.id, cursor),
           // `startedAt` moves when the run leaves `pending`; `createdAt` is
           // the only timestamp a run that never started has.
@@ -363,4 +405,12 @@ export const reconcileOrphanedFlowRuns = async (
   if (reconciled > 0) {
     logger.info("flow.orphans_reconciled", { count: String(reconciled) });
   }
+};
+
+/** Call after the grant commits; durable runs remain recoverable if queue I/O fails. */
+export const resumeFlowStepsAfterGrant = async (
+  principal: FlowStepsGrantPrincipal,
+  dependencies: ReconcileOrphanedFlowRunsDependencies,
+): Promise<void> => {
+  await reconcileOrphanedFlowRuns({ principal }, dependencies);
 };

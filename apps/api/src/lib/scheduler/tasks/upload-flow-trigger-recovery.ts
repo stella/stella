@@ -1,5 +1,7 @@
 import { panic } from "better-result";
-import { and, asc, eq, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, lte, not, or, sql } from "drizzle-orm";
+
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import {
   flowDefinitions,
@@ -7,7 +9,13 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  defineScopedTransitions,
+  transitionScopedCount,
+} from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   automatedFlowRunDependencies,
   startAutomatedFlowRun,
@@ -16,6 +24,7 @@ import type {
   StartAutomatedFlowRunArgs,
   StartAutomatedFlowRunOutcome,
 } from "@/api/lib/flows/start-automated-flow-run";
+import { logger as recoveryLogger } from "@/api/lib/observability/logger";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const RECOVER_UPLOAD_FLOW_TRIGGERS_TASK =
@@ -82,6 +91,7 @@ export const recoverUploadFlowTriggerIntents = async ({
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
     return { settled: 0, paused: 0, retry: 0, skipped: 0 };
   }
+  await reconcileUploadTriggerGrantState({ database, now });
   const candidates = await database.transaction(async (tx) => {
     const selected = await tx
       .select({
@@ -115,6 +125,7 @@ export const recoverUploadFlowTriggerIntents = async ({
       .where(
         and(
           eq(flowUploadTriggerIntents.status, "pending"),
+          uploadTriggerActorExists(),
           lte(flowUploadTriggerIntents.retryAt, sql`${now}::timestamptz`),
           entityId === undefined
             ? undefined
@@ -208,4 +219,148 @@ export const recoverUploadFlowTriggers: SchedulerTask = async ({
     signal,
   });
   logger.info("scheduler.upload_flow_triggers_recovered", outcomes);
+};
+
+const UPLOAD_TRIGGER_GRANT_TRANSITIONS = defineScopedTransitions({
+  table: flowUploadTriggerIntents,
+  key: "entityId",
+  scope: ["definitionId"],
+  stateColumn: "status",
+  edges: {
+    pending: ["awaiting_grant"],
+    awaiting_grant: ["pending"],
+    skipped: [],
+  },
+  initial: [],
+});
+
+const uploadTriggerActorExists = (userId?: SafeId<"user">) => sql`EXISTS (
+  SELECT 1 FROM ${flowDefinitions}
+  WHERE ${flowDefinitions.id} = ${flowUploadTriggerIntents.definitionId}
+    AND ${flowDefinitions.organizationId} = ${flowUploadTriggerIntents.organizationId}
+    AND (${flowDefinitions.createdByUserId} IS NULL OR (
+      ${userId === undefined ? sql`true` : sql`${flowDefinitions.createdByUserId} = ${userId}`}
+      AND ${backgroundFeatureActorExists({ organizationId: flowUploadTriggerIntents.organizationId, workspaceId: flowUploadTriggerIntents.workspaceId, featureId: "flows", userId: flowDefinitions.createdByUserId })}
+    ))
+)`;
+
+type ResumeUploadTriggersAfterGrantOptions = {
+  tx: Pick<SchedulerDb, "select" | "execute">;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  now: Date;
+};
+
+export const resumeUploadTriggersAfterGrant = async ({
+  tx,
+  organizationId,
+  userId,
+  now,
+}: ResumeUploadTriggersAfterGrantOptions): Promise<void> => {
+  await transitionScopedCount({
+    tx,
+    spec: UPLOAD_TRIGGER_GRANT_TRANSITIONS,
+    where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), eq(flowUploadTriggerIntents.status, "awaiting_grant"), uploadTriggerActorExists(userId))}`,
+    options: {
+      from: ["awaiting_grant"],
+      to: "pending",
+      set: { retryAt: now },
+    },
+    recordTransitionAuditEvent: (_tx, count) =>
+      recoveryLogger.info("flow.upload_trigger_grant_resumed", { count }),
+  });
+};
+
+type ReconcileUploadTriggerGrantStateOptions = {
+  database: SchedulerDb;
+  now: Date;
+};
+
+const reconcileUploadTriggerGrantState = async ({
+  database,
+  now,
+}: ReconcileUploadTriggerGrantStateOptions) => {
+  // Grant repair has its own budget; an older ungranted prefix cannot consume it.
+  const resumed = await database
+    .select()
+    .from(flowUploadTriggerIntents)
+    .where(
+      and(
+        eq(flowUploadTriggerIntents.status, "awaiting_grant"),
+        uploadTriggerActorExists(),
+      ),
+    )
+    .orderBy(
+      asc(flowUploadTriggerIntents.retryAt),
+      asc(flowUploadTriggerIntents.entityId),
+    )
+    .limit(UPLOAD_TRIGGER_BATCH_SIZE);
+  const blocked = await database
+    .select()
+    .from(flowUploadTriggerIntents)
+    .where(
+      and(
+        eq(flowUploadTriggerIntents.status, "pending"),
+        not(uploadTriggerActorExists()),
+      ),
+    )
+    .orderBy(
+      asc(flowUploadTriggerIntents.retryAt),
+      asc(flowUploadTriggerIntents.entityId),
+    )
+    .limit(UPLOAD_TRIGGER_BATCH_SIZE);
+  const candidates = [...resumed, ...blocked];
+  const groups = new Map<SafeId<"organization">, typeof candidates>();
+  for (const candidate of candidates) {
+    const group = groups.get(candidate.organizationId);
+    if (group === undefined) {
+      groups.set(candidate.organizationId, [candidate]);
+      continue;
+    }
+    group.push(candidate);
+  }
+  await mapWithConcurrency({
+    items: [...groups],
+    limit: 4,
+    operation: async ([organizationId, rows]) =>
+      database.transaction(async (tx) => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId,
+          featureId: "flows",
+        });
+        const identities = or(
+          ...rows.map((row) =>
+            and(
+              eq(flowUploadTriggerIntents.entityId, row.entityId),
+              eq(flowUploadTriggerIntents.definitionId, row.definitionId),
+            ),
+          ),
+        );
+        await transitionScopedCount({
+          tx,
+          spec: UPLOAD_TRIGGER_GRANT_TRANSITIONS,
+          where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identities, not(uploadTriggerActorExists()))}`,
+          options: { from: ["pending"], to: "awaiting_grant" },
+          recordTransitionAuditEvent: (_tx, count) =>
+            recoveryLogger.info("flow.upload_trigger_awaiting_grant", {
+              count,
+            }),
+        });
+        await transitionScopedCount({
+          tx,
+          spec: UPLOAD_TRIGGER_GRANT_TRANSITIONS,
+          where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identities, uploadTriggerActorExists())}`,
+          options: {
+            from: ["awaiting_grant"],
+            to: "pending",
+            set: { retryAt: now },
+          },
+          recordTransitionAuditEvent: (_tx, count) =>
+            recoveryLogger.info("flow.upload_trigger_grant_repaired", {
+              count,
+            }),
+        });
+      }),
+  });
 };

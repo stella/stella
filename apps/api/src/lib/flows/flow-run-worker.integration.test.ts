@@ -37,6 +37,7 @@ import {
   entities,
   taskAssignees,
   fields,
+  featureEnrolments,
   flowDefinitions,
   flowRunSteps,
   notifications,
@@ -64,6 +65,8 @@ import {
   ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
 } from "@/api/lib/errors/provider-call-error";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
   cancelFlowRun,
@@ -287,6 +290,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       id: userId,
       name: "Flow Worker Test User",
       email: `${userId}@example.com`,
+      emailVerified: true,
     });
     await testDb.insert(member).values({
       id: Bun.randomUUIDv7(),
@@ -316,7 +320,11 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await testDb
+      .insert(featureEnrolments)
+      .values({ organizationId, userId, featureId: "flows" })
+      .onConflictDoNothing();
     enqueuedSteps.length = 0;
     enqueueFlowStepMock.mockClear();
     generateTanStackTextForRoleMock.mockClear();
@@ -982,6 +990,75 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     }
     expect(await readState()).toEqual(before);
     expect(enqueuedSteps.filter((step) => step.runId === runId)).toEqual([]);
+  });
+
+  test("revocation after preflight pauses a step before any write or model dispatch", async () => {
+    const { runId } = await createWaitingGate(false, {
+      initialRunStatus: "pending",
+      initialStep: AI_STEP,
+    });
+    expect(
+      await isBackgroundFeatureEnabled({
+        tx: testDb,
+        organizationId,
+        userId,
+        featureId: "flows",
+      }),
+    ).toBe(true);
+    const readState = async () => ({
+      run: await testDb.query.flowRuns.findFirst({
+        where: { id: { eq: runId } },
+      }),
+      steps: await testDb.query.flowRunSteps.findMany({
+        where: { runId: { eq: runId } },
+        orderBy: { index: "asc" },
+      }),
+    });
+    const before = await readState();
+    const entered = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const gatedMakeScopedDb: typeof makeScopedDb = (scope) => async (work) => {
+      entered.resolve(undefined);
+      await release.promise;
+      return await makeScopedDb(scope)(work);
+    };
+    const worker = executeFlowStep(
+      { runId, stepIndex: 0 },
+      new AbortController().signal,
+      {
+        admission: TEST_FLOW_MODEL_ADMISSION,
+        database: flowDatabase,
+        makeScopedDb: gatedMakeScopedDb,
+        makeSafeDb,
+        generateTextForRole: generateTextForTest,
+        loadAIConfig: async () => Result.ok(null),
+        enqueueStep: enqueueFlowStepMock,
+        broadcastUpdate,
+      },
+    );
+    await entered.promise;
+    await testDb.transaction(async (tx) => {
+      await lockFeatureRecoveryAdmission({
+        tx,
+        organizationId,
+        featureId: "flows",
+      });
+      await tx
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.organizationId, organizationId),
+            eq(featureEnrolments.userId, userId),
+            eq(featureEnrolments.featureId, "flows"),
+          ),
+        );
+    });
+    release.resolve(undefined);
+
+    expect(await worker).toEqual({ status: "paused" });
+    expect(await readState()).toEqual(before);
+    expect(generateTanStackTextForRoleMock).not.toHaveBeenCalled();
+    expect(enqueuedSteps).toEqual([]);
   });
 
   test.each(["before start", "before pause", "before failure"] as const)(

@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "Scout and upload recovery each use independently bounded admitted-wait and blocked-pending pages followed by an admission-locked recheck. Keeping these lifecycle blocks in their feature owners preserves distinct recipient predicates and composite receipt identities without introducing a generic feature-table mutation boundary."
+}

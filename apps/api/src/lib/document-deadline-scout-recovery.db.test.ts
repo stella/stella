@@ -13,14 +13,19 @@ import { eq, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
+import { user } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
-import { documentProcessingRuns } from "@/api/db/schema";
+import { documentProcessingRuns, featureEnrolments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentDeadlineScoutJob } from "@/api/lib/document-processing-enqueue";
 import type { DocumentDeadlineScoutJobData } from "@/api/lib/document-processing-enqueue";
-import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/scouts/document-deadline-recovery";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import {
+  recoverDocumentDeadlineScoutDispatches,
+  resumeDocumentDeadlineScoutsAfterGrant,
+} from "@/api/lib/scouts/document-deadline-recovery";
 import { skipDeadlineScan } from "@/api/lib/scouts/document-deadlines";
 import { DEADLINE_SCOUT_MAX_ATTEMPTS } from "@/api/lib/scouts/document-deadlines.logic";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -72,6 +77,10 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
 }, 120_000);
 
 afterAll(async () => {
@@ -82,6 +91,14 @@ beforeEach(async () => {
   added.length = 0;
   liveJobIds.clear();
   await testDb.delete(documentProcessingRuns);
+  await testDb
+    .insert(featureEnrolments)
+    .values({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      featureId: "signals",
+    })
+    .onConflictDoNothing();
 });
 
 const insertPendingScoutRun = async (): Promise<
@@ -164,6 +181,7 @@ const databaseClaimingBeforeFirstUpdate = (claim: () => Promise<void>) => {
   let armed = true;
   return asTestRaw<typeof rootDb>({
     select: testDb.select.bind(testDb),
+    transaction: testDb.transaction.bind(testDb),
     execute: async (query: Parameters<typeof testDb.execute>[0]) => {
       if (armed) {
         armed = false;
@@ -222,6 +240,10 @@ test("repeated feature refusals preserve prior failures and refund each claim ex
     .where(eq(documentProcessingRuns.id, runId));
 
   for (let cycle = 0; cycle <= DEADLINE_SCOUT_MAX_ATTEMPTS; cycle += 1) {
+    // db-await-in-loop: opt out before every scan refusal and restore the grant below.
+    await testDb
+      .delete(featureEnrolments)
+      .where(eq(featureEnrolments.userId, ids.userA1));
     // db-await-in-loop: exercise persisted claim/refusal cycles beyond the retry ceiling.
     await testDb
       .update(documentProcessingRuns)
@@ -229,6 +251,7 @@ test("repeated feature refusals preserve prior failures and refund each claim ex
         deadlineScoutAttemptCount: sql`${documentProcessingRuns.deadlineScoutAttemptCount} + 1`,
         deadlineScoutClaimedAt: new Date(),
         deadlineScoutStatus: "running",
+        deadlineScoutErrorCode: null,
       })
       .where(eq(documentProcessingRuns.id, runId));
     for (let delivery = 0; delivery < 2; delivery += 1) {
@@ -257,7 +280,29 @@ test("repeated feature refusals preserve prior failures and refund each claim ex
       claimedAt: null,
       errorCode: "feature_not_granted",
       skippedUntil: null,
-      status: "pending",
+      status: "awaiting_grant",
+    });
+    // db-await-in-loop: the actual grant transaction resumes the parked source without using an attempt.
+    const grantOrganizationId = ids.orgA;
+    const grantUserId = ids.userA1;
+    await testDb.transaction(async (tx) => {
+      await lockFeatureRecoveryAdmission({
+        tx,
+        organizationId: grantOrganizationId,
+        featureId: "signals",
+      });
+      await tx.insert(featureEnrolments).values({
+        organizationId: grantOrganizationId,
+        userId: grantUserId,
+        featureId: "signals",
+      });
+      await resumeDocumentDeadlineScoutsAfterGrant({
+        tx: asTestRaw<
+          Parameters<typeof resumeDocumentDeadlineScoutsAfterGrant>[0]["tx"]
+        >(tx),
+        organizationId: grantOrganizationId,
+        userId: grantUserId,
+      });
     });
   }
 });

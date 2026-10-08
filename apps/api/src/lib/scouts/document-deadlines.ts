@@ -30,6 +30,7 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { pauseDocumentDeadlineScoutAfterGrantLoss } from "@/api/lib/scouts/document-deadline-recovery";
 import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import {
   capText,
@@ -65,7 +66,7 @@ class DocumentDeadlineScoutError extends TaggedError(
   cause: unknown;
 }> {}
 
-type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update">;
+type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update" | "transaction">;
 
 export type RunDocumentDeadlineScoutArgs = {
   db: DeadlineScoutDb;
@@ -219,18 +220,10 @@ type DeadlineScanSettlement =
       status: "pending" | "succeeded" | "failed" | "cancelled";
       errorCode: string | null;
     }
-  | { status: "skipped"; skippedUntil: Date }
-  | { status: "paused" };
+  | { status: "skipped"; skippedUntil: Date };
 
 const settledColumns = (settlement: DeadlineScanSettlement) => {
   switch (settlement.status) {
-    case "paused":
-      return {
-        attemptRefund: 1,
-        errorCode: DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
-        skippedUntil: null,
-        status: "pending",
-      } as const;
     case "skipped":
       return {
         attemptRefund: 1,
@@ -310,7 +303,7 @@ const rejectDeadlineObservation = async ({
 };
 
 type SkipDeadlineScanOptions = {
-  db: Pick<DeadlineScoutDb, "update">;
+  db: DeadlineScoutDb;
   runId: ClaimedRun["id"];
 } & (
   | { reason: "period_exhausted"; skippedUntil: Date }
@@ -323,20 +316,18 @@ export const skipDeadlineScan = async ({
   runId,
   ...refusal
 }: SkipDeadlineScanOptions): Promise<void> => {
-  const settlement = (() => {
-    switch (refusal.reason) {
-      case "period_exhausted":
-        return {
-          status: "skipped",
-          skippedUntil: refusal.skippedUntil,
-        } as const;
-      case "feature_not_granted":
-        return { status: "paused" } as const;
-      default:
-        refusal satisfies never;
-        return panic("Unhandled deadline scan refusal");
-    }
-  })();
+  if (refusal.reason === "feature_not_granted") {
+    await pauseDocumentDeadlineScoutAfterGrantLoss({
+      database: db,
+      sourceRunId: runId,
+      from: "running",
+    });
+    return;
+  }
+  const settlement = {
+    status: "skipped",
+    skippedUntil: refusal.skippedUntil,
+  } as const;
   await settleRun({
     db,
     run: { id: runId },
@@ -371,6 +362,11 @@ const admittedDeadlineScoutActor = async ({
     workspaceId: sourceRun.workspaceId,
   });
   if (!actorUserId) {
+    await pauseDocumentDeadlineScoutAfterGrantLoss({
+      database: db,
+      sourceRunId,
+      from: "pending",
+    });
     logger.info("scout.document_deadlines.skipped", {
       sourceRunId,
       reason: "no_granted_member",

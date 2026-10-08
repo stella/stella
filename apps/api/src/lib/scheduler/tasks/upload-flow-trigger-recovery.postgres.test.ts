@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -11,23 +11,34 @@ import {
   flowDefinitions,
   flowRuns,
   flowUploadTriggerIntents,
+  pendingScoutEmissions,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   automatedFlowRunDependencies,
   startAutomatedFlowRun,
 } from "@/api/lib/flows/start-automated-flow-run";
-import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { logger } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import type {
+  SchedulerDb,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { recoverUploadFlowTriggerIntents } from "./upload-flow-trigger-recovery";
+import { recoverScoutEmission } from "./scout-emission-recovery";
+import {
+  recoverUploadFlowTriggerIntents,
+  resumeUploadTriggersAfterGrant,
+} from "./upload-flow-trigger-recovery";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
@@ -188,6 +199,213 @@ const changeTrigger = async ({
 };
 
 describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
+  test("grant repair and eligible dispatch survive an older blocked receipt prefix", async () => {
+    const previousFlag = env.FEATURE_FLOWS;
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const { db } = openClient();
+          const blocked = await uploadFixture(db);
+          const admitted = await uploadFixture(db);
+          try {
+            await db
+              .delete(featureEnrolments)
+              .where(
+                eq(featureEnrolments.organizationId, blocked.organizationId),
+              );
+            const older = new Date(NOW.getTime() - 60_000);
+            const extraEntities = Array.from({ length: 99 }, () => ({
+              id: createSafeId<"entity">(),
+              workspaceId: blocked.workspaceId,
+              name: "blocked.pdf",
+              createdBy: blocked.userId,
+            }));
+            await db.insert(entities).values(extraEntities);
+            await db.insert(flowUploadTriggerIntents).values(
+              extraEntities.map(({ id }) => ({
+                definitionId: blocked.definitionId,
+                entityId: id,
+                organizationId: blocked.organizationId,
+                workspaceId: blocked.workspaceId,
+                fileExtension: "pdf",
+                retryAt: older,
+              })),
+            );
+            await db
+              .update(flowUploadTriggerIntents)
+              .set({ retryAt: older })
+              .where(eq(flowUploadTriggerIntents.entityId, blocked.entityId));
+            await db
+              .update(flowUploadTriggerIntents)
+              .set({ status: "awaiting_grant", retryAt: LATER })
+              .where(eq(flowUploadTriggerIntents.entityId, admitted.entityId));
+            const started: string[] = [];
+            const recover = async (entityId?: typeof blocked.entityId) =>
+              await recoverUploadFlowTriggerIntents({
+                database: asTestRaw<SchedulerDb>(db),
+                now: NOW,
+                entityId,
+                start: async ({ definitionId }) => {
+                  started.push(definitionId);
+                  return { status: "settled" };
+                },
+              });
+
+            await recover();
+            expect(started).toEqual([admitted.definitionId]);
+            expect(
+              await db.$count(
+                flowUploadTriggerIntents,
+                eq(
+                  flowUploadTriggerIntents.organizationId,
+                  blocked.organizationId,
+                ),
+              ),
+            ).toBe(100);
+            expect(
+              await db.$count(
+                flowUploadTriggerIntents,
+                and(
+                  eq(
+                    flowUploadTriggerIntents.organizationId,
+                    blocked.organizationId,
+                  ),
+                  eq(flowUploadTriggerIntents.status, "awaiting_grant"),
+                ),
+              ),
+            ).toBe(32);
+
+            await db.insert(featureEnrolments).values({
+              organizationId: blocked.organizationId,
+              userId: blocked.userId,
+              featureId: "flows",
+            });
+            await db.transaction(async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx: asTestRaw<
+                  Parameters<typeof lockFeatureRecoveryAdmission>[0]["tx"]
+                >(tx),
+                organizationId: blocked.organizationId,
+                featureId: "flows",
+              });
+              await resumeUploadTriggersAfterGrant({
+                tx: asTestRaw<
+                  Parameters<typeof resumeUploadTriggersAfterGrant>[0]["tx"]
+                >(tx),
+                organizationId: blocked.organizationId,
+                userId: blocked.userId,
+                now: new Date(),
+              });
+            });
+            expect(
+              await db.$count(
+                flowUploadTriggerIntents,
+                and(
+                  eq(
+                    flowUploadTriggerIntents.organizationId,
+                    blocked.organizationId,
+                  ),
+                  eq(flowUploadTriggerIntents.status, "awaiting_grant"),
+                ),
+              ),
+            ).toBe(0);
+            await recover(blocked.entityId);
+            expect(started).toEqual([
+              admitted.definitionId,
+              blocked.definitionId,
+            ]);
+          } finally {
+            for (const fixture of [blocked, admitted]) {
+              await db
+                .delete(organization)
+                .where(eq(organization.id, fixture.organizationId));
+              await db.delete(user).where(eq(user.id, fixture.userId));
+            }
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_FLOWS = previousFlag;
+      restoreMode();
+    }
+  });
+
+  test("missing review sources settle beyond a blocked prefix and an awaiting-grant repair", async () => {
+    const previousSignals = env.FEATURE_SIGNALS;
+    const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_SIGNALS = true;
+    env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const { db } = openClient();
+          const fixture = await uploadFixture(db);
+          const sourceId = createSafeId<"documentReviewRun">();
+          try {
+            await db.insert(pendingScoutEmissions).values(
+              Array.from({ length: 100 }, () => ({
+                organizationId: fixture.organizationId,
+                workspaceId: fixture.workspaceId,
+                sourceKind: "infosoud-hearing" as const,
+                sourceId: createSafeId<"entity">(),
+                nextAttemptAt: new Date(NOW.getTime() - 60_000),
+              })),
+            );
+            await db.insert(pendingScoutEmissions).values({
+              organizationId: fixture.organizationId,
+              workspaceId: fixture.workspaceId,
+              sourceKind: "document-review",
+              sourceId,
+              status: "awaiting_grant",
+              nextAttemptAt: LATER,
+            });
+            await recoverScoutEmission(
+              asTestRaw<SchedulerTaskContext>({
+                db: asTestRaw<SchedulerDb>(db),
+                dueAt: DueSlot.of({ nextRunAt: NOW, lockedAt: NOW }),
+                logger,
+                signal: new AbortController().signal,
+              }),
+            );
+            expect(
+              await db.$count(
+                pendingScoutEmissions,
+                eq(pendingScoutEmissions.sourceId, sourceId),
+              ),
+            ).toBe(0);
+            const retained = await db
+              .select()
+              .from(pendingScoutEmissions)
+              .where(
+                eq(
+                  pendingScoutEmissions.organizationId,
+                  fixture.organizationId,
+                ),
+              );
+            expect(retained).toHaveLength(100);
+            expect(
+              retained.every(({ status }) => status === "awaiting_grant"),
+            ).toBe(true);
+          } finally {
+            await db
+              .delete(organization)
+              .where(eq(organization.id, fixture.organizationId));
+            await db.delete(user).where(eq(user.id, fixture.userId));
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_SIGNALS = previousSignals;
+      env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousScouts;
+      restoreMode();
+    }
+  });
+
   for (const change of TRIGGER_CHANGES) {
     test(`${change}: admission revalidates a claimed receipt and converges on replay`, async () => {
       const previousFlag = env.FEATURE_FLOWS;

@@ -45,6 +45,8 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   flowRunCompletedNotification,
@@ -145,12 +147,48 @@ const FLOW_RUN_COMPLETION_NOTICE_SINK = failureSink({
 
 // ── Per-job step execution (queue side) ─────────────────
 
+type HandleFlowStepStartOptions = {
+  startedPayload:
+    | null
+    | { type: "paused" }
+    | { type: "started"; payload: FlowRunUpdatePayload };
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"flowRun">;
+  broadcastUpdate: typeof broadcastFlowRunUpdate;
+};
+
+const handleFlowStepStart = ({
+  startedPayload,
+  workspaceId,
+  runId,
+  broadcastUpdate,
+}: HandleFlowStepStartOptions): FlowStepExecutionOutcome | undefined => {
+  if (startedPayload === null) {
+    return { status: "completed" };
+  }
+  switch (startedPayload.type) {
+    case "paused":
+      logger.info("flow.work_skipped", { reason: "actor_not_granted", runId });
+      return { status: "paused" };
+    case "started":
+      broadcastUpdate(workspaceId, startedPayload.payload);
+      return undefined;
+    default:
+      startedPayload satisfies never;
+      return panic("Unknown flow step admission state");
+  }
+};
+
 /**
  * Execute one step of a run. Idempotent: a retry after a successful step (or a
  * run that has since been cancelled/failed) no-ops. Throws on failure so the
  * BullMQ worker retries; the run is only flipped to `failed` from the worker's
  * final-attempt `failed` handler (`failFlowRunFromWorker`).
  */
+export type FlowStepExecutionOutcome =
+  | { status: "completed" }
+  | { status: "paused" };
+
 export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   signal: AbortSignal,
@@ -186,16 +224,16 @@ export const executeFlowStep = async (
     taskFeatures?: TaskDeploymentFeatures | undefined;
     flushSearchRepairs?: typeof flushEntitySearchRepairs | undefined;
   },
-): Promise<void> => {
+): Promise<FlowStepExecutionOutcome> => {
   const runId = brandPersistedFlowRunId(rawRunId);
   const run = await loadRun(runId, database);
   if (!run) {
     logger.warn("flow.run_missing", { runId, stepIndex: String(stepIndex) });
-    return;
+    return { status: "completed" };
   }
   if (isTerminalFlowRunStatus(run.status)) {
     // Cancelled/failed/completed run: a queued step must not resurrect it.
-    return;
+    return { status: "completed" };
   }
 
   const step = await loadStep(runId, stepIndex, database);
@@ -203,7 +241,7 @@ export const executeFlowStep = async (
     return panic("flow run step row missing for an in-flight run");
   }
   if (step.status === "completed" || step.status === "skipped") {
-    return; // A retry after this step already finished.
+    return { status: "completed" }; // A retry after this step already finished.
   }
 
   const stepDef = run.definitionSnapshot.steps.at(stepIndex);
@@ -232,6 +270,19 @@ export const executeFlowStep = async (
 
   // Mark the step (and run) running. Broadcast so the UI shows progress.
   const startedPayload = await scopedDb(async (tx) => {
+    // Serialize the step boundary with grant/revoke, including an absent
+    // enrolment row. Preflight admission alone can go stale before this write.
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: scope.organizationId,
+      featureId: "flows",
+    });
+    const admitted = await isBackgroundFeatureEnabled({
+      tx,
+      organizationId: scope.organizationId,
+      userId: actorUserId,
+      featureId: "flows",
+    });
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
       runId,
@@ -261,6 +312,9 @@ export const executeFlowStep = async (
         }),
       );
     }
+    if (!admitted) {
+      return { type: "paused" } as const;
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "running", startedAt: new Date() })
@@ -271,12 +325,20 @@ export const executeFlowStep = async (
       .update(flowRuns)
       .set({ status: "running" })
       .where(eq(flowRuns.id, runId));
-    return await readRunProgress(tx, runId);
+    return {
+      type: "started",
+      payload: await readRunProgress(tx, runId),
+    } as const;
   });
-  if (startedPayload === null) {
-    return;
+  const startOutcome = handleFlowStepStart({
+    startedPayload,
+    workspaceId: run.workspaceId,
+    runId,
+    broadcastUpdate,
+  });
+  if (startOutcome !== undefined) {
+    return startOutcome;
   }
-  broadcastUpdate(run.workspaceId, startedPayload);
 
   switch (stepDef.kind) {
     case "review-gate":
@@ -291,7 +353,7 @@ export const executeFlowStep = async (
         taskFeatures,
         flushSearchRepairs,
       });
-      return;
+      return { status: "completed" };
     case "ai": {
       const output = await runAiStep({
         admission:
@@ -325,7 +387,7 @@ export const executeFlowStep = async (
         broadcastUpdate,
         enqueueStep,
       });
-      return;
+      return { status: "completed" };
     }
     case "create-document": {
       await runCreateDocumentStep({
@@ -339,7 +401,7 @@ export const executeFlowStep = async (
         broadcastUpdate,
         enqueueStep,
       });
-      return;
+      return { status: "completed" };
     }
     default:
       return panic("unhandled flow step kind");

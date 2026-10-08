@@ -327,6 +327,22 @@ describe("reconcileOrphanedFlowRuns", () => {
     expect(enqueuedRunIds.toSorted()).toEqual(nonTerminalRunIds.toSorted());
   });
 
+  test("a scoped regrant wakes only its actor's runs, including recent pauses", async () => {
+    await reconcileOrphanedFlowRuns(
+      {
+        batchSize: 2,
+        principal: { organizationId, userId: mintAuthProviderId<"user">() },
+      },
+      reconcileDependencies,
+    );
+    expect(enqueuedRunIds).toEqual([]);
+    await reconcileOrphanedFlowRuns(
+      { batchSize: 2, principal: { organizationId, userId } },
+      reconcileDependencies,
+    );
+    expect(enqueuedRunIds.toSorted()).toEqual(nonTerminalRunIds.toSorted());
+  });
+
   test("deployment off pauses recovery for enrolled actors", async () => {
     const previous = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });

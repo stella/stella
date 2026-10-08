@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
@@ -211,3 +212,45 @@ export const loadBackgroundFeatureActors = async ({
   }
   return admitted;
 };
+
+type BackgroundFeatureActorExistsOptions = {
+  organizationId: SQLWrapper | string;
+  workspaceId: SQLWrapper | string;
+  featureId: "signals" | "flows";
+  userId?: SQLWrapper | string;
+};
+
+/** Correlated admission keeps an ungranted prefix out of bounded recovery pages. */
+export const backgroundFeatureActorExists = ({
+  organizationId,
+  workspaceId,
+  featureId,
+  userId,
+}: BackgroundFeatureActorExistsOptions) => sql`EXISTS (
+    SELECT 1 FROM ${member}
+    JOIN ${user} ON ${user.id} = ${member.userId}
+    JOIN ${featureEnrolments}
+      ON ${featureEnrolments.organizationId} = ${member.organizationId}
+      AND ${featureEnrolments.userId} = ${member.userId}
+      AND ${featureEnrolments.featureId} = ${featureId}
+    JOIN ${workspaces}
+      ON ${workspaces.id} = ${workspaceId}
+      AND ${workspaces.organizationId} = ${member.organizationId}
+    LEFT JOIN ${workspaceMembers}
+      ON ${workspaceMembers.workspaceId} = ${workspaces.id}
+      AND ${workspaceMembers.userId} = ${member.userId}
+    WHERE ${member.organizationId} = ${organizationId}
+      AND ${user.emailVerified} = true
+      AND ${user.deletedAt} IS NULL
+      AND ${userId === undefined ? sql`true` : sql`${member.userId} = ${userId}`}
+      AND (
+        ${workspaceMembers.userId} IS NOT NULL
+        OR (
+          ${workspaces.clientId} IS NOT NULL
+          AND ${member.role} IN (${sql.join(
+            CLIENT_MATTER_ADMIN_ROLES.map((role) => sql`${role}`),
+            sql`, `,
+          )})
+        )
+      )
+  )`;
