@@ -110,7 +110,7 @@ export const projectViewEligibility = <
   projectAvailable,
 }: ProjectViewEligibilityArgs<T, R>): R | UnavailableWorkspaceView => {
   if (!isAvtLayoutVisible(view.layout, accessStatus)) {
-    return { id: view.id, layout: { type: "avt" }, eligibility: "unavailable" };
+    return { id: view.id, eligibility: "unavailable" };
   }
   return projectAvailable(view);
 };

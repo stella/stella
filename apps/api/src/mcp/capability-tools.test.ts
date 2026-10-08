@@ -482,7 +482,8 @@ describe("list verification access grants across MCP tools", () => {
       });
       expect(errorEnvelope(described)).toMatchObject({
         code: "not_found",
-        message: "Not found",
+        message: `No capability with id "${capability}"`,
+        hint: expect.any(String),
       });
     }
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
@@ -623,7 +624,6 @@ describe("list verification access grants across MCP tools", () => {
           : [
               {
                 id: view.id,
-                layout: { type: "avt" },
                 eligibility: "unavailable",
               },
             ],
@@ -637,7 +637,7 @@ describe("list verification access grants across MCP tools", () => {
     });
     expect(denied.isError).not.toBe(true);
     expect(parseToolPayload<unknown[]>(denied)).toEqual([
-      { id: view.id, layout: { type: "avt" }, eligibility: "unavailable" },
+      { id: view.id, eligibility: "unavailable" },
     ]);
   });
 
@@ -652,7 +652,8 @@ describe("list verification access grants across MCP tools", () => {
         });
         expect(errorEnvelope(result)).toMatchObject({
           code: "not_found",
-          message: "Not found",
+          message: `No capability with id "${capability}"`,
+          hint: expect.any(String),
         });
       }
     }
@@ -727,7 +728,8 @@ describe("list verification access grants across MCP tools", () => {
         });
         expect(errorEnvelope(described)).toMatchObject({
           code: "not_found",
-          message: "Not found",
+          message: `No capability with id "${capability}"`,
+          hint: expect.any(String),
         });
         for (const validate_only of [false, true]) {
           const invoked = await handleMcpToolCall({
@@ -737,7 +739,8 @@ describe("list verification access grants across MCP tools", () => {
           });
           expect(errorEnvelope(invoked)).toMatchObject({
             code: "not_found",
-            message: "Not found",
+            message: `No capability with id "${capability}"`,
+            hint: expect.any(String),
           });
         }
       }
