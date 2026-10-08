@@ -1,10 +1,12 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
   checkListing,
+  listRunProblems,
   owningPackage,
   parseListingReport,
   type PlaywrightListing,
@@ -195,6 +197,17 @@ describe("owningPackage", () => {
 });
 
 describe("Playwright child reports", () => {
+  test("reports a binary that fails to launch", () => {
+    const run = spawnSync(
+      path.join(tmpdir(), "stella-missing-playwright-binary"),
+      [],
+      { encoding: "utf-8" },
+    );
+    expect(listRunProblems({ config: CONFIG, packageRoot: WEB, run })).toEqual([
+      expect.stringContaining(`${CONFIG}: could not launch playwright:`),
+    ]);
+  });
+
   test.each([null, undefined, ""])(
     "reports unavailable stdout: %s",
     (stdout) => {

@@ -18,7 +18,7 @@
 //   bun scripts/check-playwright-config-scope.ts
 
 import { panic, Result, TaggedError } from "better-result";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -204,6 +204,35 @@ const trackedConfigs = (): string[] => {
     .toSorted();
 };
 
+type ListRunProblemsOptions = {
+  config: string;
+  packageRoot: string;
+  run: Pick<SpawnSyncReturns<string>, "error" | "status" | "stdout" | "stderr">;
+};
+
+// A failed launch (ENOENT, EACCES) leaves stdout and stderr null despite
+// their `string` type, so it must return before either is read.
+export const listRunProblems = ({
+  config,
+  packageRoot,
+  run,
+}: ListRunProblemsOptions): string[] => {
+  if (run.error) {
+    return [`${config}: could not launch playwright: ${run.error.message}`];
+  }
+  const report = parseListingReport(run.stdout);
+  if (report.isErr()) {
+    return [
+      `${config}: ${report.error.message} (exit ${String(run.status)}): ${run.stderr.trim().split("\n").slice(0, 5).join(" | ")}`,
+    ];
+  }
+  const problems = checkListing(config, packageRoot, report.value);
+  if (problems.length === 0 && run.status !== 0) {
+    problems.push(`${config}: playwright --list exited ${String(run.status)}`);
+  }
+  return problems;
+};
+
 const listConfig = (config: string): string[] => {
   const absolute = path.join(REPO_ROOT, config);
   const owner = owningPackage({ file: absolute });
@@ -221,19 +250,7 @@ const listConfig = (config: string): string[] => {
     ["test", "--config", absolute, "--list", "--reporter=json"],
     { cwd: packageRoot, encoding: "utf-8", env, maxBuffer: 64 * 1024 * 1024 },
   );
-  const report = parseListingReport(result.stdout);
-  if (report.isErr()) {
-    return [
-      `${config}: ${report.error.message} (exit ${String(result.status)}): ${result.stderr.trim().split("\n").slice(0, 5).join(" | ")}`,
-    ];
-  }
-  const problems = checkListing(config, packageRoot, report.value);
-  if (problems.length === 0 && result.status !== 0) {
-    problems.push(
-      `${config}: playwright --list exited ${String(result.status)}`,
-    );
-  }
-  return problems;
+  return listRunProblems({ config, packageRoot, run: result });
 };
 
 const main = (): number => {
