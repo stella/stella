@@ -1,20 +1,8 @@
 import { BidiText } from "@stll/ui/bidi-text";
-import { CourtBadge, type CourtBadgeWeight } from "@stll/ui/court-badge";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { cn } from "@stll/ui/utils";
 
 import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";
-
-/**
- * How each tier's chip is drawn: a firm edge at the apex, lighter down the
- * instances. Weight rather than colour, because a chip must not be the only
- * carrier of a fact — and it never is: the court's name stands beside it.
- */
-const TIER_BADGE_WEIGHT = {
-  constitutional: "solid",
-  supreme: "tinted",
-  regional: "outline",
-  other: "dashed",
-} as const satisfies Record<CourtTier, CourtBadgeWeight>;
 
 type CourtTierBadgeProps = {
   abbreviation: string;
@@ -31,11 +19,15 @@ export const CourtTierBadge = ({
   className,
   tier,
 }: CourtTierBadgeProps) => (
-  <CourtBadge
-    abbreviation={abbreviation}
-    className={cn(className)}
-    weight={TIER_BADGE_WEIGHT[tier]}
-  />
+  <span className={cn(className)}>
+    <DocumentIdentityBadge
+      identity={{
+        kind: "decision",
+        courtAbbreviation: abbreviation,
+        courtTier: tier,
+      }}
+    />
+  </span>
 );
 
 type CourtNameProps = {
@@ -62,9 +54,13 @@ export const CourtName = ({
   tier,
 }: CourtNameProps) => (
   <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
-    {abbreviation && tier !== undefined && (
-      <CourtTierBadge abbreviation={abbreviation} tier={tier} />
-    )}
+    <DocumentIdentityBadge
+      identity={{
+        kind: "decision",
+        courtAbbreviation: abbreviation,
+        courtTier: tier,
+      }}
+    />
     <BidiText as="span" className="truncate" title={court}>
       {court}
     </BidiText>

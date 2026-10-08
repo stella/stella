@@ -1,13 +1,13 @@
 import { lazy, Suspense } from "react";
 
-import { ScrollTextIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
+import { statuteDocumentIdentity } from "@/features/statutes/statute-act-number";
 import {
   isStatuteViewPayload,
   STATUTE_VIEW,
@@ -24,9 +24,9 @@ const LazyStatuteInspectorView = lazy(async () => {
 });
 
 const StatuteRailIcon = ({
-  active,
+  tab,
 }: InspectorRailIconProps<StatuteViewPayload>) => (
-  <ScrollTextIcon className={cn("size-3.5", !active && "opacity-70")} />
+  <DocumentIdentityBadge identity={statuteDocumentIdentity(tab.payload.eli)} />
 );
 
 const StatuteView = (props: InspectorViewRenderProps<StatuteViewPayload>) => (
@@ -44,6 +44,7 @@ registerInspectorView<StatuteViewPayload>({
   type: STATUTE_VIEW,
   render: StatuteView,
   railIcon: StatuteRailIcon,
+  railIconInactive: "legible",
   validate: isStatuteViewPayload,
   ariaLabel: (tab) => tab.label,
 });

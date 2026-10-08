@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -33,6 +34,7 @@ import {
   DIRECTION_TITLE,
 } from "@/features/case-law/components/case-viewer/decision-citations";
 import { CitationTreatmentBar } from "@/features/case-law/components/citation-treatment-bar";
+import { decisionDocumentIdentity } from "@/features/case-law/document-identity";
 import {
   decisionCitationSummaryOptions,
   decisionLeadingCitationsOptions,
@@ -269,6 +271,10 @@ const LeadingRow = ({
         onClick={() => setOpen(!open)}
         type="button"
       >
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(row.decision)}
+          title={`${row.decision.caseNumber} · ${row.decision.court}`}
+        />
         <ChevronRightIcon
           className={cn(
             "text-foreground-disabled mt-0.5 size-3 shrink-0 transition-transform",

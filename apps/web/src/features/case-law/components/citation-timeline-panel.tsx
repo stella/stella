@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { PopoverClose, PopoverTitle } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
@@ -43,6 +44,7 @@ import {
 } from "@/features/case-law/components/citation-timeline.logic";
 import type { TimelineColumn } from "@/features/case-law/components/citation-timeline.logic";
 import { CitationTreatmentBar } from "@/features/case-law/components/citation-treatment-bar";
+import { decisionDocumentIdentity } from "@/features/case-law/document-identity";
 import { decisionLeadingCitationsOptions } from "@/features/case-law/queries/citations";
 import type { LeadingCitation } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -293,6 +295,10 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
           />
         }
       >
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(row.decision)}
+          title={`${row.decision.caseNumber} · ${row.decision.court}`}
+        />
         <span className="flex min-w-0 flex-1 flex-col">
           <BidiText
             as="span"

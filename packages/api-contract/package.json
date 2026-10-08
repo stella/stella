@@ -29,6 +29,7 @@
     "./inspector-file-facet": "./src/inspector-file-facet.ts",
     "./sk-court-succession": "./src/sk-court-succession.ts",
     "./sk-court-tiers": "./src/sk-court-tiers.ts",
+    "./court-abbreviations": "./src/court-abbreviations.ts",
     "./case-law-court-year": "./src/case-law-court-year.ts",
     "./case-law-court-tiers": "./src/case-law-court-tiers.ts",
     "./case-law-court-tier-locales": "./src/case-law-court-tier-locales.ts",

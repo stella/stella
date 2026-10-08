@@ -5,11 +5,13 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
+import { decisionDocumentIdentity } from "@/features/case-law/document-identity";
 import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
@@ -47,9 +49,15 @@ export const CitingDecisionItem = ({
         slug: decision.slug,
       }}
     >
-      <BidiText as="span" className="text-foreground text-xs font-medium">
-        {decision.caseNumber}
-      </BidiText>
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(decision)}
+          title={`${decision.caseNumber} · ${decision.court}`}
+        />
+        <BidiText as="span" className="text-foreground text-xs font-medium">
+          {decision.caseNumber}
+        </BidiText>
+      </span>
       <span className="text-muted-foreground text-2xs">
         {decided === null ? decision.court : `${decision.court} · ${decided}`}
       </span>

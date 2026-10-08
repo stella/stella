@@ -13,8 +13,8 @@ import {
 import { normalizeStringList } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { Button } from "@stll/ui/button";
-import { CourtBadge } from "@stll/ui/court-badge";
 import { DatePickerPopover } from "@stll/ui/date-picker-popover";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
 import {
   CaseLawIcon,
@@ -130,21 +130,13 @@ const ResultsTable = ({
               >
                 <TableCell className="py-3 ps-4 max-[480px]:w-full">
                   <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                    {row.courtAbbreviation !== null && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span className="inline-flex min-w-8 shrink-0" />
-                          }
-                        >
-                          <CourtBadge
-                            abbreviation={row.courtAbbreviation}
-                            weight="outline"
-                          />
-                        </TooltipTrigger>
-                        <TooltipPopup>{row.court}</TooltipPopup>
-                      </Tooltip>
-                    )}
+                    <DocumentIdentityBadge
+                      identity={{
+                        kind: "decision",
+                        courtAbbreviation: row.courtAbbreviation,
+                      }}
+                      title={`${row.caseNumber} — ${row.court}`}
+                    />
                     <PreviewCard>
                       <PreviewCardTrigger
                         render={

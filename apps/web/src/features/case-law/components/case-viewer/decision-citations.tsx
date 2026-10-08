@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -21,6 +22,7 @@ import type {
   CitedDecisionAddress,
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
+import { decisionDocumentIdentity } from "@/features/case-law/document-identity";
 import {
   CITATION_DIRECTIONS,
   decisionCitationsInfiniteOptions,
@@ -387,6 +389,10 @@ const CitationRow = ({
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
+      <DocumentIdentityBadge
+        identity={decisionDocumentIdentity(item.decision)}
+        title={`${item.decision.caseNumber} · ${item.decision.court}`}
+      />
       <CitedDecisionLink
         decision={item.decision}
         passage={{

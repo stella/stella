@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react";
 
-import { ScrollTextIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import type {
@@ -13,6 +12,7 @@ import {
   PROVISION_VIEW,
 } from "@/features/statutes/provision-inspector.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
+import { statuteDocumentIdentity } from "@/features/statutes/statute-act-number";
 
 // The reader registers the kind on load so a tab can be opened (and a synced
 // tab recognised) immediately, but the view itself reads case law, diffs
@@ -25,9 +25,9 @@ const LazyProvisionInspectorView = lazy(async () => {
 });
 
 const ProvisionRailIcon = ({
-  active,
+  tab,
 }: InspectorRailIconProps<ProvisionViewPayload>) => (
-  <ScrollTextIcon className={cn("size-3.5", !active && "opacity-70")} />
+  <DocumentIdentityBadge identity={statuteDocumentIdentity(tab.payload.eli)} />
 );
 
 const ProvisionView = (
@@ -44,6 +44,7 @@ registerInspectorView<ProvisionViewPayload>({
   type: PROVISION_VIEW,
   render: ProvisionView,
   railIcon: ProvisionRailIcon,
+  railIconInactive: "legible",
   validate: isProvisionViewPayload,
   ariaLabel: (tab) => tab.label,
 });
