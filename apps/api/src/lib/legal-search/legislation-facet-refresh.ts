@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import type { Transaction } from "@/api/db/root";
 import {
   legislationDocuments,
@@ -8,8 +10,11 @@ import {
   legislationFacetRefreshes,
 } from "@/api/db/schema";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import { publishedLegislationCountryFor } from "@/api/lib/legal-search/legislation-redistribution";
+import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 
 /** The connection the scheduler task opens; the refresh owns its transaction. */
 type RefreshDb = {
@@ -48,10 +53,24 @@ export const legislationFacetRefreshQuery = (db: Pick<Transaction, "select">) =>
       legislationDocuments.documentType,
     );
 
-/** Replace the statute facet snapshot atomically; readers never see it half-written. */
+type RefreshOptions = {
+  signal?: AbortSignal;
+  /** Kinds of act one response carries; a jurisdiction past it is reported. */
+  bucketCap?: number;
+};
+
+/**
+ * Replace the statute facet snapshot atomically; readers never see it
+ * half-written. A jurisdiction holding more kinds of act than one response
+ * carries is reported here, once per refresh, rather than on every read: the
+ * read returns the most common kinds up to the cap.
+ */
 export const refreshLegislationFacetCounts = async (
   db: RefreshDb,
-  signal?: AbortSignal,
+  {
+    signal,
+    bucketCap = LIMITS.legislationDocumentTypeBucketLimit,
+  }: RefreshOptions = {},
 ) =>
   await withAggregateTransaction(db, async (tx) => {
     await tx.delete(legislationFacetCounts).where(sql`true`);
@@ -78,6 +97,35 @@ export const refreshLegislationFacetCounts = async (
     if (!summary) {
       panic("Legislation facet refresh aggregate returned no row.");
     }
+
+    // One row per admitted jurisdiction, a closed list in code: the snapshot
+    // counts nothing else, so more rows than that is a broken invariant.
+    const kinds = await readBounded(
+      tx
+        .select({
+          country: legislationFacetCounts.country,
+          kinds: sql<number>`count(DISTINCT ${legislationFacetCounts.documentType})::int`,
+        })
+        .from(legislationFacetCounts)
+        .groupBy(legislationFacetCounts.country),
+      PUBLIC_LEGISLATION_COUNTRIES.length,
+    );
+    if (kinds.type === "overflow") {
+      return panic(
+        "Legislation facet snapshot holds a jurisdiction that is not admitted.",
+      );
+    }
+    const overflowing = kinds.rows.filter((row) => row.kinds > bucketCap);
+    for (const row of overflowing) {
+      logger.warn("legislation.facets.bucket_overflow", {
+        country: row.country,
+        kinds: row.kinds,
+        cap: bucketCap,
+      });
+    }
     signal?.throwIfAborted();
-    return { buckets: summary.buckets };
+    return {
+      buckets: summary.buckets,
+      overflowing: overflowing.map((row) => row.country),
+    };
   });

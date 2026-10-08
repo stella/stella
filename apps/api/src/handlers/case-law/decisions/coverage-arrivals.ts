@@ -13,11 +13,12 @@ import {
  * What became public for each source in the last seven days, as the
  * scheduler last counted it (`lib/case-law/source-arrivals-refresh.ts`).
  *
- * The request never counts a week of arrivals itself: the window is a heap
- * walk of every decision a source received in it, which during a bulk ingest
- * takes seconds and holds up every public read queued behind it. It reads one
- * stored integer per source instead, a primary key lookup. Source policy is enforced by the reader's row policy on the
- * snapshot, so a withheld source has no row to return.
+ * The request never counts a week of arrivals itself: the window is a walk of
+ * every decision a source received in it, which during a bulk ingest takes
+ * seconds and holds up every public read queued behind it. It reads one stored
+ * integer per source instead, a primary key lookup. Source policy is enforced
+ * by the reader's row policy on the snapshot, so a withheld source has no row
+ * to return.
  *
  * A count older than `SOURCE_ARRIVALS_FRESHNESS_MS` describes a different
  * week, so it is not returned: the source reads as unknown, never as a stale

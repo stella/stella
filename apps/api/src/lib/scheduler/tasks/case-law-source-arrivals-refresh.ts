@@ -8,7 +8,13 @@ import { recordSystemAudit } from "@/api/lib/system-audit/record";
 export const REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK =
   "caseLaw.refreshSourceArrivals" as const;
 
-const REFRESH_STATEMENT_TIMEOUT_MS = 10 * 60_000;
+/**
+ * The recount runs in one transaction over the decision table's newest rows,
+ * so its snapshot holds back vacuum there for as long as it runs. Two minutes
+ * bounds that; a recount that cannot finish in it fails, and the stored rows
+ * age into "unknown" rather than holding vacuum back during a bulk ingest.
+ */
+const REFRESH_STATEMENT_TIMEOUT_MS = 2 * 60_000;
 const REFRESH_LOCK_TIMEOUT_MS = 10_000;
 
 export const refreshCaseLawSourceArrivalsTask: SchedulerTask = async ({
@@ -23,6 +29,7 @@ export const refreshCaseLawSourceArrivalsTask: SchedulerTask = async ({
   }
   // The claim instant, not the slot: the stored week ends when it was counted.
   const now = dueAt.claimedAtDate();
+  const started = performance.now();
   const { sources } = await withLongRunningConnection(
     {
       lockTimeout: REFRESH_LOCK_TIMEOUT_MS,
@@ -31,6 +38,7 @@ export const refreshCaseLawSourceArrivalsTask: SchedulerTask = async ({
     },
     async ({ db }) => await refreshCaseLawSourceArrivals(db, { now, signal }),
   );
+  const durationMs = Math.round(performance.now() - started);
   await recordSystemAudit(
     schedulerDb,
     "system:case-law-source-arrivals-refresh",
@@ -38,5 +46,6 @@ export const refreshCaseLawSourceArrivalsTask: SchedulerTask = async ({
   );
   logger.info("scheduler.case_law_source_arrivals_refreshed", {
     "caseLawSourceArrivals.sources": sources,
+    "caseLawSourceArrivals.durationMs": durationMs,
   });
 };

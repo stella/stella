@@ -25,7 +25,8 @@ import {
 } from "@/api/handlers/legislation/by-eli";
 import {
   buildLegislationFacetsQuery,
-  readLegislationFacets,
+  LEGISLATION_FACET_STALE_AFTER_MS,
+  readLegislationFacets as readLegislationFacetsResult,
   readLegislationFacetsHandler,
 } from "@/api/handlers/legislation/facets";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
@@ -53,10 +54,16 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+
+/** The facets read, failing the test on an error result. */
+const readLegislationFacets = async (
+  ...args: Parameters<typeof readLegislationFacetsResult>
+) => (await readLegislationFacetsResult(...args)).unwrap();
 
 // Public statute reads over a fixture whose current version is neither the
 // newest row nor the newest window: one superseded version, one in force and
@@ -1230,6 +1237,7 @@ describe("statute facets", () => {
       // A refresh replaces the snapshot rather than adding to it.
       expect(await refreshLegislationFacetCounts(refreshDb)).toEqual({
         buckets,
+        overflowing: [],
       });
       expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
 
@@ -1296,6 +1304,121 @@ describe("statute facets", () => {
     }
     // With no refresh on record the live aggregation answers again.
     expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
+  });
+
+  test("an aged snapshot is still served and reported stale", async () => {
+    if (client === undefined) {
+      throw new Error("the fixture database is not open");
+    }
+    const owner = drizzle({ client });
+    // SAFETY: the PGlite handle implements the transaction surface the
+    // scheduled refresh uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
+    const refreshDb = owner as unknown as Parameters<
+      typeof refreshLegislationFacetCounts
+    >[0];
+    const logs = installRecordingLogger();
+    try {
+      await refreshLegislationFacetCounts(refreshDb);
+      const [marker] = await owner
+        .select({ refreshedAt: legislationFacetRefreshes.refreshedAt })
+        .from(legislationFacetRefreshes);
+      const refreshedAt =
+        marker?.refreshedAt ?? panic("the refresh wrote no marker");
+      const fresh = await readLegislationFacets(
+        legislationDb,
+        "CZE",
+        refreshedAt,
+      );
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) => message === "legislation.facets.snapshot_stale",
+          ),
+      ).toEqual([]);
+
+      // One millisecond past the stale window: served unchanged, and said so.
+      const aged = new Date(
+        refreshedAt.getTime() + LEGISLATION_FACET_STALE_AFTER_MS + 1,
+      );
+      expect(await readLegislationFacets(legislationDb, "CZE", aged)).toEqual(
+        fresh,
+      );
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) => message === "legislation.facets.snapshot_stale",
+          ),
+      ).toMatchObject([
+        {
+          attributes: {
+            country: "CZE",
+            "snapshot.ageMs": LEGISLATION_FACET_STALE_AFTER_MS + 1,
+          },
+        },
+      ]);
+    } finally {
+      logs.restore();
+      await owner.delete(legislationFacetCounts).where(sql`true`);
+      await owner.delete(legislationFacetRefreshes).where(sql`true`);
+    }
+  });
+
+  test("a jurisdiction past the bucket cap is reported once, by the refresh", async () => {
+    if (client === undefined) {
+      throw new Error("the fixture database is not open");
+    }
+    const owner = drizzle({ client });
+    // SAFETY: the PGlite handle implements the transaction surface the
+    // scheduled refresh uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
+    const refreshDb = owner as unknown as Parameters<
+      typeof refreshLegislationFacetCounts
+    >[0];
+    const logs = installRecordingLogger();
+    try {
+      // The fixture holds two kinds of act in CZE; a cap of one overflows it.
+      const outcome = await refreshLegislationFacetCounts(refreshDb, {
+        bucketCap: 1,
+      });
+      expect(outcome.overflowing).toEqual(["CZE"]);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) => message === "legislation.facets.bucket_overflow",
+          ),
+      ).toMatchObject([{ attributes: { country: "CZE", kinds: 2, cap: 1 } }]);
+
+      // The read reports nothing and stays bounded: it serves the most common
+      // kinds up to the response's own cap.
+      const before = logs.records.length;
+      const facets = await readLegislationFacets(legislationDb, "CZE");
+      expect(facets.documentType.map(({ value }) => value)).toEqual([
+        "act",
+        "code",
+      ]);
+      expect(logs.records.slice(before)).toEqual([]);
+    } finally {
+      logs.restore();
+      await owner.delete(legislationFacetCounts).where(sql`true`);
+      await owner.delete(legislationFacetRefreshes).where(sql`true`);
+    }
+  });
+
+  test("before any refresh the live aggregation is cached, not rerun per request", async () => {
+    let reads = 0;
+    const countingDb: LegislationReadDb = async (read) => {
+      reads += 1;
+      return await legislationDb(read);
+    };
+    const first = await readLegislationFacets(countingDb, "CZE");
+    const afterFirst = reads;
+    expect(await readLegislationFacets(countingDb, "CZE")).toEqual(first);
+    // The second request reads only the refresh marker and the source policy.
+    expect(reads - afterFirst).toBe(1);
   });
 
   test("each kind of act offered lists exactly as many works as it counts", async () => {

@@ -26,7 +26,7 @@ export const refreshLegislationFacetsTask: SchedulerTask = async ({
       statementTimeout: REFRESH_STATEMENT_TIMEOUT_MS,
       signal,
     },
-    async ({ db }) => await refreshLegislationFacetCounts(db, signal),
+    async ({ db }) => await refreshLegislationFacetCounts(db, { signal }),
   );
   await recordSystemAudit(schedulerDb, "system:legislation-facet-refresh", {
     subject: runId,

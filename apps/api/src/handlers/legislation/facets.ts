@@ -15,7 +15,10 @@ import {
   LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT,
   projectLegislationFacets,
 } from "@/api/handlers/legislation/catalog-response";
+import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
+import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
+import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import {
   publishedLegislationDocument,
@@ -97,40 +100,102 @@ export const legislationFacetSnapshotQuery = (
  * and a Work whose kind changed between wordings counts once, under the kind
  * it is listed as.
  *
- * The answer comes from the snapshot the scheduler refreshes every hour. Only
- * a database that has never been refreshed (a fresh install, a fixture) pays
- * the live aggregation, which counts the same thing straight from the corpus.
+ * The answer comes from the snapshot the scheduler refreshes every hour (the
+ * first refresh runs as soon as the job is registered). Only a database that
+ * has never been refreshed pays the live aggregation, which counts the same
+ * thing straight from the corpus and is cached briefly as a backstop.
+ *
+ * A snapshot older than `LEGISLATION_FACET_STALE_AFTER_MS` is still served,
+ * since the counts move slowly, but reported, so a refresh that keeps failing
+ * is visible rather than silent.
  */
 export const readLegislationFacets = async (
   legislationDb: LegislationReadDb,
   country: string,
-): Promise<LegislationFacets> =>
-  await legislationDb(async (tx) => {
+  now: Date = new Date(),
+): Promise<Result<LegislationFacets, LegislationFacetsError>> => {
+  const read = await legislationDb(async (tx) => {
     // The refresh marker, not the buckets: a reader that can see no bucket
     // (every source withheld) still has a snapshot, and its answer is empty.
-    const refreshed = await tx
+    const [refreshed] = await tx
       .select({ refreshedAt: legislationFacetRefreshes.refreshedAt })
       .from(legislationFacetRefreshes)
       .limit(1);
-    if (refreshed.length === 0) {
-      return { documentType: await buildLegislationFacetsQuery(tx, country) };
+    if (refreshed === undefined) {
+      return {
+        type: "unrefreshed",
+        excludedSourceIds:
+          await readNonRedistributableLegislationSourceIdsQuery(tx),
+      } as const;
     }
-    const buckets = await legislationFacetSnapshotQuery(
-      tx,
-      country,
-      LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT + 1,
-    );
-    if (buckets.length > LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT) {
-      // More kinds of act than the response can carry: no options beats a
-      // silently truncated list that reads as complete.
-      logger.warn("legislation.facets.bucket_overflow", {
+    return {
+      type: "snapshot",
+      refreshedAt: refreshed.refreshedAt,
+      documentType: await legislationFacetSnapshotQuery(
+        tx,
         country,
-        cap: LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT,
-      });
-      return { documentType: [] };
-    }
-    return { documentType: buckets };
+        LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT,
+      ),
+    } as const;
   });
+
+  if (read.type === "unrefreshed") {
+    const live = await liveLegislationFacets({
+      legislationDb,
+      country,
+      excludedSourceIds: read.excludedSourceIds,
+    });
+    return Result.isError(live)
+      ? live
+      : Result.ok({ documentType: live.value });
+  }
+
+  const ageMs = now.getTime() - read.refreshedAt.getTime();
+  if (ageMs > LEGISLATION_FACET_STALE_AFTER_MS) {
+    logger.warn("legislation.facets.snapshot_stale", {
+      country,
+      "snapshot.ageMs": ageMs,
+    });
+  }
+  return Result.ok({ documentType: read.documentType });
+};
+
+/** Three missed hourly refreshes: past this the snapshot is reported stale. */
+export const LEGISLATION_FACET_STALE_AFTER_MS =
+  3 * LEGISLATION_FACET_REFRESH_INTERVAL_MS;
+
+const LIVE_FACETS_CACHE_TTL_MS = 5 * 60 * 1000;
+const LIVE_FACETS_CACHE_MAX_ENTRIES = 16;
+
+type LiveFacetsLoad = {
+  legislationDb: LegislationReadDb;
+  country: string;
+  excludedSourceIds: readonly string[];
+};
+
+/**
+ * The backstop before the first refresh: the live aggregation, cached per
+ * process for a few minutes. Source policy is part of the key, so a
+ * revocation changes the key instead of waiting out the window.
+ */
+const liveLegislationFacets = createTtlResultCache({
+  load: async ({ legislationDb, country }: LiveFacetsLoad) =>
+    await Result.tryPromise({
+      try: async () =>
+        await legislationDb(
+          async (tx) => await buildLegislationFacetsQuery(tx, country),
+        ),
+      catch: (cause) =>
+        new LegislationFacetsError({
+          message: "Legislation facets could not be read",
+          cause,
+        }),
+    }),
+  key: ({ country, excludedSourceIds }: LiveFacetsLoad) =>
+    `${country}:${excludedSourceIds.toSorted().join(",")}`,
+  ttlMs: LIVE_FACETS_CACHE_TTL_MS,
+  maxEntries: LIVE_FACETS_CACHE_MAX_ENTRIES,
+});
 
 /**
  * The live aggregation: a scan of the jurisdiction. Served only before the
@@ -189,11 +254,12 @@ export const readLegislationFacetsHandler = async (
         cause,
       }),
   });
-  if (Result.isError(result)) {
+  const facets = Result.isError(result) ? result : result.value;
+  if (Result.isError(facets)) {
     logger.warn("legislation.facets.unavailable", {
-      "error.type": errorTag(result.error),
+      "error.type": errorTag(facets.error),
     });
     return NO_FACETS;
   }
-  return projectLegislationFacets(result.value);
+  return projectLegislationFacets(facets.value);
 };

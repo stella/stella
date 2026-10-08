@@ -15,20 +15,28 @@ type RefreshDb = {
 };
 
 /**
- * One source's published arrivals since `since`.
+ * One source's published arrivals in `[since, until)`.
  *
  * `case_law_decisions_source_arrivals_idx` is `(source_id, created_at)`,
- * partial on the publication gate, so the window is an index range entered at
- * its lower bound and counted off the index. It still visits the heap for
- * every page not yet marked all-visible, and a week of bulk ingest is exactly
- * the freshly written, not yet vacuumed range: seconds on a busy week, which
- * is why the count runs on the scheduler and never on a public request.
+ * partial on the publication gate, so the window is an index range and is
+ * counted off the index. It still visits the heap for every page not yet
+ * marked all-visible, and a week of bulk ingest is exactly the freshly
+ * written, not yet vacuumed range: seconds on a busy week, which is why the
+ * count runs on the scheduler and never on a public request. The upper bound
+ * is the stored `counted_at`, so the week a row states is the week it counted.
  */
-export const sourceArrivalsCountSql = (since: Date) => sql`
+export const sourceArrivalsCountSql = ({
+  since,
+  until,
+}: {
+  since: Date;
+  until: Date;
+}) => sql`
   SELECT count(*)::integer AS added_last_week
   FROM case_law_decisions d
   WHERE d.source_id = s.id
     AND d.created_at >= ${since.toISOString()}::timestamptz
+    AND d.created_at < ${until.toISOString()}::timestamptz
     AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
 `;
 
@@ -36,9 +44,10 @@ export const sourceArrivalsCountSql = (since: Date) => sql`
 export const sourceArrivalsRefreshQuery = (now: Date) => sql`
   SELECT s.id AS source_id, recent.added_last_week
   FROM case_law_sources s
-  CROSS JOIN LATERAL (${sourceArrivalsCountSql(
-    new Date(now.getTime() - SOURCE_ARRIVALS_WINDOW_MS),
-  )}) AS recent
+  CROSS JOIN LATERAL (${sourceArrivalsCountSql({
+    since: new Date(now.getTime() - SOURCE_ARRIVALS_WINDOW_MS),
+    until: now,
+  })}) AS recent
 `;
 
 /**

@@ -573,6 +573,29 @@ test(
 );
 
 test(
+  "a stored week ends at its own count: a later arrival is not in it",
+  async () => {
+    // Counted ninety minutes before NOW: the row two hours old is in the
+    // week, the row one hour old arrived after the count and is not.
+    const earlier = new Date(NOW.getTime() - 90 * 60_000);
+    try {
+      await refreshCaseLawSourceArrivals(refreshDb, { now: earlier });
+      const arrivals = await readAsReader(
+        async (tx) =>
+          await readCaseLawArrivalsQuery(tx, {
+            sourceIds: [czSourceId],
+            now: earlier,
+          }),
+      );
+      expect(arrivals.get(String(czSourceId))?.addedLastWeek).toBe(1);
+    } finally {
+      await refreshCaseLawSourceArrivals(refreshDb, { now: NOW });
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
   "a refresh replaces the whole snapshot and recounts the window from its own instant",
   async () => {
     // Ninety minutes before the week ends, only the row an hour old is

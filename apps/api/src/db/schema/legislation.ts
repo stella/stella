@@ -9,7 +9,7 @@ import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legis
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
-import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
 import {
   legislationVersionRef,
   notWithdrawn,
@@ -614,7 +614,7 @@ export const legislationFacetCounts = p.pgTable(
         SELECT 1
         FROM ${legislationSources} AS facet_source
         WHERE facet_source.id = ${t.sourceId}
-          AND ${redistributableCaseLawSourceFor(sql`facet_source.descriptor`)}
+          AND ${redistributableLegislationSourceFor(sql`facet_source.descriptor`)}
       )`,
     }),
   ],

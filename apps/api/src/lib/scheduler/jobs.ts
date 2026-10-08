@@ -11,6 +11,7 @@ import { envBase } from "@/api/env-base";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
+import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
@@ -81,7 +82,22 @@ type SchedulerJobDefinition = {
   payload?: SchedulerPayload | null;
   payloadUpdate?: "preserve" | "replace";
   enabled?: boolean;
+  /**
+   * When a job's row is first created. `after-interval` (the default) waits
+   * one full interval; `on-registration` is due at once, for a job whose
+   * output readers depend on (a snapshot) and which must not leave a fresh
+   * deployment without it for a whole interval. Either way the runner's claim
+   * decides which replica runs it, so only one does.
+   */
+  firstRun?: "after-interval" | "on-registration";
 };
+
+/** The `nextRunAt` a job row is created with. */
+export const initialNextRunAt = (
+  { firstRun = "after-interval", schedule }: SchedulerJobDefinition,
+  now: Date,
+): Date =>
+  firstRun === "on-registration" ? now : computeNextRunAt(schedule, now);
 
 export const ensureSchedulerJob = async (
   definition: SchedulerJobDefinition,
@@ -90,7 +106,10 @@ export const ensureSchedulerJob = async (
 };
 
 export const upsertSchedulerJob = async (
-  {
+  definition: SchedulerJobDefinition,
+  db: SchedulerDb,
+): Promise<void> => {
+  const {
     description,
     enabled = true,
     id,
@@ -98,10 +117,9 @@ export const upsertSchedulerJob = async (
     payloadUpdate = "replace",
     schedule,
     task,
-  }: SchedulerJobDefinition,
-  db: SchedulerDb,
-): Promise<void> => {
-  const nextRunAt = computeNextRunAt(schedule);
+  } = definition;
+  const now = new Date();
+  const nextRunAt = computeNextRunAt(schedule, now);
   const [existingJob] = await db
     .select({
       schedule: schedulerJobs.schedule,
@@ -121,7 +139,7 @@ export const upsertSchedulerJob = async (
       description,
       enabled,
       id,
-      nextRunAt,
+      nextRunAt: initialNextRunAt(definition, now),
       payload,
       schedule,
       task,
@@ -312,12 +330,17 @@ export const DECLARED_SCHEDULER_JOBS = [
     description: "Recount the statute facets the public listing offers",
     id: "legislation.refreshFacetCounts.hourly",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    firstRun: "on-registration",
+    schedule: {
+      type: "interval",
+      everyMs: LEGISLATION_FACET_REFRESH_INTERVAL_MS,
+    },
     task: REFRESH_LEGISLATION_FACETS_TASK,
   },
   {
     description: "Recount each case-law source's arrivals of the last week",
     id: "caseLaw.refreshSourceArrivals.threeHourly",
+    firstRun: "on-registration",
     mode: "recurring",
     schedule: {
       type: "interval",

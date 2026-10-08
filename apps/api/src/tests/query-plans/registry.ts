@@ -94,7 +94,7 @@ if (!Array.isArray(shardConditions)) {
 const sampleCountry =
   publicCaseLawCountry("CZE") ?? panic("The query-plan country must be public");
 const citationPageSize = 10;
-/** A bulk-ingest week of the largest source, the worst the recount visits. */
+/** A generous bound for a heavy ingest week. */
 const SOURCE_ARRIVALS_REFRESH_HEAP_FETCH_BUDGET = 1_000_000;
 
 /** A raw `$1` statement with its one parameter bound, as a Drizzle query. */
