@@ -43,6 +43,7 @@ const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 const providerBody = t.Object({
   provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
   apiKey: t.Optional(t.String({ minLength: 1 })),
+  anthropicWorkspaceId: t.Optional(t.String({ maxLength: 256 })),
   region: t.Optional(
     t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
   ),
@@ -174,7 +175,7 @@ const updateAIConfig = createSafeRootHandler(
 
     const newKeyProviders = new Set<BYOKProvider>();
     for (const provider of body.providers) {
-      if (provider.apiKey) {
+      if (provider.apiKey || provider.anthropicWorkspaceId !== undefined) {
         newKeyProviders.add(provider.provider);
       }
     }
@@ -207,10 +208,15 @@ const updateAIConfig = createSafeRootHandler(
       return [`${providerConfig.provider}: ${result.error}`];
     });
 
+    const setupErrorCode = validationResults
+      .flatMap((result) =>
+        !result.valid && result.code !== undefined ? [result.code] : [],
+      )
+      .at(0);
     if (failures.length > 0) {
       return Result.err(
         new HandlerError({
-          code: AI_CONFIG_ERROR_CODE.providerValidationFailed,
+          code: setupErrorCode ?? AI_CONFIG_ERROR_CODE.providerValidationFailed,
           status: 400,
           message: failures.join("; "),
         }),
@@ -304,6 +310,7 @@ type ValidationResult = ProviderProbeResult;
 type ProviderConfigInput = {
   provider: BYOKProvider;
   apiKey?: string | undefined;
+  anthropicWorkspaceId?: string | undefined;
   region?: DataRegion | undefined;
 };
 
@@ -370,6 +377,29 @@ const resolveProviderConfigs = (
       };
     }
 
+    if (providerInput.provider === "anthropic") {
+      const existingAnthropicWorkspaceId =
+        existingProvider?.provider === "anthropic"
+          ? existingProvider.anthropicWorkspaceId
+          : undefined;
+      const anthropicWorkspaceId =
+        providerInput.anthropicWorkspaceId === undefined
+          ? existingAnthropicWorkspaceId
+          : providerInput.anthropicWorkspaceId.trim() || undefined;
+      resolvedProviders.push({
+        provider: "anthropic",
+        apiKey,
+        region,
+        anthropicWorkspaceId,
+      });
+      continue;
+    }
+    if (providerInput.anthropicWorkspaceId !== undefined) {
+      return {
+        valid: false,
+        error: "Workspace ID is supported only for Anthropic",
+      };
+    }
     resolvedProviders.push({
       provider: providerInput.provider,
       apiKey,
@@ -519,6 +549,10 @@ const validateProviderKey = async (
     try: async () =>
       await probeProvider({
         apiKey: providerConfig.apiKey,
+        anthropicWorkspaceId:
+          providerConfig.provider === "anthropic"
+            ? providerConfig.anthropicWorkspaceId
+            : undefined,
         permit,
         provider: providerConfig.provider,
         timeoutMs: SETTINGS_PROBE_TIMEOUT_MS,

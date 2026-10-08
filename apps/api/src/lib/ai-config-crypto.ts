@@ -20,7 +20,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 
-const standardProviderSchema = v.picklist(TANSTACK_AI_PROVIDERS);
+const standardProviderSchema = v.picklist(
+  TANSTACK_AI_PROVIDERS.filter((provider) => provider !== "anthropic"),
+);
 
 const modelSelectionProviderValues = [
   ...TANSTACK_AI_PROVIDERS,
@@ -34,6 +36,14 @@ const modelSelectionSchema = v.strictObject({
 });
 
 const providerSchema = v.variant("provider", [
+  v.strictObject({
+    provider: v.literal("anthropic"),
+    apiKey: v.pipe(v.string(), v.minLength(1)),
+    anthropicWorkspaceId: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    ),
+    region: v.optional(v.picklist(["eu", "global", "ch"])),
+  }),
   v.strictObject({
     provider: standardProviderSchema,
     apiKey: v.pipe(v.string(), v.minLength(1)),
@@ -104,15 +114,14 @@ export const decryptAIConfig = async (
   return normalizeOrgAIConfig(v.parse(orgAIConfigSchema, parsed));
 };
 
-/**
- * Mask an API key for safe display. Reveals a prefix of at most 8 chars
- * (enough to identify which key a long, real credential is) but never more
- * than a quarter of the key's length, so a short or misconfigured key can
- * never expose a meaningful portion of the secret. A genuine 32+ char key
- * shows its 8-char prefix; a 16-char key shows only 4 (a quarter, not the
- * half the earlier `floor(length / 2)` rule would have leaked).
- */
+/** Reveal only a recognized provider prefix and the final four characters. */
 export const maskApiKey = (key: string): string => {
-  const visibleChars = Math.min(8, Math.floor(key.length / 4));
-  return `${key.slice(0, visibleChars)}${"*".repeat(16)}`;
+  if (key.length < 16) {
+    return "****";
+  }
+  const prefix =
+    /^(sk-ant-(?:api\d+|usr)-|sk-or-v1-|sk-proj-|sk-svcacct-|sk-|AIza|ABSK|hf_)/u
+      .exec(key)
+      ?.at(0) ?? "";
+  return `${prefix}****${key.slice(-4)}`;
 };

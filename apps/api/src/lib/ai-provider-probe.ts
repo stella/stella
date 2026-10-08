@@ -7,7 +7,10 @@
 
 import { Result } from "better-result";
 
+import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
+
 import { env } from "@/api/env";
+import { anthropicWorkspaceHeaders } from "@/api/lib/anthropic-config";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
@@ -15,6 +18,7 @@ import {
 } from "@/api/lib/azure-foundry";
 import { PROVIDER_DATA_POLICY } from "@/api/lib/chat/provider-data-policy";
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
+import { identifyProviderSetupError } from "@/api/lib/provider-error-catalogue";
 import type {
   SafeOutboundFetchResponse,
   SafeOutboundFetchBody,
@@ -49,7 +53,7 @@ export type ProviderProbeValue = (typeof PROVIDER_PROBE_VALUES)[number];
 
 export type ProviderProbeResult =
   | { valid: true }
-  | { valid: false; error: string };
+  | { valid: false; error: string; code?: ProviderSetupErrorCode };
 
 type ProbeTarget = {
   url: URL;
@@ -61,9 +65,8 @@ const PROBE_TARGETS: Record<
   (apiKey: string) => ProbeTarget
 > = {
   google: (apiKey) => ({
-    url: new URL(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
-    ),
+    url: new URL("https://generativelanguage.googleapis.com/v1beta/models"),
+    headers: { "x-goog-api-key": apiKey },
   }),
   anthropic: (apiKey) => ({
     url: new URL("https://api.anthropic.com/v1/models"),
@@ -145,6 +148,7 @@ export type ProbeProviderOptions = {
   apiKey: string;
   permit: ThirdPartyOutboundPermit;
   provider: ProviderProbeValue;
+  anthropicWorkspaceId?: string;
   endpoint?: string;
   apiVersion?: string;
   expectedAzureDeployments?: readonly string[];
@@ -157,6 +161,7 @@ export const probeProvider = async ({
   provider,
   permit,
   endpoint,
+  anthropicWorkspaceId,
   apiVersion,
   expectedAzureDeployments,
   timeoutMs = DEFAULT_VALIDATION_TIMEOUT_MS,
@@ -185,6 +190,12 @@ export const probeProvider = async ({
   }
 
   const target = PROBE_TARGETS[provider](apiKey);
+  if (provider === "anthropic") {
+    target.headers = {
+      ...target.headers,
+      ...anthropicWorkspaceHeaders(anthropicWorkspaceId),
+    };
+  }
   const response = await fetchBytes({
     permit,
     url: target.url,
@@ -203,9 +214,15 @@ export const probeProvider = async ({
   }
 
   const detail = extractDetail(response.value);
+  const error = parseJsonBody(response.value)?.["error"];
+  const code = identifyProviderSetupError({
+    provider,
+    error: isRecord(error) ? error : undefined,
+  });
   const label = PROVIDER_LABELS[provider];
   return {
     valid: false,
+    ...(code === undefined ? {} : { code }),
     error: detail
       ? `${label} rejected the key (HTTP ${response.value.status}): ${detail}`
       : `${label} rejected the key (HTTP ${response.value.status})`,

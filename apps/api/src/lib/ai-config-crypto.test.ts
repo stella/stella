@@ -17,41 +17,19 @@ const { encryptContent } = await import("@/api/lib/content-encryption");
 const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
 
 describe("maskApiKey", () => {
-  // Rule: reveal min(8, floor(length / 4)) leading chars. A long, real key
-  // exposes an 8-char identifying prefix; short/misconfigured keys never
-  // expose more than a quarter of their length.
-  test("reveals an 8-char prefix once the key is at least 32 chars", () => {
-    // 35 chars: floor(35 / 4) = 8, so the whole 8-char cap is revealed.
-    const masked = maskApiKey("sk-1234567890abcdefghijklmnopqrstuv");
-
-    expect(masked).toBe(`sk-12345${"*".repeat(16)}`);
+  test("retains only provider prefix and last four", () => {
+    expect(maskApiKey("sk-or-v1-1234567890abcdefghijklmnop1234")).toBe(
+      "sk-or-v1-****1234",
+    );
+    expect(maskApiKey("sk-ant-usr-1234567890abcdefghijklmnop5678")).toBe(
+      "sk-ant-usr-****5678",
+    );
+    expect(maskApiKey("0123456789abcdef")).toBe("****cdef");
   });
-
-  test("reveals only a quarter of a mid-length key, never half", () => {
-    // A 16-char key exposes 4 chars (floor(16 / 4)); the old floor(length / 2)
-    // rule would have leaked 8 — half the secret.
-    expect(maskApiKey("0123456789abcdef")).toBe(`0123${"*".repeat(16)}`);
-  });
-
-  test("reveals a quarter of a short key", () => {
-    // 8 chars -> floor(8 / 4) = 2 visible.
-    expect(maskApiKey("abcd1234")).toBe(`ab${"*".repeat(16)}`);
-  });
-
-  test("reveals no chars for keys shorter than 4", () => {
-    expect(maskApiKey("abc")).toBe("*".repeat(16));
-    expect(maskApiKey("ab")).toBe("*".repeat(16));
-    expect(maskApiKey("x")).toBe("*".repeat(16));
-  });
-
-  test("returns only asterisks for an empty string", () => {
-    expect(maskApiKey("")).toBe("*".repeat(16));
-  });
-
-  test("caps visible chars at 8 for very long keys", () => {
-    const masked = maskApiKey("a".repeat(200));
-
-    expect(masked).toBe(`${"a".repeat(8)}${"*".repeat(16)}`);
+  test("short credentials reveal nothing", () => {
+    for (const key of ["", "x", "abcd1234"]) {
+      expect(maskApiKey(key)).toBe("****");
+    }
   });
 });
 
@@ -323,5 +301,36 @@ describe("decision model in the stored blob", () => {
     const config = await decryptAIConfig(organizationId, ciphertext, iv);
 
     expect(config.decision).toEqual(decision);
+  });
+  test("round-trips an Anthropic workspace id alongside its key", async () => {
+    const anthropicProviders = [
+      {
+        provider: "anthropic",
+        apiKey: "sk-ant-usr-fixture",
+        anthropicWorkspaceId: "wrk_fixture",
+      },
+    ] satisfies OrgAIConfig["providers"];
+    const { ciphertext, iv } = await encryptAIConfig(organizationId, {
+      providers: anthropicProviders,
+      overrideModels,
+      decision: null,
+    });
+    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+    expect(config.providers).toEqual([
+      { ...anthropicProviders[0], region: "global" },
+    ]);
+    expect(
+      isOrgAIConfig({
+        providers: [
+          {
+            provider: "openai",
+            apiKey: "sk-fixture",
+            anthropicWorkspaceId: "wrk_fixture",
+          },
+        ],
+        overrideModels,
+        decision: null,
+      }),
+    ).toBe(false);
   });
 });

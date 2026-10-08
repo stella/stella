@@ -105,10 +105,18 @@ export type OrgDecisionModelConfig = {
 };
 
 export type StandardOrgAIProviderConfig = {
-  provider: Exclude<AIProvider, "azure_foundry" | "huggingface">;
+  provider: Exclude<AIProvider, "azure_foundry" | "huggingface" | "anthropic">;
   /** Decrypted API key. */
   apiKey: string;
   /** Stored endpoint selection; validated against the provider on save. */
+  region?: DataRegion | undefined;
+};
+
+export type AnthropicOrgAIProviderConfig = {
+  provider: "anthropic";
+  apiKey: string;
+  /** Stored in the encrypted configuration alongside the key. */
+  anthropicWorkspaceId?: string | undefined;
   region?: DataRegion | undefined;
 };
 
@@ -134,6 +142,7 @@ export type HuggingFaceOrgAIProviderConfig = {
 
 export type OrgAIProviderConfig =
   | StandardOrgAIProviderConfig
+  | AnthropicOrgAIProviderConfig
   | AzureFoundryOrgAIProviderConfig
   | HuggingFaceOrgAIProviderConfig;
 

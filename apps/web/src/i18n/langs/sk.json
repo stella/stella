@@ -1920,6 +1920,7 @@
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
+    "unsavedChanges": "Neuložené zmeny",
     "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
@@ -3721,7 +3722,6 @@
         "fallback": "Náhradné",
         "notAcceptable": "Neprijateľné"
       },
-      "unsavedChanges": "Neuložené zmeny",
       "untitledPosition": "Pozícia bez názvu",
       "updated": "Playbook aktualizovaný",
       "updatedAt": "Aktualizované {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Pridať poskytovateľa",
       "addProviderFirst": "Najprv pridajte poskytovateľa",
+      "anthropicWorkspaceId": "ID pracovného priestoru",
+      "anthropicWorkspaceRequired": "Tento kľúč Anthropic vyžaduje pracovný priestor. Zadajte jeho ID z konzoly Anthropic a znova uložte.",
+      "anthropicWorkspaces": "Otvoriť pracovné priestory Anthropic",
       "apiKey": "API kľúč",
       "apiKeyConfiguredPlaceholder": "Nastavené: {key}. Zadaním nového kľúča ho nahradíte.",
       "apiKeyPlaceholder": "Zadajte svoj API kľúč",
@@ -4040,6 +4043,7 @@
       "editProviders": "Upraviť poskytovateľov",
       "endpoint": "Endpoint",
       "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
+      "invalidKeyFormat": "Zadajte platný API kľúč pre {provider}.",
       "keepSavedKey": "Ponechať uložený kľúč",
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Uvažovanie"
       },
+      "savedVerified": "Uložené · overené",
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
       "selectedProvider": "{provider}",

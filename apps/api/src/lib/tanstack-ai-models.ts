@@ -50,6 +50,7 @@ import {
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
+import { anthropicClientOptions } from "@/api/lib/anthropic-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AIDataClass,
@@ -338,6 +339,7 @@ type ModelOverride = {
 type TanStackModelFactoryOptions = {
   provider: AIProvider;
   region?: DataRegion | undefined;
+  anthropicWorkspaceId?: string | undefined;
 } & (
   | { apiKey: string; dataClass: AIDataClass }
   | ({
@@ -565,17 +567,28 @@ const createExtendedGeminiAdapter = (
   return gemini(modelId, apiKey);
 };
 
-const createExtendedAnthropicAdapter = (
-  modelId: string,
-  apiKey: string,
-): AnyTextAdapter => {
+type AnthropicAdapterOptions = {
+  modelId: string;
+  apiKey: string;
+  anthropicWorkspaceId: string | undefined;
+};
+
+const createExtendedAnthropicAdapter = ({
+  modelId,
+  apiKey,
+  anthropicWorkspaceId,
+}: AnthropicAdapterOptions): AnyTextAdapter => {
   const anthropic = extendAdapter(createAnthropicChat, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return anthropic(modelId, apiKey);
+  return anthropic(
+    modelId,
+    apiKey,
+    anthropicClientOptions(anthropicWorkspaceId),
+  );
 };
 
 const createExtendedOpenAIAdapter = (
@@ -884,7 +897,12 @@ const createProviderTextAdapterFactory = (
         apiKey ?? env.ANTHROPIC_API_KEY,
         "ANTHROPIC_API_KEY",
       );
-      return (modelId) => createExtendedAnthropicAdapter(modelId, key);
+      return (modelId) =>
+        createExtendedAnthropicAdapter({
+          modelId,
+          apiKey: key,
+          anthropicWorkspaceId: options.anthropicWorkspaceId,
+        });
     }
     case "bedrock": {
       const key = apiKey ?? env.BEDROCK_API_KEY;
@@ -1352,10 +1370,13 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
     case "huggingface":
       hasher.update(config.baseURL);
       break;
+    case "anthropic":
+      hasher.update(config.anthropicWorkspaceId ?? "");
+      hasher.update(providerRegion(config));
+      break;
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
@@ -1363,9 +1384,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
       break;
     default: {
       config satisfies never;
-      return panic(
-        `Unsupported BYOK provider configuration: ${JSON.stringify(config)}`,
-      );
+      return panic("Unsupported BYOK provider configuration");
     }
   }
   const hash = hasher.digest("hex").slice(0, 16);
@@ -1374,15 +1393,19 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
 
 const factoryExtras = (
   config: OrgAIProviderConfig,
-): Pick<TanStackModelFactoryOptions, "region"> => {
+): Pick<TanStackModelFactoryOptions, "region" | "anthropicWorkspaceId"> => {
   switch (config.provider) {
     case "azure_foundry":
     case "huggingface":
       return {};
+    case "anthropic":
+      return {
+        region: providerRegion(config),
+        anthropicWorkspaceId: config.anthropicWorkspaceId,
+      };
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":

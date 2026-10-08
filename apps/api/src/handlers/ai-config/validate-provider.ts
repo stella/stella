@@ -16,11 +16,10 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 
-const MAX_PROBE_ERROR_DETAIL_LEN = 200;
-
 export const validateProviderBody = t.Object({
   provider: t.UnionEnum(TANSTACK_AI_PROVIDERS),
   apiKey: t.String({ minLength: 1, maxLength: 512 }),
+  anthropicWorkspaceId: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
   region: t.Optional(
     t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
   ),
@@ -40,11 +39,6 @@ const probeUnavailable = (error: unknown): HandlerError =>
     cause: error,
   });
 
-const truncateProbeError = (message: string): string =>
-  message.length > MAX_PROBE_ERROR_DETAIL_LEN
-    ? message.slice(0, MAX_PROBE_ERROR_DETAIL_LEN)
-    : message;
-
 /**
  * Authenticated AI provider key health-check. The onboarding flow
  * calls this before the user has an active organization, so the gate
@@ -59,6 +53,18 @@ const truncateProbeError = (message: string): string =>
 const validateProvider = createSafeSessionHandler(
   config,
   async function* ({ body, request, set, user }) {
+    if (
+      body.anthropicWorkspaceId !== undefined &&
+      body.provider !== "anthropic"
+    ) {
+      return Result.err(
+        new HandlerError({
+          code: "ai_config_provider_invalid",
+          status: 400,
+          message: "Workspace ID is supported only for Anthropic",
+        }),
+      );
+    }
     if (
       body.region &&
       body.region !== "global" &&
@@ -114,6 +120,7 @@ const validateProvider = createSafeSessionHandler(
         try: async () =>
           await probeProvider({
             apiKey: body.apiKey,
+            anthropicWorkspaceId: body.anthropicWorkspaceId,
             permit: grantThirdPartyOutboundPermit(),
             provider: body.provider,
           }),
@@ -124,7 +131,7 @@ const validateProvider = createSafeSessionHandler(
           });
           return new HandlerError({
             status: 502,
-            message: truncateProbeError(raw),
+            message: raw,
             cause: error,
           });
         },
@@ -135,12 +142,6 @@ const validateProvider = createSafeSessionHandler(
       logger.warn("ai_config.provider_validation_rejected", {
         provider: body.provider,
       });
-      if (result.error && result.error.length > MAX_PROBE_ERROR_DETAIL_LEN) {
-        return Result.ok({
-          valid: false as const,
-          error: truncateProbeError(result.error),
-        });
-      }
     }
 
     return Result.ok(result);

@@ -1920,6 +1920,7 @@
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
+    "unsavedChanges": "تغييرات غير محفوظة",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
@@ -3721,7 +3722,6 @@
         "fallback": "بديل",
         "notAcceptable": "غير مقبول"
       },
-      "unsavedChanges": "تغييرات غير محفوظة",
       "untitledPosition": "موقف بلا عنوان",
       "updated": "تم تحديث دليل المراجعة",
       "updatedAt": "آخر تحديث: {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "إضافة مزوّد",
       "addProviderFirst": "أضف مزوّدًا أولًا",
+      "anthropicWorkspaceId": "معرّف مساحة العمل",
+      "anthropicWorkspaceRequired": "يحتاج مفتاح Anthropic هذا إلى مساحة عمل. أدخل معرّفها من وحدة تحكم Anthropic، ثم احفظ مرة أخرى.",
+      "anthropicWorkspaces": "فتح مساحات عمل Anthropic",
       "apiKey": "مفتاح API",
       "apiKeyConfiguredPlaceholder": "مضبوط: {key}. أدخل مفتاحًا جديدًا لاستبداله.",
       "apiKeyPlaceholder": "أدخل مفتاح API الخاص بك",
@@ -4040,6 +4043,7 @@
       "editProviders": "تعديل المزوّدين",
       "endpoint": "نقطة النهاية",
       "endpointDescription": "استخدم نقطة نهاية Azure OpenAI أو Azure Foundry ‏/openai/v1. تخزّن stella نقطة النهاية المُسوّاة.",
+      "invalidKeyFormat": "أدخل مفتاح API صالحًا لمزود {provider}.",
       "keepSavedKey": "الاحتفاظ بالمفتاح المحفوظ",
       "modelForRole": "نموذج {role}",
       "modelIdPlaceholder": "البحث عن النماذج",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "استدلال"
       },
+      "savedVerified": "تم الحفظ · تم التحقق",
       "selectAtLeastOneRole": "اختر دورًا واحدًا على الأقل لهذا المفتاح.",
       "selectModelForEachRole": "أضف مزوّدًا واختر نموذجًا لكل فئة.",
       "selectedProvider": "{provider}",

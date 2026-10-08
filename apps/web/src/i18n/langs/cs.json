@@ -1920,6 +1920,7 @@
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
+    "unsavedChanges": "Neuložené změny",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
     "unverified": "Neověřeno",
@@ -3721,7 +3722,6 @@
         "fallback": "Náhradní",
         "notAcceptable": "Nepřijatelné"
       },
-      "unsavedChanges": "Neuložené změny",
       "untitledPosition": "Pozice bez názvu",
       "updated": "Playbook aktualizován",
       "updatedAt": "Aktualizováno {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Přidat poskytovatele",
       "addProviderFirst": "Nejprve přidejte poskytovatele",
+      "anthropicWorkspaceId": "ID pracovního prostoru",
+      "anthropicWorkspaceRequired": "Tento klíč Anthropic vyžaduje pracovní prostor. Zadejte jeho ID z konzole Anthropic a znovu uložte.",
+      "anthropicWorkspaces": "Otevřít pracovní prostory Anthropic",
       "apiKey": "API klíč",
       "apiKeyConfiguredPlaceholder": "Nastaveno: {key}. Zadáním nového klíče jej nahradíte.",
       "apiKeyPlaceholder": "Zadejte svůj API klíč",
@@ -4040,6 +4043,7 @@
       "editProviders": "Upravit poskytovatele",
       "endpoint": "Endpoint",
       "endpointDescription": "Použijte Azure OpenAI nebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
+      "invalidKeyFormat": "Zadejte platný API klíč pro {provider}.",
       "keepSavedKey": "Ponechat uložený klíč",
       "modelForRole": "Model pro roli {role}",
       "modelIdPlaceholder": "Hledat modely",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Uvažování"
       },
+      "savedVerified": "Uloženo · ověřeno",
       "selectAtLeastOneRole": "Vyberte pro tento klíč alespoň jednu roli.",
       "selectModelForEachRole": "Přidejte poskytovatele a pro každou kategorii vyberte model.",
       "selectedProvider": "{provider}",

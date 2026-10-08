@@ -1920,6 +1920,7 @@
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",
     "unknownUser": "Usuário desconhecido",
     "unpin": "Desafixar",
+    "unsavedChanges": "Alterações não salvas",
     "unsavedChangesEscape": "Alterações não salvas. Pressione Esc novamente para descartá-las",
     "unsavedLeaveConfirm": "Você tem alterações não salvas. Sair sem salvar?",
     "unverified": "Não verificado",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternativa",
         "notAcceptable": "Inaceitável"
       },
-      "unsavedChanges": "Alterações não salvas",
       "untitledPosition": "Posição sem título",
       "updated": "Playbook atualizado",
       "updatedAt": "Atualizado em {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Adicionar provedor",
       "addProviderFirst": "Adicione um provedor primeiro",
+      "anthropicWorkspaceId": "ID do espaço de trabalho",
+      "anthropicWorkspaceRequired": "Esta chave da Anthropic precisa de um espaço de trabalho. Insira o ID dele no console da Anthropic e salve novamente.",
+      "anthropicWorkspaces": "Abrir os espaços de trabalho da Anthropic",
       "apiKey": "Chave de API",
       "apiKeyConfiguredPlaceholder": "Configurado: {key}. Insira uma nova chave para substituí-la.",
       "apiKeyPlaceholder": "Insira sua chave de API",
@@ -4040,6 +4043,7 @@
       "editProviders": "Editar provedores",
       "endpoint": "Endpoint",
       "endpointDescription": "Use o endpoint /openai/v1 do Azure OpenAI ou Azure Foundry. stella armazena o endpoint normalizado.",
+      "invalidKeyFormat": "Insira uma chave de API válida do {provider}.",
       "keepSavedKey": "Manter chave salva",
       "modelForRole": "Modelo {role}",
       "modelIdPlaceholder": "Pesquisar modelos",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Raciocínio"
       },
+      "savedVerified": "Salvo · verificado",
       "selectAtLeastOneRole": "Selecione pelo menos uma função para esta chave.",
       "selectModelForEachRole": "Adicione um provedor e selecione um modelo para cada categoria.",
       "selectedProvider": "{provider}",

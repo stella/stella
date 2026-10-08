@@ -971,7 +971,7 @@ const PlaybookEditorForm = ({
               )}
               {isDirty && (
                 <span className="text-muted-foreground text-xs">
-                  {t("knowledge.playbooks.unsavedChanges")}
+                  {t("common.unsavedChanges")}
                 </span>
               )}
               {isEdit && (

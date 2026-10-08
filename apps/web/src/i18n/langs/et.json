@@ -1920,6 +1920,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChanges": "Salvestamata muudatused",
     "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternatiiv",
         "notAcceptable": "Vastuvõetamatu"
       },
-      "unsavedChanges": "Salvestamata muudatused",
       "untitledPosition": "Pealkirjata seisukoht",
       "updated": "Playbook uuendatud",
       "updatedAt": "Uuendatud {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Lisa teenusepakkuja",
       "addProviderFirst": "Lisa esmalt teenusepakkuja",
+      "anthropicWorkspaceId": "Tööruumi ID",
+      "anthropicWorkspaceRequired": "See Anthropic API-võti vajab tööruumi. Sisestage tööruumi ID Anthropic Console’ist ja salvestage uuesti.",
+      "anthropicWorkspaces": "Ava Anthropic tööruumid",
       "apiKey": "API-võti",
       "apiKeyConfiguredPlaceholder": "Seadistatud: {key}. Sisesta uus võti, et see asendada.",
       "apiKeyPlaceholder": "Sisestage oma API võti",
@@ -4040,6 +4043,7 @@
       "editProviders": "Muuda teenusepakkujaid",
       "endpoint": "Lõpp-punkt",
       "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. stella salvestab normaliseeritud endpointi.",
+      "invalidKeyFormat": "Sisestage teenuse {provider} kehtiv API-võti.",
       "keepSavedKey": "Hoia salvestatud võti alles",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Arutlus"
       },
+      "savedVerified": "Salvestatud · kontrollitud",
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",

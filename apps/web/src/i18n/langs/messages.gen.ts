@@ -1923,6 +1923,7 @@ type Messages = {
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unknownUser": "Unknown user";
     "unpin": "Unpin";
+    "unsavedChanges": "Unsaved changes";
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unverified": "Unverified";
@@ -3724,7 +3725,6 @@ type Messages = {
         "fallback": "Fallback";
         "notAcceptable": "Not acceptable";
       };
-      "unsavedChanges": "Unsaved changes";
       "untitledPosition": "Untitled position";
       "updated": "Playbook updated";
       "updatedAt": "Updated {date}";
@@ -4013,6 +4013,9 @@ type Messages = {
     "aiConfig": {
       "addProvider": "Add provider";
       "addProviderFirst": "Add a provider first";
+      "anthropicWorkspaceId": "Workspace ID";
+      "anthropicWorkspaceRequired": "This Anthropic key needs a workspace. Enter its Workspace ID from Anthropic Console, then save again.";
+      "anthropicWorkspaces": "Open Anthropic Workspaces";
       "apiKey": "API key";
       "apiKeyConfiguredPlaceholder": "Configured: {key}. Enter a new key to replace it.";
       "apiKeyPlaceholder": "Enter your API key";
@@ -4043,6 +4046,7 @@ type Messages = {
       "editProviders": "Edit providers";
       "endpoint": "Endpoint";
       "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.";
+      "invalidKeyFormat": "Enter a valid {provider} API key.";
       "keepSavedKey": "Keep saved key";
       "modelForRole": "{role} model";
       "modelIdPlaceholder": "Search models";
@@ -4085,6 +4089,7 @@ type Messages = {
         "pdf": "PDF";
         "reasoning": "Reasoning";
       };
+      "savedVerified": "Saved · verified";
       "selectAtLeastOneRole": "Select at least one role for this key.";
       "selectModelForEachRole": "Add a provider and select a model for each category.";
       "selectedProvider": "{provider}";

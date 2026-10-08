@@ -1920,6 +1920,7 @@
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
+    "unsavedChanges": "Nesaglabātas izmaiņas",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternatīva",
         "notAcceptable": "Nav pieņemams"
       },
-      "unsavedChanges": "Nesaglabātas izmaiņas",
       "untitledPosition": "Nenosaukta pozīcija",
       "updated": "Pārbaudes ceļvedis atjaunināts",
       "updatedAt": "Atjaunināts {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Pievienot pakalpojumu sniedzēju",
       "addProviderFirst": "Vispirms pievienojiet pakalpojumu sniedzēju",
+      "anthropicWorkspaceId": "Darbvietas ID",
+      "anthropicWorkspaceRequired": "Šai Anthropic atslēgai nepieciešama darbvieta. Ievadiet tās ID no Anthropic konsoles un saglabājiet vēlreiz.",
+      "anthropicWorkspaces": "Atvērt Anthropic darbvietas",
       "apiKey": "API atslēga",
       "apiKeyConfiguredPlaceholder": "Konfigurēts: {key}. Ievadiet jaunu atslēgu, lai to aizstātu.",
       "apiKeyPlaceholder": "Ievadiet savu API atslēgu",
@@ -4040,6 +4043,7 @@
       "editProviders": "Rediģēt pakalpojumu sniedzējus",
       "endpoint": "Galamērķis",
       "endpointDescription": "Izmantojiet Azure OpenAI vai Azure Foundry /openai/v1 galamērķi. stella saglabā normalizēto galamērķi.",
+      "invalidKeyFormat": "Ievadiet derīgu {provider} API atslēgu.",
       "keepSavedKey": "Paturēt saglabāto atslēgu",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Meklēt modeļus",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Argumentācija"
       },
+      "savedVerified": "Saglabāts · pārbaudīts",
       "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
       "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",
       "selectedProvider": "{provider}",

@@ -1920,6 +1920,7 @@
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
+    "unsavedChanges": "Modifications non enregistrées",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternative",
         "notAcceptable": "Inacceptable"
       },
-      "unsavedChanges": "Modifications non enregistrées",
       "untitledPosition": "Critère sans titre",
       "updated": "Playbook mis à jour",
       "updatedAt": "Mis à jour : {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Ajouter un fournisseur",
       "addProviderFirst": "Ajoutez d’abord un fournisseur",
+      "anthropicWorkspaceId": "ID de l’espace de travail",
+      "anthropicWorkspaceRequired": "Cette clé Anthropic nécessite un espace de travail. Saisissez son ID depuis la console Anthropic, puis enregistrez à nouveau.",
+      "anthropicWorkspaces": "Ouvrir les espaces de travail Anthropic",
       "apiKey": "Clé API",
       "apiKeyConfiguredPlaceholder": "Configurée : {key}. Saisissez une nouvelle clé pour la remplacer.",
       "apiKeyPlaceholder": "Saisissez votre clé API",
@@ -4040,6 +4043,7 @@
       "editProviders": "Modifier les fournisseurs",
       "endpoint": "Point de terminaison",
       "endpointDescription": "Utilisez le point de terminaison Azure OpenAI ou Azure Foundry /openai/v1. stella enregistre le point de terminaison normalisé.",
+      "invalidKeyFormat": "Saisissez une clé API valide pour {provider}.",
       "keepSavedKey": "Conserver la clé enregistrée",
       "modelForRole": "Modèle pour {role}",
       "modelIdPlaceholder": "Rechercher des modèles",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Raisonnement"
       },
+      "savedVerified": "Enregistré · vérifié",
       "selectAtLeastOneRole": "Sélectionnez au moins un rôle pour cette clé.",
       "selectModelForEachRole": "Ajoutez un fournisseur et choisissez un modèle pour chaque catégorie.",
       "selectedProvider": "{provider}",

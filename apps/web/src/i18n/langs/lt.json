@@ -1920,6 +1920,7 @@
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
     "unknownUser": "Nežinomas naudotojas",
     "unpin": "Atsegti",
+    "unsavedChanges": "Neišsaugoti pakeitimai",
     "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte",
     "unsavedLeaveConfirm": "Turite neišsaugotų pakeitimų. Išeiti neišsaugojus?",
     "unverified": "Nepatvirtinta",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternatyva",
         "notAcceptable": "Nepriimtina"
       },
-      "unsavedChanges": "Neišsaugoti pakeitimai",
       "untitledPosition": "Pozicija be pavadinimo",
       "updated": "Peržiūros vadovas atnaujintas",
       "updatedAt": "Atnaujinta {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Pridėti teikėją",
       "addProviderFirst": "Pirmiausia pridėkite teikėją",
+      "anthropicWorkspaceId": "Darbo srities ID",
+      "anthropicWorkspaceRequired": "Šiam Anthropic raktui reikia darbo srities. Įveskite jos ID iš Anthropic konsolės ir išsaugokite dar kartą.",
+      "anthropicWorkspaces": "Atidaryti Anthropic darbo sritis",
       "apiKey": "API raktas",
       "apiKeyConfiguredPlaceholder": "Sukonfigūruota: {key}. Įveskite naują raktą, kad pakeistumėte.",
       "apiKeyPlaceholder": "Įveskite savo API raktą",
@@ -4040,6 +4043,7 @@
       "editProviders": "Redaguoti teikėjus",
       "endpoint": "Galinis taškas",
       "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. stella išsaugo normalizuotą galinį tašką.",
+      "invalidKeyFormat": "Įveskite galiojantį {provider} API raktą.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Mąstymas"
       },
+      "savedVerified": "Išsaugota · patikrinta",
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",

@@ -2,15 +2,22 @@ import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  AlertDialog,
+  AlertDialogPopup,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogClose,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
-import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
 import {
   createProviderCredentialDraft,
@@ -18,27 +25,24 @@ import {
   ensureRoleModelsForProviders,
   getProviderValues,
   hasUsableDecisionModel,
-  hasUsableProviderDrafts,
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
   serializeDecisionModel,
   serializeOverrideModels,
   serializeProviderDrafts,
-  isProviderValue,
-  PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import type {
   DecisionModelState,
-  ModelSelection,
   ProviderCredentialDraft,
   RoleModelSelections,
-  RoleValue,
   StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
+import { CopyActionButton } from "@/components/copy-action-button";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
@@ -48,6 +52,7 @@ import {
 } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 import { AIConfigDecisionModel } from "@/routes/_protected.settings/-components/organization/ai-config-decision-model";
+import { AIProviderRows } from "@/routes/_protected.settings/-components/organization/ai-provider-rows";
 
 export const AIConfigCard = () => {
   const activeOrganizationId = useRouteContext({
@@ -153,32 +158,25 @@ type AIConfigFormProps = {
   organizationId: string;
 };
 
-const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
+export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
   const t = useTranslations("organization");
-  const tCommon = useTranslations("common");
-  const tSuccess = useTranslations("success");
-  const tErrors = useTranslations("errors");
-  const analytics = useAnalytics();
+  const common = useTranslations("common");
   const queryClient = useQueryClient();
-
-  const initialProviders =
-    config.configured && config.providers.length > 0
-      ? providerDraftsFromStoredProviders(config.providers)
-      : [createProviderCredentialDraft()];
-  const initialProviderValues = getProviderValues(initialProviders);
-  const initialRoleModels = config.configured
+  const initialProviders = config.configured
+    ? providerDraftsFromStoredProviders(config.providers)
+    : [];
+  const [storedProviders, setStoredProviders] = useState(initialProviders);
+  const [providers, setProviders] = useState(
+    config.configured ? initialProviders : [createProviderCredentialDraft()],
+  );
+  const initialRoles = config.configured
     ? roleModelsFromOverrideModels({
         overrideModels: config.overrideModels,
-        providers: initialProviderValues,
+        providers: getProviderValues(initialProviders),
       })
-    : createDefaultRoleModels(initialProviderValues);
-
-  const [providers, setProviders] =
-    useState<ProviderCredentialDraft[]>(initialProviders);
-  const [roleModels, setRoleModels] =
-    useState<RoleModelSelections>(initialRoleModels);
-  // The decision model merges on its own terms, so the form tracks what the
-  // user did to it rather than a value: untouched keeps the stored one.
+    : createDefaultRoleModels();
+  const [roleModels, setRoleModels] = useState(initialRoles);
+  const [savedRoles, setSavedRoles] = useState(initialRoles);
   const [decisionState, setDecisionState] = useState<DecisionModelState>({
     kind: "untouched",
   });
@@ -186,215 +184,279 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     useState<StoredDecisionModel | null>(
       config.configured ? config.decision : null,
     );
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving">("idle");
+  const isDirty =
+    providers.some(
+      (provider) =>
+        provider.apiKey.length > 0 ||
+        provider.anthropicWorkspaceId !==
+          storedProviders.find((saved) => saved.provider === provider.provider)
+            ?.anthropicWorkspaceId,
+    ) ||
+    decisionState.kind !== "untouched" ||
+    JSON.stringify(roleModels) !== JSON.stringify(savedRoles);
+  const blocker = useUnsavedWork({
+    surface: "ai-provider-settings",
+    guard: "confirm-navigation",
+    isDirty,
+  });
 
-  const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {
-    const providerValues = getProviderValues(nextProviders);
-    setProviders(nextProviders);
-    setRoleModels((prev) =>
-      ensureRoleModelsForProviders({
-        providers: providerValues,
-        roleModels: prev,
-      }),
-    );
-  };
-
-  const setRoleModel = (role: RoleValue, model: ModelSelection | null) => {
-    setRoleModels((prev) => ({
-      ...prev,
-      [role]: model,
-    }));
-  };
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const providerValues = getProviderValues(providers);
-      const overrideModels = serializeOverrideModels({
-        providers: providerValues,
-        roleModels,
-      });
-      if (!overrideModels) {
-        // The Save button is disabled when `canSave` is false, which checks
-        // the same `serializeOverrideModels(...) !== null` invariant. The
-        // inline message at the field below renders the translated guidance.
-        panic("ai-config save fired with no valid override models");
-      }
-
-      // An absent `decision` is what keeps the stored one, so the field is
-      // omitted rather than sent as undefined.
-      const decision = serializeDecisionModel(decisionState);
-      const response = await api["organization-settings"]["ai-config"].post({
-        providers: serializeProviderDrafts(providers),
-        overrideModels,
-        ...(decision === undefined ? {} : { decision }),
-      });
-      return unwrapEden(response);
-    },
-    onSuccess: async (data) => {
-      const nextProviders = providerDraftsFromStoredProviders(data.providers);
-      setProviders(nextProviders);
-      setRoleModels(
-        roleModelsFromOverrideModels({
-          overrideModels: data.overrideModels,
-          providers: getProviderValues(nextProviders),
+  const refresh = async (configured: boolean) => {
+    queryClient.setQueryData(
+      aiAvailabilityOptions({ organizationId }).queryKey,
+      (current) =>
+        updateCachedAIAvailability({
+          current,
+          instanceProvisioned: config.instanceProvisioned,
+          orgConfigured: configured,
         }),
-      );
-      setStoredDecision(data.decision);
-      setDecisionState({ kind: "untouched" });
-      queryClient.setQueryData(
-        aiAvailabilityOptions({ organizationId }).queryKey,
-        (current) =>
-          updateCachedAIAvailability({
-            current,
-            instanceProvisioned: config.instanceProvisioned,
-            orgConfigured: true,
+    );
+    await invalidateAIConfigurationCaches(queryClient, organizationId);
+  };
+
+  type PersistAIConfigOptions = {
+    nextProviders: ProviderCredentialDraft[];
+    nextRoles: RoleModelSelections;
+    mode: "credentials" | "settings";
+  };
+  const persist = async ({
+    nextProviders,
+    nextRoles,
+    mode,
+  }: PersistAIConfigOptions) => {
+    const overrideModels = serializeOverrideModels({
+      providers: getProviderValues(nextProviders),
+      roleModels: nextRoles,
+    });
+    if (!overrideModels) {
+      return Result.err(
+        new APIError({
+          code: "ai_config_model_invalid",
+          status: 400,
+          message: t("aiConfig.selectModelForEachRole"),
+        }),
+      ).unwrap();
+    }
+    const decision =
+      mode === "settings" ? serializeDecisionModel(decisionState) : undefined;
+    const response = await api["organization-settings"]["ai-config"].post({
+      providers: serializeProviderDrafts(nextProviders),
+      overrideModels,
+      ...(decision === undefined ? {} : { decision }),
+    });
+    const data = unwrapEden(response);
+    const saved = providerDraftsFromStoredProviders(data.providers);
+    setStoredProviders(saved);
+    setRoleModels((current) =>
+      mode === "settings"
+        ? nextRoles
+        : ensureRoleModelsForProviders({
+            providers: getProviderValues(saved),
+            roleModels: current,
           }),
-      );
-      await invalidateAIConfigurationCaches(queryClient, organizationId);
-      stellaToast.add({
-        title: tSuccess("aiConfigUpdated"),
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, tErrors("actionFailed"));
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"]["ai-config"].delete(
-        {},
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
-    onSuccess: async () => {
-      const nextProviders = [createProviderCredentialDraft()];
-      setProviders(nextProviders);
-      setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
-      setStoredDecision(null);
+    );
+    setSavedRoles(nextRoles);
+    setStoredDecision(data.decision);
+    if (mode === "settings") {
       setDecisionState({ kind: "untouched" });
-      queryClient.setQueryData(
-        aiAvailabilityOptions({ organizationId }).queryKey,
-        (current) =>
-          updateCachedAIAvailability({
-            current,
-            instanceProvisioned: config.instanceProvisioned,
-            orgConfigured: false,
-          }),
+    }
+    await refresh(true);
+    return saved;
+  };
+
+  const saveProvider = async (draft: ProviderCredentialDraft) => {
+    setSaveState("saving");
+    const result = await Result.tryPromise({
+      try: async () => {
+        const next = [
+          ...storedProviders.filter(
+            (provider) => provider.provider !== draft.provider,
+          ),
+          draft,
+        ];
+        const nextRoles = ensureRoleModelsForProviders({
+          providers: getProviderValues(next),
+          roleModels: savedRoles,
+        });
+        const saved = await persist({
+          nextProviders: next,
+          nextRoles,
+          mode: "credentials",
+        });
+        setProviders((current) =>
+          current.map((provider) =>
+            provider.provider === draft.provider
+              ? (saved.find(
+                  (candidate) => candidate.provider === draft.provider,
+                ) ?? panic("Saved provider absent"))
+              : provider,
+          ),
+        );
+      },
+      catch: (error: unknown) => error,
+    });
+    setSaveState("idle");
+    result.unwrap();
+  };
+
+  const removeProvider = async (draft: ProviderCredentialDraft) => {
+    if (
+      !storedProviders.some((provider) => provider.provider === draft.provider)
+    ) {
+      setProviders((current) =>
+        current.filter((provider) => provider.provider !== draft.provider),
       );
-      await invalidateAIConfigurationCaches(queryClient, organizationId);
-      stellaToast.add({
-        title: tSuccess("aiConfigDeleted"),
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, tErrors("actionFailed"));
-    },
-  });
+      return;
+    }
+    setSaveState("saving");
+    const result = await Result.tryPromise({
+      try: async () => {
+        const next = storedProviders.filter(
+          (provider) => provider.provider !== draft.provider,
+        );
+        if (next.length === 0) {
+          unwrapEden(
+            await api["organization-settings"]["ai-config"].delete({}),
+          );
+          setStoredProviders([]);
+          setStoredDecision(null);
+          setDecisionState({ kind: "untouched" });
+          await refresh(false);
+        } else {
+          await persist({
+            nextProviders: next,
+            nextRoles: ensureRoleModelsForProviders({
+              providers: getProviderValues(next),
+              roleModels: savedRoles,
+            }),
+            mode: "credentials",
+          });
+        }
+        setProviders((current) =>
+          current.filter((provider) => provider.provider !== draft.provider),
+        );
+      },
+      catch: (error: unknown) => error,
+    });
+    setSaveState("idle");
+    result.unwrap();
+  };
 
-  const providerValues = getProviderValues(providers);
-  const removeLabel = tCommon("remove");
-  const rolesReady =
-    hasUsableProviderDrafts(providers) &&
-    serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
-  const decisionReady = hasUsableDecisionModel({
-    state: decisionState,
-    stored: storedDecision,
-  });
-  const canSave = rolesReady && decisionReady;
-
+  const saveSettings = async () => {
+    setSaveState("saving");
+    setSettingsError(null);
+    const result = await Result.tryPromise({
+      try: async () =>
+        await persist({
+          nextProviders: storedProviders,
+          nextRoles: roleModels,
+          mode: "settings",
+        }),
+      catch: (error: unknown) => error,
+    });
+    if (result.isErr()) {
+      const error = result.error;
+      setSettingsError(
+        APIError.is(error)
+          ? (error.rawMessage ?? error.message)
+          : common("somethingWentWrong"),
+      );
+    }
+    setSaveState("idle");
+  };
+  const providerValues = getProviderValues(storedProviders);
+  const canSaveSettings =
+    storedProviders.length > 0 &&
+    serializeOverrideModels({ providers: providerValues, roleModels }) !==
+      null &&
+    hasUsableDecisionModel({ state: decisionState, stored: storedDecision });
   return (
     <div className="flex flex-col gap-4">
-      {config.configured && (
-        <div className="flex items-center justify-between gap-2">
-          <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
-            <span className="text-muted-foreground text-xs">
-              {tCommon("active")}:
-            </span>
-            {config.providers.map((providerConfig) => (
-              <span
-                className="text-xs"
-                key={`${providerConfig.provider}-${providerConfig.apiKeyMasked}`}
-              >
-                <span className="font-medium">
-                  {isProviderValue(providerConfig.provider)
-                    ? PROVIDER_LABELS[providerConfig.provider]
-                    : providerConfig.provider}
-                </span>{" "}
-                <span className="text-muted-foreground font-mono">
-                  {providerConfig.apiKeyMasked}
-                </span>
-              </span>
-            ))}
-          </div>
+      <AIProviderRows
+        providers={providers}
+        disabled={saveState === "saving"}
+        onChange={setProviders}
+        onSave={saveProvider}
+        onRemove={removeProvider}
+      />
+      {storedProviders.length > 0 && (
+        <>
+          <AIConfigRoleModelPicker
+            disabled={saveState === "saving"}
+            providers={providerValues}
+            roleModels={roleModels}
+            onModelChange={(role, model) =>
+              setRoleModels((previous) => ({ ...previous, [role]: model }))
+            }
+          />
+          <AIConfigDecisionModel
+            disabled={saveState === "saving"}
+            instanceProvisioned={config.decisionInstanceProvisioned}
+            onStateChange={setDecisionState}
+            state={decisionState}
+            stored={storedDecision}
+          />
+          {!hasUsableDecisionModel({
+            state: decisionState,
+            stored: storedDecision,
+          }) && (
+            <p className="text-destructive text-xs">
+              {t("aiConfig.decision.incomplete")}
+            </p>
+          )}
           <Button
-            aria-label={removeLabel}
-            loading={deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate()}
+            className="self-start"
             size="sm"
-            variant="ghost"
+            disabled={!canSaveSettings || saveState === "saving"}
+            onClick={() => detached(saveSettings(), "ai-config.save-settings")}
           >
-            <Trash2Icon className="size-4" />
+            {common("saveChanges")}
           </Button>
-        </div>
+          {settingsError && (
+            <div
+              role="alert"
+              className="text-destructive flex items-start gap-2 text-sm"
+            >
+              <p className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
+                {settingsError}
+              </p>
+              <CopyActionButton text={settingsError} />
+            </div>
+          )}
+        </>
       )}
-      <Frame>
-        <FramePanel>
-          <div className="flex flex-col gap-5 p-1">
-            <AIConfigProvidersEditor
-              disabled={saveMutation.isPending}
-              onProvidersChange={updateProviders}
-              providers={providers}
-            />
-
-            <div className="border-t" />
-
-            <AIConfigRoleModelPicker
-              disabled={saveMutation.isPending}
-              onModelChange={setRoleModel}
-              providers={providerValues}
-              roleModels={roleModels}
-            />
-
-            <div className="border-t" />
-
-            <AIConfigDecisionModel
-              disabled={saveMutation.isPending}
-              instanceProvisioned={config.decisionInstanceProvisioned}
-              onStateChange={setDecisionState}
-              state={decisionState}
-              stored={storedDecision}
-            />
-          </div>
-        </FramePanel>
-      </Frame>
-
-      {!rolesReady && (
-        <p className="text-destructive-foreground text-xs">
-          {t("aiConfig.selectModelForEachRole")}
-        </p>
-      )}
-
-      {!decisionReady && (
-        <p className="text-destructive-foreground text-xs">
-          {t("aiConfig.decision.incomplete")}
-        </p>
-      )}
-
-      <Button
-        className="self-start"
-        disabled={!canSave}
-        loading={saveMutation.isPending}
-        onClick={() => saveMutation.mutate()}
-        size="sm"
+      <AlertDialog
+        open={blocker.status === "blocked"}
+        onOpenChange={(open) => {
+          if (!open && blocker.status === "blocked") {
+            blocker.reset();
+          }
+        }}
       >
-        {config.configured ? tCommon("saveChanges") : t("aiConfig.configure")}
-      </Button>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{common("confirmAction")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {common("unsavedLeaveConfirm")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {common("goBackToEditing")}
+            </AlertDialogClose>
+            <Button
+              onClick={() => {
+                if (blocker.status === "blocked") {
+                  blocker.proceed();
+                }
+              }}
+            >
+              {common("confirm")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 };

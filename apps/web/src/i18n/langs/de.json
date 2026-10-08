@@ -1920,6 +1920,7 @@
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unsavedChanges": "Ungespeicherte Änderungen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternative",
         "notAcceptable": "Nicht akzeptabel"
       },
-      "unsavedChanges": "Ungespeicherte Änderungen",
       "untitledPosition": "Standpunkt ohne Titel",
       "updated": "Playbook aktualisiert",
       "updatedAt": "Aktualisiert: {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Provider hinzufügen",
       "addProviderFirst": "Zuerst Provider hinzufügen",
+      "anthropicWorkspaceId": "Workspace-ID",
+      "anthropicWorkspaceRequired": "Dieser Anthropic-Schlüssel benötigt einen Workspace. Geben Sie dessen ID aus der Anthropic-Konsole ein und speichern Sie erneut.",
+      "anthropicWorkspaces": "Anthropic-Workspaces öffnen",
       "apiKey": "API-Schlüssel",
       "apiKeyConfiguredPlaceholder": "Konfiguriert: {key}. Geben Sie einen neuen Schlüssel ein, um ihn zu ersetzen.",
       "apiKeyPlaceholder": "API-Schlüssel eingeben",
@@ -4040,6 +4043,7 @@
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
       "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
+      "invalidKeyFormat": "Geben Sie einen gültigen API-Schlüssel für {provider} ein.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Argumentation"
       },
+      "savedVerified": "Gespeichert · verifiziert",
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",

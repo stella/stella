@@ -46,6 +46,7 @@ export type ProviderPreview = {
 export type ProviderCredentialDraft = {
   provider: ProviderValue;
   apiKey: string;
+  anthropicWorkspaceId?: string | undefined;
   apiKeyMasked?: string | undefined;
   endpoint: string;
   apiVersion?: string | undefined;
@@ -65,6 +66,7 @@ export type ModelOption = ModelSelection & {
 };
 
 export type StoredProviderConfig = {
+  anthropicWorkspaceId?: string | undefined;
   provider: string;
   apiKeyMasked?: string | undefined;
   endpoint?: string | undefined;
@@ -84,6 +86,7 @@ export type StoredOverrideModels =
   | undefined;
 
 export type SerializedProviderConfig = {
+  anthropicWorkspaceId?: string;
   provider: ProviderValue;
   apiKey?: string;
   endpoint?: string;
@@ -161,6 +164,7 @@ export const providerDraftsFromStoredProviders = (
       provider,
       apiKey: "",
       apiKeyMasked: providerConfig.apiKeyMasked,
+      anthropicWorkspaceId: providerConfig.anthropicWorkspaceId,
       endpoint: providerConfig.endpoint ?? "",
       apiVersion: providerConfig.apiVersion,
       region:
@@ -413,6 +417,10 @@ export const serializeProviderDrafts = (
     serializedProviders.push({
       provider: providerDraft.provider,
       ...(apiKey ? { apiKey } : {}),
+      ...(providerDraft.provider === "anthropic" &&
+      providerDraft.anthropicWorkspaceId !== undefined
+        ? { anthropicWorkspaceId: providerDraft.anthropicWorkspaceId.trim() }
+        : {}),
       region: providerDraft.region,
     });
   }
@@ -547,6 +555,10 @@ export const serializeDecisionModel = (
       return {
         provider: state.provider,
         ...(apiKey ? { apiKey } : {}),
+        ...(providerDraft.provider === "anthropic" &&
+        providerDraft.anthropicWorkspaceId !== undefined
+          ? { anthropicWorkspaceId: providerDraft.anthropicWorkspaceId.trim() }
+          : {}),
         modelId: state.modelId.trim(),
       };
     }

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { TANSTACK_AI_PROVIDERS, BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 
@@ -8,6 +8,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import { toSafeId } from "@/api/lib/branded-types";
+import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -113,4 +114,131 @@ describe("organization AI settings validation", () => {
       ]);
     });
   }
+});
+
+describe("Anthropic workspace settings", () => {
+  const anthropicModels = BYOK_DEFAULT_MODELS.anthropic;
+  const anthropicOverrides = {
+    fast: { provider: "anthropic", modelId: anthropicModels.fast },
+    chat: { provider: "anthropic", modelId: anthropicModels.chat },
+    reasoning: { provider: "anthropic", modelId: anthropicModels.reasoning },
+    pdf: { provider: "anthropic", modelId: anthropicModels.pdf },
+  } as const;
+
+  test("verifies and stores a user key and workspace together", async () => {
+    const requests: {
+      url: string;
+      headers: Headers;
+      method: string | undefined;
+    }[] = [];
+    const probe = spyOn(outbound, "safeOutboundFetchBytes").mockImplementation(
+      async (options) => {
+        requests.push({
+          url: String(options.url),
+          headers: new Headers(options.headers),
+          method: options.method,
+        });
+        return Result.ok({
+          body: new TextEncoder().encode('{"data":[]}').buffer,
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        });
+      },
+    );
+    try {
+      const db = createSettingsDb();
+      const result = await updateAIConfig.handler(
+        createTestHandlerContext<UpdateContext>({
+          recordAuditEvent: auditRecorderDouble(),
+          safeDb: db.safeDb,
+          body: {
+            providers: [
+              {
+                provider: "anthropic",
+                apiKey: "sk-ant-usr-fixture",
+                anthropicWorkspaceId: "wrk_fixture",
+              },
+            ],
+            overrideModels: anthropicOverrides,
+          },
+        }),
+      );
+      expect(result).toMatchObject({
+        providers: [
+          { provider: "anthropic", anthropicWorkspaceId: "wrk_fixture" },
+        ],
+      });
+      expect(JSON.stringify(result)).not.toContain("sk-ant-usr-fixture");
+      expect(requests).toHaveLength(1);
+      expect(requests.at(0)?.url).toBe("https://api.anthropic.com/v1/models");
+      expect(requests.at(0)?.method).toBe("GET");
+      expect(requests.at(0)?.headers.get("anthropic-workspace-id")).toBe(
+        "wrk_fixture",
+      );
+      const written = db.written();
+      if (!written) {
+        throw new Error("Expected saved settings");
+      }
+      const saved = await decryptAIConfig(
+        toSafeId<"organization">("org_test"),
+        written.aiConfigEncrypted,
+        written.aiConfigIv,
+      );
+      expect(saved.providers).toEqual([
+        {
+          provider: "anthropic",
+          apiKey: "sk-ant-usr-fixture",
+          anthropicWorkspaceId: "wrk_fixture",
+          region: "global",
+        },
+      ]);
+    } finally {
+      probe.mockRestore();
+    }
+  });
+
+  test("missing workspace id returns actionable typed error and does not save", async () => {
+    const message =
+      "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use.";
+    const probe = spyOn(outbound, "safeOutboundFetchBytes").mockImplementation(
+      async () =>
+        Result.ok({
+          body: new TextEncoder().encode(
+            JSON.stringify({
+              type: "error",
+              error: { type: "invalid_request_error", message },
+            }),
+          ).buffer,
+          headers: new Headers(),
+          ok: false,
+          status: 400,
+        }),
+    );
+    try {
+      const db = createSettingsDb();
+      const result = await updateAIConfig.handler(
+        createTestHandlerContext<UpdateContext>({
+          recordAuditEvent: auditRecorderDouble(),
+          safeDb: db.safeDb,
+          body: {
+            providers: [
+              { provider: "anthropic", apiKey: "sk-ant-usr-fixture" },
+            ],
+            overrideModels: anthropicOverrides,
+          },
+        }),
+      );
+      expect(result).toMatchObject({
+        code: 400,
+        response: {
+          code: "ai_config_anthropic_workspace_required",
+          message: `anthropic: Anthropic rejected the key (HTTP 400): ${message}`,
+        },
+      });
+      expect(db.written()).toBeUndefined();
+    } finally {
+      probe.mockRestore();
+    }
+  });
 });

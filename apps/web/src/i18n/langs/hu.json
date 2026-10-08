@@ -1920,6 +1920,7 @@
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
+    "unsavedChanges": "Nem mentett módosítások",
     "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
     "unverified": "Nem ellenőrzött",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternatíva",
         "notAcceptable": "Nem elfogadható"
       },
-      "unsavedChanges": "Mentetlen módosítások",
       "untitledPosition": "Névtelen álláspont",
       "updated": "Playbook frissítve",
       "updatedAt": "Frissítve: {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Szolgáltató hozzáadása",
       "addProviderFirst": "Először adjon hozzá szolgáltatót",
+      "anthropicWorkspaceId": "Munkaterület-azonosító",
+      "anthropicWorkspaceRequired": "Ehhez az Anthropic-kulcshoz munkaterület szükséges. Adja meg az azonosítóját az Anthropic konzoljából, majd mentse újra.",
+      "anthropicWorkspaces": "Anthropic-munkaterületek megnyitása",
       "apiKey": "API-kulcs",
       "apiKeyConfiguredPlaceholder": "Beállítva: {key}. Új kulccsal lecserélheti.",
       "apiKeyPlaceholder": "Adja meg az API-kulcsát",
@@ -4040,6 +4043,7 @@
       "editProviders": "Szolgáltatók szerkesztése",
       "endpoint": "Végpont",
       "endpointDescription": "Használja az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A stella a normalizált végpontot menti.",
+      "invalidKeyFormat": "Adjon meg egy érvényes {provider} API-kulcsot.",
       "keepSavedKey": "Mentett kulcs megtartása",
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Érvelés"
       },
+      "savedVerified": "Mentve · ellenőrizve",
       "selectAtLeastOneRole": "Válasszon legalább egy szerepkört ehhez a kulcshoz.",
       "selectModelForEachRole": "Adjon hozzá szolgáltatót, és válasszon modellt minden kategóriához.",
       "selectedProvider": "{provider}",

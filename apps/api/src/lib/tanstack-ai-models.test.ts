@@ -1,8 +1,9 @@
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
+  BYOK_DEFAULT_MODELS,
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   getModelReasoningEfforts,
@@ -1340,4 +1341,69 @@ const orgConfigForProvider = (
     pdf: { provider, modelId: "model-pdf" },
   },
   decision: null,
+});
+
+describe("Anthropic workspace dispatch", () => {
+  test("every model role receives workspace headers and changed workspace invalidates the cached factory", async () => {
+    const requests: Headers[] = [];
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+      async (_url, init) => {
+        requests.push(new Headers(init?.headers));
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: {
+              type: "invalid_request_error",
+              message: "Recorded transport stop",
+            },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      },
+    );
+    clearByokAdapterCache();
+    try {
+      for (const anthropicWorkspaceId of ["wrk_first", "wrk_second"]) {
+        const defaults = BYOK_DEFAULT_MODELS.anthropic;
+        const config = {
+          providers: [
+            {
+              provider: "anthropic",
+              apiKey: "sk-ant-usr-fixture",
+              anthropicWorkspaceId,
+            },
+          ],
+          overrideModels: {
+            fast: { provider: "anthropic", modelId: defaults.fast },
+            chat: { provider: "anthropic", modelId: defaults.chat },
+            reasoning: { provider: "anthropic", modelId: defaults.reasoning },
+            pdf: { provider: "anthropic", modelId: defaults.pdf },
+          },
+          decision: null,
+        } satisfies OrgAIConfig;
+        for (const role of MODEL_ROLES) {
+          const model = getTanStackTextModelForRole(role, config, {
+            organizationId: orgId,
+            dataClass: "customer",
+            managedAIResidency: "eu",
+          });
+          const before = requests.length;
+          for await (const _chunk of model.adapter.chatStream({
+            logger: resolveDebugOption(false),
+            messages: [{ role: "user", content: "Fixture" }],
+            model: model.adapter.model,
+          })) {
+            // Recorded response exercises serialization without calling a provider.
+          }
+          expect(requests).toHaveLength(before + 1);
+          expect(requests.at(-1)?.get("anthropic-workspace-id")).toBe(
+            anthropicWorkspaceId,
+          );
+        }
+      }
+    } finally {
+      fetchSpy.mockRestore();
+      clearByokAdapterCache();
+    }
+  });
 });

@@ -1920,6 +1920,7 @@
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
+    "unsavedChanges": "Niezapisane zmiany",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
@@ -3721,7 +3722,6 @@
         "fallback": "Alternatywne",
         "notAcceptable": "Nieakceptowalne"
       },
-      "unsavedChanges": "Niezapisane zmiany",
       "untitledPosition": "Stanowisko bez nazwy",
       "updated": "Playbook zaktualizowany",
       "updatedAt": "Zaktualizowano: {date}",
@@ -4010,6 +4010,9 @@
     "aiConfig": {
       "addProvider": "Dodaj dostawcę",
       "addProviderFirst": "Najpierw dodaj dostawcę",
+      "anthropicWorkspaceId": "Identyfikator obszaru roboczego",
+      "anthropicWorkspaceRequired": "Ten klucz Anthropic wymaga obszaru roboczego. Wprowadź jego identyfikator z konsoli Anthropic i zapisz ponownie.",
+      "anthropicWorkspaces": "Otwórz obszary robocze Anthropic",
       "apiKey": "Klucz API",
       "apiKeyConfiguredPlaceholder": "Skonfigurowano: {key}. Wpisz nowy klucz, aby go zastąpić.",
       "apiKeyPlaceholder": "Wprowadź klucz API",
@@ -4040,6 +4043,7 @@
       "editProviders": "Edytuj dostawców",
       "endpoint": "Punkt końcowy",
       "endpointDescription": "Użyj endpointu Azure OpenAI lub Azure Foundry /openai/v1. stella zapisze znormalizowany endpoint.",
+      "invalidKeyFormat": "Wprowadź prawidłowy klucz API dostawcy {provider}.",
       "keepSavedKey": "Zachowaj zapisany klucz",
       "modelForRole": "Model dla roli {role}",
       "modelIdPlaceholder": "Szukaj modeli",
@@ -4082,6 +4086,7 @@
         "pdf": "PDF",
         "reasoning": "Rozumowanie"
       },
+      "savedVerified": "Zapisano · zweryfikowano",
       "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
       "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",
       "selectedProvider": "{provider}",

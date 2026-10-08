@@ -344,3 +344,82 @@ describe("probeProvider", () => {
     });
   });
 });
+
+describe("Anthropic workspace-scoped provider checks", () => {
+  test("checks a user key with the workspace header without generation", async () => {
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-usr-fixture",
+        anthropicWorkspaceId: "wrk_fixture",
+      }),
+    ).toEqual({ valid: true });
+    expect(calls).toHaveLength(1);
+    expect(calls.at(0)?.url.pathname).toBe("/v1/models");
+    expect(calls.at(0)?.method).toBe("GET");
+    expect(calls.at(0)?.headers.get("anthropic-workspace-id")).toBe(
+      "wrk_fixture",
+    );
+    expect(calls.at(0)?.headers.get("x-api-key")).toBe("sk-ant-usr-fixture");
+  });
+
+  test("returns the full provider diagnostic and typed workspace guidance", async () => {
+    const message =
+      "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use.";
+    nextResponse = {
+      kind: "ok",
+      status: 400,
+      body: {
+        type: "error",
+        error: { type: "invalid_request_error", message },
+      },
+    };
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-usr-fixture",
+      }),
+    ).toEqual({
+      valid: false,
+      code: "ai_config_anthropic_workspace_required",
+      error: `Anthropic rejected the key (HTTP 400): ${message}`,
+    });
+    expect(calls.at(0)?.url.pathname).toBe("/v1/models");
+  });
+
+  test("keeps workspace-scoped keys unchanged", async () => {
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-api03-fixture",
+      }),
+    ).toEqual({ valid: true });
+    expect(calls.at(0)?.headers.has("anthropic-workspace-id")).toBe(false);
+  });
+
+  test("keeps long unknown provider diagnostics in full", async () => {
+    const message = "Provider diagnostic ".repeat(40);
+    nextResponse = {
+      kind: "ok",
+      status: 401,
+      body: { error: { type: "authentication_error", message } },
+    };
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-api03-fixture",
+      }),
+    ).toEqual({
+      valid: false,
+      error: `Anthropic rejected the key (HTTP 401): ${message}`,
+    });
+  });
+
+  test("sends Google keys in a header rather than the URL", async () => {
+    await probeProvider({ provider: "google", apiKey: "google-fixture-key" });
+    expect(calls.at(0)?.url.search).toBe("");
+    expect(calls.at(0)?.headers.get("x-goog-api-key")).toBe(
+      "google-fixture-key",
+    );
+  });
+});
