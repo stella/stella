@@ -4956,6 +4956,9 @@
     .sm\:h-10 {
       height: calc(var(--spacing) * 10);
     }
+    .sm\:h-auto {
+      height: auto;
+    }
     .sm\:min-h-0 {
       min-height: 0px;
     }
