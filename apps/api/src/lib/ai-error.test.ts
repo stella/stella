@@ -30,6 +30,12 @@ import {
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import {
+  ModelDeadlineExceededError,
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
+  ModelRunError,
+} from "@/api/lib/errors/provider-call-error";
+import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -781,5 +787,99 @@ describe("AWS SDK service exceptions", () => {
     error.name = "ThrottlingException";
 
     expect(classifyAIError(error)).toBe("unknown");
+  });
+});
+
+describe("model runs this service names itself", () => {
+  const model = { provider: "google", keySource: "byok" } as const;
+  const sink = failureSink({ event: "ai-error.test", expected: [] });
+
+  const NAMED = [
+    {
+      error: new ModelOutputIncompleteError({ model }),
+      kind: "output_incomplete",
+      reason: "model_output_incomplete",
+    },
+    {
+      error: new ModelOutputInvalidError({ model }),
+      kind: "output_invalid",
+      reason: "model_output_invalid",
+    },
+    {
+      error: new ModelDeadlineExceededError({ deadlineMs: 45_000, model }),
+      kind: "deadline_exceeded",
+      reason: "model_deadline_exceeded",
+    },
+  ] as const;
+
+  for (const { error, kind, reason } of NAMED) {
+    test(`names ${error.name} as ${kind} and grades it ${reason}, never unclassified`, () => {
+      expect(classifyAIError(error)).toBe(kind);
+      expect(classifyAIBoundaryFailure(error)).toBe(kind);
+      expect(gradeFailure(readEvidence(error), sink).reason).toBe(reason);
+      expect(isAnticipatedAIFailure(error, kind)).toBe(true);
+      // Still a model run error to every caller that already handles one.
+      expect(error).toBeInstanceOf(ModelRunError);
+    });
+
+    test(`names ${error.name} through the wrappers a caller adds`, () => {
+      expect(
+        classifyAIError(new Error("Generation failed", { cause: error })),
+      ).toBe(kind);
+    });
+  }
+
+  test("a bare model run error stays unknown: only a named outcome is named", () => {
+    const error = new ModelRunError({ model });
+    expect(classifyAIError(error)).toBe("unknown");
+    expect(gradeFailure(readEvidence(error), sink).reason).toBe("unclassified");
+  });
+});
+
+describe("structured-output run error codes", () => {
+  // The engine rebuilds a structured-output failure as an `Error` carrying
+  // the adapter's or its own code, so the code is the evidence.
+  const codedError = (code: string, message = "Structured output failed") =>
+    Object.assign(new Error(message), { code });
+
+  for (const code of [
+    "max_tokens",
+    "parse-error",
+    "structured-output-parse-failed",
+  ]) {
+    test(`reads ${code} as an incomplete answer`, () => {
+      expect(classifyAIError(codedError(code))).toBe("output_incomplete");
+    });
+  }
+
+  test("reads OpenAI's output-ceiling stop as an incomplete answer", () => {
+    expect(classifyAIError(codedError("incomplete", "max_output_tokens"))).toBe(
+      "output_incomplete",
+    );
+    // The same code for any other reason is not a ceiling stop.
+    expect(classifyAIError(codedError("incomplete", "content_filter"))).toBe(
+      "unknown",
+    );
+  });
+
+  test("reads a schema rejection of a complete answer as invalid", () => {
+    expect(
+      classifyAIError(codedError("structured-output-validation-failed")),
+    ).toBe("output_invalid");
+  });
+
+  test("reads the code through the cause the engine wraps it in", () => {
+    expect(
+      classifyAIError(
+        new Error("Structured output failed", {
+          cause: codedError("parse-error"),
+        }),
+      ),
+    ).toBe("output_incomplete");
+  });
+
+  test("an inherited key is not a code", () => {
+    expect(classifyAIError(codedError("toString"))).toBe("unknown");
+    expect(classifyAIError(codedError("__proto__"))).toBe("unknown");
   });
 });

@@ -711,6 +711,13 @@
         "procedural-history": "Procesinė eiga",
         "reasoning": "Mąstymas"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
+        "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
+        "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
+        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}",
+        "unavailable": "Šiam sprendimui DI analizė neprieinama."
+      },
       "generate": "Parengti DI santraukas",
       "holdingAnchor": "Pereiti prie pastraipos",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",

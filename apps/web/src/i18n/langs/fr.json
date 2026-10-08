@@ -711,6 +711,13 @@
         "procedural-history": "Procédure",
         "reasoning": "Raisonnement"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {La clé {provider} de votre organisation a renvoyé une réponse incomplète.} other {Le modèle d’IA a renvoyé une réponse incomplète.}}",
+        "providerRefused": "{source, select, organization {{provider} a refusé la requête faite avec la clé de votre organisation. Vérifiez la clé, son quota et la facturation dans les paramètres de l’organisation.} other {Le fournisseur d’IA a refusé la requête.}}",
+        "providerUnavailable": "{source, select, organization {{provider} est indisponible pour la clé de votre organisation pour le moment.} other {Le fournisseur d’IA est indisponible pour le moment.}}",
+        "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}",
+        "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
+      },
       "generate": "Générer les sommaires par IA",
       "holdingAnchor": "Aller au paragraphe",
       "invitation": "Avec un compte gratuit, l’IA prépare des notes de travail sur cette décision.",

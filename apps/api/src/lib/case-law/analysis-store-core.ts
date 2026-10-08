@@ -9,9 +9,11 @@
  * sentinel cleanup must then leave the newer parse's state alone.
  */
 
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type {
+  AnalysisFailed,
   AnalysisGenerating,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
@@ -60,6 +62,11 @@ type AnalysisRelease = {
   sentinel: AnalysisGenerating;
 };
 
+type AnalysisFailure = AnalysisRelease & {
+  /** Over the sentinel's own input, which the store does not re-derive. */
+  failure: AnalysisFailed;
+};
+
 export type AnalysisStore = {
   /**
    * Takes the row for a run over `fingerprint`, provided it still holds
@@ -84,12 +91,49 @@ export type AnalysisStore = {
    * sentinel holds a different value and is left alone.
    */
   clear: (release: AnalysisRelease) => Promise<void>;
+  /**
+   * Replaces this run's sentinel, and only this run's, with the record of
+   * how it failed, so a reader polling the run learns it ended and why
+   * instead of finding the row empty and starting it again. Answers whether
+   * the row still held the sentinel; when it did not, a newer run owns the
+   * row and keeps it.
+   */
+  fail: (failure: AnalysisFailure) => Promise<boolean>;
   /** What the store holds beside the row; null where the row is the store. */
   peek: (decisionId: SafeId<"caseLawDecision">) => unknown;
 };
 
 /**
- * The row-backed store. Its three statements touch one column of one table,
+ * How a run gives the row back: its exact sentinel, and only that, becomes
+ * nothing (the run was released) or the record of how it failed. A
+ * replacement run that took over a stale sentinel holds a different value
+ * and is left alone.
+ */
+const replaceSentinel = async (
+  db: AnalysisRowWriter,
+  {
+    decisionId,
+    sentinel,
+    value,
+  }: AnalysisRelease & { value: AnalysisFailed | null },
+): Promise<boolean> => {
+  // audit: skip — analysis sentinel release or outcome; no user-facing record changes
+  const written = await db
+    .update(caseLawDecisions)
+    .set({ analysis: value })
+    .where(
+      and(
+        eq(caseLawDecisions.id, decisionId),
+        // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
+        sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
+      ),
+    )
+    .returning({ id: caseLawDecisions.id });
+  return written.length > 0;
+};
+
+/**
+ * The row-backed store. Its statements touch one column of one table,
  * which is exactly what the restricted analysis-writer role is granted.
  */
 export const createDbAnalysisStore = (
@@ -127,17 +171,13 @@ export const createDbAnalysisStore = (
     return written.length > 0;
   },
   clear: async ({ decisionId, sentinel }) => {
-    // audit: skip — analysis sentinel cleanup; no user-facing state change
-    await db
-      .update(caseLawDecisions)
-      .set({ analysis: null })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
-          sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
-        ),
-      );
+    await replaceSentinel(db, { decisionId, sentinel, value: null });
+  },
+  fail: async ({ decisionId, failure, sentinel }) => {
+    if (failure.inputFingerprint !== sentinel.inputFingerprint) {
+      return panic("A failure record must be over its run's own input");
+    }
+    return await replaceSentinel(db, { decisionId, sentinel, value: failure });
   },
   peek: () => null,
 });

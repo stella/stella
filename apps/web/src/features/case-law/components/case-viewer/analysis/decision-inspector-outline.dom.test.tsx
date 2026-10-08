@@ -69,7 +69,7 @@ const done = {
 const states = {
   idle: { status: "idle" },
   generating: { status: "generating", tree: done.analysis.tree },
-  error: { status: "error" },
+  error: { status: "error", error: { kind: "unreadable" } },
   done,
 } satisfies Record<AnalysisState["status"], AnalysisState>;
 

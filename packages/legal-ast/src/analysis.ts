@@ -149,7 +149,53 @@ export type AnalysisGenerating = {
   inputFingerprint: AnalysisInputFingerprint;
 };
 
-export type PersistedDecisionAnalysis = DecisionAnalysis | AnalysisGenerating;
+/**
+ * Why a generation run ended without an analysis, as the reader is told:
+ * the answer arrived incomplete (cut off, unparseable, or not the requested
+ * structure), the run outlived its deadline, the provider refused the call
+ * (rejected key, billing, quota, retired model), the provider was
+ * unavailable, or something else failed.
+ */
+export const ANALYSIS_FAILURE_CODES = [
+  "answer_incomplete",
+  "timed_out",
+  "provider_refused",
+  "provider_unavailable",
+  "failed",
+] as const;
+
+export type AnalysisFailureCode = (typeof ANALYSIS_FAILURE_CODES)[number];
+
+/**
+ * Whose key the failed run called the provider with. An organization's own
+ * key is named by an opaque tag, never by the organization's id: the row is
+ * corpus state every deployment reading the corpus can see, and which
+ * organization opened which decision is that organization's business.
+ */
+export type AnalysisFailureKey =
+  | { source: "organization"; tag: string; provider: string }
+  | { source: "platform" };
+
+/**
+ * The record a failed run leaves on the row in place of its sentinel, so a
+ * reader polling the run learns it ended and why, instead of finding the row
+ * empty and starting the same run again. It holds only while it is fresh and
+ * only for readers calling with the same key: anyone else reads it as no
+ * analysis, and an explicit retry replaces it.
+ */
+export type AnalysisFailed = {
+  version: typeof CURRENT_ANALYSIS_VERSION;
+  status: "failed";
+  failedAt: string;
+  inputFingerprint: AnalysisInputFingerprint;
+  code: AnalysisFailureCode;
+  key: AnalysisFailureKey;
+};
+
+export type PersistedDecisionAnalysis =
+  | DecisionAnalysis
+  | AnalysisGenerating
+  | AnalysisFailed;
 
 export const analysisAnnotationSchema: v.GenericSchema<AnalysisAnnotation> =
   v.object({
@@ -300,11 +346,41 @@ const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> =
     inputFingerprint: inputFingerprintSchema,
   });
 
+const nonEmptyString = v.pipe(v.string(), v.minLength(1));
+
+const analysisFailureKeySchema: v.GenericSchema<AnalysisFailureKey> = v.variant(
+  "source",
+  [
+    v.strictObject({
+      source: v.literal("organization"),
+      tag: nonEmptyString,
+      provider: nonEmptyString,
+    }),
+    v.strictObject({ source: v.literal("platform") }),
+  ],
+);
+
+const analysisFailedSchema: v.GenericSchema<AnalysisFailed> = v.strictObject({
+  version: v.literal(CURRENT_ANALYSIS_VERSION),
+  status: v.literal("failed"),
+  failedAt: v.string(),
+  inputFingerprint: inputFingerprintSchema,
+  code: v.picklist(ANALYSIS_FAILURE_CODES),
+  key: analysisFailureKeySchema,
+});
+
 const persistedDecisionAnalysisSchema: v.GenericSchema<PersistedDecisionAnalysis> =
-  v.union([analysisGeneratingSchema, decisionAnalysisSchema]);
+  v.union([
+    analysisGeneratingSchema,
+    analysisFailedSchema,
+    decisionAnalysisSchema,
+  ]);
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   v.is(analysisGeneratingSchema, val);
+
+export const isAnalysisFailed = (val: unknown): val is AnalysisFailed =>
+  v.is(analysisFailedSchema, val);
 
 export const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
   v.is(decisionAnalysisSchema, val);

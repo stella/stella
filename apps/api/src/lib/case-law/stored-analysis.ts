@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 /**
  * What a stored decision analysis is worth for the document as it reads
@@ -8,6 +8,9 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
  */
 
 import type {
+  AnalysisFailed,
+  AnalysisFailureCode,
+  AnalysisFailureKey,
   AnalysisGenerating,
   AnalysisInputFingerprint,
   DecisionAnalysis,
@@ -16,6 +19,7 @@ import {
   CURRENT_ANALYSIS_VERSION,
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
+import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions } from "@/api/db/schema";
@@ -39,15 +43,125 @@ export const analysisSentinel = (
 });
 
 /**
+ * How long a failed run's record answers for the decision. Within it, the
+ * reader whose key failed is told why (and offered a retry) instead of the
+ * next poll starting the same run again; past it, the next open of the
+ * decision simply runs anew.
+ */
+export const ANALYSIS_FAILURE_HOLD_MS = 15 * 60 * 1000;
+
+/**
+ * The key a reader would run the analysis with, in the form a failure record
+ * names it. An organization's key is named by a tag derived from the
+ * organization and the decision, so the record says nothing about which
+ * organization it was and two decisions' records cannot be linked to one.
+ */
+export type AnalysisReaderKey =
+  | {
+      source: "organization";
+      organizationId: SafeId<"organization">;
+      provider: string;
+    }
+  | { source: "platform" };
+
+const organizationKeyTag = (
+  organizationId: SafeId<"organization">,
+  decisionId: SafeId<"caseLawDecision">,
+): string =>
+  sha256Hex(`case-law-analysis-failure:${organizationId}:${decisionId}`);
+
+export const analysisFailureKey = (
+  reader: AnalysisReaderKey,
+  decisionId: SafeId<"caseLawDecision">,
+): AnalysisFailureKey => {
+  switch (reader.source) {
+    case "organization":
+      return {
+        source: "organization",
+        tag: organizationKeyTag(reader.organizationId, decisionId),
+        provider: reader.provider,
+      };
+    case "platform":
+      return { source: "platform" };
+    default:
+      reader satisfies never;
+      return panic("Unhandled analysis reader key");
+  }
+};
+
+export const analysisFailure = ({
+  code,
+  decisionId,
+  fingerprint,
+  now,
+  reader,
+}: {
+  code: AnalysisFailureCode;
+  decisionId: SafeId<"caseLawDecision">;
+  fingerprint: AnalysisInputFingerprint;
+  now: Date;
+  reader: AnalysisReaderKey;
+}): AnalysisFailed => ({
+  version: CURRENT_ANALYSIS_VERSION,
+  status: "failed",
+  failedAt: now.toISOString(),
+  inputFingerprint: fingerprint,
+  code,
+  key: analysisFailureKey(reader, decisionId),
+});
+
+/**
+ * Whether a failure record answers this reader: only a reader calling with
+ * the very key that failed. A platform failure says nothing about an
+ * organization's own key and the reverse, and one organization's key failing
+ * says nothing about another's, so every other reader reads it as no
+ * analysis and runs with its own key.
+ */
+export const failureAnswersReader = ({
+  decisionId,
+  failure,
+  reader,
+}: {
+  decisionId: SafeId<"caseLawDecision">;
+  failure: AnalysisFailed;
+  reader: AnalysisReaderKey;
+}): boolean => {
+  const key = failure.key;
+  switch (key.source) {
+    case "organization":
+      return (
+        reader.source === "organization" &&
+        key.tag === organizationKeyTag(reader.organizationId, decisionId) &&
+        key.provider === reader.provider
+      );
+    case "platform":
+      return reader.source === "platform";
+    default:
+      key satisfies never;
+      return panic("Unhandled analysis failure key");
+  }
+};
+
+/**
  * A finished analysis over the same input, a run still in flight over the
- * same input, or nothing. A value over any other input is stale, whatever
- * its shape: its anchors name blocks of a document that no longer exists.
- * A value the parser rejects is nothing too, whatever it claims.
+ * same input, a run over the same input that failed recently, or nothing. A
+ * value over any other input is stale, whatever its shape: its anchors name
+ * blocks of a document that no longer exists. A value the parser rejects is
+ * nothing too, whatever it claims, and so is a sentinel or failure record
+ * past its hold.
  */
 export type StoredAnalysisState =
   | { kind: "done"; analysis: DecisionAnalysis }
   | { kind: "generating" }
+  | { kind: "failed"; failure: AnalysisFailed }
   | { kind: "none" };
+
+const isFresh = (at: string, now: Date, holdMs: number): boolean => {
+  const instant = Result.try(() => Temporal.Instant.from(at));
+  return (
+    instant.isOk() && now.getTime() - instant.value.epochMilliseconds < holdMs
+  );
+};
 
 export const storedAnalysisState = ({
   fingerprint,
@@ -65,11 +179,19 @@ export const storedAnalysisState = ({
   if (!("status" in analysis)) {
     return { kind: "done", analysis };
   }
-  const startedAt = Result.try(() => Temporal.Instant.from(analysis.startedAt));
-  return startedAt.isOk() &&
-    now.getTime() - startedAt.value.epochMilliseconds < SENTINEL_STALE_MS
-    ? { kind: "generating" }
-    : { kind: "none" };
+  switch (analysis.status) {
+    case "generating":
+      return isFresh(analysis.startedAt, now, SENTINEL_STALE_MS)
+        ? { kind: "generating" }
+        : { kind: "none" };
+    case "failed":
+      return isFresh(analysis.failedAt, now, ANALYSIS_FAILURE_HOLD_MS)
+        ? { kind: "failed", failure: analysis }
+        : { kind: "none" };
+    default:
+      analysis satisfies never;
+      return panic("Unhandled persisted analysis status");
+  }
 };
 
 export type AnalysisStoreKey = {

@@ -126,6 +126,7 @@ const createStore = ({
     clear: async () => {
       await Promise.resolve();
     },
+    fail: async () => await Promise.resolve(false),
     peek: () => held,
   };
   return { calls, store };

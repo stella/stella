@@ -74,10 +74,24 @@ const TOOL_CALL_END_STREAM_CHUNK_TYPE =
 const TOOL_CALL_START_STREAM_CHUNK_TYPE =
   "TOOL_CALL_START" satisfies StreamChunk["type"];
 
+/**
+ * Whether a run error's `code` and `message` say the response stopped at the
+ * output ceiling. Read from the fields, so the same verdict holds for the
+ * stream event and for the `Error` the structured-output engine rebuilds from
+ * it (which keeps both).
+ */
+export const isOutputCeilingStopReport = ({
+  code,
+  message,
+}: {
+  code: unknown;
+  message: unknown;
+}): boolean =>
+  code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+  (code === INCOMPLETE_RESPONSE_CODE && message === OUTPUT_CEILING_REASON);
+
 const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
-  chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
-  (chunk.code === INCOMPLETE_RESPONSE_CODE &&
-    chunk.message === OUTPUT_CEILING_REASON);
+  isOutputCeilingStopReport(chunk);
 
 /**
  * A response cut off at the output ceiling, read as a `length` finish.

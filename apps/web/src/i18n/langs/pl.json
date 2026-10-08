@@ -711,6 +711,13 @@
         "procedural-history": "Przebieg postępowania",
         "reasoning": "Rozumowanie"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
+        "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
+        "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
+      },
       "generate": "Ułóż tezy w AI",
       "holdingAnchor": "Przejdź do akapitu",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",

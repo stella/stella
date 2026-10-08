@@ -70,6 +70,9 @@ import type {
   TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
+  ModelDeadlineExceededError,
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
   ModelRunError,
   PROVIDER_CALL_ERROR_MESSAGE,
   ProviderCallError,
@@ -180,16 +183,39 @@ export type TanStackTextFinishPolicy =
   | "allow-output-ceiling"
   | "require-complete";
 
-type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions & {
-  finishPolicy: TanStackTextFinishPolicy;
+/**
+ * A bound on one awaited model call, owned by the call rather than threaded in
+ * as an abort signal: a run that outlives it fails as a
+ * `ModelDeadlineExceededError`, never as the cancellation an abort signal
+ * reads as, so the caller can tell a slow provider from a client that left.
+ */
+type GenerationDeadlineOption = {
+  deadlineMs?: number | undefined;
 };
 
-type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
-  TanStackTextForRoleOptions & {
-    /** Explicit exception for a generative fallback or provider-path probe. */
-    outputMode?: "generative" | undefined;
-    outputSchema: TSchema;
+type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions &
+  GenerationDeadlineOption & {
+    finishPolicy: TanStackTextFinishPolicy;
   };
+
+/**
+ * The output a structured answer needs, in tokens. The request asks for this
+ * much, bounded by what the resolved model can emit at all (its catalog output
+ * limit, less any thinking reservation), so a caller states its own need once
+ * and no model-specific number lives at a call site. Exclusive with
+ * `maxOutputTokens`, which sends a figure as given.
+ */
+type OutputTokenBudgetOption =
+  | { outputTokenBudget?: never }
+  | { maxOutputTokens?: never; outputTokenBudget: number };
+
+type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
+  TanStackTextForRoleOptions &
+    OutputTokenBudgetOption & {
+      /** Explicit exception for a generative fallback or provider-path probe. */
+      outputMode?: "generative" | undefined;
+      outputSchema: TSchema;
+    };
 
 export type TanStackStructuredOutputPartial<TOutput> = NonNullable<
   StructuredOutputPart<TOutput>["partial"]
@@ -237,6 +263,58 @@ const cancelledGenerationError = (): HandlerError =>
     "generation_cancelled",
   );
 
+type GenerationDeadline = {
+  /** The caller's signal joined with the deadline's own. */
+  signal: AbortSignal | undefined;
+  /** Whether the deadline, rather than the caller, ended the run. */
+  expired: () => boolean;
+  clear: () => void;
+};
+
+const startGenerationDeadline = ({
+  abortSignal,
+  deadlineMs,
+}: {
+  abortSignal: AbortSignal | undefined;
+  deadlineMs: number | undefined;
+}): GenerationDeadline => {
+  if (deadlineMs === undefined) {
+    return {
+      signal: abortSignal,
+      expired: () => false,
+      clear: () => undefined,
+    };
+  }
+  if (!Number.isInteger(deadlineMs) || deadlineMs <= 0) {
+    return panic("A generation deadline must be a positive integer of ms");
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, deadlineMs);
+  return {
+    signal:
+      abortSignal === undefined
+        ? controller.signal
+        : AbortSignal.any([abortSignal, controller.signal]),
+    expired: () => controller.signal.aborted,
+    clear: () => {
+      clearTimeout(timer);
+    },
+  };
+};
+
+// The error a run its caller's signal ended is reported as: the deadline's own
+// when the deadline fired, a cancellation otherwise.
+const endedRunError = (
+  deadline: GenerationDeadline,
+  deadlineMs: number | undefined,
+  model: ResolvedTanStackTextModel,
+): HandlerError =>
+  deadline.expired() && deadlineMs !== undefined
+    ? new ModelDeadlineExceededError({ deadlineMs, model })
+    : cancelledGenerationError();
+
 const isAbortRejection = ({
   error,
   signal,
@@ -279,8 +357,23 @@ const finishAccepted = (
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
+  const deadline = startGenerationDeadline(options);
+  try {
+    return await generateTanStackTextWithin(options, deadline);
+  } finally {
+    deadline.clear();
+  }
+};
+
+const generateTanStackTextWithin = async (
+  options: GenerateTanStackTextForRoleOptions,
+  deadline: GenerationDeadline,
+): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
-  const abortSignal = admittedDispatchSignal(options);
+  const abortSignal = admittedDispatchSignal({
+    ...options,
+    abortSignal: deadline.signal,
+  });
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
@@ -312,7 +405,7 @@ export const generateTanStackTextForRole = async (
     }
   } catch (error) {
     if (isAbortRejection({ error, signal: abortSignal })) {
-      throw cancelledGenerationError();
+      throw endedRunError(deadline, options.deadlineMs, model);
     }
 
     throw error;
@@ -325,10 +418,16 @@ export const generateTanStackTextForRole = async (
   // answer the caller cannot tell from a whole one. A reported finish
   // separates the two: that run completed before the signal fired.
   if (run.finish.kind === "unfinished" && abortSignal?.aborted === true) {
-    throw cancelledGenerationError();
+    throw endedRunError(deadline, options.deadlineMs, model);
   }
 
   if (!finishAccepted(options.finishPolicy, run.finish)) {
+    // A run that spent its output budget is an incomplete answer and is named
+    // as one; the other refused finishes (moderated, tool-bearing, unfinished)
+    // keep the generic refusal.
+    if (run.finish.kind === "finished" && run.finish.reason === "length") {
+      throw new ModelOutputIncompleteError({ model });
+    }
     throw new HandlerError({
       status: 502,
       message: "AI generation did not complete",
@@ -704,6 +803,10 @@ const PROVIDER_OWNED_ERROR_KIND = {
   model_unavailable: true,
   provider_unavailable: true,
   provider_stream_incomplete: true,
+  // Named by this service from the run's own outcome, not by the provider.
+  output_incomplete: false,
+  output_invalid: false,
+  deadline_exceeded: false,
   loop_detected: false,
   empty_completion: false,
   unknown: false,
@@ -759,6 +862,16 @@ export const withRecoveredProviderStatus = ({
       ? error
       : { cause: body, requestId: providerRequestIdFrom(error) };
   const kind = classifyAIError(evidence);
+  // An answer that arrived but cannot be used is named from the code the
+  // engine or adapter reported, whatever else the chain carries: left to the
+  // fallback below it would leave as a bare `ModelRunError` and grade as an
+  // unclassified defect.
+  if (!isOwnedRunFailure(error) && kind === "output_incomplete") {
+    return new ModelOutputIncompleteError({ model });
+  }
+  if (!isOwnedRunFailure(error) && kind === "output_invalid") {
+    return new ModelOutputInvalidError({ model });
+  }
   if (
     !hasProviderFailureInCauseChain(evidence) &&
     !PROVIDER_OWNED_ERROR_KIND[kind]
@@ -962,7 +1075,7 @@ type ParseModelOutputOptions<TSchema extends v.GenericSchema> = {
 };
 
 // A Valibot issue message can quote the received value, which here is model
-// output, so a mismatch surfaces as the fixed-message `ModelRunError`.
+// output, so a mismatch surfaces as the fixed-message `ModelOutputInvalidError`.
 const parseModelOutput = <TSchema extends v.GenericSchema>({
   model,
   outputSchema,
@@ -970,22 +1083,66 @@ const parseModelOutput = <TSchema extends v.GenericSchema>({
 }: ParseModelOutputOptions<TSchema>): v.InferOutput<TSchema> => {
   const parsed = v.safeParse(outputSchema, output);
   if (!parsed.success) {
-    throw new ModelRunError({ model });
+    throw new ModelOutputInvalidError({ model });
   }
   return parsed.output;
 };
 
+/**
+ * The output allowance a structured answer that needs `budget` tokens asks
+ * the resolved model for: the budget, bounded by the model's own allowance
+ * (`chatTurnOutputTokens`). `undefined` for a model the catalog does not list,
+ * which leaves the allowance to the provider rather than guess one.
+ */
+export const outputTokensWithinModelLimit = (
+  model: ResolvedTanStackTextModel,
+  budget: number,
+): number | undefined => {
+  if (!Number.isInteger(budget) || budget <= 0) {
+    return panic("An output token budget must be a positive integer");
+  }
+  const allowance = chatTurnOutputTokens(model);
+  return allowance === undefined ? undefined : Math.min(budget, allowance);
+};
+
+const requestedOutputTokens = (
+  options: {
+    maxOutputTokens?: number | undefined;
+    outputTokenBudget?: number | undefined;
+  },
+  model: ResolvedTanStackTextModel,
+): number | undefined =>
+  options.outputTokenBudget === undefined
+    ? options.maxOutputTokens
+    : outputTokensWithinModelLimit(model, options.outputTokenBudget);
+
 export const generateTanStackObjectForRole = async <
   TSchema extends v.GenericSchema,
->({
-  outputMode: _outputMode,
-  outputSchema,
-  ...options
-}: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
-  v.InferOutput<TSchema>
-> => {
+>(
+  options: GenerateTanStackObjectForRoleOptions<TSchema> &
+    GenerationDeadlineOption,
+): Promise<v.InferOutput<TSchema>> => {
+  const deadline = startGenerationDeadline(options);
+  try {
+    return await generateTanStackObjectWithin(options, deadline);
+  } finally {
+    deadline.clear();
+  }
+};
+
+const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
+  {
+    outputMode: _outputMode,
+    outputSchema,
+    ...options
+  }: GenerateTanStackObjectForRoleOptions<TSchema> & GenerationDeadlineOption,
+  deadline: GenerationDeadline,
+): Promise<v.InferOutput<TSchema>> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
-  const abortSignal = admittedDispatchSignal(options);
+  const abortSignal = admittedDispatchSignal({
+    ...options,
+    abortSignal: deadline.signal,
+  });
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
@@ -1001,6 +1158,7 @@ export const generateTanStackObjectForRole = async <
       provider: model.provider,
     }),
   );
+  const maxOutputTokens = requestedOutputTokens(options, model);
 
   const generated = await Result.tryPromise({
     try: async () =>
@@ -1021,7 +1179,7 @@ export const generateTanStackObjectForRole = async <
             modelOptions: mergeGenerationOptions({
               caching: options.caching,
               model,
-              maxOutputTokens: options.maxOutputTokens,
+              maxOutputTokens,
               serviceTier,
               temperature: options.temperature,
             }),
@@ -1038,7 +1196,7 @@ export const generateTanStackObjectForRole = async <
     // that as a plain error rather than an abort. The caller's signal is what
     // tells the two apart, as for text generation.
     if (abortSignal?.aborted === true) {
-      throw cancelledGenerationError();
+      throw endedRunError(deadline, options.deadlineMs, model);
     }
     throw generated.error;
   }
@@ -1069,7 +1227,7 @@ export const streamTanStackObjectForRole = async function* <
     abortController,
     analytics: options.analytics,
     caching: options.caching,
-    maxOutputTokens: options.maxOutputTokens,
+    maxOutputTokens: requestedOutputTokens(options, model),
     messages: requestMessages,
     model,
     outputSchema,

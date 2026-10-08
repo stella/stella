@@ -69,6 +69,13 @@ const memoryAnalysisStore: AnalysisStore = {
     }
     await Promise.resolve();
   },
+  fail: async ({ decisionId, failure, sentinel }) => {
+    const held = memoryAnalyses.get(decisionId) === sentinel;
+    if (held) {
+      memoryAnalyses.set(decisionId, failure);
+    }
+    return await Promise.resolve(held);
+  },
   peek: (decisionId) => memoryAnalyses.get(decisionId) ?? null,
 };
 

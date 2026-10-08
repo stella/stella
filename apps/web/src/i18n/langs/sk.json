@@ -711,6 +711,13 @@
         "procedural-history": "Procesná história",
         "reasoning": "Uvažovanie"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
+        "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
+        "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
+        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}",
+        "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
+      },
       "generate": "Zostaviť právne vety pomocou AI",
       "holdingAnchor": "Prejsť na odsek",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",

@@ -10,6 +10,7 @@ import {
   getOutputTokenLimit,
   MODEL_ROLES,
   REASONING_EFFORTS,
+  TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -23,7 +24,11 @@ import {
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import {
+  MODEL_OUTPUT_INCOMPLETE_MESSAGE,
   MODEL_RUN_ERROR_MESSAGE,
+  ModelDeadlineExceededError,
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
   ModelRunError,
   ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
@@ -46,6 +51,7 @@ import {
   generateTanStackObjectForRole,
   generateTanStackTextForRole,
   mergeGenerationOptions,
+  outputTokensWithinModelLimit,
   streamTanStackChatRun,
   streamTanStackObjectForRole,
   streamTanStackTextForRole,
@@ -379,6 +385,9 @@ const noCaching = {
   enabled: false,
   reason: "org-disabled",
 } satisfies CachingDecision;
+
+/** A sink with no local expectations, so a grade is the failure's own. */
+const anySink = failureSink({ event: "generation.test", expected: [] });
 
 /**
  * A provider answer whose only surviving detail is its response body: the
@@ -1530,6 +1539,8 @@ describe("TanStack AI text generation", () => {
     );
 
     expect(caught).toMatchObject({ status: 502 });
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+    expect(classifyAIError(caught)).toBe("output_incomplete");
   });
 
   // The output-ceiling stop reaches the engine as a `RUN_ERROR` on more than
@@ -1616,10 +1627,16 @@ describe("TanStack AI text generation", () => {
       (error: unknown) => error,
     );
 
+    // Named as the incomplete answer it is, never left unclassified.
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
     expect(caught).toMatchObject({
-      message: "AI generation did not complete",
+      message: MODEL_OUTPUT_INCOMPLETE_MESSAGE,
       status: 502,
     });
+    expect(classifyAIError(caught)).toBe("output_incomplete");
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "model_output_incomplete",
+    );
   });
 
   test("rejects a cancelled run instead of returning its truncated text", async () => {
@@ -2436,5 +2453,362 @@ describe("a chat run a caller consumes itself", () => {
       asTestRaw<Error | undefined>(caught)?.name,
     );
     expect(JSON.stringify({ chunks, caught })).not.toContain(SENTINEL);
+  });
+});
+
+// A provider that streams its structured answer natively, as Gemini's adapter
+// does: the engine reads the adapter's own run error codes from this path,
+// which is where a cut-off answer is noticed in production.
+type StructuredStream = (
+  signal: AbortSignal | undefined,
+) => AsyncIterable<StreamChunk>;
+
+const structuredStreamModel = (
+  stream: StructuredStream,
+): ResolvedTanStackTextModel => {
+  const adapter: AnyTextAdapter = {
+    ...providerAdapter,
+    structuredOutputStream: (options) =>
+      stream(options.chatOptions.request?.signal),
+  };
+  // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives; the rest
+  // is `testModel`'s bookkeeping.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
+  return { ...testModel, adapter } as ResolvedTanStackTextModel;
+};
+
+const runStarted = {
+  type: EventType.RUN_STARTED,
+  runId: PROVIDER_RUN_ID,
+  threadId: PROVIDER_THREAD_ID,
+} satisfies StreamChunk;
+
+const partialAnswer = (delta: string): StreamChunk[] => [
+  {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId: PROVIDER_MESSAGE_ID,
+    role: "assistant",
+  },
+  {
+    type: EventType.TEXT_MESSAGE_CONTENT,
+    messageId: PROVIDER_MESSAGE_ID,
+    delta,
+  },
+];
+
+const structuredRunError = (code: string, message: string): StreamChunk => ({
+  type: EventType.RUN_ERROR,
+  runId: PROVIDER_RUN_ID,
+  threadId: PROVIDER_THREAD_ID,
+  code,
+  message,
+});
+
+const untilAborted = async (signal: AbortSignal | undefined): Promise<void> => {
+  if (signal === undefined) {
+    throw new Error("The engine must hand the adapter the run's signal");
+  }
+  if (signal.aborted) {
+    return;
+  }
+  const aborted = Promise.withResolvers<undefined>();
+  signal.addEventListener(
+    "abort",
+    () => {
+      aborted.resolve(undefined);
+    },
+    { once: true },
+  );
+  await aborted.promise;
+};
+
+const OBJECT_OPTIONS = {
+  admission: NO_ORGANIZATION_MODEL_DISPATCH,
+  caching: noCaching,
+  organizationId: null,
+  dataClass: "customer",
+  managedAIResidency: "eu",
+  orgAIConfig: null,
+  outputSchema: v.strictObject({ answer: v.string() }),
+  prompt: "Extract the answer.",
+  role: "chat",
+  serviceTier: "standard",
+  tenantWorkspaceIds: [],
+} as const;
+
+const generateObjectWith = async (
+  stream: StructuredStream,
+  extra: { abortSignal?: AbortSignal; deadlineMs?: number } = {},
+): Promise<unknown> =>
+  await generateTanStackObjectForRole({
+    ...OBJECT_OPTIONS,
+    ...extra,
+    resolveTextModel: () => structuredStreamModel(stream),
+  }).then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+
+describe("a structured answer that arrived but cannot be used is named", () => {
+  const SENTINEL = "SENTINEL_CUT_OFF_ANSWER";
+
+  test("an answer the provider stopped at its output ceiling is incomplete", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield* partialAnswer(`{"answer": "${SENTINEL}`);
+      yield structuredRunError(
+        "max_tokens",
+        "The response was cut off because the maximum token limit was reached.",
+      );
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+    expect(classifyAIError(caught)).toBe("output_incomplete");
+    expect(gradeFailure(readEvidence(caught), anySink)).toMatchObject({
+      reason: "model_output_incomplete",
+      grade: "transient",
+    });
+    expect(JSON.stringify(caught)).not.toContain(SENTINEL);
+  });
+
+  test("OpenAI's spelling of the output-ceiling stop is incomplete too", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield* partialAnswer(`{"answer": "${SENTINEL}`);
+      yield structuredRunError("incomplete", "max_output_tokens");
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+  });
+
+  test("a cut-off answer that does not parse is incomplete, not unclassified", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield* partialAnswer(`{"answer": "${SENTINEL}`);
+      yield structuredRunError(
+        "parse-error",
+        `Failed to parse JSON content: {"answer": "${SENTINEL}`,
+      );
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "model_output_incomplete",
+    );
+    expect(JSON.stringify(caught)).not.toContain(SENTINEL);
+    expect(String(asTestRaw<Error>(caught).stack)).not.toContain(SENTINEL);
+  });
+
+  test("a complete answer its schema rejects is invalid", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      const raw = JSON.stringify({ answer: [SENTINEL] });
+      yield* partialAnswer(raw);
+      yield {
+        type: EventType.CUSTOM,
+        name: "structured-output.complete",
+        value: { object: { answer: [SENTINEL] }, raw },
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: PROVIDER_RUN_ID,
+        threadId: PROVIDER_THREAD_ID,
+        finishReason: "stop",
+      } satisfies StreamChunk;
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(classifyAIError(caught)).toBe("output_invalid");
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "model_output_invalid",
+    );
+    expect(JSON.stringify(caught)).not.toContain(SENTINEL);
+  });
+
+  // The codes are a closed vocabulary: a code the engine or adapter does not
+  // use for an unusable answer must not be read as one.
+  test("an unrelated run error code stays the generic model run error", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield structuredRunError("something-else", "Unrelated failure.");
+    });
+
+    expect(caught).toBeInstanceOf(ModelRunError);
+    expect(caught).not.toBeInstanceOf(ModelOutputIncompleteError);
+    expect(caught).not.toBeInstanceOf(ModelOutputInvalidError);
+  });
+});
+
+describe("a generation bounded by its own deadline", () => {
+  test("a structured run that outlives its deadline fails as timed out", async () => {
+    const started = performance.now();
+    const caught = await generateObjectWith(
+      async function* (signal) {
+        yield runStarted;
+        await untilAborted(signal);
+      },
+      { deadlineMs: 40 },
+    );
+
+    expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+    expect(caught).toMatchObject({ deadlineMs: 40, status: 502 });
+    expect(classifyAIError(caught)).toBe("deadline_exceeded");
+    expect(gradeFailure(readEvidence(caught), anySink)).toMatchObject({
+      reason: "model_deadline_exceeded",
+      grade: "transient",
+    });
+    // The run ended at the deadline, not whenever the provider gave up.
+    expect(performance.now() - started).toBeLessThan(5000);
+  });
+
+  test("a caller's own abort under a deadline that has not fired is a cancellation", async () => {
+    const controller = new AbortController();
+    const caught = await generateObjectWith(
+      async function* (signal) {
+        yield runStarted;
+        controller.abort();
+        await untilAborted(signal);
+      },
+      { abortSignal: controller.signal, deadlineMs: 60_000 },
+    );
+
+    expect(caught).not.toBeInstanceOf(ModelDeadlineExceededError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "generation_cancelled",
+    );
+  });
+
+  test("a run that answers within its deadline returns the answer", async () => {
+    const answer = { answer: "on time" };
+    const raw = JSON.stringify(answer);
+    expect(
+      await generateTanStackObjectForRole({
+        ...OBJECT_OPTIONS,
+        deadlineMs: 60_000,
+        resolveTextModel: () =>
+          structuredStreamModel(async function* () {
+            yield runStarted;
+            yield* partialAnswer(raw);
+            yield {
+              type: EventType.CUSTOM,
+              name: "structured-output.complete",
+              value: { object: answer, raw },
+            } satisfies StreamChunk;
+            yield {
+              type: EventType.RUN_FINISHED,
+              runId: PROVIDER_RUN_ID,
+              threadId: PROVIDER_THREAD_ID,
+              finishReason: "stop",
+            } satisfies StreamChunk;
+          }),
+      }),
+    ).toEqual(answer);
+  });
+
+  test("a text run that outlives its deadline fails as timed out", async () => {
+    const adapter: AnyTextAdapter = {
+      ...providerAdapter,
+      async *chatStream(options) {
+        yield runStarted;
+        await untilAborted(options.request?.signal);
+      },
+    };
+    const caught = await generateTanStackTextForRole({
+      caching: noCaching,
+      deadlineMs: 40,
+      finishPolicy: "require-complete",
+      organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+      // SAFETY: as `structuredStreamModel`.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
+      resolveTextModel: () =>
+        ({ ...testModel, adapter }) as ResolvedTanStackTextModel,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+    expect(classifyAIError(caught)).toBe("deadline_exceeded");
+  });
+});
+
+describe("an output token budget bounded by the model's catalog limit", () => {
+  // SAFETY: the helpers read only provider/modelOptions/modelId.
+  const modelFor = (
+    provider: (typeof TANSTACK_AI_PROVIDERS)[number],
+    modelId: string,
+  ): ResolvedTanStackTextModel =>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    ({
+      adapter: {},
+      keySource: "byok",
+      modelId,
+      modelOptions: {},
+      provider,
+    }) as ResolvedTanStackTextModel;
+
+  test("every offered model answers a budget within its own limit", () => {
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        const limit = getOutputTokenLimit(modelId);
+        // The catalog guard: an offered model the catalog gives no limit
+        // would leave the budget to the provider's own default.
+        expect(limit).toBeGreaterThan(0);
+        const model = modelFor(provider, modelId);
+        for (const budget of [1, 16_384, 10_000_000]) {
+          expect(outputTokensWithinModelLimit(model, budget)).toBe(
+            Math.min(budget, limit ?? 0),
+          );
+        }
+      }
+    }
+  });
+
+  test("the budget reaches the request as the provider's output option", async () => {
+    queueRun(objectRun({ answer: "ok" }));
+    const model = modelFor("openai", "gpt-5.5");
+    expect(getOutputTokenLimit("gpt-5.5")).toBeGreaterThan(16_384);
+
+    await generateTanStackObjectForRole({
+      ...OBJECT_OPTIONS,
+      outputTokenBudget: 16_384,
+      resolveTextModel: () =>
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
+        ({ ...model, adapter: providerAdapter }) as ResolvedTanStackTextModel,
+    });
+
+    expect(providerRequests.at(-1)?.modelOptions).toMatchObject({
+      max_output_tokens: 16_384,
+    });
+  });
+
+  test("a model the catalog does not list keeps the provider's default", async () => {
+    queueRun(objectRun({ answer: "ok" }));
+
+    await generateObjectForTestModel({
+      ...OBJECT_OPTIONS,
+      outputTokenBudget: 16_384,
+    });
+
+    expect(providerRequests.at(-1)?.modelOptions).not.toHaveProperty(
+      "max_output_tokens",
+    );
+  });
+
+  test("a budget that is not a positive integer is refused", () => {
+    const model = modelFor("openai", "gpt-5.5");
+    for (const budget of [0, -1, 1.5, Number.NaN]) {
+      expect(() => outputTokensWithinModelLimit(model, budget)).toThrow(
+        "An output token budget must be a positive integer",
+      );
+    }
   });
 });

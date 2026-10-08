@@ -711,6 +711,13 @@
         "procedural-history": "التاريخ الإجرائي",
         "reasoning": "التسبيب"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {أعاد مفتاح {provider} الخاص بمؤسستك إجابة غير مكتملة.} other {أعاد نموذج الذكاء الاصطناعي إجابة غير مكتملة.}}",
+        "providerRefused": "{source, select, organization {رفض {provider} الطلب المُرسل بمفتاح مؤسستك. تحقّق من المفتاح وحصّته والفوترة في إعدادات المؤسسة.} other {رفض مزوّد الذكاء الاصطناعي الطلب.}}",
+        "providerUnavailable": "{source, select, organization {{provider} غير متاح حالياً لمفتاح مؤسستك.} other {مزوّد الذكاء الاصطناعي غير متاح حالياً.}}",
+        "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}",
+        "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
+      },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
       "holdingAnchor": "الانتقال إلى الفقرة",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",

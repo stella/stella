@@ -1,7 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
+import {
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  type CaseLawAnalysisUnavailableCode,
+} from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
+  ANALYSIS_FAILURE_CODES,
+  type AnalysisFailureCode,
   type DecisionAnalysis,
   type PersistedDecisionAnalysis,
   parsePersistedDecisionAnalysis,
@@ -11,25 +18,78 @@ import type { PublicCaseLawDecision } from "@/features/case-law/public-decision"
 import { apiUrl } from "@/lib/api-url";
 import { STALE_TIME } from "@/lib/consts";
 
+/** Whose AI key the failed run called the provider with. */
+export type AnalysisFailureKey =
+  | { source: "organization"; provider: string }
+  | { source: "platform" };
+
+/**
+ * Why the reader has no analysis: the server will not make one, the last run
+ * failed (and how, with whose key), or the answer itself could not be read.
+ */
+export type AnalysisError =
+  | { kind: "unavailable"; code: CaseLawAnalysisUnavailableCode }
+  | { kind: "failed"; code: AnalysisFailureCode; key: AnalysisFailureKey }
+  | { kind: "unreadable" };
+
 type AnalysisResponse =
   | { status: "done"; analysis: DecisionAnalysis }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
-  | { status: "error" };
+  | { status: "error"; error: AnalysisError };
 
 export type AnalysisQueryResult =
   | { kind: "done"; analysis: DecisionAnalysis }
   | { kind: "generating"; tree: DecisionAnalysis["tree"] }
-  | { kind: "error" };
+  | { kind: "error"; error: AnalysisError };
 
 const POLL_INTERVAL_MS = 2000;
 
+const UNREADABLE: AnalysisError = { kind: "unreadable" };
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const isMember = <T extends string>(
+  members: readonly T[],
+  value: unknown,
+): value is T => members.some((member) => member === value);
 
 const completeAnalysis = (
   analysis: PersistedDecisionAnalysis | null,
 ): DecisionAnalysis | null =>
   analysis !== null && !("status" in analysis) ? analysis : null;
+
+const parseFailureKey = (value: unknown): AnalysisFailureKey | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const source = value["source"];
+  if (source === "platform") {
+    return { source: "platform" };
+  }
+  const provider = value["provider"];
+  return source === "organization" &&
+    typeof provider === "string" &&
+    provider.length > 0
+    ? { source: "organization", provider }
+    : null;
+};
+
+/**
+ * The error a response names, read deliberately: an unknown code or a failure
+ * without its key is unreadable, never a guess at one of the known messages.
+ */
+const parseAnalysisError = (value: Record<string, unknown>): AnalysisError => {
+  const code = value["code"];
+  if (isMember(CASE_LAW_ANALYSIS_UNAVAILABLE_CODES, code)) {
+    return { kind: "unavailable", code };
+  }
+  if (isMember(ANALYSIS_FAILURE_CODES, code)) {
+    const key = parseFailureKey(value["key"]);
+    return key === null ? UNREADABLE : { kind: "failed", code, key };
+  }
+  return UNREADABLE;
+};
 
 export const parseAnalysisResponse = (
   value: unknown,
@@ -53,14 +113,68 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "error") {
-    return { status: "error" };
+    return { status: "error", error: parseAnalysisError(value) };
   }
 
   return null;
 };
 
-const isTerminal = (result: AnalysisQueryResult | undefined): boolean =>
-  result?.kind === "done" || result?.kind === "error";
+/** A settled result is final until the reader asks again; polling stops. */
+export const isTerminalAnalysisResult = (
+  result: AnalysisQueryResult | undefined,
+): boolean => result?.kind === "done" || result?.kind === "error";
+
+const queryResultOf = (
+  parsed: AnalysisResponse | null,
+): AnalysisQueryResult => {
+  if (parsed === null) {
+    return { kind: "error", error: UNREADABLE };
+  }
+  switch (parsed.status) {
+    case "done":
+      return { kind: "done", analysis: parsed.analysis };
+    case "generating":
+      return { kind: "generating", tree: parsed.tree };
+    case "error":
+      return { kind: "error", error: parsed.error };
+    default:
+      parsed satisfies never;
+      return panic("Unhandled analysis response");
+  }
+};
+
+const readAnalysis = async ({
+  decisionId,
+  retry,
+  signal,
+}: {
+  decisionId: string;
+  retry: boolean;
+  signal?: AbortSignal | undefined;
+}): Promise<AnalysisQueryResult> => {
+  const path = `/case/decisions/${decisionId}/analysis`;
+  const response = await fetchWithTimeout(
+    apiUrl(retry ? `${path}?retry=true` : path),
+    {
+      credentials: "include",
+      ...(signal === undefined ? {} : { signal }),
+      timeoutMs: 15_000,
+    },
+  );
+  const data: unknown = await response.json();
+  return queryResultOf(parseAnalysisResponse(data));
+};
+
+/**
+ * Asks for a new run after a failed one. A plain read keeps answering the
+ * failure, so polling never restarts the run that just failed; this is the
+ * reader's explicit request to try again. Its answer (normally `generating`)
+ * replaces the cached failure, which resumes polling.
+ */
+export const retryDecisionAnalysis = async (
+  decisionId: string,
+): Promise<AnalysisQueryResult> =>
+  await readAnalysis({ decisionId, retry: true });
 
 /**
  * The AI analysis of one decision: the only place the reader holds it, as the
@@ -90,33 +204,10 @@ export const decisionAnalysisOptions = ({
 }: DecisionAnalysisKey) =>
   queryOptions({
     queryKey: ["case-law-decision-analysis", decisionId, { decisionUpdatedAt }],
-    queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
-      const response = await fetchWithTimeout(
-        apiUrl(`/case/decisions/${decisionId}/analysis`),
-        {
-          credentials: "include",
-          signal,
-          timeoutMs: 15_000,
-        },
-      );
-
-      const data: unknown = await response.json();
-      const parsed = parseAnalysisResponse(data);
-
-      if (!parsed) {
-        return { kind: "error" };
-      }
-
-      if (parsed.status === "done") {
-        return { kind: "done", analysis: parsed.analysis };
-      }
-      if (parsed.status === "generating") {
-        return { kind: "generating", tree: parsed.tree };
-      }
-      return { kind: "error" };
-    },
+    queryFn: async ({ signal }): Promise<AnalysisQueryResult> =>
+      await readAnalysis({ decisionId, retry: false, signal }),
     refetchInterval: ({ state }) =>
-      isTerminal(state.data) ? false : POLL_INTERVAL_MS,
+      isTerminalAnalysisResult(state.data) ? false : POLL_INTERVAL_MS,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     // A finished analysis changes only when regenerated, so it is never asked

@@ -20,7 +20,7 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { aiAvailabilityOptions } =
   await import("@/lib/organization/ai-config-queries");
-const { decisionAnalysisOptions } =
+const { decisionAnalysisOptions, isTerminalAnalysisResult } =
   await import("@/features/case-law/queries/decision-analysis");
 const { useLazyDecisionAnalysis } =
   await import("./use-lazy-decision-analysis");
@@ -301,4 +301,90 @@ describe("shared lazy decision analysis", () => {
       expect(requests.length).toBe(1);
     },
   );
+
+  test("a failed run settles as its named error; Retry asks for a new run and polls it to done", async () => {
+    const FAILED = {
+      status: "error",
+      code: "answer_incomplete",
+      error: "The AI model returned an incomplete answer",
+      key: { source: "organization", provider: "google" },
+    } as const;
+    const retried = { value: false };
+    const requests = respondToAnalysis(async () => {
+      const latest = requests.at(-1);
+      const retry = latest
+        ? new URL(latest.url).searchParams.get("retry")
+        : null;
+      if (retry === "true") {
+        retried.value = true;
+        return Response.json({ status: "generating" });
+      }
+      return Response.json(
+        retried.value ? { status: "done", analysis } : FAILED,
+      );
+    });
+    const client = clientWithAvailability();
+    const { result } = renderHook(() => useLazyDecisionAnalysis(eligible), {
+      wrapper: wrapperFor({ client }),
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("error"));
+    expect(result.current.state).toEqual({
+      status: "error",
+      error: {
+        kind: "failed",
+        code: "answer_incomplete",
+        key: { source: "organization", provider: "google" },
+      },
+    });
+    // The failure is terminal: past a whole poll interval the query has not
+    // read the row again (which, before the record existed, started the run
+    // that just failed a second time).
+    expect(
+      isTerminalAnalysisResult(
+        client.getQueryData(decisionAnalysisOptions(key).queryKey),
+      ),
+    ).toBe(true);
+    await act(async () => {
+      await Bun.sleep(2500);
+    });
+    expect(requests.length).toBe(1);
+
+    await act(async () => {
+      result.current.generate();
+    });
+    await waitFor(() => expect(retried.value).toBe(true));
+    expect(new URL(requests[1]?.url ?? "").searchParams.get("retry")).toBe(
+      "true",
+    );
+    await waitFor(() => expect(result.current.state.status).toBe("done"), {
+      timeout: 5000,
+    });
+    // Only the explicit retry carried the flag; the polls that followed it
+    // were plain reads.
+    expect(
+      requests
+        .slice(2)
+        .every((request) => !new URL(request.url).searchParams.has("retry")),
+    ).toBe(true);
+  });
+
+  test("a decision the server will never analyse offers no retry", async () => {
+    const requests = respondToAnalysis(async () =>
+      Response.json({
+        status: "error",
+        code: "language_unsupported",
+        error: 'Analysis is not available for decisions in language "fr"',
+      }),
+    );
+    const client = clientWithAvailability();
+    const { result } = renderHook(() => useLazyDecisionAnalysis(eligible), {
+      wrapper: wrapperFor({ client }),
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("error"));
+    await act(async () => {
+      result.current.generate();
+    });
+    expect(requests.length).toBe(1);
+  });
 });

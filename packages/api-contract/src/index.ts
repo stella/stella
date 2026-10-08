@@ -24,6 +24,8 @@ export {
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
+export { CASE_LAW_ANALYSIS_UNAVAILABLE_CODES } from "./case-law-analysis";
+export type { CaseLawAnalysisUnavailableCode } from "./case-law-analysis";
 export {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
