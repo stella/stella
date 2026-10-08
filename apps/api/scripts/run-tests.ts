@@ -9,7 +9,6 @@ import {
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 
-import { sanitizeErrorForOutput } from "@stll/errors";
 import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
 
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
@@ -37,6 +36,7 @@ import {
 } from "./test-batch-plan";
 import {
   acquireCurrentSnapshot,
+  exitAfterSnapshotFailure,
   snapshotCacheDir,
   snapshotDigest,
   snapshotKey,
@@ -351,12 +351,7 @@ if (
   try {
     testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
   } catch (error) {
-    if (error instanceof SnapshotBuildError) {
-      printError(String(sanitizeErrorForOutput(error)));
-      process.exitCode = error.exitCode;
-      throw error;
-    }
-    throw error;
+    exitAfterSnapshotFailure(error);
   }
 }
 

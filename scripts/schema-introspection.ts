@@ -53,6 +53,59 @@ const memberName = (node: ts.Node): string | undefined => {
   return undefined;
 };
 
+const transparentExpression = (node: ts.Expression): ts.Expression => {
+  if (
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isParenthesizedExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return transparentExpression(node.expression);
+  }
+  return node;
+};
+
+const transparentExpressionParent = (node: ts.Expression): ts.Node => {
+  let current = node;
+  while (
+    (ts.isAsExpression(current.parent) ||
+      ts.isSatisfiesExpression(current.parent) ||
+      ts.isParenthesizedExpression(current.parent) ||
+      ts.isTypeAssertionExpression(current.parent) ||
+      ts.isNonNullExpression(current.parent)) &&
+    current.parent.expression === current
+  ) {
+    current = current.parent;
+  }
+  return current.parent;
+};
+
+const assignedIdentifier = (
+  expression: ts.Expression,
+): ts.Identifier | undefined => {
+  const parent = transparentExpressionParent(expression);
+  if (
+    ts.isVariableDeclaration(parent) &&
+    parent.initializer !== undefined &&
+    transparentExpression(parent.initializer) === expression &&
+    ts.isIdentifier(parent.name)
+  ) {
+    return parent.name;
+  }
+  if (
+    ts.isBinaryExpression(parent) &&
+    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    transparentExpression(parent.right) === expression
+  ) {
+    const target = transparentExpression(parent.left);
+    if (ts.isIdentifier(target)) {
+      return target;
+    }
+  }
+  return undefined;
+};
+
 // Bind only this source to distinguish a collection/hash method from a
 // database operation without loading the application's type graph.
 const sourceProgram = (source: ts.SourceFile) => {
@@ -63,42 +116,67 @@ const sourceProgram = (source: ts.SourceFile) => {
   return ts.createProgram([source.fileName], options, host);
 };
 
-const isCalledAlias = (source: ts.SourceFile, member: ts.Node): boolean => {
+const isCalledAlias = (
+  source: ts.SourceFile,
+  member: ts.Expression,
+): boolean => {
   const checker = sourceProgram(source).getTypeChecker();
-  const parent = member.parent;
-  if (ts.isCallExpression(parent) && parent.expression === member) {
+  const expression = transparentExpression(member);
+  const parent = transparentExpressionParent(member);
+  if (
+    ts.isCallExpression(parent) &&
+    transparentExpression(parent.expression) === expression
+  ) {
     return true;
   }
-  if (
-    !ts.isVariableDeclaration(parent) ||
-    parent.initializer !== member ||
-    !ts.isIdentifier(parent.name)
-  ) {
+  const aliasName = assignedIdentifier(expression);
+  const symbol =
+    aliasName === undefined
+      ? undefined
+      : checker.getSymbolAtLocation(aliasName);
+  if (symbol === undefined) {
     return false;
   }
-  const symbol = checker.getSymbolAtLocation(parent.name);
-  return (
-    symbol !== undefined &&
-    source.statements.some((statement) => {
-      let invoked = false;
-      const visit = (node: ts.Node): void => {
+  const reachesCall = (current: ts.Symbol, seen: Set<ts.Symbol>): boolean => {
+    if (seen.has(current)) {
+      return false;
+    }
+    seen.add(current);
+    let invoked = false;
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isIdentifier(node) &&
+        checker.getSymbolAtLocation(node) === current
+      ) {
+        const useParent = transparentExpressionParent(node);
         if (
-          ts.isIdentifier(node) &&
-          checker.getSymbolAtLocation(node) === symbol &&
-          ts.isCallExpression(node.parent) &&
-          node.parent.expression === node
+          ts.isCallExpression(useParent) &&
+          transparentExpression(useParent.expression) === node
         ) {
           invoked = true;
           return;
         }
-        if (!invoked) {
-          ts.forEachChild(node, visit);
+        const nextAliasName = assignedIdentifier(node);
+        const alias =
+          nextAliasName === undefined
+            ? undefined
+            : checker.getSymbolAtLocation(nextAliasName);
+        if (alias !== undefined && reachesCall(alias, seen)) {
+          invoked = true;
+          return;
         }
-      };
+      }
+      if (!invoked) {
+        ts.forEachChild(node, visit);
+      }
+    };
+    source.statements.some((statement) => {
       visit(statement);
       return invoked;
-    })
-  );
+    });
+    return invoked;
+  };
+  return reachesCall(symbol, new Set());
 };
 
 type GlobalConsoleDispatchOptions = {
