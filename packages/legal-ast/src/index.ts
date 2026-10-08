@@ -96,3 +96,4 @@ export type {
   StatuteStatus,
   StatuteTable,
 } from "./statute-ast.js";
+export { headingPathsByAnchor } from "./heading-path.js";
