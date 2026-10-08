@@ -5343,7 +5343,6 @@
       "noLanguagesFound": "Keeli ei leitud",
       "notConfigured": "DeepL pole selle organisatsiooni jaoks seadistatud. Tõlkimise lubamiseks lisage organisatsiooni seadetes DeepL-i API-võti.",
       "outputLabel": "Tõlke tüüp",
-      "progress": "Tõlke edenemine",
       "progressCount": "Valmis {completed} / {total}",
       "providerUnavailable": "Tõlketeenus pole saadaval. Proovige hiljem uuesti või võtke ühendust administraatoriga.",
       "runFailed": "Tõlget ei saanud lõpule viia.",

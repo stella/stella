@@ -5343,7 +5343,6 @@
       "noLanguagesFound": "Valodas nav atrastas",
       "notConfigured": "DeepL nav konfigurēts šai organizācijai. Lai iespējotu tulkošanu, organizācijas iestatījumos pievienojiet DeepL API atslēgu.",
       "outputLabel": "Tulkojuma veids",
-      "progress": "Tulkošanas progress",
       "progressCount": "Pabeigts {completed} no {total}",
       "providerUnavailable": "Tulkošanas pakalpojums nav pieejams. Mēģiniet vēlāk vēlreiz vai sazinieties ar administratoru.",
       "runFailed": "Tulkojumu neizdevās pabeigt.",

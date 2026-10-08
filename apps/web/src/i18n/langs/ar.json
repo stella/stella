@@ -5343,7 +5343,6 @@
       "noLanguagesFound": "لم يتم العثور على لغات",
       "notConfigured": "DeepL غير مُهيّأ لهذه المؤسسة. أضِف مفتاح API الخاص بـ DeepL في إعدادات المؤسسة لتمكين الترجمة.",
       "outputLabel": "نوع الترجمة",
-      "progress": "تقدم الترجمة",
       "progressCount": "اكتمل {completed} من {total}",
       "providerUnavailable": "خدمة الترجمة غير متاحة. حاول مرة أخرى لاحقًا أو تواصل مع المسؤول.",
       "runFailed": "تعذّر إكمال الترجمة.",

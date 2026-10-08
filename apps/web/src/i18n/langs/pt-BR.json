@@ -5343,7 +5343,6 @@
       "noLanguagesFound": "Nenhum idioma encontrado",
       "notConfigured": "O DeepL não está configurado para esta organização. Adicione uma chave de API do DeepL nas configurações da organização para habilitar a tradução.",
       "outputLabel": "Tipo de tradução",
-      "progress": "Progresso da tradução",
       "progressCount": "{completed} de {total} concluídos",
       "providerUnavailable": "O serviço de tradução não está disponível. Tente novamente mais tarde ou entre em contato com o administrador.",
       "runFailed": "Não foi possível concluir a tradução.",
