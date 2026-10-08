@@ -211,7 +211,10 @@
         document.getElementById("title").textContent = params.get("message");
         document.getElementById("subtitle").textContent = params.get("detail");
         document.querySelector(".details").hidden = true;
-        document.getElementById("cancelBtn").textContent = strings.close;
+        // An offer to act (connect, retry) is dismissed with Cancel; a plain
+        // notice only closes.
+        document.getElementById("cancelBtn").textContent =
+          params.get("dismiss") || strings.close;
         const action = params.get("action");
         document.getElementById("connectBtn").hidden = !action;
         document.getElementById("connectBtn").textContent = action;

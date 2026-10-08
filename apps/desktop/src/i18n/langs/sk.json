@@ -139,7 +139,15 @@
     "handoffFailed": "Dokument sa nepodarilo otvoriť",
     "handoffUnavailable": "Dokument sa nepodarilo otvoriť. Začnite znova zo Stelly.",
     "handoffRetry": "Skúsiť znova",
-    "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte"
+    "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
+    "handoffConnectToSign": "Na podpísanie tohto dokumentu pripojte stella desktop",
+    "handoffConnectToOpen": "Na otvorenie tohto dokumentu pripojte stella desktop",
+    "handoffConnectDetail": "Pripojte svoj účet stella. Dokument sa po pripojení otvorí automaticky.",
+    "handoffUntrustedServer": "stella desktop nedôveruje serveru, z ktorého odkaz na dokument pochádza.",
+    "handoffAccountMismatch": "Tento dokument patrí inému účtu, než aký je pripojený k stella desktop.",
+    "handoffAccountChanged": "Počas otvárania dokumentu sa zmenil účet stella desktop. Začnite znova zo stelly.",
+    "handoffAlreadyOpen": "Iné okno na podpis je už otvorené. Dokončite ho alebo zatvorte a skúste to znova.",
+    "handoffExpired": "Platnosť odkazu na dokument vypršala skôr, než bol stella desktop pripojený. Začnite znova zo stelly."
   },
   "settings": {
     "about": "O aplikácii",

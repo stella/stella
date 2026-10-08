@@ -11,6 +11,9 @@ use tokio::sync::Mutex;
 const PROTOCOL_HEADER: &str = "X-Stella-Desktop-Protocol";
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
 const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
+/// `DESKTOP_HANDOFF_LIFETIME_SECONDS` in the API contract. Counted from when
+/// the deep link arrives, so a parked handoff never outlives its token.
+const HANDOFF_LIFETIME: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Target {
@@ -30,6 +33,16 @@ impl Target {
 pub(crate) enum Failure {
   UpdateRequired,
   AccountRequired,
+  /// The link names an API this desktop does not trust.
+  UntrustedServer,
+  /// The document belongs to another account or server than the linked one.
+  AccountMismatch,
+  /// The linked account changed or disconnected while the document opened.
+  AccountChanged,
+  /// Another signing dialog holds the only slot.
+  AlreadyOpen,
+  /// A parked handoff outlived its token before the account was linked.
+  Expired,
   Retryable(String),
   Terminal(String),
 }
@@ -71,6 +84,11 @@ impl Failure {
     match self {
       Self::UpdateRequired => "dialog.handoffUpdateRequired",
       Self::AccountRequired => "dialog.handoffAccountRequired",
+      Self::UntrustedServer => "dialog.handoffUntrustedServer",
+      Self::AccountMismatch => "dialog.handoffAccountMismatch",
+      Self::AccountChanged => "dialog.handoffAccountChanged",
+      Self::AlreadyOpen => "dialog.handoffAlreadyOpen",
+      Self::Expired => "dialog.handoffExpired",
       Self::Retryable(_) => "dialog.handoffFailed",
       Self::Terminal(_) => "dialog.handoffUnavailable",
     }
@@ -78,7 +96,14 @@ impl Failure {
   pub(crate) fn action_key(&self) -> Option<&'static str> {
     match self {
       Self::Retryable(_) => Some("dialog.handoffRetry"),
-      Self::UpdateRequired | Self::AccountRequired | Self::Terminal(_) => None,
+      Self::UpdateRequired
+      | Self::AccountRequired
+      | Self::UntrustedServer
+      | Self::AccountMismatch
+      | Self::AccountChanged
+      | Self::AlreadyOpen
+      | Self::Expired
+      | Self::Terminal(_) => None,
     }
   }
 }
@@ -225,7 +250,117 @@ async fn recover(
     Failure::Retryable(_)
     | Failure::UpdateRequired
     | Failure::AccountRequired
+    | Failure::UntrustedServer
+    | Failure::AccountMismatch
+    | Failure::AccountChanged
+    | Failure::AlreadyOpen
+    | Failure::Expired
     | Failure::Terminal(_) => Ok(Recovery::Stop),
+  }
+}
+
+/// Why a document handoff ended before a window of its own could say so.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Stop {
+  /// Already in front of the user: a recovery dialog or the signing dialog.
+  Presented(String),
+  /// No usable account for the link's server. The handoff has not been
+  /// redeemed, so it can wait for the account to be linked.
+  AccountRequired,
+  /// Not yet shown to the user.
+  Failed(Failure),
+}
+impl From<Failure> for Stop {
+  fn from(failure: Failure) -> Self {
+    Self::Failed(failure)
+  }
+}
+impl From<String> for Stop {
+  fn from(detail: String) -> Self {
+    Self::Failed(Failure::Terminal(detail))
+  }
+}
+
+/// The account a redemption may present. An unlinked desktop, or one whose
+/// saved credential the API rejects, must not redeem: an unauthenticated
+/// redeem ends the handoff on the server, and the user is about to link.
+/// An account on another server keeps the unauthenticated redeem, which
+/// tells the web the desktop needs a different account.
+async fn admitted_account(
+  state: &crate::account::AccountState,
+  api_base_url: &str,
+) -> Result<Option<crate::account::LinkedAccount>, Stop> {
+  let Some(account) = crate::account::current(state).await? else {
+    return Err(Stop::AccountRequired);
+  };
+  if account.api_base_url != api_base_url {
+    return Ok(None);
+  }
+  match crate::registry::request(
+    account.request_auth(),
+    serde_json::json!({"type":"config"}),
+  )
+  .await
+  {
+    Err(error) if error == crate::registry::not_connected() => {
+      tracing::warn!(
+        target: crate::logging::TRAIL_TARGET,
+        event = "handoff.account_rejected",
+        status = 401_u16
+      );
+      if let Err(error) = crate::account::invalidate(state, &account).await {
+        tracing::warn!(error = %error, "rejected desktop account was not removed");
+      }
+      Err(Stop::AccountRequired)
+    }
+    // Anything else is the redeem's to report, with its own recovery.
+    Ok(_) | Err(_) => Ok(Some(account)),
+  }
+}
+
+struct RedeemCore<'a> {
+  state: &'a crate::account::AccountState,
+  client: &'a DesktopHttpClient,
+  target: Target,
+  api_base_url: &'a str,
+  token: &'a str,
+}
+
+async fn redeem_with<T: serde::de::DeserializeOwned>(
+  core: RedeemCore<'_>,
+  host: &impl RecoveryHost,
+) -> Result<(T, crate::account::LinkedAccount), Stop> {
+  let RedeemCore {
+    state,
+    client,
+    target,
+    api_base_url,
+    token,
+  } = core;
+  let mut account = admitted_account(state, api_base_url).await?;
+  loop {
+    let result = attempt_linked(LinkedRequestOptions {
+      client,
+      target,
+      api_base_url,
+      token,
+      account,
+    })
+    .await;
+    let failure = match result {
+      Ok(redeemed) => return Ok(redeemed),
+      Err(failure) => failure,
+    };
+    let message_key = failure.message_key();
+    match recover(failure, host).await? {
+      Recovery::Retry => {}
+      Recovery::Stop => {
+        return Err(Stop::Presented(crate::i18n::t(message_key).into()));
+      }
+    }
+    account = crate::account::current(state)
+      .await?
+      .filter(|account| account.api_base_url == api_base_url);
   }
 }
 
@@ -239,7 +374,7 @@ pub(crate) struct RedeemOptions<'a> {
 
 pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
   options: RedeemOptions<'_>,
-) -> Result<(T, crate::account::LinkedAccount), String> {
+) -> Result<(T, crate::account::LinkedAccount), Stop> {
   let RedeemOptions {
     manager,
     app,
@@ -248,37 +383,130 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
     token,
   } = options;
   if crate::updater::check_on_handoff(app, manager).await {
-    return Err("Desktop update installed; reopen the document after relaunch.".into());
+    return Err(Stop::Presented(
+      "Desktop update installed; reopen the document after relaunch.".into(),
+    ));
   }
   let client = DesktopHttpClient::new(HttpClientOptions {
     redirect: reqwest::redirect::Policy::none(),
     timeout: None,
   })
   .map_err(|e| e.to_string())?;
-  loop {
-    let account_state = app.state::<crate::account::AccountState>();
-    let result = match crate::account::current(&account_state).await {
-      Ok(account) => {
-        attempt_linked(LinkedRequestOptions {
-          client: &client,
-          target,
-          api_base_url,
-          token,
-          account,
-        })
-        .await
-      }
-      Err(message) => Err(Failure::Terminal(message)),
-    };
-    let failure = match result {
-      Ok(redeemed) => return Ok(redeemed),
-      Err(failure) => failure,
-    };
-    let message_key = failure.message_key();
-    match recover(failure, &DesktopRecovery { app, manager }).await? {
-      Recovery::Retry => {}
-      Recovery::Stop => return Err(crate::i18n::t(message_key).into()),
-    }
+  let state = app.state::<crate::account::AccountState>();
+  redeem_with(
+    RedeemCore {
+      state: state.inner(),
+      client: &client,
+      target,
+      api_base_url,
+      token,
+    },
+    &DesktopRecovery { app, manager },
+  )
+  .await
+}
+
+/// Tells the API the desktop has no account for this handoff, so the web
+/// stops waiting. Used once the user declines to link.
+pub(crate) async fn decline(target: Target, api_base_url: &str, token: &str) {
+  let Ok(client) = DesktopHttpClient::new(HttpClientOptions {
+    redirect: reqwest::redirect::Policy::none(),
+    timeout: None,
+  }) else {
+    return;
+  };
+  let result = attempt::<serde_json::Value>(RequestOptions {
+    client: &client,
+    target,
+    api_base_url,
+    token,
+    credential: None,
+  })
+  .await;
+  if !matches!(result, Err(Failure::AccountRequired)) {
+    tracing::warn!("declined document handoff was not recorded");
+  }
+}
+
+/// One handoff waits for the account link at a time; a newer deep link
+/// replaces it. The token stays in native memory only.
+pub(crate) struct ParkedHandoff {
+  pub target: Target,
+  pub api_base_url: String,
+  pub token: zeroize::Zeroizing<String>,
+  expires: std::time::Instant,
+}
+
+static PARKED: std::sync::Mutex<Option<ParkedHandoff>> = std::sync::Mutex::new(None);
+
+pub(crate) fn park(target: Target, api_base_url: &str, token: &str) {
+  park_at(target, api_base_url, token, std::time::Instant::now());
+}
+
+fn park_at(target: Target, api_base_url: &str, token: &str, now: std::time::Instant) {
+  *PARKED
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ParkedHandoff {
+    target,
+    api_base_url: api_base_url.into(),
+    token: zeroize::Zeroizing::new(token.into()),
+    expires: now + HANDOFF_LIFETIME,
+  });
+}
+
+/// Drops the parked handoff if it is still `token`'s. Returns whether it was.
+pub(crate) fn unpark(token: &str) -> bool {
+  let mut parked = PARKED
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner);
+  if parked
+    .as_ref()
+    .is_some_and(|parked| parked.token.as_str() == token)
+  {
+    *parked = None;
+    return true;
+  }
+  false
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Resumable {
+  Nothing,
+  Expired,
+  Ready(ParkedHandoff),
+}
+
+impl std::fmt::Debug for ParkedHandoff {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ParkedHandoff")
+      .field("target", &self.target)
+      .field("api_base_url", &self.api_base_url)
+      .finish_non_exhaustive()
+  }
+}
+impl PartialEq for ParkedHandoff {
+  fn eq(&self, other: &Self) -> bool {
+    self.target == other.target
+      && self.api_base_url == other.api_base_url
+      && self.token == other.token
+  }
+}
+impl Eq for ParkedHandoff {}
+
+pub(crate) fn take_parked() -> Resumable {
+  take_parked_at(std::time::Instant::now())
+}
+
+fn take_parked_at(now: std::time::Instant) -> Resumable {
+  match PARKED
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .take()
+  {
+    None => Resumable::Nothing,
+    Some(parked) if now >= parked.expires => Resumable::Expired,
+    Some(parked) => Resumable::Ready(parked),
   }
 }
 
@@ -714,6 +942,191 @@ mod tests {
   }
 
   #[test]
+  fn every_failure_shown_before_a_dialog_has_a_fixed_localized_message() {
+    for failure in [
+      Failure::UpdateRequired,
+      Failure::AccountRequired,
+      Failure::UntrustedServer,
+      Failure::AccountMismatch,
+      Failure::AccountChanged,
+      Failure::AlreadyOpen,
+      Failure::Expired,
+      Failure::Retryable("detail".into()),
+      Failure::Terminal("detail".into()),
+    ] {
+      assert!(
+        crate::i18n::locales_missing(failure.message_key()).is_empty(),
+        "{failure:?}"
+      );
+    }
+  }
+
+  fn linked_fixture(api_base_url: &str, key: &str) -> crate::account::LinkedAccount {
+    crate::account::LinkedAccount {
+      api_base_url: api_base_url.into(),
+      web_origin: "https://web.example.test".into(),
+      account: crate::types::LinkedAccountSnapshot {
+        email: "desktop@example.test".into(),
+        name: None,
+        verified_at: chrono::Utc::now().to_rfc3339(),
+      },
+      identity: crate::types::DesktopAccountIdentity {
+        user_id: "user_fixture".into(),
+        organization_id: "org_fixture".into(),
+      },
+      credential: crate::types::DesktopAccountCredential {
+        key: key.into(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).to_rfc3339(),
+      },
+    }
+  }
+
+  /// A desktop API that accepts only `stella_dr_live` and counts redeems.
+  async fn handoff_server(
+    redeems: Arc<std::sync::atomic::AtomicUsize>,
+  ) -> (String, tokio::task::JoinHandle<()>) {
+    use axum::{Router, http::StatusCode, routing::post};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let accepted = |headers: &axum::http::HeaderMap| {
+      headers
+        .get("authorization")
+        .is_some_and(|value| value == "Bearer stella_dr_live")
+    };
+    let redeem = post(move |headers: axum::http::HeaderMap| {
+      let redeems = redeems.clone();
+      async move {
+        redeems.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if accepted(&headers) {
+          (
+            StatusCode::OK,
+            axum::Json(serde_json::json!({"id":"redeemed"})),
+          )
+        } else {
+          (
+            StatusCode::UNAUTHORIZED,
+            axum::Json(serde_json::json!({"code":"desktop_account_required"})),
+          )
+        }
+      }
+    });
+    let router = Router::new()
+      .route(
+        "/v1/desktop-registry/request",
+        post(move |headers: axum::http::HeaderMap| async move {
+          if accepted(&headers) {
+            (StatusCode::OK, axum::Json(serde_json::json!({})))
+          } else {
+            (StatusCode::UNAUTHORIZED, axum::Json(serde_json::json!({})))
+          }
+        }),
+      )
+      .route(Target::DesktopEdit.path(), redeem.clone())
+      .route(Target::PdfSigning.path(), redeem);
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    (origin, server)
+  }
+
+  fn no_recovery() -> FakeRecovery {
+    FakeRecovery {
+      events: Default::default(),
+      accepted: false,
+      update_outcome: std::sync::Mutex::new(None),
+    }
+  }
+
+  // Every assertion on the single parked slot lives in this one test, so
+  // parallel tests cannot race on it.
+  #[tokio::test]
+  async fn a_handoff_arriving_unlinked_waits_for_the_link_and_then_completes() {
+    let redeems = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let (origin, server) = handoff_server(redeems.clone()).await;
+    let client = DesktopHttpClient::new(HttpClientOptions::default()).unwrap();
+    let token = "a".repeat(64);
+    let state: crate::account::AccountState =
+      Arc::new(Mutex::new(crate::account::AccountStore::Memory(None)));
+
+    for target in [Target::PdfSigning, Target::DesktopEdit] {
+      // Unlinked: nothing is redeemed, so the server keeps the handoff open.
+      let arrived = redeem_with::<serde_json::Value>(
+        RedeemCore {
+          state: &state,
+          client: &client,
+          target,
+          api_base_url: &origin,
+          token: &token,
+        },
+        &no_recovery(),
+      )
+      .await;
+      assert!(matches!(arrived, Err(Stop::AccountRequired)));
+      assert_eq!(redeems.load(std::sync::atomic::Ordering::SeqCst), 0);
+      park(target, &origin, &token);
+
+      // The account link completes; the parked handoff resumes with it.
+      *state.lock().await = crate::account::AccountStore::Memory(Some(linked_fixture(
+        &origin,
+        "stella_dr_live",
+      )));
+      let Resumable::Ready(parked) = take_parked() else {
+        panic!("the parked handoff must resume after linking");
+      };
+      assert_eq!(parked.target, target);
+      let (redeemed, account) = redeem_with::<serde_json::Value>(
+        RedeemCore {
+          state: &state,
+          client: &client,
+          target: parked.target,
+          api_base_url: &parked.api_base_url,
+          token: &parked.token,
+        },
+        &no_recovery(),
+      )
+      .await
+      .unwrap();
+      assert_eq!(redeemed, serde_json::json!({"id":"redeemed"}));
+      assert_eq!(account.credential.key, "stella_dr_live");
+      assert_eq!(redeems.swap(0, std::sync::atomic::Ordering::SeqCst), 1);
+      assert_eq!(take_parked(), Resumable::Nothing);
+      *state.lock().await = crate::account::AccountStore::Memory(None);
+    }
+
+    // A saved credential the API rejects is dropped before any redeem.
+    *state.lock().await = crate::account::AccountStore::Memory(Some(linked_fixture(
+      &origin,
+      "stella_dr_rejected_before_handoff",
+    )));
+    let rejected = redeem_with::<serde_json::Value>(
+      RedeemCore {
+        state: &state,
+        client: &client,
+        target: Target::PdfSigning,
+        api_base_url: &origin,
+        token: &token,
+      },
+      &no_recovery(),
+    )
+    .await;
+    assert!(matches!(rejected, Err(Stop::AccountRequired)));
+    assert_eq!(redeems.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert!(crate::account::current(&state).await.unwrap().is_none());
+
+    // One slot, newest wins, and it lapses with the handoff's lifetime.
+    let now = std::time::Instant::now();
+    park_at(Target::DesktopEdit, &origin, "first", now);
+    park_at(Target::PdfSigning, &origin, "second", now);
+    assert!(!unpark("first"));
+    assert!(unpark("second"));
+    assert_eq!(take_parked_at(now), Resumable::Nothing);
+    park_at(Target::PdfSigning, &origin, "late", now);
+    assert_eq!(take_parked_at(now + HANDOFF_LIFETIME), Resumable::Expired);
+    assert_eq!(take_parked_at(now), Resumable::Nothing);
+    server.abort();
+  }
+
+  #[test]
   fn protocol_matches_api_contract() {
     let source = std::fs::read_to_string(concat!(
       env!("CARGO_MANIFEST_DIR"),
@@ -741,6 +1154,12 @@ mod tests {
     assert_eq!(
       declaration("DESKTOP_HANDOFF_PROTOCOL_HEADER"),
       format!("\"{PROTOCOL_HEADER}\"")
+    );
+    assert_eq!(
+      declaration("DESKTOP_HANDOFF_LIFETIME_SECONDS")
+        .parse::<u64>()
+        .unwrap(),
+      HANDOFF_LIFETIME.as_secs()
     );
   }
 }

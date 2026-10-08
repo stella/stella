@@ -139,7 +139,15 @@
     "handoffFailed": "Nie udało się otworzyć dokumentu",
     "handoffUnavailable": "Nie udało się otworzyć dokumentu. Zacznij ponownie ze Stelli.",
     "handoffRetry": "Spróbuj ponownie",
-    "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić"
+    "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
+    "handoffConnectToSign": "Połącz stella desktop, aby podpisać ten dokument",
+    "handoffConnectToOpen": "Połącz stella desktop, aby otworzyć ten dokument",
+    "handoffConnectDetail": "Połącz swoje konto stella. Dokument otworzy się automatycznie po połączeniu.",
+    "handoffUntrustedServer": "stella desktop nie ufa serwerowi, z którego pochodzi ten link do dokumentu.",
+    "handoffAccountMismatch": "Ten dokument należy do innego konta niż konto połączone ze stella desktop.",
+    "handoffAccountChanged": "Konto stella desktop zmieniło się podczas otwierania dokumentu. Zacznij ponownie w stelli.",
+    "handoffAlreadyOpen": "Inne okno podpisu jest już otwarte. Dokończ je lub zamknij i spróbuj ponownie.",
+    "handoffExpired": "Link do dokumentu wygasł, zanim stella desktop został połączony. Zacznij ponownie w stelli."
   },
   "settings": {
     "about": "Informacje",

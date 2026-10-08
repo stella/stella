@@ -4,7 +4,8 @@ use crate::types::DEFAULT_BRIDGE_PORT;
 
 const DEFAULT_WEB_PORT: u16 = 3000;
 const DEFAULT_API_PORT: u16 = 3001;
-const PRODUCTION_API_BASE_URL: &str = "https://api.stll.app";
+pub const PRODUCTION_API_BASE_URL: &str = "https://api.stll.app";
+pub const PRODUCTION_WEB_ORIGIN: &str = "https://my.stll.app";
 
 // Development builds must never claim production's persisted data or Keychain
 // ACLs. A locally signed binary otherwise makes the next release build look
@@ -121,6 +122,24 @@ pub fn normalize_self_host_api_base_url(value: &str) -> Result<String, String> {
   normalize_url_origin(&parsed)
 }
 
+/// The web origin that links a desktop account for an API the build trusts
+/// without a self-host approval: production, or a local development stack.
+pub fn web_origin_for_trusted_api(api_base_url: &str) -> Option<String> {
+  if api_base_url == PRODUCTION_API_BASE_URL {
+    return Some(PRODUCTION_WEB_ORIGIN.into());
+  }
+  let parsed = reqwest::Url::parse(api_base_url).ok()?;
+  let api_port = parse_port(std::env::var("STELLA_API_PORT").ok(), DEFAULT_API_PORT);
+  if parsed.scheme() != "http"
+    || !is_loopback_host(&parsed)
+    || parsed.port() != Some(api_port)
+  {
+    return None;
+  }
+  let web_port = parse_port(std::env::var("STELLA_WEB_PORT").ok(), DEFAULT_WEB_PORT);
+  Some(format!("http://{}:{web_port}", parsed.host()?))
+}
+
 pub fn resolve_bridge_port() -> u16 {
   parse_port(
     std::env::var("STELLA_DESKTOP_BRIDGE_PORT").ok(),
@@ -171,6 +190,27 @@ pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_handoff_api_maps_to_the_web_origin_that_links_its_account() {
+    assert_eq!(
+      web_origin_for_trusted_api("https://api.stll.app").as_deref(),
+      Some("https://my.stll.app")
+    );
+    let api_port = parse_port(std::env::var("STELLA_API_PORT").ok(), DEFAULT_API_PORT);
+    let web_port = parse_port(std::env::var("STELLA_WEB_PORT").ok(), DEFAULT_WEB_PORT);
+    assert_eq!(
+      web_origin_for_trusted_api(&format!("http://localhost:{api_port}")),
+      Some(format!("http://localhost:{web_port}"))
+    );
+    for unknown in [
+      "https://stella.example",
+      "http://stella.example:3001",
+      "not a url",
+    ] {
+      assert_eq!(web_origin_for_trusted_api(unknown), None, "{unknown}");
+    }
+  }
 
   #[test]
   fn normalizes_self_host_web_origin() {

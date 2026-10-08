@@ -1,6 +1,8 @@
 export const DESKTOP_HANDOFF_PROTOCOL_HEADER = "X-Stella-Desktop-Protocol";
 export const DESKTOP_HANDOFF_PROTOCOL_VERSION = 1;
 export const DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL = 1;
+/** A handoff token's lifetime; the desktop parks an unlinked handoff no longer. */
+export const DESKTOP_HANDOFF_LIFETIME_SECONDS = 120;
 
 export const DESKTOP_HANDOFF_FAILURE = {
   updateRequired: "desktop_update_required",

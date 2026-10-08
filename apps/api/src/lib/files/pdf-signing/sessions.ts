@@ -10,6 +10,7 @@
 
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
+import { DESKTOP_HANDOFF_LIFETIME_SECONDS } from "@stll/api-contract/desktop-handoff";
 import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
 import { Temporal } from "@stll/time";
 
@@ -56,7 +57,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 /** The browser hands the deep link straight to the OS; two minutes is the
  *  whole window in which the desktop app has to come up and redeem it. */
-const PDF_SIGNING_HANDOFF_TTL_MS = 2 * 60 * 1000;
+const PDF_SIGNING_HANDOFF_TTL_MS = DESKTOP_HANDOFF_LIFETIME_SECONDS * 1000;
 
 /** The desktop dialog is modal: pick an identity, sign, done. */
 const PDF_SIGNING_SESSION_TTL_MS = 10 * 60 * 1000;

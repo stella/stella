@@ -139,7 +139,15 @@
     "handoffFailed": "Nem sikerült megnyitni a dokumentumot",
     "handoffUnavailable": "Nem sikerült megnyitni a dokumentumot. Kezdje újra a Stellából.",
     "handoffRetry": "Újrapróbálkozás",
-    "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt"
+    "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
+    "handoffConnectToSign": "Csatlakoztassa a stella desktopot a dokumentum aláírásához",
+    "handoffConnectToOpen": "Csatlakoztassa a stella desktopot a dokumentum megnyitásához",
+    "handoffConnectDetail": "Csatlakoztassa stella-fiókját. A dokumentum a csatlakozás után automatikusan megnyílik.",
+    "handoffUntrustedServer": "A stella desktop nem bízik abban a szerverben, ahonnan a dokumentumhivatkozás származik.",
+    "handoffAccountMismatch": "Ez a dokumentum egy másik fiókhoz tartozik, mint amelyik a stella desktophoz csatlakozik.",
+    "handoffAccountChanged": "A stella desktop fiókja megváltozott a dokumentum megnyitása közben. Kezdje újra a stellában.",
+    "handoffAlreadyOpen": "Már nyitva van egy másik aláírási ablak. Fejezze be vagy zárja be, majd próbálja újra.",
+    "handoffExpired": "A dokumentumhivatkozás lejárt, mielőtt a stella desktop csatlakozott. Kezdje újra a stellában."
   },
   "settings": {
     "about": "Névjegy",
