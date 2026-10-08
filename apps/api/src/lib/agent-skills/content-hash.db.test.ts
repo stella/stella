@@ -21,6 +21,7 @@ import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import updateSkill from "@/api/handlers/skills/update";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -396,10 +397,11 @@ describe("skill content hash", () => {
       });
     const fetched = await fetchSkillPackageFromUrl(
       `https://skills.example/${name}/SKILL.md`,
-      createSkillPackageFetchContext(
-        { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
-        serve,
-      ),
+      createSkillPackageFetchContext({
+        fetchBytes: serve,
+        limits: { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
+        permit: grantThirdPartyOutboundPermit(),
+      }),
     );
     if (Result.isError(fetched)) {
       throw fetched.error;
