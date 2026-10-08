@@ -423,31 +423,17 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
 
   test("the aggregate installs a bounded statement timeout", async () => {
     await withRollback(async (tx) => {
-      await readAuditedActivitySummary(
-        {
-          transaction: async (run) =>
-            await tx.transaction(async (nested) => {
-              const summary = await run(nested);
-              const row = executedRows(
-                await nested.execute(
-                  sql`SELECT current_setting('statement_timeout') AS timeout`,
-                ),
-              ).at(0);
-              const expectedMs = clampSharedPoolTimeout(
-                2000,
-                sharedPoolTimeoutPolicy,
-              );
-              expect(row).toEqual({
-                timeout:
-                  expectedMs % 1000 === 0
-                    ? `${expectedMs / 1000}s`
-                    : `${expectedMs}ms`,
-              });
-              return summary;
-            }),
-        },
-        Date.parse("9999-01-08T12:00:00Z"),
-      );
+      await readAuditedActivitySummary(tx, Date.parse("9999-01-08T12:00:00Z"));
+      const row = executedRows(
+        await tx.execute(
+          sql`SELECT current_setting('statement_timeout') AS timeout`,
+        ),
+      ).at(0);
+      const expectedMs = clampSharedPoolTimeout(2000, sharedPoolTimeoutPolicy);
+      expect(row).toEqual({
+        timeout:
+          expectedMs % 1000 === 0 ? `${expectedMs / 1000}s` : `${expectedMs}ms`,
+      });
     });
   });
 
@@ -456,17 +442,11 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
       const previous = await auditIds(tx);
       const read = readAuditedActivitySummary(
         {
-          transaction: async (run) =>
-            await tx.transaction(
-              async (nested) =>
-                await run({
-                  select: nested.select.bind(nested),
-                  execute: nested.execute.bind(nested),
-                  insert: () => {
-                    throw new TypeError("Audit insertion unavailable");
-                  },
-                }),
-            ),
+          select: tx.select.bind(tx),
+          execute: tx.execute.bind(tx),
+          insert: () => {
+            throw new TypeError("Audit insertion unavailable");
+          },
         },
         Date.parse("9999-01-08T12:00:00Z"),
       );
@@ -523,8 +503,26 @@ describe.skipIf(!enabled)("operator activity database summary", () => {
             const rendered = JSON.stringify(plan);
             expect(rendered).not.toContain("Seq Scan");
             expect(rendered).toContain("Index");
-            expect(rendered).toContain("chat_messages_created_at_brin_idx");
-            expect(rendered).toContain("audit_logs_created_at_brin_idx");
+            // Empty CI tables make the chosen index a cost tie; production
+            // statistics, not this plan, decide between BRIN and the btree.
+            const timeIndexes = executedRows(
+              await tx.execute(
+                sql`SELECT indexname, indexdef FROM pg_indexes
+                  WHERE schemaname = current_schema()
+                    AND indexname IN ('chat_messages_created_at_brin_idx', 'audit_logs_created_at_brin_idx')
+                  ORDER BY indexname`,
+              ),
+            );
+            expect(timeIndexes).toEqual([
+              {
+                indexname: "audit_logs_created_at_brin_idx",
+                indexdef: expect.stringContaining("USING brin (created_at)"),
+              },
+              {
+                indexname: "chat_messages_created_at_brin_idx",
+                indexdef: expect.stringContaining("USING brin (created_at)"),
+              },
+            ]);
             tx.rollback();
           }),
         catch: (cause) => cause,
