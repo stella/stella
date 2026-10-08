@@ -129,7 +129,7 @@ function DevRouteComponent() {
 
     return (
       <React.Suspense fallback={null}>
-        <main className="bg-background min-h-0 flex-1 overflow-y-auto p-4">
+        <main className="bg-background min-h-0 flex-1 p-4">
           <ProvisionHeaderPlayground />
         </main>
       </React.Suspense>

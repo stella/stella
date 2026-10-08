@@ -7,7 +7,9 @@ import { flushSync } from "react-dom";
  */
 const READING_POSITION_HOLD_MS = 10_000;
 
-const SCROLLING_OVERFLOW = new Set(["auto", "overlay", "scroll"]);
+/** Whether an `overflow-y` value lets the element scroll its content. */
+const scrollsVertically = (overflowY: string): boolean =>
+  overflowY === "auto" || overflowY === "overlay" || overflowY === "scroll";
 
 /** The element that scrolls the text this element sits in. */
 export const readerScrollOwner = (element: Element): HTMLElement | null => {
@@ -16,7 +18,7 @@ export const readerScrollOwner = (element: Element): HTMLElement | null => {
     candidate !== null;
     candidate = candidate.parentElement
   ) {
-    if (SCROLLING_OVERFLOW.has(getComputedStyle(candidate).overflowY)) {
+    if (scrollsVertically(getComputedStyle(candidate).overflowY)) {
       return candidate;
     }
   }

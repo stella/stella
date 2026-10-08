@@ -598,7 +598,7 @@ const cardsIn = (
   )?.nextElementSibling;
   while (
     sibling instanceof HTMLElement &&
-    sibling.dataset.slot === "provision-card"
+    sibling.dataset["slot"] === "provision-card"
   ) {
     cards.push(sibling);
     sibling = sibling.nextElementSibling;
@@ -676,7 +676,7 @@ describe("the provision card header", () => {
     [...header.querySelectorAll<HTMLElement>(":scope > *")].map((part) =>
       part.matches("button")
         ? "button"
-        : (part.dataset.slot ?? part.tagName.toLowerCase()),
+        : (part.dataset["slot"] ?? part.tagName.toLowerCase()),
     );
 
   const openPeek = async (
@@ -797,7 +797,7 @@ describe("the provision card header", () => {
       const SHORT = "Část první";
       const LONG =
         "Hlava druhá o řízení před soudem prvního stupně a o jeho přípravě";
-      const placed = anchors.map((anchor, index) => ({
+      const placed = anchors.map((anchor, index): DecisionProvisionAnchor => ({
         ...anchor,
         target: {
           ...anchor.target,
