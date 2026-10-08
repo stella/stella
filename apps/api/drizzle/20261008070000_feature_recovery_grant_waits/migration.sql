@@ -68,22 +68,26 @@ SET lock_timeout = 0;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "pending_scout_emissions_next_attempt_idx";
 --> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "pending_scout_emissions_next_attempt_idx"
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "pending_scout_emissions_next_attempt_idx"
   ON "pending_scout_emissions" ("next_attempt_at") WHERE "status" = 'pending';
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "pending_scout_emissions_awaiting_grant_idx";
 --> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "pending_scout_emissions_awaiting_grant_idx"
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "pending_scout_emissions_awaiting_grant_idx"
   ON "pending_scout_emissions" ("organization_id", "workspace_id") WHERE "status" = 'awaiting_grant';
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "flow_upload_trigger_intents_awaiting_grant_idx";
 --> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "flow_upload_trigger_intents_awaiting_grant_idx"
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "flow_upload_trigger_intents_awaiting_grant_idx"
   ON "flow_upload_trigger_intents" ("organization_id", "workspace_id") WHERE "status" = 'awaiting_grant';
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "document_processing_runs_deadline_scout_awaiting_grant_idx";
 --> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "document_processing_runs_deadline_scout_awaiting_grant_idx"
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "document_processing_runs_deadline_scout_awaiting_grant_idx"
   ON "document_processing_runs" ("organization_id", "workspace_id", "id") WHERE "deadline_scout_status" = 'awaiting_grant';
 --> statement-breakpoint
 SET statement_timeout = '5s';

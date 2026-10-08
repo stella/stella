@@ -35,7 +35,8 @@ SET lock_timeout = 0;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "flow_upload_trigger_intents_retry_idx";
 --> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "flow_upload_trigger_intents_retry_idx"
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "flow_upload_trigger_intents_retry_idx"
   ON "flow_upload_trigger_intents" ("retry_at", "definition_id", "entity_id")
   WHERE "status" = 'pending';
 --> statement-breakpoint

@@ -149,12 +149,9 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Adds the cleanup-status CHECK only when absent. The body is static DDL;
   // the conditional makes a partially applied migration retryable.
   "20260830150000_workspace_reference_cleanup_indexes/migration.sql:157817473ab2cf147be3836c532ca148079553e488ae4df0bdb9ae19ecaa32e2",
-  // Adds the upload receipt settlement CHECK only when absent on its exact
-  // relation. Static DDL makes the file retryable after its concurrent rebuild
-  // committed metadata but before the migration ledger entry committed.
+  // Static missing-only checks make committed DDL replayable; neither body
+  // changes the concurrent-index protocol or executes dynamic SQL.
   "20261008062000_upload_trigger_settlements/migration.sql:c6e71fa842501914e50112ab870cfd166f46a20a4cda0b6dc06a98dc287c8d65",
-  // The same exact-relation absence guard for the scout receipt status CHECK;
-  // retrying its later concurrent index builds executes no duplicate ADD.
   "20261008070000_feature_recovery_grant_waits/migration.sql:164a5f477c32d9f62e6ad5e7dabb6b4aa96e17d9f0da867908d2b110c377cae9",
   // Add each supplements foreign key and CHECK only when absent. The bodies
   // are static DDL; the conditional makes a re-applied migration a no-op.
@@ -777,46 +774,11 @@ const collectUnsafeConcurrentIndexesInMigration = ({
 }: ConcurrentIndexMigrationOptions): string[] => {
   const violations: string[] = [];
   const sqlWithoutLineComments = stripSqlComments(source);
-  const statements = splitSqlStatements(source);
-  const retryRebuildPositions = new Set<number>();
-  let statementCursor = 0;
-  for (const [position, statement] of statements.entries()) {
-    const statementOffset = sqlWithoutLineComments.indexOf(
-      statement,
-      statementCursor,
-    );
-    if (statementOffset === -1) {
-      panic("Parsed migration statement is absent from stripped SQL");
-    }
-    statementCursor = statementOffset + statement.length;
-    const match = [...statement.matchAll(CONCURRENT_IF_NOT_EXISTS)].at(0);
-    if (match?.index !== 0) {
-      continue;
-    }
-    const name = matchedIndexName(match);
-    const precedingDrop = [
-      ...(statements.at(position - 1) ?? "").matchAll(CONCURRENT_DROP),
-    ].at(0);
-    // Rebuilding a non-unique index first removes both valid old predicates and
-    // invalid cancelled builds. Only an immediately preceding top-level drop
-    // certifies this create; unique-index removal remains forbidden below.
-    const hasRetryRebuild =
-      position > 0 &&
-      precedingDrop?.index === 0 &&
-      matchedIndexName(precedingDrop) === name;
-    if (name && hasRetryRebuild) {
-      retryRebuildPositions.add(statementOffset);
-    }
-  }
   for (const match of sqlWithoutLineComments.matchAll(
     CONCURRENT_IF_NOT_EXISTS,
   )) {
     const name = matchedIndexName(match);
-    if (
-      !name ||
-      (!validatedIndexNames.has(name) &&
-        !retryRebuildPositions.has(match.index))
-    ) {
+    if (!name || !validatedIndexNames.has(name)) {
       violations.push(
         `${relativePath}: ${name ?? "unknown index"} uses IF NOT EXISTS without an online validity postcondition`,
       );
@@ -1239,74 +1201,6 @@ const collectUnsafeTypeChanges = async () => {
 };
 
 describe("concurrent index migration safety", () => {
-  test("retry-drop approval preserves global quoted-command detection and unique-index protection", () => {
-    const scan = (sql: string) =>
-      collectUnsafeConcurrentIndexesInMigration({
-        relativePath: "retry/migration.sql",
-        source: `SET lock_timeout = '1s'; SET statement_timeout = 0; ${sql} SET statement_timeout = '5s'; SET lock_timeout = '1s';`,
-        validatedIndexNames: new Set(),
-      });
-    expect(
-      scan(
-        `DROP INDEX CONCURRENTLY IF EXISTS "retry_idx"; SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id)';`,
-      ),
-    ).toContain(
-      "retry/migration.sql: retry_idx uses IF NOT EXISTS without an online validity postcondition",
-    );
-    expect(
-      scan(
-        'DROP INDEX CONCURRENTLY IF EXISTS "retry_idx"; CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id);',
-      ),
-    ).toContain(
-      "retry/migration.sql: retry can remove valid unique index retry_idx",
-    );
-  });
-
-  test.each([
-    {
-      placement: "before",
-      sql: 'DROP INDEX CONCURRENTLY IF EXISTS "retry_idx"; CREATE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id);',
-      repaired: true,
-    },
-    {
-      placement: "after",
-      sql: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id); DROP INDEX CONCURRENTLY IF EXISTS "retry_idx";',
-      repaired: false,
-    },
-    {
-      placement: "different index",
-      sql: 'DROP INDEX CONCURRENTLY IF EXISTS "other_idx"; CREATE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id);',
-      repaired: false,
-    },
-    {
-      placement: "quoted command",
-      sql: `SELECT 'DROP INDEX CONCURRENTLY IF EXISTS "retry_idx"'; CREATE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id);`,
-      repaired: false,
-    },
-    {
-      placement: "earlier create consumes the drop",
-      sql: 'DROP INDEX CONCURRENTLY IF EXISTS "retry_idx"; CREATE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id); CREATE INDEX CONCURRENTLY IF NOT EXISTS "retry_idx" ON contacts(id);',
-      repaired: false,
-    },
-  ])(
-    "a $placement retry drop certifies only its following same-index create",
-    ({ sql, repaired }) => {
-      const relativePath = "retry/migration.sql";
-      const violations = collectUnsafeConcurrentIndexesInMigration({
-        relativePath,
-        source: `SET lock_timeout = '1s'; SET statement_timeout = 0; ${sql} SET statement_timeout = '5s'; SET lock_timeout = '1s';`,
-        validatedIndexNames: new Set(),
-      });
-      expect(violations).toEqual(
-        repaired
-          ? []
-          : [
-              `${relativePath}: retry_idx uses IF NOT EXISTS without an online validity postcondition`,
-            ],
-      );
-    },
-  );
-
   test.each([
     { spelling: "index_name", name: "index_name" },
     { spelling: "INDEX_NAME", name: "index_name" },
