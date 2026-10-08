@@ -76,12 +76,12 @@ const registerScroller = (scroller: HTMLElement) => {
     configurable: true,
     value: VIEW_PX,
   });
-  scroller.scrollTo = ((options?: ScrollToOptions | number, y?: number) => {
+  scroller.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
     const top = typeof options === "number" ? y : options?.top;
     if (top !== undefined) {
       setScrollTop(scroller, top);
     }
-  }) as typeof scroller.scrollTo;
+  };
 };
 
 const rect = (top: number, height: number) =>
@@ -153,7 +153,7 @@ const ABOVE_PARAGRAPH = `Podle ${ABOVE_CITATION} zákona soud postupoval.`;
 const MID_PARAGRAPH = `Rozhodující je ${MID_CITATION} zákona pro tuto věc.`;
 const HEADNOTE = "Soud použije citovaná ustanovení společně.";
 
-const paragraph = (id: string, text: string, role?: "counsel" | undefined) => ({
+const paragraph = (id: string, text: string, role?: "counsel") => ({
   anchorId: `anchor-${id}`,
   id,
   inlines: [{ text, type: "text" as const }],
