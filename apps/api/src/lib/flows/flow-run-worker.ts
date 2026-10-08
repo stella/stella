@@ -12,6 +12,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
@@ -449,6 +450,7 @@ export const reconcileOrphanedFlowRuns = async (
   );
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
+  const previousStep = alias(flowRunSteps, "flow_recovery_previous_step");
   const actorUserId = sql`CASE
     WHEN ${flowRuns.triggerSource}->>'type' = 'manual'
       THEN ${flowRuns.triggerSource}->>'userId'
@@ -486,6 +488,14 @@ export const reconcileOrphanedFlowRuns = async (
           eq(flowRunSteps.index, flowRuns.currentStepIndex),
         ),
       )
+      .leftJoin(
+        previousStep,
+        and(
+          eq(previousStep.runId, flowRuns.id),
+          eq(previousStep.workspaceId, flowRuns.workspaceId),
+          eq(previousStep.index, sql`${flowRuns.currentStepIndex} - 1`),
+        ),
+      )
       .leftJoin(user, and(eq(user.id, actorUserId), isNull(user.deletedAt)))
       .leftJoin(
         member,
@@ -519,12 +529,14 @@ export const reconcileOrphanedFlowRuns = async (
                 ),
               ),
           cursor === null ? undefined : gt(flowRuns.id, cursor),
-          // `startedAt` moves when the run leaves `pending`; `createdAt` is
-          // the only timestamp a run that never started has.
+          // An unclaimed current step became ready when its predecessor
+          // finished. Legacy or first-step gaps fall back to the run clock.
           stalledBefore === undefined
             ? undefined
             : lt(
-                sql`CASE WHEN ${flowRuns.status} = 'running' THEN ${flowRunSteps.startedAt} ELSE coalesce(${flowRuns.startedAt}, ${flowRuns.createdAt}) END`,
+                sql`CASE WHEN ${flowRuns.status} = 'running'
+                  THEN coalesce(${flowRunSteps.startedAt}, ${previousStep.finishedAt}, ${flowRuns.startedAt}, ${flowRuns.createdAt})
+                  ELSE coalesce(${flowRuns.startedAt}, ${flowRuns.createdAt}) END`,
                 stalledBefore,
               ),
         ),

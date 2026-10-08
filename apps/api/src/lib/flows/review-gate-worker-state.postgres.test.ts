@@ -1,18 +1,25 @@
-import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { describe, expect, mock, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
+  FlowStepError,
 } from "@/api/lib/flows/flow-executor";
+import type { FlowStepJobData } from "@/api/lib/flows/flow-run-queue";
+import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
+import { RUNTIME_MODE, setRuntimeModeForTesting } from "@/api/runtime-mode";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -48,9 +55,15 @@ type PausedWorkerOptions = {
   db: GatedTestDb;
   f: Awaited<ReturnType<typeof flowReviewGateFixture>>;
   phase: (typeof PHASES)[number];
+  enqueueStep?: (job: FlowStepJobData) => Promise<void>;
 };
 
-const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
+const pausedWorker = async ({
+  db,
+  f,
+  phase,
+  enqueueStep = async () => undefined,
+}: PausedWorkerOptions) => {
   if (phase === "complete") {
     await db
       .update(flowRuns)
@@ -105,7 +118,7 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
       },
     makeSafeDb: () => f.safeDb(db),
     broadcastUpdate: () => undefined,
-    enqueueStep: async () => undefined,
+    enqueueStep,
     generateTextForRole: async () => {
       reached.resolve(undefined);
       await release.promise;
@@ -144,6 +157,77 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("worker review gate state (postgres)", () => {
+    test("the standing sweep recovers a ready step after its enqueue fails", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const f = await flowReviewGateFixture(db, {
+          intermediate: true,
+          initialRunStatus: "pending",
+        });
+        const previousFlag = env.FEATURE_FLOWS;
+        const restoreRuntime = setRuntimeModeForTesting({
+          mode: RUNTIME_MODE.strict,
+        });
+        env.FEATURE_FLOWS = true;
+        try {
+          const worker = await pausedWorker({
+            db,
+            f,
+            phase: "complete",
+            enqueueStep: async () => {
+              throw new FlowStepError({
+                message: "Next step queue unavailable",
+              });
+            },
+          });
+          worker.release();
+          expect(await rejectionOf(worker.running)).toMatchObject({
+            message: "Next step queue unavailable",
+          });
+          const state = await f.read();
+          expect(state.run).toMatchObject({
+            status: "running",
+            currentStepIndex: 1,
+          });
+          expect(state.steps.at(0)?.status).toBe("completed");
+          expect(state.steps.at(1)).toMatchObject({
+            status: "pending",
+            startedAt: null,
+          });
+          const readyAt = state.steps.at(0)?.finishedAt;
+          if (readyAt === null || readyAt === undefined) {
+            return panic("Completed step has no finish clock");
+          }
+          await db
+            .update(flowRuns)
+            .set({ startedAt: new Date(readyAt.getTime() - 60 * 60_000) })
+            .where(eq(flowRuns.id, f.runId));
+          const enqueueStep = mock(async (_job: FlowStepJobData) => {});
+          const principal = {
+            organizationId: f.organizationId,
+            userId: f.userId,
+          };
+          await reconcileOrphanedFlowRuns(
+            { principal, stalledBefore: new Date(readyAt.getTime() - 1) },
+            { database: db, enqueueStep },
+          );
+          expect(enqueueStep).not.toHaveBeenCalled();
+          await reconcileOrphanedFlowRuns(
+            { principal, stalledBefore: new Date(readyAt.getTime() + 1) },
+            { database: db, enqueueStep },
+          );
+          expect(enqueueStep).toHaveBeenCalledTimes(1);
+          expect(enqueueStep).toHaveBeenCalledWith({
+            runId: f.runId,
+            stepIndex: 1,
+          });
+        } finally {
+          await f.cleanup();
+          env.FEATURE_FLOWS = previousFlag;
+          restoreRuntime();
+        }
+      });
+    });
     for (const phase of PHASES) {
       for (const first of ["worker", "cancel"] as const) {
         test(`${phase}: ${first} commits first while the other session waits`, async () => {
