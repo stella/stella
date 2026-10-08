@@ -12,7 +12,6 @@ import type {
   Position,
   PositionSeverity,
   PositionStandard,
-  PositionStandardSource,
   ReferencePassage,
   TierRule,
 } from "@/lib/eden-client";
@@ -31,7 +30,6 @@ export type {
   Position,
   PositionSeverity,
   PositionStandard,
-  PositionStandardSource,
   ReferencePassage,
   TierRule,
 };

@@ -22,7 +22,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 // One background extraction must not turn into an unbounded prompt on the
 // tenant's own provider key: cap both the rows read and the rendered text.
-export const TRANSCRIPT_MAX_MESSAGES = 60;
+const TRANSCRIPT_MAX_MESSAGES = 60;
 export const TRANSCRIPT_MAX_CHARS = 12_000;
 // Per-message ceiling so one pasted contract cannot consume the whole budget
 // and crowd out every other message in the range.

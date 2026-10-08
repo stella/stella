@@ -79,6 +79,7 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -1605,6 +1606,7 @@ const resolveModels = async (modelIds: readonly string[]) => {
         managedAIResidency: "eu",
         role: "fast",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

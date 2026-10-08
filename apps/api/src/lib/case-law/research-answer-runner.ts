@@ -73,6 +73,7 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import {
@@ -124,6 +125,8 @@ export type ResearchRunColumn = ResearchQuestion & {
 };
 
 export type RunResearchAnswersInput = {
+  /** The queuing request's admission: the whole run is one action. */
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   columns: readonly ResearchRunColumn[];
@@ -422,6 +425,7 @@ const answerDecision = async (
         orgAIConfig: input.orgAIConfig,
         managedAIResidency: input.managedAIResidency,
         organizationId: input.organizationId,
+        admission: input.admission,
         // The corpus is global; answers are tenant rows written separately.
         tenantWorkspaceIds: [],
         analytics: aiAnalytics,

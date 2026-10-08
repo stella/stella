@@ -12,12 +12,12 @@ import {
   FileTextIcon,
   HistoryIcon,
   LandmarkIcon,
-  LoaderIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
   AiActionIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
@@ -151,7 +151,7 @@ export const SearchSummaryItem = ({
       >
         <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
           {isPending ? (
-            <LoaderIcon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <AiActionIcon className="size-3.5" />
           )}
@@ -187,6 +187,7 @@ export const SearchSummaryItem = ({
       </div>
       <div className="border-border/70 mt-2 border-t pt-2">
         <Button
+          aria-busy={isOpeningChat || undefined}
           className="h-auto gap-2 px-1.5 py-1"
           disabled={isOpeningChat}
           onClick={onOpenChat}
@@ -194,7 +195,7 @@ export const SearchSummaryItem = ({
           variant="ghost"
         >
           {isOpeningChat ? (
-            <LoaderIcon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <MessageSquareIcon className="size-3.5" />
           )}

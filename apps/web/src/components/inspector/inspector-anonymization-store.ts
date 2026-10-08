@@ -7,7 +7,6 @@ import {
 } from "@/components/inspector/inspector-anonymization-slice";
 import type {
   AnonymizationMatchSnapshot,
-  DocumentTextSelection,
   InspectorAnonymizationStore,
 } from "@/components/inspector/inspector-store-types";
 
@@ -19,15 +18,6 @@ export const useInspectorAnonymizationStore =
 export const useIsAnonymizationActive = (): boolean =>
   useInspectorAnonymizationStore(
     (state) => state.anonymizationActiveMountCount > 0,
-  );
-
-export const useDocumentTextSelection = (
-  fieldId: string | null,
-): DocumentTextSelection | null =>
-  useInspectorAnonymizationStore((state) =>
-    fieldId === null
-      ? null
-      : (state.documentTextSelectionByFieldId[fieldId] ?? null),
   );
 
 export const useAnonymizationMatches = (

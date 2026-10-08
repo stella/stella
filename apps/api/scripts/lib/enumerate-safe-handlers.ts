@@ -180,7 +180,7 @@ export type CollectedEndpoint = {
  * exported as both default and a name is recorded once under the default id, so
  * existing baseline entries stay valid. Pure (a plain record in, no I/O).
  */
-export const collectModuleEndpoints = (
+const collectModuleEndpoints = (
   mod: Record<string, unknown>,
   moduleId: string,
 ): CollectedEndpoint[] => {
@@ -227,12 +227,12 @@ export const enumerateModuleEndpoints = (
     exposure,
   }));
 
-export type DiscoveredEndpoint = CollectedEndpoint & {
+type DiscoveredEndpoint = CollectedEndpoint & {
   /** Repo-relative path of the file this endpoint was discovered in. */
   file: string;
 };
 
-export type DiscoveredFile = {
+type DiscoveredFile = {
   /** Repo-relative file path. */
   id: string;
   callCount: number;

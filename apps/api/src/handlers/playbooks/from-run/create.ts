@@ -23,6 +23,7 @@ import {
   referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 
 const fromRunBodySchema = t.Object({
@@ -99,7 +100,9 @@ const createPlaybookFromRun = createSafeRootHandler(
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
+    scopedDb,
     session,
+    user,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -200,6 +203,12 @@ const createPlaybookFromRun = createSafeRootHandler(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
     const createdResult = yield* createPlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId,
       accessibleWorkspaceIds,

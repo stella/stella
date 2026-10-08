@@ -179,6 +179,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
   },
+  "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],

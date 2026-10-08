@@ -17,10 +17,11 @@ import {
   actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { startChatExecutionAdmission } from "./chat-execution-admission";
 import {
   chatMessageContentFromMessage,
   toPersistableChatMessage,
@@ -161,6 +162,9 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          modelAdmission: testModelAdmission(
+            toSafeId<"organization">("org_admission"),
+          ),
           reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             releases += 1;
@@ -291,6 +295,9 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission: {
         signal: admission.signal,
+        modelAdmission: testModelAdmission(
+          toSafeId<"organization">("org_admission"),
+        ),
         reservePeriod: async () => Result.ok(undefined),
         release: async () => {
           releases += 1;
@@ -375,6 +382,9 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission: {
         signal: new AbortController().signal,
+        modelAdmission: testModelAdmission(
+          toSafeId<"organization">("org_admission"),
+        ),
         reservePeriod: async () => Result.ok(undefined),
         release: async () => {
           releaseStarted.resolve(undefined);
@@ -504,6 +514,9 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          modelAdmission: testModelAdmission(
+            toSafeId<"organization">("org_admission"),
+          ),
           reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             await Promise.resolve();
@@ -622,6 +635,9 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          modelAdmission: testModelAdmission(
+            toSafeId<"organization">("org_admission"),
+          ),
           reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             releases += 1;
@@ -761,7 +777,7 @@ describe("chat run admission follows owned settlement", () => {
         return await Promise.resolve(1);
       },
     };
-    const acquired = await startChatExecutionAdmission({
+    const acquired = await startExecutionAdmission({
       mode: "action",
       periodIdentity: {
         actionKind: "chat.send",

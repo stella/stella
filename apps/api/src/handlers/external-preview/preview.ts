@@ -5,6 +5,8 @@ import { t } from "elysia";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import {
@@ -62,7 +64,10 @@ const previewExternalSource = createSafeRootHandler(
   async function* ({ query }) {
     const target = yield* Result.await(validatePreviewUrl(query.url));
     const previewFetch = yield* Result.await(
-      fetchPreviewUrl(target, { maxBytes: MAX_PREVIEW_BYTES }),
+      fetchPreviewUrl(target, {
+        maxBytes: MAX_PREVIEW_BYTES,
+        permit: grantThirdPartyOutboundPermit(),
+      }),
     );
     const { requestedUrl, response, url } = previewFetch;
     const contentType = getContentType(response.headers);
@@ -138,7 +143,10 @@ export const previewExternalFile = createSafeRootHandler(
   async function* ({ query }) {
     const target = yield* Result.await(validatePreviewUrl(query.url));
     const previewFetch = yield* Result.await(
-      fetchPreviewUrl(target, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
+      fetchPreviewUrl(target, {
+        maxBytes: MAX_FILE_PREVIEW_BYTES,
+        permit: grantThirdPartyOutboundPermit(),
+      }),
     );
     const { requestedUrl, response, url } = previewFetch;
     const contentType = getContentType(response.headers);
@@ -370,6 +378,7 @@ type ValidatedPreviewUrl = {
 
 type FetchPreviewUrlOptions = {
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
 };
 
 type FetchPreviewUrlResult = {
@@ -380,7 +389,7 @@ type FetchPreviewUrlResult = {
 
 const fetchPreviewUrl = async (
   target: ValidatedPreviewUrl,
-  { maxBytes }: FetchPreviewUrlOptions,
+  { maxBytes, permit }: FetchPreviewUrlOptions,
 ): Promise<Result<FetchPreviewUrlResult, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -396,6 +405,7 @@ const fetchPreviewUrl = async (
             "User-Agent": "Stella external source preview",
           },
           maxBytes,
+          permit,
           redirect: "manual",
           timeoutMs: PREVIEW_TIMEOUT_MS,
           url: currentTarget.url,

@@ -83,7 +83,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
         ),
       )
       .limit(1)
-      .for("update");
+      .for("no key update");
     if (!workspaceRows.at(0)) {
       return;
     }

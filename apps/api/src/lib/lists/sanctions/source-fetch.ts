@@ -25,6 +25,7 @@ import type {
   SanctionsSource,
 } from "@stll/sanctions";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
@@ -199,6 +200,7 @@ const lastModifiedOf = (
 };
 
 type FetchOptions = {
+  permit: ThirdPartyOutboundPermit;
   euXmlUrlOverride?: string | undefined;
   fetchStreamRequest?: typeof safeOutboundFetchStream | undefined;
   signal: AbortSignal;
@@ -218,6 +220,7 @@ const headersFor = ({
 });
 
 const fetchBytes = async ({
+  permit,
   maxBytes,
   signal,
   source,
@@ -226,6 +229,7 @@ const fetchBytes = async ({
   accept,
 }: {
   accept?: string | undefined;
+  permit: ThirdPartyOutboundPermit;
   maxBytes: number;
   signal: AbortSignal;
   source: SanctionsSource;
@@ -233,6 +237,7 @@ const fetchBytes = async ({
   userAgent?: string | undefined;
 }): Promise<Result<ArrayBuffer, SanctionsRefreshError>> => {
   const response = await safeOutboundFetchBytes({
+    permit,
     url,
     maxBytes,
     timeoutMs: REQUEST_TIMEOUT_MS,
@@ -251,6 +256,7 @@ const fetchBytes = async ({
 };
 
 const fetchStream = async ({
+  permit,
   fetchStreamRequest = safeOutboundFetchStream,
   signal,
   source,
@@ -258,6 +264,7 @@ const fetchStream = async ({
   url,
   userAgent,
 }: {
+  permit: ThirdPartyOutboundPermit;
   fetchStreamRequest?: typeof safeOutboundFetchStream | undefined;
   signal: AbortSignal;
   source: SanctionsSource;
@@ -303,6 +310,7 @@ const fetchStream = async ({
       // Public downloads reconstruct only the user agent on every hop; no
       // authorization, cookies, or URL credentials cross publisher hosts.
       return await fetchStreamRequest({
+        permit,
         url: parsed.value,
         maxBytes: LIST_MAX_BYTES,
         timeoutMs: REQUEST_TIMEOUT_MS,
@@ -402,6 +410,7 @@ const loadStreamedMarker = async ({
   readVersion: ReadStreamedVersion;
 }): Promise<Result<FetchedMarker, SanctionsRefreshError>> => {
   const response = await fetchStream({
+    permit: options.permit,
     fetchStreamRequest: options.fetchStreamRequest,
     source,
     url: downloadUrl,
@@ -435,6 +444,7 @@ const loadMarkerOnce = async (
       let downloadUrl = options.euXmlUrlOverride;
       if (downloadUrl === undefined) {
         const metadataBytes = await fetchBytes({
+          permit: options.permit,
           signal: options.signal,
           source,
           url: SANCTIONS_SOURCE_CONFIG.eu.markerUrl,
@@ -507,6 +517,7 @@ const loadMarkerOnce = async (
       });
     case "cz": {
       const page = await fetchBytes({
+        permit: options.permit,
         signal: options.signal,
         source,
         url: SANCTIONS_SOURCE_CONFIG.cz.markerUrl,
@@ -608,6 +619,7 @@ const loadEditionOnce = async (
 ): Promise<Result<FetchedEdition, SanctionsRefreshError>> => {
   if (marker.source === "cz") {
     const downloaded = await fetchBytes({
+      permit: options.permit,
       signal: options.signal,
       source: marker.source,
       url: marker.downloadUrl,
@@ -637,6 +649,7 @@ const loadEditionOnce = async (
   }
 
   const downloaded = await fetchStream({
+    permit: options.permit,
     fetchStreamRequest: options.fetchStreamRequest,
     source: marker.source,
     url: marker.downloadUrl,

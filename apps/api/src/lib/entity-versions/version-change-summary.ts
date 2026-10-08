@@ -7,6 +7,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
 type SummarizeVersionChangeOptions = {
@@ -17,6 +18,7 @@ type SummarizeVersionChangeOptions = {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   safeDb: SafeDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -33,6 +35,7 @@ export const summarizeVersionChange = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   safeDb,
   userId,
   workspaceId,
@@ -68,6 +71,7 @@ export const summarizeVersionChange = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         aiAnalytics,
       }),
     catch: (cause) => {

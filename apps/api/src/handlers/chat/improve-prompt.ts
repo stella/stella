@@ -8,7 +8,11 @@ import { buildPromptImprovementModelInput } from "@/api/handlers/chat/improve-pr
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -39,6 +43,7 @@ const improvePrompt = createSafeRootHandler(
     body,
     orgAIConfig,
     managedAIResidency,
+    modelAdmission,
     promptCachingEnabled,
     request,
     safeDb,
@@ -104,6 +109,7 @@ const improvePrompt = createSafeRootHandler(
             messages: modelInput.messages,
             maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
             organizationId: session.activeOrganizationId,
+            admission: configuredModelAdmission({ modelAdmission }),
             orgAIConfig,
             managedAIResidency,
             role: "fast",

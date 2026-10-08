@@ -12,13 +12,8 @@ import {
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { Button } from "@stll/ui/button";
-import {
-  CheckIcon,
-  GlobeIcon,
-  LoaderIcon,
-  PencilIcon,
-  XIcon,
-} from "@stll/ui/icons";
+import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
@@ -556,10 +551,10 @@ export const ToolApprovalCard = ({
         <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
         <span className="font-medium">{label}</span>
         {isProcessing && (
-          <LoaderIcon
-            aria-label={t("common.running")}
-            className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin"
-            role="img"
+          <Loader
+            className="ms-auto size-3.5 shrink-0"
+            label={t("common.running")}
+            size="sm"
           />
         )}
         {isApproved && (

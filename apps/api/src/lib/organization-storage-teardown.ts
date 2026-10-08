@@ -107,7 +107,7 @@ export class OrganizationStorageTeardownBoundError extends TaggedError(
   organizationId: SafeId<"organization">;
 }> {}
 
-export class OrganizationStorageTeardownStateError extends TaggedError(
+class OrganizationStorageTeardownStateError extends TaggedError(
   "OrganizationStorageTeardownStateError",
 )<{
   message: string;
@@ -121,7 +121,7 @@ export class WorkspaceStorageTeardownBoundError extends TaggedError(
   workspaceId: SafeId<"workspace">;
 }> {}
 
-export class WorkspaceStorageTeardownStateError extends TaggedError(
+class WorkspaceStorageTeardownStateError extends TaggedError(
   "WorkspaceStorageTeardownStateError",
 )<{
   message: string;
@@ -842,7 +842,7 @@ type WorkspaceStorageTeardownOptions = OrganizationTeardownScope & {
 };
 
 /** Record every durable object class owned by one matter. */
-export const recordWorkspaceStorageTeardown = async ({
+const recordWorkspaceStorageTeardown = async ({
   organizationId,
   pagesMax = LIMITS.organizationStorageTeardownPagesMax,
   tx,

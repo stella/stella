@@ -25,6 +25,7 @@ import {
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { Separator } from "@stll/ui/separator";
+import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
@@ -889,10 +890,7 @@ const GestureAiRow = ({
   if (enrichment.status !== "ready") {
     return (
       <div className="flex h-8 items-center px-2.5">
-        <span
-          aria-hidden="true"
-          className="bg-muted h-1.5 w-16 animate-pulse rounded-full"
-        />
+        <Skeleton className="h-1.5 w-16 rounded-full" />
       </div>
     );
   }

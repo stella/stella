@@ -1,11 +1,9 @@
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import config from "../oxlint.config.ts";
-import { BASELINE_PATHS } from "./baseline-paths.ts";
-import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 import {
   createFileIndex,
   isRecord,
@@ -125,40 +123,20 @@ export const coverageProblems = ({
 export const problemKey = ({ ruleId, category }: CoverageProblem): string =>
   `${ruleId}::${category}`;
 
-export const parseCoverageBaseline = (text: string): Record<string, string> => {
-  const baseline: unknown = JSON.parse(text);
-  if (
-    !isRecord(baseline) ||
-    Object.entries(baseline).some(
-      ([key, reason]) =>
-        !/^[^/]+\/[^:]+::(?:unwired|empty-scope|untested)$/u.test(key) ||
-        typeof reason !== "string" ||
-        reason.trim().length === 0,
-    )
-  ) {
-    return panic(
-      "Rule coverage baseline must map rule/category keys to nonempty reasons",
-    );
-  }
-  return Object.fromEntries(
-    Object.entries(baseline).map(([key, reason]) => [key, String(reason)]),
-  );
+const REMEDIATION: Record<CoverageProblem["category"], string> = {
+  unwired: "register the plugin and configure the rule",
+  "empty-scope": "give the rule at least one linted file",
+  untested: "add reporting and clean test cases",
 };
 
-export const baselineErrors = (
+/** Every custom rule must be wired, scoped and tested; there is no allowance. */
+export const coverageErrors = (
   problems: readonly CoverageProblem[],
-  baseline: Record<string, string>,
-): string[] => {
-  const current = new Set(problems.map(problemKey));
-  return [
-    ...[...current]
-      .filter((key) => !(key in baseline))
-      .map((key) => `Missing control: ${key}`),
-    ...Object.keys(baseline)
-      .filter((key) => !current.has(key))
-      .map((key) => `Remove resolved baseline entry: ${key}`),
-  ];
-};
+): string[] =>
+  problems.map(
+    (problem) =>
+      `Custom rule coverage gap: ${problemKey(problem)} (${REMEDIATION[problem.category]})`,
+  );
 
 export const repositoryRules = async () => {
   // Enumerate all tracked top-level modules, including plugins absent from config.
@@ -188,76 +166,6 @@ export const repositoryRules = async () => {
   return { ruleIds: ruleIds.toSorted(), registeredRuleIds };
 };
 
-export const initialBaselineErrors = (
-  baseline: Record<string, string>,
-  baseRuleIds: readonly string[],
-): string[] => {
-  const existing = new Set(baseRuleIds);
-  return Object.keys(baseline)
-    .filter((key) => !existing.has(key.split("::").at(0) ?? ""))
-    .map((key) => `New rules cannot enter the baseline: ${key}`);
-};
-
-export const readBaseRules = async (base: string): Promise<string[]> => {
-  const directory = mkdtempSync(path.join(tmpdir(), "oxlint-base-rules-"));
-  try {
-    const archivePath = path.join(directory, "plugins.tar");
-    const archive = Bun.spawnSync(["git", "archive", base, ".oxlint-plugins"], {
-      cwd: repoRoot,
-      stdout: Bun.file(archivePath),
-      stderr: "pipe",
-    });
-    if (!archive.success) {
-      return panic(
-        `Cannot enumerate base plugins: ${archive.stderr.toString()}`,
-      );
-    }
-    const extracted = Bun.spawnSync(
-      ["tar", "-xf", archivePath, "-C", directory],
-      { stderr: "pipe" },
-    );
-    if (!extracted.success) {
-      return panic(
-        `Cannot extract base plugins: ${extracted.stderr.toString()}`,
-      );
-    }
-    for (const dependency of [
-      "node_modules",
-      "scripts",
-      ".claude",
-      "apps",
-      "packages",
-    ]) {
-      symlinkSync(
-        path.join(repoRoot, dependency),
-        path.join(directory, dependency),
-      );
-    }
-    const listed = Bun.spawnSync(
-      ["git", "ls-tree", "-r", "--name-only", base, ".oxlint-plugins"],
-      { cwd: repoRoot, stderr: "pipe" },
-    );
-    if (!listed.success) {
-      return panic("Cannot list base plugins");
-    }
-    const rules: string[] = [];
-    for (const file of listed.stdout
-      .toString()
-      .split("\n")
-      .filter((candidate) =>
-        /^\.oxlint-plugins\/[^/]+\.ts$/u.test(candidate),
-      )) {
-      const module = await import(path.join(directory, file));
-      if (module.default !== undefined) {
-        rules.push(...exportedRuleIds(module.default));
-      }
-    }
-    return rules;
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-};
-
 export const CUSTOM_LINT_TEST_ARGS = [
   "test",
   "./.oxlint-plugins/__tests__",
@@ -282,52 +190,15 @@ const main = async (): Promise<number> => {
       trackedFiles: trackedRepoFiles(),
       coverage: readCoverage(readFileSync(coveragePath, "utf-8")),
     });
-    const baseline = parseCoverageBaseline(
-      readFileSync(
-        path.join(repoRoot, BASELINE_PATHS.oxlintRuleCoverage),
-        "utf-8",
-      ),
-    );
-    const errors = baselineErrors(problems, baseline);
-    const base = process.env["BASE_SHA"] || "origin/main";
-    const resolved = Bun.spawnSync(
-      ["git", "rev-parse", "--verify", `${base}^{commit}`],
-      { cwd: repoRoot, stderr: "pipe" },
-    );
-    if (!resolved.success) {
-      return panic(`Cannot resolve rule coverage comparison base: ${base}`);
-    }
-    const baseCommit = resolved.stdout.toString().trim();
-    const parentBaseline = Bun.spawnSync(
-      [
-        "git",
-        "cat-file",
-        "-e",
-        `${baseCommit}:${BASELINE_PATHS.oxlintRuleCoverage}`,
-      ],
-      { cwd: repoRoot, stderr: "pipe" },
-    );
-    if (!parentBaseline.success) {
-      errors.push(
-        ...initialBaselineErrors(baseline, await readBaseRules(baseCommit)),
-      );
-    }
-    const membership = runLedgerMembershipGuard({
-      ledgerRel: BASELINE_PATHS.oxlintRuleCoverage,
-      repoRoot,
-      parseLedger: (text) => Object.keys(parseCoverageBaseline(text)),
-      label: "custom rule coverage",
-      remediation: "wire the rule and add reporting and clean test cases",
-      args: ["--base", baseCommit],
-    });
+    const errors = coverageErrors(problems);
     for (const error of errors) {
       console.error(error);
     }
-    if (errors.length > 0 || membership !== 0) {
+    if (errors.length > 0) {
       return 1;
     }
     console.log(
-      `Custom rule coverage OK (${problems.length} baseline entries).`,
+      "Custom rule coverage OK (every rule wired, scoped and tested).",
     );
     return 0;
   } finally {

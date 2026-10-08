@@ -16,6 +16,67 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+type ScriptTestArguments =
+  | { readonly type: "valid"; readonly timeout: number | undefined }
+  | { readonly type: "invalid"; readonly message: string };
+
+export const parseScriptTestArguments = (
+  args: readonly string[],
+): ScriptTestArguments => {
+  let timeout: number | undefined;
+  const argumentsIterator = args.values();
+  for (const argument of argumentsIterator) {
+    if (argument !== "--timeout") {
+      return { type: "invalid", message: `unknown argument: ${argument}` };
+    }
+    if (timeout !== undefined) {
+      return { type: "invalid", message: "--timeout may be supplied once" };
+    }
+    const raw = argumentsIterator.next().value;
+    if (typeof raw !== "string" || !/^\d+$/u.test(raw)) {
+      return {
+        type: "invalid",
+        message: "--timeout requires a positive integer",
+      };
+    }
+    const parsed = Number(raw);
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+      return {
+        type: "invalid",
+        message: "--timeout requires a positive integer",
+      };
+    }
+    timeout = parsed;
+  }
+  return { type: "valid", timeout };
+};
+
+type UnlistedTestCommandOptions = {
+  readonly files: readonly string[];
+  readonly timeout: number | undefined;
+};
+
+export const unlistedTestCommands = ({
+  files,
+  timeout,
+}: UnlistedTestCommandOptions): string[][] => {
+  const bunTests = files.filter((file) => file.endsWith(".ts"));
+  const shellTests = files.filter((file) => file.endsWith(".sh"));
+  return [
+    ...(bunTests.length === 0
+      ? []
+      : [
+          [
+            "bun",
+            "test",
+            ...(timeout === undefined ? [] : ["--timeout", String(timeout)]),
+            ...bunTests,
+          ],
+        ]),
+    ...shellTests.map((file) => ["bash", file]),
+  ];
+};
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
 const WORKFLOW = ".github/workflows/ci.yml";
@@ -52,20 +113,26 @@ const run = (command: readonly string[]): boolean => {
 };
 
 if (import.meta.main) {
-  const workflowText = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf-8");
-  const unlisted = unlistedTests(
-    scan(TEST_GLOB).filter((file) => !file.includes("/node_modules/")),
-    workflowText,
-  );
-  const bunTests = unlisted.filter((file) => file.endsWith(".ts"));
-  const shellTests = unlisted.filter((file) => file.endsWith(".sh"));
-
-  const results = [
-    ...(bunTests.length === 0 ? [] : [run(["bun", "test", ...bunTests])]),
-    ...shellTests.map((file) => run(["bash", file])),
-  ];
-  if (results.includes(false)) {
-    panic("Unlisted script tests failed");
+  const options = parseScriptTestArguments(process.argv.slice(2));
+  if (options.type === "invalid") {
+    console.error(
+      `Usage: bun scripts/run-unlisted-script-tests.ts [--timeout <positive integer>]\n${options.message}`,
+    );
+    process.exitCode = 2;
+  } else {
+    const workflowText = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf-8");
+    const unlisted = unlistedTests(
+      scan(TEST_GLOB).filter((file) => !file.includes("/node_modules/")),
+      workflowText,
+    );
+    const commands = unlistedTestCommands({
+      files: unlisted,
+      timeout: options.timeout,
+    });
+    const results = commands.map((command) => run(command));
+    if (results.includes(false)) {
+      panic("Unlisted script tests failed");
+    }
+    console.log(`Ran ${unlisted.length} unlisted script test file(s).`);
   }
-  console.log(`Ran ${unlisted.length} unlisted script test file(s).`);
 }

@@ -140,6 +140,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
+  "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",

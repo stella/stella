@@ -38,7 +38,11 @@ export const createPublicSanctionsScreening = ({
       async (session) =>
         await screenSanctionsSubject({
           ...props,
-          reportFailure,
+          reportFailure: (failure) => {
+            if (!isSanctionsMatcherCancelled(session.signal)) {
+              reportFailure(failure);
+            }
+          },
           matcher: async ({ db, source, edition, query, limit }) => {
             if (isSanctionsMatcherCancelled(session.signal)) {
               return Result.err({
@@ -145,6 +149,13 @@ export const createPublicSanctionsScreening = ({
         }),
       options,
     );
+    if (result.status === "unavailable") {
+      reportFailure({
+        stage: "whole-screening",
+        reason: result.cause,
+        error: result.error,
+      });
+    }
     return result;
   };
   return async (props) => {
@@ -175,7 +186,6 @@ export const createPublicSanctionsScreening = ({
     if (result.status === "completed") {
       return result.value;
     }
-    reportFailure({ stage: "whole-screening", reason: result.cause });
     return Result.ok(
       unavailableSanctionsScreening({
         reason: "load-failed",

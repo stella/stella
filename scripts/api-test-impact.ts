@@ -27,7 +27,7 @@ export const API_ALL_RULES = {
   database: /^apps\/api\/src\/db\//u,
   runner: /^apps\/api\/scripts\//u,
   selector:
-    /^scripts\/(?:test-scope|test-shards|api-test-impact|ci-api-test-plan)\.(?:test\.)?ts$/u,
+    /^scripts\/(?:test-scope|test-shards|api-test-impact|ci-api-test-plan|ci-postgres-test-plan|ci-postgres-selector-miss)\.(?:test\.)?ts$/u,
   environment: /^apps\/api\/\.env/u,
   postgres: /^docker\/postgres\//u,
   data: /^(?:apps\/api|packages)\/(?!.*\.(?:[cm]?[jt]s|[jt]sx)$)/u,
@@ -276,12 +276,14 @@ const buildGraph = (root: string, starts: readonly string[]) => {
 type SelectApiTestImpactOptions = {
   changed: readonly string[];
   root?: string;
+  graphFailurePolicy?: "affected" | "all";
 };
 
 /** A graph or metadata failure must widen selection, including CLI failures. */
 export const selectApiTestImpact = ({
   changed,
   root = REPOSITORY_ROOT,
+  graphFailurePolicy = "affected",
 }: SelectApiTestImpactOptions): ApiTestImpact => {
   try {
     if (
@@ -315,6 +317,7 @@ export const selectApiTestImpact = ({
     ]);
     const preloadClosure = graph.closure(preload);
     if (
+      (graphFailurePolicy === "all" && graph.failed.size > 0) ||
       [...preloadClosure].some((file) => graph.failed.has(file)) ||
       changed.some((file) => preloadClosure.has(file) || graph.failed.has(file))
     ) {

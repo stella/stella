@@ -38,12 +38,8 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ChevronRightIcon,
-  LoaderIcon,
-  PanelRightIcon,
-  AiActionIcon,
-} from "@stll/ui/icons";
+import { ChevronRightIcon, PanelRightIcon, AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -1829,9 +1825,14 @@ export const SearchDialog = ({
                   />
                 </SearchScopeInput>
                 {isFetching && !isFetchingNextPage && (
-                  <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+                  <Loader
+                    className="size-4 shrink-0"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 )}
                 <Button
+                  aria-busy={refineSearchMutation.isPending || undefined}
                   aria-label={t("search.aiRefine")}
                   className="size-8 shrink-0"
                   disabled={!query.trim() || refineSearchMutation.isPending}
@@ -1843,7 +1844,7 @@ export const SearchDialog = ({
                   variant="ghost"
                 >
                   {refineSearchMutation.isPending ? (
-                    <LoaderIcon className="size-4 animate-spin" />
+                    <Loader className="size-4" size="sm" variant="decorative" />
                   ) : (
                     <AiActionIcon className="size-4" />
                   )}
@@ -2384,6 +2385,7 @@ const SearchDialogFooter = ({
         )}
         {canAskAI && mode === "browse" && scope !== "registries" && (
           <Button
+            aria-busy={isAskingAI || undefined}
             aria-keyshortcuts="Tab"
             className="h-auto gap-1.5"
             disabled={isAskingAI}
@@ -2391,7 +2393,9 @@ const SearchDialogFooter = ({
             size="xs"
             variant="muted"
           >
-            {isAskingAI && <LoaderIcon className="size-3 animate-spin" />}
+            {isAskingAI && (
+              <Loader className="size-3" size="sm" variant="decorative" />
+            )}
             <span className="sm:hidden">{t("common.askAI")}</span>
             <span className="hidden sm:inline">
               <SearchFooterHintText translationKey="search.hintAskAI" />
@@ -2644,7 +2648,11 @@ const SearchHitResults = ({
           )}
           {!pagination.isFetchNextPageError &&
             pagination.isFetchingNextPage && (
-              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             )}
           {!pagination.isFetchNextPageError &&
             !pagination.isFetchingNextPage && (
