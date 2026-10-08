@@ -108,6 +108,23 @@ describe("decision reader paragraph windows", () => {
         .success,
     ).toBe(true);
   });
+  test("the default window marks the whole blocks it leaves out as truncated", () => {
+    const short = [paragraph(1), paragraph(2), paragraph(3)];
+    const exact = selectReaderWindow({
+      ast: astOf(short),
+      paragraphs: undefined,
+    });
+    expect(exact).toMatchObject({ status: "selected", truncated: false });
+    const omitted = selectReaderWindow({
+      ast: astOf([...short, paragraph(4)]),
+      paragraphs: undefined,
+    });
+    if (omitted.status !== "selected") {
+      throw new Error("Expected a default window");
+    }
+    expect(omitted.window.map((item) => item.number)).toEqual([1, 2, 3]);
+    expect(omitted.truncated).toBe(true);
+  });
   test("default window bounds preserve Unicode code points without exceeding the budget", () => {
     const selected = selectReaderWindow({
       ast: astOf([paragraph(48, `${"a".repeat(7999)}😀`)]),
@@ -174,6 +191,7 @@ describe("decision reader bounded pages", () => {
         offset: 12,
         blockOffset: 0,
         referenceCursor: "reference",
+        batchDigest: phase === "blocks" ? null : "digest",
       };
       expect(encodeReaderCursor(cursor)).toBe(encodeReaderCursor(cursor));
       expect(decodeReaderCursor(encodeReaderCursor(cursor))).toEqual(cursor);

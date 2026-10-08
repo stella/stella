@@ -23,6 +23,7 @@ import {
   createReaderBlocksTool,
   DECISION_READER_TOOL_SET,
 } from "./decision-reader-tools";
+import { decodeReaderCursor } from "./decision-reader.logic";
 import type { ReaderSource } from "./decision-reader.logic";
 import type { McpToolHandler, McpToolResponse } from "./tool-types";
 
@@ -419,6 +420,64 @@ describe("decision reader tool contracts", () => {
     if (changed.status === "error" && changed.error.type === "structured") {
       expect(changed.error.code).toBe("conflict");
     }
+  });
+  test("an anchor batch revision between pages of one batch is a typed conflict", async () => {
+    const citationsOf = (target: string) =>
+      Array.from({ length: 80 }, (_, index) => ({
+        pieceId: `piece-${"x".repeat(800)}`,
+        start: 0,
+        end: 8,
+        citationId: `citation-${index}`,
+        decisionId: target,
+      }));
+    let citationAnchors = citationsOf(otherId);
+    const source = sourceOf(astOf(1));
+    const context = contextWith({
+      readDecisionReaderSource: async ({ phase }) => ({
+        ...source,
+        citationAnchors: phase === "citations" ? citationAnchors : [],
+        provisionAnchors: [],
+        referenceNextCursor: null,
+      }),
+    });
+    let cursor: string | undefined;
+    let midBatch: string | null = null;
+    for (let page = 0; page < 10 && midBatch === null; page += 1) {
+      const result = await blocks({
+        args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
+        context,
+      });
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available" ||
+        result.data.content.nextCursor === null
+      ) {
+        throw new Error("Expected a continuation inside the citation batch");
+      }
+      cursor = result.data.content.nextCursor;
+      const position = decodeReaderCursor(cursor);
+      if (position?.phase === "citations" && position.offset > 0) {
+        midBatch = cursor;
+      }
+    }
+    if (midBatch === null) {
+      throw new Error("Expected the citation batch to span several pages");
+    }
+    const unchanged = await blocks({
+      args: { decision_id: id, cursor: midBatch },
+      context,
+    });
+    expect(unchanged.status).toBe("success");
+
+    citationAnchors = citationsOf(id);
+    const revised = await blocks({
+      args: { decision_id: id, cursor: midBatch },
+      context,
+    });
+    expect(revised).toMatchObject({
+      status: "error",
+      error: { type: "structured", code: "conflict" },
+    });
   });
   test("both withheld policies are explicit and opening never includes withheld text", async () => {
     expect(READER_WITHHELD_TEXT_POLICY).toBe("metadata-only");
