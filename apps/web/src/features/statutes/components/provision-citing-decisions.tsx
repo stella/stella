@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -11,10 +10,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
-import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
-import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
+import { presentedCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -116,13 +113,7 @@ export const ProvisionCitingDecisions = ({
   );
 
   const decisions = optionalArray(data?.pages).flatMap((page) => page.items);
-  const presentations = decisionCitationPresentationsById(
-    decisions.map((decision) => ({
-      decisionId: decision.decisionId,
-      courtShortCode: decisionCitationCourtLabel(decision),
-    })),
-  );
-  const visible = filterCitingDecisions(decisions, filter);
+  const visible = presentedCitingDecisions(decisions, filter);
 
   if (isPending) {
     return <CitingDecisionsLoader />;
@@ -169,14 +160,11 @@ export const ProvisionCitingDecisions = ({
         <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
       )}
       <ul className="m-0 flex list-none flex-col p-0">
-        {visible.map((decision) => (
+        {visible.map(({ decision, presentation }) => (
           <li key={`${decision.decisionId}-${decision.spanStart}`}>
             <CitingDecisionItem
               decision={decision}
-              presentation={
-                presentations.get(decision.decisionId) ??
-                panic("Citing decision missing collected identity")
-              }
+              presentation={presentation}
             />
           </li>
         ))}
