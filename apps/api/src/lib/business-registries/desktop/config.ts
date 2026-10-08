@@ -26,7 +26,7 @@ export const DESKTOP_ACCOUNT_PERMISSION = {
 export const DESKTOP_REGISTRY_PERMISSION = {
   integration: ["create"],
 } satisfies PermissionInput;
-export const desktopRegistryMetadata = v.strictObject({
+const desktopRegistryMetadata = v.strictObject({
   purpose: v.literal(DESKTOP_REGISTRY_KEY_CONFIG),
   organizationId: v.pipe(v.string(), v.nonEmpty()),
   inactivityExpiresAt: v.union([
