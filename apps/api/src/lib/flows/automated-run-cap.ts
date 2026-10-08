@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, gte, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -6,6 +7,7 @@ import type { rootDb } from "@/api/db/root";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isAutomatedRunCapReached } from "@/api/lib/flows/flow-trigger-logic";
+import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
 
 /**
@@ -32,6 +34,28 @@ import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
  * advisory locks; the definition-id hash is the second key.
  */
 const FLOW_RUN_CAP_LOCK_NAMESPACE = 0x0f_10_cc_a9;
+
+const replayIdentityFor = (triggerSource: FlowTriggerSource) => {
+  switch (triggerSource.type) {
+    case "file-upload":
+      return and(
+        sql`${flowRuns.triggerSource}->>'type' = 'file-upload'`,
+        sql`${flowRuns.triggerSource}->>'entityId' = ${triggerSource.entityId}`,
+      );
+    case "schedule":
+      return triggerSource.dueSlot === undefined
+        ? undefined
+        : and(
+            sql`${flowRuns.triggerSource}->>'type' = 'schedule'`,
+            sql`${flowRuns.triggerSource}->>'dueSlot' = ${triggerSource.dueSlot}`,
+          );
+    case "manual":
+      return undefined;
+    default:
+      triggerSource satisfies never;
+      return panic("Unknown flow trigger source");
+  }
+};
 
 const startOfUtcDay = (now: Date): Date =>
   new Date(
@@ -77,7 +101,8 @@ export const insertAutomatedFlowRunWithinCap = async ({
 
     // Recovery may replay after the run committed but before its receipt settled.
     // The same definition lock makes this decision atomic with every insertion.
-    if (rows.run.triggerSource.type === "file-upload") {
+    const replayIdentity = replayIdentityFor(rows.run.triggerSource);
+    if (replayIdentity !== undefined) {
       const existing = await tx
         .select({ id: flowRuns.id })
         .from(flowRuns)
@@ -85,8 +110,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
           and(
             eq(flowRuns.definitionId, definitionId),
             eq(flowRuns.workspaceId, rows.run.workspaceId),
-            sql`${flowRuns.triggerSource}->>'type' = 'file-upload'`,
-            sql`${flowRuns.triggerSource}->>'entityId' = ${rows.run.triggerSource.entityId}`,
+            replayIdentity,
           ),
         )
         .limit(1);

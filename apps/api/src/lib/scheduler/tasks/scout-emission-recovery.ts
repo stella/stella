@@ -131,6 +131,8 @@ export const recoverScoutEmission: SchedulerTask = async ({
                 inserted: [{ entityId, hearing }],
                 now,
               });
+              // The emitter rechecks admission and owns dequeue; a revoked grant retains the intent.
+              return;
             }
             break;
           }
@@ -151,7 +153,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
       .update(pendingScoutEmissions)
       .set({
         nextAttemptAt: new Date(now.getTime() + RETRY_INTERVAL_MS),
-        lastError: errorTag(recovery.error).slice(0, 128),
+        lastError: errorTag(recovery.error.cause).slice(0, 128),
       })
       .where(
         and(

@@ -58,6 +58,12 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "blocked",
     "failed",
   ],
+  "system:review-reset-flows-cleanup": ["flowDefinitions"],
+  "system:review-reset-signal-cleanup": [
+    "scoutRuns",
+    "signalEvents",
+    "signalsRemoved",
+  ],
   "system:review-organization-reset": [
     "deletedMatters",
     "deletedContacts",

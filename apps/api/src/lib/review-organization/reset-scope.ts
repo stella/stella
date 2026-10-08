@@ -1,11 +1,23 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { cleanupFlowDefinitions } from "@/api/lib/flows/reset-cleanup";
 import { inOrder } from "@/api/lib/review-organization/in-order";
+import {
+  REVIEW_RESET_SWEEP,
+  SIGNAL_RESET_SCOUT_TABLE,
+  SIGNAL_RESET_EVENT_TABLE,
+  SIGNAL_RESET_SIGNAL_TABLE,
+} from "@/api/lib/review-organization/reset-census";
+import {
+  cleanupScoutRuns,
+  cleanupSignalEvents,
+  cleanupSignals,
+} from "@/api/lib/signals/reset-cleanup";
 
 /**
  * Organization-scoped tables the reset leaves in place, each with its reason.
@@ -59,117 +71,6 @@ export const REVIEW_RESET_KEPT_TABLES = {
 } as const satisfies Record<string, string>;
 
 /**
- * Organization-scoped tables the reset empties for the review organization,
- * by `organization_id`, in this order: a table that references another
- * without a cascade comes before it (`reset-scope.test.ts` checks the order
- * against the schema). Workspace-only tables go with their matter.
- */
-export const REVIEW_RESET_CLEARED_TABLES = [
-  "agent_skill_comments",
-  "agent_skill_proposals",
-  "agent_skill_resources",
-  "agent_skill_revisions",
-  "agent_skills",
-  "ai_memories",
-  "anonymization_allowlist_entries",
-  "anonymization_blacklist_entries",
-  "bilingual_translation_rows",
-  "bilingual_translation_runs",
-  "billing_arrangements",
-  "billing_codes",
-  "case_law_research_answers",
-  "case_law_research_columns",
-  "chat_run_log_entries",
-  "chat_run_logs",
-  "chat_threads",
-  "chat_turns",
-  "clause_categories",
-  "clause_variants",
-  "clause_versions",
-  "clauses",
-  "contact_extraction_uploads",
-  "contact_import_requests",
-  "contact_relationships",
-  "contact_search_document_preview_passages",
-  "contact_search_documents",
-  "contacts",
-  "correspondence",
-  "correspondence_allowed_sender_matters",
-  "correspondence_attachments",
-  "correspondence_drop_logs",
-  "correspondence_filers",
-  "desktop_presence",
-  "document_processing_runs",
-  "document_reference_counters",
-  "document_review_findings",
-  "document_review_parties",
-  "document_review_reference_passages",
-  "document_review_runs",
-  "document_translation_runs",
-  "document_translation_units",
-  "entity_version_ai_summaries",
-  "entity_views",
-  "expenses",
-  "extracted_content",
-  "extraction_runs",
-  "file_chat_threads",
-  "file_comparison_uploads",
-  "flow_definitions",
-  "invoice_lines",
-  "invoices",
-  "legal_reader_annotations",
-  "matter_counters",
-  "matter_inbound_addresses",
-  "notifications",
-  "number_series",
-  "number_series_allocations",
-  "number_series_counters",
-  "office_file_evidence",
-  "pending_uploads",
-  "playbook_definition_versions",
-  "playbook_definitions",
-  "rate_tables",
-  "sanctions_contact_marks",
-  "sanctions_contact_matches",
-  "sanctions_contact_screenings",
-  "sanctions_screening_events",
-  "saved_searches",
-  "saved_time_narratives",
-  "scout_runs",
-  "search_document_preview_passages",
-  "search_documents",
-  "search_projection_repair_queue",
-  "seller_profiles",
-  "signal_events",
-  "signals",
-  "style_sets",
-  "template_categories",
-  "template_chat_threads",
-  "template_clauses",
-  "template_fills",
-  "template_lookup_format_user_defaults",
-  "template_lookup_formats",
-  "template_persistence_requests",
-  "template_recipes",
-  "template_versions",
-  "templates",
-  "time_daily_targets",
-  "time_entries",
-  "time_entry_suggestions",
-  "time_entry_timer_states",
-  "time_timer_confirmations",
-  "time_timers",
-  "vat_rates",
-  "workspace_contacts",
-  "workspace_search_document_preview_passages",
-  "workspace_search_documents",
-  "workspace_view_templates",
-  // Referenced without a cascade by tables above.
-  "correspondence_allowed_senders",
-  "document_types",
-] as const;
-
-/**
  * Matters leave through the authorized matter deletion before the sweep runs
  * (its own coverage test proves what goes with a matter); the sweep only runs
  * once none is left.
@@ -191,13 +92,20 @@ const removedCount = (rows: unknown[]): number => {
 
 /**
  * Empty every cleared table for one organization, in the owner transaction
- * that already recorded the organization's storage erasure. Returns the rows
- * removed per table.
+ * that already recorded the organization's storage erasure. Returns generic
+ * table counts; feature owners record their own counts in the same transaction.
  */
-export const sweepReviewOrganization = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<Map<string, number>> => {
+type SweepReviewOrganizationOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  subject: SafeId<"schedulerJobRun">;
+};
+
+export const sweepReviewOrganization = async ({
+  tx,
+  organizationId,
+  subject,
+}: SweepReviewOrganizationOptions): Promise<Map<string, number>> => {
   // audit: skip - the reset sweep; the run's totals go to the system audit
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads
@@ -215,8 +123,41 @@ export const sweepReviewOrganization = async (
       ),
     )
     .returning({ id: userFiles.id });
-  removed.set("user_files", attachments.length);
-  const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
+  const manualCounts = {
+    user_files: attachments.length,
+  } as const satisfies Record<
+    (typeof REVIEW_RESET_MANUAL_TABLES)[number],
+    number
+  >;
+  for (const [name, count] of Object.entries(manualCounts)) {
+    removed.set(name, count);
+  }
+  const swept = await inOrder(REVIEW_RESET_SWEEP, async ([name, auditor]) => {
+    switch (auditor) {
+      case "flows":
+        await cleanupFlowDefinitions({ tx, organizationId, subject });
+        return Result.ok(undefined);
+      case "signals":
+        switch (name) {
+          case SIGNAL_RESET_SCOUT_TABLE:
+            await cleanupScoutRuns({ tx, organizationId, subject });
+            return Result.ok(undefined);
+          case SIGNAL_RESET_EVENT_TABLE:
+            await cleanupSignalEvents({ tx, organizationId, subject });
+            return Result.ok(undefined);
+          case SIGNAL_RESET_SIGNAL_TABLE:
+            await cleanupSignals({ tx, organizationId, subject });
+            return Result.ok(undefined);
+          default:
+            name satisfies never;
+            return panic("Unknown signal reset cleanup table");
+        }
+      case "generic":
+        break;
+      default:
+        auditor satisfies never;
+        return panic("Unknown reset sweep auditor");
+    }
     // audit: skip - one table of the reset sweep; totals go to the system audit
     const rows = executedRows(
       await tx.execute(

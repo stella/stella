@@ -355,7 +355,7 @@ describe("review organization reset refusals", () => {
       config: target,
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: new AbortController().signal,
       dependencies: resetDependencies,
     });
@@ -425,7 +425,7 @@ describe("review organization seed and reset", () => {
       config: config(fixture.reviewOrgId),
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: new AbortController().signal,
       dependencies: resetDependencies,
     });
@@ -513,7 +513,7 @@ describe("review organization seed and reset", () => {
         config: config(fixture.reviewOrgId),
         db: ownerDb(),
         rlsDatabase: rlsDatabase(),
-        runId: Bun.randomUUIDv7(),
+        runId: createSafeId<"schedulerJobRun">(),
         signal: new AbortController().signal,
         dependencies: {
           ...resetDependencies,
@@ -570,7 +570,7 @@ describe("review organization seed and reset", () => {
             config: config(fixture.reviewOrgId),
             db: ownerDb(),
             rlsDatabase: rlsDatabase(),
-            runId: Bun.randomUUIDv7(),
+            runId: createSafeId<"schedulerJobRun">(),
             signal: controller.signal,
             dependencies: {
               ...resetDependencies,
@@ -662,7 +662,7 @@ describe("review organization seed and reset", () => {
       config: config(fixture.reviewOrgId),
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: controller.signal,
       dependencies: {
         ...resetDependencies,
@@ -703,7 +703,7 @@ describe("review organization seed and reset", () => {
         config: config(fixture.reviewOrgId),
         db: ownerDb(),
         rlsDatabase: rlsDatabase(),
-        runId: Bun.randomUUIDv7(),
+        runId: createSafeId<"schedulerJobRun">(),
         signal: new AbortController().signal,
         dependencies: {
           ...resetDependencies,
@@ -795,7 +795,7 @@ describe("review organization seed and reset", () => {
       config: config(fixture.reviewOrgId),
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: new AbortController().signal,
       dependencies: resetDependencies,
     });

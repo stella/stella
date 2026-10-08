@@ -140,6 +140,29 @@ export const FEATURE_REGISTRY = {
       ],
       dispatchModules: [
         {
+          type: "registry",
+          module: "apps/api/src/lib/review-organization/reset-census.ts",
+          registry: "REVIEW_RESET_SWEEP",
+        },
+        {
+          type: "operational",
+          module: "apps/api/src/lib/signals/reset-cleanup.ts",
+          effects: ["cleanup"],
+          owners: [
+            {
+              effect: "cleanup",
+              module: "apps/api/src/lib/signals/reset-cleanup-owner.ts",
+              exports: [
+                "cleanupScoutRuns",
+                "cleanupSignalEvents",
+                "cleanupSignals",
+              ],
+            },
+          ],
+          reason:
+            "Reset removes retained feature data and records its own deletion counts in the same transaction without returning feature counts to the generic sweep.",
+        },
+        {
           type: "admitted",
           module: "apps/api/src/lib/entities/signal-window-rows.ts",
           admission: "isFeatureEnabled",
@@ -240,6 +263,25 @@ export const FEATURE_REGISTRY = {
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
       ],
       dispatchModules: [
+        {
+          type: "registry",
+          module: "apps/api/src/lib/review-organization/reset-census.ts",
+          registry: "REVIEW_RESET_SWEEP",
+        },
+        {
+          type: "operational",
+          module: "apps/api/src/lib/flows/reset-cleanup.ts",
+          effects: ["cleanup"],
+          owners: [
+            {
+              effect: "cleanup",
+              module: "apps/api/src/lib/flows/reset-cleanup-owner.ts",
+              exports: ["cleanupFlowDefinitions"],
+            },
+          ],
+          reason:
+            "Reset removes retained feature data and records its own deletion counts in the same transaction without returning feature counts to the generic sweep.",
+        },
         {
           type: "operational",
           module: "apps/api/src/lib/member-assignment-offboarding.ts",

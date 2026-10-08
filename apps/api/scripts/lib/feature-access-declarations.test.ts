@@ -751,3 +751,45 @@ describe("operational dispatch ownership", () => {
     ).toContainEqual(invalid);
   });
 });
+
+describe("module paths and SQL table ownership", () => {
+  const endpoint = "apps/api/src/routes/ordinary.ts";
+  const path = "apps/api/src/lib/fixture_rows/helper.ts";
+  const validate = (source: string) =>
+    validateFeatureAccessDeclarations({
+      registry,
+      endpoints: [{ file: endpoint, config: {} }],
+      sources: new Map([
+        ...baseSources,
+        [path, "export const ordinary = () => 1;"],
+        [endpoint, source],
+      ]),
+    });
+  test.each([
+    'import { ordinary } from "../lib/fixture_rows/helper"; export const run = () => ordinary();',
+    'export { ordinary } from "../lib/fixture_rows/helper";',
+    'export const run = async () => await import("../lib/fixture_rows/helper");',
+  ])("module addresses alone do not declare feature access: %s", (source) => {
+    expect(validate(source)).toEqual([]);
+  });
+  test("real raw SQL table reads still declare feature access", () => {
+    expect(
+      validate(
+        'import { ordinary } from "../lib/fixture_rows/helper"; export const run = (tx) => tx.execute("select * from fixture_rows");',
+      ),
+    ).toContainEqual({
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
+  test("dynamic module expressions still expose their own feature reads", () => {
+    expect(
+      validate(
+        'export const run = (tx) => import(tx.execute("select * from fixture_rows"));',
+      ),
+    ).toContainEqual({
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
+});

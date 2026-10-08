@@ -138,7 +138,8 @@ true satisfies [MissingFlowTriggerType, ExtraFlowTriggerType] extends [
 /** What actually initiated a given run (recorded on the run row). */
 export type FlowTriggerSource =
   | { type: "manual"; userId: string }
-  | { type: "schedule" }
+  // Persisted runs created before due-slot replay protection have no identity.
+  | { type: "schedule"; dueSlot?: string }
   | { type: "file-upload"; entityId: string };
 
 type MissingFlowTriggerSourceType = Exclude<

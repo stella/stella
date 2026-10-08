@@ -5,6 +5,8 @@
  * pagination's multi-batch path is exercised without seeding thousands of rows.
  */
 
+import { panic } from "better-result";
+import { Queue } from "bullmq";
 import {
   afterAll,
   beforeAll,
@@ -15,6 +17,7 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -22,12 +25,21 @@ import { featureEnrolments, flowRuns, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import {
+  enqueueFlowStep,
+  FLOW_RUN_QUEUE_NAME,
+  FLOW_STEP_JOB_OPTIONS,
+} from "@/api/lib/flows/flow-run-queue";
+import type { FlowStepJobData } from "@/api/lib/flows/flow-run-queue";
 import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
 import type {
   FlowDefinitionSnapshot,
   FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import { createBullMqConnection } from "@/api/lib/redis-client";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -160,6 +172,114 @@ describe("reconcileOrphanedFlowRuns", () => {
       [...nonTerminalRunIds].toSorted(),
     );
   });
+
+  test.skipIf(process.env["STELLA_RUN_VALKEY_TESTS"] !== "true")(
+    "a completed admission pause is delivered again after regrant without unrelated queue activity",
+    async () => {
+      const runId =
+        nonTerminalRunIds.at(0) ?? panic("Missing recovery fixture");
+      const prefix = `flow-regrant-${Bun.randomUUIDv7()}`;
+      const queueConnection = createBullMqConnection({
+        storeClass: "durable-coordination",
+      });
+      const workerConnection = createBullMqConnection({
+        storeClass: "durable-coordination",
+      });
+      const queue = new Queue<FlowStepJobData>(FLOW_RUN_QUEUE_NAME, {
+        connection: queueConnection,
+        prefix,
+        defaultJobOptions: FLOW_STEP_JOB_OPTIONS,
+      });
+      const paused = Promise.withResolvers<undefined>();
+      const resumed = Promise.withResolvers<undefined>();
+      const executed: FlowStepJobData[] = [];
+      let completed = 0;
+      const errors: Error[] = [];
+      const worker = new BullMqWorker<FlowStepJobData>(
+        queue.name,
+        async (job) => {
+          if (
+            await isBackgroundFeatureEnabled({
+              tx: asTestRaw<
+                Parameters<typeof isBackgroundFeatureEnabled>[0]["tx"]
+              >(testDb),
+              organizationId,
+              userId,
+              featureId: "flows",
+            })
+          ) {
+            executed.push(job.data);
+          }
+        },
+        { connection: workerConnection, prefix },
+      );
+      worker.on("error", (error) => {
+        errors.push(error);
+      });
+      worker.on("completed", () => {
+        completed += 1;
+        if (completed === 1) {
+          paused.resolve(undefined);
+        }
+        if (completed === 2) {
+          resumed.resolve(undefined);
+        }
+      });
+      const target = await testDb.query.flowRuns.findFirst({
+        where: { id: { eq: runId } },
+        columns: { currentStepIndex: true },
+      });
+      const stepIndex =
+        target?.currentStepIndex ?? panic("Missing durable step");
+      try {
+        await testDb
+          .delete(featureEnrolments)
+          .where(
+            and(
+              eq(featureEnrolments.organizationId, organizationId),
+              eq(featureEnrolments.featureId, "flows"),
+            ),
+          );
+        await enqueueFlowStep({ runId, stepIndex }, { queue });
+        await withTimeout(async () => await paused.promise, {
+          label: "paused flow completion",
+          timeoutMs: 5000,
+        });
+        expect(executed).toEqual([]);
+        await testDb
+          .insert(featureEnrolments)
+          .values({ featureId: "flows", organizationId, userId });
+        await reconcileOrphanedFlowRuns(
+          {},
+          {
+            database: reconcileDependencies.database,
+            enqueueStep: async (step) => {
+              if (step.runId === runId) {
+                await enqueueFlowStep(step, { queue });
+              }
+            },
+          },
+        );
+        await withTimeout(async () => await resumed.promise, {
+          label: "regranted flow delivery",
+          timeoutMs: 5000,
+        });
+        expect(executed).toEqual([{ runId, stepIndex }]);
+        expect(completed).toBe(2);
+        expect(errors).toEqual([]);
+      } finally {
+        await worker.close();
+        await queue.obliterate({ force: true });
+        await queue.close();
+        queueConnection.disconnect();
+        workerConnection.disconnect();
+        await testDb
+          .insert(featureEnrolments)
+          .values({ featureId: "flows", organizationId, userId })
+          .onConflictDoNothing();
+      }
+    },
+  );
 
   test("the standing sweep skips runs inside the stall window", async () => {
     await reconcileOrphanedFlowRuns(

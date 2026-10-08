@@ -232,6 +232,65 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     expect(reserved).toBe(1);
   });
 
+  test("scheduled due-slot replay is a fixed point before the daily cap", async () => {
+    const definitionId = await createDefinition();
+    await seedRuns(definitionId, CAP - 1, new Date());
+    const triggerSource = {
+      type: "schedule",
+      dueSlot: "2030-01-01T23:00:00.000Z",
+    } as const satisfies FlowTriggerSource;
+    let reservations = 0;
+    const reservePeriod = async () => {
+      reservations += 1;
+    };
+    const first = await attemptStart(
+      definitionId,
+      reservePeriod,
+      createSafeId<"flowRun">(),
+      triggerSource,
+    );
+    expect(first.result.outcome).toBe("started");
+    const replay = await attemptStart(
+      definitionId,
+      reservePeriod,
+      createSafeId<"flowRun">(),
+      triggerSource,
+    );
+    expect(replay.result.outcome).toBe("already-started");
+    expect(reservations).toBe(1);
+    expect(await countRunsForDefinition(definitionId)).toBe(CAP);
+    expect(
+      await testDb.$count(flowRunSteps, eq(flowRunSteps.runId, replay.runId)),
+    ).toBe(0);
+  });
+
+  test("distinct scheduled slots remain independent of legacy unidentified runs", async () => {
+    const definitionId = await createDefinition();
+    await seedRun(definitionId, { type: "schedule" }, new Date(0));
+    for (const dueSlot of [
+      "2030-01-01T23:00:00.000Z",
+      "2030-01-02T23:00:00.000Z",
+    ]) {
+      // db-await-in-loop: exercise independent deliveries and their immediate replay under the definition lock.
+      const first = await attemptStart(
+        definitionId,
+        undefined,
+        createSafeId<"flowRun">(),
+        { type: "schedule", dueSlot },
+      );
+      expect(first.result.outcome).toBe("started");
+      // db-await-in-loop: the replay must converge to the already committed delivery.
+      const replay = await attemptStart(
+        definitionId,
+        undefined,
+        createSafeId<"flowRun">(),
+        { type: "schedule", dueSlot },
+      );
+      expect(replay.result.outcome).toBe("already-started");
+    }
+    expect(await countRunsForDefinition(definitionId)).toBe(3);
+  });
+
   test("rolls run and step rows back when period reservation refuses", async () => {
     const definitionId = await createDefinition();
     const before = await countRunsForDefinition(definitionId);

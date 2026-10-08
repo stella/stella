@@ -164,6 +164,16 @@ export const flowRuns = p.pgTable(
         sql`(${table.triggerSource}->>'entityId')`,
       )
       .where(sql`${table.triggerSource}->>'type' = 'file-upload'`),
+    p
+      .index("flow_runs_schedule_identity_idx")
+      .on(
+        table.definitionId,
+        table.workspaceId,
+        sql`(${table.triggerSource}->>'dueSlot')`,
+      )
+      .where(
+        sql`${table.triggerSource}->>'type' = 'schedule' AND ${table.triggerSource}->>'dueSlot' IS NOT NULL`,
+      ),
     p.unique("flow_runs_id_ws_unq").on(table.id, table.workspaceId),
     ...wsPolicies(),
   ],

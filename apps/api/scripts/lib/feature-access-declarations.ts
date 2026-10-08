@@ -1129,6 +1129,24 @@ const collectModuleUses = (
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
   const visit = (node: ts.Node) => {
+    // Module addresses are inspected by the dependency graph, never as SQL table names.
+    if (ts.isStringLiteralLike(node)) {
+      const parent = node.parent;
+      if (
+        (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) &&
+        parent.moduleSpecifier === node
+      ) {
+        return;
+      }
+      if (
+        ts.isCallExpression(parent) &&
+        parent.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        parent.arguments.at(0) === node
+      ) {
+        return;
+      }
+    }
+
     if (dispatchRegistry(node)) {
       return;
     }
