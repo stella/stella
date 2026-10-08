@@ -18,8 +18,7 @@ SET lock_timeout = 0;
 -- only this migration's index if a cancelled concurrent build left it invalid.
 DROP INDEX CONCURRENTLY IF EXISTS "flow_runs_upload_identity_idx";
 --> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "flow_runs_upload_identity_idx"
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "flow_runs_upload_identity_idx"
   ON "flow_runs" ("definition_id", "workspace_id", ("trigger_source"->>'entityId'))
   WHERE "trigger_source"->>'type' = 'file-upload';
 --> statement-breakpoint
@@ -27,8 +26,7 @@ CREATE INDEX CONCURRENTLY "flow_runs_upload_identity_idx"
 -- Scheduled delivery replays keep the original due slot across retries.
 DROP INDEX CONCURRENTLY IF EXISTS "flow_runs_schedule_identity_idx";
 --> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "flow_runs_schedule_identity_idx"
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "flow_runs_schedule_identity_idx"
   ON "flow_runs" ("definition_id", "workspace_id", ("trigger_source"->>'dueSlot'))
   WHERE "trigger_source"->>'type' = 'schedule'
     AND "trigger_source"->>'dueSlot' IS NOT NULL;
