@@ -47,6 +47,7 @@ describe("activity contract", () => {
       date: "2026-03-10",
       earliestDate: "2026-02-09",
       excludedApps: [{ identifier: "com.example.app", name: "App" }],
+      otherAccountHistoryDays: 0,
       persistence: "encrypted",
       recordingStatus: "recording",
       retention: "month",
@@ -55,6 +56,18 @@ describe("activity contract", () => {
       unreadable: false,
     };
     expect(isActivityDaySnapshot(snapshot)).toBe(true);
+    for (const days of [
+      -1,
+      0.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      "2",
+      undefined,
+    ]) {
+      expect(
+        isActivityDaySnapshot({ ...snapshot, otherAccountHistoryDays: days }),
+      ).toBe(false);
+    }
     expect(isActivityDaySnapshot({ ...snapshot, retention: "year" })).toBe(
       false,
     );

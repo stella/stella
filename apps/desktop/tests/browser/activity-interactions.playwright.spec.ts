@@ -12,6 +12,7 @@ const SNAPSHOT = {
   date: "2026-10-07",
   earliestDate: "2026-10-01",
   excludedApps: [],
+  otherAccountHistoryDays: 0,
   persistence: "encrypted",
   recordingStatus: "recording",
   retention: "month",
@@ -27,14 +28,18 @@ const SNAPSHOT = {
   unreadable: false,
 } satisfies ActivityDaySnapshot;
 
-const installNativeBoundary = async (page: Page) => {
-  expect(isActivityDaySnapshot(SNAPSHOT)).toBe(true);
+const installNativeBoundary = async (
+  page: Page,
+  snapshot: ActivityDaySnapshot = SNAPSHOT,
+) => {
+  expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await page.addInitScript(
-    ({ snapshot, changedEvent }) => {
+    ({ snapshot: initialSnapshot, changedEvent }) => {
       const callbacks = new Map<number, (data: unknown) => unknown>();
       const invocations: { args: Record<string, unknown>; command: string }[] =
         [];
       let nextCallbackId = 1;
+      let activitySnapshot = initialSnapshot;
       Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
       Reflect.set(window, "__STELLA_TEST_ACTIVITY_CHANGED__", () => {
         const subscription = invocations.findLast(
@@ -56,7 +61,25 @@ const installNativeBoundary = async (page: Page) => {
         invoke: async (command: string, args: Record<string, unknown> = {}) => {
           invocations.push({ args, command });
           if (command === "activity_get_day") {
-            return { ...snapshot, date: args["date"] ?? snapshot.date };
+            return {
+              ...activitySnapshot,
+              date: args["date"] ?? activitySnapshot.date,
+            };
+          }
+          if (command === "activity_delete_other_account_history") {
+            activitySnapshot = {
+              ...activitySnapshot,
+              otherAccountHistoryDays: 0,
+            };
+            const subscription = invocations.findLast(
+              ({ args: listenerArgs, command: listenerCommand }) =>
+                listenerCommand === "plugin:event|listen" &&
+                listenerArgs["event"] === changedEvent,
+            );
+            const id = subscription?.args["handler"];
+            if (typeof id === "number") {
+              callbacks.get(id)?.({ event: changedEvent, id, payload: null });
+            }
           }
           if (command === "get_desktop_language") {
             return "en";
@@ -88,11 +111,11 @@ const installNativeBoundary = async (page: Page) => {
         unregisterCallback: (id: number) => callbacks.delete(id),
       });
     },
-    { snapshot: SNAPSHOT, changedEvent: ACTIVITY_CHANGED_EVENT },
+    { snapshot, changedEvent: ACTIVITY_CHANGED_EVENT },
   );
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: enMessages.activity.copySummary }),
+    page.getByRole("heading", { name: enMessages.activity.title, exact: true }),
   ).toBeVisible();
 };
 
@@ -197,4 +220,72 @@ test("only an explicit summary copy publishes activity to the clipboard", async 
         )
       : [],
   ).toHaveLength(1);
+});
+
+for (const state of [
+  { persistence: "encrypted", recordingStatus: "recording" },
+  { persistence: "encrypted", recordingStatus: "off" },
+  { persistence: "deletionOnly", recordingStatus: "off" },
+] as const) {
+  test(`other-account history is count-only and deletion is confirmed in ${state.persistence}/${state.recordingStatus}`, async ({
+    page,
+  }) => {
+    await installNativeBoundary(page, {
+      ...SNAPSHOT,
+      ...state,
+      otherAccountHistoryDays: 3,
+    });
+    await expect(
+      page.getByText(
+        "3 saved days from other accounts remain on this device.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    const openDelete = page.getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    });
+    await openDelete.click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "Delete 3 saved days from other accounts on this device? This cannot be undone.",
+    );
+    expect(await invocations(page)).not.toContainEqual(
+      expect.objectContaining({
+        command: "activity_delete_other_account_history",
+      }),
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.cancel, exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    expect(await invocations(page)).not.toContainEqual(
+      expect.objectContaining({
+        command: "activity_delete_other_account_history",
+      }),
+    );
+    await openDelete.click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.delete, exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(openDelete).toBeHidden();
+    expect(await invocations(page)).toContainEqual({
+      command: "activity_delete_other_account_history",
+      args: {},
+    });
+  });
+}
+
+test("no other-account history note is shown when its day count is zero", async ({
+  page,
+}) => {
+  await installNativeBoundary(page);
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    }),
+  ).toHaveCount(0);
 });

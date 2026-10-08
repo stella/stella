@@ -34,6 +34,11 @@ pub struct ActivityStore {
   root: PathBuf,
 }
 
+struct OtherAccountHistoryFiles {
+  day_count: usize,
+  paths: Vec<PathBuf>,
+}
+
 impl ActivityStore {
   pub fn new(key: [u8; 32], root: PathBuf) -> Self {
     Self { key, root }
@@ -189,13 +194,58 @@ impl ActivityStore {
     )
   }
 
-  /// Sweep every account namespace without loading another account's key or
-  /// plaintext. Legacy unnamespaced day files are also eligible for deletion.
-  pub fn sweep_namespaces(root: &Path, earliest: NaiveDate) -> Result<usize, String> {
-    let mut deleted = Self::delete_days_before_root(root, earliest)?;
+  /// Aggregate only: no inactive account's dates, identity, settings, key or
+  /// decrypted content are exposed. Reading this count never expires data.
+  pub fn other_account_history_days(
+    root: &Path,
+    current_namespace: &str,
+  ) -> Result<usize, String> {
+    if !Self::is_account_namespace(current_namespace) {
+      return Err("activity account namespace is invalid".to_string());
+    }
+    Ok(Self::other_account_history_files(root, current_namespace)?.day_count)
+  }
+
+  /// Explicitly removes inactive accounts' dated history and interrupted-write
+  /// files. Their settings remain; the current account is never included.
+  pub fn delete_other_account_history(
+    root: &Path,
+    current_namespace: &str,
+  ) -> Result<(), String> {
+    if !Self::is_account_namespace(current_namespace) {
+      return Err("activity account namespace is invalid".to_string());
+    }
+    for path in Self::other_account_history_files(root, current_namespace)?.paths {
+      remove_file_if_present(&path)?;
+    }
+    Ok(())
+  }
+
+  fn is_account_namespace(namespace: &str) -> bool {
+    namespace.len() == 64 && namespace.bytes().all(|byte| byte.is_ascii_hexdigit())
+  }
+
+  fn other_account_history_files(
+    root: &Path,
+    current_namespace: &str,
+  ) -> Result<OtherAccountHistoryFiles, String> {
+    let mut history = OtherAccountHistoryFiles {
+      day_count: 0,
+      paths: Vec::new(),
+    };
+    let root_type = match fs::symlink_metadata(root) {
+      Ok(metadata) => metadata.file_type(),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(history),
+      Err(error) => {
+        return Err(format!("activity root could not be inspected: {error}"));
+      }
+    };
+    if !root_type.is_dir() {
+      return Ok(history);
+    }
     let entries = match fs::read_dir(root) {
       Ok(entries) => entries,
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(deleted),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(history),
       Err(error) => {
         return Err(format!("activity namespaces could not be listed: {error}"));
       }
@@ -203,15 +253,65 @@ impl ActivityStore {
     for entry in entries {
       let entry = entry
         .map_err(|error| format!("activity namespace could not be listed: {error}"))?;
-      if entry
+      let name = entry.file_name();
+      let Some(namespace) = name.to_str() else {
+        continue;
+      };
+      if namespace == current_namespace || !Self::is_account_namespace(namespace) {
+        continue;
+      }
+      if !entry
         .file_type()
         .map_err(|error| format!("activity namespace type could not be read: {error}"))?
         .is_dir()
       {
-        deleted += Self::delete_days_before_root(&entry.path(), earliest)?;
+        continue;
+      }
+      let days = entry.path().join(DAYS_DIR_NAME);
+      let days_type = match fs::symlink_metadata(&days) {
+        Ok(metadata) => metadata.file_type(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+        Err(error) => {
+          return Err(format!("activity days could not be inspected: {error}"));
+        }
+      };
+      if !days_type.is_dir() {
+        continue;
+      }
+      let entries = fs::read_dir(days)
+        .map_err(|error| format!("activity days could not be listed: {error}"))?;
+      for entry in entries {
+        let entry = entry
+          .map_err(|error| format!("activity day could not be listed: {error}"))?;
+        if !entry
+          .file_type()
+          .map_err(|error| format!("activity day type could not be read: {error}"))?
+          .is_file()
+        {
+          continue;
+        }
+        let name = entry.file_name();
+        if entry
+          .path()
+          .extension()
+          .is_some_and(|extension| extension == "tmp")
+        {
+          history.paths.push(entry.path());
+          continue;
+        }
+        let Some(date) = name
+          .to_str()
+          .and_then(|name| name.strip_suffix(DAY_FILE_SUFFIX))
+        else {
+          continue;
+        };
+        if parse_date(date).is_ok_and(|parsed| format_date(parsed) == date) {
+          history.day_count += 1;
+          history.paths.push(entry.path());
+        }
       }
     }
-    Ok(deleted)
+    Ok(history)
   }
 
   pub fn delete_all_days(&self) -> Result<(), String> {
@@ -304,30 +404,237 @@ mod tests {
   }
 
   #[test]
-  fn namespace_sweep_needs_no_keys_or_settings() {
+  fn invalid_current_namespaces_cannot_count_or_delete_any_account_history() {
     let (_, root) = store();
-    for namespace in ["a", "b"] {
+    let current = "a".repeat(64);
+    let inactive = "b".repeat(64);
+    for namespace in [&current, &inactive] {
       let days = root.join(namespace).join(DAYS_DIR_NAME);
       fs::create_dir_all(&days).unwrap();
-      fs::write(days.join("2026-03-01.json.enc"), b"unreadable ciphertext").unwrap();
-      fs::write(days.join("2026-03-03.json.enc"), b"unreadable ciphertext").unwrap();
+      fs::write(days.join("2020-01-01.json.enc"), b"preserved ciphertext").unwrap();
+      fs::write(
+        days.join("interrupted.tmp"),
+        b"preserved partial ciphertext",
+      )
+      .unwrap();
     }
-    assert_eq!(ActivityStore::sweep_namespaces(&root, date(2)).unwrap(), 2);
-    for namespace in ["a", "b"] {
+    for invalid in [
+      String::new(),
+      "not-a-hash".to_string(),
+      "a".repeat(63),
+      "a".repeat(65),
+      "g".repeat(64),
+      format!("../{}", "a".repeat(61)),
+    ] {
+      assert_eq!(
+        ActivityStore::other_account_history_days(&root, &invalid).unwrap_err(),
+        "activity account namespace is invalid"
+      );
+      assert_eq!(
+        ActivityStore::delete_other_account_history(&root, &invalid).unwrap_err(),
+        "activity account namespace is invalid"
+      );
+      for namespace in [&current, &inactive] {
+        let days = root.join(namespace).join(DAYS_DIR_NAME);
+        assert_eq!(
+          fs::read(days.join("2020-01-01.json.enc")).unwrap(),
+          b"preserved ciphertext"
+        );
+        assert_eq!(
+          fs::read(days.join("interrupted.tmp")).unwrap(),
+          b"preserved partial ciphertext"
+        );
+      }
+    }
+    assert_eq!(
+      ActivityStore::other_account_history_days(&root, &current).unwrap(),
+      1
+    );
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn inactive_history_count_and_explicit_deletion_need_no_keys_or_settings() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let inactive = "b".repeat(64);
+    // An older origin-derived namespace is still an inactive account's data.
+    let old_origin_namespace = "c".repeat(64);
+    let non_hex = "g".repeat(64);
+    let short = "d".repeat(63);
+    let long = "e".repeat(65);
+    assert_eq!(
+      ActivityStore::other_account_history_days(&root, &current).unwrap(),
+      0
+    );
+    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    for namespace in [
+      &current,
+      &inactive,
+      &old_origin_namespace,
+      &non_hex,
+      &short,
+      &long,
+      &"unrelated".to_string(),
+      &DAYS_DIR_NAME.to_string(),
+    ] {
+      let days = root.join(namespace).join(DAYS_DIR_NAME);
+      fs::create_dir_all(&days).unwrap();
+      fs::write(
+        root.join(namespace).join(SETTINGS_FILE_NAME),
+        b"unreadable settings",
+      )
+      .unwrap();
+      fs::write(days.join("2020-01-01.json.enc"), b"unreadable ciphertext").unwrap();
+      fs::write(days.join("2026-03-03.json.enc"), b"unreadable ciphertext").unwrap();
+      fs::write(days.join("2026-03-03.json.123.tmp"), b"partial").unwrap();
+      fs::write(days.join("2026-99-99.json.enc"), b"not a day").unwrap();
+      fs::write(days.join("2026-3-1.json.enc"), b"not canonical").unwrap();
+      fs::create_dir(days.join("2026-03-04.json.enc")).unwrap();
+    }
+    for _ in 0..2 {
+      assert_eq!(
+        ActivityStore::other_account_history_days(&root, &current).unwrap(),
+        4
+      );
+      // Merely inspecting history never applies retention to inactive accounts.
       assert!(
-        !root
-          .join(namespace)
-          .join("days/2026-03-01.json.enc")
+        root
+          .join(&inactive)
+          .join("days/2020-01-01.json.enc")
           .exists()
       );
       assert!(
         root
+          .join(&old_origin_namespace)
+          .join("days/2020-01-01.json.enc")
+          .exists()
+      );
+      assert!(
+        root
+          .join(&inactive)
+          .join("days/2026-03-03.json.123.tmp")
+          .exists()
+      );
+    }
+    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    assert_eq!(
+      ActivityStore::other_account_history_days(&root, &current).unwrap(),
+      0
+    );
+    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    for namespace in [&inactive, &old_origin_namespace] {
+      assert!(
+        !root
+          .join(namespace)
+          .join("days/2020-01-01.json.enc")
+          .exists()
+      );
+      assert!(
+        !root
           .join(namespace)
           .join("days/2026-03-03.json.enc")
           .exists()
       );
+      assert_eq!(
+        fs::read(root.join(namespace).join(SETTINGS_FILE_NAME)).unwrap(),
+        b"unreadable settings"
+      );
+      assert!(
+        !root
+          .join(namespace)
+          .join("days/2026-03-03.json.123.tmp")
+          .exists()
+      );
+      for retained in [
+        "2026-99-99.json.enc",
+        "2026-3-1.json.enc",
+        "2026-03-04.json.enc",
+      ] {
+        assert!(
+          root
+            .join(namespace)
+            .join(DAYS_DIR_NAME)
+            .join(retained)
+            .exists()
+        );
+      }
+    }
+    for namespace in [
+      &current,
+      &non_hex,
+      &short,
+      &long,
+      &"unrelated".to_string(),
+      &DAYS_DIR_NAME.to_string(),
+    ] {
+      assert_eq!(
+        fs::read(root.join(namespace).join("days/2020-01-01.json.enc")).unwrap(),
+        b"unreadable ciphertext"
+      );
+      assert_eq!(
+        fs::read(root.join(namespace).join("days/2026-03-03.json.enc")).unwrap(),
+        b"unreadable ciphertext"
+      );
     }
     ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  #[cfg(unix)]
+  fn inactive_history_operations_ignore_symlinks_at_every_directory_level() {
+    use std::os::unix::fs::symlink;
+    let (_, root) = store();
+    let (_, outside) = store();
+    let outside_days = outside.join(DAYS_DIR_NAME);
+    fs::create_dir_all(&outside_days).unwrap();
+    let outside_file = outside_days.join("2020-01-01.json.enc");
+    fs::write(&outside_file, b"preserved").unwrap();
+    fs::create_dir_all(&root).unwrap();
+    symlink(&outside, root.join("a".repeat(64))).unwrap();
+    let days_link_namespace = root.join("b".repeat(64));
+    fs::create_dir(&days_link_namespace).unwrap();
+    symlink(&outside_days, days_link_namespace.join(DAYS_DIR_NAME)).unwrap();
+    let days = root.join("c".repeat(64)).join(DAYS_DIR_NAME);
+    fs::create_dir_all(&days).unwrap();
+    let linked_file = days.join("2020-01-01.json.enc");
+    symlink(&outside_file, &linked_file).unwrap();
+    let linked_temp = days.join("interrupted.tmp");
+    symlink(&outside_file, &linked_temp).unwrap();
+    fs::write(days.join("2026-03-03.json.enc"), b"inactive").unwrap();
+    let current = "f".repeat(64);
+    assert_eq!(
+      ActivityStore::other_account_history_days(&root, &current).unwrap(),
+      1
+    );
+    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    assert_eq!(
+      ActivityStore::other_account_history_days(&root, &current).unwrap(),
+      0
+    );
+    assert_eq!(fs::read(&outside_file).unwrap(), b"preserved");
+    assert!(
+      fs::symlink_metadata(&linked_file)
+        .unwrap()
+        .file_type()
+        .is_symlink()
+    );
+    assert!(
+      fs::symlink_metadata(&linked_temp)
+        .unwrap()
+        .file_type()
+        .is_symlink()
+    );
+    let root_link = root.with_extension("link");
+    symlink(&root, &root_link).unwrap();
+    assert_eq!(
+      ActivityStore::other_account_history_days(&root_link, &current).unwrap(),
+      0
+    );
+    ActivityStore::delete_other_account_history(&root_link, &current).unwrap();
+    fs::remove_file(root_link).unwrap();
+    ActivityStore::remove(&root).unwrap();
+    ActivityStore::remove(&outside).unwrap();
   }
 
   #[test]

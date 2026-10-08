@@ -39,6 +39,7 @@ export type ActivityDaySnapshot = {
   date: string;
   earliestDate: string;
   excludedApps: ActivityAppExclusion[];
+  otherAccountHistoryDays: number;
   persistence: ActivityPersistenceStatus;
   recordingStatus: ActivityRecordingStatus;
   retention: ActivityRetention;
@@ -75,6 +76,9 @@ export const isActivityDaySnapshot = (
   typeof value["today"] === "string" &&
   typeof value["earliestDate"] === "string" &&
   typeof value["unreadable"] === "boolean" &&
+  typeof value["otherAccountHistoryDays"] === "number" &&
+  Number.isSafeInteger(value["otherAccountHistoryDays"]) &&
+  value["otherAccountHistoryDays"] >= 0 &&
   isOneOf(ACTIVITY_PERSISTENCE_STATUSES, value["persistence"]) &&
   isOneOf(ACTIVITY_RECORDING_STATUSES, value["recordingStatus"]) &&
   isOneOf(ACTIVITY_RETENTIONS, value["retention"]) &&

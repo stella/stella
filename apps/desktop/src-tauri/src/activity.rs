@@ -170,6 +170,7 @@ pub struct ActivityDaySnapshot {
   recording_status: ActivityRecordingStatus,
   retention: ActivityRetention,
   excluded_apps: Vec<AppExclusion>,
+  other_account_history_days: usize,
   segments: Vec<ActivitySegment>,
   /// A day whose file exists but cannot be read.
   unreadable: bool,
@@ -898,11 +899,47 @@ impl ActivityManager {
     Ok(())
   }
 
+  fn other_account_store_root(&self) -> Result<PathBuf, String> {
+    let root = match &self.persistence {
+      ActivityPersistence::Encrypted(store) => store.root().parent().map(PathBuf::from),
+      ActivityPersistence::DeletionOnly(root) => root.parent().map(PathBuf::from),
+      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
+        store_root()
+      }
+    };
+    root.ok_or_else(|| "activity history is unavailable".to_string())
+  }
+
+  pub fn other_account_history_days(&self) -> Result<usize, String> {
+    let namespace = self
+      .namespace
+      .as_deref()
+      .ok_or_else(|| "activity account is unavailable".to_string())?;
+    ActivityStore::other_account_history_days(
+      &self.other_account_store_root()?,
+      namespace,
+    )
+    .map_err(|_| "activity history could not be listed".to_string())
+  }
+
+  pub fn delete_other_account_history(&mut self) -> Result<(), String> {
+    let namespace = self
+      .namespace
+      .as_deref()
+      .ok_or_else(|| "activity account is unavailable".to_string())?;
+    ActivityStore::delete_other_account_history(
+      &self.other_account_store_root()?,
+      namespace,
+    )
+    .map_err(|_| "activity history could not be deleted".to_string())
+  }
+
   pub fn day_snapshot(
     &self,
     date: NaiveDate,
     now: DateTime<Utc>,
     _caller: &ActivityCaller,
+    other_account_history_days: usize,
   ) -> ActivityDaySnapshot {
     let today = local_date(now);
     let (mut segments, unreadable) = match self.days.get(&date) {
@@ -931,6 +968,7 @@ impl ActivityManager {
       recording_status: self.settings.recording_status,
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
+      other_account_history_days,
       segments,
       unreadable,
     }
@@ -1047,18 +1085,6 @@ pub fn unload_account(app: &AppHandle) {
   emit_changed(app);
 }
 
-/// Inactive or unreadable namespaces use the longest supported retention;
-/// sweeping them never needs another account's key or plaintext settings.
-fn sweep_stored_namespaces(now: DateTime<Utc>) -> Result<bool, String> {
-  let Some(root) = store_root() else {
-    return Ok(false);
-  };
-  let earliest = local_date(now)
-    .checked_sub_days(Days::new(ActivityRetention::Quarter.days() - 1))
-    .unwrap_or(NaiveDate::MIN);
-  Ok(ActivityStore::sweep_namespaces(&root, earliest)? > 0)
-}
-
 /// Starts or stops the feature after the server decision changed. Turning
 /// it off stops sampling and closes the window; stored days are untouched.
 pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
@@ -1159,9 +1185,6 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
   if !is_supported() {
     return;
   }
-  if let Err(error) = sweep_stored_namespaces(Utc::now()) {
-    tracing::warn!(error = %error, "expired activity namespaces could not be removed");
-  }
   let sweep_app = app.clone();
   let sweep_state = Arc::clone(&state);
   tauri::async_runtime::spawn(async move {
@@ -1169,10 +1192,6 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
     interval.tick().await;
     loop {
       interval.tick().await;
-      let swept = sweep_stored_namespaces(Utc::now()).unwrap_or_else(|error| {
-        tracing::warn!(error = %error, "expired activity namespaces could not be removed");
-        false
-      });
       let changed = match sweep_state.lock() {
         Ok(mut manager) if manager.is_initialized() => {
           manager.prune_expired(Utc::now()).unwrap_or_else(|error| {
@@ -1182,7 +1201,7 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
         }
         _ => false,
       };
-      if changed || swept {
+      if changed {
         emit_changed(&sweep_app);
       }
     }
@@ -1291,7 +1310,7 @@ mod tests {
           );
           assert!(
             manager
-              .day_snapshot(local_date(at(0)), at(5), &caller_b)
+              .day_snapshot(local_date(at(0)), at(5), &caller_b, 0)
               .segments
               .is_empty()
           );
@@ -1317,7 +1336,7 @@ mod tests {
         let new_caller_a = ActivityCaller::for_account_test(3, "a");
         assert_eq!(
           manager
-            .day_snapshot(local_date(at(0)), at(5), &new_caller_a)
+            .day_snapshot(local_date(at(0)), at(5), &new_caller_a, 0)
             .segments
             .len(),
           1

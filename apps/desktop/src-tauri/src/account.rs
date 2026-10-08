@@ -69,7 +69,6 @@ impl LinkedAccount {
     use sha2::{Digest, Sha256};
     let mut hash = Sha256::new();
     for field in [
-      self.api_base_url.as_str(),
       self.identity.organization_id.as_str(),
       self.identity.user_id.as_str(),
     ] {
@@ -1039,7 +1038,7 @@ mod tests {
   }
 
   #[test]
-  fn local_data_namespaces_bind_origin_organization_and_user_only() {
+  fn local_data_namespaces_bind_organization_and_user_only() {
     let a = fixture("stella_dr_a", 3600);
     let namespace = a.local_data_namespace();
     assert_eq!(namespace.len(), 64);
@@ -1047,11 +1046,12 @@ mod tests {
     let mut refreshed = a.clone();
     refreshed.credential.key = "stella_dr_rotated".into();
     refreshed.account.email = "changed@example.test".into();
+    refreshed.api_base_url = "https://another.example.test".into();
+    refreshed.web_origin = "https://another-web.example.test".into();
     assert_eq!(namespace, refreshed.local_data_namespace());
-    for field in ["origin", "organization", "user"] {
+    for field in ["organization", "user"] {
       let mut b = a.clone();
       match field {
-        "origin" => b.api_base_url = "https://another.example.test".into(),
         "organization" => b.identity.organization_id.push_str("-other"),
         "user" => b.identity.user_id.push_str("-other"),
         _ => unreachable!(),

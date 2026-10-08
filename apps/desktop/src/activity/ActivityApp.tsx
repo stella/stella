@@ -72,12 +72,14 @@ type ActivityDialog =
   | { type: "closed" }
   | { date: string; type: "deleteDay" }
   | { type: "deleteAll" }
+  | { days: number; type: "deleteOtherAccountHistory" }
   | { app: ActivityAppExclusion; type: "excludeApp" };
 
 type ActivityCommand =
   | "activity_copy_text"
   | "activity_delete_all"
   | "activity_delete_day"
+  | "activity_delete_other_account_history"
   | "activity_exclude_app"
   | "activity_remove_app_exclusion"
   | "activity_set_recording_status"
@@ -447,6 +449,26 @@ const SegmentList = ({ segments }: { segments: readonly TimedSegment[] }) => {
   );
 };
 
+type OtherAccountHistoryProps = {
+  days: number;
+  onDelete: () => void;
+};
+
+const OtherAccountHistory = ({ days, onDelete }: OtherAccountHistoryProps) => {
+  const t = useTranslations("activity");
+  if (days === 0) {
+    return null;
+  }
+  return (
+    <div className="text-muted-foreground flex items-center justify-between gap-3 text-xs">
+      <p>{t("otherAccountHistory", { days })}</p>
+      <Button onClick={onDelete} size="sm" variant="ghost">
+        {t("deleteOtherAccountHistory")}
+      </Button>
+    </div>
+  );
+};
+
 type ActivitySettingsProps = {
   onCommand: RunCommand;
   onDeleteAll: () => void;
@@ -584,6 +606,19 @@ const ActivityDialogView = ({
             )
           }
           title={t("excludeApp", { name: dialog.app.name })}
+        />
+      );
+    case "deleteOtherAccountHistory":
+      return (
+        <ConfirmDialog
+          description={t("deleteOtherAccountHistoryConfirmation", {
+            days: dialog.days,
+          })}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand("activity_delete_other_account_history", {}, onClose)
+          }
+          title={t("deleteOtherAccountHistory")}
         />
       );
     case "deleteAll":
@@ -755,15 +790,31 @@ const ActivityApp = () => {
     // The store announces itself with a change event once it is open.
     return <main className="bg-background min-h-dvh" />;
   }
+  const otherAccountHistory = (
+    <OtherAccountHistory
+      days={snapshot.otherAccountHistoryDays}
+      onDelete={() =>
+        setDialog({
+          days: snapshot.otherAccountHistoryDays,
+          type: "deleteOtherAccountHistory",
+        })
+      }
+    />
+  );
+  const dialogView = (
+    <ActivityDialogView
+      dialog={dialog}
+      onClose={() => setDialog({ type: "closed" })}
+      onCommand={runCommand}
+    />
+  );
   if (snapshot.persistence === "deletionOnly") {
     return (
       <ActivityShell>
         <DeletionOnlyNotice onDelete={() => setDialog({ type: "deleteAll" })} />
-        <ActivityDialogView
-          dialog={dialog}
-          onClose={() => setDialog({ type: "closed" })}
-          onCommand={runCommand}
-        />
+        {otherAccountHistory}
+        {error ? <ErrorLine message={error} /> : null}
+        {dialogView}
       </ActivityShell>
     );
   }
@@ -777,7 +828,9 @@ const ActivityApp = () => {
             })
           }
         />
+        {otherAccountHistory}
         {error ? <ErrorLine message={error} /> : null}
+        {dialogView}
       </ActivityShell>
     );
   }
@@ -808,11 +861,8 @@ const ActivityApp = () => {
         }
         snapshot={snapshot}
       />
-      <ActivityDialogView
-        dialog={dialog}
-        onClose={() => setDialog({ type: "closed" })}
-        onCommand={runCommand}
-      />
+      {otherAccountHistory}
+      {dialogView}
     </ActivityShell>
   );
 };

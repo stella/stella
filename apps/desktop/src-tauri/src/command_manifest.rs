@@ -59,6 +59,7 @@ macro_rules! with_stella_commands {
       activity_commands::activity_remove_app_exclusion => "activity_remove_app_exclusion",
       activity_commands::activity_delete_day => "activity_delete_day",
       activity_commands::activity_delete_all => "activity_delete_all",
+      activity_commands::activity_delete_other_account_history => "activity_delete_other_account_history",
       activity_commands::activity_copy_text => "activity_copy_text",
       desktop_telemetry::desktop_report_error => "desktop_report_error",
       desktop_telemetry::desktop_report_timing => "desktop_report_timing",

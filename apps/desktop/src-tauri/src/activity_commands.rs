@@ -51,7 +51,8 @@ pub fn activity_get_day(
   let manager = state.lock().map_err(|_| lock_error())?;
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
-  Ok(manager.day_snapshot(date, now, &caller))
+  let other_account_history_days = manager.other_account_history_days()?;
+  Ok(manager.day_snapshot(date, now, &caller, other_account_history_days))
 }
 
 #[tauri::command]
@@ -125,6 +126,20 @@ pub fn activity_delete_all(
   state: State<'_, ActivityAppState>,
 ) -> Result<(), String> {
   update(&app, &state, &caller, ActivityManager::delete_all)
+}
+
+#[tauri::command]
+pub fn activity_delete_other_account_history(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+) -> Result<(), String> {
+  update(
+    &app,
+    &state,
+    &caller,
+    ActivityManager::delete_other_account_history,
+  )
 }
 
 /// Copies a block summary the window composed. The text goes to the system

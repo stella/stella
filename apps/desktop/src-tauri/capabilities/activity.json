@@ -15,6 +15,7 @@
     "allow-activity-remove-app-exclusion",
     "allow-activity-delete-day",
     "allow-activity-delete-all",
+    "allow-activity-delete-other-account-history",
     "allow-activity-copy-text"
   ]
 }

@@ -19,8 +19,9 @@ local-only feature follows every rule below and adds one entry to
   deletion-only state until the user deletes the data.
 - **Debug builds stay in memory** unless the feature's
   `STELLA_ENABLE_DEBUG_*_PERSISTENCE` variable is set.
-- **Retention sweep.** Expired data is deleted on load and by an hourly sweep,
-  whether or not the feature is currently enabled.
+- **Retention sweep.** Expired data for the loaded account is deleted on load
+  and by an hourly sweep, whether or not the feature is currently enabled.
+  Activity never automatically deletes another account's history.
 - **Payload-free events.** Changes are announced with `emit(..., ())`; the
   window pulls data through commands that take the feature's `LocalCaller`
   (`local_window.rs`), which checks the window label and the app origin.
@@ -59,17 +60,21 @@ local-only feature follows every rule below and adds one entry to
 
 Activity days, settings and welcome consent belong to the linked account.
 The store directory and encryption keychain account use a SHA-256 digest of
-length-delimited API origin, organization id and user id. Disconnecting closes
+length-delimited organization id and user id; changing API origin does not
+change ownership. Disconnecting closes
 the gate and window, supersedes pending requests, flushes only the active
 prefix, and unloads all readable account state. Relinking another account
 starts with that account's own consent and history. Previous accounts' encrypted
 files remain available when those accounts relink.
 
 Retention uses day filenames even when keys or settings are unreadable. The
-active account uses its configured retention; inactive namespaces and legacy
-unnamespaced files use the longest supported retention (90 days) without
-opening any other account's key or settings. Old unnamespaced stores are never
-read into an account namespace.
+loaded account uses its configured retention. Other namespaces remain untouched
+until explicit deletion: the open activity window shows only their aggregate
+day count and a Delete action with confirmation. It never shows their dates,
+identity or content, and counting and deleting need no key or decryption.
+Explicit deletion removes inactive day files and interrupted-write remnants;
+it preserves the current account and settings. Namespace identity changed before
+release, so there is no migration or read of old unnamespaced stores.
 
 An app exclusion asks whether to keep or delete its past segments. Both choices
 prevent future sampling of the app. Day partitions are pinned when a segment
