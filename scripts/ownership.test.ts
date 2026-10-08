@@ -518,12 +518,13 @@ const renewalDoor = () => {
   const door = ROOT_CONNECTION_DOORS.find(
     ({ id }) => id === "desktop-account-renewal",
   );
-  if (!door || door.enforcement.kind !== "import") {
+  const enforcement = door?.enforcement;
+  if (!door || enforcement?.kind !== "import") {
     throw new TypeError(
       "Desktop renewal must be an import-confined root connection door",
     );
   }
-  return door;
+  return { ...door, enforcement };
 };
 
 const assertRenewalExports = (text: string) => {
@@ -602,7 +603,10 @@ const assertRenewalDatabaseBoundary = (text: string) => {
           "Renewal transactions only select or CAS-update credentials",
         );
       }
-      if (method === "from" || method === "update") {
+      // Deadline parsing is a clock read, not a table access.
+      const isInstantParse =
+        method === "from" && receiver.getText(source) === "Temporal.Instant";
+      if ((method === "from" && !isInstantParse) || method === "update") {
         const table = node.arguments.at(0);
         if (
           !table ||
