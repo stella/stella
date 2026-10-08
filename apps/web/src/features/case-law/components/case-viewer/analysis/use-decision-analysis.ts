@@ -33,11 +33,32 @@ export type AnalysisState =
   | { status: "done"; analysis: DecisionAnalysis }
   | { status: "error"; providerDiagnostic?: ProviderDiagnostic };
 
+/**
+ * This view's own explicit retry that failed in transport. It is the view's
+ * state only while nothing newer reached the shared result: another view's
+ * retry or a poll that answered since supersedes it.
+ */
+type RetryFailure = {
+  error: unknown;
+  /** When this view asked for the retry. */
+  submittedAt: number;
+  /** When the shared result last changed. */
+  resultUpdatedAt: number;
+};
+
+/** Whether a failed retry is still this view's latest word on the analysis. */
+const isCurrentRetryFailure = (
+  retryFailure: RetryFailure | undefined,
+): retryFailure is RetryFailure =>
+  retryFailure !== undefined &&
+  retryFailure.submittedAt >= retryFailure.resultUpdatedAt;
+
 type AnalysisQuerySnapshot = {
   hasQueryError: boolean;
   isFetching: boolean;
   result: AnalysisQueryResult | undefined;
   queryError?: unknown;
+  retryFailure?: RetryFailure | undefined;
 };
 
 /** Resolve retained query data into one unambiguous reader state. */
@@ -46,16 +67,31 @@ export const analysisStateFromQuery = ({
   isFetching,
   result,
   queryError,
+  retryFailure,
 }: AnalysisQuerySnapshot): Exclude<AnalysisState, { status: "idle" }> => {
+  // A finished analysis wins over everything, this view's failed retry too.
   if (result?.kind === "done") {
     return { status: "done", analysis: result.analysis };
   }
 
+  const retryFailed = isCurrentRetryFailure(retryFailure);
+
   // TanStack Query retains the settled error result while a manual refetch is
   // in flight. Fetching must win, otherwise Retry appears to do nothing and
   // leaves the adjacent layer controls visually stuck beside a stale error.
-  if (isFetching && (result?.kind === "error" || hasQueryError)) {
+  if (
+    isFetching &&
+    (result?.kind === "error" || hasQueryError || retryFailed)
+  ) {
     return { status: "generating", tree: [] };
+  }
+
+  if (retryFailed) {
+    const diagnostic = providerDiagnosticFromThrown(retryFailure.error);
+    return {
+      status: "error",
+      ...(diagnostic === undefined ? {} : { providerDiagnostic: diagnostic }),
+    };
   }
 
   // A failed poll retains its previous progress data, but polling has stopped.
@@ -129,38 +165,41 @@ export const useDecisionAnalysis = ({
     refetchInterval: (current) =>
       retrying ? false : analysisRefetchInterval(current),
   });
-  const finishedAnalysis =
-    query.data?.kind === "done" ? query.data.analysis : null;
+  const retryFailure = retry.isError
+    ? {
+        error: retry.error,
+        submittedAt: retry.submittedAt,
+        resultUpdatedAt: query.dataUpdatedAt,
+      }
+    : undefined;
+  const state: AnalysisState =
+    !enabled && query.data?.kind !== "done"
+      ? { status: "idle" }
+      : analysisStateFromQuery({
+          hasQueryError: query.isError,
+          isFetching: query.isFetching || retrying,
+          result: query.data,
+          queryError: query.error,
+          retryFailure,
+        });
 
-  const hasErrorResult =
-    query.data?.kind === "error" || query.isError || retry.isError;
+  // A retry is for a failed run, including one whose stale poll is still in
+  // flight; a finished analysis is never retried.
+  const failed =
+    query.data?.kind === "error" ||
+    query.isError ||
+    isCurrentRetryFailure(retryFailure);
   const generate = () => {
     if (
       !enabled ||
-      finishedAnalysis !== null ||
+      query.data?.kind === "done" ||
+      !failed ||
       queryClient.isMutating({ mutationKey, exact: true }) > 0
     ) {
       return;
     }
-    if (hasErrorResult) {
-      retry.mutate();
-    }
+    retry.mutate();
   };
-
-  const state: AnalysisState = (() => {
-    if (finishedAnalysis !== null) {
-      return { status: "done", analysis: finishedAnalysis };
-    }
-    if (!enabled) {
-      return { status: "idle" };
-    }
-    return analysisStateFromQuery({
-      hasQueryError: query.isError || retry.isError,
-      isFetching: query.isFetching || retrying,
-      result: retry.isError ? undefined : query.data,
-      queryError: retry.error ?? query.error,
-    });
-  })();
 
   return { state, generate };
 };

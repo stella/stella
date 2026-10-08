@@ -570,3 +570,90 @@ test("a retry transport error retains its provider diagnostic until the next ret
     ANALYSIS_REQUEST_MODE.retry,
   ]);
 });
+
+test("another view's completed retry wins over this view's failed retry, which can still retry later", async () => {
+  const diagnostic = {
+    provider: "anthropic",
+    code: PROVIDER_SETUP_ERROR_CODE.anthropicNoCredits,
+    message: "Synthetic provider refusal after explicit retry",
+  };
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    switch (served) {
+      case 1:
+        return Response.json({ status: "error" });
+      case 2:
+        return Response.json(
+          { message: "Provider refused", providerDiagnostic: diagnostic },
+          { status: 402 },
+        );
+      case 3:
+        return Response.json({ status: "done", analysis });
+      default:
+        return Response.json({ status: "generating" });
+    }
+  });
+  const client = clientWithAvailability();
+  const wrapper = wrapperFor({ client });
+  const first = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  const second = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await waitFor(() => {
+    expect(first.result.current.state.status).toBe("error");
+  });
+
+  // The first view's retry fails in transport; only that view shows it.
+  await act(async () => {
+    first.result.current.generate();
+  });
+  await waitFor(() => {
+    expect(first.result.current.state).toEqual({
+      status: "error",
+      providerDiagnostic: diagnostic,
+    });
+  });
+  expect(second.result.current.state).toEqual({ status: "error" });
+
+  // The second view's retry completes the shared analysis: both show it.
+  await act(async () => {
+    second.result.current.generate();
+  });
+  await waitFor(() => {
+    expect(second.result.current.state).toEqual({ status: "done", analysis });
+  });
+  expect(first.result.current.state).toEqual({ status: "done", analysis });
+
+  // The analysis fails again; the first view's old failure does not mask it
+  // and its retry is accepted.
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  await act(async () => {
+    client.setQueryData(
+      options.queryKey,
+      () => ({ kind: "error" }) satisfies AnalysisQueryResult,
+    );
+  });
+  await waitFor(() => {
+    expect(first.result.current.state).toEqual({ status: "error" });
+  });
+  await act(async () => {
+    first.result.current.generate();
+  });
+  await waitFor(() => {
+    expect(requests).toHaveLength(4);
+  });
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.retry,
+  ]);
+});
