@@ -13,6 +13,8 @@
     "./citation-link": "./src/citation-link.tsx",
     "./citation-treatment": "./src/citation-treatment.ts",
     "./cited-provision": "./src/cited-provision.tsx",
+    "./court-name": "./src/court-name.tsx",
+    "./decision-identity": "./src/decision-identity.tsx",
     "./court-tier-badge": "./src/court-tier-badge.tsx",
     "./decision-body-state.logic": "./src/decision-body-state.logic.ts",
     "./decision-text": "./src/decision-text.tsx",

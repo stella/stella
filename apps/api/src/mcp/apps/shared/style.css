@@ -1,6 +1,8 @@
 @import "tailwindcss" source(none);
 @import "@stll/ui/theme.css";
 @source "../case-law-results";
+@source "../decision-reader";
+@source "../../../../../../packages/decision-reader/src";
 @source "../../../../../../packages/ui/src";
 
 :root {

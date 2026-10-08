@@ -68,7 +68,8 @@ export type ProvisionPreviewRef = {
 
 export type ReaderPresentationAdapters = {
   messages: ReaderMessages;
-  copyPermalink: (anchorId: string) => void;
+  /** Omit when the host cannot copy a permalink; copy controls are hidden. */
+  copyPermalink?: ((anchorId: string) => void) | undefined;
 };
 
 export type DecisionReaderAdapters = ReaderPresentationAdapters & {

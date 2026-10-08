@@ -2,12 +2,12 @@ import type { RefObject } from "react";
 
 import { panic } from "better-result";
 
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
-
 import {
   holdLanding,
   readerBlockByAnchor,
-} from "@/components/legal-reader/reader-landing";
+} from "@stll/decision-reader/reader-landing";
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { decisionParagraphLanding } from "./decision-paragraph-landing.logic";

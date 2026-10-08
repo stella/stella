@@ -26,6 +26,12 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 
 import type { env } from "@/api/env";
 
+import {
+  READER_PAGE_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  READER_PROVISION_ANCHOR_MAX_CHARS,
+} from "./chat/decision-reader-projections";
+
 /** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
  *  object literal instead of restating the page size. */
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
@@ -332,13 +338,13 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
-  decisionReaderPageMaxChars: 60_000,
+  decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
   decisionReaderPageContentChars: 50_000,
   decisionReaderOpenTextChars: 8000,
   decisionReaderOutlineEntries: 40,
   decisionReaderCursorOffsetMin: 0,
-  decisionReaderProvisionAnchorMinChars: 1,
-  decisionReaderProvisionAnchorMaxChars: 256,
+  decisionReaderProvisionAnchorMinChars: READER_PROVISION_ANCHOR_MIN_CHARS,
+  decisionReaderProvisionAnchorMaxChars: READER_PROVISION_ANCHOR_MAX_CHARS,
   // A reader cursor nests a provision page cursor (generation, span start and
   // an anchor up to the limit above) beside two digests; its maximal encoding
   // is under 900 characters.

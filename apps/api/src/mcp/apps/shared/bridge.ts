@@ -15,6 +15,45 @@ import { createDetached } from "@stll/errors";
 import type { PresentationApp } from "../manifest";
 import { appLocale } from "./locale";
 
+const applyHostPresentation = (context: McpUiHostContext) => {
+  const locale = appLocale(context.locale);
+  document.documentElement.lang = locale.locale;
+  document.documentElement.dir = locale.direction;
+  document.title = locale.messages.title;
+  if (context.theme !== undefined) {
+    applyDocumentTheme(context.theme);
+    document.documentElement.classList.toggle("dark", context.theme === "dark");
+  }
+  if (context.styles?.variables !== undefined) {
+    applyHostStyleVariables(context.styles.variables);
+  }
+};
+
+type OpenPresentationLinkOptions = {
+  app: Pick<App, "openLink">;
+  url: string;
+  fail: (message: string | null) => void;
+};
+const openPresentationLink = async ({
+  app,
+  url,
+  fail,
+}: OpenPresentationLinkOptions) => {
+  const parsed = parseLegalCitationHttpUrl(url);
+  if (parsed === null) {
+    fail(null);
+    return;
+  }
+  const opened = await Result.tryPromise(async () =>
+    app.openLink({ url: parsed.href }),
+  );
+  if (Result.isError(opened)) {
+    fail(opened.error.message);
+  } else if (opened.value.isError === true) {
+    fail(null);
+  }
+};
+
 type ResultState<View> =
   | { status: "idle" }
   | { status: "loading" }
@@ -32,6 +71,28 @@ type ReadCall = { name: ToolName; arguments: Record<string, unknown> };
 type PresentationBridgeOptions<View> = {
   manifest: PresentationApp;
   parse: (payload: unknown, input: Record<string, unknown>) => View | undefined;
+};
+
+type RequestPresentationToolOptions = {
+  app: Pick<App, "callServerTool">;
+  manifest: PresentationApp;
+  request: ReadCall;
+};
+const requestPresentationTool = async ({
+  app,
+  manifest,
+  request,
+}: RequestPresentationToolOptions) => {
+  if (!manifest.callableTools.some((name) => name === request.name)) {
+    return undefined;
+  }
+  const called = await Result.tryPromise(async () =>
+    app.callServerTool(request),
+  );
+  if (Result.isError(called) || called.value.isError === true) {
+    return undefined;
+  }
+  return called.value;
 };
 
 export const createPresentationBridge = <View>({
@@ -91,20 +152,7 @@ export const createPresentationBridge = <View>({
             snapshot.tool),
       result: snapshot.result,
     };
-    const locale = appLocale(merged.locale);
-    document.documentElement.lang = locale.locale;
-    document.documentElement.dir = locale.direction;
-    document.title = locale.messages.title;
-    if (merged.theme !== undefined) {
-      applyDocumentTheme(merged.theme);
-      document.documentElement.classList.toggle(
-        "dark",
-        merged.theme === "dark",
-      );
-    }
-    if (merged.styles?.variables !== undefined) {
-      applyHostStyleVariables(merged.styles.variables);
-    }
+    applyHostPresentation(merged);
     for (const listener of listeners) {
       listener();
     }
@@ -123,6 +171,7 @@ export const createPresentationBridge = <View>({
     }
   };
   const toolResult = (result: AppEventMap["toolresult"]) => {
+    hostContext(app.getHostContext() ?? {});
     generation += 1;
     receive(result);
   };
@@ -147,6 +196,32 @@ export const createPresentationBridge = <View>({
     publish({ status: "error", message });
   Reflect.set(app, "onerror", reportAppError);
 
+  // Paged reads and previews own their request state; a late failure must not replace a newer opening.
+  const requestTool = (request: ReadCall) =>
+    requestPresentationTool({ app, manifest, request });
+  const requestDisplayMode = async (
+    mode: "fullscreen" | "inline",
+    onError?: (message: string | null) => void,
+  ) => {
+    const fail =
+      onError ??
+      ((message: string | null) => publish({ status: "error", message }));
+    if (!snapshot.context.availableDisplayModes?.includes(mode)) {
+      return;
+    }
+    const currentGeneration = generation;
+    const requested = await Result.tryPromise(async () =>
+      app.requestDisplayMode({ mode }),
+    );
+    if (currentGeneration !== generation) {
+      return;
+    }
+    if (Result.isError(requested)) {
+      fail(requested.error.message);
+      return;
+    }
+    hostContext({ displayMode: requested.value.mode });
+  };
   const call = async (request: ReadCall): Promise<void> => {
     // The typed call list and its runtime check share the manifest the CI census reads.
     if (!manifest.callableTools.some((name) => name === request.name)) {
@@ -174,20 +249,14 @@ export const createPresentationBridge = <View>({
     };
     receive(called.value);
   };
-  const openLink = async (url: string): Promise<void> => {
-    const parsed = parseLegalCitationHttpUrl(url);
-    if (parsed === null) {
-      publish({ status: "error", message: null });
-      return;
-    }
-    const opened = await Result.tryPromise(async () =>
-      app.openLink({ url: parsed.href }),
-    );
-    if (Result.isError(opened)) {
-      publish({ status: "error", message: opened.error.message });
-    } else if (opened.value.isError === true) {
-      publish({ status: "error", message: null });
-    }
+  const openLink = async (
+    url: string,
+    onError?: (message: string | null) => void,
+  ): Promise<void> => {
+    const fail =
+      onError ??
+      ((message: string | null) => publish({ status: "error", message }));
+    await openPresentationLink({ app, url, fail });
   };
   const connect = async (): Promise<void> => {
     const connected = await Result.tryPromise(async () => app.connect());
@@ -200,6 +269,12 @@ export const createPresentationBridge = <View>({
   return {
     detached: createDetached(() => publish({ status: "error", message: null })),
     connect,
+    requestTool,
+    requestFullscreen: async (onError?: (message: string | null) => void) =>
+      await requestDisplayMode("fullscreen", onError),
+    requestInline: async (onError?: (message: string | null) => void) =>
+      await requestDisplayMode("inline", onError),
+    supportsTools: () => app.getHostCapabilities()?.serverTools !== undefined,
     call,
     openLink,
     retry: async () => {
