@@ -64,7 +64,7 @@ describe("providerErrorFields", () => {
   test("reads code, param and type from an SDK error body, never its message", () => {
     const fields = providerErrorFields({
       status: 400,
-      message: "Please save the contact Jana Novakova.",
+      message: "Please save the contact REQUEST-CONTENT-SENTINEL.",
       type: "invalid_request_error",
       param: "input[3].call_id",
       code: "invalid_value",
@@ -75,7 +75,7 @@ describe("providerErrorFields", () => {
       "error.provider.param": "input[3].call_id",
       "error.provider.type": "invalid_request_error",
     });
-    expect(JSON.stringify(fields)).not.toContain("Novakova");
+    expect(JSON.stringify(fields)).not.toContain("REQUEST-CONTENT-SENTINEL");
   });
 
   test("reads the body nested under `error`", () => {
@@ -93,7 +93,7 @@ describe("providerErrorFields", () => {
     expect(
       providerErrorFields({
         type: "invalid_request_error",
-        param: "the contact Jana Novakova",
+        param: "the contact REQUEST-CONTENT-SENTINEL",
         code: "x".repeat(65),
       }),
     ).toEqual({

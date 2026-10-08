@@ -3404,11 +3404,11 @@ describe("outgoing chat stream message ids", () => {
           {
             type: EventType.RUN_ERROR,
             message:
-              "Invalid value for 'input[3]'. Please save the contact Jana Novakova.",
+              "Invalid value for 'input[3]'. Please save the contact REQUEST-CONTENT-SENTINEL.",
             rawEvent: {
               code: "invalid_value",
               message:
-                "Invalid value for 'input[3]'. Please save the contact Jana Novakova.",
+                "Invalid value for 'input[3]'. Please save the contact REQUEST-CONTENT-SENTINEL.",
               param: "input[3]",
               status: 400,
               type: "invalid_request_error",
@@ -3432,7 +3432,9 @@ describe("outgoing chat stream message ids", () => {
           "failure.shadow_reason": "provider_request_rejected",
         }),
       );
-      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain("Novakova");
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+        "REQUEST-CONTENT-SENTINEL",
+      );
     } finally {
       errorSpy.mockRestore();
     }
