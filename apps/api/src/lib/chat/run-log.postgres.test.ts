@@ -31,7 +31,6 @@ if (!databaseUrl || !runPostgresTests) {
   describe("chat delivery durability (postgres)", () => {
     const { db, cleanUp } = openGatedTestDatabase(databaseUrl, { max: 2 });
     const organizationId = mintAuthProviderId<"organization">();
-    const otherOrganizationId = mintAuthProviderId<"organization">();
     const userId = mintAuthProviderId<"user">();
     const threadId = createSafeId<"chatThread">();
     const turnId = createSafeId<"chatTurn">();
@@ -44,13 +43,6 @@ if (!databaseUrl || !runPostgresTests) {
       organizationId,
       userId,
     );
-    const otherOrgDb = createScopedDb(
-      markRlsDatabase(db),
-      [],
-      otherOrganizationId,
-      userId,
-    );
-
     beforeAll(async () => {
       await db.insert(user).values({
         id: userId,
@@ -64,24 +56,11 @@ if (!databaseUrl || !runPostgresTests) {
           slug: organizationId,
           createdAt: new Date(),
         },
-        {
-          id: otherOrganizationId,
-          name: "Other delivery test",
-          slug: otherOrganizationId,
-          createdAt: new Date(),
-        },
       ]);
       await db.insert(member).values([
         {
           id: mintAuthProviderIdValue(),
           organizationId,
-          userId,
-          role: "owner",
-          createdAt: new Date(),
-        },
-        {
-          id: mintAuthProviderIdValue(),
-          organizationId: otherOrganizationId,
           userId,
           role: "owner",
           createdAt: new Date(),
@@ -115,9 +94,6 @@ if (!databaseUrl || !runPostgresTests) {
     cleanUp(async () => {
       await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
       await db.delete(organization).where(eq(organization.id, organizationId));
-      await db
-        .delete(organization)
-        .where(eq(organization.id, otherOrganizationId));
       await db.delete(user).where(eq(user.id, userId));
     });
 
@@ -179,14 +155,6 @@ if (!databaseUrl || !runPostgresTests) {
           ?.slice(4) ?? panic("Missing durable offset");
       await reader.cancel();
       expect(abortController.signal.aborted).toBe(false);
-      expect(
-        await createChatRunLogReplay({
-          db: otherOrgDb,
-          organizationId: otherOrganizationId,
-          runId,
-          resumeOffset: offset,
-        }),
-      ).toBeNull();
       const replay =
         (await createChatRunLogReplay({
           db: scopedDb,

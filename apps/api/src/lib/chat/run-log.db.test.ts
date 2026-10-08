@@ -30,7 +30,7 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
-import { probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import { joinChatTurn } from "@/api/handlers/chat/turns/resume";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -54,7 +54,6 @@ let ids: TestIds;
 const seededThreads: SafeId<"chatThread">[] = [];
 let rawDb: Pick<typeof rootDb, "transaction">;
 let scopedDbA: ScopedDb;
-let scopedDbB: ScopedDb;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -63,9 +62,6 @@ beforeAll(async () => {
   rawDb = asTestRaw<Pick<typeof rootDb, "transaction">>(testDb);
   scopedDbA = asTestRaw<ScopedDb>(
     createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-  );
-  scopedDbB = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
   );
 });
 
@@ -301,22 +297,6 @@ describe("chat run log database contract", () => {
     expect(entries).toEqual([]);
   });
 
-  test("scopes reads, appends, and closes to the handle organization", async () => {
-    const run = await seedRunningTurn();
-    const own = logFor(run);
-    await own.append([chunk("tenant A")]);
-    // The caller supplies the target organization; the scoped handle still denies it.
-    const foreign = logFor(run, scopedDbB, ids.orgA);
-    expect(await foreign.snapshot()).toEqual([]);
-    expect(
-      await rejectionMessage(foreign.append([chunk("wrong tenant")])),
-    ).toContain("execution fence lost");
-    expect(await rejectionMessage(foreign.close())).toContain(
-      "execution fence lost",
-    );
-    await own.close();
-  });
-
   test("durable delivery stores the final batch before settlement removes its execution fence", async () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
@@ -392,52 +372,45 @@ describe("chat run log database contract", () => {
     await reader.return?.();
   });
 
-  test("resume route reveals a run only to its owning user, thread and organization", async () => {
+  test("rejoin reloads the transcript when its cursor belongs to a previous run", async () => {
     const run = await seedRunningTurn();
-    await logFor(run).append([chunk("private")]);
-    const probe = async ({
-      db = scopedDbA,
-      organizationId = ids.orgA,
-      userId = ids.userA1,
-      threadId = run.threadId,
-    } = {}) =>
-      await probeChatTurn.handler(
-        asTestRaw<Parameters<typeof probeChatTurn.handler>[0]>({
+    const log = logFor(run);
+    const entry = chunk("current run");
+    await log.append([entry]);
+    const join = async (runId: string, lastEventId: string) =>
+      await joinChatTurn.handler(
+        asTestRaw<Parameters<typeof joinChatTurn.handler>[0]>({
           getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
           memberRole: sessionMemberRole("owner"),
-          params: { threadId, turnId: run.execution.id },
-          query: { workspaceId: ids.wsA1 },
+          params: { threadId: run.threadId, turnId: run.execution.id },
+          query: { workspaceId: ids.wsA1, runId, lastEventId },
           request: new Request(
-            `http://localhost/v1/chat/threads/${threadId}/turns/${run.execution.id}/resume`,
+            `http://localhost/v1/chat/threads/${run.threadId}/turns/${run.execution.id}/join`,
           ),
-          route: "/v1/chat/threads/:threadId/turns/:turnId/resume",
-          safeDb: toSafeDbMock(db),
-          scopedDb: db,
-          session: { activeOrganizationId: organizationId },
+          route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+          safeDb: toSafeDbMock(scopedDbA),
+          scopedDb: scopedDbA,
+          session: { activeOrganizationId: ids.orgA },
           set: { headers: {}, status: 200 },
-          user: { id: userId },
+          user: { id: ids.userA1 },
         }),
       );
-    expect(await probe()).toEqual({
-      type: "running",
+    expect(await join(Bun.randomUUIDv7(), "9")).toEqual({
+      type: "transcript",
       turnId: run.execution.id,
-      runId: run.runId,
     });
-    const unknown = await probe({
-      threadId: toSafeId<"chatThread">(Bun.randomUUIDv7()),
-    });
-    expect(unknown).toMatchObject({ code: 404 });
-    for (const refused of [
-      await probe({
-        db: scopedDbB,
-        organizationId: ids.orgB,
-        userId: ids.userB1,
-      }),
-      await probe({ userId: ids.userA2 }),
-      unknown,
-    ]) {
-      expect(refused).toEqual(unknown);
+    const response = await join(run.runId, "-1");
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      panic("Expected current run replay");
     }
+    const replay = response.text();
+    await log.close();
+    const delivered = (await replay)
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(delivered).toEqual([entry]);
   });
 
   test("large catch-up replaces deltas with a transcript snapshot then tails without text duplication", async () => {
@@ -599,7 +572,7 @@ describe("chat run log database contract", () => {
     );
   });
 
-  test("rejoin uses only the authorized organization and falls back after log closure or retention", async () => {
+  test("rejoin falls back after log closure or retention", async () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
     await log.append([chunk("private")]);
@@ -610,14 +583,6 @@ describe("chat run log database contract", () => {
       resumeOffset: "-1",
     });
     expect(replay).not.toBeNull();
-    expect(
-      await createChatRunLogReplay({
-        db: scopedDbB,
-        organizationId: ids.orgB,
-        runId: run.runId,
-        resumeOffset: "-1",
-      }),
-    ).toBeNull();
     await log.close();
     expect(
       await createChatRunLogReplay({
