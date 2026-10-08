@@ -436,18 +436,14 @@ export const AIKeyRequiredDialog = ({
           <div className="grid gap-3">
             <AIConfigProvidersEditor
               compact
-              disabled={
-                saveMutation.isPending || configQuery.status !== "success"
-              }
+              disabled={saveMutation.isPending}
               onProvidersChange={updateProviders}
               providers={providers}
             />
 
             <AIConfigRoleModelPicker
               compact
-              disabled={
-                saveMutation.isPending || configQuery.status !== "success"
-              }
+              disabled={saveMutation.isPending}
               onModelChange={setRoleModel}
               providers={providerValues}
               roleModels={roleModels}
