@@ -9,10 +9,19 @@ export const VISUAL_GESTURE_WINDOW_MS = 1000;
 /** The gestures that grant a token: a click or a key press. */
 const VISUAL_GESTURE_EVENTS = ["click", "keydown"] as const;
 
+type GestureEvent = {
+  readonly isTrusted: boolean;
+  readonly type: string;
+  /** Click count; 0 for a click the browser derives from a key press. */
+  readonly detail?: number;
+  /** True for the repeated key events of a held key. */
+  readonly repeat?: boolean;
+};
+
 type GestureEventTarget = {
   addEventListener: (
     type: (typeof VISUAL_GESTURE_EVENTS)[number],
-    listener: (event: { readonly isTrusted: boolean }) => void,
+    listener: (event: GestureEvent) => void,
     options: { capture: true },
   ) => void;
 };
@@ -34,10 +43,19 @@ export const createVisualGestureGate = ({
   let grantedAt: number | null = null;
   // `isTrusted` is an own, unforgeable property of every event, read here
   // from the event the browser dispatched.
-  const observe = (event: { readonly isTrusted: boolean }) => {
-    if (event.isTrusted === true) {
-      grantedAt = now();
+  // A key press is one gesture: a held key's repeats and the click the
+  // browser derives from Enter or Space on a control grant nothing more.
+  const observe = (event: GestureEvent) => {
+    if (event.isTrusted !== true) {
+      return;
     }
+    if (event.type === "keydown" && event.repeat === true) {
+      return;
+    }
+    if (event.type === "click" && event.detail === 0) {
+      return;
+    }
+    grantedAt = now();
   };
   return Object.freeze({
     observe,
