@@ -15,6 +15,10 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
+import {
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS } from "@/api/tests/pglite-test-db";
 import {
@@ -131,9 +135,10 @@ const isListItemGate = (conjunct: string): boolean => {
     isNull === "list_item_type IS NULL" &&
     isTask === "list_item_type = 'task'::text" &&
     granted !== undefined &&
-    /^\(?COALESCE\(.*current_setting\('app\.enabled_features'::text, true\).*\? '[a-z-]+'::text$/su.test(
+    /^\(?COALESCE\(.*current_setting\('app\.enabled_features'::text, true\)/su.test(
       granted,
-    )
+    ) &&
+    granted.endsWith(`? '${LEGAL_LISTS_FEATURE_ID}'::text`)
   );
 };
 
@@ -249,6 +254,20 @@ describe("policy coverage", () => {
         check_expr: listGate,
       }),
     ).toBeUndefined();
+    // The gate must name the lists grant itself, not another feature's.
+    const otherGrant = listGate.replace(
+      `'${LEGAL_LISTS_FEATURE_ID}'`,
+      () => `'${LIST_VERIFICATION_FEATURE_ID}'`,
+    );
+    expect(otherGrant).not.toBe(listGate);
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "entities",
+        using_expr: otherGrant,
+        check_expr: otherGrant,
+      }),
+    ).toBeDefined();
     // Each conjunct must fence on its own: an OR with true admits every row.
     for (const widened of [
       "(true OR (current_setting('app.enabled_features'::text, true))::jsonb ? 'legal-lists'::text)",
