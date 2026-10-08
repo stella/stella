@@ -597,6 +597,8 @@ export const LIMITS = {
     sourceUrl: 2048 * 4,
     headline: 4096,
   },
+  /** Kinds of act a statute facet response carries for one jurisdiction. */
+  legislationDocumentTypeBucketLimit: 1000,
   /** Rows per list on the law home's legislation shelf. */
   legislationShelfPerList: 5,
   /** Days either side of today the legislation shelf looks at. */

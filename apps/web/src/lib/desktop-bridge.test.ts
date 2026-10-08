@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
+import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+
 import {
   DesktopAccountConflictError,
   desktopBridgeProofHeaders,
@@ -14,6 +16,7 @@ const challenge = {
   correlationId: "90123344-5566-7788-9900-aabbccddeeff",
   verifierHash: "a".repeat(64),
   portSecret: "b".repeat(64),
+  protocol: String(DESKTOP_ACCOUNT_POLICY.linkProtocol),
 };
 const fragment = `#desktop-account?${new URLSearchParams(challenge).toString()}`;
 
