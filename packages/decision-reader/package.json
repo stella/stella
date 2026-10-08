@@ -27,6 +27,7 @@
     "./reader-adapters": "./src/reader-adapters.tsx",
     "./reader-inset-box": "./src/reader-inset-box.tsx",
     "./reader-landing": "./src/reader-landing.ts",
+    "./reader-message-types": "./src/reader-message-types.ts",
     "./reader-outline": "./src/reader-outline.ts",
     "./reader-search": "./src/reader-search.ts",
     "./reader-text-scale.logic": "./src/reader-text-scale.logic.ts",

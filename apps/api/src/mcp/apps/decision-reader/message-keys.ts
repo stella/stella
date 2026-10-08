@@ -1,4 +1,4 @@
-import type { ReaderMessageKey } from "@stll/decision-reader/reader-adapters";
+import type { ReaderMessageKey } from "@stll/decision-reader/reader-message-types";
 
 export const READER_MESSAGE_KEYS = {
   "statutes.diffRemoved": "statutes.diffRemoved",

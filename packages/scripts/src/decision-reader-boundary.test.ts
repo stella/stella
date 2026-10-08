@@ -203,6 +203,30 @@ test("shared decision identity exports resolve to context-free package owners", 
   }
 });
 
+test("reader catalogue types compile without DOM or JSX dependencies", () => {
+  const entry = Bun.resolveSync(
+    "@stll/decision-reader/reader-message-types",
+    path.join(repositoryRoot, "apps/api"),
+  );
+  const program = ts.createProgram({
+    rootNames: [entry],
+    options: {
+      lib: ["lib.esnext.d.ts"],
+      types: [],
+      noEmit: true,
+      strict: true,
+      skipLibCheck: true,
+    },
+  });
+  expect(
+    ts
+      .getPreEmitDiagnostics(program)
+      .map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      ),
+  ).toEqual([]);
+});
+
 test("reader production imports stay inside its context-free boundary", () => {
   for (const relativeFile of new Bun.Glob(
     "src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",

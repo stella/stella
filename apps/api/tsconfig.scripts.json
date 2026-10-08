@@ -1,16 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.scripts.json"
   },
   // The main project already checks src and drizzle.config.ts. Imports from
   // scripts remain part of this project through normal traversal; shared
   // ambient asset declarations must stay rooted here.
-  "include": [
-    "scripts",
-    "evals",
-    "../../types",
-    "../../packages/ui/src/css.d.ts"
-  ]
+  "include": ["scripts", "evals", "../../types"]
 }

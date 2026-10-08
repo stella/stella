@@ -5,6 +5,7 @@ import { panic } from "better-result";
 
 import type { ReaderCitationTreatment } from "./citation-treatment";
 import type { MissingBodyReason } from "./decision-body-state.logic";
+import type { ReaderMessageKey } from "./reader-message-types";
 import type {
   CitedDecisionTarget,
   CitedProvisionTarget,
@@ -13,21 +14,7 @@ import type {
   ProvisionViewPayload,
 } from "./reader-types";
 
-export type ReaderMessageKey =
-  | "statutes.diffRemoved"
-  | "statutes.diffInserted"
-  | "common.copyLink"
-  | "common.back"
-  | "caseLaw.viewer.legalSentence"
-  | "caseLaw.viewer.abstract"
-  | "folio.comment"
-  | "legalReader.annotations.highlight"
-  | "caseLaw.reader.headMatter"
-  | "caseLaw.notesFilter.ai"
-  | "common.court"
-  | "statutes.currentWording"
-  | "statutes.wordingVersionUnknown"
-  | "statutes.openProvision";
+export type { ReaderMessageKey } from "./reader-message-types";
 
 export type ReaderMessages = Record<ReaderMessageKey, string> & {
   sourceAttribution: (
