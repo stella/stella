@@ -54,6 +54,22 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "schema-index",
+    outputKind: "committed",
+    outputs: ["apps/api/src/db/schema-index/*.md"],
+    inputs: [
+      "apps/api/src/db/schema/**",
+      "apps/api/src/db/auth-schema.ts",
+      "apps/api/src/db/agent-auth-schema.ts",
+      "apps/api/src/db/registration-budget-schema.ts",
+      "apps/api/scripts/generate-schema-index.ts",
+    ],
+    write: ["bun", "apps/api/scripts/generate-schema-index.ts", "--write"],
+    check: ["bun", "apps/api/scripts/generate-schema-index.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "transition-triggers",
     outputKind: "committed",
     outputs: ["apps/api/drizzle/*_flow_run_transitions/migration.sql"],
