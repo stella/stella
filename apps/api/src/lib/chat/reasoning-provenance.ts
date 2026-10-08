@@ -120,19 +120,23 @@ export const stampReasoningProvenance = <
     if (part.provenance !== undefined) {
       return part;
     }
+    // A signature is the only identity that survives across messages. Step ids
+    // and content are reused by later turns (a new turn may restart at the
+    // same step id under another model), so unsigned parts adopt provenance
+    // only from the message that owns them.
     const previous =
-      previousThinking.find(
-        (candidate) =>
-          (part.signature !== undefined &&
-            candidate.signature === part.signature) ||
-          (part.stepId !== undefined && candidate.stepId === part.stepId) ||
-          (part.signature === undefined &&
-            candidate.signature === undefined &&
-            candidate.content === part.content),
-      ) ??
-      (part.signature === undefined && ownedPrevious?.signature === undefined
-        ? ownedPrevious
-        : undefined);
+      part.signature === undefined
+        ? (owningMessageThinking.find(
+            (candidate) =>
+              candidate.signature === undefined &&
+              ((part.stepId !== undefined &&
+                candidate.stepId === part.stepId) ||
+                candidate.content === part.content),
+          ) ??
+          (ownedPrevious?.signature === undefined ? ownedPrevious : undefined))
+        : previousThinking.find(
+            (candidate) => candidate.signature === part.signature,
+          );
     if (previous !== undefined) {
       return previous.provenance === undefined
         ? part

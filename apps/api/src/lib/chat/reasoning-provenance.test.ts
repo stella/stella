@@ -16,6 +16,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
 import {
   reasoningProvenanceForSignature,
   stampReasoningProvenance,
@@ -26,7 +27,21 @@ const message = (parts: ChatPart[]): ChatMessage => ({
   role: "assistant",
   parts,
 });
+const laterMessage = (parts: ChatPart[]): ChatMessage => ({
+  id: "019eb9fa-c91f-7000-9b9c-9365977dda79",
+  role: "assistant",
+  parts,
+});
+const userMessage = (id: string, content: string): ChatMessage => ({
+  id,
+  role: "user",
+  parts: [{ type: "text", content }],
+});
 const model = { provider: "openai", modelId: "gpt-6.1-sol" } as const;
+const anthropicModel = {
+  provider: "anthropic",
+  modelId: "claude-opus-5",
+} as const;
 const signature = JSON.stringify({
   id: "rs_1",
   encrypted_content: "encrypted",
@@ -200,5 +215,123 @@ describe("reasoning provenance survives transcript boundaries", () => {
       richPartBytes: 0,
       richPartCount: 0,
     });
+  });
+});
+
+describe("historical reasoning identity never crosses messages without a signature", () => {
+  test("a new turn reusing a historical step id under another model keeps its own provenance and is replayed", () => {
+    const historicalProvenance = reasoningProvenanceForSignature({
+      ...model,
+      signature,
+    });
+    const historical = message([
+      { ...thinking, stepId: "step-1", provenance: historicalProvenance },
+      { type: "text", content: "Earlier answer" },
+    ]);
+    const current = {
+      type: "thinking",
+      content: "Current thinking",
+      signature: "current-turn-signature",
+      stepId: "step-1",
+    } as const;
+    const initialMessages = [
+      userMessage("019eb9fa-c91f-7000-9b9c-9365977dda70", "First"),
+      historical,
+      userMessage("019eb9fa-c91f-7000-9b9c-9365977dda71", "Second"),
+    ];
+    const stamped = stampReasoningProvenance({
+      message: laterMessage([current, { type: "text", content: "Answer" }]),
+      model: anthropicModel,
+      initialMessages,
+    });
+    const currentProvenance = {
+      provider: "anthropic",
+      model: anthropicModel.modelId,
+      format: "anthropic-thinking-signature",
+    } as const;
+    expect(currentProvenance).not.toEqual(historicalProvenance);
+    expect(stamped.parts.at(0)).toEqual({
+      ...current,
+      provenance: currentProvenance,
+    });
+    const replayed = buildClosedTranscript({
+      messages: convertMessagesToModelMessages([
+        ...initialMessages,
+        stamped,
+        userMessage("019eb9fa-c91f-7000-9b9c-9365977dda72", "Third"),
+      ]),
+      target: { provider: "anthropic", modelId: anthropicModel.modelId },
+      onReasoningDropped: () => {},
+    });
+    expect(
+      replayed.flatMap((entry) =>
+        (entry.thinking ?? []).map(({ content }) => content),
+      ),
+    ).toEqual([current.content]);
+  });
+
+  test("unsigned reasoning never adopts provenance by step id from another message", () => {
+    const historical = message([
+      {
+        type: "thinking",
+        content: "Historical",
+        stepId: "step-1",
+        provenance: reasoningProvenanceForSignature(model),
+      },
+    ]);
+    const stamped = stampReasoningProvenance({
+      message: laterMessage([
+        { type: "thinking", content: "Current", stepId: "step-1" },
+      ]),
+      model: anthropicModel,
+      initialMessages: [historical],
+    });
+    expect(stamped.parts.at(0)).toEqual({
+      type: "thinking",
+      content: "Current",
+      stepId: "step-1",
+      provenance: reasoningProvenanceForSignature(anthropicModel),
+    });
+  });
+
+  test("unsigned reasoning keeps provenance by step id within its owning message", () => {
+    const stepProvenance = reasoningProvenanceForSignature(anthropicModel);
+    const owning = message([
+      {
+        type: "thinking",
+        content: "First",
+        stepId: "step-1",
+        provenance: reasoningProvenanceForSignature(model),
+      },
+      {
+        type: "thinking",
+        content: "Second",
+        stepId: "step-2",
+        provenance: stepProvenance,
+      },
+    ]);
+    const stamped = stampReasoningProvenance({
+      message: message([
+        { type: "thinking", content: "Second continued", stepId: "step-2" },
+      ]),
+      model,
+      initialMessages: [owning],
+    });
+    expect(stamped.parts.at(0)).toEqual({
+      type: "thinking",
+      content: "Second continued",
+      stepId: "step-2",
+      provenance: stepProvenance,
+    });
+  });
+
+  test("signed reasoning keeps its provenance from an equal signature in another message", () => {
+    const provenance = reasoningProvenanceForSignature({ ...model, signature });
+    const stamped = stampReasoningProvenance({
+      message: laterMessage([thinking]),
+      model: anthropicModel,
+      initialMessages: [message([{ ...thinking, provenance }])],
+    });
+    expect(stamped.parts.at(0)).toEqual({ ...thinking, provenance });
   });
 });
