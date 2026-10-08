@@ -55,7 +55,9 @@ const memoryAnalysisStore: AnalysisStore = {
     if (held !== undefined && held !== observed) {
       return await Promise.resolve(null);
     }
-    // The same failure guard as the row store's claim statement.
+    // The same failure guard as the row store's claim transaction. Nothing
+    // here awaits between the check and the write below, so in one process
+    // no failure can be filed in between.
     const failure =
       unlessFailed === undefined
         ? undefined

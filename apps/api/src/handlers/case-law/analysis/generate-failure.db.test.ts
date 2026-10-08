@@ -13,7 +13,7 @@ import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import {
   BYOK_DEFAULT_MODELS,
@@ -36,6 +36,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_FAILURE_HOLD_MS,
   analysisFailureKeyTag,
+  failureClaimGuard,
   analysisFailureRecord,
 } from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
@@ -449,6 +450,63 @@ describe("a failed analysis run", () => {
     });
     expect(late.requests).toHaveLength(0);
     expect(await storedValue(decisionId)).toBeNull();
+  });
+
+  test("a plain claim reads failures only after it holds the row lock", async () => {
+    const decisionId = await insertDecision();
+    const now = new Date();
+    const reader = { source: "platform" } as const;
+    // A failure filed inside the claim's transaction, after its row lock and
+    // before its failure read: where a failure write that held the lock would
+    // have committed.
+    const store = createDbAnalysisStore(db, {
+      afterClaimLock: async (tx) => {
+        await tx.execute(sql`
+          INSERT INTO "case_law_analysis_failures"
+            ("decision_id", "key_tag", "input_fingerprint", "code", "key_source", "provider", "recorded_at")
+          VALUES (${decisionId}::uuid, 'platform', ${FINGERPRINT}, 'timed_out', 'platform', NULL, ${now.toISOString()}::timestamptz)
+        `);
+      },
+    });
+
+    const claimed = await store.claim({
+      decisionId,
+      fingerprint: FINGERPRINT,
+      observed: null,
+      unlessFailed: failureClaimGuard({ decisionId, now, reader }),
+    });
+
+    // The failure read saw it, so the swap was rolled back (with the seam's
+    // own insert, which shared the claim's transaction).
+    expect(claimed).toBeNull();
+    expect(await storedValue(decisionId)).toBeNull();
+  });
+
+  test("a plain claim with no failure filed after its lock takes the row", async () => {
+    const decisionId = await insertDecision();
+    const now = new Date();
+    const seen: string[] = [];
+    const store = createDbAnalysisStore(db, {
+      afterClaimLock: async () => {
+        seen.push("locked");
+        await Promise.resolve();
+      },
+    });
+
+    const claimed = await store.claim({
+      decisionId,
+      fingerprint: FINGERPRINT,
+      observed: null,
+      unlessFailed: failureClaimGuard({
+        decisionId,
+        now,
+        reader: { source: "platform" },
+      }),
+    });
+
+    expect(seen).toEqual(["locked"]);
+    expect(claimed).toMatchObject({ status: "generating" });
+    expect(await storedValue(decisionId)).toEqual(claimed);
   });
 
   test("a retry paused the same way still runs: only a plain read is held back", async () => {

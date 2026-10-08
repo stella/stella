@@ -9,8 +9,8 @@
  * sentinel cleanup must then leave the newer parse's state alone.
  */
 
-import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import type {
   AnalysisGenerating,
@@ -20,6 +20,7 @@ import type {
 import type { Transaction } from "@/api/db/root";
 import { caseLawAnalysisFailures, caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
 import {
   ANALYSIS_FAILURE_HOLD_MS,
@@ -42,6 +43,10 @@ export type AnalysisRowWriter = Pick<
   Transaction,
   "delete" | "execute" | "select" | "update"
 >;
+
+/** The store's handle: the row writer, able to open the claim's transaction. */
+export type AnalysisClaimWriter = AnalysisRowWriter &
+  Pick<Transaction, "transaction">;
 
 type AnalysisClaim = AnalysisStoreKey & {
   /** The stored value this caller read and found wanting; see `claimableAnalysisRow`. */
@@ -215,27 +220,76 @@ const releaseRun = async (
  * granted; only a failed run's record reaches a second table, which only the
  * owner connection that runs the analysis may write.
  */
+/** Test seams; never set outside tests. */
+type AnalysisStoreHooks = {
+  /** Runs inside a plain claim, after its swap took the row lock and before the failure read. */
+  afterClaimLock?: ((tx: AnalysisRowWriter) => Promise<void>) | undefined;
+};
+
 export const createDbAnalysisStore = (
-  db: AnalysisRowWriter,
+  db: AnalysisClaimWriter,
+  hooks: AnalysisStoreHooks = {},
 ): AnalysisStore => ({
   claim: async ({ decisionId, fingerprint, observed, unlessFailed }) => {
     // audit: skip — analysis sentinel; the caller audits the analysis it saves
     const sentinel = analysisSentinel(fingerprint, new Date());
-    const [updated] = await db
-      .update(caseLawDecisions)
-      .set({ analysis: sentinel })
-      .where(
-        and(
-          claimableAnalysisRow({ decisionId, observed }),
-          ...(unlessFailed === undefined
-            ? []
-            : [
-                sql`NOT EXISTS (SELECT 1 FROM "case_law_analysis_failures" AS failure WHERE failure."decision_id" = ${caseLawDecisions.id} AND failure."key_tag" = ${unlessFailed.keyTag} AND failure."input_fingerprint" = ${fingerprint} AND failure."key_source" = ${unlessFailed.keySource} AND failure."provider" IS NOT DISTINCT FROM ${unlessFailed.provider} AND failure."recorded_at" > ${unlessFailed.heldSince.toISOString()}::timestamptz)`,
-              ]),
-        ),
-      )
-      .returning({ id: caseLawDecisions.id });
-    return updated === undefined ? null : sentinel;
+    const swap = async (handle: AnalysisRowWriter) => {
+      const [updated] = await handle
+        .update(caseLawDecisions)
+        .set({ analysis: sentinel })
+        .where(claimableAnalysisRow({ decisionId, observed }))
+        .returning({ id: caseLawDecisions.id });
+      return updated === undefined ? null : sentinel;
+    };
+    if (unlessFailed === undefined) {
+      return await swap(db);
+    }
+    // A plain claim, in one short transaction. Under READ COMMITTED a guard
+    // folded into the UPDATE would read failures from the statement's own
+    // snapshot, and a concurrent failure write (which releases the row and
+    // files the failure in one statement, under this row's lock) would then
+    // be rechecked on the row alone. So the compare-and-swap goes first: it
+    // takes the row lock, waiting for any such write to commit. The failure
+    // read that follows is a new statement with a fresh snapshot, so it sees
+    // what that write filed, and an applicable failure rolls the swap back.
+    // The swap is the lock: the aggregate-lock owner confines explicit
+    // `FOR UPDATE` reads, and an UPDATE of this one row needs none.
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await withAggregateTransaction(db, async (tx: Transaction) => {
+          const claimed = await swap(tx);
+          if (claimed === null) {
+            return null;
+          }
+          await hooks.afterClaimLock?.(tx);
+          const [failure] = await tx
+            .select({ keyTag: caseLawAnalysisFailures.keyTag })
+            .from(caseLawAnalysisFailures)
+            .where(
+              and(
+                eq(caseLawAnalysisFailures.decisionId, decisionId),
+                eq(caseLawAnalysisFailures.keyTag, unlessFailed.keyTag),
+                eq(caseLawAnalysisFailures.inputFingerprint, fingerprint),
+                eq(caseLawAnalysisFailures.keySource, unlessFailed.keySource),
+                sql`${caseLawAnalysisFailures.provider} IS NOT DISTINCT FROM ${unlessFailed.provider}`,
+                sql`${caseLawAnalysisFailures.recordedAt} > ${unlessFailed.heldSince.toISOString()}::timestamptz`,
+              ),
+            )
+            .limit(1);
+          if (failure !== undefined) {
+            tx.rollback();
+          }
+          return claimed;
+        }),
+      catch: (error: unknown) => error,
+    });
+    if (Result.isOk(outcome)) {
+      return outcome.value;
+    }
+    if (outcome.error instanceof TransactionRollbackError) {
+      return null;
+    }
+    throw outcome.error;
   },
   save: async ({ analysis, contentHash, decisionId, expected }) => {
     // audit: skip — the caller audits the analysis it saves

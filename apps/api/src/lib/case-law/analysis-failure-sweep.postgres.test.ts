@@ -3,7 +3,9 @@
  * delete a record that another writer refreshed while the sweep waited on its
  * row lock: a deleted fresh record lets the next poll start a run its reader
  * never asked for. Concurrent writers need two real connections, so this runs
- * against Postgres in the gated job; PGlite serves one connection only.
+ * against Postgres in the gated job; PGlite serves one connection only. The
+ * plain claim is held to the same standard: it must wait for an uncommitted
+ * failure write on the decision row before reading failures.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -20,6 +22,7 @@ import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   ANALYSIS_FAILURE_HOLD_MS,
   analysisFailureRecord,
+  failureClaimGuard,
 } from "./analysis-failure";
 import { createDbAnalysisStore } from "./analysis-store-core";
 import { analysisSentinel } from "./stored-analysis";
@@ -174,6 +177,65 @@ if (!databaseUrl || !runPostgresTests) {
         .from(caseLawAnalysisFailures)
         .where(eq(caseLawAnalysisFailures.decisionId, refreshedDecision));
       expect(survivors).toEqual([{ recordedAt: now }]);
+    });
+
+    test("a plain claim that starts while a failure write is uncommitted waits for it and claims nothing", async () => {
+      const now = new Date();
+      const decisionId = await insertDecision();
+      const reader = { source: "platform" } as const;
+      const sentinel = analysisSentinel(FINGERPRINT, now);
+      await db
+        .update(caseLawDecisions)
+        .set({ analysis: sentinel })
+        .where(eq(caseLawDecisions.id, decisionId));
+
+      let claim: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // Connection one: the failing run releases its sentinel and files its
+        // failure, holding the decision row's lock until it commits.
+        await createDbAnalysisStore(tx).fail({
+          decisionId,
+          keyTag: KEY_TAG,
+          sentinel,
+          failure: analysisFailureRecord({
+            code: "timed_out",
+            fingerprint: FINGERPRINT,
+            now,
+            reader,
+          }),
+        });
+
+        // Connection two: a plain read that observed the run's marker as it
+        // stood claims over it, and waits on the row lock the write holds.
+        claim = createDbAnalysisStore(second.db).claim({
+          decisionId,
+          fingerprint: FINGERPRINT,
+          observed: sentinel,
+          unlessFailed: failureClaimGuard({ decisionId, now, reader }),
+        });
+
+        const claimWaits = async (): Promise<boolean> => {
+          const rows = await db.execute<{ waiting: number }>(sql`
+            SELECT count(*)::int AS waiting FROM pg_stat_activity
+            WHERE wait_event_type = 'Lock' AND query ILIKE '%update "case_law_decisions"%'
+          `);
+          return (rows[0]?.waiting ?? 0) > 0;
+        };
+        const deadline = Date.now() + 10_000;
+        while (!(await claimWaits())) {
+          if (Date.now() > deadline) {
+            throw new Error("the claim never waited on the decision row");
+          }
+          await Bun.sleep(20);
+        }
+      });
+
+      expect(await claim).toBeNull();
+      const [row] = await db
+        .select({ analysis: caseLawDecisions.analysis })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      expect(row?.analysis ?? null).toBeNull();
     });
   });
 }
