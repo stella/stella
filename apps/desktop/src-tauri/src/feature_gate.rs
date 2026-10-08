@@ -27,8 +27,16 @@ impl DesktopFeature {
   }
 }
 
+#[derive(Default, PartialEq, Eq)]
+enum AccountPhase {
+  #[default]
+  Ready,
+  Changing,
+}
+
 #[derive(Default)]
 struct GateState {
+  phase: AccountPhase,
   generation: u64,
   namespace: Option<String>,
   expires_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -68,10 +76,19 @@ impl FeatureGates {
   /// Closing access and superseding in-flight requests is one atomic change.
   pub fn invalidate(&self) {
     if let Ok(mut state) = self.0.write() {
+      state.phase = AccountPhase::Changing;
       state.generation = state.generation.wrapping_add(1);
       state.namespace = None;
       state.expires_at = None;
       state.enabled.clear();
+    }
+  }
+
+  /// New-account decisions remain closed until readable feature state has
+  /// been unloaded, including periodic refreshes already in progress.
+  pub fn finish_account_change(&self) {
+    if let Ok(mut state) = self.0.write() {
+      state.phase = AccountPhase::Ready;
     }
   }
 
@@ -84,7 +101,7 @@ impl FeatureGates {
     enabled: HashSet<DesktopFeature>,
   ) -> Option<Vec<DesktopFeature>> {
     let mut state = self.0.write().ok()?;
-    if generation != state.generation {
+    if generation != state.generation || state.phase != AccountPhase::Ready {
       return None;
     }
     let enabled = if namespace.is_some()
@@ -177,6 +194,19 @@ mod tests {
           .account_binding(DesktopFeature::ActivityTimeline)
           .is_none()
       );
+      // Even a fast B response is rejected until A's readable state is gone.
+      assert!(
+        gates
+          .install(
+            gates.generation().unwrap(),
+            Some("b".into()),
+            expiry,
+            HashSet::from([DesktopFeature::ActivityTimeline])
+          )
+          .is_none()
+      );
+      assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+      gates.finish_account_change();
       if let Some(decision) = replacement.as_ref() {
         gates
           .install(

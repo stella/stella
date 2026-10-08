@@ -152,6 +152,9 @@ pub fn account_changed(app: &AppHandle, unload: impl FnOnce(&AppHandle)) {
     gates.invalidate();
   }
   unload(app);
+  if let Some(gates) = app.try_state::<FeatureGates>() {
+    gates.finish_account_change();
+  }
   refresh_signal().notify_one();
 }
 
