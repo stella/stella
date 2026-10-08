@@ -26,7 +26,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/runtime.ts"
+    ".": "./src/runtime.ts",
+    "./local-module-loader": "./src/local-module-loader.ts"
   },
   "publishConfig": {
     "access": "public"

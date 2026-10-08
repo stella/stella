@@ -25,7 +25,6 @@ import {
   InspectorDock,
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
-  useInspectorPaneWidth,
 } from "@stll/ui/inspector";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
@@ -55,7 +54,7 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
-import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
+import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { QuickEntry } from "@/components/quick-entry";
@@ -631,9 +630,9 @@ function WorkspaceInspectorSidePanel({
   // inspector's; this panel only supplies the sidebar's inline size.
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
-  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+  const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
+    openedFrom: "matter",
     sidebarWidth,
-    storageKey: inspectorPaneWidthStorageKey("matter"),
     viewportWidth,
   });
   // Re-run the offset effect once the new bundle applies: `loadedLang` (not
