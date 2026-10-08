@@ -298,7 +298,9 @@ export const createDurableChatTransport = <
           if (!response.ok) {
             throw new ChatReconnectError({
               code:
-                response.status === 403 || response.status === 404
+                response.status === 401 ||
+                response.status === 403 ||
+                response.status === 404
                   ? "refused"
                   : undefined,
               message: `Chat rejoin failed (${response.status}).`,

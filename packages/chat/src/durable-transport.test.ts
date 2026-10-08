@@ -486,7 +486,7 @@ describe("durable chat transport", () => {
     }
   });
 
-  for (const status of [403, 404]) {
+  for (const status of [401, 403, 404]) {
     for (const contentType of ["application/json", "text/plain"]) {
       test(`a ${status} ${contentType} join refusal stops reconnection immediately`, async () => {
         const errors: ChatReconnectError[] = [];
