@@ -1,6 +1,7 @@
 import "@/api/lib/observability/otel";
 import type { AttributeValue } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import { Result } from "better-result";
 
 import type { FailureGrade, FailureReason } from "@stll/errors";
 import {
@@ -79,6 +80,8 @@ const isOwnedValueValid = (key: string, value: unknown): boolean => {
   return true;
 };
 
+const UNSERIALIZABLE_ATTRIBUTE = "[unserializable attribute]";
+
 const outputAttributeValue = (value: unknown): AttributeValue | undefined => {
   if (
     typeof value === "string" ||
@@ -98,7 +101,18 @@ const outputAttributeValue = (value: unknown): AttributeValue | undefined => {
       return value;
     }
   }
-  return value === undefined ? undefined : JSON.stringify(value);
+  if (typeof value === "bigint") {
+    return String(value);
+  }
+  if (value === undefined) {
+    return undefined;
+  }
+  return Result.try(
+    () =>
+      JSON.stringify(value, (_key, item: unknown) =>
+        typeof item === "bigint" ? String(item) : item,
+      ) ?? UNSERIALIZABLE_ATTRIBUTE,
+  ).unwrapOr(UNSERIALIZABLE_ATTRIBUTE);
 };
 
 const filterLogAttributes = ({
@@ -140,7 +154,10 @@ const filterLogAttributes = ({
 
 const queryFieldCount = (
   attributes: LoggerAttributeInput | undefined,
-): number => Object.keys(attributes ?? {}).filter(isQueryErrorOutputKey).length;
+): number =>
+  Result.try(
+    () => Object.keys(attributes ?? {}).filter(isQueryErrorOutputKey).length,
+  ).unwrapOr(0);
 
 export const sanitizeLogAttributes = (
   attributes: LoggerAttributeInput | undefined,

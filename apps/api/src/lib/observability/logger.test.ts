@@ -82,6 +82,65 @@ describe("logger attributes", () => {
     expect(output).not.toContain('"body"');
   });
 
+  test("direct and nested bigint attributes emit as strings", () => {
+    const attributes = {
+      count: 123n,
+      diagnostic: { count: 456n, values: [789n] },
+      attempts: 1,
+    };
+    const expected = {
+      count: "123",
+      diagnostic: '{"count":"456","values":["789"]}',
+      attempts: 1,
+    };
+    expect(sanitizeLogAttributes(attributes)).toEqual(expected);
+    const recording = installRecordingLogger();
+    try {
+      logger.error("test.failed", attributes);
+      expect(recording.records).toEqual([
+        { severityText: "ERROR", message: "test.failed", attributes: expected },
+      ]);
+    } finally {
+      recording.restore();
+    }
+    const chunks: string[] = [];
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+    logger.error("test.failed", attributes);
+    expect(chunks).toHaveLength(1);
+    expect(JSON.parse(chunks.join(""))).toEqual({
+      severity: "ERROR",
+      message: "test.failed",
+      ...expected,
+    });
+  });
+
+  test("unsupported attribute serialization emits a safe placeholder", () => {
+    const diagnostic = Object.assign(new Error("Diagnostic unavailable"), {
+      toJSON: () => {
+        throw new TypeError("Serialization unavailable");
+      },
+    });
+    const recording = installRecordingLogger();
+    try {
+      logger.error("test.failed", { diagnostic, attempts: 1 });
+      expect(recording.records).toEqual([
+        {
+          severityText: "ERROR",
+          message: "test.failed",
+          attributes: {
+            diagnostic: "[unserializable attribute]",
+            attempts: 1,
+          },
+        },
+      ]);
+    } finally {
+      recording.restore();
+    }
+  });
+
   test("every logger entry point projects payload shapes before recording, OTel and process output", async () => {
     const marker = "request.failed";
     const driver = Object.assign(new Error("duplicate"), {
