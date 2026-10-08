@@ -41,6 +41,8 @@ const { cleanup, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
+const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
+  await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -87,6 +89,21 @@ test.each([
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    // The law route as the app mounts it: a router and the chat editor
+    // above the reader, and no AI key gate.
+    const router = createRouter({
+      routeTree: createRootRoute({
+        component: () => (
+          <ChatEditorProvider>
+            <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
+              <p>{READER_CONTENT}</p>
+            </LegalReaderAIChat>
+          </ChatEditorProvider>
+        ),
+      }),
+      history: createMemoryHistory({ initialEntries: ["/law/cz/statutes"] }),
+    });
+    await router.load();
     render(
       <QueryClientProvider client={queryClient}>
         <AuthenticatedUserProvider
@@ -103,11 +120,7 @@ test.each([
         >
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <ChatEditorProvider>
-                <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
-                  <p>{READER_CONTENT}</p>
-                </LegalReaderAIChat>
-              </ChatEditorProvider>
+              <RouterProvider router={router} />
             </FormattingProvider>
           </IntlProvider>
         </AuthenticatedUserProvider>
