@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/statutes" });
 
 // The build turns a `?worker&url` import into the emitted worker's URL; the
@@ -32,12 +34,16 @@ globalThis.fetch = Object.assign(
     if (/\/chat\/threads\/[^/]+\/messages$/u.test(url.pathname)) {
       return Response.json({ message: "Not found" }, { status: 404 });
     }
+    // The composer's matter picker: a member with no matters yet.
+    if (url.pathname.endsWith("/workspaces/navigation")) {
+      return Response.json({ items: [], nextCursor: null, workspaces: [] });
+    }
     return Response.json({});
   },
   { preconnect: originalFetch.preconnect },
 );
 
-const { cleanup, render, screen, waitFor } =
+const { act, cleanup, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -62,6 +68,10 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  // Let React finish the work the readers scheduled before the DOM goes.
+  await act(async () => {
+    await sleep(50);
+  });
   globalThis.fetch = originalFetch;
   await GlobalRegistrator.unregister();
 });
