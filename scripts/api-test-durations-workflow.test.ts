@@ -68,6 +68,17 @@ test("duration cache saves only after green main API shards", () => {
   ).toMatchObject({
     with: { key: `api-test-durations-\${{ github.run_id }}` },
   });
+  // Cache-replayed shards upload no timings; the input directory must exist.
+  const aggregate = String(
+    workflowStepByName(
+      workflowJobSteps(workflow, "api-test-durations"),
+      "Aggregate API test durations",
+    ).run,
+  );
+  expect(aggregate).toContain('mkdir -p "$RUNNER_TEMP/api-test-timings"');
+  expect(aggregate.indexOf("mkdir")).toBeLessThan(
+    aggregate.indexOf("refresh-test-durations.ts"),
+  );
 });
 
 test("API shards consume and verify the plan artifact before testing", () => {

@@ -1,5 +1,15 @@
 import { expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
+import { listApiTestPaths } from "./api-test-plan";
 import {
   refreshedTestDurations,
   serializeTestDurations,
@@ -55,5 +65,41 @@ test("an unreadable previous weights file is ignored, not fatal", () => {
         '{"version":1,"files":{"new":1000}}',
       ]),
     ).toEqual({ new: { seconds: 1, source: "measured" } });
+  }
+});
+
+test("a main run whose shards all replay cached results carries the base forward", () => {
+  const live = listApiTestPaths(path.resolve(import.meta.dir, "..")).at(0);
+  if (live === undefined) {
+    throw new Error("expected at least one live API test file");
+  }
+  const root = mkdtempSync(path.join(tmpdir(), "api-test-durations-"));
+  try {
+    const timings = path.join(root, "timings");
+    mkdirSync(timings);
+    const basePath = path.join(root, "base.json");
+    const destination = path.join(root, "out.json");
+    writeFileSync(
+      basePath,
+      JSON.stringify({
+        [live]: { seconds: 3, source: "measured" },
+        "deleted.test.ts": { seconds: 9, source: "measured" },
+      }),
+    );
+    const result = Bun.spawnSync([
+      process.execPath,
+      path.join(import.meta.dir, "refresh-test-durations.ts"),
+      "--write",
+      destination,
+      "--base",
+      basePath,
+      timings,
+    ]);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(JSON.parse(readFileSync(destination, "utf-8"))).toEqual({
+      [live]: { seconds: 3, source: "measured" },
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

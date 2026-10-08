@@ -3796,7 +3796,11 @@ jobs:
           restore-keys: api-test-durations-
 
       - name: Aggregate API test durations
-        run: bun apps/api/scripts/refresh-test-durations.ts --write "$RUNNER_TEMP/api-test-durations.json" --base "$([[ -f "$RUNNER_TEMP/api-test-durations.json" ]] && echo "$RUNNER_TEMP/api-test-durations.json" || echo missing)" "$RUNNER_TEMP/api-test-timings"
+        run: |
+          # Shards replayed from the Turbo cache upload no timings; with none
+          # at all, the restored weights carry forward unchanged.
+          mkdir -p "$RUNNER_TEMP/api-test-timings"
+          bun apps/api/scripts/refresh-test-durations.ts --write "$RUNNER_TEMP/api-test-durations.json" --base "$([[ -f "$RUNNER_TEMP/api-test-durations.json" ]] && echo "$RUNNER_TEMP/api-test-durations.json" || echo missing)" "$RUNNER_TEMP/api-test-timings"
 
       - name: Save API test durations
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
