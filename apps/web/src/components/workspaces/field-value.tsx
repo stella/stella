@@ -3,7 +3,8 @@ import { useTranslations } from "use-intl";
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Loader2Icon, SquareMinusIcon } from "@stll/ui/icons";
+import { SquareMinusIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 import {
   ClipFieldValue,
@@ -221,10 +222,10 @@ const PendingFieldValue = ({
   if (variant === "table") {
     return (
       <>
-        <Loader2Icon
-          aria-hidden="true"
-          className="text-muted-foreground absolute end-1 top-1 z-20 size-3 shrink-0 animate-spin"
-          strokeWidth={2.25}
+        <Loader
+          className="absolute end-1 top-1 z-20 size-3 shrink-0"
+          label={t("common.loading")}
+          size="sm"
         />
         {hasPreview ? (
           <BidiText as="div" className="line-clamp-2 min-w-0">
@@ -238,9 +239,13 @@ const PendingFieldValue = ({
   }
 
   return (
-    <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
+    <span
+      aria-busy="true"
+      className="text-muted-foreground flex items-center gap-1.5 text-sm"
+      role="status"
+    >
       {t("workspaces.fields.calculating")}
-      <span className="bg-muted-foreground size-2 animate-pulse rounded-full" />
+      <Loader className="size-2" size="sm" variant="decorative" />
     </span>
   );
 };
