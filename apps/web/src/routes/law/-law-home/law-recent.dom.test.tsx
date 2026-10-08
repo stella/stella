@@ -384,7 +384,7 @@ test("signed-in recents import local data once and always display server data", 
 
 type HistoryRequest = { url: URL; method: string };
 const mountServerHistory = async (
-  respond: (request: HistoryRequest) => Response,
+  respond: (request: HistoryRequest) => Response | Promise<Response>,
 ) => {
   const { QueryClient, QueryClientProvider } =
     await import("@tanstack/react-query");
@@ -428,6 +428,25 @@ const mountServerHistory = async (
   }
   return {
     requests,
+    setScope: async ({
+      userId,
+      organizationId,
+    }: {
+      userId: string;
+      organizationId: string;
+    }) => {
+      await act(async () => {
+        client.setQueryData(sessionOptions.queryKey, {
+          ...signedSession,
+          user: { ...signedSession.user, id: userId },
+          session: {
+            ...signedSession.session,
+            userId,
+            activeOrganizationId: organizationId,
+          },
+        });
+      });
+    },
     setOrganization: async (organizationId: string) => {
       await act(async () => {
         client.setQueryData(sessionOptions.queryKey, {
@@ -595,3 +614,115 @@ test("clear confirmation belongs to its opening organization and cannot survive 
     await fixture.dispose();
   }
 });
+
+for (const change of [
+  {
+    type: "organization",
+    userId: "scoped-history-reader",
+    organizationId: "scoped-history-org-b",
+  },
+  {
+    type: "account",
+    userId: "scoped-history-other-reader",
+    organizationId: "scoped-history-org-a",
+  },
+] as const) {
+  test(`a delayed local import retains its snapshots when the ${change.type} changes and the server rejects its originating scope`, async () => {
+    const { userStorageKey } =
+      await import("@/lib/account/user-scoped-storage");
+    const originalScope = {
+      userId: "scoped-history-reader",
+      organizationId: "scoped-history-org-a",
+    };
+    const key = userStorageKey("law_search_history", {
+      kind: "user",
+      userId: originalScope.userId,
+    });
+    const local = JSON.stringify([
+      { query: "Kept local query", at: "2026-01-01T12:00:00Z" },
+    ]);
+    const legacy = JSON.stringify([
+      { query: "Kept legacy query", at: "2026-01-01T12:00:00Z" },
+    ]);
+    const storage = browserStateStorage("local");
+    storage.setItem(key, local);
+    storage.setItem("law_search_history", legacy);
+    const pending: {
+      request: HistoryRequest;
+      response: ReturnType<typeof Promise.withResolvers<Response>>;
+    }[] = [];
+    const settled: { request: HistoryRequest; status: number }[] = [];
+    const fixture = await mountServerHistory(({ url, method }) => {
+      if (!url.pathname.endsWith("/import")) {
+        throw new TypeError("History must wait for the local import");
+      }
+      const response = Promise.withResolvers<Response>();
+      const request = { url, method };
+      pending.push({ request, response });
+      return response.promise.then((result) => {
+        settled.push({ request, status: result.status });
+        return result;
+      });
+    });
+    try {
+      await waitFor(() => expect(pending.length).toBe(1));
+      const first = pending.at(0);
+      if (!first) {
+        throw new TypeError("Expected an originating import request");
+      }
+      expect(first.request.url.searchParams.get("expectedUserId")).toBe(
+        originalScope.userId,
+      );
+      expect(first.request.url.searchParams.get("expectedOrganizationId")).toBe(
+        originalScope.organizationId,
+      );
+      const activeScope = {
+        userId: change.userId,
+        organizationId: change.organizationId,
+      };
+      await fixture.setScope(activeScope);
+      await waitFor(() => expect(pending.length).toBe(2));
+      const mismatch =
+        first.request.url.searchParams.get("expectedUserId") !==
+          activeScope.userId ||
+        first.request.url.searchParams.get("expectedOrganizationId") !==
+          activeScope.organizationId;
+      expect(mismatch).toBe(true);
+      await act(async () => {
+        first.response.resolve(
+          Response.json(
+            { message: "Signed-in scope changed" },
+            { status: 409 },
+          ),
+        );
+      });
+      await waitFor(() =>
+        expect(
+          settled.some(
+            ({ request, status }) =>
+              request === first.request && status === 409,
+          ),
+        ).toBe(true),
+      );
+      expect(storage.getItem(key)).toBe(local);
+      expect(storage.getItem("law_search_history")).toBe(legacy);
+      expect(
+        fixture.requests.every(({ url }) => url.pathname.endsWith("/import")),
+      ).toBe(true);
+    } finally {
+      await act(async () => {
+        for (const request of pending) {
+          request.response.resolve(
+            Response.json(
+              { message: "Signed-in scope changed" },
+              { status: 409 },
+            ),
+          );
+        }
+      });
+      await fixture.dispose();
+      storage.removeItem(key);
+      storage.removeItem("law_search_history");
+    }
+  });
+}

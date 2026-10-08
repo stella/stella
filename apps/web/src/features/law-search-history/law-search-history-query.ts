@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import type { SafeId } from "@stll/api-contract/safe-id";
 
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { api } from "@/lib/api";
@@ -22,7 +23,22 @@ type LawHistoryScope = {
   userId: string | undefined;
   organizationId: string | null | undefined;
 };
-type LawHistoryOwner = { userId: string; organizationId: string };
+type LawHistoryOwner = {
+  readonly userId: string;
+  readonly organizationId: string;
+};
+
+/** Every history write names the account and organization that initiated it. */
+const historyMutationRequest = (
+  scope: LawHistoryOwner,
+  signal?: AbortSignal,
+) => ({
+  query: {
+    expectedUserId: scope.userId,
+    expectedOrganizationId: scope.organizationId,
+  },
+  ...(signal === undefined ? {} : { fetch: { signal } }),
+});
 const lawHistoryKeys = {
   owner: (scope: LawHistoryScope) => ["law-search-history", scope],
   import: (scope: LawHistoryScope) => [
@@ -41,20 +57,20 @@ const lawHistoryKeys = {
 
 /** The owner-scoped TanStack query shares this import across mounted readers. */
 type ImportLocalLawHistoryOptions = {
-  userId: string;
+  scope: LawHistoryOwner;
   signal: AbortSignal;
   isCurrentScope: () => boolean;
 };
 
 const importLocalLawHistory = async ({
-  userId,
+  scope,
   signal,
   isCurrentScope,
 }: ImportLocalLawHistoryOptions) => {
   const storage = browserStateStorage("local");
   const scopedKey = userStorageKey(LAW_HISTORY_STORAGE_KEY, {
     kind: "user",
-    userId,
+    userId: scope.userId,
   });
   await migrateLocalLawHistory({
     storage,
@@ -64,7 +80,7 @@ const importLocalLawHistory = async ({
       unwrapEden(
         await api["search-history"].import.post(
           { entries },
-          { fetch: { signal } },
+          historyMutationRequest(scope, signal),
         ),
       );
     },
@@ -84,7 +100,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     organizationId === null ||
     organizationId === undefined
       ? null
-      : { userId, organizationId };
+      : ({ userId, organizationId } as const);
   const enabled = scope !== null;
   const keyScope = { userId, organizationId };
   const importQuery = useQuery({
@@ -97,7 +113,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
         return null;
       }
       await importLocalLawHistory({
-        userId: scope.userId,
+        scope: { userId: scope.userId, organizationId: scope.organizationId },
         signal,
         isCurrentScope: () => {
           const current = queryClient.getQueryData(sessionOptions.queryKey);
@@ -132,36 +148,66 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   const view = useQueryView(query);
   useQueryViewError(view);
   const onError = (error: unknown) => notifyUserError(error, t("common.error"));
-  const onSuccess = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: lawHistoryKeys.lists(keyScope),
-    });
-  };
-  const record = useMutation({
-    mutationFn: async (entry: HistoryInput) => {
-      if (!enabled) {
-        return;
-      }
-      return unwrapEden(await api["search-history"].post(entry));
+  type RecordHistoryUse = { scope: LawHistoryOwner; entry: HistoryInput };
+  const recordMutation = useMutation({
+    mutationFn: async ({ scope: originatingScope, entry }: RecordHistoryUse) =>
+      unwrapEden(
+        await api["search-history"].post(
+          entry,
+          historyMutationRequest(originatingScope),
+        ),
+      ),
+    onError,
+    onSuccess: async (_, { scope: originatingScope }) => {
+      await queryClient.invalidateQueries({
+        queryKey: lawHistoryKeys.lists(originatingScope),
+      });
     },
-    onError,
-    onSuccess,
   });
-  const remove = useMutation({
-    mutationFn: async (id: SafeId<"searchHistoryEntry">) =>
-      unwrapEden(await api["search-history"]({ entryId: id }).delete()),
+  const recordEntry = useLatestCallback((entry: HistoryInput) => {
+    if (scope === null) {
+      return;
+    }
+    recordMutation.mutate({
+      scope: { userId: scope.userId, organizationId: scope.organizationId },
+      entry,
+    });
+  });
+  type RemoveHistoryUse = {
+    scope: LawHistoryOwner;
+    id: SafeId<"searchHistoryEntry">;
+  };
+  const removeMutation = useMutation({
+    mutationFn: async ({ scope: originatingScope, id }: RemoveHistoryUse) =>
+      unwrapEden(
+        await api["search-history"]({ entryId: id }).delete(
+          undefined,
+          historyMutationRequest(originatingScope),
+        ),
+      ),
     onError,
-    onSuccess,
+    onSuccess: async (_, { scope: originatingScope }) => {
+      await queryClient.invalidateQueries({
+        queryKey: lawHistoryKeys.lists(originatingScope),
+      });
+    },
+  });
+  const removeEntry = useLatestCallback((id: SafeId<"searchHistoryEntry">) => {
+    if (scope === null) {
+      return;
+    }
+    removeMutation.mutate({
+      scope: { userId: scope.userId, organizationId: scope.organizationId },
+      id,
+    });
   });
   const clear = useMutation({
     mutationFn: async (capturedScope: LawHistoryOwner) =>
       unwrapEden(
-        await api["search-history"].delete(undefined, {
-          query: {
-            expectedUserId: capturedScope.userId,
-            expectedOrganizationId: capturedScope.organizationId,
-          },
-        }),
+        await api["search-history"].delete(
+          undefined,
+          historyMutationRequest(capturedScope),
+        ),
       ),
     onError,
     onSuccess: async (_, capturedScope) => {
@@ -179,8 +225,8 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     isPending:
       enabled && (importView.type === "pending" || view.type === "pending"),
     error: importError ?? listError,
-    record,
-    remove,
+    record: { mutate: recordEntry },
+    remove: { mutate: removeEntry, isPending: removeMutation.isPending },
     clear,
   };
 };

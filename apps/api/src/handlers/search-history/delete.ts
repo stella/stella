@@ -10,9 +10,15 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+import {
+  assertSearchHistoryScope,
+  searchHistoryScopeQuery,
+} from "./scope-precondition";
+
 const config = {
+  query: searchHistoryScopeQuery,
   description:
-    "Delete one entry from your own search history in the active organization. The entry is erased, not hidden; this cannot be undone. Take the id from `search-history.list`.",
+    "Delete one entry from your own search history in the active organization. The entry is erased, not hidden; this cannot be undone. Take the id and scope from `search-history.list`. A changed sign-in scope rejects the request.",
   permissions: { searchHistory: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -29,7 +35,12 @@ const config = {
 
 const deleteSearchHistoryEntry = createSafeRootHandler(
   config,
-  async function* ({ params, safeDb, session, user, recordAuditEvent }) {
+  async function* ({ params, safeDb, session, user, query, recordAuditEvent }) {
+    yield* assertSearchHistoryScope({
+      query,
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
         const rows = await tx

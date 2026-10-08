@@ -11,8 +11,13 @@ import {
   searchHistoryEntryInputSchema,
   upsertSearchHistoryRows,
 } from "./entries";
+import {
+  assertSearchHistoryScope,
+  searchHistoryScopeQuery,
+} from "./scope-precondition";
 
 const config = {
+  query: searchHistoryScopeQuery,
   permissions: { searchHistory: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   // The law pages record a use as it happens; agents read and delete history.
@@ -23,7 +28,12 @@ const config = {
 /** Records one use: a new entry, or a bump of the caller's matching one. */
 const upsertSearchHistory = createSafeRootHandler(
   config,
-  async function* ({ body, safeDb, session, user, recordAuditEvent }) {
+  async function* ({ body, safeDb, session, user, query, recordAuditEvent }) {
+    yield* assertSearchHistoryScope({
+      query,
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     const rows = yield* Result.await(
       Result.tryPromise(
         async () =>

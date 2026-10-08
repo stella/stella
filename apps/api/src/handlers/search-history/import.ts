@@ -16,8 +16,13 @@ import {
   upsertSearchHistoryRows,
 } from "./entries";
 import type { SearchHistoryUse } from "./entries";
+import {
+  assertSearchHistoryScope,
+  searchHistoryScopeQuery,
+} from "./scope-precondition";
 
 const config = {
+  query: searchHistoryScopeQuery,
   permissions: { searchHistory: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   // A browser hands over what it kept locally, once; not an agent action.
@@ -57,7 +62,12 @@ const readUsedAt = (value: string, now: Date): Date | null =>
  */
 const importSearchHistory = createSafeRootHandler(
   config,
-  async function* ({ body, safeDb, session, user, recordAuditEvent }) {
+  async function* ({ body, safeDb, session, user, query, recordAuditEvent }) {
+    yield* assertSearchHistoryScope({
+      query,
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     const now = new Date();
     const uses: SearchHistoryUse[] = [];
     for (const kept of body.entries) {

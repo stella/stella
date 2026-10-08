@@ -17,10 +17,12 @@ export const searchHistoryRoute = new Elysia({ prefix: "/search-history" })
   })
   .post("/", upsertSearchHistory.handler, {
     body: upsertSearchHistory.config.body,
+    query: upsertSearchHistory.config.query,
     permissions: upsertSearchHistory.config.permissions,
   })
   .post("/import", importSearchHistory.handler, {
     body: importSearchHistory.config.body,
+    query: importSearchHistory.config.query,
     permissions: importSearchHistory.config.permissions,
   })
   .delete("/", clearSearchHistory.handler, {
@@ -29,5 +31,6 @@ export const searchHistoryRoute = new Elysia({ prefix: "/search-history" })
   })
   .delete("/:entryId", deleteSearchHistoryEntry.handler, {
     params: deleteSearchHistoryEntry.config.params,
+    query: deleteSearchHistoryEntry.config.query,
     permissions: deleteSearchHistoryEntry.config.permissions,
   });

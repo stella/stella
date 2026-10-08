@@ -134,7 +134,10 @@ const historyAuditRecorder = (fixture: HistoryFixture) =>
   });
 
 const identity = (fixture: HistoryFixture) => ({
-  query: {},
+  query: {
+    expectedOrganizationId: fixture.organizationId,
+    expectedUserId: fixture.userId,
+  },
   recordAuditEvent: historyAuditRecorder(fixture),
   safeDb: createSafeDb(
     fixture.rlsDb,
@@ -625,6 +628,99 @@ if (!databaseUrl || !enabled) {
         ).toEqual({ deleted: 1 });
         expect((await readHistory(active)).items).toEqual([]);
         expect(await auditRows()).toHaveLength(2);
+      });
+    });
+
+    test("every history mutation rejects a changed originating user or organization before writing", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const active = {
+          ...fixture,
+          organizationId: fixture.otherOrganizationId,
+        };
+        const original = await recordQuery(
+          fixture,
+          "Original organization history",
+        );
+        const current = await recordQuery(
+          active,
+          "Current organization history",
+        );
+        const auditRows = () =>
+          fixture.db
+            .select()
+            .from(auditLogs)
+            .where(
+              inArray(auditLogs.organizationId, [
+                fixture.organizationId,
+                fixture.otherOrganizationId,
+              ]),
+            );
+        const before = await auditRows();
+        expect(before).toHaveLength(2);
+        for (const query of [
+          {
+            expectedOrganizationId: fixture.organizationId,
+            expectedUserId: fixture.userId,
+          },
+          {
+            expectedOrganizationId: active.organizationId,
+            expectedUserId: fixture.otherUserId,
+          },
+        ]) {
+          const responses = [
+            await record.handler(
+              createTestHandlerContext<Parameters<typeof record.handler>[0]>({
+                ...identity(active),
+                query,
+                body: { kind: "search", query: "Changed-scope record" },
+              }),
+            ),
+            await importEntries.handler(
+              createTestHandlerContext<
+                Parameters<typeof importEntries.handler>[0]
+              >({
+                ...identity(active),
+                query,
+                body: {
+                  entries: [
+                    {
+                      entry: { kind: "search", query: "Changed-scope import" },
+                      usedAt: "2020-01-01T00:00:00Z",
+                    },
+                  ],
+                },
+              }),
+            ),
+            await deleteEntry.handler(
+              createTestHandlerContext<
+                Parameters<typeof deleteEntry.handler>[0]
+              >({
+                ...identity(active),
+                query,
+                params: { entryId: current.id },
+              }),
+            ),
+            await clear.handler(
+              createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+                ...identity(active),
+                query,
+              }),
+            ),
+          ];
+          for (const response of responses) {
+            expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
+            if (response instanceof ElysiaCustomStatusResponse) {
+              expect(response.code).toBe(409);
+            }
+          }
+          expect(
+            (await readHistory(fixture)).items.map(({ id }) => id),
+          ).toEqual([original.id]);
+          expect((await readHistory(active)).items.map(({ id }) => id)).toEqual(
+            [current.id],
+          );
+          expect(await auditRows()).toEqual(before);
+        }
       });
     });
 

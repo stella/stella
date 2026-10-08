@@ -41,13 +41,13 @@ describe("personal search history CLI", () => {
             partPath === "organizationId" || partPath === "userId",
         ),
       ).toBe(false);
-      if (action === "clear") {
+      if (action !== "list") {
         for (const partPath of ["expectedOrganizationId", "expectedUserId"]) {
           expect(leaf.flags).toContainEqual(
             expect.objectContaining({
               part: "query",
               partPath,
-              required: false,
+              required: true,
             }),
           );
         }

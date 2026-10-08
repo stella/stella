@@ -8,8 +8,12 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 
 import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
+import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import {
+  READ_TOOL_REF_FIELD_MAP,
+  WRITE_TOOL_REF_FIELD_MAP,
+} from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -3494,15 +3498,14 @@ test.each(["default-deny", "granted", "colleague"] as const)(
 
 describe("personal search history capabilities", () => {
   test("keeps personal history discovery and invocation out of AI chat", () => {
-    for (const tool of [
-      "list_capabilities",
-      "describe_capability",
-      "invoke_capability",
-    ] as const) {
-      expect(WRITE_TOOL_REF_FIELD_MAP[tool].chatProjectable).toBe(false);
+    for (const tool of ["list_capabilities", "describe_capability"] as const) {
+      expect(READ_TOOL_REF_FIELD_MAP[tool].chatProjectable).toBe(false);
     }
+    expect(WRITE_TOOL_REF_FIELD_MAP.invoke_capability.chatProjectable).toBe(
+      false,
+    );
   });
-  test("describes caller-owned history without accepting tenant or owner ids", async () => {
+  test("describes caller-owned history and required mutation scope preconditions", async () => {
     for (const capability of [
       "search-history.list",
       "search-history.delete",
@@ -3530,13 +3533,17 @@ describe("personal search history capabilities", () => {
           `${part}.properties.userId`,
         );
       }
-      if (capability === "search-history.clear") {
+      if (capability !== "search-history.list") {
         expect(payload.inputSchema).toHaveProperty(
           "query.properties.expectedOrganizationId",
         );
         expect(payload.inputSchema).toHaveProperty(
           "query.properties.expectedUserId",
         );
+        expect(payload.inputSchema).toHaveProperty("query.required", [
+          "expectedOrganizationId",
+          "expectedUserId",
+        ]);
       }
     }
   });
@@ -3564,6 +3571,7 @@ describe("personal search history capabilities", () => {
     expect(parseToolPayload(result)).toMatchObject({
       items: [],
       nextCursor: null,
+      scope: { organizationId: "org_1", userId: "user_1" },
     });
     expect(queries).toHaveLength(1);
     expect(queries.at(0)).not.toContain('"kind"');
@@ -3577,7 +3585,18 @@ describe("personal search history capabilities", () => {
       "search-history.delete",
       "search-history.clear",
     ]) {
+      const recordedEvents: (typeof auditLogs.$inferInsert)[] = [];
       const database = createScopedDbMock({
+        insert: (table: unknown) => {
+          expect(table).toBe(auditLogs);
+          return {
+            values: async (
+              rows: readonly (typeof auditLogs.$inferInsert)[],
+            ) => {
+              recordedEvents.push(...rows);
+            },
+          };
+        },
         delete: () => ({
           where: () => ({
             returning: async () => [{ id: entryId, kind: "search" }],
@@ -3592,18 +3611,19 @@ describe("personal search history capabilities", () => {
           }),
         }),
       });
-      const recordedEvents: Parameters<AuditRecorder>[1][] = [];
       const context = createContext(database);
-      context.recordAuditEvent = async (_tx, event) => {
-        recordedEvents.push(event);
-      };
       const result = await handleMcpToolCall({
         args: {
           capability,
-          input:
-            capability === "search-history.delete"
+          input: {
+            ...(capability === "search-history.delete"
               ? { params: { entryId } }
-              : { query: {} },
+              : {}),
+            query: {
+              expectedOrganizationId: context.organizationId,
+              expectedUserId: context.userId,
+            },
+          },
           confirm: true,
         },
         context,
@@ -3614,8 +3634,10 @@ describe("personal search history capabilities", () => {
           ? { id: entryId }
           : { deleted: 1 },
       );
-      expect(recordedEvents).toEqual([
+      expect(recordedEvents).toMatchObject([
         {
+          userId: context.userId,
+          organizationId: context.organizationId,
           action: AUDIT_ACTION.DELETE,
           resourceType: AUDIT_RESOURCE_TYPE.SEARCH_HISTORY,
           resourceId:
@@ -3631,24 +3653,68 @@ describe("personal search history capabilities", () => {
     }
   });
 
-  test("clear scope preconditions reject changed scope before accessing history", async () => {
-    const database = createScopedDbMock({});
-    const result = await handleMcpToolCall({
-      toolName: "invoke_capability",
-      args: {
-        capability: "search-history.clear",
-        input: {
-          query: {
-            expectedOrganizationId: "a1111111-1111-4111-8111-111111111111",
-            expectedUserId: "a2222222-2222-4222-8222-222222222222",
+  test.each([
+    {
+      changed: "organization",
+      query: { expectedOrganizationId: "other_org", expectedUserId: "user_1" },
+    },
+    {
+      changed: "user",
+      query: { expectedOrganizationId: "org_1", expectedUserId: "other_user" },
+    },
+  ])(
+    "mutation scope preconditions reject changed $changed before accessing history",
+    async ({ query }) => {
+      for (const capability of [
+        "search-history.clear",
+        "search-history.delete",
+      ]) {
+        const database = createScopedDbMock({});
+        const result = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          args: {
+            capability,
+            input: {
+              ...(capability === "search-history.delete"
+                ? {
+                    params: { entryId: "a3333333-3333-4333-8333-333333333333" },
+                  }
+                : {}),
+              query,
+            },
+            confirm: true,
           },
+          context: createContext(database),
+        });
+        expect(errorEnvelope(result).code).toBe("conflict");
+        expect(database.getCallCount()).toBe(0);
+      }
+    },
+  );
+
+  test("mutations require both scope preconditions before accessing history", async () => {
+    for (const capability of [
+      "search-history.clear",
+      "search-history.delete",
+    ]) {
+      const database = createScopedDbMock({});
+      const result = await handleMcpToolCall({
+        toolName: "invoke_capability",
+        args: {
+          capability,
+          input: {
+            ...(capability === "search-history.delete"
+              ? { params: { entryId: "a3333333-3333-4333-8333-333333333333" } }
+              : {}),
+            query: {},
+          },
+          confirm: true,
         },
-        confirm: true,
-      },
-      context: createContext(database),
-    });
-    expect(errorEnvelope(result).code).toBe("conflict");
-    expect(database.getCallCount()).toBe(0);
+        context: createContext(database),
+      });
+      expect(errorEnvelope(result).code).toBe("validation_error");
+      expect(database.getCallCount()).toBe(0);
+    }
   });
 
   test("deleting history requires write consent and explicit confirmation", async () => {
@@ -3671,7 +3737,10 @@ describe("personal search history capabilities", () => {
   test("delete validates ids before invoking the database", async () => {
     const result = await call("invoke_capability", {
       capability: "search-history.delete",
-      input: { params: { entryId: "invalid-history-id" } },
+      input: {
+        params: { entryId: "invalid-history-id" },
+        query: { expectedOrganizationId: "org_1", expectedUserId: "user_1" },
+      },
       confirm: true,
     });
     expect(errorEnvelope(result).code).toBe("validation_error");
