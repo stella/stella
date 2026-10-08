@@ -17,6 +17,8 @@ use crate::{
   local_window::ActivityCaller,
 };
 
+const MAX_COPY_BYTES: usize = 16 * 1024;
+
 fn lock_error() -> String {
   "activity timeline is unavailable".to_string()
 }
