@@ -22,7 +22,7 @@ import {
   caseLawPageBeforeEnd,
   caseLawPageNumber,
   caseLawPageRest,
-  caseLawPageRows,
+  caseLawPageEvidence,
 } from "./case-law-pages.logic";
 
 const PAGE_SIZE: PublicLawPageSize = 50;
@@ -32,6 +32,11 @@ type SearchOverInput = {
   realResults: number;
   /** What its first page reported. */
   total: SearchTotal;
+  /**
+   * Rows dropped from one page's text results, as decisions a reference pins
+   * are: that page is short while the results go on past it.
+   */
+  dropped?: { page: number; rows: number };
 };
 
 type SearchOver = {
@@ -42,23 +47,34 @@ type SearchOver = {
 };
 
 /**
- * A search holding `realResults` at 50 a page, whatever its count says.
- * Records each page it was asked for.
+ * A search holding `realResults` at 50 a page, whatever its count says, and
+ * answering each page the way the page query does: its rows, and whether the
+ * search reported more after it. Records each page it was asked for.
  */
-const searchOver = ({ realResults, total }: SearchOverInput): SearchOver => {
+const searchOver = ({
+  dropped,
+  realResults,
+  total,
+}: SearchOverInput): SearchOver => {
   const reads: number[] = [];
   return {
     reads,
     landing: {
-      pageSize: PAGE_SIZE,
-      total,
-      rowsOn: async (page) => {
+      evidenceOn: async (page) => {
         reads.push(page);
-        return Math.max(
+        const ranked = Math.max(
           0,
           Math.min(PAGE_SIZE, realResults - (page - 1) * PAGE_SIZE),
         );
+        const rows = dropped?.page === page ? ranked - dropped.rows : ranked;
+        return caseLawPageEvidence({
+          decisions: Array.from({ length: Math.max(0, rows) }, () => null),
+          hasMore: realResults > page * PAGE_SIZE,
+          reach: SEARCH_PAGE_REACH.REACHED,
+        });
       },
+      pageSize: PAGE_SIZE,
+      total,
     },
   };
 };
@@ -119,6 +135,18 @@ describe("an empty numbered jump", () => {
     }
   });
 
+  test("a short page in the middle of the results is not taken for the last", async () => {
+    // Three pages of text results; the page-2 copies of two pinned decisions
+    // are dropped, so page 2 holds 48 rows while the search reports more.
+    const search = searchOver({
+      dropped: { page: 2, rows: 2 },
+      realResults: 150,
+      total: estimated(1000),
+    });
+
+    expect(await caseLawLandingPage({ ...search.landing, wanted: 8 })).toBe(3);
+  });
+
   test("a page with rows is kept after one read", async () => {
     const search = searchOver({ realResults: 120, total: estimated(1000) });
 
@@ -129,7 +157,7 @@ describe("an empty numbered jump", () => {
   test("an outage keeps the page the link named", async () => {
     const landed = await caseLawLandingPage({
       pageSize: PAGE_SIZE,
-      rowsOn: async () => null,
+      evidenceOn: async () => ({ type: "unknown" }),
       total: estimated(1000),
       wanted: 8,
     });
@@ -197,22 +225,33 @@ describe("what follows the page on screen", () => {
 });
 
 describe("a page as evidence of where the results end", () => {
-  test("its rows count, unless the search could not place it", () => {
+  test("only the page's own end signal decides, never its row count", () => {
+    // Short, yet the search reports more: not the last page.
     expect(
-      caseLawPageRows({ decisions: [], hasMore: false, reach: PLACED }),
-    ).toBe(0);
+      caseLawPageEvidence({ decisions: [null], hasMore: true, reach: PLACED }),
+    ).toEqual({ type: "rows", rest: "more" });
     expect(
-      caseLawPageRows({ decisions: [], hasMore: false, reach: STOPPED_SHORT }),
-    ).toBeNull();
+      caseLawPageEvidence({ decisions: [null], hasMore: false, reach: PLACED }),
+    ).toEqual({ type: "rows", rest: "end" });
+    expect(
+      caseLawPageEvidence({ decisions: [], hasMore: false, reach: PLACED }),
+    ).toEqual({ type: "empty" });
+    expect(
+      caseLawPageEvidence({
+        decisions: [],
+        hasMore: false,
+        reach: STOPPED_SHORT,
+      }),
+    ).toEqual({ type: "unknown" });
   });
 
   test("a jump to a page the search stopped short of placing is not walked back", async () => {
     const reads: number[] = [];
     const landed = await caseLawLandingPage({
       pageSize: PAGE_SIZE,
-      rowsOn: async (page) => {
+      evidenceOn: async (page) => {
         reads.push(page);
-        return caseLawPageRows({
+        return caseLawPageEvidence({
           decisions: [],
           hasMore: false,
           reach: STOPPED_SHORT,

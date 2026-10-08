@@ -5,6 +5,8 @@
  * on the page size.
  */
 
+import { panic } from "better-result";
+
 import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
 import {
   SEARCH_PAGE_REACH,
@@ -73,17 +75,28 @@ export const caseLawPageBeforeEnd = ({
   return Math.max(1, Math.min(lastWithRows, emptyPage - 1));
 };
 
+/**
+ * What reading one page proved about where the results end. Only the page's
+ * own end signal decides: its row count never does, because a page can be
+ * short without being the last (decisions a reference pins are dropped from
+ * every text page they would have appeared on).
+ */
+export type CaseLawPageEvidence =
+  /** The read failed, or the search could not place the page: no proof. */
+  | { type: "unknown" }
+  /** The page holds nothing: the results end before it. */
+  | { type: "empty" }
+  /** The page holds rows; `rest` says whether the search reported more. */
+  | { type: "rows"; rest: "more" | "end" };
+
 type CaseLawLandingPageInput = {
   /** The page a link or a pager button named. */
   wanted: number;
   pageSize: PublicLawPageSize;
   /** The result set's total, as its first page reported it. */
   total: SearchTotal;
-  /**
-   * How many rows a page holds, or null when the search could not be read:
-   * an outage proves nothing about which pages exist.
-   */
-  rowsOn: (page: number) => Promise<number | null>;
+  /** What reading a page proves; an outage proves nothing. */
+  evidenceOn: (page: number) => Promise<CaseLawPageEvidence>;
 };
 
 /**
@@ -94,23 +107,22 @@ type CaseLawLandingPageInput = {
  * understate the results and a listing may not be counted at all, so the
  * last page with rows is searched for between the deepest page known to hold
  * rows (the first, until a read says otherwise) and the shallowest page known
- * to be empty. A page holding fewer rows than a full page is the last one, so
- * the search stops there. Reads are sequential by nature, each deciding the
- * next, and number at most two plus the halvings between the first page and
- * the page named, which the depth bound caps. An outage proves nothing about
- * which pages exist, so it keeps the page the navigation named.
+ * to be empty. A page whose answer reports no more results is the last one,
+ * so the search stops there. Reads are sequential by nature, each deciding
+ * the next, and number at most two plus the halvings between the first page
+ * and the page named, which the depth bound caps. A read that proves nothing
+ * keeps the page the navigation named.
  */
 export const caseLawLandingPage = async ({
+  evidenceOn,
   pageSize,
-  rowsOn,
   total,
   wanted,
 }: CaseLawLandingPageInput): Promise<number> => {
   if (wanted <= 1) {
     return 1;
   }
-  const wantedRows = await rowsOn(wanted);
-  if (wantedRows === null || wantedRows > 0) {
+  if ((await evidenceOn(wanted)).type !== "empty") {
     return wanted;
   }
   /** Deepest page known to hold rows; the first stands in until one is read. */
@@ -125,16 +137,22 @@ export const caseLawLandingPage = async ({
   let probe =
     suggested > holding ? suggested : Math.floor((holding + empty) / 2);
   while (probe > holding && probe < empty) {
-    const rows = await rowsOn(probe);
-    if (rows === null) {
-      return wanted;
-    }
-    if (rows === 0) {
-      empty = probe;
-    } else if (rows < pageSize) {
-      return probe;
-    } else {
-      holding = probe;
+    const evidence = await evidenceOn(probe);
+    switch (evidence.type) {
+      case "unknown":
+        return wanted;
+      case "empty":
+        empty = probe;
+        break;
+      case "rows":
+        if (evidence.rest === "end") {
+          return probe;
+        }
+        holding = probe;
+        break;
+      default:
+        evidence satisfies never;
+        return panic("Unhandled page evidence");
     }
     probe = Math.floor((holding + empty) / 2);
   }
@@ -149,13 +167,21 @@ type CaseLawPageAnswer = {
 };
 
 /**
- * How many rows a page holds, as evidence of where the results end: null for
- * a page the search could not place, whose rows (however few) prove nothing.
+ * What a page's answer proves about where the results end: nothing for a
+ * page the search could not place, whose rows (however few) prove nothing;
+ * otherwise empty, or rows with the search's own word on whether more follow.
  */
-export const caseLawPageRows = (
+export const caseLawPageEvidence = (
   page: CaseLawPageAnswer & { decisions: readonly unknown[] },
-): number | null =>
-  page.reach === SEARCH_PAGE_REACH.SCAN_BUDGET ? null : page.decisions.length;
+): CaseLawPageEvidence => {
+  if (page.reach === SEARCH_PAGE_REACH.SCAN_BUDGET) {
+    return { type: "unknown" };
+  }
+  if (page.decisions.length === 0) {
+    return { type: "empty" };
+  }
+  return { type: "rows", rest: page.hasMore ? "more" : "end" };
+};
 
 type CaseLawPageRestInput = {
   /** The page query's data; it may still be another page's while one loads. */
