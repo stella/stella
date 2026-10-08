@@ -1,13 +1,13 @@
 import * as v from "valibot";
 
+import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { createCaseDecisionViewTab } from "../../src/components/inspector/case-decision-view";
 import {
   inspectorMinimizedStorageKey,
   inspectorStateStorageKey,
 } from "../../src/components/inspector/inspector-storage-keys";
-import type { GenericTab } from "../../src/components/inspector/inspector-store-types";
+import { decisionTitle } from "../../src/features/case-law/decision-title";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
@@ -85,7 +85,23 @@ const views = [
   {
     kind: "decision",
     value: decision,
-    tab: createCaseDecisionViewTab({ ...decision, decisionId: decision.id }),
+    // The inspector's tab factory module reaches the router types, which the
+    // e2e program cannot load; the restore assertions below catch a drift.
+    tab: {
+      type: "case-law-decision",
+      id: `case-law-decision:${decision.id}`,
+      label: decisionTitle(decision),
+      payload: {
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.id,
+        route: createCaseLawDecisionRouteParams({
+          ...decision,
+          decisionId: decision.id,
+        }),
+      },
+    },
     mainPath: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
     paths: [
       `/v1/case/decisions/${decision.id}`,
@@ -141,7 +157,7 @@ for (const view of views) {
       id: view.tab.id,
       label: view.tab.label,
       payload: view.tab.payload,
-    } satisfies GenericTab;
+    };
     await page.addInitScript(
       ({ restoredTab, stateKey, minimizedKey }) => {
         localStorage.setItem(
