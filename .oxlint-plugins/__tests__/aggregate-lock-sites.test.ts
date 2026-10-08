@@ -100,6 +100,8 @@ describe("aggregate lock confinement", () => {
       'const tail = "WHERE id = $1 FOR UPDATE"',
       'const tail = "where id = $1 for update"',
       'const tail = "ORDER BY id FOR NO KEY UPDATE"',
+      'const query = "select id from items for update"',
+      'const tail = "order by id for share"',
     ]) {
       expect(aggregateLockSites(file, source)).toHaveLength(1);
     }
