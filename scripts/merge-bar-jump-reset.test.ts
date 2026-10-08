@@ -141,6 +141,23 @@ describe("classifying merge queue cancellations", () => {
     ).toEqual({ type: "not-reset" });
   });
 
+  test.each(["timed_out", null])(
+    "a summary job that concluded %s still rules a reset out",
+    (conclusion) => {
+      expect(
+        classify({
+          evidence: {
+            ...evidence,
+            jobs: [
+              ...evidence.jobs,
+              { name: "ci-result", conclusion, completedAt: jump.at },
+            ],
+          },
+        }),
+      ).toEqual({ type: "not-reset" });
+    },
+  );
+
   test("a group without a cancelled job is not a reset", () => {
     expect(
       classify({

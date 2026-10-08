@@ -80,15 +80,14 @@ export const classifyJumpReset = ({
   }
   // Jobs that finished before the jump keep their success; a failed, timed
   // out or unfinished job is real evidence and rules a reset out. Without a
-  // failed step anywhere, a summary job's failure is the cancellation itself.
-  const jobs = evidence.jobs.filter(
-    (job) => job.conclusion !== "skipped" && !SUMMARY_JOBS.has(job.name ?? ""),
-  );
-  if (
-    jobs.some(
-      (job) => job.conclusion !== "cancelled" && job.conclusion !== "success",
-    )
-  ) {
+  // failed step anywhere, a summary job's failure is the cancellation itself;
+  // any other summary result (timed out, unfinished) still rules it out.
+  const allowed = (job: CancelledJob) =>
+    job.conclusion === "skipped" ||
+    job.conclusion === "cancelled" ||
+    job.conclusion === "success" ||
+    (SUMMARY_JOBS.has(job.name ?? "") && job.conclusion === "failure");
+  if (!evidence.jobs.every(allowed)) {
     return { type: "not-reset" };
   }
   // A cancelled summary job is still a cancellation (a force-cancel stops
