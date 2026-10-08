@@ -753,6 +753,19 @@ const importedReference = ({
     });
     const specifier = statement.moduleSpecifier.text;
     const clause = statement.importClause;
+    if (clause?.isTypeOnly === true) {
+      // Type-only imports have no runtime value; a same-named binding is
+      // never trusted.
+      if (
+        clause.name?.text === name ||
+        (clause.namedBindings !== undefined &&
+          ts.isNamedImports(clause.namedBindings) &&
+          clause.namedBindings.elements.some((item) => item.name.text === name))
+      ) {
+        return undefined;
+      }
+      continue;
+    }
     if (clause?.name?.text === name) {
       return { module, specifier, exported: "default" };
     }
@@ -765,6 +778,9 @@ const importedReference = ({
     const binding = clause.namedBindings.elements.find(
       (item) => item.name.text === name,
     );
+    if (binding?.isTypeOnly === true) {
+      return undefined;
+    }
     if (binding !== undefined) {
       return {
         module,
@@ -1669,11 +1685,66 @@ type CalleeImplementationOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
 };
+const hasModifier = (statement: ts.Statement, kind: ts.SyntaxKind) =>
+  ts.canHaveModifiers(statement) &&
+  (ts.getModifiers(statement) ?? []).some((modifier) => modifier.kind === kind);
+
+/**
+ * Whether `source` exports `name` only through an `export` modifier on its
+ * own top-level function declaration or `const`. Default exports,
+ * `export =`, export specifiers (`export { … }`, `export … from`, in either
+ * position) and namespace re-exports of that name all fail closed, so
+ * aliases and barrels never earn credit.
+ */
+const isDirectNamedExport = (source: ts.SourceFile, name: string) => {
+  if (name === "default") {
+    return false;
+  }
+  let declared = false;
+  for (const statement of source.statements) {
+    if (ts.isExportAssignment(statement) && statement.isExportEquals === true) {
+      return false;
+    }
+    if (ts.isExportDeclaration(statement)) {
+      const clause = statement.exportClause;
+      if (
+        clause !== undefined &&
+        (ts.isNamespaceExport(clause)
+          ? clause.name.text === name
+          : clause.elements.some(
+              (element) =>
+                element.name.text === name ||
+                element.propertyName?.text === name,
+            ))
+      ) {
+        return false;
+      }
+    }
+    const declares =
+      (ts.isFunctionDeclaration(statement) && statement.name?.text === name) ||
+      (ts.isVariableStatement(statement) &&
+        statement.declarationList.declarations.some(
+          (item) => ts.isIdentifier(item.name) && item.name.text === name,
+        ));
+    if (declares) {
+      if (
+        declared ||
+        !hasModifier(statement, ts.SyntaxKind.ExportKeyword) ||
+        hasModifier(statement, ts.SyntaxKind.DefaultKeyword)
+      ) {
+        return false;
+      }
+      declared = true;
+    }
+  }
+  return declared;
+};
+
 /**
  * Resolves a direct call to a function defined in the caller's file or in a
  * module of the same package. Both the call's binding and the definition
  * must be trusted (`trustedBinding`): a function declaration or a `const`
- * function literal, never written. Aliases, re-exports and further calls
+ * function literal, never written. Default, aliased and re-exported definitions (`isDirectNamedExport`) and further calls
  * are not followed, so lock helpers count only one level below the handler.
  */
 const calleeImplementation = ({
@@ -1704,16 +1775,11 @@ const calleeImplementation = ({
     return undefined;
   }
   const target = parse({ file: binding.module, source: content });
-  let exported = binding.exported;
-  if (exported === "default") {
-    const assignment = target.statements.find(ts.isExportAssignment);
-    if (assignment === undefined || !ts.isIdentifier(assignment.expression)) {
-      return undefined;
-    }
-    exported = assignment.expression.text;
+  if (!isDirectNamedExport(target, binding.exported)) {
+    return undefined;
   }
   const definition = trustedTopLevel({
-    name: exported,
+    name: binding.exported,
     source: target,
     access,
   });

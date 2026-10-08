@@ -742,6 +742,73 @@ describe("aggregate mutation route coverage", () => {
       }
     });
 
+    test("only directly exported named definitions are followed", () => {
+      const sources = setup();
+      const body = "await safeDb(async (tx) => { await lockExample(tx); });";
+      const locking = `async (tx) => { ${acquisition} }`;
+      const named =
+        'import { lockExample } from "@/api/services/example-lock";';
+      sources.set(
+        service,
+        `${lockImport} export const lockExample = ${locking};`,
+      );
+      sources.set(module, handlerModule({ imports: named, body }));
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+      for (const [definition, imports] of [
+        [
+          `const lockExample = ${locking}; const noop = async () => {}; export { noop as lockExample };`,
+          named,
+        ],
+        [
+          `export const lockExample = ${locking}; export { lockExample as other };`,
+          named,
+        ],
+        [
+          `const lockExample = ${locking}; export default lockExample;`,
+          'import lockExample from "@/api/services/example-lock";',
+        ],
+        [
+          `export default async function lockExample(tx) { ${acquisition} }`,
+          'import lockExample from "@/api/services/example-lock";',
+        ],
+        [`const lockExample = ${locking}; export = lockExample;`, named],
+        [
+          `export const lockExample = ${locking};`,
+          'import type { lockExample } from "@/api/services/example-lock";',
+        ],
+        [
+          `export const lockExample = ${locking};`,
+          'import { type lockExample } from "@/api/services/example-lock";',
+        ],
+        [
+          `export const lockExample = ${locking};`,
+          'import * as lockExample from "@/api/services/example-lock";',
+        ],
+      ]) {
+        sources.set(service, `${lockImport} ${definition}`);
+        sources.set(module, handlerModule({ imports, body }));
+        expect(() => enumerate(sources)).toThrow(
+          "must await withAggregateLock",
+        );
+      }
+      sources.set(
+        service,
+        `${lockImport} export const lockExample = ${locking};`,
+      );
+      sources.set(
+        "apps/api/src/services/barrel.ts",
+        'export { lockExample } from "./example-lock";',
+      );
+      sources.set(
+        module,
+        handlerModule({
+          imports: 'import { lockExample } from "@/api/services/barrel";',
+          body,
+        }),
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    });
+
     test("the helper two levels deep does not cover the route", () => {
       const sources = setup();
       sources.set(
