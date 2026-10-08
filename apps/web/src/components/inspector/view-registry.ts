@@ -111,6 +111,15 @@ export type InspectorViewRegistration<P = unknown> = {
    * for view kinds whose tabs are never broadcast.
    */
   validate: (payload: unknown) => payload is P;
+  beforeLeave?:
+    | ((args: {
+        tabId: string;
+        payload: P;
+        nextPayload: unknown | null;
+        proceed: () => void;
+      }) => void)
+    | undefined;
+  onClose?: ((tabId: string) => void) | undefined;
   canRename?: boolean | undefined;
   ariaLabel?: ((tab: InspectorViewTab<P>) => string) | undefined;
   /**
@@ -223,6 +232,18 @@ export const registerInspectorView = <P>(
           registration.validate(tab.payload)
             ? (registration.ariaLabel?.({ ...tab, payload: tab.payload }) ?? "")
             : ""
+      : undefined,
+    beforeLeave: registration.beforeLeave
+      ? ({ tabId, payload, nextPayload, proceed }) => {
+          if (registration.validate(payload)) {
+            registration.beforeLeave?.({
+              tabId,
+              payload,
+              nextPayload,
+              proceed,
+            });
+          }
+        }
       : undefined,
     validate: (payload): payload is unknown => registration.validate(payload),
   };

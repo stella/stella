@@ -26,10 +26,11 @@ export type ParkedPlaybookPane = {
   openIds: ReadonlySet<string>;
   revealedIds: ReadonlySet<string>;
   scrollTop: number;
+  requiresLeaveConfirmation: boolean;
 };
 
 const useParkedPlaybookPanes = create<
-  Readonly<Record<string, ParkedPlaybookPane>>
+  Readonly<Record<string, Readonly<Record<string, ParkedPlaybookPane>>>>
 >(() => ({}));
 
 type ParkPlaybookPaneArgs = {
@@ -49,7 +50,7 @@ export const parkPlaybookPane = ({
       ...Object.fromEntries(
         Object.entries(current).filter(([id]) => isTabOpen(id)),
       ),
-      [tabId]: state,
+      [tabId]: { ...current[tabId], [state.playbookId]: state },
     }),
     true,
   );
@@ -60,8 +61,7 @@ export const readParkedPlaybookPane = (
   tabId: string,
   playbookId: string,
 ): ParkedPlaybookPane | null => {
-  const entry = useParkedPlaybookPanes.getState()[tabId];
-  return entry?.playbookId === playbookId ? entry : null;
+  return useParkedPlaybookPanes.getState()[tabId]?.[playbookId] ?? null;
 };
 
 export const discardParkedPlaybookPane = (tabId: string) => {
@@ -72,4 +72,76 @@ export const discardParkedPlaybookPane = (tabId: string) => {
       ),
     true,
   );
+};
+
+type PaneLeaveGuardArgs = {
+  tabId: string;
+  playbookId: string;
+  shouldConfirm: () => boolean;
+};
+
+const leaveGuards = new Map<string, Map<string, () => boolean>>();
+
+export const registerPlaybookPaneLeaveGuard = ({
+  tabId,
+  playbookId,
+  shouldConfirm,
+}: PaneLeaveGuardArgs) => {
+  const guards = leaveGuards.get(tabId) ?? new Map<string, () => boolean>();
+  guards.set(playbookId, shouldConfirm);
+  leaveGuards.set(tabId, guards);
+  return () => {
+    if (guards.get(playbookId) === shouldConfirm) {
+      guards.delete(playbookId);
+    }
+    if (guards.size === 0 && leaveGuards.get(tabId) === guards) {
+      leaveGuards.delete(tabId);
+    }
+  };
+};
+
+type PaneLeaveRequest = {
+  tabId: string;
+  playbookId: string;
+  proceed: () => void;
+};
+
+type PaneLeaveState =
+  | { type: "idle" }
+  | ({ type: "confirm" } & PaneLeaveRequest);
+
+export const usePlaybookPaneLeave = create<PaneLeaveState>(() => ({
+  type: "idle",
+}));
+
+export const requestPlaybookPaneLeave = ({
+  tabId,
+  playbookId,
+  proceed,
+}: PaneLeaveRequest) => {
+  const liveGuard = leaveGuards.get(tabId)?.get(playbookId);
+  const shouldConfirm = liveGuard
+    ? liveGuard()
+    : (readParkedPlaybookPane(tabId, playbookId)?.requiresLeaveConfirmation ??
+      false);
+  if (!shouldConfirm) {
+    proceed();
+    return;
+  }
+  usePlaybookPaneLeave.setState(
+    { type: "confirm", tabId, playbookId, proceed },
+    true,
+  );
+};
+
+export const cancelPlaybookPaneLeave = () => {
+  usePlaybookPaneLeave.setState({ type: "idle" }, true);
+};
+
+export const confirmPlaybookPaneLeave = () => {
+  const request = usePlaybookPaneLeave.getState();
+  cancelPlaybookPaneLeave();
+  if (request.type === "confirm") {
+    request.proceed();
+  }
 };

@@ -1915,7 +1915,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-const orgSettings = await loadOrgSettings(context);
+    const orgSettings = await loadOrgSettings(context);
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
@@ -2029,7 +2029,7 @@ const orgSettings = await loadOrgSettings(context);
     return toolDataResult(payload);
   }
 
-const orgSettings = await loadOrgSettings(context);
+  const orgSettings = await loadOrgSettings(context);
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       admitModelAction: playbookDerivationAdmitter(context),

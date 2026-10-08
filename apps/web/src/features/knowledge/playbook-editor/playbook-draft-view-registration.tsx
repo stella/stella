@@ -12,6 +12,10 @@ import {
   isPlaybookDraftViewPayload,
   PLAYBOOK_DRAFT_VIEW,
 } from "@/lib/knowledge/playbook-draft-view";
+import {
+  discardParkedPlaybookPane,
+  requestPlaybookPaneLeave,
+} from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { PlaybookDraftViewPayload } from "@/lib/knowledge/playbook-draft-view";
 
 // The kind registers with the app shell, so a tab restored after a reload
@@ -42,4 +46,19 @@ registerInspectorView<PlaybookDraftViewPayload>({
   railIcon: PlaybookDraftRailIcon,
   validate: isPlaybookDraftViewPayload,
   ariaLabel: (tab) => tab.label,
+  beforeLeave: ({ tabId, payload, nextPayload, proceed }) => {
+    if (
+      isPlaybookDraftViewPayload(nextPayload) &&
+      nextPayload.playbookId === payload.playbookId
+    ) {
+      proceed();
+      return;
+    }
+    requestPlaybookPaneLeave({
+      tabId,
+      playbookId: payload.playbookId,
+      proceed,
+    });
+  },
+  onClose: discardParkedPlaybookPane,
 });

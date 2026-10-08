@@ -38,15 +38,15 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
 import type { PlaybookSnapshot } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   canAutosave,
   draftToAdopt,
-  isNewerToken,
   resolvePaneSaveStatus,
   resolveServerFollow,
+  isNewerToken,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
 import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
@@ -73,10 +73,18 @@ import {
   discardParkedPlaybookPane,
   parkPlaybookPane,
   readParkedPlaybookPane,
+  registerPlaybookPaneLeaveGuard,
 } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
 import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
+import {
+  usePlaybookSaveQueue,
+} from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
+import type {
+  SaveOutcome,
+  SendSaveArgs,
+} from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -503,19 +511,6 @@ const AUTOSAVE_DELAY_MS = 2000;
 
 type SaveRequestState = "idle" | "in-flight" | "failed";
 
-type SaveOutcome =
-  | { type: "saved"; updatedAt: string | null }
-  | { type: "conflict"; error: ApiErrorInput }
-  | { type: "failed"; error: ApiErrorInput };
-
-/** `isLatest` is false when another save was queued behind this one. */
-type QueuedSave = { outcome: SaveOutcome; isLatest: boolean };
-
-type SendSaveArgs = {
-  savedDraft: PlaybookDraft;
-  expectedUpdatedAt: string | null;
-};
-
 /** What the form starts from: a parked pane state, or a server version. */
 type FormSeed = Omit<ParkedPlaybookPane, "playbookId">;
 
@@ -537,6 +532,7 @@ const seedFromServer = ({ server, isNew }: SeedFromServerArgs): FormSeed => {
     approvedAt: server.approvedAt,
     openIds: new Set(positions.slice(0, 1).map((p) => p.sourceId)),
     revealedIds: new Set(),
+    requiresLeaveConfirmation: false,
     scrollTop: 0,
   };
 };
@@ -632,7 +628,6 @@ const PlaybookEditorForm = ({
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveRequest, setSaveRequest] = useState<SaveRequestState>("idle");
-  const inFlightSaveRef = useRef<Promise<SaveOutcome> | null>(null);
   // A playbook being deleted takes no more autosaves.
   const deletingRef = useRef(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -782,6 +777,7 @@ const PlaybookEditorForm = ({
   };
 
   const updatePosition = (sourceId: string, next: Position) => {
+
     editedIdsRef.current.add(sourceId);
     setPositions((prev) =>
       prev.map((p) => (p.sourceId === sourceId ? next : p)),
@@ -800,6 +796,7 @@ const PlaybookEditorForm = ({
   };
 
   const removePosition = (sourceId: string) => {
+
     const index = positions.findIndex((p) => p.sourceId === sourceId);
     const removed = positions[index];
     setPositions((prev) => prev.filter((p) => p.sourceId !== sourceId));
@@ -813,18 +810,21 @@ const PlaybookEditorForm = ({
         timeout: POSITION_REMOVED_TOAST_TIMEOUT_MS,
         actionProps: {
           children: t("common.undo"),
-          onClick: () =>
+          onClick: () => {
+
             setPositions((prev) =>
               prev.some((p) => p.sourceId === sourceId)
                 ? prev
                 : prev.toSpliced(Math.min(index, prev.length), 0, removed),
-            ),
+            );
+          },
         },
       }),
     );
   };
 
   const addPosition = (mode: "graded" | "extract") => {
+
     const position =
       mode === "graded" ? newGradedPosition() : newExtractPosition();
     setPositions((prev) => [...prev, position]);
@@ -837,6 +837,7 @@ const PlaybookEditorForm = ({
     if (!original) {
       return;
     }
+
     const copy = duplicatePosition(original);
     setPositions((prev) => {
       const at = prev.findIndex((p) => p.sourceId === sourceId);
@@ -882,6 +883,7 @@ const PlaybookEditorForm = ({
   };
 
   const reorderPosition = (draggedSourceId: string, targetSourceId: string) => {
+
     setPositions((prev) => {
       const from = prev.findIndex((p) => p.sourceId === draggedSourceId);
       const to = prev.findIndex((p) => p.sourceId === targetSourceId);
@@ -897,6 +899,7 @@ const PlaybookEditorForm = ({
   };
 
   const movePosition = (sourceId: string, direction: "up" | "down") => {
+
     setPositions((prev) => {
       const index = prev.findIndex((p) => p.sourceId === sourceId);
       return moveAdjacent(prev, index, direction) ?? prev;
@@ -1102,10 +1105,7 @@ const PlaybookEditorForm = ({
     }
 
     setSaving(true);
-    const outcome = await sendSave({
-      savedDraft: draft,
-      expectedUpdatedAt: updatedAt,
-    });
+    const { outcome } = await queueSave(draft);
     setSaving(false);
     switch (outcome.type) {
       case "saved":
@@ -1128,34 +1128,16 @@ const PlaybookEditorForm = ({
     }
   };
 
-  /**
-   * Queues a save behind any save still in flight, so two never run at once.
-   * A queued save expects the token the one before it returned.
-   */
-  const queueSave = async (savedDraft: PlaybookDraft): Promise<QueuedSave> => {
-    const previous = inFlightSaveRef.current;
-    const tokenAtCall = updatedAt;
-    const request = (async () => {
-      const before = previous === null ? null : await previous;
-      const expectedUpdatedAt =
-        before?.type === "saved" && before.updatedAt !== null
-          ? before.updatedAt
-          : tokenAtCall;
-      return sendSave({ savedDraft, expectedUpdatedAt });
-    })();
-    inFlightSaveRef.current = request;
-    const outcome = await request;
-    const isLatest = inFlightSaveRef.current === request;
-    if (isLatest) {
-      inFlightSaveRef.current = null;
-    }
-    return { outcome, isLatest };
-  };
+  const {
+    queueSave,
+    flushOnLeave: queueFinalDraft,
+    hasPendingSave,
+  } = usePlaybookSaveQueue({ updatedAt, sendSave });
 
   const isAutosaveDue = () =>
     !deletingRef.current &&
     autosaves &&
-    isDirty &&
+    (isDirty || hasPendingSave()) &&
     !nameMissing &&
     invalidIds.length === 0;
 
@@ -1209,11 +1191,43 @@ const PlaybookEditorForm = ({
    * The status line is gone by then, so a failure is a toast.
    */
   const flushOnLeave = async () => {
-    const { outcome } = await queueSave(draft);
+    const request = queueFinalDraft({
+      draft,
+      isDirty,
+      canSaveDraft:
+        !deletingRef.current &&
+        autosaves &&
+        !nameMissing &&
+        invalidIds.length === 0,
+    });
+    if (request === null) {
+      return;
+    }
+    const { outcome } = await request;
     if (outcome.type !== "saved") {
       notifySaveFailed(outcome.error);
     }
   };
+
+  const requiresLeaveConfirmation = useLatestCallback(
+    () =>
+      isDirty &&
+      (!autosaves ||
+        nameMissing ||
+        invalidIds.length > 0 ||
+        saveRequest === "failed"),
+  );
+
+  useMountEffect(() => {
+    if (host.type !== "pane" || playbookId === null) {
+      return;
+    }
+    return registerPlaybookPaneLeaveGuard({
+      tabId: host.tabId,
+      playbookId,
+      shouldConfirm: requiresLeaveConfirmation,
+    });
+  });
 
   // The pane unmounts whenever another inspector tab is opened or the pane
   // is minimized. It saves what it can, and parks the rest unless the tab
@@ -1227,9 +1241,7 @@ const PlaybookEditorForm = ({
     for (const toastId of undoToastIdsRef.current) {
       stellaToast.close(toastId);
     }
-    if (isAutosaveDue()) {
-      detached(flushOnLeave(), "playbook-editor.flush-on-leave");
-    }
+    detached(flushOnLeave(), "playbook-editor.flush-on-leave");
     if (!host.isTabOpen(host.tabId)) {
       discardParkedPlaybookPane(host.tabId);
       return;
@@ -1246,6 +1258,7 @@ const PlaybookEditorForm = ({
         approvedAt,
         openIds,
         revealedIds,
+        requiresLeaveConfirmation: requiresLeaveConfirmation(),
         scrollTop: scrollTopRef.current,
       },
     });
@@ -1461,7 +1474,10 @@ const PlaybookEditorForm = ({
               <Input
                 aria-invalid={attemptedSave && name.trim() === ""}
                 id={nameId}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+
+                }}
                 ref={nameInputRef}
                 placeholder={t("knowledge.playbooks.namePlaceholder")}
                 value={name}
@@ -1473,7 +1489,10 @@ const PlaybookEditorForm = ({
               <Textarea
                 className="min-h-[60px]"
                 id={descriptionId}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+
+                }}
                 placeholder={t("knowledge.playbooks.descriptionPlaceholder")}
                 value={description}
               />
@@ -1484,11 +1503,12 @@ const PlaybookEditorForm = ({
               <div className="grid gap-1.5">
                 <Label htmlFor={documentTypeId}>{t("common.type")}</Label>
                 <Select
-                  onValueChange={(next) =>
+                  onValueChange={(next) => {
+
                     setDocumentTypeKey(
                       next === null || next === SCOPE_ALL_VALUE ? null : next,
-                    )
-                  }
+                    );
+                  }}
                   value={documentTypeKey ?? SCOPE_ALL_VALUE}
                 >
                   <SelectTrigger id={documentTypeId}>

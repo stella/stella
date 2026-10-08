@@ -1,0 +1,224 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, expect, test } from "bun:test";
+
+import type { PlaybookDraft } from "./playbook-editor.logic";
+import type { SaveOutcome, SendSaveArgs } from "./use-playbook-save-queue";
+
+GlobalRegistrator.register({ url: "http://localhost:3000" });
+const { useState } = await import("react");
+const { cleanup, fireEvent, render, act } =
+  await import("@testing-library/react");
+const { useMountEffect } = await import("@/hooks/use-effect");
+const { useLatestCallback } = await import("@/hooks/use-latest-callback");
+const { usePlaybookSaveQueue, usePlaybookDetailSaveSubscription } =
+  await import("./use-playbook-save-queue");
+const { QueryClient } = await import("@tanstack/react-query");
+
+const initialDraft = {
+  name: "Original",
+  description: "",
+  documentTypeKey: null,
+  perspective: null,
+  trigger: null,
+  positions: [],
+} satisfies PlaybookDraft;
+
+type EditorHarnessProps = {
+  sendSave: (args: SendSaveArgs) => Promise<SaveOutcome>;
+  outcomes: SaveOutcome[];
+  requests: Promise<unknown>[];
+};
+
+const EditorHarness = ({
+  sendSave,
+  outcomes,
+  requests,
+}: EditorHarnessProps) => {
+  const [draft, setDraft] = useState(initialDraft);
+  const [result, setResult] = useState("idle");
+  const { queueSave, flushOnLeave } = usePlaybookSaveQueue({
+    updatedAt: "2026-10-08T08:00:00.000Z",
+    sendSave,
+  });
+  const save = () => {
+    requests.push(
+      queueSave(draft).then(({ outcome }) => {
+        outcomes.push(outcome);
+        setResult(outcome.type);
+      }),
+    );
+  };
+  const leave = useLatestCallback(() => {
+    const request = flushOnLeave({
+      draft,
+      isDirty: draft.name !== initialDraft.name,
+      canSaveDraft: true,
+    });
+    if (request !== null) {
+      requests.push(request.then(({ outcome }) => outcomes.push(outcome)));
+    }
+  });
+  useMountEffect(() => () => leave());
+  return (
+    <>
+      <input
+        aria-label="Name"
+        value={draft.name}
+        onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+      />
+      <button onClick={save}>Save</button>
+      <button onClick={save}>Retry</button>
+      <output>{result}</output>
+    </>
+  );
+};
+
+const deferred = () => {
+  let complete: (outcome: SaveOutcome) => void = () => {
+    throw new Error("Deferred response has not been initialized");
+  };
+  const promise = new Promise<SaveOutcome>((resolve) => {
+    complete = resolve;
+  });
+  return { promise, complete };
+};
+
+const saved = {
+  type: "saved",
+  updatedAt: "2026-10-08T08:01:00.000Z",
+} as const satisfies SaveOutcome;
+
+afterEach(cleanup);
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
+
+test("reverting and closing during a save persists the final draft after the response", async () => {
+  const first = deferred();
+  const sent: SendSaveArgs[] = [];
+  const outcomes: SaveOutcome[] = [];
+  const requests: Promise<unknown>[] = [];
+  const view = render(
+    <EditorHarness
+      outcomes={outcomes}
+      requests={requests}
+      sendSave={(args) => {
+        sent.push(args);
+        return sent.length === 1 ? first.promise : Promise.resolve(saved);
+      }}
+    />,
+  );
+  fireEvent.change(view.getByLabelText("Name"), {
+    target: { value: "Edited" },
+  });
+  fireEvent.click(view.getByText("Save"));
+  expect(sent.at(0)?.savedDraft.name).toBe("Edited");
+  fireEvent.change(view.getByLabelText("Name"), {
+    target: { value: "Original" },
+  });
+  view.unmount();
+  expect(sent).toHaveLength(1);
+  await act(async () => {
+    first.complete(saved);
+    await Promise.all(requests);
+  });
+  expect(sent).toHaveLength(2);
+  expect(sent.at(1)).toMatchObject({
+    savedDraft: { name: "Original" },
+    expectedUpdatedAt: saved.updatedAt,
+  });
+  expect(outcomes.map((outcome) => outcome.type)).toEqual(["saved", "saved"]);
+});
+
+test("Retry saves after a rejected request and leaves no failed request in the queue", async () => {
+  const sent: SendSaveArgs[] = [];
+  const outcomes: SaveOutcome[] = [];
+  const requests: Promise<unknown>[] = [];
+  const view = render(
+    <EditorHarness
+      outcomes={outcomes}
+      requests={requests}
+      sendSave={(args) => {
+        sent.push(args);
+        return sent.length === 1
+          ? Promise.reject(new Error("Connection lost"))
+          : Promise.resolve(saved);
+      }}
+    />,
+  );
+  fireEvent.click(view.getByText("Save"));
+  await act(async () => {
+    await Promise.all(requests);
+  });
+  expect(view.getByText("failed")).toBeDefined();
+  fireEvent.click(view.getByText("Retry"));
+  await act(async () => {
+    await Promise.all(requests);
+  });
+  expect(sent).toHaveLength(2);
+  expect(view.getByText("saved")).toBeDefined();
+  view.unmount();
+  expect(requests).toHaveLength(2);
+  expect(outcomes.map((outcome) => outcome.type)).toEqual(["failed", "saved"]);
+});
+
+test("closing a dirty form flushes it without waiting for a debounce", async () => {
+  const sent: SendSaveArgs[] = [];
+  const outcomes: SaveOutcome[] = [];
+  const requests: Promise<unknown>[] = [];
+  const view = render(
+    <EditorHarness
+      outcomes={outcomes}
+      requests={requests}
+      sendSave={(args) => {
+        sent.push(args);
+        return Promise.resolve(saved);
+      }}
+    />,
+  );
+  fireEvent.change(view.getByLabelText("Name"), {
+    target: { value: "Final draft" },
+  });
+  view.unmount();
+  await act(async () => {
+    await Promise.all(requests);
+  });
+  expect(sent.at(0)?.savedDraft.name).toBe("Final draft");
+  expect(outcomes.map((outcome) => outcome.type)).toEqual(["saved"]);
+});
+
+test("a model save schedules work through the latest handler for the exact detail and stops on unmount", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { gcTime: Infinity } },
+  });
+  const detailKey = ["playbook", "same"] as const;
+  client.setQueryData(detailKey, { status: "approved" });
+  const scheduled: string[] = [];
+  const DetailSubscriber = ({ phase }: { phase: string }) => {
+    usePlaybookDetailSaveSubscription({
+      queryClient: client,
+      queryKey: detailKey,
+      onSaved: () => scheduled.push(phase),
+    });
+    return null;
+  };
+  const view = render(<DetailSubscriber phase="idle" />);
+  view.rerender(<DetailSubscriber phase="model-save" />);
+  await act(async () => {
+    client.setQueryData(["playbook", "other"], { status: "draft" });
+    await client.invalidateQueries({
+      queryKey: detailKey,
+      exact: true,
+      refetchType: "none",
+    });
+  });
+  expect(scheduled).toEqual([]);
+  await act(async () => {
+    client.setQueryData(detailKey, { status: "draft" });
+  });
+  expect(scheduled).toEqual(["model-save"]);
+  view.unmount();
+  client.setQueryData(detailKey, { status: "draft", revision: 2 });
+  expect(scheduled).toEqual(["model-save"]);
+  client.clear();
+});
