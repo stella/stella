@@ -476,10 +476,18 @@ async fn recover_rotation(
           }
           Err(RenewalFailure::Unavailable(message)) => Err(message),
           Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
-          Err(RenewalFailure::Rejected) => {
-            store.clear().await?;
-            Err(crate::registry::not_connected())
-          }
+          // A timed-out rotation can commit between the two probes; adopt a
+          // live successor so disconnect revokes it instead of orphaning it.
+          Err(RenewalFailure::Rejected) => match transport.send(&candidate, None).await
+          {
+            Ok(reply) => commit_rotation(store, account, pending, reply).await,
+            Err(RenewalFailure::Unavailable(message)) => Err(message),
+            Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
+            Err(RenewalFailure::Rejected) => {
+              store.clear().await?;
+              Err(crate::registry::not_connected())
+            }
+          },
         };
       }
       match transport.send(&account, Some(&pending.successor_key)).await {
@@ -2020,6 +2028,55 @@ mod tests {
       store.load().await.unwrap().unwrap().credential.key,
       original.credential.key
     );
+    assert!(store.pending().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn disconnect_adopts_a_successor_committed_between_the_probes() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+      Ok(renewal_reply(&original)),
+    ]);
+    let recovered =
+      recover_rotation(&mut store, original, &transport, RecoveryMode::Disconnect)
+        .await
+        .unwrap();
+    assert_eq!(
+      transport.requests(),
+      vec![
+        ("stella_dr_successor".into(), None),
+        ("stella_dr_original".into(), None),
+        ("stella_dr_successor".into(), None),
+      ]
+    );
+    assert_eq!(recovered.credential.key, "stella_dr_successor");
+    assert_eq!(
+      store.load().await.unwrap().unwrap().credential.key,
+      "stella_dr_successor"
+    );
+    assert!(store.pending().await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn disconnect_clears_only_after_both_generations_are_rejected() {
+    let original = fixture("stella_dr_original", 60);
+    let mut store = rotation_fixture(original.clone());
+    let transport = QueuedRenewal::new(vec![
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+      Err(RenewalFailure::Rejected),
+    ]);
+    assert_eq!(
+      recover_rotation(&mut store, original, &transport, RecoveryMode::Disconnect)
+        .await
+        .err(),
+      Some(crate::registry::not_connected())
+    );
+    assert_eq!(transport.requests().len(), 3);
+    assert!(store.load().await.unwrap().is_none());
     assert!(store.pending().await.unwrap().is_none());
   }
 
