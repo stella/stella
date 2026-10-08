@@ -37,6 +37,7 @@ export const readDecisionBlocksArgs = nullAsAbsent(
     cursor: cursorInput({
       description:
         "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages.",
+      maxLength: LIMITS.decisionReaderCursorMaxChars,
     }),
   }),
 );

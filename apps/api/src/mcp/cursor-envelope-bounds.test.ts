@@ -97,6 +97,20 @@ const timestampCursor = createTimestampIdCursorCodec({
 const idCursor = encodePaginationCursor([UUID]);
 const offsetCursor = encodePaginationCursor([Number.MAX_SAFE_INTEGER]);
 
+const readerCursor = encodeReaderCursor({
+  decisionId: UUID,
+  version: readerVersion([]),
+  phase: "provisions",
+  offset: Number.MAX_SAFE_INTEGER,
+  blockOffset: Number.MAX_SAFE_INTEGER,
+  referenceCursor: encodePaginationCursor([
+    "9223372036854775807",
+    2_147_483_647,
+    "a".repeat(LIMITS.decisionReaderProvisionAnchorMaxChars),
+  ]),
+  batchDigest: readerVersion([]),
+});
+
 // These use the same encoders as the handlers: tuple shapes come from the
 // owning cursorForItem call, while nested envelopes pass through their codec.
 // A registry addition has no fixture by default and fails the census below.
@@ -122,20 +136,7 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   ),
   "default.read_content_across_matters.nextCursor": offsetCursor,
   "default.read_case_law_citations.nextCursor": idCursor,
-  "default.read_case_law_decision_blocks.content.nextCursor":
-    encodeReaderCursor({
-      decisionId: UUID,
-      version: readerVersion([]),
-      phase: "provisions",
-      offset: Number.MAX_SAFE_INTEGER,
-      blockOffset: Number.MAX_SAFE_INTEGER,
-      referenceCursor: encodePaginationCursor([
-        "9223372036854775807",
-        2_147_483_647,
-        "a".repeat(LIMITS.decisionReaderProvisionAnchorMaxChars),
-      ]),
-      batchDigest: readerVersion([]),
-    }),
+  "default.read_case_law_decision_blocks.content.nextCursor": readerCursor,
   "default.search_legislation.nextCursor": statuteCursor,
   "default.read_statute.nextCursor": offsetCursor,
   "default.read_provision_history.nextCursor": encodePaginationCursor([
