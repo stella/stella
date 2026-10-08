@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Nincs mentve",
-      "failedTitle": "A módosítás mentése sikertelen volt",
-      "saved": "Mentve",
-      "saving": "Mentés…"
+      "failedTitle": "A módosítás mentése sikertelen volt"
     },
     "sourceMediumTooltip": "A forrás adathordozója — semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
     "states": {
@@ -1881,6 +1879,8 @@
     "saveAndLeave": "Mentés és kilépés",
     "saveAsPdf": "Mentés PDF-ként",
     "saveChanges": "Változtatások mentése",
+    "saved": "Mentve",
+    "saving": "Mentés…",
     "scopeThisPage": "(ez az oldal)",
     "scrollToBottom": "Görgetés az aljára",
     "scrollToTop": "Görgetés a tetejére",
@@ -3574,6 +3574,11 @@
       "askContentLabel": "Válasz típusa",
       "askQuestionLabel": "A kérdés szövege",
       "askQuestionPlaceholder": "Mit olvassunk ki minden dokumentumból? Hagyja üresen a kézi bevitelhez.",
+      "autosave": {
+        "failed": "A mentés nem sikerült",
+        "nameMissing": "Nincs mentve: adjon meg egy nevet",
+        "positionsNeedAttention": "Nincs mentve: {count, plural, one {# álláspont} other {# álláspont}} figyelmet igényel"
+      },
       "check": "Pontos szabály használata AI helyett",
       "checkHint": "Mérhető feltételekhez, például: fizetési határidő ≤ 30 nap.",
       "checkKind": {
@@ -3603,6 +3608,7 @@
       "deletePlaybook": "Playbook törlése",
       "deletePosition": "Álláspont törlése",
       "deleted": "Playbook törölve",
+      "deletedElsewhere": "Ezt a playbookot törölték.",
       "derivedAutomatically": "A kinyerési kérdés és a válaszformátum ebből a pozícióból készül. Nincs szükség beállításra.",
       "derivedQuestion": "Kinyerési kérdés",
       "derivedType": "Válaszformátum",
@@ -3655,10 +3661,12 @@
       },
       "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
       "noSettledPosition": "Nincs kialakult álláspont",
+      "openInPane": "Playbook megnyitása",
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
       "positionOfTotal": "{index}. álláspont, összesen {total}",
+      "positionRemoved": "Álláspont eltávolítva",
       "positions": "Álláspontok",
       "recent": "Nemrég használt",
       "recommended": "Ajánlott kiindulópontok",
