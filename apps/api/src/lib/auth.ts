@@ -80,6 +80,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { createAuthRefusalLogPlugin } from "@/api/lib/auth/auth-refusal-log";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -2001,6 +2002,10 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         },
       ),
       oauthUiFragmentBridgePlugin,
+      // Last, so it records the answer every other hook has settled on.
+      createAuthRefusalLogPlugin((attributes) =>
+        logger.warn("auth.request_refused", attributes),
+      ),
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
