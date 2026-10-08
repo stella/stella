@@ -632,11 +632,9 @@ impl ActivityManager {
     }
     // Day boundaries are pinned when opening; a changed zone cannot move an
     // already flushed prefix into another file.
-    let mut segment_start = if resumed_input.is_some() {
-      last_input
-    } else {
-      now
-    };
+    // Foreground attribution starts at this observation; input may precede
+    // it in another day or zone and cannot establish earlier app ownership.
+    let mut segment_start = now;
     if let Some(open) = self.open.as_ref()
       && open.partition != partition
     {
@@ -678,7 +676,8 @@ impl ActivityManager {
           },
           last_seen: now,
           last_input,
-          idle_since: (last_input < segment_start).then_some(last_input),
+          idle_since: (resumed_input.is_none() && last_input < segment_start)
+            .then_some(last_input),
           partition,
         });
       }
@@ -1743,6 +1742,73 @@ mod tests {
     assert_eq!(
       recorded[0].end,
       at(15) - chrono::Duration::milliseconds(200)
+    );
+  }
+
+  #[test]
+  fn resumed_input_before_midnight_is_attributed_from_the_next_foreground_sample() {
+    let zone = FixedOffset::east_opt(0).unwrap();
+    let start = Utc.with_ymd_and_hms(2026, 3, 10, 23, 59, 45).unwrap();
+    let root = std::env::temp_dir()
+      .join(format!("stella-midnight-resume-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let mut manager = recording_manager();
+    manager.persistence = ActivityPersistence::Encrypted(store.clone());
+    let clock = Instant::now();
+    for (second, idle) in [(0, 0), (5, 0), (10, 5), (15, 1), (20, 0)] {
+      let now = start + chrono::Duration::seconds(second);
+      manager.observe_at(
+        now,
+        clock + Duration::from_secs(second as u64),
+        Duration::from_secs(idle),
+        active("word"),
+        partition_in(&zone, now),
+      );
+      manager.flush(now).unwrap();
+    }
+    manager.stop(start + chrono::Duration::seconds(20)).unwrap();
+    let mut recorded = Vec::new();
+    for date in store.day_dates().unwrap() {
+      for segment in store.load_day(date).unwrap() {
+        assert_eq!(segment.start.with_timezone(&zone).date_naive(), date);
+        assert_eq!(
+          (segment.end - chrono::Duration::nanoseconds(1))
+            .with_timezone(&zone)
+            .date_naive(),
+          date
+        );
+        recorded.push(segment);
+      }
+    }
+    recorded.sort_by_key(|segment| segment.start);
+    assert_eq!(recorded.len(), 2);
+    assert_eq!(recorded[0].start, start);
+    assert_eq!(recorded[0].end, start + chrono::Duration::seconds(5));
+    assert_eq!(recorded[1].start, start + chrono::Duration::seconds(15));
+    assert_eq!(recorded[1].end, start + chrono::Duration::seconds(20));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn fractional_idle_at_the_initial_sample_keeps_advancing_input_activity() {
+    let mut manager = recording_manager();
+    let clock = Instant::now();
+    for second in [0, 5, 10] {
+      manager.observe_at(
+        at(second),
+        clock + Duration::from_secs(second as u64),
+        Duration::from_millis(200),
+        active("word"),
+        partition_in(&Local, at(second)),
+      );
+    }
+    manager.stop(at(10)).unwrap();
+    let recorded = manager.days.values().flatten().collect::<Vec<_>>();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].start, at(5));
+    assert_eq!(
+      recorded[0].end,
+      at(10) - chrono::Duration::milliseconds(200)
     );
   }
 
