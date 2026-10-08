@@ -18,6 +18,7 @@
 
 import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -27,10 +28,10 @@ import {
   writeOrCheckArtifacts,
 } from "../../../scripts/generated-artifacts";
 
-const DB_DIR = new URL("../src/db/", import.meta.url).pathname;
+const DB_DIR = fileURLToPath(new URL("../src/db/", import.meta.url));
 const SCHEMA_DIR = path.join(DB_DIR, "schema");
 const INDEX_DIR = path.join(DB_DIR, "schema-index");
-const API_SRC_DIR = new URL("../src/", import.meta.url).pathname;
+const API_SRC_DIR = fileURLToPath(new URL("../src/", import.meta.url));
 
 /** Schema modules outside `schema/` that `schema.ts` and auth export. */
 const EXTRA_SCHEMA_FILES = [
