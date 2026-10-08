@@ -4,7 +4,7 @@ import { READER_PROVISION_MODE_STORAGE_KEY } from "@/components/legal-reader/rea
 import {
   LAW_SEARCH_HISTORY_KEY,
   mergeLawRecent,
-} from "@/lib/law-search-history.logic";
+} from "@/lib/law-search-history/law-search-history.logic";
 
 export type StorageArea = "local" | "session";
 

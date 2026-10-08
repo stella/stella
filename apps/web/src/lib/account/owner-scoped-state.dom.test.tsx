@@ -118,7 +118,8 @@ type StorageFamily = (typeof USER_STORAGE_FAMILIES)[number];
 const familyEntry = (family: StorageFamily) => {
   const baseKey = `${family.prefix}document:anchor`;
   const area = browserStateStorage(family.area);
-  switch (family.owner) {
+  const { owner } = family;
+  switch (owner) {
     case "scoped":
       return {
         family,
@@ -129,7 +130,7 @@ const familyEntry = (family: StorageFamily) => {
     case "carried":
       return { family, baseKey, key: baseKey, storage: area };
     default:
-      family.owner satisfies never;
+      owner satisfies never;
       return panic("Unhandled registered storage ownership");
   }
 };

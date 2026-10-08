@@ -119,7 +119,8 @@ const ownerOfKey = (
   family: UserStorageFamily,
   key: string,
 ): StorageOwner | "unknown" => {
-  switch (family.owner) {
+  const { owner } = family;
+  switch (owner) {
     case "scoped": {
       if (key.endsWith(VISITOR_SUFFIX)) {
         return VISITOR;
@@ -132,8 +133,8 @@ const ownerOfKey = (
     case "carried":
       return "unknown";
     default: {
-      family.owner satisfies never;
-      return panic(`Unhandled owner reading: ${String(family.owner)}`);
+      owner satisfies never;
+      return panic(`Unhandled owner reading: ${String(owner)}`);
     }
   }
 };

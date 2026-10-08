@@ -18,7 +18,10 @@ import {
   userScopedStateStorage,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
-import { lawRecentKey, readLawRecent } from "@/lib/law-search-history.logic";
+import {
+  lawRecentKey,
+  readLawRecent,
+} from "@/lib/law-search-history/law-search-history.logic";
 
 /** A `Storage` held in memory, as a browser tab would hold it. */
 class MemoryStorage implements Storage {

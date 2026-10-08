@@ -16,7 +16,7 @@ import {
   normalizeRecent,
   readLawRecent,
   type LawRecentEntry,
-} from "@/lib/law-search-history.logic";
+} from "@/lib/law-search-history/law-search-history.logic";
 import { writeStoredJson } from "@/lib/stored-json";
 
 export {
@@ -25,7 +25,7 @@ export {
   readLawRecent,
   type LawRecentEntry,
   type LawRecentFilter,
-} from "@/lib/law-search-history.logic";
+} from "@/lib/law-search-history/law-search-history.logic";
 
 type RecentState = { entries: readonly LawRecentEntry[]; hydrated: boolean };
 const recentStore = createStore<RecentState>(() => ({

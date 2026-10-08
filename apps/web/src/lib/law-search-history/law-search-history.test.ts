@@ -11,7 +11,7 @@ import {
 
 import { Temporal } from "@stll/time";
 
-import type { LawRecentEntry } from "@/lib/law-search-history";
+import type { LawRecentEntry } from "@/lib/law-search-history/law-search-history";
 
 const local = new Map<string, string>();
 const memoryStorage = {
@@ -38,7 +38,7 @@ const {
   recordLawOpen,
   recordLawSearch,
   removeLawRecent,
-} = await import("@/lib/law-search-history");
+} = await import("@/lib/law-search-history/law-search-history");
 const { installUserScopedStorage } =
   await import("@/lib/account/install-user-scoped-storage");
 const { releaseUserStorage, userStorageKey } =
