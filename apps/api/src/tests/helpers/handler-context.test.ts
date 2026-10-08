@@ -77,7 +77,7 @@ describe("handler contexts require explicit collaborators", () => {
         safeDb: NO_DB,
         scopedDb: NO_DB,
       });
-      expect(() => context[type](async () => undefined)).toThrow(
+      expect(async () => context[type](async () => undefined)).toThrow(
         "NO_DB path accessed the database",
       );
     },
