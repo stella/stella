@@ -8,12 +8,6 @@ import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 
 export type UserFileUrl = `${typeof USER_FILE_URL_PREFIX}${string}`;
 
-export type UserFileViews = {
-  simple: string;
-  original?: string;
-  trackedChanges?: string;
-};
-
 export const toUserFileUrl = (id: SafeId<"userFile">): UserFileUrl =>
   `${USER_FILE_URL_PREFIX}${id}`;
 

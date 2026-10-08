@@ -10,7 +10,7 @@ export type ClauseMetadata = {
   custom: JsonObject;
 };
 
-export const isClauseMetadata = (value: unknown): value is ClauseMetadata =>
+const isClauseMetadata = (value: unknown): value is ClauseMetadata =>
   isRecord(value) &&
   value["version"] === CLAUSE_METADATA_VERSION &&
   isRecord(value["custom"]);

@@ -72,7 +72,7 @@ import {
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 
-export const CORPUS_INDEX_MANIFEST_SCHEMA_VERSION = 1;
+const CORPUS_INDEX_MANIFEST_SCHEMA_VERSION = 1;
 
 type CorpusIndexProjectionContract = {
   documentIdField: "document_id";
