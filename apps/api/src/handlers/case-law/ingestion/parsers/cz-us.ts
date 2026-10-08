@@ -52,13 +52,14 @@ import {
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
-
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
   Inline,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   RTF_EMBEDDED_CONTAINERS,
   RTF_VISIBLE_BLOCK_DESTINATIONS,

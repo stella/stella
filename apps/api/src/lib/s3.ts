@@ -551,7 +551,7 @@ export const refreshCorpusS3 = async (
   _corpusCredentialMode = s3Policy?.mode ?? "default";
 };
 
-export const getCorpusS3 = (): S3Client => {
+const getCorpusS3 = (): S3Client => {
   _corpusClient ??= buildS3Client(corpusBucket(), staticCredentialsFromEnv());
   return _corpusClient;
 };

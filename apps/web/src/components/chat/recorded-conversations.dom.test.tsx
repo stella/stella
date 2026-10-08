@@ -463,8 +463,8 @@ const readScreen = (container: HTMLElement): ScreenState => {
     actionable: [],
     approved: [],
     busy:
-      container.querySelector(".animate-spin, .animate-skeleton") !== null ||
-      BUSY_TEXTS.some((text) => container.textContent.includes(text)),
+      container.querySelector('[aria-busy="true"], [data-slot="skeleton"]') !==
+        null || BUSY_TEXTS.some((text) => container.textContent.includes(text)),
     denied: [],
     stepLists: [...container.querySelectorAll("summary")].filter((summary) =>
       STEP_COUNT_PATTERN.test(summary.textContent.trim()),

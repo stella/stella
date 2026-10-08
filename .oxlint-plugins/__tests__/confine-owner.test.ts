@@ -389,14 +389,16 @@ const storedContentEntries = OWNERSHIP.filter(({ id }) =>
 
 describe.serial("confine-owner stored content rows", () => {
   test("covers each stored content owner", () => {
-    expect(storedContentEntries.map(({ id }) => id)).toEqual([
-      "stored-file-read",
-      "stored-tenant-file-read",
-      "audited-download-grant",
-      "content-delivery-intent",
-      "content-delivery-receipt",
-      "content-delivery-scope",
-    ]);
+    expect(storedContentEntries.map(({ id }) => id).toSorted()).toEqual(
+      [
+        "stored-file-read",
+        "stored-tenant-file-read",
+        "audited-download-grant",
+        "content-delivery-intent",
+        "content-delivery-receipt",
+        "content-delivery-scope",
+      ].toSorted(),
+    );
   });
 
   for (const entry of storedContentEntries) {

@@ -45,3 +45,23 @@ test("an unrelated module's same-named checker is not an admission operation", (
     }),
   ).toEqual([]);
 });
+
+for (const importedName of ["authorizeHandlerUsage", "checkUsage"]) {
+  test(`an injected checker defaulting to ${importedName} remains in the admission census`, () => {
+    const declaration =
+      importedName === "authorizeHandlerUsage"
+        ? "authorizeHandlerUsage"
+        : `authorizeHandlerUsage as ${importedName}`;
+    const text = `import { ${declaration} } from "@/api/lib/api-handlers";
+const createHandler = ({ authorizeUsage = ${importedName} } = {}) =>
+  authorizeUsage({ metering: { actionType: "doc_review", modelRole: "chat" } });`;
+    expect(enumerateConditionalOperations({ file, text })).toEqual([
+      {
+        file,
+        line: 3,
+        checker: "authorizeHandlerUsage",
+        metering: { actionType: "doc_review", modelRole: "chat" },
+      },
+    ]);
+  });
+}

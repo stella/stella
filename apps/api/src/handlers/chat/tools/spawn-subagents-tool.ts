@@ -33,6 +33,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import {
+  requireChatToolModelAdmission,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
+import {
   getTanStackTextModelInfoForRole,
   isAllowedBYOKModelForRole,
   resolveEffectiveServiceTierForProvider,
@@ -292,6 +296,8 @@ type CreateSpawnSubagentsToolProps = {
    * the caller drains the buffer after the run to surface proposed writes.
    */
   buildSubagentToolset: (proposalSink: SubagentProposalSink) => ChatToolMap;
+  /** The parent turn's admission: subagents are steps of the turn. */
+  modelAdmission: ModelDispatchAdmission | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -363,6 +369,7 @@ export const runCheckedSubagentBatch = async <N>({
     const tools = props.buildSubagentToolset(proposalBuffer.sink);
     try {
       const run = await dependencies.runSubagent({
+        admission: requireChatToolModelAdmission(props.modelAdmission),
         organizationId: props.organizationId,
         orgAIConfig: props.orgAIConfig,
         managedAIResidency: props.managedAIResidency,

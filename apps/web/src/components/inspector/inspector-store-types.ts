@@ -51,7 +51,7 @@ export type ChatTab = {
 
 export type MatterTabId = `matter:${string}`;
 
-export type MatterTab = {
+type MatterTab = {
   type: "matter";
   id: MatterTabId;
   label: string;
@@ -59,7 +59,7 @@ export type MatterTab = {
   color?: string | null | undefined;
 };
 
-export type ExternalTab = {
+type ExternalTab = {
   type: "external";
   id: ExternalTabId;
   chatThreadId: ChatThreadId;
@@ -172,7 +172,7 @@ export type InspectorTabGroup =
 /** A tab shape `openTabs` can materialize: the kinds a workspace entity maps to. */
 export type InspectorOpenTarget = FileTab | TaskTab;
 
-export type DocumentTextSelection = {
+type DocumentTextSelection = {
   text: string;
   seq: number;
 };
@@ -183,9 +183,9 @@ export type AnonymizationMatchSnapshot = {
   labelByCanonical: Map<string, string>;
 };
 
-export type AnonymizationSelectionSource = "doc" | "sidebar";
+type AnonymizationSelectionSource = "doc" | "sidebar";
 
-export type AnonymizationSelection = {
+type AnonymizationSelection = {
   canonical: string | null;
   label: string | null;
   source: AnonymizationSelectionSource | null;
@@ -206,7 +206,7 @@ export type InspectorTabsState = {
   reviveSuggestion: InspectorTab | null;
 };
 
-export type InspectorCommandState = {
+type InspectorCommandState = {
   desktopOpenAttention: {
     fieldId: string;
     sequence: number;
@@ -245,7 +245,7 @@ export type InspectorCommandState = {
 
 type AnonymizationPipelineStatus = "idle" | "running" | "ready" | "error";
 
-export type InspectorAnonymizationState = {
+type InspectorAnonymizationState = {
   anonymizationActiveMountCount: number;
   documentTextSelectionByFieldId: Record<string, DocumentTextSelection>;
   anonymizationMatchesByFieldId: Record<string, AnonymizationMatchSnapshot>;
@@ -257,11 +257,11 @@ export type InspectorAnonymizationState = {
   anonymizationSelection: AnonymizationSelection;
 };
 
-export type CloseTabOptions = {
+type CloseTabOptions = {
   suggestRevive?: boolean;
 };
 
-export type FileFieldReplacement = {
+type FileFieldReplacement = {
   id: string;
   fileName?: string | undefined;
   label?: string | undefined;
@@ -290,7 +290,7 @@ export const INSPECTOR_PANE_INTENT = {
 type InspectorPaneIntent =
   (typeof INSPECTOR_PANE_INTENT)[keyof typeof INSPECTOR_PANE_INTENT];
 
-export type InspectorTabsActions = {
+type InspectorTabsActions = {
   createGroup: (args: { name: string; color: string }) => string;
   updateGroup: (args: { id: string; name: string; color: string }) => void;
   removeGroup: (id: string) => void;
@@ -396,7 +396,7 @@ export type InspectorTabsActions = {
   toggleMinimized: () => void;
 };
 
-export type InspectorCommandActions = {
+type InspectorCommandActions = {
   requestDesktopOpenAttention: (fieldId: string) => void;
   clearDesktopOpenAttention: (sequence: number) => void;
   requestRename: (id: string) => void;
@@ -425,7 +425,7 @@ export type InspectorCommandActions = {
   clearCommandsForMissingTabs: (tabIds: ReadonlySet<string>) => void;
 };
 
-export type InspectorAnonymizationActions = {
+type InspectorAnonymizationActions = {
   acquireAnonymizationActive: () => void;
   releaseAnonymizationActive: () => void;
   publishDocumentTextSelection: (fieldId: string, text: string) => void;

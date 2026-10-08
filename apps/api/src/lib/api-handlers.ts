@@ -1,6 +1,6 @@
 import type { Static, TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
-import { Result, UnhandledException } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
@@ -85,6 +85,10 @@ import {
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   announceResourceSetUpdates,
@@ -571,6 +575,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     usageLane?: UsageLaneDecision;
     /** Shared lease and client cancellation, set only for admitted finite work. */
     actionSignal?: AbortSignal;
+    /** Proof a model dispatch needs; set only for admitted finite work. */
+    modelAdmission?: ModelDispatchAdmission;
     /**
      * Whether stella may annotate AI requests for this org with
      * prompt-cache markers. Threaded through to the model resolver;
@@ -1066,12 +1072,19 @@ type FiniteActionContext = SafeHandlerLogContext & {
   session: { activeOrganizationId: SafeId<"organization"> };
   scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
+  modelAdmission?: ModelDispatchAdmission;
+};
+
+/** What admitted finite work runs with: its lease signal and model proof. */
+type AdmittedFiniteContext = {
+  actionSignal: AbortSignal;
+  modelAdmission: ModelDispatchAdmission;
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
   actionKind: PeriodActionKind;
   ctx: TContext;
-  handler: SafeHandlerFn<TContext, TResult>;
+  handler: SafeHandlerFn<TContext & AdmittedFiniteContext, TResult>;
   admit?: typeof withActionAdmission;
 };
 
@@ -1111,9 +1124,19 @@ const runAdmittedFiniteHandler = async function* <
                 }),
           );
         }
-        ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
-        ctx.actionSignal.throwIfAborted();
-        const outcome = await Result.gen(() => handler(ctx));
+        const outcome = await admitModelDispatch({
+          organizationId: ctx.session.activeOrganizationId,
+          actionKind,
+          signal,
+          run: async (modelAdmission) => {
+            const admitted = Object.assign(ctx, {
+              actionSignal: AbortSignal.any([ctx.request.signal, signal]),
+              modelAdmission,
+            });
+            admitted.actionSignal.throwIfAborted();
+            return await Result.gen(() => handler(admitted));
+          },
+        });
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();
@@ -1149,6 +1172,19 @@ const runAdmittedFiniteHandler = async function* <
 };
 
 /**
+ * The model proof of a handler whose config declares `actionAdmission`: the
+ * wrapper admits the request and sets it before the handler runs. The
+ * dispatch-admission guard checks that every caller declares the admission.
+ */
+export const configuredModelAdmission = ({
+  modelAdmission,
+}: {
+  modelAdmission?: ModelDispatchAdmission | undefined;
+}): ModelDispatchAdmission =>
+  modelAdmission ??
+  panic("A handler dispatched a model without its configured admission");
+
+/**
  * Call after resource authorization and the operation's usage preflight.
  * @yields Typed failures for the owning safe-handler boundary.
  */
@@ -1161,7 +1197,7 @@ export const admitFiniteAction = async function* <
   admit,
   actionKind,
 }: FiniteActionOptions<TContext, TResult> & {
-  handler: SafeHandlerFn<TContext, TResult> &
+  handler: SafeHandlerFn<TContext & AdmittedFiniteContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
   return yield* runAdmittedFiniteHandler({

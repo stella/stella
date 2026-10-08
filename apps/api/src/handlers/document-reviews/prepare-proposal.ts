@@ -27,7 +27,7 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
-export type ProposalBody = Static<typeof proposeReviewPositionsBodySchema>;
+type ProposalBody = Static<typeof proposeReviewPositionsBodySchema>;
 
 export type PreparedProposal = {
   target: PreparedDocxFile;
@@ -114,18 +114,20 @@ export const prepareReferenceProposal = async function* ({
     workspaceId,
     userId,
     safeDb,
+    selection: selection.value,
   });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);
   }
-  return await authorization.value.execute(async () => {
+  return await authorization.value.execute(async ({ proof }) => {
+    const checked = proof.input.value;
     const resolvedFiles = [
-      selection.value.target,
-      ...selection.value.references,
+      checked.selection.target,
+      ...checked.selection.references,
     ].map((document) => document.file);
     const preparedResult = await Result.tryPromise({
       try: async () =>
-        await fetchAndPrepareReviewFiles(resolvedFiles, organizationId),
+        await fetchAndPrepareReviewFiles(resolvedFiles, checked.organizationId),
       catch: (cause) =>
         new HandlerError({
           status: 500,
@@ -144,7 +146,7 @@ export const prepareReferenceProposal = async function* ({
     // verified block can be pinned as a passage that outlives this request.
     const references: ReferenceSource[] = [];
     for (const [index, file] of preparedResult.value.slice(1).entries()) {
-      const document = selection.value.references[index];
+      const document = checked.selection.references[index];
       if (file.kind !== "docx" || document === undefined) {
         return panic("DOCX review reference was not prepared as DOCX blocks");
       }
@@ -159,7 +161,7 @@ export const prepareReferenceProposal = async function* ({
     return Result.ok({
       target,
       references,
-      targetEntityVersionId: selection.value.target.entityVersionId,
+      targetEntityVersionId: checked.selection.target.entityVersionId,
     });
   });
 };

@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import {
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
   organizationFileObjects,
   organizationFileUsage,
   usageEntitlements,
@@ -461,6 +463,65 @@ describe("organization file usage", () => {
         ],
         db(),
       );
+    }
+  });
+
+  test("the free floor bounds the whole organization, with no seat assignment", async () => {
+    const freePolicyId = createSafeId<"usagePolicy">();
+    const now = Date.now();
+    await testDb.insert(usagePolicies).values({
+      id: freePolicyId,
+      policyKey: `file-usage-free-${freePolicyId}`.slice(0, 64),
+      displayName: "Free fixture",
+      kind: "free",
+      monthlyUsageUnits: 0,
+      maxMembers: 1,
+      storageBytesPerAssignment: 40n,
+      serviceActionsPerPeriod: 3,
+    });
+    await testDb.insert(organizationAccessStates).values({
+      organizationId: ids.orgB,
+      state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+      evaluationStartedAt: new Date(now - 120_000),
+      evaluationEndsAt: new Date(now - 60_000),
+      evaluationEndedAt: new Date(now - 60_000),
+    });
+    try {
+      const freeInput = (objectKey: string, sizeBytes: number) => ({
+        organizationId: ids.orgB,
+        objectKey,
+        sizeBytes,
+      });
+      const over = await reserveOrganizationFileBytes(
+        freeInput("fixture/free-over", 41),
+        db(),
+      );
+      expect(over).toMatchObject({ error: { reason: "capacity_exceeded" } });
+      const overBatch = await reserveOrganizationFilesBytes(
+        [freeInput("fixture/free-a", 20), freeInput("fixture/free-b", 21)],
+        db(),
+      );
+      expect(overBatch).toMatchObject({
+        error: { reason: "capacity_exceeded" },
+      });
+      const fits = await reserveOrganizationFileBytes(
+        freeInput("fixture/free-fits", 40),
+        db(),
+      );
+      expect(Result.isOk(fits)).toBe(true);
+      if (Result.isOk(fits)) {
+        await releaseOrganizationFileBytes(fits.value, db());
+      }
+    } finally {
+      await testDb
+        .delete(organizationFileObjects)
+        .where(eq(organizationFileObjects.organizationId, ids.orgB));
+      await testDb
+        .delete(organizationAccessStates)
+        .where(eq(organizationAccessStates.organizationId, ids.orgB));
+      await testDb
+        .delete(usagePolicies)
+        .where(eq(usagePolicies.id, freePolicyId));
     }
   });
 

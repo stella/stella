@@ -50,7 +50,7 @@ export const prepareBatch = (
  * gate (file, clip, error, pending, unsupported) resolve to `undefined`, which
  * the evaluator treats as empty/absent.
  */
-export const fieldContentToValue = (content: FieldContent): ConditionValue => {
+const fieldContentToValue = (content: FieldContent): ConditionValue => {
   switch (content.type) {
     case "text":
       return content.value;

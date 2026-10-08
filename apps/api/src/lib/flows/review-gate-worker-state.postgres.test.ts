@@ -18,6 +18,7 @@ import {
   flowReviewGateFixture,
   waitForBlockedPid,
 } from "@/api/tests/helpers/flow-review-gate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -86,6 +87,7 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
   );
   let transactions = 0;
   const dependencies = {
+    admission: testModelAdmission(f.organizationId),
     database: db,
     makeScopedDb:
       () =>
@@ -199,6 +201,7 @@ if (!databaseUrl || !enabled) {
                 return await scoped(work);
               };
             const dependencies = {
+              admission: testModelAdmission(f.organizationId),
               database: workerDb,
               makeScopedDb,
               makeSafeDb: () => f.safeDb(workerDb),

@@ -8,6 +8,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
@@ -17,6 +18,8 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -40,6 +43,8 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  // The run is queued here; its worker takes a background slot.
+  actionAdmission: { type: "handler", actionKind: "list-verification.start" },
   description:
     "Start checking one document (DOCX, PDF, or a file with a PDF " +
     "rendition) against the facts of one list. Every claim the document " +
@@ -85,6 +90,38 @@ const requireVerifiableFile = (content: {
     }),
   );
 };
+
+type MarkVerificationEnqueueFailedOptions = {
+  safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+};
+
+const markVerificationEnqueueFailed = async (
+  options: MarkVerificationEnqueueFailedOptions,
+) =>
+  await options.safeDb(async (tx) => {
+    await options.recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+      resourceId: options.runId,
+      metadata: { status: "failed", errorCode: "enqueue_failed" },
+    });
+    await tx
+      .update(legalListVerificationRuns)
+      .set({
+        status: "failed",
+        errorCode: "enqueue_failed",
+        finishedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(legalListVerificationRuns.id, options.runId),
+          eq(legalListVerificationRuns.workspaceId, options.workspaceId),
+        ),
+      );
+  });
 
 const createVerification = createSafeHandler(
   config,
@@ -187,35 +224,43 @@ const createVerification = createSafeHandler(
         workspaceId,
         userId: user.id,
         safeDb,
+        recordAuditEvent,
+        listId,
+        entityId,
+        fileFieldId,
+        version,
+        file,
+        evidence: evidence.evidence,
       }),
     );
     return await authorization.execute(
-      async () =>
+      async ({ proof }) =>
         await Result.gen(async function* () {
+          const checked = proof.input.value;
           const runId = createSafeId<"legalListVerificationRun">();
           const inserted = await startVerificationRun({
-            safeDb,
+            safeDb: checked.safeDb,
             run: {
               id: runId,
-              organizationId,
-              workspaceId,
-              entityId,
-              fileFieldId,
-              entityVersionId: version.id,
-              contentSha256: file.sha256Hex,
-              evidence: evidence.evidence,
-              requestedBy: user.id,
+              organizationId: checked.organizationId,
+              workspaceId: checked.workspaceId,
+              entityId: checked.entityId,
+              fileFieldId: checked.fileFieldId,
+              entityVersionId: checked.version.id,
+              contentSha256: checked.file.sha256Hex,
+              evidence: checked.evidence,
+              requestedBy: checked.userId,
             },
             recordAuditEvent: async (tx) =>
-              await recordAuditEvent(tx, {
+              await checked.recordAuditEvent(tx, {
                 action: AUDIT_ACTION.EXECUTE,
                 resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
                 resourceId: runId,
                 metadata: {
-                  listId,
-                  entityId,
-                  fileFieldId,
-                  factCount: evidence.evidence.facts.length,
+                  listId: checked.listId,
+                  entityId: checked.entityId,
+                  fileFieldId: checked.fileFieldId,
+                  factCount: checked.evidence.facts.length,
                 },
               }),
           });
@@ -242,35 +287,20 @@ const createVerification = createSafeHandler(
             try: async () =>
               await enqueueListVerificationRun({
                 runId,
-                workspaceId,
-                organizationId,
-                userId: user.id,
+                workspaceId: checked.workspaceId,
+                organizationId: checked.organizationId,
+                userId: checked.userId,
               }),
             catch: (cause) => cause,
           });
           if (Result.isError(enqueued)) {
             // A never-enqueued run must not hold the document's active slot.
             yield* Result.await(
-              safeDb(async (tx) => {
-                await recordAuditEvent(tx, {
-                  action: AUDIT_ACTION.UPDATE,
-                  resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
-                  resourceId: runId,
-                  metadata: { status: "failed", errorCode: "enqueue_failed" },
-                });
-                await tx
-                  .update(legalListVerificationRuns)
-                  .set({
-                    status: "failed",
-                    errorCode: "enqueue_failed",
-                    finishedAt: new Date(),
-                  })
-                  .where(
-                    and(
-                      eq(legalListVerificationRuns.id, runId),
-                      eq(legalListVerificationRuns.workspaceId, workspaceId),
-                    ),
-                  );
+              markVerificationEnqueueFailed({
+                safeDb: checked.safeDb,
+                recordAuditEvent: checked.recordAuditEvent,
+                workspaceId: checked.workspaceId,
+                runId,
               }),
             );
             return Result.err(

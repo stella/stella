@@ -232,6 +232,7 @@ const BenchPane = ({ width }: { width: number }) => (
             />
           </div>
           <DecisionText
+            surface="development"
             decision={BENCH_DECISION}
             decisionId={BENCH_DECISION.id}
           />

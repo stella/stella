@@ -1,0 +1,7 @@
+# Applying response header and body idle deadlines
+
+Generated from `scripts/ownership/fetch-transfer-timeout.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                  | Owner                         | Enforcement | Summary                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------- | ----------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch-transfer-timeout` — Applying response header and body idle deadlines | `packages/fetch/src/index.ts` | none        | `@stll/fetch` requires a header or idle timeout policy for new callers and composes caller cancellation. Idle deadlines cover pending body reads; header deadlines stop at the response. Deprecated numeric callers and raw total deadlines on body reads are enumerated by `scripts/transfer-read-guard.ts` with a shrink-only baseline. |

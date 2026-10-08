@@ -68,7 +68,7 @@ export type StartFlowRunOptions = {
   kickoff?: typeof runQueuedKickoff;
 };
 
-export type StartFlowRunResult = {
+type StartFlowRunResult = {
   runId: SafeId<"flowRun">;
   status: FlowRunStatus;
 };

@@ -17,6 +17,7 @@ import {
   withAdmittedOperation,
 } from "@/api/lib/proofs/checked-transaction";
 import { runCheckedAction } from "@/api/lib/rate-limit/action-admission";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">("checked_org");
@@ -225,6 +226,7 @@ test("checked subagent batches use checked dispatcher and organization", async (
     Parameters<typeof runCheckedSubagentBatch>[0]["input"]["value"]
   >({
     props: {
+      modelAdmission: testModelAdmission(organizationId),
       organizationId,
       userId,
       workspaceId: null,

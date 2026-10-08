@@ -83,6 +83,22 @@ export const enumerateConditionalOperations = ({
       }
     }
   }
+  // Handler factories retain the real checker as an injectable default.
+  const discoverDefaults = (node: ts.Node) => {
+    if (
+      ts.isBindingElement(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      ts.isIdentifier(node.initializer)
+    ) {
+      const checker = aliases.get(node.initializer.text);
+      if (checker !== undefined) {
+        aliases.set(node.name.text, checker);
+      }
+    }
+    ts.forEachChild(node, discoverDefaults);
+  };
+  discoverDefaults(source);
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)) {
       const expression = node.expression;

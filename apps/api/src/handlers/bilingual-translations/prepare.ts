@@ -9,7 +9,11 @@ import { Result } from "better-result";
 
 import { prepareBilingualTranslationBodySchema } from "@/api/handlers/bilingual-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { decideDispositions, proposeGlossary } from "@/api/lib/bilingual/ai";
 import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
@@ -26,6 +30,7 @@ import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 const PREPARE_TIMEOUT_MS = 150_000;
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "bilingual.prepare" },
   contentDelivery: {
     type: "none",
     reason:
@@ -45,6 +50,7 @@ const config = {
 const prepareBilingualTranslation = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -108,6 +114,7 @@ const prepareBilingualTranslation = createSafeHandler(
 
     const organizationId = session.activeOrganizationId;
     const context: BilingualAIDocumentContext = {
+      admission: configuredModelAdmission({ modelAdmission }),
       organizationId,
       workspaceId,
       orgAIConfig,

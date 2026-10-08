@@ -62,6 +62,11 @@ test("period exhaustion has its own non-transient code before execution", async 
       organizationId,
       userId: firstUser,
       policy,
+      periodPolicy: { periodMs: 86_400_000, limit: 3 },
+      periodIdentity: {
+        actionKind: "chat.improve-prompt",
+        logicalPhaseId: "exhausted-phase",
+      },
       redis: { send: async () => -1 },
       run: async () => {
         calls += 1;

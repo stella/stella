@@ -53,6 +53,7 @@ import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "document-reviews.start" },
   description:
     "Start an asynchronous review of one document against a confirmed list of positions. Returns a run ID to poll.",
   // entity:update because every run processes an existing target document
@@ -321,30 +322,40 @@ const createDocumentReviewRun = createSafeHandler(
       workspaceId,
       userId: user.id,
       safeDb,
+      recordAuditEvent,
+      selection: selection.value,
+      basis,
+      plan,
+      playbook,
+      skipped: body.skipped,
+      referenceCount: references.length,
+      targetDocumentName:
+        nameByEntityId.get(selection.value.target.entityId) ?? null,
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
     }
     return await authorization.value.execute(
-      async () =>
+      async ({ proof }) =>
         await Result.gen(async function* () {
-          const pinnedTarget = selection.value.target;
-          const targetDocumentName =
-            nameByEntityId.get(pinnedTarget.entityId) ?? null;
+          const checked = proof.input.value;
+          const pinnedTarget = checked.selection.target;
           // The side the run judged from, by role alone: the party's name is the
           // document's business, and the audit record does not need it to say what
           // the review was.
           const perspectiveRole =
-            basis.perspective.type === "party" ? basis.perspective.role : null;
+            checked.basis.perspective.type === "party"
+              ? checked.basis.perspective.role
+              : null;
           // Null for positions confirmed for this run alone: those have no playbook
           // to name, and `referenceCount` says what they were drawn from instead.
           const playbookBasisName =
-            playbook.provenance === PLAYBOOK_PIN_PROVENANCE.EPHEMERAL
+            checked.playbook.provenance === PLAYBOOK_PIN_PROVENANCE.EPHEMERAL
               ? null
-              : playbook.definitionSnapshot.name;
+              : checked.playbook.definitionSnapshot.name;
           const runId = createSafeId<"documentReviewRun">();
           const inserted = yield* Result.await(
-            safeDb(async (tx) => {
+            checked.safeDb(async (tx) => {
               // One unfinished review per document: a second one would spend twice
               // and race the first to the same findings. The partial unique index
               // backs this up if two requests pass the check together.
@@ -353,7 +364,7 @@ const createDocumentReviewRun = createSafeHandler(
                 .from(documentReviewRuns)
                 .where(
                   and(
-                    eq(documentReviewRuns.workspaceId, workspaceId),
+                    eq(documentReviewRuns.workspaceId, checked.workspaceId),
                     eq(documentReviewRuns.entityId, pinnedTarget.entityId),
                     eq(
                       documentReviewRuns.fileFieldId,
@@ -371,23 +382,23 @@ const createDocumentReviewRun = createSafeHandler(
 
               await tx.insert(documentReviewRuns).values({
                 id: runId,
-                organizationId,
-                workspaceId,
+                organizationId: checked.organizationId,
+                workspaceId: checked.workspaceId,
                 entityId: pinnedTarget.entityId,
                 fileFieldId: pinnedTarget.file.fileFieldId,
                 entityVersionId: pinnedTarget.entityVersionId,
                 contentSha256: pinnedTarget.file.sha256Hex,
-                playbookDefinitionId: playbook.definitionId,
-                basis,
+                playbookDefinitionId: checked.playbook.definitionId,
+                basis: checked.basis,
                 // Pinned by value with everything else the reviewer confirmed: what
                 // the proposal left uncompared is part of what this run covered.
-                skipped: body.skipped,
+                skipped: checked.skipped,
                 status: "queued",
-                total: plan.expectedFindingCount,
-                requestedBy: user.id,
+                total: checked.plan.expectedFindingCount,
+                requestedBy: checked.userId,
               });
 
-              await recordAuditEvent(tx, {
+              await checked.recordAuditEvent(tx, {
                 action: AUDIT_ACTION.EXECUTE,
                 resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
                 resourceId: runId,
@@ -395,14 +406,14 @@ const createDocumentReviewRun = createSafeHandler(
                 // the way the run row pins them: the matter's activity names the
                 // document and its basis without re-reading a row that may be gone.
                 metadata: {
-                  documentName: targetDocumentName,
+                  documentName: checked.targetDocumentName,
                   entityId: pinnedTarget.entityId,
-                  expectedFindingCount: plan.expectedFindingCount,
+                  expectedFindingCount: checked.plan.expectedFindingCount,
                   fileFieldId: pinnedTarget.file.fileFieldId,
                   perspectiveRole,
                   playbookName: playbookBasisName,
-                  playbookProvenance: playbook.provenance,
-                  referenceCount: references.length,
+                  playbookProvenance: checked.playbook.provenance,
+                  referenceCount: checked.referenceCount,
                 },
               });
               return true;
@@ -422,9 +433,9 @@ const createDocumentReviewRun = createSafeHandler(
             try: async () =>
               await enqueueDocumentReviewRun({
                 runId,
-                workspaceId,
-                organizationId,
-                userId: user.id,
+                workspaceId: checked.workspaceId,
+                organizationId: checked.organizationId,
+                userId: checked.userId,
               }),
             catch: (cause) => cause,
           });
@@ -432,7 +443,7 @@ const createDocumentReviewRun = createSafeHandler(
             // A never-enqueued run must not hold the document's active slot, so mark
             // it failed immediately rather than waiting for the orphan reconciler.
             yield* Result.await(
-              safeDb(async (tx) => {
+              checked.safeDb(async (tx) => {
                 // audit: skip — status bookkeeping on the run row audited at insert.
                 await tx
                   .update(documentReviewRuns)

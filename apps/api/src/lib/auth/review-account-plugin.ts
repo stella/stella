@@ -1,3 +1,4 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { AuthContext, BetterAuthPlugin } from "better-auth";
 import {
@@ -7,6 +8,7 @@ import {
   isAPIError,
 } from "better-auth/api";
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import {
   checkReviewAccountAccess,
@@ -128,6 +130,43 @@ const requireNamedOrganizations = async ({
 
 const CREDENTIAL_PROVIDER_ID = "credential";
 
+/** Server-only: the operator command's one way to create the review account. */
+export const REVIEW_ACCOUNT_CREATE_USER_PATH = "/review-account/create-user";
+
+/**
+ * Creates the review account inside a Better Auth endpoint context, so the
+ * configured user validation runs on it like on every other creation. Server
+ * only: it is callable through `auth.api`, never over HTTP.
+ */
+export const createReviewAccountUserPlugin = (config: ReviewAccountConfig) =>
+  ({
+    id: "review-account-provisioning",
+    endpoints: {
+      // A path, so the user hook can recognise this creation, and
+      // SERVER_ONLY, so the HTTP router never registers it.
+      createReviewAccountUser: createAuthEndpoint(
+        REVIEW_ACCOUNT_CREATE_USER_PATH,
+        {
+          method: "POST",
+          body: v.object({ email: v.pipe(v.string(), v.email()) }),
+          metadata: { SERVER_ONLY: true },
+        },
+        async ({ body, context }) => {
+          if (!isReviewAccountEmail({ email: body.email, config })) {
+            throw new APIError("FORBIDDEN", {
+              code: "account_access_unavailable",
+              message: REVIEW_ACCOUNT_REFUSAL_MESSAGE,
+            });
+          }
+          return await context.internalAdapter.createUser(
+            { email: body.email, name: "Reviewer", emailVerified: true },
+            { method: "admin" },
+          );
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
+
 /**
  * Database-layer rules for the review account, covering every path that
  * writes the rows (explicit linking, implicit linking on a social sign-in
@@ -218,8 +257,14 @@ export const createReviewAccountDatabaseHooks = (
     context: unknown,
   ): Promise<undefined> => {
     await Promise.resolve();
-    // Only the operator command, outside any request, creates the account.
-    const inRequest = context !== null && context !== undefined;
+    // Only the operator command creates the account, through the server-only
+    // endpoint below; no HTTP request can reach that path.
+    const inRequest =
+      context !== null &&
+      context !== undefined &&
+      !(
+        isRecord(context) && context["path"] === REVIEW_ACCOUNT_CREATE_USER_PATH
+      );
     if (inRequest && isReviewAccountEmail({ email: user.email, config })) {
       throw new APIError("FORBIDDEN", {
         code: "account_access_unavailable",

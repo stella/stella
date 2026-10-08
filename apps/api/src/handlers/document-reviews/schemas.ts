@@ -30,15 +30,13 @@ export const documentReviewTargetSchema = t.Object({
 // A reference may live in another matter than the target (a signed precedent
 // against a new draft), so it names its own workspace; the handler checks the
 // caller can read that workspace before pinning anything from it.
-export const documentReviewRefSchema = t.Object({
+const documentReviewRefSchema = t.Object({
   workspaceId: tSafeId("workspace"),
   entityId: tSafeId("entity"),
   fileFieldId: tSafeId("field"),
 });
 
 export type DocumentReviewRef = Static<typeof documentReviewRefSchema>;
-
-type Assignable<Source extends Target, Target> = Source;
 
 // The decision vocabulary reaches the wire from the same const the column's
 // CHECK constraint is derived from, so the schema cannot accept a value the
@@ -63,15 +61,16 @@ export const decideReviewFindingBodySchema = t.Object({
   ),
 });
 
-export type DocumentReviewDecisionInput = Assignable<
-  Static<typeof decideReviewFindingBodySchema>["decision"],
-  DocumentReviewDecision
->;
+true satisfies Static<
+  typeof decideReviewFindingBodySchema
+>["decision"] extends DocumentReviewDecision
+  ? true
+  : never;
 
 // The side a comparison is judged for: one of the target's parties by the
 // role the document gives it, or no side. Required so a client cannot leave
 // it out and get a side by default.
-export const reviewPerspectiveSchema = t.Union([
+const reviewPerspectiveSchema = t.Union([
   t.Object({ type: t.Literal("neutral") }),
   t.Object({
     type: t.Literal("party"),
@@ -90,7 +89,7 @@ export const reviewPerspectiveSchema = t.Union([
  * `ReviewSkippedTerm[]`, so a wire shape that drifts from the engine's fails
  * typecheck at that insert rather than at a reader.
  */
-export const reviewSkippedTermSchema = t.Object({
+const reviewSkippedTermSchema = t.Object({
   subject: t.String({
     minLength: 1,
     maxLength: REVIEW_SKIP_SUBJECT_MAX_LENGTH,

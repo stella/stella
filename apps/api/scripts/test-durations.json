@@ -227,6 +227,10 @@
     "seconds": 0.261725,
     "source": "estimated"
   },
+  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/account-issuer-nullable-migration.db.test.ts": {
     "seconds": 4.993753,
     "source": "estimated"
@@ -267,6 +271,10 @@
     "seconds": 6.4,
     "source": "measured"
   },
+  "src/db/case-law-citation-review-provenance-migration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/case-law-citation-reviews-migration.test.ts": {
     "seconds": 4.6,
     "source": "measured"
@@ -281,6 +289,10 @@
   },
   "src/db/case-law-replay-rls.db.test.ts": {
     "seconds": 1.753123,
+    "source": "estimated"
+  },
+  "src/db/case-law-source-lease-purpose-migration.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/db/chat-matter-document-tool-rename.db.test.ts": {
@@ -801,6 +813,10 @@
   },
   "src/handlers/case-law/decisions/document-on-demand.test.ts": {
     "seconds": 6.156543,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/decisions/document-ownership-route.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/decisions/document-state.test.ts": {
@@ -1731,6 +1747,10 @@
     "seconds": 0.154141,
     "source": "estimated"
   },
+  "src/handlers/case-law/polarity/consts.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/polarity/context.test.ts": {
     "seconds": 0.446202,
     "source": "estimated"
@@ -1845,10 +1865,6 @@
   },
   "src/handlers/chat/attempt-answer.test.ts": {
     "seconds": 0.460327,
-    "source": "estimated"
-  },
-  "src/handlers/chat/chat-execution-admission.test.ts": {
-    "seconds": 0.463732,
     "source": "estimated"
   },
   "src/handlers/chat/chat-message-parts.test.ts": {
@@ -2595,6 +2611,10 @@
     "seconds": 3.2242,
     "source": "estimated"
   },
+  "src/handlers/document-translations/runs/create.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/document-translations/schemas.test.ts": {
     "seconds": 0.332837,
     "source": "estimated"
@@ -3125,6 +3145,10 @@
   },
   "src/handlers/legislation/work-names.db.test.ts": {
     "seconds": 3.41409,
+    "source": "estimated"
+  },
+  "src/handlers/lists/columns/create.postgres.test.ts": {
+    "seconds": 3,
     "source": "estimated"
   },
   "src/handlers/lists/generation-candidates/acceptance/create.db.test.ts": {
@@ -4827,6 +4851,18 @@
     "seconds": 0.493191,
     "source": "estimated"
   },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/db/arabic-normalize.test.ts": {
     "seconds": 1.739487,
     "source": "estimated"
@@ -5049,6 +5085,10 @@
   },
   "src/lib/document-processing-reconciliation-feeds.db.test.ts": {
     "seconds": 3.84235,
+    "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/document-reference.test.ts": {
@@ -6347,6 +6387,14 @@
     "seconds": 0.078638,
     "source": "estimated"
   },
+  "src/lib/legal-search/deferred-document-ownership-contract.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/deferred-document-source-ownership.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/document-stage-observation.test.ts": {
     "seconds": 3.71102,
     "source": "estimated"
@@ -7087,12 +7135,24 @@
     "seconds": 0.154125,
     "source": "estimated"
   },
+  "src/lib/rate-limit/execution-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/rate-limit/mcp-read-fence.test.ts": {
     "seconds": 0.730715,
     "source": "estimated"
   },
   "src/lib/rate-limit/mcp-read-fence.valkey.test.ts": {
     "seconds": 0.0948,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-action-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-dispatch-admission.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/rate-limit/organization-action-admission.test.ts": {
@@ -7547,6 +7607,10 @@
     "seconds": 0.586685,
     "source": "estimated"
   },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/search/projection-repair-queue.db.test.ts": {
     "seconds": 11.479625,
     "source": "estimated"
@@ -7911,6 +7975,10 @@
     "seconds": 0.247414,
     "source": "estimated"
   },
+  "src/lib/usage/effective-policy.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/usage/index.test.ts": {
     "seconds": 3.462843,
     "source": "estimated"
@@ -7939,8 +8007,16 @@
     "seconds": 3.2,
     "source": "measured"
   },
+  "src/lib/usage/organization-access.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/usage/organization-action-budget.test.ts": {
     "seconds": 0.207401,
+    "source": "estimated"
+  },
+  "src/lib/usage/organization-effective-policy.postgres.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/usage/policy-catalog.test.ts": {
@@ -8635,6 +8711,14 @@
     "seconds": 0.566837,
     "source": "estimated"
   },
+  "src/scripts/corpus-generation.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/scripts/corpus-generation.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/scripts/corpus-index-query-diff-client.test.ts": {
     "seconds": 0.12729,
     "source": "estimated"
@@ -8742,6 +8826,10 @@
   "src/scripts/replay-tick.test.ts": {
     "seconds": 0.4,
     "source": "measured"
+  },
+  "src/scripts/review-account.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/scripts/review-account.logic.test.ts": {
     "seconds": 1,
@@ -8877,6 +8965,10 @@
   },
   "src/tests/security/account-wide-auth-revocation.test.ts": {
     "seconds": 1.93918,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/security/ai-memories-rls.test.ts": {

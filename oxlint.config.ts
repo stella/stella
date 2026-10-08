@@ -343,6 +343,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-user-id-schema.fixture.ts", [
     "no-raw-user-id-schema/no-raw-user-id-schema",
   ]),
+  fixtureRuleOverride("confine-aggregate-lock.fixture.ts", [
+    "confine-aggregate-lock/confine-aggregate-lock",
+  ]),
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
   ]),
@@ -718,38 +721,11 @@ const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
 // owner that can detect a same-element conflict instead of calling the
 // adapter directly. `monitorForElements` (no per-element registry) is not
 // restricted.
-// Shrink-only migration exceptions: remove each file when its surface moves
-// element registration into an explicit owner. Never add new consumers here.
-export const LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES = [
-  // Owns the picker rows; no other registration owner touches those elements.
-  "apps/web/src/components/matter-target-picker.tsx",
-  // Owns the sidebar rows; no other registration owner touches those elements.
-  "apps/web/src/components/app-sidebar.tsx",
-  // Owns the organizer rows; no other registration owner touches those elements.
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
-  // Owns the calendar day cells; no other registration owner touches those elements.
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx",
-  // Owns the calendar chips; no other registration owner touches those elements.
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx",
-  // Owns the tree rows; no other registration owner touches those elements.
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
-  // Owns the entity row handles; no other registration owner touches those elements.
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
-  // Owns the position rows; no other registration owner touches those elements.
-  "apps/web/src/routes/knowledge/-components/position-editor.tsx",
-  // Owns the document type cards; no other registration owner touches those elements.
-  "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx",
-  // Owns the page tiles; no other registration owner touches those elements.
-  "apps/web/src/components/pdf/page-organizer.tsx",
-  // Owns the header cells; no other registration owner touches those elements.
-  "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
-] as const;
-
 const webPragmaticDragAdapterImport = {
   name: "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
   importNames: ["draggable", "dropTargetForElements"],
   message:
-    "Register element drag sources and drop targets through the surface's registration owner (kanban: use-kanban-drop-targets.ts), not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+    "Register element drag sources and drop targets through '@/lib/drag-and-drop/element-registration'.",
 };
 
 const uiPragmaticDragAdapterImport = {
@@ -937,6 +913,7 @@ const config = defineConfig({
     },
   },
   rules: {
+    "confine-aggregate-lock/confine-aggregate-lock": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
       { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
@@ -1633,6 +1610,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
@@ -2050,78 +2028,7 @@ const config = defineConfig({
         "packages/workspace-ui/src/**/*.tsx",
       ],
       rules: {
-        "no-adhoc-loader/no-adhoc-loader": [
-          "error",
-          {
-            // Sites that predate `@stll/ui/loader`. A ratchet: entries can
-            // only be removed as each site moves to `Loader`/`Skeleton`, and
-            // no new file may add itself.
-            allowedFiles: [
-              "apps/web/src/components/ai-rewrite-control.tsx",
-              "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
-              "apps/web/src/components/ai-suggestions/host.tsx",
-              "apps/web/src/components/bilingual-run-panel.tsx",
-              "apps/web/src/components/chat/ask-user-card.tsx",
-              "apps/web/src/components/chat/chat-prompt-improve-button.tsx",
-              "apps/web/src/components/chat/chat-thread-messages.tsx",
-              "apps/web/src/components/chat/message-export-menu.tsx",
-              "apps/web/src/components/chat/needs-matter-card.tsx",
-              "apps/web/src/components/chat/spawn-subagents-card.tsx",
-              "apps/web/src/components/chat/tool-approval-card.tsx",
-              "apps/web/src/components/docx/docx-browser-editor.tsx",
-              "apps/web/src/components/inspector/desktop-open-button.tsx",
-              "apps/web/src/components/inspector/document-ai-source-bar.tsx",
-              "apps/web/src/components/inspector/file-tab-panel.tsx",
-              "apps/web/src/components/inspector/inspector-facet-bar.tsx",
-              "apps/web/src/components/pdf/creating-citations.tsx",
-              "apps/web/src/components/pdf/pdf-viewer.tsx",
-              "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx",
-              "apps/web/src/components/pdf/versions-sidebar.tsx",
-              "apps/web/src/components/saved-searches.tsx",
-              "apps/web/src/components/search-dialog-results.tsx",
-              "apps/web/src/components/search-dialog.tsx",
-              "apps/web/src/components/translate-document-dialog.tsx",
-              "apps/web/src/components/versions/version-list.tsx",
-              "apps/web/src/components/workspaces/entity-kind-icon.tsx",
-              "apps/web/src/components/workspaces/field-value.tsx",
-              "apps/web/src/features/chat/components/chat-title-rename.tsx",
-              "apps/web/src/features/knowledge/views/playbooks/playbooks-page-view.tsx",
-              "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx",
-              "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
-              "apps/web/src/routes/_protected.contacts/import.tsx",
-              "apps/web/src/routes/knowledge/-components/blueprint-gallery-sheet.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/add-mcp-server-sheet.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/catalogue-browser.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/install-pack-button.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-view.tsx",
-              "apps/web/src/routes/knowledge/-components/clause-detail.tsx",
-              "apps/web/src/routes/knowledge/-components/clause-editor.tsx",
-              "apps/web/src/routes/knowledge/-components/import-skill-dialog.tsx",
-              "apps/web/src/routes/knowledge/-components/template-clauses-tab.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-fields.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-inspector.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx",
-              "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx",
-              "apps/web/src/routes/_protected.settings/account.profile.tsx",
-              "apps/web/src/routes/_protected.settings/organization.usage.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
-              {
-                path: "packages/ui/src/components/button.tsx",
-                reason:
-                  "The Button `loading` state spins a lucide icon in place of the button's own icon; it moves to `Loader` once the size-in-slot behaviour is ported.",
-              },
-              {
-                path: "packages/ui/src/components/toast.tsx",
-                reason:
-                  "The loading toast type spins a lucide icon in the toast's icon slot; it moves to `Loader` with the button port.",
-              },
-            ],
-          },
-        ],
+        "no-adhoc-loader/no-adhoc-loader": "error",
       },
     },
     {
@@ -2348,12 +2255,6 @@ const config = defineConfig({
             // exact existing utility, so another layout transition in the same
             // file still fails.
             allowedFiles: [
-              {
-                path: "apps/web/src/routes/_protected.settings/organization.usage.tsx",
-                reason:
-                  "Usage meter animates the bar width it owns as the quota fills.",
-                utilities: ["transition-[width]"],
-              },
               {
                 path: "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx",
                 reason:
@@ -3491,14 +3392,8 @@ const config = defineConfig({
       },
     },
     {
-      // The kanban drag-and-drop owner: the one web module that may call the
-      // adapter's `draggable`/`dropTargetForElements` directly (it exports
-      // the conflict-guarded `attachElementDropTarget` every kanban drop
-      // target and the column draggable go through). Every other apps/web
-      // import restriction still applies, so it is restated here.
-      files: [
-        "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
-      ],
+      // Web element registrations share one owner and conflict registry.
+      files: ["apps/web/src/lib/drag-and-drop/element-registration.ts"],
       rules: {
         "no-restricted-imports": [
           "error",
@@ -5523,28 +5418,6 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: { "require-contract-domains/require-contract-domains": "error" },
-    },
-    {
-      // Shrink-only exceptions for existing surface-owned elements; preserve
-      // every other web import restriction while registration owners migrate.
-      files: [...LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES],
-      rules: {
-        "no-restricted-imports": [
-          "error",
-          {
-            paths: [noZodImport, ...webFolioAllLocalesImports],
-            patterns: [
-              {
-                group: webLocalApiImportGroup,
-                message: "Use '@/lib/api-contract' instead of '@/api/'.",
-              },
-              ...webCrossWorkspaceImports,
-              webDatePickerImport,
-              pragmaticDragAdapterDeepImportBan,
-            ],
-          },
-        ],
-      },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

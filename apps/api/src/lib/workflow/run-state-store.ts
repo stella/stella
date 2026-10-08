@@ -703,7 +703,3 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
       )) === "OK",
   };
 };
-
-export type WorkflowRunStateStore = ReturnType<
-  typeof createWorkflowRunStateStore
->;

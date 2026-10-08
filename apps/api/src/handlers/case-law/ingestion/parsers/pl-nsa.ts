@@ -12,11 +12,13 @@
  * matched to find a boundary (rule 9).
  */
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   buildValidationHtml,

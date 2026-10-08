@@ -243,7 +243,7 @@ const recordClauseSlotScope = (
 };
 
 /** Slot scopes of several containers (body, headers, footers) as one. */
-export const mergeClauseSlotScopes = (
+const mergeClauseSlotScopes = (
   into: Map<string, EnclosingScope | null>,
   from: ReadonlyMap<string, EnclosingScope | null>,
 ): void => {

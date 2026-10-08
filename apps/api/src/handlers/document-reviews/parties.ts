@@ -24,18 +24,20 @@ import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/sche
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   ACCOUNT_ACCESS,
+  admitFiniteAction,
   authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   detectReviewParties,
   REVIEW_PARTIES_PROMPT_VERSION,
+  type DetectReviewPartiesArgs,
 } from "@/api/lib/document-review/parties";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const TIMEOUT_MS = 60_000;
@@ -54,14 +56,53 @@ const config = {
   body: documentReviewPartiesBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
-type PersistDetectedPartiesOptions = {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  entityId: SafeId<"entity">;
-  entityVersionId: SafeId<"entityVersion">;
-  parties: typeof documentReviewParties.$inferInsert.parties;
+type DetectAdmittedPartiesOptions = {
+  ctx: Parameters<typeof admitFiniteAction>[0]["ctx"];
+  detectParties: typeof detectReviewParties;
+  request: Omit<DetectReviewPartiesArgs, "abortSignal" | "admission">;
 };
+
+/** Only a cache miss calls the model, so only a cache miss draws an action. */
+const detectAdmittedParties = async ({
+  ctx,
+  detectParties,
+  request,
+}: DetectAdmittedPartiesOptions) =>
+  await Result.gen(() =>
+    admitFiniteAction({
+      actionKind: "document-reviews.parties",
+      ctx,
+      async *handler({ actionSignal, modelAdmission }) {
+        const detected = yield* Result.await(
+          detectParties({
+            ...request,
+            admission: modelAdmission,
+            abortSignal: AbortSignal.any([
+              actionSignal,
+              AbortSignal.timeout(TIMEOUT_MS),
+            ]),
+          }).then((result) =>
+            // `WorkflowIntegrationError.cause` carries the provider's own
+            // failure: classify against that so an exhausted quota or a
+            // rejected key answers with the status that names it instead of
+            // an opaque 500.
+            Result.mapError(result, (error) =>
+              aiHandlerError(error.cause, {
+                status: 502,
+                message: "Party detection failed",
+              }),
+            ),
+          ),
+        );
+        return Result.ok({ parties: detected });
+      },
+    }),
+  );
+
+type PersistDetectedPartiesOptions = Pick<
+  typeof documentReviewParties.$inferInsert,
+  "organizationId" | "workspaceId" | "entityId" | "entityVersionId" | "parties"
+> & { safeDb: SafeDb };
 
 const persistDetectedParties = async ({
   safeDb,
@@ -138,9 +179,8 @@ export const createReviewParties = ({
   /** External file-store boundary; supplied by focused handler tests. */
   prepareReviewFiles?: typeof fetchAndPrepareReviewFiles | undefined;
 } = {}) =>
-  createSafeHandler(
-    config,
-    async function* ({
+  createSafeHandler(config, async function* (ctx) {
+    const {
       safeDb,
       workspaceId,
       body,
@@ -150,153 +190,163 @@ export const createReviewParties = ({
       orgAIConfigStatus,
       promptCachingEnabled,
       user,
-    }) {
-      const organizationId = session.activeOrganizationId;
-      const targetRef = { ...body.target, workspaceId };
-      const loadedEntities = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.entities.findMany({
-            where: { id: { in: [targetRef.entityId] } },
-            columns: { id: true, workspaceId: true },
-            limit: 1,
-            with: {
-              currentVersion: {
-                columns: { id: true },
-                with: {
-                  fields: { columns: { id: true, content: true } },
-                },
+    } = ctx;
+    const organizationId = session.activeOrganizationId;
+    const targetRef = { ...body.target, workspaceId };
+
+    const loadedEntities = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.entities.findMany({
+          where: { id: { in: [targetRef.entityId] } },
+          columns: { id: true, workspaceId: true },
+          limit: 1,
+          with: {
+            currentVersion: {
+              columns: { id: true },
+              with: {
+                fields: { columns: { id: true, content: true } },
               },
             },
-          }),
-        ),
-      );
-      const selection = resolveReviewSelection({
-        target: targetRef,
-        references: [],
-        entities: loadedEntities,
-      });
-      if (Result.isError(selection)) {
-        return Result.err(selection.error);
-      }
-      const { entityId, entityVersionId, file } = selection.value.target;
-      const cached = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({ parties: documentReviewParties.parties })
-            .from(documentReviewParties)
-            .where(
-              and(
-                eq(documentReviewParties.workspaceId, workspaceId),
-                eq(documentReviewParties.entityVersionId, entityVersionId),
-                eq(
-                  documentReviewParties.promptVersion,
-                  REVIEW_PARTIES_PROMPT_VERSION,
-                ),
-              ),
-            )
-            .limit(1),
-        ),
-      );
-      const cachedRow = cached.at(0);
-      if (cachedRow !== undefined) {
-        return Result.ok({ entityVersionId, parties: cachedRow.parties });
-      }
-      yield* requireTanStackAIAvailableForRole({
-        dataClass: "customer",
-        configStatus: orgAIConfigStatus,
-        orgConfig: orgAIConfig,
-        role: "pdf",
-      });
-
-      const authorization = yield* Result.await(
-        authorizeHandlerUsage({
-          metering: { actionType: "chat", modelRole: "pdf" },
-          organizationId,
-          orgAIConfig,
-          workspaceId,
-          userId: user.id,
-          safeDb,
+          },
         }),
-      );
-      return await authorization.execute(
-        async () =>
-          await Result.gen(async function* () {
-            const prepared = yield* Result.await(
-              Result.tryPromise({
-                try: async () =>
-                  await prepareReviewFiles([file], organizationId),
-                catch: (cause) =>
-                  new HandlerError({
-                    status: 500,
-                    message: "Internal server error",
-                    cause,
-                  }),
-              }),
-            );
-            const target = prepared.at(0);
-            if (target?.kind !== "docx") {
-              return panic(
-                "DOCX review target was not prepared as DOCX blocks",
-              );
-            }
+      ),
+    );
+    const selection = resolveReviewSelection({
+      target: targetRef,
+      references: [],
+      entities: loadedEntities,
+    });
+    if (Result.isError(selection)) {
+      return Result.err(selection.error);
+    }
+    const { entityId, entityVersionId, file } = selection.value.target;
 
-            const serviceTier = "standard" as const;
-            const detected = await detectParties({
-              target,
-              targetEntityVersionId: entityVersionId,
-              organizationId,
-              workspaceId,
-              orgAIConfig,
-              managedAIResidency,
-              promptCachingEnabled,
-              serviceTier,
-              usageMetering: {
-                actionType: "chat",
-                organizationId,
-                safeDb,
+    const cached = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ parties: documentReviewParties.parties })
+          .from(documentReviewParties)
+          .where(
+            and(
+              eq(documentReviewParties.workspaceId, workspaceId),
+              eq(documentReviewParties.entityVersionId, entityVersionId),
+              eq(
+                documentReviewParties.promptVersion,
+                REVIEW_PARTIES_PROMPT_VERSION,
+              ),
+            ),
+          )
+          .limit(1),
+      ),
+    );
+    const cachedRow = cached.at(0);
+    if (cachedRow !== undefined) {
+      return Result.ok({ entityVersionId, parties: cachedRow.parties });
+    }
+
+    yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
+      configStatus: orgAIConfigStatus,
+      orgConfig: orgAIConfig,
+      role: "pdf",
+    });
+
+    const authorization = yield* Result.await(
+      authorizeHandlerUsage({
+        metering: { actionType: "chat", modelRole: "pdf" },
+        organizationId,
+        orgAIConfig,
+        workspaceId,
+        userId: user.id,
+        safeDb,
+        ctx,
+        detectParties,
+        prepareReviewFiles,
+        file,
+        entityId,
+        entityVersionId,
+        managedAIResidency,
+        promptCachingEnabled,
+      }),
+    );
+    return await authorization.execute(
+      async ({ proof }) =>
+        await Result.gen(async function* () {
+          const checked = proof.input.value;
+          const admittedContext = cloneOperationInput(checked.ctx);
+          const preparedResult = await Result.tryPromise({
+            try: async () =>
+              await checked.prepareReviewFiles(
+                [checked.file],
+                checked.organizationId,
+              ),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Internal server error",
+                cause,
+              }),
+          });
+          if (Result.isError(preparedResult)) {
+            return Result.err(preparedResult.error);
+          }
+          const target = preparedResult.value.at(0);
+          if (target?.kind !== "docx") {
+            return panic("DOCX review target was not prepared as DOCX blocks");
+          }
+
+          const serviceTier = "standard" as const;
+          const { parties } = yield* Result.await(
+            detectAdmittedParties({
+              ctx: admittedContext,
+              detectParties: checked.detectParties,
+              request: {
+                target,
+                targetEntityVersionId: checked.entityVersionId,
+                organizationId: checked.organizationId,
+                workspaceId: checked.workspaceId,
+                orgAIConfig: checked.orgAIConfig,
+                managedAIResidency: checked.managedAIResidency,
+                promptCachingEnabled: checked.promptCachingEnabled,
                 serviceTier,
-                userId: user.id,
-                workspaceId,
+                usageMetering: {
+                  actionType: "chat",
+                  organizationId: checked.organizationId,
+                  safeDb: checked.safeDb,
+                  serviceTier,
+                  userId: checked.userId,
+                  workspaceId: checked.workspaceId,
+                },
               },
-              abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-            });
-            if (Result.isError(detected)) {
-              // `WorkflowIntegrationError.cause` carries the provider's own failure —
-              // classify against that so refused admission or a rejected key answers
-              // with the status that names it instead of an opaque 500.
-              return Result.err(
-                aiHandlerError(detected.error.cause, {
-                  status: 502,
-                  message: "Party detection failed",
-                }),
-              );
-            }
-            const parties = detected.value;
+            }),
+          );
 
-            const persisted = yield* Result.await(
-              persistDetectedParties({
-                safeDb,
-                organizationId,
-                workspaceId,
-                entityId,
-                entityVersionId,
-                parties,
+          const persisted = yield* Result.await(
+            persistDetectedParties({
+              safeDb: checked.safeDb,
+              organizationId: checked.organizationId,
+              workspaceId: checked.workspaceId,
+              entityId: checked.entityId,
+              entityVersionId: checked.entityVersionId,
+              parties,
+            }),
+          );
+
+          if (!persisted) {
+            return Result.err(
+              new HandlerError({
+                status: 404,
+                message: "Document review target is no longer available",
               }),
             );
+          }
 
-            if (!persisted) {
-              return Result.err(
-                new HandlerError({
-                  status: 404,
-                  message: "Document review target is no longer available",
-                }),
-              );
-            }
-
-            return Result.ok({ entityVersionId, parties });
-          }),
-      );
-    },
-  );
+          return Result.ok({
+            entityVersionId: checked.entityVersionId,
+            parties,
+          });
+        }),
+    );
+  });
 
 export default createReviewParties();

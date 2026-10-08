@@ -6,6 +6,7 @@ import path from "node:path";
 
 import {
   BYOK_MODEL_OPTIONS,
+  MODELS_DEV_RATE_CORRECTIONS,
   MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
   MODELS_DEV_RATE_SOURCE_ALIASES,
   MODEL_RATES,
@@ -413,6 +414,7 @@ export const modelRateFromModelsDev = (
 };
 
 export type GeneratedModelRateRow = {
+  corrections: readonly string[];
   modelId: string;
   rate: ModelRate;
   source: string;
@@ -420,10 +422,71 @@ export type GeneratedModelRateRow = {
   sourceUrl: string | null;
 };
 
+/**
+ * Apply the reviewed corrections for one models.dev source to its flat cost
+ * fields. Fails when the upstream value no longer equals the pinned one, so a
+ * correction never outlives the upstream defect it covers.
+ */
+export const applyModelRateCorrections = (
+  modelValue: unknown,
+  source: string,
+  corrections: typeof MODELS_DEV_RATE_CORRECTIONS,
+): { corrections: string[]; modelValue: unknown } => {
+  const entries = corrections[source];
+  if (entries === undefined) {
+    return { corrections: [], modelValue };
+  }
+  if (!isObject(modelValue) || !isObject(modelValue["cost"])) {
+    return panic(`${source}: models.dev record has no cost object`);
+  }
+  const upstreamCost = modelValue["cost"];
+  for (const entry of entries) {
+    const upstreamValue = upstreamCost[entry.field];
+    if (upstreamValue !== entry.upstreamUsd) {
+      return panic(
+        `${source}: models.dev cost.${entry.field} is ${String(upstreamValue)}, ` +
+          `not the corrected ${entry.upstreamUsd}; delete or re-review its ` +
+          "MODELS_DEV_RATE_CORRECTIONS entry",
+      );
+    }
+  }
+  const cost = {
+    ...upstreamCost,
+    ...Object.fromEntries(
+      entries.map((entry) => [entry.field, entry.correctedUsd]),
+    ),
+  };
+  return {
+    corrections: entries.map(
+      (entry) =>
+        `cost.${entry.field} ${entry.upstreamUsd} -> ${entry.correctedUsd} ` +
+        `(${entry.reason}; ${entry.sourceUrl})`,
+    ),
+    modelValue: { ...modelValue, cost },
+  };
+};
+
+/** Correction sources that no rated model reads. */
+export const findUnusedModelRateCorrections = (
+  usedSources: ReadonlySet<string>,
+  corrections: typeof MODELS_DEV_RATE_CORRECTIONS,
+): string[] =>
+  Object.keys(corrections).filter((source) => !usedSources.has(source));
+
 export const buildModelRateRows = (
   upstream: ReadonlyMap<string, unknown>,
-): GeneratedModelRateRow[] =>
-  buildRateSources().map((spec) => {
+): GeneratedModelRateRow[] => {
+  const sources = buildRateSources();
+  const unused = findUnusedModelRateCorrections(
+    new Set(sources.map((spec) => `${spec.provider}:${spec.sourceModelId}`)),
+    MODELS_DEV_RATE_CORRECTIONS,
+  );
+  if (unused.length > 0) {
+    return panic(
+      `rate corrections target no rated source: ${unused.join(", ")}`,
+    );
+  }
+  return sources.map((spec) => {
     const directKey = `${spec.provider}:${spec.modelId}`;
     const sourceKey = `${spec.provider}:${spec.sourceModelId}`;
     const directValue = upstream.get(directKey);
@@ -445,14 +508,21 @@ export const buildModelRateRows = (
         `${spec.modelId}: models.dev rate source ${sourceKey} is absent`,
       );
     }
+    const corrected = applyModelRateCorrections(
+      modelValue,
+      sourceKey,
+      MODELS_DEV_RATE_CORRECTIONS,
+    );
     return {
+      corrections: corrected.corrections,
       modelId: spec.modelId,
-      rate: modelRateFromModelsDev(modelValue, sourceKey),
+      rate: modelRateFromModelsDev(corrected.modelValue, sourceKey),
       source: sourceKey,
       sourceReason: spec.sourceReason,
       sourceUrl: spec.sourceUrl,
     };
   });
+};
 
 /** An integer as generated catalog source writes it: `65_536`, `4096`. */
 export const formatInteger = (value: number): string => {
@@ -514,6 +584,9 @@ export const renderModelRatesModule = (
     ...(row.sourceUrl === null
       ? []
       : [`  // reviewed source: ${row.sourceUrl}`]),
+    ...row.corrections.map(
+      (correction) => `  // reviewed rate correction: ${correction}`,
+    ),
     `  "${row.modelId}": {`,
     ...renderRate(row.rate),
     "  },",

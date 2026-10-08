@@ -14,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -21,6 +22,7 @@ export type GenerateBBoxesProps = {
   abortSignal: AbortSignal;
   justificationId: SafeId<"justification">;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig?: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;

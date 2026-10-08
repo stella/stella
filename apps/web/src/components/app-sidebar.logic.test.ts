@@ -4,7 +4,6 @@ import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import {
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
-  matterActivityNeedsLegalListsDecision,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -269,69 +268,41 @@ describe("sidebar list item admission", () => {
     type: "entity",
   } as const satisfies WorkspaceActivity;
   for (const listItemType of [null, ...LIST_ITEM_TYPES]) {
-    for (const legalListsEnabled of [false, true]) {
-      test(`task ${listItemType ?? "none"} with Lists ${String(legalListsEnabled)}`, () => {
-        const item = {
-          ...entity,
-          listItemType,
-        } as const satisfies WorkspaceActivity;
-        const visible = matterActivityItemVisible(item, legalListsEnabled);
-        expect(visible).toBe(
-          legalListsEnabled || listItemType === null || listItemType === "task",
-        );
-        expect(
-          matterActivityIsKnownEmpty({
-            isInvalidated: false,
-            status: "success",
-            pages: [
-              {
-                items: [item].filter((entry) =>
-                  matterActivityItemVisible(entry, legalListsEnabled),
-                ),
-                nextCursor: null,
-              },
-            ],
-          }),
-        ).toBe(!visible);
-      });
-    }
-  }
-  test("only list items other than tasks need the Lists decision", () => {
-    expect(matterActivityNeedsLegalListsDecision([])).toBe(false);
-    expect(matterActivityNeedsLegalListsDecision([entity])).toBe(false);
-    expect(
-      matterActivityNeedsLegalListsDecision([
-        { ...entity, listItemType: "task" },
-      ]),
-    ).toBe(false);
-    for (const listItemType of LIST_ITEM_TYPES.filter(
-      (type) => type !== "task",
-    )) {
+    test(`only task list items appear as sidebar tasks: ${listItemType ?? "none"}`, () => {
+      const item = {
+        ...entity,
+        listItemType,
+      } as const satisfies WorkspaceActivity;
+      const visible = matterActivityItemVisible(item);
+      expect(visible).toBe(listItemType === null || listItemType === "task");
       expect(
-        matterActivityNeedsLegalListsDecision([
-          entity,
-          { ...entity, id: "entity-b", listItemType },
-        ]),
-      ).toBe(true);
-    }
-  });
-  test("documents and threads remain visible without Lists", () => {
+        matterActivityIsKnownEmpty({
+          isInvalidated: false,
+          status: "success",
+          pages: [
+            {
+              items: [item].filter(matterActivityItemVisible),
+              nextCursor: null,
+            },
+          ],
+        }),
+      ).toBe(!visible);
+    });
+  }
+  test("documents and threads remain visible", () => {
     expect(
-      matterActivityItemVisible(
-        {
-          type: "thread",
-          id: "thread-a",
-          title: "Review notes",
-          activityAt: entity.activityAt,
-        } satisfies WorkspaceActivity,
-        false,
-      ),
+      matterActivityItemVisible({
+        type: "thread",
+        id: "thread-a",
+        title: "Review notes",
+        activityAt: entity.activityAt,
+      } satisfies WorkspaceActivity),
     ).toBe(true);
     expect(
-      matterActivityItemVisible(
-        { ...entity, entityKind: "document" } satisfies WorkspaceActivity,
-        false,
-      ),
+      matterActivityItemVisible({
+        ...entity,
+        entityKind: "document",
+      } satisfies WorkspaceActivity),
     ).toBe(true);
   });
 });

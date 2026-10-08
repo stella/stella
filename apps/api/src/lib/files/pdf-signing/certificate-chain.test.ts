@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   certificationPathReachesAnchor,
   chainReachesRoot,
@@ -14,6 +15,7 @@ import {
 import type { TestCertificate } from "@/api/tests/helpers/test-pki";
 
 const keyPool = createTestRsaKeyPool();
+const permit = grantThirdPartyOutboundPermit();
 beforeEach(() => keyPool.reset());
 
 const ROOT_URL = "http://pki.example/root.cer";
@@ -70,6 +72,7 @@ describe("completing the signer's certificate chain", () => {
     const { fetcher, requested } = servingFetcher({});
 
     const completed = await completeCertificateChain({
+      permit,
       candidates: [root.der, stranger.der, intermediate.der],
       certificate: leaf.der,
       fetcher,
@@ -89,6 +92,7 @@ describe("completing the signer's certificate chain", () => {
     });
 
     const completed = await completeCertificateChain({
+      permit,
       candidates: [],
       certificate: leaf.der,
       fetcher,
@@ -112,6 +116,7 @@ describe("completing the signer's certificate chain", () => {
     const { fetcher } = servingFetcher({ [INTERMEDIATE_URL]: impostor });
 
     const completed = await completeCertificateChain({
+      permit,
       candidates: [impostor.der],
       certificate: leaf.der,
       fetcher,
@@ -130,6 +135,7 @@ describe("completing the signer's certificate chain", () => {
     });
 
     const completed = await completeCertificateChain({
+      permit,
       candidates: [],
       certificate: leaf.der,
       fetcher,
@@ -144,6 +150,7 @@ describe("completing the signer's certificate chain", () => {
     const own = await createTestCertificate({ keyPool, commonName: "Self" });
 
     const completed = await completeCertificateChain({
+      permit,
       candidates: [],
       certificate: own.der,
       fetcher: servingFetcher({}).fetcher,
@@ -163,9 +170,9 @@ describe("fetching PKI data a certificate points at", () => {
     "file:///etc/passwd",
     "ldap://directory.example/cn=CA",
   ])("never reaches %s", async (url) => {
-    expect(await safePkiFetch({ maxBytes: 1024, method: "GET", url })).toBe(
-      null,
-    );
+    expect(
+      await safePkiFetch({ permit, maxBytes: 1024, method: "GET", url }),
+    ).toBe(null);
   });
 });
 

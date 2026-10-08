@@ -25,6 +25,37 @@ test("every real workflow job has an event policy and the fast gate follows it",
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
 });
 
+test("Postgres PR opt-in cannot lose its disabled-by-default switch", () => {
+  const workflow = v.parse(
+    workflowSchema,
+    structuredClone(workflows["ci.yml"]),
+  );
+  const service = workflow.jobs["service-suites"];
+  if (service === undefined || typeof service.if !== "string") {
+    panic("Missing service-suite switch fixture");
+  }
+  const original = service.if;
+  expect(original).toContain("vars.CI_POSTGRES_PR_SELECTION == 'on'");
+  for (const replacement of [
+    "true",
+    "vars.CI_POSTGRES_PR_SELECTION != 'off'",
+  ]) {
+    service.if = original.replace(
+      "vars.CI_POSTGRES_PR_SELECTION == 'on'",
+      () => replacement,
+    );
+    expect(service.if).not.toBe(original);
+    expect(
+      checkCiEventPolicies({
+        workflows: { ...workflows, "ci.yml": workflow },
+        policy,
+      }),
+    ).toContain(
+      "ci.yml/service-suites: Postgres PR suites must require the disabled-by-default switch",
+    );
+  }
+});
+
 test("repeating a fast check cannot replace another declared check", () => {
   const workflow = structuredClone(workflows["ci.yml"]);
   const parsed = v.parse(workflowSchema, workflow);
