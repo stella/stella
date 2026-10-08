@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -20,6 +20,7 @@ import {
   AggregateLockBusy,
   ROW_LOCK_MODES,
   withAggregateLock,
+  withAggregateRowQuery,
 } from "./aggregate-lock";
 import type { RowLockMode } from "./aggregate-lock";
 
@@ -127,6 +128,133 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("aggregate lock extension (postgres)", () => {
+    test.each(["broad", "other-only", "either"] as const)(
+      "registered row predicates prevent waiting on an unrelated locked row with %s extras",
+      async (extra) => {
+        await withLockFixture(
+          databaseUrl,
+          async ({
+            holder,
+            contender,
+            organizationId,
+            otherOrganizationId,
+          }) => {
+            await holder.transaction(async (holdingTx) => {
+              expect(
+                await withAggregateLock({
+                  aggregate: "organization",
+                  id: otherOrganizationId,
+                  mode: "update",
+                  tx: holdingTx,
+                }),
+              ).toEqual({ status: "locked" });
+              await contender.transaction(async (tx) => {
+                const extras = {
+                  broad: sql`TRUE`,
+                  "other-only": eq(organization.id, otherOrganizationId),
+                  either:
+                    or(
+                      eq(organization.id, organizationId),
+                      eq(organization.id, otherOrganizationId),
+                    ) ?? panic("Nonempty organization disjunction must exist"),
+                };
+                const acquisition = await withAggregateRowQuery({
+                  aggregate: "organization",
+                  id: organizationId,
+                  mode: "update",
+                  tx,
+                  select: (queryTx) =>
+                    queryTx.select({ id: organization.id }).from(organization),
+                  where: extras[extra],
+                });
+                expect(acquisition.status).toBe(
+                  extra === "other-only" ? "missing" : "locked",
+                );
+                if (acquisition.status === "busy") {
+                  panic(
+                    "Blocking declared-row acquisition must not reach the unrelated held row",
+                  );
+                }
+                expect(acquisition.rows.map((row) => row.id)).toEqual(
+                  extra === "other-only" ? [] : [organizationId],
+                );
+                const healthy = await tx.execute(sql`SELECT 1 AS healthy`);
+                expect(healthy.at(0)?.["healthy"]).toBe(1);
+                expect(
+                  await withAggregateLock({
+                    aggregate: "organization",
+                    id: organizationId,
+                    mode: "update",
+                    tx,
+                  }),
+                ).toEqual({ status: "locked" });
+              });
+            });
+          },
+        );
+      },
+    );
+
+    test("extra predicates preserve registered tenant scope without waiting on rows outside it", async () => {
+      await withLockFixture(
+        databaseUrl,
+        async ({
+          holder,
+          contender,
+          organizationId,
+          otherOrganizationId,
+          workspaceId,
+        }) => {
+          await holder.transaction(async (holdingTx) => {
+            expect(
+              await withAggregateLock({
+                aggregate: "workspace",
+                id: { id: workspaceId, organizationId },
+                mode: "update",
+                tx: holdingTx,
+              }),
+            ).toEqual({ status: "locked" });
+            await contender.transaction(async (tx) => {
+              const acquisition = await withAggregateRowQuery({
+                aggregate: "workspace",
+                id: { id: workspaceId, organizationId: otherOrganizationId },
+                mode: "update",
+                tx,
+                select: (queryTx) =>
+                  queryTx
+                    .select({
+                      id: workspaces.id,
+                      organizationId: workspaces.organizationId,
+                    })
+                    .from(workspaces),
+                where:
+                  or(
+                    eq(workspaces.organizationId, organizationId),
+                    sql`TRUE`,
+                  ) ?? panic("Nonempty workspace disjunction must exist"),
+              });
+              expect(acquisition.status).toBe("missing");
+              if (acquisition.status === "busy") {
+                panic(
+                  "Wrong-tenant acquisition must not reach the physically matching held workspace",
+                );
+              }
+              expect(acquisition.rows).toEqual([]);
+              // A missing workspace must not consume rank or poison the parent.
+              expect(
+                await withAggregateLock({
+                  aggregate: "organization",
+                  id: otherOrganizationId,
+                  mode: "update",
+                  tx,
+                }),
+              ).toEqual({ status: "locked" });
+            });
+          });
+        },
+      );
+    });
+
     test("two KEY SHARE holders reject blocking upgrades at their high-water and both receive typed NOWAIT busy", async () => {
       await withLockFixture(
         databaseUrl,

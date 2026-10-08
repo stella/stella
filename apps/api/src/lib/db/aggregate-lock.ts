@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import {
+  and,
   getColumnTable,
   getColumns,
   getTableName,
@@ -703,13 +704,19 @@ export const withAggregateLock = async (
   return rows.length > 0 ? { status: "locked" } : { status: "missing" };
 };
 
+type AggregateLockableQuery<Row> = {
+  for: (mode: RowLockMode, config?: LockConfig) => PromiseLike<Row[]>;
+  toSQL: () => { sql: string };
+  as: (alias: string) => Subquery;
+};
 type AggregateRowQueryOptions<Row> = RowIdentityOptions & {
   mode: RowLockMode;
   select: (tx: Transaction) => {
-    for: (mode: RowLockMode, config?: LockConfig) => PromiseLike<Row[]>;
+    where: (predicate: SQL) => AggregateLockableQuery<Row>;
     toSQL: () => { sql: string };
     as: (alias: string) => Subquery;
   };
+  where?: SQL;
   lockConfig?: Omit<LockConfig, "noWait" | "skipLocked">;
 } & ({ tx: Transaction; wait?: "block" } | { tx: Transaction; wait: "nowait" });
 type AggregateRowsResult<Row> =
@@ -859,8 +866,11 @@ const outerSelectTokens = (source: string): SelectToken[] => {
 const aggregateSelectTarget = (source: string) => {
   const allTokens = outerSelectTokens(source);
   for (const [index, token] of allTokens.entries()) {
-    if (token.kind !== "word" || token.value !== "for" || token.depth === 0) {
+    if (token.kind !== "word" || token.value !== "for") {
       continue;
+    }
+    if (token.depth === 0) {
+      panic("Aggregate query must not include a locking clause");
     }
     const strength = allTokens.at(index + 1);
     if (
@@ -872,6 +882,14 @@ const aggregateSelectTarget = (source: string) => {
     }
   }
   const tokens = allTokens.filter((token) => token.depth === 0);
+  if (tokens.some((token) => token.kind === "word" && token.value === "of")) {
+    panic("Aggregate query must not include a locking clause");
+  }
+  if (
+    tokens.some((token) => token.kind === "word" && token.value === "offset")
+  ) {
+    panic("Aggregate query must not include an offset");
+  }
   const first = tokens.at(0);
   const fromIndexes = tokens.flatMap((token, index) =>
     token.kind === "word" && token.value === "from" ? [index] : [],
@@ -921,6 +939,9 @@ const aggregateSelectTarget = (source: string) => {
     table: table.value,
     joined: tokens.some(
       (token) => token.kind === "word" && token.value === "join",
+    ),
+    filtered: tokens.some(
+      (token) => token.kind === "word" && token.value === "where",
     ),
   };
 };
@@ -1079,7 +1100,7 @@ const validateProjectedRows = (rows: readonly ProjectedValue[][]): void => {
   }
 };
 
-/** Lock the caller's exact selected rows; preserve CAS/projection and record only returned physical identities. */
+/** Apply the registered identity and tenant predicate before locking; extra predicates can only narrow it. */
 export const withAggregateRowQuery = async <Row>(
   options: AggregateRowQueryOptions<Row>,
 ): Promise<AggregateRowsResult<Row>> => {
@@ -1100,6 +1121,9 @@ export const withAggregateRowQuery = async <Row>(
     if (target.table !== table) {
       panic("Aggregate query target does not match its registered resource");
     }
+    if (target.filtered) {
+      panic("Pass additional aggregate predicates through the where option");
+    }
     const of = options.lockConfig?.of;
     if (of !== undefined) {
       const targets = Array.isArray(of) ? of : [of];
@@ -1118,9 +1142,21 @@ export const withAggregateRowQuery = async <Row>(
       getColumns(query.as("aggregate_projection")),
       resource,
     );
+    const columns = [...resource.columns, ...resource.scopeColumns];
+    const values = [...resource.values, ...resource.scopeValues];
+    const predicate =
+      and(
+        ...columns.map(
+          (column, index) =>
+            sql`${sql.identifier(table, column)} = ${values.at(index) ?? panic("Missing aggregate row key")}`,
+        ),
+        options.where,
+      ) ?? panic("Missing registered aggregate predicate");
+    const scopedQuery = query.where(predicate);
+    aggregateSelectTarget(scopedQuery.toSQL().sql);
     assertAggregateLevelAvailable(queryHistory);
     queryHistory.status = "acquiring";
-    const rows = await query.for(
+    const rows = await scopedQuery.for(
       options.mode,
       wait === "nowait"
         ? { ...options.lockConfig, noWait: true }

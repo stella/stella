@@ -1,12 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import {
-  and,
-  eq,
-  getTableName,
-  sql,
-  TransactionRollbackError,
-} from "drizzle-orm";
+import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -39,6 +33,31 @@ const workspaceIdentity = {
   aggregate: "workspace",
   id: { id: workspaceId, organizationId },
 } as const;
+
+// This adapter deliberately violates its row contract while preserving genuine SDK projection metadata.
+const malformedWorkspaceQuery = (
+  tx: Transaction,
+  rows: { id: typeof workspaceId; organizationId: typeof organizationId }[],
+) => {
+  const query = tx
+    .select({ id: workspaces.id, organizationId: workspaces.organizationId })
+    .from(workspaces);
+  return {
+    toSQL: () => query.toSQL(),
+    as: (alias: string) => query.as(alias),
+    where: (predicate: SQL) => {
+      const scoped = query.where(predicate);
+      return {
+        toSQL: () => scoped.toSQL(),
+        as: (alias: string) => scoped.as(alias),
+        for: async (...args: Parameters<typeof scoped.for>) => {
+          await scoped.for(...args);
+          return rows;
+        },
+      };
+    },
+  };
+};
 
 beforeAll(async () => {
   await db.insert(organization).values({
@@ -86,22 +105,16 @@ describe("aggregate queries preserve their decisive read", () => {
             organizationId: workspaces.organizationId,
             caption: workspaces.name,
           })
-          .from(workspaces)
-          .where(
-            and(
-              eq(workspaces.id, workspaceId),
-              eq(workspaces.organizationId, organizationId),
-              timestampMatchesCasToken(
-                workspaces.lastActivityAt,
-                captured.token,
-              ),
-            ),
-          );
+          .from(workspaces);
       const result = await withAggregateRowQuery({
         ...workspaceIdentity,
         tx,
         mode: "update",
         select: query,
+        where: timestampMatchesCasToken(
+          workspaces.lastActivityAt,
+          captured.token,
+        ),
       });
       expect(result).toEqual({
         status: "locked",
@@ -120,6 +133,10 @@ describe("aggregate queries preserve their decisive read", () => {
         tx,
         mode: "update",
         select: query,
+        where: timestampMatchesCasToken(
+          workspaces.lastActivityAt,
+          captured.token,
+        ),
       });
       expect(stale).toEqual({ status: "missing", rows: [] });
     });
@@ -132,19 +149,14 @@ describe("aggregate queries preserve their decisive read", () => {
         ...workspaceIdentity,
         tx,
         mode: "update",
+        where: eq(workspaces.name, "absent projection"),
         select: (queryTx) =>
           queryTx
             .select({
               id: workspaces.id,
               organizationId: workspaces.organizationId,
             })
-            .from(workspaces)
-            .where(
-              and(
-                eq(workspaces.id, workspaceId),
-                eq(workspaces.name, "absent projection"),
-              ),
-            ),
+            .from(workspaces),
       });
       expect(result).toEqual({ status: "missing", rows: [] });
       expect(
@@ -158,28 +170,32 @@ describe("aggregate queries preserve their decisive read", () => {
     });
   });
 
-  test("rejects rows outside the requested identity", async () => {
-    const error = await rejectionOf(
-      withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
-        return await withAggregateRowQuery({
+  test("additional predicates cannot select another physical identity", async () => {
+    await withAggregateTransaction(db, async (rawTx) => {
+      const tx = asTestRaw<Transaction>(rawTx);
+      expect(
+        await withAggregateRowQuery({
           ...workspaceIdentity,
           tx,
           mode: "update",
+          where: eq(workspaces.id, otherWorkspaceId),
           select: (queryTx) =>
             queryTx
               .select({
                 id: workspaces.id,
                 organizationId: workspaces.organizationId,
               })
-              .from(workspaces)
-              .where(eq(workspaces.id, otherWorkspaceId)),
-        });
-      }),
-    );
-    expect(error).toMatchObject({
-      message:
-        "Aggregate query returned an undeclared physical or tenant resource",
+              .from(workspaces),
+        }),
+      ).toEqual({ status: "missing", rows: [] });
+      expect(
+        await withAggregateLock({
+          aggregate: "organization",
+          id: organizationId,
+          tx,
+          mode: "update",
+        }),
+      ).toEqual({ status: "locked" });
     });
   });
 
@@ -192,10 +208,7 @@ describe("aggregate queries preserve their decisive read", () => {
           tx,
           mode: "update",
           select: (queryTx) =>
-            queryTx
-              .select({ id: organization.id })
-              .from(organization)
-              .where(eq(organization.id, organizationId)),
+            queryTx.select({ id: organization.id }).from(organization),
         });
       }),
     );
@@ -221,8 +234,7 @@ describe("outer aggregate query target validation", () => {
                   Number,
                 ),
               })
-              .from(organization)
-              .where(eq(organization.id, organizationId)),
+              .from(organization),
         });
       }),
     );
@@ -251,8 +263,7 @@ describe("outer aggregate query target validation", () => {
                   Number,
                 ),
             })
-            .from(workspaces)
-            .where(eq(workspaces.id, workspaceId)),
+            .from(workspaces),
       });
       expect(result).toEqual({
         status: "locked",
@@ -283,8 +294,7 @@ describe("outer aggregate query target validation", () => {
                   .mapWith(String)
                   .as("FROM organization JOIN member"),
             })
-            .from(workspaces)
-            .where(eq(workspaces.id, workspaceId)),
+            .from(workspaces),
       });
       expect(result).toEqual({
         status: "locked",
@@ -316,8 +326,7 @@ describe("aggregate query projection ownership", () => {
               matter: { key: workspaces.id, tenant: workspaces.organizationId },
               caption: workspaces.name,
             })
-            .from(workspaces)
-            .where(eq(workspaces.id, workspaceId)),
+            .from(workspaces),
       });
       expect(result).toEqual({
         status: "locked",
@@ -349,10 +358,7 @@ describe("aggregate query projection ownership", () => {
               tx,
               mode: "update",
               select: (queryTx) =>
-                queryTx
-                  .select({ id, organizationId: tenant })
-                  .from(workspaces)
-                  .where(eq(workspaces.id, workspaceId)),
+                queryTx.select({ id, organizationId: tenant }).from(workspaces),
             }),
           ),
         ).toMatchObject({
@@ -391,8 +397,7 @@ describe("aggregate query projection ownership", () => {
                 .innerJoin(
                   organization,
                   eq(organization.id, workspaces.organizationId),
-                )
-                .where(eq(workspaces.id, workspaceId)),
+                ),
           }),
         ),
       ).toMatchObject({
@@ -411,9 +416,123 @@ describe("aggregate query projection ownership", () => {
   });
 });
 
+describe("owner-scoped query predicates", () => {
+  test("broad predicates return only the declared row; a different tenant returns none", async () => {
+    await withAggregateTransaction(db, async (rawTx) => {
+      const tx = asTestRaw<Transaction>(rawTx);
+      const select = (queryTx: Transaction) =>
+        queryTx
+          .select({
+            id: workspaces.id,
+            organizationId: workspaces.organizationId,
+          })
+          .from(workspaces);
+      expect(
+        await withAggregateRowQuery({
+          ...workspaceIdentity,
+          tx,
+          mode: "update",
+          where: eq(workspaces.organizationId, organizationId),
+          select,
+        }),
+      ).toEqual({
+        status: "locked",
+        rows: [{ id: workspaceId, organizationId }],
+      });
+      expect(
+        await withAggregateRowQuery({
+          aggregate: "workspace",
+          id: {
+            id: workspaceId,
+            organizationId: mintAuthProviderId<"organization">(),
+          },
+          tx,
+          mode: "update",
+          select,
+        }),
+      ).toEqual({ status: "missing", rows: [] });
+    });
+  });
+
+  test.each(["filtered", "locked", "joined-locked", "offset"] as const)(
+    "%s caller builders fail before scoping or execution and leave history idle",
+    async (shape) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        let scoped = false;
+        expect(
+          await rejectionOf(
+            withAggregateRowQuery({
+              ...workspaceIdentity,
+              tx,
+              mode: "update",
+              lockConfig: { of: workspaces },
+              select: (queryTx) => {
+                const base = queryTx
+                  .select({
+                    id: workspaces.id,
+                    organizationId: workspaces.organizationId,
+                  })
+                  .from(workspaces)
+                  .$dynamic();
+                const query = (() => {
+                  switch (shape) {
+                    case "offset":
+                      return base.offset(1);
+                    case "filtered":
+                      return base.where(eq(workspaces.id, workspaceId));
+                    case "joined-locked":
+                      return base
+                        .innerJoin(
+                          organization,
+                          eq(organization.id, workspaces.organizationId),
+                        )
+                        .for("key share", { of: organization });
+                    case "locked":
+                      return base.for("share");
+                    default:
+                      shape satisfies never;
+                      return panic("Unknown query contract fixture");
+                  }
+                })();
+                return {
+                  toSQL: () => query.toSQL(),
+                  as: (alias: string) => query.as(alias),
+                  where: (predicate: SQL) => {
+                    scoped = true;
+                    return query.where(predicate);
+                  },
+                };
+              },
+            }),
+          ),
+        ).toMatchObject({
+          message: {
+            offset: "Aggregate query must not include an offset",
+            filtered:
+              "Pass additional aggregate predicates through the where option",
+            locked: "Aggregate query must not include a locking clause",
+            "joined-locked":
+              "Aggregate query must not include a locking clause",
+          }[shape],
+        });
+        expect(scoped).toBe(false);
+        expect(
+          await withAggregateLock({
+            aggregate: "organization",
+            id: organizationId,
+            tx,
+            mode: "update",
+          }),
+        ).toEqual({ status: "locked" });
+      });
+    },
+  );
+});
+
 describe("returned aggregate identity validation", () => {
   test.each(["identity", "tenant", "cardinality"] as const)(
-    "a blocking %s refusal retains the acquired identities and leaves history idle",
+    "a blocking malformed %s response records returned identities and leaves history idle",
     async (mismatch) => {
       await withAggregateTransaction(db, async (rawTx) => {
         const tx = asTestRaw<Transaction>(rawTx);
@@ -435,22 +554,10 @@ describe("returned aggregate identity validation", () => {
               tx,
               mode: "key share",
               select: (queryTx) =>
-                queryTx
-                  .select({
-                    id: workspaces.id,
-                    organizationId: workspaces.organizationId,
-                  })
-                  .from(workspaces)
-                  .where(
-                    mismatch === "cardinality"
-                      ? eq(workspaces.organizationId, organizationId)
-                      : eq(
-                          workspaces.id,
-                          mismatch === "identity"
-                            ? otherWorkspaceId
-                            : workspaceId,
-                        ),
-                  ),
+                malformedWorkspaceQuery(
+                  queryTx,
+                  returnedIds.map((id) => ({ id, organizationId })),
+                ),
             }),
           ),
         ).toMatchObject({
@@ -511,13 +618,9 @@ describe("returned aggregate identity validation", () => {
             mode: "update",
             wait: "nowait",
             select: (queryTx) =>
-              queryTx
-                .select({
-                  id: workspaces.id,
-                  organizationId: workspaces.organizationId,
-                })
-                .from(workspaces)
-                .where(eq(workspaces.id, workspaceId)),
+              malformedWorkspaceQuery(queryTx, [
+                { id: workspaceId, organizationId },
+              ]),
           }),
         ),
       ).toMatchObject({
@@ -546,14 +649,13 @@ describe("returned aggregate identity validation", () => {
             mode: "update",
             wait: "nowait",
             select: (queryTx) =>
-              queryTx
-                .select({
-                  id: workspaces.id,
-                  organizationId: workspaces.organizationId,
-                })
-                .from(workspaces)
-                .where(eq(workspaces.organizationId, organizationId))
-                .orderBy(workspaces.id),
+              malformedWorkspaceQuery(
+                queryTx,
+                [workspaceId, otherWorkspaceId].map((id) => ({
+                  id,
+                  organizationId,
+                })),
+              ),
           }),
         ),
       ).toMatchObject({
@@ -573,6 +675,42 @@ describe("returned aggregate identity validation", () => {
 
 describe("nested query lock rejection", () => {
   test.each(ROW_LOCK_MODES)(
+    "nested FOR %s in an additional predicate is refused before acquisition",
+    async (mode) => {
+      await withAggregateTransaction(db, async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        expect(
+          await rejectionOf(
+            withAggregateRowQuery({
+              ...workspaceIdentity,
+              tx,
+              mode: "update",
+              where: sql`EXISTS (SELECT 1 FROM ${organization} ${sql.raw(`FOR ${mode.toUpperCase()}`)})`,
+              select: (queryTx) =>
+                queryTx
+                  .select({
+                    id: workspaces.id,
+                    organizationId: workspaces.organizationId,
+                  })
+                  .from(workspaces),
+            }),
+          ),
+        ).toMatchObject({
+          message: "Nested aggregate row locking clauses are not tracked",
+        });
+        expect(
+          await withAggregateLock({
+            aggregate: "organization",
+            id: organizationId,
+            mode: "update",
+            tx,
+          }),
+        ).toEqual({ status: "locked" });
+      });
+    },
+  );
+
+  test.each(ROW_LOCK_MODES)(
     "nested FOR %s is refused before acquisition",
     async (mode) => {
       await withAggregateTransaction(db, async (rawTx) => {
@@ -590,8 +728,7 @@ describe("nested query lock rejection", () => {
                     organizationId: workspaces.organizationId,
                     nested: sql`(SELECT ${organization.id} FROM ${organization} WHERE ${organization.id} = ${organizationId} ${sql.raw(`FOR ${mode.toUpperCase()}`)})`,
                   })
-                  .from(workspaces)
-                  .where(eq(workspaces.id, workspaceId)),
+                  .from(workspaces),
             }),
           ),
         ).toMatchObject({
@@ -631,8 +768,7 @@ describe("nested query lock rejection", () => {
                     id: workspaces.id,
                     organizationId: workspaces.organizationId,
                   })
-                  .from(workspaces)
-                  .where(eq(workspaces.id, workspaceId)),
+                  .from(workspaces),
             }),
           ),
         ).toMatchObject({
@@ -664,8 +800,7 @@ describe("aggregate query targets and lock modes", () => {
             id: workspaces.id,
             organizationId: workspaces.organizationId,
           })
-          .from(workspaces)
-          .where(eq(workspaces.id, workspaceId));
+          .from(workspaces);
       expect(
         await withAggregateRowQuery({
           ...workspaceIdentity,
@@ -717,8 +852,7 @@ describe("aggregate query targets and lock modes", () => {
             .innerJoin(
               organization,
               eq(organization.id, workspaces.organizationId),
-            )
-            .where(eq(workspaces.id, workspaceId)),
+            ),
       });
       expect(result).toEqual({
         status: "locked",
@@ -745,8 +879,7 @@ describe("aggregate query targets and lock modes", () => {
               .innerJoin(
                 organization,
                 eq(organization.id, workspaces.organizationId),
-              )
-              .where(eq(workspaces.id, workspaceId)),
+              ),
         });
       }),
     );
@@ -803,8 +936,7 @@ describe("aggregate query targets and lock modes", () => {
               id: workspaces.id,
               organizationId: workspaces.organizationId,
             })
-            .from(workspaces)
-            .where(eq(workspaces.id, workspaceId)),
+            .from(workspaces),
       });
       expect(
         await rejectionOf(
@@ -850,16 +982,22 @@ describe("NOWAIT acquisition fencing", () => {
               id: workspaces.id,
               organizationId: workspaces.organizationId,
             })
-            .from(workspaces)
-            .where(eq(workspaces.id, workspaceId));
+            .from(workspaces);
           return {
             toSQL: () => query.toSQL(),
             as: (alias: string) => query.as(alias),
-            for: async (...args: Parameters<typeof query.for>) => {
-              const rows = await query.for(...args);
-              ready.resolve(undefined);
-              await release.promise;
-              return rows;
+            where: (predicate: SQL) => {
+              const scoped = query.where(predicate);
+              return {
+                toSQL: () => scoped.toSQL(),
+                as: (alias: string) => scoped.as(alias),
+                for: async (...args: Parameters<typeof scoped.for>) => {
+                  const rows = await scoped.for(...args);
+                  ready.resolve(undefined);
+                  await release.promise;
+                  return rows;
+                },
+              };
             },
           };
         },
@@ -996,8 +1134,7 @@ describe("aggregate transaction lifetime", () => {
                   id: workspaces.id,
                   organizationId: workspaces.organizationId,
                 })
-                .from(workspaces)
-                .where(eq(workspaces.id, workspaceId)),
+                .from(workspaces),
           });
           if (disposition === "rollback") {
             savepoint.rollback();
