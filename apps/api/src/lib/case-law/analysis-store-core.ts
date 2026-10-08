@@ -359,7 +359,7 @@ export const createDbAnalysisStore = (
   },
   fail: async ({ decisionId, failure, keyTag, sentinel }) => {
     if (failure.inputFingerprint !== sentinel.inputFingerprint) {
-      return panic("A failure record must be over its run's own input");
+      panic("A failure record must be over its run's own input");
     }
     await releaseRun(db, {
       decisionId,

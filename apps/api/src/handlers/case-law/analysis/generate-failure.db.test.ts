@@ -344,7 +344,7 @@ describe("a failed analysis run", () => {
       promptCachingEnabled: false,
       retry,
       store: createDbAnalysisStore(db),
-      resolveTextModel: () => model,
+      resolveTextModel: async () => await model,
       ...(deadlineMs === undefined ? {} : { deadlineMs }),
       ...(beforeClaim === undefined ? {} : { beforeClaim }),
     });
@@ -722,6 +722,7 @@ describe("the analysis run's bounds", () => {
       const limit = getOutputTokenLimit(modelId);
       expect(limit).toBeGreaterThan(0);
       // SAFETY: the helper reads only provider/modelOptions/modelId.
+      /* oxlint-disable typescript/no-unsafe-type-assertion -- focused pure helper test */
       const model = {
         adapter: {},
         keySource: "byok",
@@ -729,6 +730,7 @@ describe("the analysis run's bounds", () => {
         modelOptions: {},
         provider,
       } as ResolvedTanStackTextModel;
+      /* oxlint-enable typescript/no-unsafe-type-assertion */
       expect(
         outputTokensWithinModelLimit(model, ANALYSIS_OUTPUT_TOKEN_BUDGET),
       ).toBe(Math.min(ANALYSIS_OUTPUT_TOKEN_BUDGET, limit ?? 0));

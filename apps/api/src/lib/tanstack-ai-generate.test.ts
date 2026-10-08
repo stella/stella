@@ -2471,9 +2471,6 @@ const structuredStreamModel = (
     structuredOutputStream: (options) =>
       stream(options.chatOptions.request?.signal ?? undefined),
   };
-  // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives; the rest
-  // is `testModel`'s bookkeeping.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
   return { ...testModel, adapter };
 };
 
@@ -2769,8 +2766,6 @@ describe("a generation bounded by its own deadline", () => {
       role: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
-      // SAFETY: as `structuredStreamModel`.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused adapter fixture
       resolveTextModel: () => ({ ...testModel, adapter }),
     }).then(
       () => undefined,
@@ -2788,7 +2783,7 @@ describe("an output token budget bounded by the model's catalog limit", () => {
     provider: (typeof TANSTACK_AI_PROVIDERS)[number],
     modelId: string,
   ): ResolvedTanStackTextModel =>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    /* oxlint-disable typescript/no-unsafe-type-assertion -- focused pure helper test */
     ({
       adapter: {},
       keySource: "byok",
@@ -2796,6 +2791,7 @@ describe("an output token budget bounded by the model's catalog limit", () => {
       modelOptions: {},
       provider,
     }) as ResolvedTanStackTextModel;
+  /* oxlint-enable typescript/no-unsafe-type-assertion */
 
   test("every offered model answers a budget within its own limit", () => {
     for (const provider of TANSTACK_AI_PROVIDERS) {
