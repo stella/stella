@@ -118,7 +118,7 @@ const queryErrorMetadata = (input: Record<string, unknown>, cause: unknown) => {
 
 /**
  * Keep the original error in process for retries and classification. Output
- * receives a plain Error projection, without custom inspectors or serializers.
+ * receives standard Error or AggregateError projections without custom serializers.
  * Database causes retain only SQLSTATE and schema identifiers, never detail,
  * hint, routine messages, parameters, or source SQL.
  */
@@ -161,11 +161,22 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       if (!database && !causeChanged && !containsQueryError(input)) {
         return input;
       }
-      const output = new Error(
-        database
-          ? "Database query failed (values redacted)"
-          : "Error caused by database query failure",
-      );
+      const message = database
+        ? "Database query failed (values redacted)"
+        : "Error caused by database query failure";
+      const output =
+        input instanceof AggregateError
+          ? new AggregateError(
+              input.errors.map((member: unknown) =>
+                visit({
+                  input: member,
+                  databaseCause: database,
+                  depth: depth + 1,
+                }),
+              ),
+              message,
+            )
+          : new Error(message);
       output.name =
         typeof input["name"] === "string" && IDENTIFIER.test(input["name"])
           ? input["name"]

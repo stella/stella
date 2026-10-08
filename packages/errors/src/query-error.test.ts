@@ -75,6 +75,48 @@ test("query output redacts nested aggregate and cyclic causes without invoking c
   }
 });
 
+test("aggregate query output retains structured member diagnostics", () => {
+  const query = `insert into account values ('${SECRET}')`;
+  const first = failure(query);
+  const second = failure(query);
+  second.cause.code = "23514";
+  second.cause.constraint_name = "account_status_check";
+  const nested = new AggregateError([second], "Batch operation failed");
+  const aggregate = new AggregateError(
+    [first, nested],
+    "Batch operation failed",
+  );
+  const safe = sanitizeErrorForOutput(aggregate);
+  expect(safe).toBeInstanceOf(AggregateError);
+  if (!(safe instanceof AggregateError)) {
+    throw new TypeError("Expected an aggregate output projection");
+  }
+  expect(safe.errors).toEqual([
+    expect.objectContaining({
+      code: "23505",
+      constraint_name: "account_token_unique",
+      cause: expect.objectContaining({ code: "23505" }),
+    }),
+    expect.objectContaining({
+      errors: [
+        expect.objectContaining({
+          code: "23514",
+          constraint_name: "account_status_check",
+          cause: expect.objectContaining({ code: "23514" }),
+        }),
+      ],
+    }),
+  ]);
+  const output = inspect(safe, { depth: 20 });
+  expect(output).not.toContain(SECRET);
+  expect(output).not.toContain(query);
+  expect(output).not.toContain("params");
+  expect(output).toContain("insert into");
+  expect(inspect(sanitizeErrorForOutput(safe), { depth: 20 })).toBe(output);
+  expect(aggregate.errors).toEqual([first, nested]);
+  expect(first.params).toEqual([SECRET]);
+});
+
 test("query output fails closed when a database error property cannot be read", () => {
   const error = failure("select $1");
   Object.defineProperty(error, "query", {
