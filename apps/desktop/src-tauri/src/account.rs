@@ -63,6 +63,22 @@ fn is_live_expiry_at(value: &str, now: chrono::DateTime<chrono::Utc>) -> bool {
 }
 
 impl LinkedAccount {
+  /// Length-delimited identity fields prevent ambiguous concatenations. Only
+  /// the digest is used in local paths and keychain account names.
+  pub(crate) fn local_data_namespace(&self) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hash = Sha256::new();
+    for field in [
+      self.api_base_url.as_str(),
+      self.identity.organization_id.as_str(),
+      self.identity.user_id.as_str(),
+    ] {
+      hash.update((field.len() as u64).to_be_bytes());
+      hash.update(field.as_bytes());
+    }
+    hex::encode(hash.finalize())
+  }
+
   fn from_request(
     request: LinkAccountRequest,
     web_origin: &str,
@@ -292,7 +308,8 @@ pub async fn invalidate(
 }
 
 pub fn notify(app: &tauri::AppHandle) {
-  crate::feature_access::refresh();
+  crate::feature_access::account_changed(app);
+  crate::activity::unload_account(app);
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(error = %error, "desktop account change was not delivered");
   }
@@ -1019,6 +1036,28 @@ mod tests {
         expires_at: (chrono::Utc::now() + chrono::Duration::seconds(expires_in))
           .to_rfc3339(),
       },
+    }
+  }
+
+  #[test]
+  fn local_data_namespaces_bind_origin_organization_and_user_only() {
+    let a = fixture("stella_dr_a", 3600);
+    let namespace = a.local_data_namespace();
+    assert_eq!(namespace.len(), 64);
+    assert!(namespace.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    let mut refreshed = a.clone();
+    refreshed.credential.key = "stella_dr_rotated".into();
+    refreshed.account.email = "changed@example.test".into();
+    assert_eq!(namespace, refreshed.local_data_namespace());
+    for field in ["origin", "organization", "user"] {
+      let mut b = a.clone();
+      match field {
+        "origin" => b.api_base_url = "https://another.example.test".into(),
+        "organization" => b.identity.organization_id.push_str("-other"),
+        "user" => b.identity.user_id.push_str("-other"),
+        _ => unreachable!(),
+      }
+      assert_ne!(namespace, b.local_data_namespace());
     }
   }
 

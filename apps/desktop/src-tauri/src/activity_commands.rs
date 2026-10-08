@@ -9,8 +9,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::{
   activity::{
-    self, ActivityAppState, ActivityDaySnapshot, ActivityManager,
-    ActivityRecordingStatus, ActivityRetention,
+    self, ActivityAppState, ActivityDaySnapshot, ActivityHistoryDisposition,
+    ActivityManager, ActivityRecordingStatus, ActivityRetention,
   },
   local_window::ActivityCaller,
 };
@@ -24,9 +24,12 @@ fn lock_error() -> String {
 fn update(
   app: &AppHandle,
   state: &ActivityAppState,
+  caller: &ActivityCaller,
   change: impl FnOnce(&mut ActivityManager) -> Result<(), String>,
 ) -> Result<(), String> {
   let mut manager = state.lock().map_err(|_| lock_error())?;
+  caller.require_current(app)?;
+  manager.require_caller(caller)?;
   change(&mut manager)?;
   drop(manager);
   let _ = app.emit(activity::CHANGED_EVENT, ());
@@ -36,6 +39,7 @@ fn update(
 #[tauri::command]
 pub fn activity_get_day(
   caller: ActivityCaller,
+  app: AppHandle,
   state: State<'_, ActivityAppState>,
   date: Option<String>,
 ) -> Result<ActivityDaySnapshot, String> {
@@ -45,12 +49,14 @@ pub fn activity_get_day(
     None => now.with_timezone(&chrono::Local).date_naive(),
   };
   let manager = state.lock().map_err(|_| lock_error())?;
+  caller.require_current(&app)?;
+  manager.require_caller(&caller)?;
   Ok(manager.day_snapshot(date, now, &caller))
 }
 
 #[tauri::command]
 pub fn activity_set_recording_status(
-  _caller: ActivityCaller,
+  caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   status: ActivityRecordingStatus,
@@ -58,74 +64,83 @@ pub fn activity_set_recording_status(
   if status == ActivityRecordingStatus::Off {
     return Err("activity recording can only be paused".to_string());
   }
-  update(&app, &state, |manager| {
+  update(&app, &state, &caller, |manager| {
     manager.set_recording_status(status, Utc::now())
   })
 }
 
 #[tauri::command]
 pub fn activity_set_retention(
-  _caller: ActivityCaller,
+  caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   retention: ActivityRetention,
 ) -> Result<(), String> {
-  update(&app, &state, |manager| {
+  update(&app, &state, &caller, |manager| {
     manager.set_retention(retention, Utc::now())
   })
 }
 
 #[tauri::command]
 pub fn activity_exclude_app(
-  _caller: ActivityCaller,
+  caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   identifier: String,
   name: String,
+  history: ActivityHistoryDisposition,
 ) -> Result<(), String> {
-  update(&app, &state, |manager| {
-    manager.exclude_app(&identifier, &name)
+  update(&app, &state, &caller, |manager| {
+    manager.exclude_app(&identifier, &name, history)
   })
 }
 
 #[tauri::command]
 pub fn activity_remove_app_exclusion(
-  _caller: ActivityCaller,
+  caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   identifier: String,
 ) -> Result<(), String> {
-  update(&app, &state, |manager| {
+  update(&app, &state, &caller, |manager| {
     manager.remove_exclusion(&identifier)
   })
 }
 
 #[tauri::command]
 pub fn activity_delete_day(
-  _caller: ActivityCaller,
+  caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   date: String,
 ) -> Result<(), String> {
   let date = activity::parse_date(&date)?;
-  update(&app, &state, |manager| manager.delete_day(date))
+  update(&app, &state, &caller, |manager| manager.delete_day(date))
 }
 
 #[tauri::command]
 pub fn activity_delete_all(
-  _caller: ActivityCaller,
+  caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
 ) -> Result<(), String> {
-  update(&app, &state, ActivityManager::delete_all)
+  update(&app, &state, &caller, ActivityManager::delete_all)
 }
 
 /// Copies a block summary the window composed. The text goes to the system
 /// clipboard only, at the user's request.
 #[tauri::command]
-pub fn activity_copy_text(_caller: ActivityCaller, text: String) -> Result<(), String> {
+pub fn activity_copy_text(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  text: String,
+) -> Result<(), String> {
   if text.trim().is_empty() || text.len() > MAX_COPY_BYTES {
     return Err("activity summary is empty or too large to copy".to_string());
   }
+  let manager = state.lock().map_err(|_| lock_error())?;
+  caller.require_current(&app)?;
+  manager.require_caller(&caller)?;
   crate::clipboard::write_plain_text(text)
 }

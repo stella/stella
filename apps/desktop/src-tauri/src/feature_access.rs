@@ -103,22 +103,42 @@ async fn fetch(account: &LinkedAccount) -> Result<HashSet<DesktopFeature>, Strin
   enabled_features(&body)
 }
 
-async fn current_decision(app: &AppHandle) -> HashSet<DesktopFeature> {
+struct AccountDecision {
+  namespace: Option<String>,
+  expires_at: Option<chrono::DateTime<chrono::Utc>>,
+  enabled: HashSet<DesktopFeature>,
+}
+
+async fn current_decision(app: &AppHandle) -> AccountDecision {
+  let closed = || AccountDecision {
+    namespace: None,
+    expires_at: None,
+    enabled: HashSet::new(),
+  };
   let Some(state) = app.try_state::<AccountState>() else {
-    return HashSet::new();
+    return closed();
   };
   let account = match account::current(&state).await {
     Ok(Some(account)) => account,
-    Ok(None) => return HashSet::new(),
+    Ok(None) => return closed(),
     Err(error) => {
       tracing::warn!(error = %error, "feature access skipped: account is unreadable");
-      return HashSet::new();
+      return closed();
     }
   };
-  fetch(&account).await.unwrap_or_else(|error| {
+  let namespace = Some(account.local_data_namespace());
+  let expires_at = chrono::DateTime::parse_from_rfc3339(&account.credential.expires_at)
+    .ok()
+    .map(|expiry| expiry.with_timezone(&chrono::Utc));
+  let enabled = fetch(&account).await.unwrap_or_else(|error| {
     tracing::warn!(error = %error, "feature access is unavailable; gated features stay off");
     HashSet::new()
-  })
+  });
+  AccountDecision {
+    namespace,
+    expires_at,
+    enabled,
+  }
 }
 
 fn refresh_signal() -> &'static tokio::sync::Notify {
@@ -127,7 +147,10 @@ fn refresh_signal() -> &'static tokio::sync::Notify {
 }
 
 /// Asks the refresh loop to fetch now (after an account link or unlink).
-pub fn refresh() {
+pub fn account_changed(app: &AppHandle) {
+  if let Some(gates) = app.try_state::<FeatureGates>() {
+    gates.invalidate();
+  }
   refresh_signal().notify_one();
 }
 
@@ -144,11 +167,22 @@ pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
         _ = interval.tick() => {}
         () = refresh_signal().notified() => {}
       }
-      let decision = current_decision(&app).await;
       let Some(gates) = app.try_state::<FeatureGates>() else {
         return;
       };
-      for feature in gates.replace(decision) {
+      let Some(generation) = gates.generation() else {
+        return;
+      };
+      let decision = current_decision(&app).await;
+      let Some(changed) = gates.install(
+        generation,
+        decision.namespace,
+        decision.expires_at,
+        decision.enabled,
+      ) else {
+        continue;
+      };
+      for feature in changed {
         on_change(&app, feature, gates.is_enabled(feature));
       }
     }

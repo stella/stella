@@ -9,13 +9,13 @@
 //! whenever recording stops. Nothing here reaches the network: the data is
 //! read only by the activity window, through `ActivityCaller`.
 
-use chrono::{DateTime, Days, Local, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Days, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::PathBuf,
   sync::{Arc, Mutex},
-  time::Duration,
+  time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
@@ -33,9 +33,9 @@ pub const CHANGED_EVENT: &str = "activity-timeline-changed";
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// A sample later than this after the previous one means the machine slept
 /// or the sampler stalled; the open segment ends at the last sample.
-const MAX_SAMPLE_GAP: chrono::Duration = chrono::Duration::seconds(15);
+const MAX_SAMPLE_GAP: Duration = Duration::from_secs(15);
 const IDLE_THRESHOLD: Duration = Duration::from_secs(5 * 60);
-const FLUSH_INTERVAL: chrono::Duration = chrono::Duration::seconds(60);
+const FLUSH_INTERVAL: Duration = Duration::from_secs(60);
 const RETENTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const MAX_EXCLUSIONS: usize = 128;
 const DEBUG_PERSISTENCE_ENV: &str = "STELLA_ENABLE_DEBUG_ACTIVITY_PERSISTENCE";
@@ -131,9 +131,25 @@ pub enum Observation {
   Unattributed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActivityHistoryDisposition {
+  Keep,
+  Delete,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DayPartition {
+  date: NaiveDate,
+  next_start: DateTime<Utc>,
+  offset: FixedOffset,
+}
+
 struct OpenSegment {
   segment: ActivitySegment,
   last_seen: DateTime<Utc>,
+  last_input: DateTime<Utc>,
+  partition: DayPartition,
 }
 
 /// The day a view asks for, with what the window needs to render it.
@@ -160,7 +176,12 @@ pub struct ActivityManager {
   /// so a flush never drops what an earlier run stored.
   days: BTreeMap<NaiveDate, Vec<ActivitySegment>>,
   dirty: BTreeSet<NaiveDate>,
-  last_flush: Option<DateTime<Utc>>,
+  last_flush: Option<Instant>,
+  last_sample: Option<(DateTime<Utc>, Instant)>,
+  wall_floor: Option<DateTime<Utc>>,
+  observation_generation: u64,
+  namespace: Option<String>,
+  account_generation: Option<u64>,
 }
 
 pub type ActivityAppState = Arc<Mutex<ActivityManager>>;
@@ -195,30 +216,50 @@ fn local_date(instant: DateTime<Utc>) -> NaiveDate {
   instant.with_timezone(&Local).date_naive()
 }
 
-/// The UTC instant local `date` starts at; DST gaps resolve to the earliest
-/// valid instant.
-fn local_midnight(date: NaiveDate) -> DateTime<Utc> {
-  let naive = date.and_hms_opt(0, 0, 0).unwrap_or_default();
-  Local
-    .from_local_datetime(&naive)
-    .earliest()
-    .unwrap_or_else(|| Local.from_utc_datetime(&naive))
-    .with_timezone(&Utc)
+/// The first valid local instant, including midnight gaps, folds and skipped
+/// whole dates. Never interpret a missing local midnight as UTC.
+fn day_start<T: TimeZone>(zone: &T, mut date: NaiveDate) -> DateTime<Utc> {
+  loop {
+    let midnight = date.and_hms_opt(0, 0, 0).expect("valid midnight");
+    for second in 0..86400 {
+      let naive = midnight + chrono::Duration::seconds(second);
+      if let Some(instant) = zone.from_local_datetime(&naive).earliest() {
+        return instant.with_timezone(&Utc);
+      }
+    }
+    date = date.succ_opt().expect("local day is representable");
+  }
 }
 
-/// Splits a segment at local midnights so each piece belongs to one day.
-fn split_by_local_day(segment: ActivitySegment) -> Vec<(NaiveDate, ActivitySegment)> {
+#[cfg(test)]
+fn local_midnight(date: NaiveDate) -> DateTime<Utc> {
+  day_start(&Local, date)
+}
+
+fn partition_in<T: TimeZone>(zone: &T, now: DateTime<Utc>) -> DayPartition {
+  use chrono::Offset;
+  let local = now.with_timezone(zone);
+  let date = local.date_naive();
+  DayPartition {
+    date,
+    next_start: day_start(zone, date.succ_opt().expect("local day is representable")),
+    offset: local.offset().fix(),
+  }
+}
+
+/// Injectable zone resolver used for day-boundary regression coverage.
+#[cfg(test)]
+fn split_by_day_in<T: TimeZone>(
+  zone: &T,
+  segment: ActivitySegment,
+) -> Vec<(NaiveDate, ActivitySegment)> {
   let mut pieces = Vec::new();
   let mut start = segment.start;
   while start < segment.end {
-    let date = local_date(start);
-    let next_midnight = date
-      .checked_add_days(Days::new(1))
-      .map_or(segment.end, local_midnight);
-    let end = segment.end.min(next_midnight.max(start));
-    let end = if end <= start { segment.end } else { end };
+    let partition = partition_in(zone, start);
+    let end = segment.end.min(partition.next_start);
     pieces.push((
-      date,
+      partition.date,
       ActivitySegment {
         app_identifier: segment.app_identifier.clone(),
         app_name: segment.app_name.clone(),
@@ -231,13 +272,25 @@ fn split_by_local_day(segment: ActivitySegment) -> Vec<(NaiveDate, ActivitySegme
   pieces
 }
 
+#[cfg(test)]
+fn split_by_local_day(segment: ActivitySegment) -> Vec<(NaiveDate, ActivitySegment)> {
+  split_by_day_in(&Local, segment)
+}
+
 fn is_excluded(exclusions: &[AppExclusion], identifier: &str) -> bool {
   exclusions
     .iter()
     .any(|exclusion| exclusion.matches_identifier(identifier))
 }
 
-fn push_merged(segments: &mut Vec<ActivitySegment>, segment: ActivitySegment) {
+fn push_merged(segments: &mut Vec<ActivitySegment>, mut segment: ActivitySegment) {
+  // A corrected clock must not double-count an already persisted interval.
+  if let Some(last) = segments.last() {
+    segment.start = segment.start.max(last.end);
+  }
+  if segment.end <= segment.start {
+    return;
+  }
   if let Some(last) = segments.last_mut()
     && last.app_identifier == segment.app_identifier
     && last.end == segment.start
@@ -257,6 +310,11 @@ impl ActivityManager {
       days: BTreeMap::new(),
       dirty: BTreeSet::new(),
       last_flush: None,
+      last_sample: None,
+      wall_floor: None,
+      observation_generation: 0,
+      namespace: None,
+      account_generation: None,
     }
   }
 
@@ -280,6 +338,44 @@ impl ActivityManager {
     self.days.clear();
     self.dirty.clear();
     self.last_flush = None;
+    self.last_sample = None;
+    self.wall_floor = None;
+    self.observation_generation = self.observation_generation.wrapping_add(1);
+  }
+
+  fn install_account(
+    &mut self,
+    binding: (u64, String),
+    persistence: ActivityPersistence,
+    settings: ActivitySettings,
+  ) {
+    self.install(persistence, settings);
+    self.account_generation = Some(binding.0);
+    self.namespace = Some(binding.1);
+  }
+
+  fn unload_account(&mut self, now: DateTime<Utc>) -> Result<(), String> {
+    let result = self.stop(now);
+    self.install(
+      ActivityPersistence::Initializing,
+      ActivitySettings::default(),
+    );
+    self.namespace = None;
+    self.account_generation = None;
+    result
+  }
+
+  pub(crate) fn require_caller(&self, caller: &ActivityCaller) -> Result<(), String> {
+    if caller
+      .account_binding()
+      .is_some_and(|(generation, namespace)| {
+        Some(*generation) == self.account_generation
+          && self.namespace.as_ref() == Some(namespace)
+      })
+    {
+      return Ok(());
+    }
+    Err("activity account is unavailable".into())
   }
 
   fn require_writable(&self) -> Result<(), String> {
@@ -321,6 +417,7 @@ impl ActivityManager {
       self.settings = previous;
       return Err(error);
     }
+    self.observation_generation = self.observation_generation.wrapping_add(1);
     Ok(())
   }
 
@@ -344,11 +441,19 @@ impl ActivityManager {
     self.prune_expired(now).map(|_| ())
   }
 
-  pub fn exclude_app(&mut self, identifier: &str, name: &str) -> Result<(), String> {
+  pub fn exclude_app(
+    &mut self,
+    identifier: &str,
+    name: &str,
+    history: ActivityHistoryDisposition,
+  ) -> Result<(), String> {
     let exclusion = AppExclusion::new(identifier, name)
       .ok_or_else(|| "activity application is invalid".to_string())?;
     if self.is_excluded(&exclusion.identifier) {
-      return Ok(());
+      return match history {
+        ActivityHistoryDisposition::Keep => Ok(()),
+        ActivityHistoryDisposition::Delete => self.delete_app_history(&exclusion),
+      };
     }
     if self.settings.excluded_apps.len() >= MAX_EXCLUSIONS {
       return Err("activity exclusion limit reached".to_string());
@@ -361,9 +466,31 @@ impl ActivityManager {
       self.close_open_at_last_sample();
     }
     self.update_settings(|settings| {
-      settings.excluded_apps.push(exclusion);
+      settings.excluded_apps.push(exclusion.clone());
       foreground_app::normalize_exclusions(&mut settings.excluded_apps, MAX_EXCLUSIONS);
-    })
+    })?;
+    match history {
+      ActivityHistoryDisposition::Keep => Ok(()),
+      ActivityHistoryDisposition::Delete => self.delete_app_history(&exclusion),
+    }
+  }
+
+  fn delete_app_history(&mut self, exclusion: &AppExclusion) -> Result<(), String> {
+    if let ActivityPersistence::Encrypted(store) = &self.persistence {
+      for date in store.day_dates()? {
+        if !self.days.contains_key(&date) {
+          self.days.insert(date, store.load_day(date)?);
+        }
+      }
+    }
+    for (date, segments) in &mut self.days {
+      let before = segments.len();
+      segments.retain(|segment| !exclusion.matches_identifier(&segment.app_identifier));
+      if segments.len() != before {
+        self.dirty.insert(*date);
+      }
+    }
+    self.flush(Utc::now())
   }
 
   pub fn remove_exclusion(&mut self, identifier: &str) -> Result<(), String> {
@@ -375,15 +502,70 @@ impl ActivityManager {
     })
   }
 
-  /// Applies one sample. Returns whether a segment was closed.
+  /// Production supplies both clocks and idle evidence; tests can inject them.
+  #[cfg(test)]
   pub fn observe(&mut self, now: DateTime<Utc>, observation: Observation) -> bool {
+    let monotonic = self.last_sample.map_or_else(Instant::now, |(wall, clock)| {
+      clock + (now - wall).to_std().unwrap_or_default()
+    });
+    self.observe_at(
+      now,
+      monotonic,
+      Duration::ZERO,
+      observation,
+      partition_in(&Local, now),
+    )
+  }
+
+  fn accepts_observation(&self, generation: u64, enabled: bool) -> bool {
+    enabled && self.is_recording() && generation == self.observation_generation
+  }
+
+  fn observe_at(
+    &mut self,
+    now: DateTime<Utc>,
+    monotonic: Instant,
+    idle: Duration,
+    observation: Observation,
+    partition: DayPartition,
+  ) -> bool {
     let mut closed = false;
-    if self
-      .open
-      .as_ref()
-      .is_some_and(|open| now - open.last_seen > MAX_SAMPLE_GAP)
+    if let Some((wall, previous)) = self.last_sample {
+      let elapsed = monotonic.saturating_duration_since(previous);
+      let wall_elapsed = (now - wall).to_std();
+      if elapsed > MAX_SAMPLE_GAP
+        || wall_elapsed.is_err()
+        || wall_elapsed
+          .is_ok_and(|wall_elapsed| wall_elapsed.abs_diff(elapsed) > MAX_SAMPLE_GAP)
+      {
+        closed |= self.close_open_at_last_sample();
+      }
+    }
+    self.last_sample = Some((now, monotonic));
+    if self.wall_floor.is_some_and(|floor| now < floor) {
+      return closed;
+    }
+    self.wall_floor = Some(now);
+    let last_input = chrono::Duration::from_std(idle)
+      .ok()
+      .and_then(|idle| now.checked_sub_signed(idle))
+      .unwrap_or(now);
+    if let Some(open) = self.open.as_mut() {
+      open.last_input = open.last_input.max(last_input);
+    }
+    // Day boundaries are pinned when opening; a changed zone cannot move an
+    // already flushed prefix into another file.
+    let mut segment_start = now;
+    if let Some(open) = self.open.as_ref()
+      && open.partition != partition
     {
-      closed |= self.close_open_at_last_sample();
+      let boundary = open.partition.next_start;
+      // Crossing the pinned calendar boundary preserves the whole interval;
+      // an unrelated zone change ends the old partition at this sample.
+      if now >= boundary {
+        segment_start = boundary;
+      }
+      closed |= self.close_open(now.min(boundary));
     }
     match observation {
       Observation::Idle { idle } => {
@@ -391,16 +573,17 @@ impl ActivityManager {
           .ok()
           .and_then(|idle| now.checked_sub_signed(idle))
           .unwrap_or(now);
-        let last_seen = self.open.as_ref().map_or(now, |open| open.last_seen);
-        closed |= self.close_open(idle_since.min(last_seen));
+        closed |= self.close_open(idle_since);
       }
-      // The time since the last sample belongs to the app that was open.
       Observation::Unattributed => closed |= self.close_open(now),
       Observation::Active { identifier, name } => {
+        if self.is_excluded(&identifier) {
+          return closed | self.close_open(now);
+        }
         if let Some(open) = self.open.as_mut()
           && open.segment.app_identifier == identifier
         {
-          open.segment.end = now;
+          open.segment.end = now.min(open.last_input);
           open.last_seen = now;
           return closed;
         }
@@ -409,10 +592,12 @@ impl ActivityManager {
           segment: ActivitySegment {
             app_identifier: identifier,
             app_name: name,
-            start: now,
-            end: now,
+            start: segment_start,
+            end: now.min(last_input),
           },
           last_seen: now,
+          last_input,
+          partition,
         });
       }
     }
@@ -433,20 +618,28 @@ impl ActivityManager {
       return false;
     };
     let mut segment = open.segment;
-    segment.end = end.max(segment.start);
+    segment.end = end
+      .min(open.last_input)
+      .min(open.partition.next_start)
+      .max(segment.start);
     if segment.end <= segment.start {
       return false;
     }
-    let mut recorded = false;
-    for (date, piece) in split_by_local_day(segment) {
-      let Some(day) = self.day_mut(date) else {
-        continue;
-      };
-      push_merged(day, piece);
-      self.dirty.insert(date);
-      recorded = true;
+    let date = open.partition.date;
+    let Some(day) = self.day_mut(date) else {
+      return false;
+    };
+    // A backwards clock correction or restart must never overlap persisted
+    // activity. The overlapping prefix is discarded until UTC catches up.
+    if let Some(last) = day.last() {
+      segment.start = segment.start.max(last.end);
     }
-    recorded
+    if segment.end <= segment.start {
+      return false;
+    }
+    push_merged(day, segment);
+    self.dirty.insert(date);
+    true
   }
 
   /// The cached segments of `date`, loading the file first. `None` when the
@@ -474,7 +667,24 @@ impl ActivityManager {
       .open
       .as_ref()
       .filter(|open| open.segment.end > open.segment.start)
-      .map(|open| split_by_local_day(open.segment.clone()))
+      .map(|open| {
+        let mut segment = open.segment.clone();
+        segment.end = segment
+          .end
+          .min(open.last_input)
+          .min(open.partition.next_start);
+        if let Some(last) = self
+          .days
+          .get(&open.partition.date)
+          .and_then(|day| day.last())
+        {
+          segment.start = segment.start.max(last.end);
+        }
+        if segment.end <= segment.start {
+          return Vec::new();
+        }
+        vec![(open.partition.date, segment)]
+      })
       .unwrap_or_default()
   }
 
@@ -485,11 +695,13 @@ impl ActivityManager {
   /// A day the open segment reaches is cached before its first write, so the
   /// file it is loaded from cannot already hold that segment.
   pub fn flush(&mut self, now: DateTime<Utc>) -> Result<(), String> {
-    self.last_flush = Some(now);
+    let _ = now;
+    self.last_flush = Some(Instant::now());
     let open_pieces = self.open_pieces();
     for (date, _) in &open_pieces {
       let _ = self.day_mut(*date);
     }
+    let open_pieces = self.open_pieces();
     let ActivityPersistence::Encrypted(store) = &self.persistence else {
       self.dirty.clear();
       return Ok(());
@@ -522,14 +734,15 @@ impl ActivityManager {
     failure.map_or(Ok(()), Err)
   }
 
-  pub fn flush_due(&self, now: DateTime<Utc>) -> bool {
-    self
-      .last_flush
-      .is_none_or(|last_flush| now - last_flush >= FLUSH_INTERVAL)
+  pub fn flush_due(&self, now: Instant) -> bool {
+    self.last_flush.is_none_or(|last_flush| {
+      now.saturating_duration_since(last_flush) >= FLUSH_INTERVAL
+    })
   }
 
   /// Ends recording for now: closes the open segment and writes it.
   pub fn stop(&mut self, now: DateTime<Utc>) -> Result<(), String> {
+    self.observation_generation = self.observation_generation.wrapping_add(1);
     self.close_open_at_last_sample();
     self.flush(now)
   }
@@ -552,12 +765,16 @@ impl ActivityManager {
       ActivityPersistence::Encrypted(store) => {
         Ok(store.delete_days_before(earliest)? > 0 || dropped)
       }
+      ActivityPersistence::DeletionOnly(root) => {
+        Ok(ActivityStore::delete_days_before_root(root, earliest)? > 0 || dropped)
+      }
       _ => Ok(dropped),
     }
   }
 
   pub fn delete_day(&mut self, date: NaiveDate) -> Result<(), String> {
     self.require_writable()?;
+    self.observation_generation = self.observation_generation.wrapping_add(1);
     if self
       .open_pieces()
       .iter()
@@ -576,6 +793,7 @@ impl ActivityManager {
   /// Deletes every recorded day. Settings stay; in deletion-only mode the
   /// unreadable store goes as a whole and a fresh one is opened.
   pub fn delete_all(&mut self) -> Result<(), String> {
+    self.observation_generation = self.observation_generation.wrapping_add(1);
     match &self.persistence {
       ActivityPersistence::Initializing => {
         return Err("activity timeline is still loading".to_string());
@@ -584,7 +802,11 @@ impl ActivityManager {
       ActivityPersistence::MemoryOnly => {}
       ActivityPersistence::DeletionOnly(root) => {
         ActivityStore::remove(root)?;
-        let (persistence, settings) = open_persistence();
+        let namespace = self
+          .namespace
+          .as_deref()
+          .ok_or_else(|| "activity account is unavailable".to_string())?;
+        let (persistence, settings) = open_persistence(namespace);
         self.install(persistence, settings);
         return Ok(());
       }
@@ -635,18 +857,18 @@ impl ActivityManager {
 }
 
 /// Blocking keychain and file work; runs off the main thread.
-fn open_persistence() -> (ActivityPersistence, ActivitySettings) {
+fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) {
   if local_store::debug_build_is_memory_only(DEBUG_PERSISTENCE_ENV) {
     return (ActivityPersistence::MemoryOnly, ActivitySettings::default());
   }
-  let Some(root) = store_root() else {
+  let Some(root) = store_root().map(|root| root.join(namespace)) else {
     tracing::warn!(
       "activity timeline is memory-only because no data directory is available"
     );
     return (ActivityPersistence::MemoryOnly, ActivitySettings::default());
   };
   let key = match local_store::resolve_key(
-    LocalDataKey::ActivityTimeline,
+    LocalDataKey::ActivityTimeline(namespace),
     ActivityStore::has_data(&root),
   ) {
     StoreKey::Key(key) => key,
@@ -681,14 +903,21 @@ fn emit_changed(app: &AppHandle) {
   let _ = app.emit(CHANGED_EVENT, ());
 }
 
-/// Opens the store once, then sweeps expired days. Runs when the feature is
-/// enabled, and at startup when an earlier run left data (retention applies
-/// whether or not the feature is enabled now).
+/// Installs only the current account's namespace. A slow keychain lookup
+/// cannot publish a store after its account generation has been superseded.
 pub fn initialize(app: &AppHandle) {
+  let Some(gates) = app.try_state::<FeatureGates>() else {
+    return;
+  };
+  let Some(binding) = gates.account_binding(DesktopFeature::ActivityTimeline) else {
+    return;
+  };
   let Some(state) = app.try_state::<ActivityAppState>() else {
     return;
   };
-  if state.lock().is_ok_and(|manager| manager.is_initialized()) {
+  if state.lock().is_ok_and(|manager| {
+    manager.is_initialized() && manager.namespace.as_ref() == Some(&binding.1)
+  }) {
     return;
   }
   let state = Arc::clone(&state);
@@ -696,14 +925,22 @@ pub fn initialize(app: &AppHandle) {
   let spawned = std::thread::Builder::new()
     .name("stella-activity-init".to_string())
     .spawn(move || {
-      let (persistence, settings) = open_persistence();
+      let (persistence, settings) = open_persistence(&binding.1);
       let Ok(mut manager) = state.lock() else {
         return;
       };
-      if manager.is_initialized() {
+      let Some(gates) = app.try_state::<FeatureGates>() else {
+        return;
+      };
+      if gates
+        .account_binding(DesktopFeature::ActivityTimeline)
+        .as_ref()
+        != Some(&binding)
+        || (manager.is_initialized() && manager.namespace.as_ref() == Some(&binding.1))
+      {
         return;
       }
-      manager.install(persistence, settings);
+      manager.install_account(binding, persistence, settings);
       if let Err(error) = manager.prune_expired(Utc::now()) {
         tracing::warn!(error = %error, "expired activity days could not be removed");
       }
@@ -715,9 +952,30 @@ pub fn initialize(app: &AppHandle) {
   }
 }
 
-/// Whether an earlier run left activity data on disk.
-pub fn has_stored_data() -> bool {
-  store_root().is_some_and(|root| ActivityStore::has_data(&root))
+/// Unlink removes all readable state immediately; encrypted account stores
+/// remain on disk for that account and the keyless retention sweep.
+pub fn unload_account(app: &AppHandle) {
+  if let Some(state) = app.try_state::<ActivityAppState>()
+    && let Ok(mut manager) = state.lock()
+  {
+    if let Err(error) = manager.unload_account(Utc::now()) {
+      tracing::warn!(error = %error, "activity timeline could not be written on unlink");
+    }
+  }
+  crate::activity_window::close(app);
+  emit_changed(app);
+}
+
+/// Inactive or unreadable namespaces use the longest supported retention;
+/// sweeping them never needs another account's key or plaintext settings.
+fn sweep_stored_namespaces(now: DateTime<Utc>) -> Result<bool, String> {
+  let Some(root) = store_root() else {
+    return Ok(false);
+  };
+  let earliest = local_date(now)
+    .checked_sub_days(Days::new(ActivityRetention::Quarter.days() - 1))
+    .unwrap_or(NaiveDate::MIN);
+  Ok(ActivityStore::sweep_namespaces(&root, earliest)? > 0)
 }
 
 /// Starts or stops the feature after the server decision changed. Turning
@@ -727,13 +985,7 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
     initialize(app);
     return;
   }
-  if let Some(state) = app.try_state::<ActivityAppState>()
-    && let Ok(mut manager) = state.lock()
-    && let Err(error) = manager.stop(Utc::now())
-  {
-    tracing::warn!(error = %error, "activity timeline could not be written");
-  }
-  crate::activity_window::close(app);
+  unload_account(app);
 }
 
 /// Writes pending activity before the process exits.
@@ -746,10 +998,8 @@ pub fn flush_on_exit(app: &AppHandle) {
   }
 }
 
-fn observe_now(app: &AppHandle, exclusions: &[AppExclusion]) -> Observation {
-  if let Some(idle) = crate::idle_time::since_last_input()
-    && idle >= IDLE_THRESHOLD
-  {
+fn observe_now(app: &AppHandle, idle: Duration) -> Observation {
+  if idle >= IDLE_THRESHOLD {
     return Observation::Idle { idle };
   }
   let Some(foreground) = foreground_app::current(app) else {
@@ -758,9 +1008,6 @@ fn observe_now(app: &AppHandle, exclusions: &[AppExclusion]) -> Observation {
   let identifier = foreground
     .identifier
     .unwrap_or_else(|| foreground.name.clone());
-  if is_excluded(exclusions, &identifier) {
-    return Observation::Unattributed;
-  }
   Observation::Active {
     identifier,
     name: foreground.name,
@@ -769,7 +1016,7 @@ fn observe_now(app: &AppHandle, exclusions: &[AppExclusion]) -> Observation {
 
 fn sample(app: &AppHandle, state: &ActivityAppState) {
   let enabled = is_enabled(app);
-  let exclusions = {
+  let generation = {
     let Ok(mut manager) = state.lock() else {
       return;
     };
@@ -781,20 +1028,23 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
       }
       return;
     }
-    manager.settings.excluded_apps.clone()
+    manager.observation_generation
   };
   // The foreground lookup hops to the main thread, so it runs without the
   // lock and commands never wait on it.
-  let observation = observe_now(app, &exclusions);
+  let now = Utc::now();
+  let monotonic = Instant::now();
+  let idle = crate::idle_time::since_last_input().unwrap_or_default();
+  let observation = observe_now(app, idle);
   let Ok(mut manager) = state.lock() else {
     return;
   };
-  if !manager.is_recording() {
+  if !manager.accepts_observation(generation, is_enabled(app)) {
     return;
   }
-  let now = Utc::now();
-  let closed = manager.observe(now, observation);
-  let flushed = manager.flush_due(now);
+  let closed =
+    manager.observe_at(now, monotonic, idle, observation, partition_in(&Local, now));
+  let flushed = manager.flush_due(monotonic);
   if flushed && let Err(error) = manager.flush(now) {
     tracing::warn!(error = %error, "activity timeline could not be written");
   }
@@ -810,8 +1060,8 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
   if !is_supported() {
     return;
   }
-  if has_stored_data() {
-    initialize(&app);
+  if let Err(error) = sweep_stored_namespaces(Utc::now()) {
+    tracing::warn!(error = %error, "expired activity namespaces could not be removed");
   }
   let sweep_app = app.clone();
   let sweep_state = Arc::clone(&state);
@@ -820,6 +1070,10 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
     interval.tick().await;
     loop {
       interval.tick().await;
+      let swept = sweep_stored_namespaces(Utc::now()).unwrap_or_else(|error| {
+        tracing::warn!(error = %error, "expired activity namespaces could not be removed");
+        false
+      });
       let changed = match sweep_state.lock() {
         Ok(mut manager) if manager.is_initialized() => {
           manager.prune_expired(Utc::now()).unwrap_or_else(|error| {
@@ -829,7 +1083,7 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
         }
         _ => false,
       };
-      if changed {
+      if changed || swept {
         emit_changed(&sweep_app);
       }
     }
@@ -890,6 +1144,88 @@ mod tests {
         )
       })
       .collect()
+  }
+
+  #[test]
+  fn accounts_isolate_history_and_consent_after_unlink_and_restart() {
+    for restart in [false, true] {
+      for enabled_b in [false, true] {
+        let root = std::env::temp_dir()
+          .join(format!("stella-activity-accounts-{}", uuid::Uuid::new_v4()));
+        let store_a = ActivityStore::new([1; 32], root.join("a"));
+        let store_b = ActivityStore::new([2; 32], root.join("b"));
+        let mut manager = ActivityManager::new();
+        manager.install_account(
+          (1, "a".into()),
+          ActivityPersistence::Encrypted(store_a.clone()),
+          ActivitySettings::default(),
+        );
+        manager
+          .set_recording_status(ActivityRecordingStatus::Recording, at(0))
+          .unwrap();
+        manager.observe(at(0), active("private-a"));
+        manager.observe(at(5), active("private-a"));
+        let caller_a = ActivityCaller::for_account_test(1, "a");
+        assert!(manager.require_caller(&caller_a).is_ok());
+        manager.unload_account(at(5)).unwrap();
+        assert!(!manager.is_initialized());
+        assert!(!manager.is_recording());
+        assert!(manager.days.is_empty());
+        assert!(manager.require_caller(&caller_a).is_err());
+        assert_eq!(store_a.load_day(local_date(at(0))).unwrap().len(), 1);
+        if restart {
+          manager = ActivityManager::new();
+        }
+        if enabled_b {
+          let settings_b = store_b.load_settings().unwrap().unwrap_or_default();
+          manager.install_account(
+            (2, "b".into()),
+            ActivityPersistence::Encrypted(store_b),
+            settings_b,
+          );
+          let caller_b = ActivityCaller::for_account_test(2, "b");
+          assert!(manager.require_caller(&caller_b).is_ok());
+          assert!(!manager.is_recording());
+          assert_eq!(
+            manager.settings.recording_status,
+            ActivityRecordingStatus::Off
+          );
+          assert!(
+            manager
+              .day_snapshot(local_date(at(0)), at(5), &caller_b)
+              .segments
+              .is_empty()
+          );
+          assert!(manager.require_caller(&caller_a).is_err());
+        } else {
+          assert!(manager.namespace.is_none());
+          assert!(manager.days.is_empty());
+          assert!(!manager.is_recording());
+        }
+        // A's history and consent persist only in A's encrypted namespace.
+        let settings_a = store_a.load_settings().unwrap().unwrap();
+        assert_eq!(
+          settings_a.recording_status,
+          ActivityRecordingStatus::Recording
+        );
+        manager.install_account(
+          (3, "a".into()),
+          ActivityPersistence::Encrypted(store_a),
+          settings_a,
+        );
+        assert!(manager.is_recording());
+        assert!(manager.require_caller(&caller_a).is_err());
+        let new_caller_a = ActivityCaller::for_account_test(3, "a");
+        assert_eq!(
+          manager
+            .day_snapshot(local_date(at(0)), at(5), &new_caller_a)
+            .segments
+            .len(),
+          1
+        );
+        std::fs::remove_dir_all(root).unwrap();
+      }
+    }
   }
 
   #[test]
@@ -980,7 +1316,9 @@ mod tests {
     let mut manager = recording_manager();
     manager.observe(at(0), active("word"));
     manager.observe(at(5), active("word"));
-    manager.exclude_app("WORD", "Word").unwrap();
+    manager
+      .exclude_app("WORD", "Word", ActivityHistoryDisposition::Keep)
+      .unwrap();
 
     assert!(manager.is_excluded("word"));
     assert_eq!(segments(&manager), [("word".into(), 0, 5)]);
@@ -1053,6 +1391,385 @@ mod tests {
     let much_later = at(0) + chrono::Duration::days(40);
     assert!(restarted.prune_expired(much_later).unwrap());
     assert!(store.load_day(day).unwrap().is_empty());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn pending_observations_are_discarded_after_every_recording_boundary() {
+    for transition in 0..5 {
+      let mut manager = recording_manager();
+      let generation = manager.observation_generation;
+      match transition {
+        0 => {
+          manager.stop(at(0)).unwrap();
+        }
+        1 => {
+          manager
+            .set_recording_status(ActivityRecordingStatus::Paused, at(0))
+            .unwrap();
+          manager
+            .set_recording_status(ActivityRecordingStatus::Recording, at(0))
+            .unwrap();
+        }
+        2 => {
+          manager
+            .exclude_app("word", "Word", ActivityHistoryDisposition::Keep)
+            .unwrap();
+        }
+        3 => {
+          manager.delete_day(local_date(at(0))).unwrap();
+        }
+        _ => {
+          manager.delete_all().unwrap();
+        }
+      }
+      assert!(!manager.accepts_observation(generation, true));
+      assert!(!manager.accepts_observation(manager.observation_generation, false));
+      assert!(manager.open.is_none());
+    }
+  }
+
+  #[test]
+  fn exclusions_revalidate_at_observation_commit_and_history_choice_is_respected() {
+    for disposition in [
+      ActivityHistoryDisposition::Keep,
+      ActivityHistoryDisposition::Delete,
+    ] {
+      let mut manager = recording_manager();
+      manager.observe(at(0), active("word"));
+      manager.observe(at(5), active("word"));
+      manager.exclude_app("word", "Word", disposition).unwrap();
+      manager.observe(at(10), active("word"));
+      assert!(manager.open.is_none());
+      match disposition {
+        ActivityHistoryDisposition::Keep => {
+          assert_eq!(segments(&manager), [("word".into(), 0, 5)])
+        }
+        ActivityHistoryDisposition::Delete => assert!(segments(&manager).is_empty()),
+      }
+    }
+  }
+
+  #[test]
+  fn every_stop_and_flush_before_idle_threshold_persists_only_input_confirmed_time() {
+    for stop_second in [10, 60, 120, 240, 299] {
+      let root = std::env::temp_dir()
+        .join(format!("stella-idle-prefix-{}", uuid::Uuid::new_v4()));
+      let store = ActivityStore::new([3; 32], root.clone());
+      let mut manager = recording_manager();
+      manager.persistence = ActivityPersistence::Encrypted(store.clone());
+      let clock = Instant::now();
+      manager.observe_at(
+        at(0),
+        clock,
+        Duration::ZERO,
+        active("word"),
+        partition_in(&Local, at(0)),
+      );
+      manager.observe_at(
+        at(5),
+        clock + Duration::from_secs(5),
+        Duration::ZERO,
+        active("word"),
+        partition_in(&Local, at(5)),
+      );
+      for second in (10..=stop_second).step_by(5) {
+        manager.observe_at(
+          at(second),
+          clock + Duration::from_secs(second as u64),
+          Duration::from_secs((second - 5) as u64),
+          active("word"),
+          partition_in(&Local, at(second)),
+        );
+      }
+      manager.flush(at(stop_second)).unwrap();
+      let persisted = store.load_day(local_date(at(0))).unwrap();
+      assert_eq!(persisted[0].end, at(5));
+      manager.stop(at(stop_second)).unwrap();
+      assert_eq!(store.load_day(local_date(at(0))).unwrap()[0].end, at(5));
+      ActivityStore::remove(&root).unwrap();
+    }
+  }
+
+  #[test]
+  fn persisted_overlap_is_discarded_before_flush_or_close() {
+    let root = std::env::temp_dir()
+      .join(format!("stella-clock-restart-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let day = local_date(at(0));
+    store
+      .save_day(
+        day,
+        &[ActivitySegment {
+          app_identifier: "word".into(),
+          app_name: "Word".into(),
+          start: at(0),
+          end: at(10),
+        }],
+      )
+      .unwrap();
+    let mut manager = recording_manager();
+    manager.persistence = ActivityPersistence::Encrypted(store.clone());
+    manager.observe(at(5), active("mail"));
+    manager.observe(at(10), active("mail"));
+    manager.flush(at(10)).unwrap();
+    assert_eq!(store.load_day(day).unwrap().len(), 1);
+    manager.observe(at(15), active("mail"));
+    manager.stop(at(15)).unwrap();
+    let persisted = store.load_day(day).unwrap();
+    assert_eq!(persisted.len(), 2);
+    assert_eq!(persisted[0].end, persisted[1].start);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn excluding_with_delete_removes_cold_encrypted_history_and_preserves_other_apps() {
+    let root = std::env::temp_dir()
+      .join(format!("stella-excluded-history-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let day = local_date(at(0));
+    let segment = |app: &str, start, end| ActivitySegment {
+      app_identifier: app.into(),
+      app_name: app.into(),
+      start: at(start),
+      end: at(end),
+    };
+    store
+      .save_day(day, &[segment("word", 0, 5), segment("mail", 5, 10)])
+      .unwrap();
+    let mut manager = recording_manager();
+    manager.persistence = ActivityPersistence::Encrypted(store.clone());
+    manager
+      .exclude_app("word", "Word", ActivityHistoryDisposition::Delete)
+      .unwrap();
+    assert_eq!(store.load_day(day).unwrap(), [segment("mail", 5, 10)]);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn clock_corrections_never_overlap_intervals_or_delay_monotonic_flush() {
+    for correction in [-120, -10, 120, 3600] {
+      let mut manager = recording_manager();
+      let clock = Instant::now();
+      for (tick, wall, app) in [
+        (0, 0, "a"),
+        (5, 5, "a"),
+        (10, 10, "b"),
+        (15, 15 + correction, "b"),
+        (20, 20 + correction, "c"),
+        (25, 25 + correction, "c"),
+      ] {
+        manager.observe_at(
+          at(wall),
+          clock + Duration::from_secs(tick),
+          Duration::ZERO,
+          active(app),
+          partition_in(&Local, at(wall)),
+        );
+      }
+      manager.stop(at(30 + correction)).unwrap();
+      let all = manager.days.values().flatten().collect::<Vec<_>>();
+      for pair in all.windows(2) {
+        assert!(pair[0].end <= pair[1].start);
+      }
+      assert!(all.iter().all(|segment| segment.start < segment.end));
+      manager.last_flush = Some(clock);
+      assert!(!manager.flush_due(clock + Duration::from_secs(59)));
+      assert!(manager.flush_due(clock + Duration::from_secs(60)));
+    }
+  }
+
+  // A pinned timezone with one transition supplies gap, fold and whole-date
+  // cases without depending on the host zone or adding a timezone database.
+  #[derive(Clone)]
+  struct TransitionZone {
+    before: FixedOffset,
+    after: FixedOffset,
+    transition: chrono::NaiveDateTime,
+  }
+
+  impl TimeZone for TransitionZone {
+    type Offset = FixedOffset;
+    fn from_offset(offset: &FixedOffset) -> Self {
+      Self {
+        before: *offset,
+        after: *offset,
+        transition: chrono::NaiveDateTime::MIN,
+      }
+    }
+    fn offset_from_local_date(
+      &self,
+      date: &NaiveDate,
+    ) -> chrono::MappedLocalTime<FixedOffset> {
+      self.offset_from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+    }
+    fn offset_from_local_datetime(
+      &self,
+      local: &chrono::NaiveDateTime,
+    ) -> chrono::MappedLocalTime<FixedOffset> {
+      let valid = |offset: FixedOffset| {
+        let utc =
+          *local - chrono::Duration::seconds(i64::from(offset.local_minus_utc()));
+        self.offset_from_utc_datetime(&utc) == offset
+      };
+      match (valid(self.before), valid(self.after)) {
+        (true, true) if self.before != self.after => {
+          if self.before.local_minus_utc() > self.after.local_minus_utc() {
+            chrono::MappedLocalTime::Ambiguous(self.before, self.after)
+          } else {
+            chrono::MappedLocalTime::Ambiguous(self.after, self.before)
+          }
+        }
+        (true, _) => chrono::MappedLocalTime::Single(self.before),
+        (_, true) => chrono::MappedLocalTime::Single(self.after),
+        _ => chrono::MappedLocalTime::None,
+      }
+    }
+    fn offset_from_utc_date(&self, date: &NaiveDate) -> FixedOffset {
+      self.offset_from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+    }
+    fn offset_from_utc_datetime(&self, utc: &chrono::NaiveDateTime) -> FixedOffset {
+      if *utc < self.transition {
+        self.before
+      } else {
+        self.after
+      }
+    }
+  }
+
+  #[test]
+  fn day_boundaries_resolve_midnight_gaps_folds_and_skipped_dates() {
+    for (before, after, transition) in [
+      (
+        -3 * 3600,
+        -2 * 3600,
+        Utc.with_ymd_and_hms(2018, 11, 4, 3, 0, 0).unwrap(),
+      ),
+      (
+        -2 * 3600,
+        -3 * 3600,
+        Utc.with_ymd_and_hms(2018, 2, 18, 3, 0, 0).unwrap(),
+      ),
+      (
+        -10 * 3600,
+        14 * 3600,
+        Utc.with_ymd_and_hms(2011, 12, 30, 10, 0, 0).unwrap(),
+      ),
+    ] {
+      let zone = TransitionZone {
+        before: FixedOffset::east_opt(before).unwrap(),
+        after: FixedOffset::east_opt(after).unwrap(),
+        transition: transition.naive_utc(),
+      };
+      let original = ActivitySegment {
+        app_identifier: "word".into(),
+        app_name: "Word".into(),
+        start: transition - chrono::Duration::seconds(5),
+        end: transition + chrono::Duration::seconds(5),
+      };
+      let pieces = split_by_day_in(&zone, original.clone());
+      assert_eq!(
+        pieces
+          .iter()
+          .map(|(_, piece)| (piece.end - piece.start).num_seconds())
+          .sum::<i64>(),
+        10
+      );
+      assert_eq!(pieces.first().unwrap().1.start, original.start);
+      assert_eq!(pieces.last().unwrap().1.end, original.end);
+      for (date, piece) in pieces {
+        assert_eq!(piece.start.with_timezone(&zone).date_naive(), date);
+        assert_eq!(
+          (piece.end - chrono::Duration::nanoseconds(1))
+            .with_timezone(&zone)
+            .date_naive(),
+          date
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn timezone_changes_keep_flushed_prefixes_in_their_opening_partition_once() {
+    let root =
+      std::env::temp_dir().join(format!("stella-zone-prefix-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let mut manager = recording_manager();
+    manager.persistence = ActivityPersistence::Encrypted(store.clone());
+    let utc = FixedOffset::east_opt(0).unwrap();
+    let west = FixedOffset::west_opt(3600).unwrap();
+    let start = Utc.with_ymd_and_hms(2026, 3, 10, 0, 30, 0).unwrap();
+    let clock = Instant::now();
+    for second in [0, 5] {
+      let now = start + chrono::Duration::seconds(second);
+      manager.observe_at(
+        now,
+        clock + Duration::from_secs(second as u64),
+        Duration::ZERO,
+        active("word"),
+        partition_in(&utc, now),
+      );
+    }
+    manager.flush(start).unwrap();
+    for second in [10, 15] {
+      let now = start + chrono::Duration::seconds(second);
+      manager.observe_at(
+        now,
+        clock + Duration::from_secs(second as u64),
+        Duration::ZERO,
+        active("word"),
+        partition_in(&west, now),
+      );
+    }
+    manager.stop(start).unwrap();
+    let mut intervals = store
+      .day_dates()
+      .unwrap()
+      .into_iter()
+      .flat_map(|date| store.load_day(date).unwrap())
+      .collect::<Vec<_>>();
+    intervals.sort_by_key(|segment| segment.start);
+    assert_eq!(
+      intervals
+        .iter()
+        .map(|segment| (segment.end - segment.start).num_seconds())
+        .sum::<i64>(),
+      15
+    );
+    for pair in intervals.windows(2) {
+      assert_eq!(pair[0].end, pair[1].start);
+    }
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn deletion_only_still_expires_day_files_without_reading_their_contents() {
+    let root =
+      std::env::temp_dir().join(format!("stella-retention-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([3; 32], root.clone());
+    let date = local_date(at(0));
+    store
+      .save_day(
+        date,
+        &[ActivitySegment {
+          app_identifier: "word".into(),
+          app_name: "Word".into(),
+          start: at(0),
+          end: at(5),
+        }],
+      )
+      .unwrap();
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::DeletionOnly(root.clone()),
+      ActivitySettings::default(),
+    );
+    assert!(
+      manager
+        .prune_expired(at(0) + chrono::Duration::days(40))
+        .unwrap()
+    );
+    assert!(store.load_day(date).unwrap().is_empty());
     ActivityStore::remove(&root).unwrap();
   }
 

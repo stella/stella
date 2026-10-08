@@ -24,9 +24,16 @@ pub trait LocalWindowFeature {
   fn is_available<R: Runtime>(_app: &AppHandle<R>) -> bool {
     true
   }
+
+  fn account_binding<R: Runtime>(_app: &AppHandle<R>) -> Option<(u64, String)> {
+    None
+  }
 }
 
-pub struct LocalCaller<F>(PhantomData<F>);
+pub struct LocalCaller<F> {
+  feature: PhantomData<F>,
+  account_binding: Option<(u64, String)>,
+}
 
 impl<F: LocalWindowFeature> LocalCaller<F> {
   fn verify(
@@ -37,12 +44,30 @@ impl<F: LocalWindowFeature> LocalCaller<F> {
     let feature_window = F::WINDOW_LABELS.contains(&label);
     let app_origin =
       url.is_some_and(|url| crate::app_window::is_app_origin(url, dev_origin));
-    (feature_window && app_origin).then_some(Self(PhantomData))
+    (feature_window && app_origin).then_some(Self {
+      feature: PhantomData,
+      account_binding: None,
+    })
+  }
+
+  pub(crate) fn account_binding(&self) -> Option<&(u64, String)> {
+    self.account_binding.as_ref()
+  }
+
+  #[cfg(test)]
+  pub(crate) fn for_account_test(generation: u64, namespace: &str) -> Self {
+    Self {
+      feature: PhantomData,
+      account_binding: Some((generation, namespace.into())),
+    }
   }
 
   #[cfg(test)]
   pub(crate) fn for_test() -> Self {
-    Self(PhantomData)
+    Self {
+      feature: PhantomData,
+      account_binding: None,
+    }
   }
 }
 
@@ -54,8 +79,13 @@ impl<'de, R: Runtime, F: LocalWindowFeature> CommandArg<'de, R> for LocalCaller<
     }
     let url = webview.url().ok();
     let dev_origin = crate::app_window::dev_origin(&webview);
-    Self::verify(webview.label(), url.as_ref(), dev_origin.as_ref())
-      .ok_or_else(|| InvokeError::from(F::REFUSAL))
+    let mut caller = Self::verify(webview.label(), url.as_ref(), dev_origin.as_ref())
+      .ok_or_else(|| InvokeError::from(F::REFUSAL))?;
+    caller.account_binding = F::account_binding(webview.app_handle());
+    if !F::is_available(webview.app_handle()) {
+      return Err(InvokeError::from(F::REFUSAL));
+    }
+    Ok(caller)
   }
 }
 
@@ -80,6 +110,27 @@ impl LocalWindowFeature for ActivityWindows {
 
   fn is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
     crate::activity::is_enabled(app)
+  }
+
+  fn account_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
+    app
+      .try_state::<crate::feature_gate::FeatureGates>()?
+      .account_binding(crate::feature_gate::DesktopFeature::ActivityTimeline)
+  }
+}
+
+impl LocalCaller<ActivityWindows> {
+  pub(crate) fn require_current<R: Runtime>(
+    &self,
+    app: &AppHandle<R>,
+  ) -> Result<(), String> {
+    if self.account_binding.is_some()
+      && self.account_binding == ActivityWindows::account_binding(app)
+      && ActivityWindows::is_available(app)
+    {
+      return Ok(());
+    }
+    Err(ActivityWindows::REFUSAL.into())
   }
 }
 

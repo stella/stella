@@ -110,8 +110,10 @@ impl ActivityStore {
 
   /// Every file in the days directory with the date it belongs to; files
   /// that are not day files (interrupted writes) have no date.
-  fn day_entries(&self) -> Result<Vec<(PathBuf, Option<NaiveDate>)>, String> {
-    let entries = match fs::read_dir(self.days_dir()) {
+  fn day_entries_root(
+    root: &Path,
+  ) -> Result<Vec<(PathBuf, Option<NaiveDate>)>, String> {
+    let entries = match fs::read_dir(root.join(DAYS_DIR_NAME)) {
       Ok(entries) => entries,
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
         return Ok(Vec::new());
@@ -135,8 +137,17 @@ impl ActivityStore {
   /// Deletes the day files before `earliest`, and temporary files left by an
   /// interrupted write. Returns how many day files went.
   pub fn delete_days_before(&self, earliest: NaiveDate) -> Result<usize, String> {
+    Self::delete_days_before_root(&self.root, earliest)
+  }
+
+  /// Retention never needs the key or readable settings. Unavailable account
+  /// settings use the default retention chosen by the caller.
+  pub fn delete_days_before_root(
+    root: &Path,
+    earliest: NaiveDate,
+  ) -> Result<usize, String> {
     let mut deleted = 0;
-    for (path, date) in self.day_entries()? {
+    for (path, date) in Self::day_entries_root(root)? {
       match date {
         Some(date) if date >= earliest => {}
         Some(_) => {
@@ -147,6 +158,40 @@ impl ActivityStore {
           remove_file_if_present(&path)?;
         }
         None => {}
+      }
+    }
+    Ok(deleted)
+  }
+
+  pub fn day_dates(&self) -> Result<Vec<NaiveDate>, String> {
+    Ok(
+      Self::day_entries_root(&self.root)?
+        .into_iter()
+        .filter_map(|(_, date)| date)
+        .collect(),
+    )
+  }
+
+  /// Sweep every account namespace without loading another account's key or
+  /// plaintext. Legacy unnamespaced day files are also eligible for deletion.
+  pub fn sweep_namespaces(root: &Path, earliest: NaiveDate) -> Result<usize, String> {
+    let mut deleted = Self::delete_days_before_root(root, earliest)?;
+    let entries = match fs::read_dir(root) {
+      Ok(entries) => entries,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(deleted),
+      Err(error) => {
+        return Err(format!("activity namespaces could not be listed: {error}"));
+      }
+    };
+    for entry in entries {
+      let entry = entry
+        .map_err(|error| format!("activity namespace could not be listed: {error}"))?;
+      if entry
+        .file_type()
+        .map_err(|error| format!("activity namespace type could not be read: {error}"))?
+        .is_dir()
+      {
+        deleted += Self::delete_days_before_root(&entry.path(), earliest)?;
       }
     }
     Ok(deleted)
@@ -238,6 +283,33 @@ mod tests {
     assert!(store.load_day(date(1)).unwrap().is_empty());
     assert_eq!(store.load_day(date(2)).unwrap().len(), 1);
     assert!(!temporary.exists());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn namespace_sweep_needs_no_keys_or_settings() {
+    let (_, root) = store();
+    for namespace in ["a", "b"] {
+      let days = root.join(namespace).join(DAYS_DIR_NAME);
+      fs::create_dir_all(&days).unwrap();
+      fs::write(days.join("2026-03-01.json.enc"), b"unreadable ciphertext").unwrap();
+      fs::write(days.join("2026-03-03.json.enc"), b"unreadable ciphertext").unwrap();
+    }
+    assert_eq!(ActivityStore::sweep_namespaces(&root, date(2)).unwrap(), 2);
+    for namespace in ["a", "b"] {
+      assert!(
+        !root
+          .join(namespace)
+          .join("days/2026-03-01.json.enc")
+          .exists()
+      );
+      assert!(
+        root
+          .join(namespace)
+          .join("days/2026-03-03.json.enc")
+          .exists()
+      );
+    }
     ActivityStore::remove(&root).unwrap();
   }
 

@@ -1,7 +1,9 @@
 # Local-only data
 
-Some desktop features keep data that never leaves the device: clipboard
-history and the activity timeline. They share one set of guardrails. A new
+Some desktop features keep data on the device: clipboard history and the
+activity timeline. Activity recording never exports data automatically; its
+Copy summary action explicitly publishes the selected summary to the system
+clipboard at the user's request. They share one set of guardrails. A new
 local-only feature follows every rule below and adds one entry to
 `tests/local-only-features.ts`, which the guard tests iterate.
 
@@ -52,3 +54,26 @@ local-only feature follows every rule below and adds one entry to
   type is listed.
 - `tests/window-capabilities.test.ts`: each window's capability grants what
   its page invokes.
+
+## Activity account ownership
+
+Activity days, settings and welcome consent belong to the linked account.
+The store directory and encryption keychain account use a SHA-256 digest of
+length-delimited API origin, organization id and user id. Disconnecting closes
+the gate and window, supersedes pending requests, flushes only the active
+prefix, and unloads all readable account state. Relinking another account
+starts with that account's own consent and history. Previous accounts' encrypted
+files remain available when those accounts relink.
+
+Retention uses day filenames even when keys or settings are unreadable. The
+active account uses its configured retention; inactive namespaces and legacy
+unnamespaced files use the longest supported retention (90 days) without
+opening any other account's key or settings. Old unnamespaced stores are never
+read into an account namespace.
+
+An app exclusion asks whether to keep or delete its past segments. Both choices
+prevent future sampling of the app. Day partitions are pinned when a segment
+opens; a time-zone change closes that partition before opening another. Idle
+prefixes are trimmed to the last input before stopping or persisting. Sampling
+gaps and flush cadence use a monotonic clock; backward wall-clock corrections
+suspend new intervals until they no longer overlap prior observations.
