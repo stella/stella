@@ -380,6 +380,7 @@ test("saving a reopened approved editor clears parked and global unload guards",
 });
 
 type LifecycleFields = { name: string; description: string };
+type LifecycleSaveResult = "saved" | "failed" | "rejected";
 type LifecycleWrite = {
   fields: LifecycleFields;
   expectedVersion: number;
@@ -745,7 +746,7 @@ const refetchLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
 const completeLifecycleSave = async (
   model: LifecycleModel,
   real: LifecycleReal,
-  result: "saved" | "failed",
+  result: LifecycleSaveResult,
 ) => {
   const queued = model.pending.at(0);
   if (queued === undefined) {
@@ -801,7 +802,11 @@ const completeLifecycleSave = async (
   const readsBeforeResponse = real.backend.reads.length;
   const modeBeforeResponse = model.mode;
   await act(async () => {
-    request.response.resolve(response);
+    if (result === "rejected") {
+      request.response.reject(new TypeError("Network request rejected"));
+    } else {
+      request.response.resolve(response);
+    }
   });
   await settleLifecycle();
   const observedRead = real.backend.reads
@@ -858,7 +863,7 @@ const completeLifecycleSave = async (
 type LifecycleAction =
   | { type: "edit"; field: keyof LifecycleFields; value: string }
   | { type: "save" }
-  | { type: "complete"; result: "saved" | "failed" }
+  | { type: "complete"; result: LifecycleSaveResult }
   | { type: "commit" }
   | { type: "refetch" }
   | { type: "revert" }
@@ -1363,7 +1368,7 @@ const lifecycleCommandArbitraries = [
   fc.constant(new LifecycleCommand({ type: "commit" })),
   fc.constant(new LifecycleCommand({ type: "refetch" })),
   fc
-    .constantFrom("saved", "failed")
+    .constantFrom("saved", "failed", "rejected")
     .map((result) => new LifecycleCommand({ type: "complete", result })),
   fc.constant(new LifecycleCommand({ type: "revert" })),
   fc.constant(new LifecycleCommand({ type: "hide" })),
@@ -1555,6 +1560,58 @@ test(
             await assertLifecycleOracle(model, real);
             expect(backend.pending).toHaveLength(0);
             expect(backend.writes).toHaveLength(writesBeforeExternalFollow);
+            // A rejected transport request must leave the real queue recoverable by Retry.
+            const rejectedDraftName = `rejected ${localName}`;
+            await new LifecycleCommand({
+              type: "edit",
+              field: "name",
+              value: rejectedDraftName,
+            }).run(model, real);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "rejected",
+            }).run(model, real);
+            await new LifecycleCommand({
+              type: "persistent-failure",
+              intervals: 2,
+            }).run(model, real);
+            expect(
+              real.view.getByDisplayValue(rejectedDraftName),
+            ).toBeDefined();
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "saved",
+            }).run(model, real);
+            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(rejectedDraftName);
+            // A rejected response can follow a committed write that a fresh read already sees.
+            const beforeRejectedCommittedRead = model.baseline.name;
+            await new LifecycleCommand({
+              type: "edit",
+              field: "name",
+              value: `rejected committed ${localName}`,
+            }).run(model, real);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({ type: "revert" }).run(model, real);
+            await new LifecycleCommand({ type: "commit" }).run(model, real);
+            await new LifecycleCommand({ type: "refetch" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "rejected",
+            }).run(model, real);
+            expect(
+              real.view.getByDisplayValue(beforeRejectedCommittedRead),
+            ).toBeDefined();
+            expect(hasUnsavedWork()).toBe(true);
+            await new LifecycleCommand({ type: "save" }).run(model, real);
+            await new LifecycleCommand({
+              type: "complete",
+              result: "saved",
+            }).run(model, real);
+            expect(backend.rows.get(PLAYBOOK_ID)?.name).toBe(
+              beforeRejectedCommittedRead,
+            );
             // Hidden history survives both a committed-but-failed reply and the queued conflict.
             const hiddenFinalName = model.baseline.name;
             await new LifecycleCommand({

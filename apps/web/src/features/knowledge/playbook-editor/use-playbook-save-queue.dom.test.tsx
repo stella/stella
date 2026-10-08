@@ -110,6 +110,7 @@ afterAll(async () => {
 
 test("reverting and closing during a save persists the final draft after the response", async () => {
   const first = deferred();
+  let persistedName = initialDraft.name;
   const sent: SendSaveArgs[] = [];
   const outcomes: SaveOutcome[] = [];
   const requests: Promise<unknown>[] = [];
@@ -119,7 +120,11 @@ test("reverting and closing during a save persists the final draft after the res
       requests={requests}
       sendSave={async (args) => {
         sent.push(args);
-        return sent.length === 1 ? first.promise : Promise.resolve(saved);
+        const outcome = sent.length === 1 ? await first.promise : saved;
+        if (outcome.type === "saved") {
+          persistedName = args.savedDraft.name;
+        }
+        return outcome;
       }}
     />,
   );
@@ -138,6 +143,7 @@ test("reverting and closing during a save persists the final draft after the res
     await Promise.all(requests);
   });
   expect(sent).toHaveLength(2);
+  expect(persistedName).toBe(initialDraft.name);
   expect(sent.at(1)).toMatchObject({
     savedDraft: { name: "Original" },
     expectedUpdatedAt: saved.updatedAt,
