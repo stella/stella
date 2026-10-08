@@ -476,7 +476,7 @@ type OcrProjectionPersistenceOutcome =
   | "source_cancelled"
   | "stale_claim";
 
-const persistOcrProjection = async ({
+export const persistOcrProjection = async ({
   claimToken,
   ciphertext,
   database,
@@ -1481,7 +1481,7 @@ const isSameNativeExtractionSource = (
   field.content.id === candidate.content.id &&
   field.content.sha256Hex === candidate.content.sha256Hex;
 
-const persistMissingNativeExtractionRuns = async (
+export const persistMissingNativeExtractionRuns = async (
   candidates: DocumentProcessingCandidate[],
   database: typeof rootDb,
 ): Promise<SafeId<"documentProcessingRun">[]> => {
