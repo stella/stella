@@ -249,21 +249,16 @@ export const createCorpusAggregateCache = ({
         };
         // Settled before any waiter resumes, so a request that follows a
         // failure finds no flight to join and no entry to read.
-        const call = load({ ...request, aggs: missingAggs }).then(
-          (answer) => {
-            release();
+        const call = load({ ...request, aggs: missingAggs })
+          .then((answer) => {
             if (Result.isOk(answer)) {
               for (const { name, key } of missing) {
                 store(key, answer.value[name]);
               }
             }
             return answer;
-          },
-          (error: unknown) => {
-            release();
-            throw error;
-          },
-        );
+          })
+          .finally(release);
         for (const { name, key } of missing) {
           const named = call.then((answer): AggregationAnswer =>
             Result.isOk(answer)

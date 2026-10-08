@@ -125,7 +125,7 @@ describe("what an aggregation is keyed by", () => {
     "aggregation",
   ] as const;
 
-  test("changing any one input misses; the same inputs, however assembled, hit", async () => {
+  test("corpus aggregate cache key covers the request and target", async () => {
     await assertProperty(
       "corpus aggregate cache key covers the request and target",
       fc.asyncProperty(
