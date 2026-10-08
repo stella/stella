@@ -8,7 +8,7 @@
  * as a sentinel connection.
  */
 
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
@@ -119,14 +119,20 @@ describe("generating an analysis for a decision in a language with no prompt", (
     const claimsBefore = rootPoolConnectionCount();
     expect(claimsBefore).not.toBeNull();
 
-    const response = await generateAnalysis(
+    const response = await generateAnalysis({
+      admitModelAction: async () =>
+        panic("Unsupported languages must not admit a model action"),
+      startModelAction: async () =>
+        panic("Unsupported languages must not start a model action"),
       decisionId,
-      executeRowsScopedDb(createScopedDb(db, [], ORGANIZATION_ID, USER_ID)),
-      ORGANIZATION_ID,
+      scopedDb: executeRowsScopedDb(
+        createScopedDb(db, [], ORGANIZATION_ID, USER_ID),
+      ),
+      organizationId: ORGANIZATION_ID,
       orgAIConfig,
-      ORG_AI_CONFIG_STATUS.ok,
-      false,
-    );
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      promptCachingEnabled: false,
+    });
 
     expect(response.unwrap()).toEqual({
       status: "error",
