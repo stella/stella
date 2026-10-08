@@ -29,10 +29,12 @@ import {
   analysisFailureStore,
   AnalysisFailureStoreError,
 } from "@/api/lib/case-law/analysis-failure";
+import type { AnalysisFailureRecord } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
   analysisStore,
   storesAnalyses,
+  type AnalysisStore,
 } from "@/api/lib/case-law/analysis-store";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -206,6 +208,108 @@ const runGeneration = async ({
 export const ANALYSIS_PROVIDER_REFUSAL_MESSAGE =
   "The AI provider refused the analysis request.";
 
+/** The answer for a run that ended in a recorded failure. */
+const failedAnalysisResponse = (
+  failure: AnalysisFailureRecord,
+): GenerateAnalysisResponse => ({
+  status: "error",
+  error: "Analysis generation failed",
+  ...(failure.guidance === undefined
+    ? {}
+    : {
+        providerDiagnostic: {
+          ...failure.guidance,
+          message: redactProviderMessage(ANALYSIS_PROVIDER_REFUSAL_MESSAGE),
+        },
+      }),
+});
+
+type GenerationClaim =
+  | { kind: "claimed"; sentinel: AnalysisGenerating }
+  | { kind: "failed"; failure: AnalysisFailureRecord }
+  | { kind: "busy" };
+
+type ClaimForGenerationOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  failureScope: Parameters<ReturnType<typeof analysisFailureStore>["read"]>[0];
+  mode: AnalysisRequestMode;
+  observed: Parameters<AnalysisStore["claim"]>[0]["observed"];
+  /** The failure this request read before admission; a retry clears only it. */
+  observedFailureId: string | null;
+};
+
+/**
+ * The only way to a model call: claim the decision, then read the terminal
+ * failure again under that claim. The read before admission may be stale; a
+ * run that failed between it and the claim has already released its sentinel,
+ * so the claim alone would start another run. A poll that finds a failure
+ * releases the claim and answers it. An explicit retry clears the failure it
+ * was asked about (only the claim winner may) and runs; a failure it did not
+ * see belongs to a run that started after it, so it releases and waits.
+ */
+const claimForGeneration = async ({
+  decisionId,
+  failureScope,
+  mode,
+  observed,
+  observedFailureId,
+}: ClaimForGenerationOptions): Promise<
+  Result<GenerationClaim, AnalysisFailureStoreError>
+> => {
+  const sentinel = await analysisStore().claim({
+    decisionId,
+    fingerprint: failureScope.fingerprint,
+    observed,
+  });
+  if (sentinel === null) {
+    return Result.ok({ kind: "busy" });
+  }
+  const release = async () => {
+    await analysisStore().clear({ decisionId, sentinel });
+  };
+  const failure = await analysisFailureStore().read(failureScope);
+  if (Result.isError(failure)) {
+    await release();
+    return Result.err(failure.error);
+  }
+  if (failure.value === null) {
+    if (mode === ANALYSIS_REQUEST_MODE.retry && observedFailureId !== null) {
+      // Another retry already cleared the failure this one was asked about.
+      await release();
+      return Result.ok({ kind: "busy" });
+    }
+    return Result.ok({ kind: "claimed", sentinel });
+  }
+  switch (mode) {
+    case ANALYSIS_REQUEST_MODE.poll:
+      await release();
+      return Result.ok({ kind: "failed", failure: failure.value });
+    case ANALYSIS_REQUEST_MODE.retry: {
+      if (failure.value.failureId !== observedFailureId) {
+        await release();
+        return Result.ok({ kind: "busy" });
+      }
+      // A losing concurrent retry must not erase that run's later failure.
+      const cleared = await analysisFailureStore().clear(
+        failureScope,
+        failure.value.failureId,
+      );
+      if (Result.isError(cleared)) {
+        await release();
+        return Result.err(cleared.error);
+      }
+      if (!cleared.value) {
+        await release();
+        return Result.ok({ kind: "busy" });
+      }
+      return Result.ok({ kind: "claimed", sentinel });
+    }
+    default:
+      mode satisfies never;
+      return panic("Unhandled analysis request mode");
+  }
+};
+
 type GenerateAnalysisResponse =
   | { status: "done"; analysis: PersistedDecisionAnalysis }
   | { status: "generating" }
@@ -338,18 +442,7 @@ export const generateAnalysis = async ({
     );
   }
   if (failure.value !== null && mode === ANALYSIS_REQUEST_MODE.poll) {
-    return Result.ok({
-      status: "error",
-      error: "Analysis generation failed",
-      ...(failure.value.guidance === undefined
-        ? {}
-        : {
-            providerDiagnostic: {
-              ...failure.value.guidance,
-              message: redactProviderMessage(ANALYSIS_PROVIDER_REFUSAL_MESSAGE),
-            },
-          }),
-    });
+    return Result.ok(failedAnalysisResponse(failure.value));
   }
 
   // AI availability is checked only on the path that actually invokes the
@@ -370,35 +463,17 @@ export const generateAnalysis = async ({
   // background run settles, after this request has answered.
   const started = await startModelAction({
     label: "analysis-generate.run-generation",
-    // Another request won the race when the claim returns null.
-    start: async () => {
-      const sentinel = await analysisStore().claim({
+    start: async () =>
+      await claimForGeneration({
         decisionId,
-        fingerprint: input.fingerprint,
-        observed,
-      });
-      if (sentinel === null || failure.value === null) {
-        return Result.ok(sentinel);
-      }
-      // Only the claim winner may clear the failure, before its model runs.
-      // A losing concurrent retry must not erase that run's later failure.
-      const cleared = await analysisFailureStore().clear(
         failureScope,
-        failure.value.failureId,
-      );
-      if (Result.isError(cleared)) {
-        await analysisStore().clear({ decisionId, sentinel });
-        return Result.err(cleared.error);
-      }
-      if (!cleared.value) {
-        await analysisStore().clear({ decisionId, sentinel });
-        return Result.ok(null);
-      }
-      return Result.ok(sentinel);
-    },
+        mode,
+        observed,
+        observedFailureId: failure.value?.failureId ?? null,
+      }),
     // The proof aborts the generation's model call if the lease is lost.
     background: async ({ admission }, claimed) => {
-      if (Result.isError(claimed) || claimed.value === null) {
+      if (Result.isError(claimed) || claimed.value.kind !== "claimed") {
         return;
       }
       await runGeneration({
@@ -411,7 +486,7 @@ export const generateAnalysis = async ({
         orgAIConfig,
         organizationId,
         promptCachingEnabled,
-        sentinel: claimed.value,
+        sentinel: claimed.value.sentinel,
       });
     },
   });
@@ -435,8 +510,17 @@ export const generateAnalysis = async ({
       new HandlerError({ status: 503, message: error.message }),
     );
   }
-
-  return Result.ok({ status: "generating" });
+  const claim = started.value.value;
+  switch (claim.kind) {
+    case "failed":
+      return Result.ok(failedAnalysisResponse(claim.failure));
+    case "claimed":
+    case "busy":
+      return Result.ok({ status: "generating" });
+    default:
+      claim satisfies never;
+      return panic("Unhandled analysis generation claim");
+  }
 };
 
 const config = {

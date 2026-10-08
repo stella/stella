@@ -154,7 +154,14 @@ const diagnostic = redactedProviderDiagnostic({
   message: "Full provider quota reason",
 });
 
-const terminalFailureStore = async () => {
+type FailureStoreFixture = {
+  /** Record the terminal failure up front, as a run that already failed did. */
+  initialFailure?: boolean;
+};
+
+const terminalFailureStore = async ({
+  initialFailure = true,
+}: FailureStoreFixture = {}) => {
   const values = new Map<string, string>();
   const commands: string[] = [];
   const store = failureOwner.createAnalysisFailureStore({
@@ -189,11 +196,16 @@ const terminalFailureStore = async () => {
       },
     }),
   });
-  expect(
-    (
-      await store.write({ organizationId, decisionId, fingerprint }, diagnostic)
-    ).isOk(),
-  ).toBe(true);
+  if (initialFailure) {
+    expect(
+      (
+        await store.write(
+          { organizationId, decisionId, fingerprint },
+          diagnostic,
+        )
+      ).isOk(),
+    ).toBe(true);
+  }
   spyOn(failureOwner, "analysisFailureStore").mockReturnValue(store);
   return { store, commands };
 };
@@ -219,7 +231,7 @@ test("two polls retain the same terminal failure and make no model calls", async
       status: "error",
       error: "Analysis generation failed",
       // The catalogue code and our words; the provider's own text stays
-      // out of the shared failure record.
+      // out of the failure record.
       providerDiagnostic: {
         provider: diagnostic.provider,
         code: diagnostic.code,
@@ -279,9 +291,9 @@ for (const schedule of ["single", "concurrent", "delayed-admission"] as const) {
         Array.from({ length: retries }, () => ({ status: "generating" })),
       );
       expect(model).toHaveBeenCalledTimes(1);
-      expect(commands.filter((command) => command === "EVAL")).toHaveLength(
-        schedule === "delayed-admission" ? 2 : 1,
-      );
+      // Only the retry that saw the failure clears it; a later one sees the
+      // newer failure under its claim and leaves it.
+      expect(commands.filter((command) => command === "EVAL")).toHaveLength(1);
       expect(commands.indexOf("EVAL")).toBeLessThan(
         commands.lastIndexOf("SET"),
       );
@@ -448,7 +460,7 @@ for (const delivery of ["available", "outage"] as const) {
           },
         },
       ]);
-      // The shared failure record never receives the provider's text.
+      // The failure record never receives the provider text.
       expect(JSON.stringify(snapshots)).not.toContain(
         "Full scoped provider reason",
       );
@@ -466,3 +478,68 @@ for (const delivery of ["available", "outage"] as const) {
     }
   });
 }
+
+test("a poll admitted after another poll's run failed answers that failure without a second model call", async () => {
+  owners();
+  // The first run fails only once the second poll has read (no failure yet)
+  // and asked for admission, which is granted after that run settled.
+  const secondPollAdmitting = Promise.withResolvers<undefined>();
+  await terminalFailureStore({ initialFailure: false });
+  const error = createProviderCallError({
+    model: { provider: "openai", keySource: "byok" },
+    status: 429,
+    evidence: {
+      error: { code: "insufficient_quota", message: "Fresh terminal failure" },
+    },
+  });
+  const model = spyOn(
+    generation,
+    "generateTanStackObjectForRole",
+  ).mockImplementation(async () => {
+    await secondPollAdmitting.promise;
+    throw error;
+  });
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  try {
+    const firstSettled = Promise.withResolvers<undefined>();
+    let starts = 0;
+    const startModelAction: DetachedModelActionStarter = async (work) => {
+      const position = starts++;
+      if (position > 0) {
+        secondPollAdmitting.resolve(undefined);
+        await firstSettled.promise;
+      }
+      const result = await runBackground(work);
+      if (position === 0) {
+        firstSettled.resolve(undefined);
+      }
+      return result;
+    };
+    const [first, second] = await Promise.all([
+      generateAnalysis({ ...options, startModelAction }),
+      generateAnalysis({ ...options, startModelAction }),
+    ]);
+    expect(first.unwrap()).toEqual({ status: "generating" });
+    expect(second.unwrap()).toMatchObject({
+      status: "error",
+      error: "Analysis generation failed",
+    });
+    expect(model).toHaveBeenCalledTimes(1);
+
+    // An explicit retry of that failure still starts exactly one run.
+    expect(
+      (
+        await generateAnalysis({
+          ...options,
+          mode: "retry",
+          startModelAction: runBackground,
+        })
+      ).unwrap(),
+    ).toEqual({ status: "generating" });
+    expect(model).toHaveBeenCalledTimes(2);
+  } finally {
+    logs.restore();
+    analytics.restore();
+  }
+});

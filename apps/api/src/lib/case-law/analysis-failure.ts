@@ -23,10 +23,10 @@ end
 return 0
 `;
 /**
- * What a failure keeps for the organization's other readers: which provider
- * refused and the catalogue code for it, never the provider's own text. The
- * record sits in a shared cache, and a provider's message can echo the
- * prompt, so the text stays only in the tenant's stored diagnostic.
+ * The fields a recorded failure may carry: which provider refused and the
+ * catalogue code for its refusal. It has no field for the provider's own
+ * text, so that text is never recorded here; readers get the catalogue
+ * guidance for the code instead.
  */
 const failureGuidanceSchema = v.strictObject({
   provider: v.string(),
@@ -40,7 +40,10 @@ const failureSchema = v.strictObject({
   guidance: v.optional(failureGuidanceSchema),
 });
 
-/** The guidance a diagnostic leaves for the shared failure record. */
+/** A terminal failure as it is recorded and read back. */
+export type AnalysisFailureRecord = v.InferOutput<typeof failureSchema>;
+
+/** The guidance a diagnostic leaves in a recorded failure. */
 export const analysisFailureGuidance = ({
   provider,
   code,

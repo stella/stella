@@ -94,7 +94,7 @@ test("failures are isolated by organization, decision, and input fingerprint and
   expect(redis.calls.at(0)?.args.at(0)).toContain("{");
 });
 
-test("a failure caused by a provider writes no provider text to the shared cache", async () => {
+test("a failure caused by a provider records no provider text", async () => {
   const redis = fakeRedis();
   const store = createAnalysisFailureStore({ createRedis: () => redis.client });
   // A whole diagnostic, message included, handed in where guidance belongs.
