@@ -15,8 +15,9 @@ import {
   LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT,
   projectLegislationFacets,
 } from "@/api/handlers/legislation/catalog-response";
-import { isLatestOpenedVersionOfWorkAt } from "@/api/handlers/legislation/list";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
+import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import {
   publishedLegislationDocument,
   publishedLegislationProjectionFor,
@@ -82,11 +83,13 @@ export const legislationFacetSnapshotQuery = (
       ),
     )
     .groupBy(legislationFacetCounts.documentType)
+    // SAFETY: the one caller reads this through `readBounded`, which applies
+    // the bucket cap plus one and refuses an overflowing set.
+    // oxlint-disable-next-line require-query-limit/require-query-limit -- bounded by readBounded at the call site; see SAFETY above
     .orderBy(
       sql`sum(${legislationFacetCounts.works}) DESC`,
       legislationFacetCounts.documentType,
-    )
-    .limit(LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT);
+    );
 
 /**
  * Each Work is counted by the row the listing shows for it today
@@ -110,11 +113,23 @@ export const readLegislationFacets = async (
       .select({ refreshedAt: legislationFacetRefreshes.refreshedAt })
       .from(legislationFacetRefreshes)
       .limit(1);
-    const documentType =
-      refreshed.length === 0
-        ? await buildLegislationFacetsQuery(tx, country)
-        : await legislationFacetSnapshotQuery(tx, country);
-    return { documentType };
+    if (refreshed.length === 0) {
+      return { documentType: await buildLegislationFacetsQuery(tx, country) };
+    }
+    const buckets = await readBounded(
+      legislationFacetSnapshotQuery(tx, country),
+      LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT,
+    );
+    if (buckets.type === "overflow") {
+      // More kinds of act than the response can carry: no options beats a
+      // silently truncated list that reads as complete.
+      logger.warn("legislation.facets.bucket_overflow", {
+        country,
+        cap: buckets.cap,
+      });
+      return { documentType: [] };
+    }
+    return { documentType: buckets.rows };
   });
 
 /**

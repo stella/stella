@@ -1,13 +1,18 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { caseLawSourceArrivals } from "@/api/db/schema";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { SOURCE_ARRIVALS_WINDOW_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
-type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
+/** The connection the scheduler task opens; the refresh owns its transaction. */
+type RefreshDb = {
+  transaction: <Value>(
+    run: (tx: Transaction) => Promise<Value>,
+  ) => Promise<Value>;
+};
 
 /**
  * One source's published arrivals since `since`.

@@ -1,17 +1,22 @@
 import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import {
   legislationDocuments,
   legislationFacetCounts,
   legislationFacetRefreshes,
 } from "@/api/db/schema";
-import { isLatestOpenedVersionOfWorkAt } from "@/api/handlers/legislation/list";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import { publishedLegislationCountryFor } from "@/api/lib/legal-search/legislation-redistribution";
 
-type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
+/** The connection the scheduler task opens; the refresh owns its transaction. */
+type RefreshDb = {
+  transaction: <Value>(
+    run: (tx: Transaction) => Promise<Value>,
+  ) => Promise<Value>;
+};
 
 /**
  * Works per admitted jurisdiction, source and kind of act, each Work counted
@@ -19,7 +24,7 @@ type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
  * left out: the snapshot is counted per source so the public read applies the
  * policy that holds when it is read, not the one that held at the refresh.
  */
-export const legislationFacetRefreshQuery = (db: Pick<RefreshDb, "select">) =>
+export const legislationFacetRefreshQuery = (db: Pick<Transaction, "select">) =>
   db
     .select({
       country: sql<string>`${legislationDocuments.country}`.as("country"),
