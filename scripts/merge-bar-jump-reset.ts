@@ -162,7 +162,7 @@ export const createJumpResetStore = (directory: string) => {
       }
     }
   };
-  const wrap = <T>(operation: () => T) =>
+  const wrap = <T>(operation: () => Awaited<T>) =>
     Result.try({
       try: operation,
       catch: (cause) =>
