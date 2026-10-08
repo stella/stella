@@ -1856,7 +1856,10 @@ describe("native interrupt boundary persistence", () => {
     for (const chunk of emitted) {
       client.processor.processChunk(chunk);
     }
-    expect(client.message()?.parts).toEqual(finish?.responseMessage.parts);
+    const visible = client.processor
+      .getMessages()
+      .find(({ id }) => id === finish?.responseMessage.id);
+    expect(visible?.parts).toEqual(finish?.responseMessage.parts);
     // The client-facing snapshot presents the same single assistant message,
     // under the persisted id, so the continuation targets the persisted turn.
     const snapshot = emitted.find(
