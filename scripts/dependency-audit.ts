@@ -100,7 +100,7 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
   };
 };
 
-const readBaseline = async (): Promise<Baseline> => {
+export const readBaseline = async (): Promise<Baseline> => {
   const file = Bun.file(BASELINE_PATH);
   if (!(await file.exists())) {
     return { note: "", auditLevel: "high", accepted: [] };
@@ -454,14 +454,16 @@ const main = async (): Promise<void> => {
   report(advisories);
 };
 
-try {
-  await main();
-} catch (error) {
-  if (error instanceof AuditCommandError) {
-    // Fail closed: the audit tool itself failed, so we cannot assert the
-    // lockfile is clean. Surface the reason and exit nonzero to block the gate.
-    console.error(error.message);
-    process.exit(1);
+if (import.meta.main) {
+  try {
+    await main();
+  } catch (error) {
+    if (error instanceof AuditCommandError) {
+      // Fail closed: the audit tool itself failed, so we cannot assert the
+      // lockfile is clean. Surface the reason and exit nonzero to block the gate.
+      console.error(error.message);
+      process.exit(1);
+    }
+    throw error;
   }
-  throw error;
 }
