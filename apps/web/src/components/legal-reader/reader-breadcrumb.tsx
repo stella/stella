@@ -253,7 +253,12 @@ export const ReaderBreadcrumb = ({
                       className="size-4 shrink-0"
                       icon={ChevronRightIcon}
                     />
-                    <Popover open={middleOpen} onOpenChange={setMiddleOpen}>
+                    <Popover
+                      open={middleOpen}
+                      onOpenChange={(open, { reason }) => {
+                        setMiddleOpen(reason === "trigger-press" || open);
+                      }}
+                    >
                       <PopoverTrigger
                         aria-label={t("common.showMore")}
                         onMouseEnter={() => setMiddleOpen(true)}

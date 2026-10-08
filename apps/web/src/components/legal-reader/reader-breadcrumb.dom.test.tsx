@@ -56,6 +56,16 @@ test("reader breadcrumb opens hidden levels on hover", async () => {
   expect(screen.getByRole("button", { name: "Oddíl A" })).toBeTruthy();
 });
 
+test("hidden levels stay open when the ellipsis is clicked after hover", async () => {
+  mount(() => {});
+  const trigger = screen.getByRole("button", { name: "Show more" });
+  await act(async () => fireEvent.mouseEnter(trigger));
+  expect(screen.getByRole("button", { name: "Hlava I" })).toBeTruthy();
+  await act(async () => fireEvent.click(trigger));
+  expect(screen.queryByRole("button", { name: "Hlava I" })).not.toBeNull();
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+});
+
 test("reader breadcrumb jumps ancestors and opens Contents at the current provision", async () => {
   const positioned = spyOn(HTMLElement.prototype, "scrollIntoView");
   const jumps: string[] = [];
