@@ -12,12 +12,19 @@ export const applyDecisionParagraphLanding = (
   container: HTMLElement,
   paragraphLanding: ReturnType<typeof decisionParagraphLanding>,
 ) => {
-  if (paragraphLanding.type === "anchor") {
-    return;
-  }
-  if (paragraphLanding.type === "unavailable") {
-    container.scrollTo({ top: 0, behavior: "instant" });
-    return;
+  switch (paragraphLanding.type) {
+    case "anchor":
+    case "invalid":
+    case "text-unavailable":
+      return;
+    case "not-found":
+      container.scrollTo({ top: 0, behavior: "instant" });
+      return;
+    case "range":
+      break;
+    default:
+      paragraphLanding satisfies never;
+      return panic("Unhandled decision paragraph landing");
   }
   const targets = paragraphLanding.anchorIds.map((id) => {
     const target = readerBlockByAnchor(container, id);

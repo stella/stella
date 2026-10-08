@@ -874,8 +874,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odsek {range} sa v tomto texte nenašiel.} few {Odseky {range} sa v tomto texte nenašli.} other {Odseky {range} sa v tomto texte nenašli.}}",
     "paragraphRangeSelected": "{count, plural, one {Odsek {range} je zvýraznený.} few {Odseky {range} sú zvýraznené.} other {Odseky {range} sú zvýraznené.}}",
-    "paragraphRangeUnavailable": "Požadované odseky sa nepodarilo nájsť. Zobrazuje sa začiatok rozhodnutia.",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",

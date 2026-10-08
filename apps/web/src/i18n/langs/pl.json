@@ -874,8 +874,8 @@
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "perPage": "Na stronę"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Nie znaleziono akapitu {range} w tym tekście.} few {Nie znaleziono akapitów {range} w tym tekście.} many {Nie znaleziono akapitów {range} w tym tekście.} other {Nie znaleziono akapitów {range} w tym tekście.}}",
     "paragraphRangeSelected": "{count, plural, one {Akapit {range} jest wyróżniony.} few {Akapity {range} są wyróżnione.} many {Akapity {range} są wyróżnione.} other {Akapity {range} są wyróżnione.}}",
-    "paragraphRangeUnavailable": "Nie znaleziono żądanych akapitów. Wyświetlono początek orzeczenia.",
     "provision": {
       "article": "art. {value}",
       "letter": "litera {value})",

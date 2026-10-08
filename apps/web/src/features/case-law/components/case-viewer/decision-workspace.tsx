@@ -524,7 +524,8 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             className="h-full"
           >
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
-              {paragraphLanding.type !== "anchor" && (
+              {(paragraphLanding.type === "range" ||
+                paragraphLanding.type === "not-found") && (
                 <p
                   role="status"
                   aria-live="polite"
@@ -545,7 +546,15 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                           paragraphLanding.range.from +
                           1,
                       })
-                    : t("caseLaw.paragraphRangeUnavailable")}
+                    : t("caseLaw.paragraphRangeNotFound", {
+                        range: formatDecisionParagraphRange(
+                          paragraphLanding.range,
+                        ),
+                        count:
+                          paragraphLanding.range.to -
+                          paragraphLanding.range.from +
+                          1,
+                      })}
                 </p>
               )}
               <div

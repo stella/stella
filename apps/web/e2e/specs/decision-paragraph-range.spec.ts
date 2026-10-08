@@ -156,7 +156,13 @@ test.describe("court paragraph deep links", () => {
     );
   });
 
-  for (const fragment of ["par=999", "par=53-48", "par=48a"]) {
+  for (const { fragment, message } of [
+    { fragment: "par=999", message: "Paragraph 999 not found in this text." },
+    {
+      fragment: "par=48-101",
+      message: "Paragraphs 48-101 not found in this text.",
+    },
+  ]) {
     test(`shows a notice at the top when ${fragment} cannot address court paragraphs`, async ({
       page,
     }) => {
@@ -174,9 +180,7 @@ test.describe("court paragraph deep links", () => {
         window.location.hash = hash;
       }, fragment);
       const notice = reader.getByRole("status");
-      await expect(notice).toHaveText(
-        "The requested paragraphs could not be found. Showing the start of the decision.",
-      );
+      await expect(notice).toHaveText(message);
       await expect(notice).toBeInViewport();
       await expect(notice).not.toHaveClass(/\bsr-only\b/u);
       await expect(reader.locator("article [data-reader-landing]")).toHaveCount(
@@ -187,4 +191,74 @@ test.describe("court paragraph deep links", () => {
         .toBe(0);
     });
   }
+  for (const fragment of ["par=53-48", "par=48a", "par=1-501"]) {
+    test(`invalid fragment ${fragment} opens normally without a range notice`, async ({
+      page,
+    }) => {
+      await installParagraphFixture(page);
+      await page.goto(`${canonicalPath}#${fragment}`);
+      await expect(page).toHaveURL(`${canonicalPath}#${fragment}`);
+      const reader = page.locator(".reader-scroll");
+      await expect(reader.locator('[data-anchor="p-1"]')).toBeInViewport();
+      await expect(reader.locator("article [data-reader-landing]")).toHaveCount(
+        0,
+      );
+      await expect(reader.getByRole("status")).toHaveCount(0);
+
+      await page.evaluate(() => {
+        window.location.hash = "par=48-53";
+      });
+      await expect(reader.locator("article [data-reader-landing]")).toHaveCount(
+        6,
+      );
+      await page.evaluate((hash) => {
+        window.location.hash = hash;
+      }, fragment);
+      await expect(page).toHaveURL(`${canonicalPath}#${fragment}`);
+      await expect(reader.locator("article [data-reader-landing]")).toHaveCount(
+        0,
+      );
+      await expect(reader.getByRole("status")).toHaveCount(0);
+    });
+  }
+
+  test("a decision without an AST retains its existing unavailable state", async ({
+    page,
+  }) => {
+    await installParagraphFixture(page);
+    await page.route(
+      (url) =>
+        url.origin === E2E_API_ORIGIN &&
+        url.pathname === `/v1/case/decisions/by-slug/${decision.slug}`,
+      async (route) => {
+        await route.fulfill({
+          json: {
+            ...decision,
+            documentAst: null,
+            fulltext: null,
+            hasDocument: false,
+            documentPending: false,
+            documentReadFailed: false,
+            documentUnavailable: true,
+          } satisfies PublicCaseLawDecision,
+        });
+      },
+    );
+    await page.goto(`${canonicalPath}#par=48-53`);
+    await expect(page).toHaveURL(`${canonicalPath}#par=48-53`);
+    await expect(
+      page.getByText(
+        "The court has not published the decision text, or it is not available here yet.",
+        {
+          exact: true,
+        },
+      ),
+    ).toBeVisible();
+    await expect(page.locator("article [data-reader-landing]")).toHaveCount(0);
+    await expect(
+      page.getByText("Paragraphs 48-53 not found in this text.", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  });
 });

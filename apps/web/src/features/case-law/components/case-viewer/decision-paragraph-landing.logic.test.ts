@@ -57,21 +57,28 @@ describe("court paragraph landings", () => {
     });
   });
   test.each([
-    "par=48-50",
-    "par=12",
-    "par=48a",
-    "par=49-48",
-    "par=1-501",
-    "par=",
-    "par=0",
-  ])("unavailable range %s never becomes an anchor", (fragment) => {
-    expect(decisionParagraphLanding(ast, fragment)).toEqual({
-      type: "unavailable",
-    });
-  });
-  test("a missing AST cannot resolve a court number", () => {
+    { fragment: "par=48-50", range: { from: 48, to: 50 } },
+    { fragment: "par=12", range: { from: 12, to: 12 } },
+  ])(
+    "a valid missing range $fragment retains its court numbers for the notice",
+    ({ fragment, range }) => {
+      expect(decisionParagraphLanding(ast, fragment)).toEqual({
+        type: "not-found",
+        range,
+      });
+    },
+  );
+  test.each(["par=48a", "par=49-48", "par=1-501", "par=", "par=0"])(
+    "invalid fragment %s does not become an anchor or missing range",
+    (fragment) => {
+      expect(decisionParagraphLanding(ast, fragment)).toEqual({
+        type: "invalid",
+      });
+    },
+  );
+  test("a missing AST uses the existing unavailable state", () => {
     expect(decisionParagraphLanding(null, "par=48")).toEqual({
-      type: "unavailable",
+      type: "text-unavailable",
     });
   });
   test.each([undefined, "p-12", "h-1"])(

@@ -15,8 +15,11 @@ export const decisionParagraphLanding = (
     return { type: "anchor", anchorId: fragment } as const;
   }
   const range = parseDecisionParagraphFragment(fragment);
-  if (range === null || ast === null) {
-    return { type: "unavailable" } as const;
+  if (range === null) {
+    return { type: "invalid" } as const;
+  }
+  if (ast === null) {
+    return { type: "text-unavailable" } as const;
   }
   const resolution = resolveDecisionParagraphRange(ast, range);
   switch (resolution.type) {
@@ -28,7 +31,7 @@ export const decisionParagraphLanding = (
         firstAnchorId: resolution.firstAnchorId,
       } as const;
     case "not-found":
-      return { type: "unavailable" } as const;
+      return { type: "not-found", range } as const;
     default:
       resolution satisfies never;
       return panic("Unhandled decision paragraph range resolution");

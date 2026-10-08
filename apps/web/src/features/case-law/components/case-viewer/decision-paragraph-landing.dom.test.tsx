@@ -58,13 +58,33 @@ test("highlights the complete range, reveals folded text, focuses and scrolls to
   expect(first.hasAttribute("tabindex")).toBe(false);
 });
 
-test("unavailable ranges scroll to the start instead of retaining a stale passage", () => {
+test("valid missing ranges scroll to the start instead of retaining a stale passage", () => {
   const { container } = fixture();
   const scroll = mock(() => {});
   container.scrollTo = scroll;
-  applyDecisionParagraphLanding(container, { type: "unavailable" });
+  applyDecisionParagraphLanding(container, {
+    type: "not-found",
+    range: { from: 48, to: 53 },
+  });
   expect(scroll).toHaveBeenCalledWith({ top: 0, behavior: "instant" });
   expect(
     container.querySelectorAll<HTMLElement>("[data-reader-landing]").length,
   ).toBe(0);
 });
+
+for (const landing of [
+  { type: "invalid" },
+  { type: "text-unavailable" },
+] as const) {
+  test(`${landing.type} leaves the normal reader untouched`, () => {
+    const { container, first } = fixture();
+    const scroll = mock(() => {});
+    container.scrollTo = scroll;
+    first.focus();
+    const activeElement = container.ownerDocument.activeElement;
+    expect(applyDecisionParagraphLanding(container, landing)).toBeUndefined();
+    expect(scroll).not.toHaveBeenCalled();
+    expect(container.ownerDocument.activeElement).toBe(activeElement);
+    expect(container.querySelectorAll("[data-reader-landing]").length).toBe(0);
+  });
+}
