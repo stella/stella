@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
 import { Worker } from "node:worker_threads";
 
+import type { FailureGrade } from "@stll/errors";
+import { FAILURE_REASON_GRADE } from "@stll/errors";
 import { DEFAULT_CUTOFF } from "@stll/sanctions";
 
+import { gradeFailure, failureSink } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -13,9 +17,13 @@ import {
 } from "@/api/tests/helpers/recording-telemetry";
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
-import { reportSanctionsScreeningFailure } from "./screening-failure";
+import {
+  SanctionsScreeningFailure,
+  reportSanctionsScreeningFailure,
+} from "./screening-failure";
+import type { SanctionsScreeningFailureCause } from "./screening-failure";
 
-test("real worker startup failure reaches the bound logger and metric without module details", async () => {
+test("real worker startup failure has WARN diagnostics without capture or module details", async () => {
   const logs = installRecordingLogger();
   const analytics = installRecordingAnalytics();
   const metrics: string[] = [];
@@ -46,16 +54,12 @@ test("real worker startup failure reaches the bound logger and metric without mo
     expect(["worker-create", "worker-error"]).toContain(outcome.cause);
     expect(logs.records).toHaveLength(1);
     expect(logs.records.at(0)).toMatchObject({
-      severityText: "ERROR",
-      message: "sanctions.screening_failed",
+      severityText: "WARN",
+      message: "sanctions.matcher_failed",
       attributes: { stage: "matcher-pool", phase: outcome.cause },
     });
-    expect(metrics).toHaveLength(1);
-    expect(JSON.parse(metrics.at(0) ?? "null")).toMatchObject({
-      sink: "sanctions.screening_failed",
-      reason: "unavailable",
-      RequestTransientFailures: 1,
-    });
+    expect(metrics).toHaveLength(0);
+    expect(analytics.exceptions()).toHaveLength(0);
     expect(
       JSON.stringify({
         logs: logs.records,
@@ -127,3 +131,91 @@ for (const code of ["42501", "ERR_POSTGRES_CONNECTION_CLOSED"] as const) {
     }
   });
 }
+
+const screeningGrades = {
+  closed: { reason: "closed", grade: "anticipated" },
+  admission: { reason: "admission", grade: "anticipated" },
+  deadline: { reason: "deadline", grade: "anticipated" },
+  "work-limit": { reason: "work-limit", grade: "anticipated" },
+  "worker-create": { reason: "worker-create", grade: "defect" },
+  "worker-error": { reason: "worker-error", grade: "defect" },
+  "worker-exit": { reason: "worker-exit", grade: "defect" },
+  "worker-send": { reason: "worker-send", grade: "defect" },
+  "worker-reply": { reason: "worker-reply", grade: "defect" },
+  "worker-retire": { reason: "worker-retire", grade: "defect" },
+  "short-read": { reason: "short-read", grade: "defect" },
+  "matcher-unavailable": { reason: "matcher-unavailable", grade: "defect" },
+  "truncated-empty": { reason: "truncated-empty", grade: "defect" },
+  "freshness-read": { reason: "freshness-read", grade: "defect" },
+  "entries-read": { reason: "entries-read", grade: "defect" },
+  "index-load": { reason: "index-load", grade: "defect" },
+  operation: { reason: "operation", grade: "defect" },
+} as const satisfies {
+  [Cause in SanctionsScreeningFailureCause]: {
+    reason: Cause;
+    grade: FailureGrade;
+  };
+};
+
+test.each(Object.values(screeningGrades))(
+  "$reason has a declared screening grade $grade",
+  ({ reason, grade }) => {
+    const failure = new SanctionsScreeningFailure({
+      message: "Unavailable",
+      stage: "whole-screening",
+      reason,
+    });
+    const graded = gradeFailure(
+      readEvidence(failure),
+      failureSink({ event: "sanctions.screening_failed", expected: [] }),
+    );
+    expect(graded.grade).toBe(grade);
+    expect(graded.rule).toBe("brand");
+    expect(FAILURE_REASON_GRADE[graded.reason]).toBe(grade);
+  },
+);
+
+test("non-PG causes retain infrastructure evidence without exporting contents", () => {
+  const logs = installRecordingLogger();
+  const analytics = installRecordingAnalytics();
+  const sentinel = "NON-PG-PRIVATE-SENTINEL";
+  const cause = Object.assign(new Error(sentinel), { code: "ECONNRESET" });
+  try {
+    reportSanctionsScreeningFailure({
+      stage: "whole-screening",
+      reason: "operation",
+      error: cause,
+    });
+    expect(logs.records.at(0)).toMatchObject({
+      severityText: "WARN",
+      attributes: {
+        "failure.grade": "transient",
+        "failure.reason": "network_reset",
+      },
+    });
+    expect(analytics.exceptions()).toHaveLength(0);
+    expect(JSON.stringify(logs.records)).not.toContain(sentinel);
+  } finally {
+    logs.restore();
+    analytics.restore();
+  }
+});
+
+test("a successful null lease has no diagnostic or capture", async () => {
+  const logs = installRecordingLogger();
+  const analytics = installRecordingAnalytics();
+  const pool = createSanctionsMatcherPool();
+  try {
+    expect(await pool.run(async () => null)).toEqual({
+      status: "completed",
+      value: null,
+    });
+    await pool.close();
+    expect(logs.records).toHaveLength(0);
+    expect(analytics.exceptions()).toHaveLength(0);
+  } finally {
+    await pool.close();
+    logs.restore();
+    analytics.restore();
+  }
+});
