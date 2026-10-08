@@ -22,12 +22,12 @@
 //
 // Modes:
 //   bun scripts/knip-exports-ratchet.ts           report current vs baseline
-//   bun scripts/knip-exports-ratchet.ts --check   CI gate (exit 1 on a rise)
+//   bun scripts/knip-exports-ratchet.ts --check   CI gate (budget and coverage)
 //   bun scripts/knip-exports-ratchet.ts --write   regenerate the baseline
 //   bun scripts/knip-exports-ratchet.ts --write --allow-increase
 //                                                 record a justified rise
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -39,11 +39,12 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE_REL = BASELINE_PATHS.knipExports;
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
 const WRITE_HINT = "bun scripts/knip-exports-ratchet.ts --write";
+const ANALYSIS_FLOOR_FRACTION = 0.5;
 const ALLOW_INCREASE_FLAG = "--allow-increase";
 
 // The issue types this budget owns. `nsExports` is off by default in knip, so
 // it has to be named explicitly.
-const ISSUE_TYPES = ["exports", "types", "nsExports"] as const;
+export const ISSUE_TYPES = ["exports", "types", "nsExports"] as const;
 
 type IssueType = (typeof ISSUE_TYPES)[number];
 
@@ -52,6 +53,7 @@ const WORKSPACE_ROOTS = ["apps", "packages"] as const;
 
 export type WorkspaceSnapshot = {
   readonly count: number;
+  readonly analyzedFiles: number;
   readonly files: Record<string, number>;
 };
 
@@ -127,24 +129,50 @@ const sortedSummary = (summary: Summary): Summary => {
     for (const file of Object.keys(snapshot.files).toSorted()) {
       files[file] = snapshot.files[file] ?? panic(`file ${file} vanished`);
     }
-    sorted[workspace] = { count: snapshot.count, files };
+    sorted[workspace] = {
+      count: snapshot.count,
+      analyzedFiles: snapshot.analyzedFiles,
+      files,
+    };
   }
   return sorted;
 };
 
-// The knip json reporter emits `{ issues: [{ file, exports, types, ... }] }`,
-// one entry per file, each issue type an array of symbols.
+// The analysis adapter adds reached source paths to the issue rows, so clean
+// files and zero-issue workspaces remain part of the coverage baseline.
 export const summarizeKnipReport = (report: unknown): Summary => {
   const summary: Record<
     string,
-    { count: number; files: Record<string, number> }
+    { count: number; analyzedFiles: number; files: Record<string, number> }
   > = {};
+  if (!isRecord(report) || !Array.isArray(report["analyzedFiles"])) {
+    panic("knip report has no analyzedFiles array");
+  }
+  const analyzedFiles = new Set<string>();
+  for (const file of report["analyzedFiles"]) {
+    if (typeof file !== "string") {
+      panic("knip report has an invalid analyzed file path");
+    }
+    analyzedFiles.add(file);
+  }
+  for (const file of analyzedFiles) {
+    const workspace = workspaceOf(file);
+    const snapshot = summary[workspace] ?? {
+      count: 0,
+      analyzedFiles: 0,
+      files: {},
+    };
+    snapshot.analyzedFiles += 1;
+    summary[workspace] = snapshot;
+  }
   for (const { file, issues } of parseKnipReport(report)) {
     if (issues.length === 0) {
       continue;
     }
     const workspace = workspaceOf(file);
-    const snapshot = summary[workspace] ?? { count: 0, files: {} };
+    const snapshot =
+      summary[workspace] ??
+      panic(`knip reported issues in unanalyzed workspace ${workspace}`);
     snapshot.count += issues.length;
     snapshot.files[file] = (snapshot.files[file] ?? 0) + issues.length;
     summary[workspace] = snapshot;
@@ -170,13 +198,15 @@ export const collectIssueSymbols = (
 
 // --- Diffing ----------------------------------------------------------------
 
-type WorkspaceStatus = "ok" | "regressed" | "dropped";
+type WorkspaceStatus = "ok" | "regressed" | "dropped" | "coverage-dropped";
 
 export type WorkspaceDiff = {
   readonly workspace: string;
   readonly status: WorkspaceStatus;
   readonly current: number;
   readonly baseline: number;
+  readonly currentAnalyzedFiles: number;
+  readonly baselineAnalyzedFiles: number;
   readonly regressedFiles: readonly {
     readonly file: string;
     readonly from: number;
@@ -206,8 +236,12 @@ export const diffSummaries = (
   ].toSorted();
 
   return workspaces.map((workspace) => {
-    const now = current[workspace] ?? { count: 0, files: {} };
-    const before = baseline[workspace] ?? { count: 0, files: {} };
+    const now = current[workspace] ?? { count: 0, analyzedFiles: 0, files: {} };
+    const before = baseline[workspace] ?? {
+      count: 0,
+      analyzedFiles: 0,
+      files: {},
+    };
     const regressedFiles = Object.entries(now.files)
       .flatMap(([file, to]) => {
         const from = before.files[file] ?? 0;
@@ -217,9 +251,15 @@ export const diffSummaries = (
 
     return {
       workspace,
-      status: workspaceStatus(now.count, before.count),
+      status:
+        now.analyzedFiles === 0 ||
+        now.analyzedFiles < before.analyzedFiles * ANALYSIS_FLOOR_FRACTION
+          ? "coverage-dropped"
+          : workspaceStatus(now.count, before.count),
       current: now.count,
       baseline: before.count,
+      currentAnalyzedFiles: now.analyzedFiles,
+      baselineAnalyzedFiles: before.analyzedFiles,
       regressedFiles,
     };
   });
@@ -231,27 +271,48 @@ export const increasedWorkspaces = (
   baseline: Summary,
 ): readonly WorkspaceDiff[] =>
   diffSummaries(current, baseline).filter(
-    ({ status }) => status === "regressed",
+    ({ current: count, baseline: before }) => count > before,
   );
 
 // --- Baseline ---------------------------------------------------------------
 
-const readBaseline = (): Summary => {
+class BaselineValidationError extends TaggedError("BaselineValidationError")<{
+  message: string;
+}> {}
+
+type BaselineOptions = {
+  baselinePath?: string;
+  purpose?: "check" | "write";
+};
+
+export const readBaseline = ({
+  baselinePath = BASELINE_PATH,
+  purpose = "check",
+}: BaselineOptions = {}): Summary => {
   const parsed = Result.try((): unknown =>
-    JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+    JSON.parse(readFileSync(baselinePath, "utf-8")),
   );
   if (Result.isError(parsed)) {
-    panic(`${BASELINE_REL} is not valid JSON; run \`${WRITE_HINT}\``);
+    throw new BaselineValidationError({
+      message: `${BASELINE_REL} is not valid JSON; run \`${WRITE_HINT}\``,
+    });
   }
-  if (!isRecord(parsed.value)) {
-    panic(`${BASELINE_REL} must be a JSON object`);
+  if (
+    !isRecord(parsed.value) ||
+    (purpose === "check" && Object.keys(parsed.value).length === 0)
+  ) {
+    throw new BaselineValidationError({
+      message: `${BASELINE_REL} must be a nonempty JSON object; run \`${WRITE_HINT}\``,
+    });
   }
 
   const baseline: Summary = {};
   for (const [workspace, snapshot] of Object.entries(parsed.value)) {
     const reportedFiles = isRecord(snapshot) ? snapshot["files"] : undefined;
     if (!isRecord(snapshot) || !isRecord(reportedFiles)) {
-      panic(`${BASELINE_REL} entry ${workspace} must carry count and files`);
+      throw new BaselineValidationError({
+        message: `${BASELINE_REL} entry ${workspace} must carry count and files`,
+      });
     }
     const files: Record<string, number> = {};
     let total = 0;
@@ -261,20 +322,32 @@ const readBaseline = (): Summary => {
         !Number.isSafeInteger(value) ||
         value <= 0
       ) {
-        panic(
-          `${BASELINE_REL} entry ${workspace} has an invalid count for ${file}`,
-        );
+        throw new BaselineValidationError({
+          message: `${BASELINE_REL} entry ${workspace} has an invalid count for ${file}`,
+        });
       }
       files[file] = value;
       total += value;
     }
     const declared = snapshot["count"];
     if (typeof declared !== "number" || declared !== total) {
-      panic(
-        `${BASELINE_REL} entry ${workspace} count ${String(declared)} does not equal its per-file total ${total}`,
-      );
+      throw new BaselineValidationError({
+        message: `${BASELINE_REL} entry ${workspace} count ${String(declared)} does not equal its per-file total ${total}`,
+      });
     }
-    baseline[workspace] = { count: total, files };
+    // A refresh preserves only the export budget; analysis coverage is regenerated.
+    // This also permits the initial schema migration through --write.
+    const analyzedFiles = purpose === "write" ? 0 : snapshot["analyzedFiles"];
+    if (
+      typeof analyzedFiles !== "number" ||
+      !Number.isSafeInteger(analyzedFiles) ||
+      (purpose === "check" && analyzedFiles <= 0)
+    ) {
+      throw new BaselineValidationError({
+        message: `${BASELINE_REL} entry ${workspace} must carry a positive analyzedFiles count; run \`${WRITE_HINT}\``,
+      });
+    }
+    baseline[workspace] = { count: total, analyzedFiles, files };
   }
   return baseline;
 };
@@ -282,17 +355,25 @@ const readBaseline = (): Summary => {
 // --- knip -------------------------------------------------------------------
 
 const runKnip = (): unknown => {
+  const generated = Bun.spawnSync({
+    cmd: [
+      "bun",
+      "--no-env-file",
+      "apps/api/scripts/generate-capability-runtime.ts",
+    ],
+    cwd: REPO_ROOT,
+    env: { ...process.env, DATABASE_URL: "postgresql://invalid" },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (generated.exitCode !== 0) {
+    panic(`knip runtime generation failed:\n${generated.stderr.toString()}`);
+  }
   const knip = Bun.spawnSync({
     cmd: [
       "bun",
       "--no-env-file",
-      "run",
-      "knip",
-      "--no-progress",
-      "--include",
-      ISSUE_TYPES.join(","),
-      "--reporter",
-      "json",
+      path.join(import.meta.dir, "knip-exports-analysis.ts"),
     ],
     cwd: REPO_ROOT,
     // knip resolves config that touches the database URL; a deliberately
@@ -302,13 +383,16 @@ const runKnip = (): unknown => {
     stderr: "pipe",
   });
 
-  // knip exits non-zero whenever it reports issues, which is the normal case
-  // for a budget: only unparsable output is a failure.
+  if (knip.exitCode !== 0) {
+    panic(
+      `knip analysis failed:\n${knip.stderr.toString().trim() || knip.stdout.toString().trim()}`,
+    );
+  }
   const stdout = knip.stdout.toString();
   const parsed = Result.try((): unknown => JSON.parse(stdout));
   if (Result.isError(parsed)) {
     panic(
-      `knip did not produce JSON output:\n${knip.stderr.toString().trim() || stdout.trim()}`,
+      `knip did not produce JSON output:\n${knip.stderr.toString().trim() || stdout.slice(-500).trim()}`,
     );
   }
   return parsed.value;
@@ -337,14 +421,30 @@ const runReport = (): number => {
   return 0;
 };
 
-const runWrite = (): number => {
-  const current = summarizeKnipReport(runKnip());
+type WriteOptions = {
+  report: unknown;
+  baselinePath?: string;
+  allowIncrease?: boolean;
+};
+
+export const runWrite = ({
+  report,
+  baselinePath = BASELINE_PATH,
+  allowIncrease = false,
+}: WriteOptions): number => {
+  const current = summarizeKnipReport(report);
+  if (Object.keys(current).length === 0) {
+    console.error("Refusing to write an empty knip analysis baseline.");
+    return 1;
+  }
   // A missing baseline is the first seed, not a rise.
   const risen = increasedWorkspaces(
     current,
-    existsSync(BASELINE_PATH) ? readBaseline() : {},
+    existsSync(baselinePath)
+      ? readBaseline({ baselinePath, purpose: "write" })
+      : {},
   );
-  if (risen.length > 0 && !process.argv.includes(ALLOW_INCREASE_FLAG)) {
+  if (risen.length > 0 && !allowIncrease) {
     console.error(
       `Refusing to raise ${BASELINE_REL}. These workspaces rose:\n`,
     );
@@ -360,7 +460,7 @@ const runWrite = (): number => {
     );
     return 1;
   }
-  writeFileSync(BASELINE_PATH, `${JSON.stringify(current, null, 2)}\n`);
+  writeFileSync(baselinePath, `${JSON.stringify(current, null, 2)}\n`);
   console.log(`Wrote ${BASELINE_REL}:`);
   for (const [workspace, snapshot] of Object.entries(current)) {
     console.log(
@@ -373,11 +473,30 @@ const runWrite = (): number => {
   return 0;
 };
 
-const runCheck = (): number => {
-  const report = runKnip();
-  const current = summarizeKnipReport(report);
-  const diffs = diffSummaries(current, readBaseline());
-  const symbols = collectIssueSymbols(report);
+type CheckOptions = {
+  report?: unknown;
+  baselinePath?: string;
+};
+
+export const runCheck = ({
+  report,
+  baselinePath = BASELINE_PATH,
+}: CheckOptions = {}): number => {
+  const baseline = Result.try({
+    try: () => readBaseline({ baselinePath }),
+    catch: (error) =>
+      error instanceof BaselineValidationError
+        ? error
+        : panic("unexpected baseline read failure", error),
+  });
+  if (Result.isError(baseline)) {
+    console.error(`knip dead exports --check: ${baseline.error.message}`);
+    return 1;
+  }
+  const analyzed = report === undefined ? runKnip() : report;
+  const current = summarizeKnipReport(analyzed);
+  const diffs = diffSummaries(current, baseline.value);
+  const symbols = collectIssueSymbols(analyzed);
 
   for (const diff of diffs.filter(({ status }) => status === "dropped")) {
     console.log(
@@ -385,8 +504,21 @@ const runCheck = (): number => {
     );
   }
 
-  const regressions = diffs.filter(({ status }) => status === "regressed");
+  const coverageDrops = diffs.filter(
+    ({ status }) => status === "coverage-dropped",
+  );
+  for (const diff of coverageDrops) {
+    console.error(
+      `knip analysis: ${diff.workspace}: ${diff.baselineAnalyzedFiles} -> ${diff.currentAnalyzedFiles} analyzed files; require nonzero coverage and at least ${ANALYSIS_FLOOR_FRACTION * 100}% of baseline. For a legitimate large deletion, run \`${WRITE_HINT}\` and commit ${BASELINE_REL} in the same PR.`,
+    );
+  }
+  const regressions = diffs.filter(
+    ({ current: count, baseline: before }) => count > before,
+  );
   if (regressions.length === 0) {
+    if (coverageDrops.length > 0) {
+      return 1;
+    }
     console.log(
       `knip dead exports --check: OK. ${diffs.length} workspace(s) at or below baseline.`,
     );
@@ -418,7 +550,12 @@ const runCheck = (): number => {
 
 if (import.meta.main) {
   if (process.argv.includes("--write")) {
-    process.exit(runWrite());
+    process.exit(
+      runWrite({
+        report: runKnip(),
+        allowIncrease: process.argv.includes(ALLOW_INCREASE_FLAG),
+      }),
+    );
   }
   process.exit(process.argv.includes("--check") ? runCheck() : runReport());
 }
