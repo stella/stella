@@ -26,7 +26,7 @@ import type {
   ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -40,6 +40,10 @@ import { withTimeout } from "@/api/lib/with-timeout";
 
 // Delivery is ephemeral; a stalled viewer must not hold a running turn's lease.
 const CHAT_TURN_DELIVERY_BUFFER_BYTES = 1024 * 1024;
+const DELIVERY_FAILED_SINK = failureSink({
+  event: "chat.turn.delivery_failed",
+  expected: [],
+});
 
 class ChatTurnDeliveryOverflow extends TaggedError("ChatTurnDeliveryOverflow")<{
   message: string;
@@ -99,7 +103,7 @@ const eagerlyDeliverTurn = (response: Response): Response => {
               if (delivery === "open") {
                 controller.error(error);
               } else {
-                captureError(error, { detached: "chat-turn-run.delivery" });
+                observeFailure(error, { sink: DELIVERY_FAILED_SINK });
               }
             }
           } finally {
