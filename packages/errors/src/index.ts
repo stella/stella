@@ -35,6 +35,7 @@ export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
 
 export {
   sanitizeErrorForOutput,
+  sanitizeErrorAttributesForOutput,
   sanitizeQueryErrorText,
   printError,
   logErrorOutput,

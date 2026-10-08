@@ -1,3 +1,4 @@
+import { printError } from "@stll/errors";
 /**
  * Seed court weights for all supported jurisdictions.
  *
@@ -63,8 +64,7 @@ const seed = async () => {
 };
 
 seed().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error("Seed failed:", message);
+  printError("Seed failed:", error);
   process.exit(1);
 });
 /* oxlint-enable no-console */

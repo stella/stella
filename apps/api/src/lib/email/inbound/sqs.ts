@@ -7,6 +7,7 @@ import {
 import { Result, TaggedError, panic } from "better-result";
 import * as v from "valibot";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { receiveAndDeleteSesInboundMail } from "@/api/lib/email/inbound/ses";
@@ -250,11 +251,14 @@ export const drainInboundMailQueue = async ({
     const parsed = parseInboundQueueMessage({ body: message.Body, topicArn });
     if (parsed.isErr()) {
       counts.poison += 1;
-      logger.error("inbound_mail.queue.poison", {
-        "queue.delivery_id": messageId,
-        "queue.receive_count": receiveCount,
-        "error.reason": parsed.error.reason,
-      });
+      logger.error(
+        "inbound_mail.queue.poison",
+        sanitizeErrorAttributesForOutput({
+          "queue.delivery_id": messageId,
+          "queue.receive_count": receiveCount,
+          "error.reason": parsed.error.reason,
+        }),
+      );
       return;
     }
     const notification = parsed.value;
@@ -275,12 +279,15 @@ export const drainInboundMailQueue = async ({
     const outcome = await receive(notification.event);
     if (outcome.isErr()) {
       counts.retry += 1;
-      logger.warn("inbound_mail.queue.retry", {
-        "queue.delivery_id": messageId,
-        "queue.receive_count": receiveCount,
-        "error.type": outcome.error._tag,
-        "error.reason": outcome.error.reason,
-      });
+      logger.warn(
+        "inbound_mail.queue.retry",
+        sanitizeErrorAttributesForOutput({
+          "queue.delivery_id": messageId,
+          "queue.receive_count": receiveCount,
+          "error.type": outcome.error._tag,
+          "error.reason": outcome.error.reason,
+        }),
+      );
       return;
     }
     // Outcomes are terminal: recipient filing/drop, or a prior raw deletion.

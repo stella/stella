@@ -1,8 +1,7 @@
 // parser-output-unchanged: shared error output does not change parsed decisions.
-import { sanitizeErrorForOutput } from "@stll/errors";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import { logger } from "@/api/lib/observability/logger";
-import { isRecord } from "@/api/lib/type-guards";
 
 const DOCUMENT_PARSE_FAILED_EVENT = "case_law.ingestion.document_parse_failed";
 
@@ -17,13 +16,10 @@ export const logDocumentParseFailure = ({
   caseNumber,
   error,
 }: LogDocumentParseFailureOptions): void => {
-  const attributes = sanitizeErrorForOutput({
+  const attributes = sanitizeErrorAttributesForOutput({
     adapterKey,
     caseNumber,
     "error.type": error,
   });
-  logger.warn(
-    DOCUMENT_PARSE_FAILED_EVENT,
-    isRecord(attributes) ? attributes : { diagnostic: attributes },
-  );
+  logger.warn(DOCUMENT_PARSE_FAILED_EVENT, attributes);
 };

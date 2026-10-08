@@ -280,6 +280,16 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
   }).unwrapOr("[unreadable error]");
 };
 
+/** Project a complete attribute record through the shared output boundary. */
+export const sanitizeErrorAttributesForOutput = (
+  attributes: Record<string, unknown>,
+): Record<string, unknown> => {
+  const projected = sanitizeErrorForOutput(attributes);
+  return isRecord(projected) && !isUnknownArray(projected)
+    ? projected
+    : { diagnostic: projected };
+};
+
 type ErrorOutputOptions = {
   level: "debug" | "info" | "warn" | "error";
   values: readonly unknown[];

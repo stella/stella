@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -1318,20 +1319,26 @@ const markRunFailed = async ({
   // and stays a structured log; capturing every attempt reported the same
   // defect up to AUTOMATIC_OCR_MAX_ATTEMPTS times.
   if (outcome.retryScheduled) {
-    logger.warn("document_processing.attempt_failed", {
-      ...documentProcessingFailureFields(error),
-      attempt: String(outcome.attemptCount),
-      errorCode: failureCode,
-      runId: run.id,
-    });
+    logger.warn(
+      "document_processing.attempt_failed",
+      sanitizeErrorAttributesForOutput({
+        ...documentProcessingFailureFields(error),
+        attempt: String(outcome.attemptCount),
+        errorCode: failureCode,
+        runId: run.id,
+      }),
+    );
     return "settled";
   }
   captureError(error, { runId: run.id });
-  logger.error("document_processing.run_failed", {
-    ...documentProcessingFailureFields(error),
-    errorCode: failureCode,
-    runId: run.id,
-  });
+  logger.error(
+    "document_processing.run_failed",
+    sanitizeErrorAttributesForOutput({
+      ...documentProcessingFailureFields(error),
+      errorCode: failureCode,
+      runId: run.id,
+    }),
+  );
   return "settled";
 };
 
@@ -2768,10 +2775,13 @@ const handleDocumentProcessingFailure = ({
       });
       return;
     case DOCUMENT_PROCESSING_FAILURE_REPORT.MACHINERY:
-      logger.error("document_processing.failed", {
-        ...documentProcessingFailureFields(error),
-        runId: job?.data.runId ?? "",
-      });
+      logger.error(
+        "document_processing.failed",
+        sanitizeErrorAttributesForOutput({
+          ...documentProcessingFailureFields(error),
+          runId: job?.data.runId ?? "",
+        }),
+      );
       return;
     default:
       report satisfies never;

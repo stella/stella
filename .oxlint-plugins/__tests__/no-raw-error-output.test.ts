@@ -45,9 +45,10 @@ test("recognizes imported sanitizer and printer aliases", async () => {
   expect(
     await lintSingleRule(
       "no-raw-error-output",
-      `import { sanitizeErrorForOutput as redact, printError as report, logErrorOutput as log,} from "@stll/errors";
+      `import { sanitizeErrorForOutput as redact, printError as report, logErrorOutput as log, sanitizeErrorAttributesForOutput as attributes,} from "@stll/errors";
 import { runScriptWithErrorOutput as run } from "@stll/errors/script-error";
 const safe = redact(error);
+logger.error("fixture.failed", attributes({ cause: error }));
 console.error(safe);
 report(error);
 log({ level: "error", values: [error] });

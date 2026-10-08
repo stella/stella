@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import { inspect } from "node:util";
 
-import { sanitizeErrorForOutput, errorOutputLogger } from "./query-error";
+import {
+  sanitizeErrorForOutput,
+  sanitizeErrorAttributesForOutput,
+  errorOutputLogger,
+} from "./query-error";
 import { QUERY_ERROR_OUTPUT_FIELDS } from "./query-field-policy";
 import { runScriptWithErrorOutput } from "./script-error";
 
@@ -290,4 +294,22 @@ test("query output projects strings throughout one logged value", () => {
       output,
     );
   }
+});
+
+test("query attribute output projects the whole record and keeps a record on failure", () => {
+  const attrs = sanitizeErrorAttributesForOutput({
+    message: SECRET,
+    cause: failure("insert into account values ($1)"),
+  });
+  const output = inspect(attrs, { depth: 20 });
+  expect(output).not.toContain(SECRET);
+  expect(output).toContain("account_token_unique");
+  expect(output).toContain("23505");
+  expect(
+    sanitizeErrorAttributesForOutput({
+      get cause() {
+        throw new Error("Fixture value unavailable");
+      },
+    }),
+  ).toEqual({ diagnostic: "[unreadable error]" });
 });

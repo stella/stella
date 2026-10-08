@@ -1,12 +1,13 @@
+import {
+  materializePptxPresentation,
+  materializeXlsxWorkbook,
+} from "@silurus/ooxml/node";
 /**
  * Isolated, bounded XLSX/PPTX locator extraction worker.
  * stdin is the original OOXML file; stdout is one JSON result.
  */
 
-import {
-  materializePptxPresentation,
-  materializeXlsxWorkbook,
-} from "@silurus/ooxml/node";
+import { sanitizeErrorForOutput } from "@stll/errors";
 
 import { OFFICE_EVIDENCE_LIMITS } from "@/api/lib/files/office-evidence-domain";
 import {
@@ -239,7 +240,7 @@ const main = async (): Promise<void> => {
       errorCode: OFFICE_EVIDENCE_UNAVAILABLE_CODE.parseFailed,
       status: OFFICE_EVIDENCE_STATUS.unavailable,
     } as const satisfies OfficeEvidenceWorkerResult;
-    process.stdout.write(JSON.stringify(result));
+    process.stdout.write(JSON.stringify(sanitizeErrorForOutput(result)));
     return;
   }
 
@@ -252,13 +253,13 @@ const main = async (): Promise<void> => {
       payload,
       status: OFFICE_EVIDENCE_STATUS.available,
     } as const satisfies OfficeEvidenceWorkerResult;
-    process.stdout.write(JSON.stringify(result));
+    process.stdout.write(JSON.stringify(sanitizeErrorForOutput(result)));
   } catch (error) {
     const result = {
       errorCode: classifyFailure(error),
       status: OFFICE_EVIDENCE_STATUS.unavailable,
     } as const satisfies OfficeEvidenceWorkerResult;
-    process.stdout.write(JSON.stringify(result));
+    process.stdout.write(JSON.stringify(sanitizeErrorForOutput(result)));
   }
 };
 

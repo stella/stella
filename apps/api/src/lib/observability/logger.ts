@@ -107,12 +107,14 @@ const outputAttributeValue = (value: unknown): AttributeValue | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  return Result.try(
-    () =>
-      JSON.stringify(value, (_key, item: unknown) =>
-        typeof item === "bigint" ? String(item) : item,
-      ) ?? UNSERIALIZABLE_ATTRIBUTE,
-  ).unwrapOr(UNSERIALIZABLE_ATTRIBUTE);
+  return Result.try(() => {
+    const serialized: unknown = JSON.stringify(value, (_key, item: unknown) =>
+      typeof item === "bigint" ? String(item) : item,
+    );
+    return typeof serialized === "string"
+      ? serialized
+      : UNSERIALIZABLE_ATTRIBUTE;
+  }).unwrapOr(UNSERIALIZABLE_ATTRIBUTE);
 };
 
 const filterLogAttributes = ({

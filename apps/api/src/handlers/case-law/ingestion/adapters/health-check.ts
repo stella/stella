@@ -255,7 +255,7 @@ export const formatHealthReport = (
         `Time: ${r.durationMs}ms`,
     );
 
-    if (r.error) {
+    if (r.error !== undefined) {
       lines.push(`  Error: ${inspect(sanitizeErrorForOutput(r.error))}`);
     }
 

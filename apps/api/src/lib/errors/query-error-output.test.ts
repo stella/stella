@@ -47,19 +47,19 @@ const MULTILINE_PARAM = `fixture-first-value\n${SECRETS[3]}`;
 const QUERY_PARAMS = [...SECRETS, MULTILINE_PARAM];
 const queryFailure = () => {
   const driver = Object.assign(
-    new Error(`Key (token)=(${SECRETS.at(1)}) already exists`),
+    new Error(`Key (token)=(${SECRETS[1]}) already exists`),
     {
       name: "PostgresError",
       code: "23505",
       constraint: "account_token_unique",
       detail: SECRETS.join(","),
       hint: SECRETS.join(","),
-      query: `insert into account values ('${SECRETS.at(1)}')`,
+      query: `insert into account values ('${SECRETS[1]}')`,
       params: QUERY_PARAMS,
     },
   );
   return new DrizzleQueryError(
-    `insert into "account" ("password", "token") values ($1, $2) returning '${SECRETS.at(2)}'`,
+    `insert into "account" ("password", "token") values ($1, $2) returning '${SECRETS[2]}'`,
     QUERY_PARAMS,
     driver,
   );

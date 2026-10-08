@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { errorOutputLogger } from "@stll/errors";
+
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
@@ -69,12 +71,10 @@ const deleteAccountSendOtp = createSafeSessionHandler(
         `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: delete-account)\x1b[0m\n`,
       );
       if (emailResult.isErr()) {
-        const message =
-          emailResult.error instanceof Error
-            ? emailResult.error.message
-            : String(emailResult.error);
-        // oxlint-disable-next-line no-console -- Local dev fallback should expose SMTP delivery failures.
-        console.warn(`[DEV] Failed to send email via SMTP: ${message}`);
+        errorOutputLogger.warn(
+          "[DEV] Failed to send email via SMTP:",
+          emailResult.error,
+        );
       }
     } else if (emailResult.isErr()) {
       return Result.err(

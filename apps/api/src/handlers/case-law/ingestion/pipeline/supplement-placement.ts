@@ -1,6 +1,8 @@
 import { Result, panic } from "better-result";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
 import type {
@@ -217,12 +219,15 @@ const supplementRawWriteFailed = (
   { sourceId, document }: SupplementPlacement,
   error: unknown,
 ): ProcessSupplementResult => {
-  logger.error("case_law.ingestion.source_raw_write_failed", {
-    sourceId,
-    caseNumber: document.caseNumber,
-    ...errorSystemFields(error),
-    "error.detail": wrappedErrorDetail(error),
-  });
+  logger.error(
+    "case_law.ingestion.source_raw_write_failed",
+    sanitizeErrorAttributesForOutput({
+      sourceId,
+      caseNumber: document.caseNumber,
+      ...errorSystemFields(error),
+      "error.detail": wrappedErrorDetail(error),
+    }),
+  );
   captureError(error, { sourceId, step: "processSupplement.raw" });
   return {
     status: PROCESS_DECISION_STATUS.RETRYABLE,

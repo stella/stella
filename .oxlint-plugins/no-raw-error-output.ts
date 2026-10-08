@@ -39,6 +39,7 @@ const API_FAILURE_FORMATTERS = new Set([
 ]);
 const SAFE_TRANSFORMS = new Set([
   "sanitizeErrorForOutput",
+  "sanitizeErrorAttributesForOutput",
   "sanitizeQueryErrorText",
   "printError",
   "logErrorOutput",
