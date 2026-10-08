@@ -290,6 +290,16 @@ export type SystemOneClient = {
   ) => Promise<Result<SystemOneResult<TQuestions>, SystemOneError>>;
 };
 
+/** Tests inject a fake transport; production uses the runtime's fetch. */
+export type DecisionFetcher = Fetcher;
+
+/**
+ * The one transport every decision provider client sends through, so the
+ * decision module acquires raw network access in a single place.
+ */
+export const createDecisionFetch = (fetcher: Fetcher | undefined) =>
+  createFetchWithTimeout(fetcher ?? globalThis.fetch);
+
 export type SystemOneClientOptions = {
   apiKey: string;
   model?: string | undefined;
@@ -347,7 +357,7 @@ export const createSystemOneClient = ({
   fetcher,
   sleep = abortableSleep,
 }: SystemOneClientOptions): SystemOneClient => {
-  const fetchWithTimeout = createFetchWithTimeout(fetcher ?? globalThis.fetch);
+  const fetchWithTimeout = createDecisionFetch(fetcher);
   const send = async (
     body: string,
     abortSignal: AbortSignal | undefined,

@@ -2,12 +2,11 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { DEFAULT_OPENAI_DECISION_MODEL } from "@stll/api-contract/ai-decision-provider";
-import { createFetchWithTimeout } from "@stll/fetch";
-import type { Fetcher } from "@stll/fetch";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
   bindAnswer,
+  createDecisionFetch,
   hasEveryAnswer,
   SystemOneError,
   SYSTEM_ONE_MAX_CHOICE_OPTIONS,
@@ -15,6 +14,7 @@ import {
   SYSTEM_ONE_MAX_REQUEST_BYTES,
 } from "@/api/lib/workflow/decisions/system-one";
 import type {
+  DecisionFetcher,
   RefusalAnswer,
   SystemOneAnswer,
   SystemOneClient,
@@ -112,7 +112,7 @@ type OpenAIDecisionsClientOptions = {
   apiKey: string;
   model?: string | undefined;
   region?: "eu" | "global" | undefined;
-  fetcher?: Fetcher | undefined;
+  fetcher?: DecisionFetcher | undefined;
   /** Per-attempt deadline; defaults to the shared transport timeout. */
   timeoutMs?: number | undefined;
   sleep?:
@@ -250,7 +250,7 @@ export const createOpenAIDecisionsClient = ({
   sleep = sleepWithSignal,
   timeoutMs = REQUEST_TIMEOUT_MS,
 }: OpenAIDecisionsClientOptions): SystemOneClient => {
-  const fetchWithTimeout = createFetchWithTimeout(fetcher ?? globalThis.fetch);
+  const fetchWithTimeout = createDecisionFetch(fetcher);
   const send = async (body: string, abortSignal?: AbortSignal) => {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
       const sent = await Result.tryPromise({
