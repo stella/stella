@@ -306,12 +306,11 @@ process.exit(result.exitCode);
       path.join(root, "broken.ts"),
       'export const broken: number = "wrong";',
     );
-    const nearestProject =
-      layout === "nearest"
-        ? config
-        : layout === "sibling-after-broken-nearest"
-          ? { compilerOptions, files: ["broken.ts"] }
-          : emptyProject;
+    const nearestProjects: Partial<Record<typeof layout, object>> = {
+      nearest: config,
+      "sibling-after-broken-nearest": { compilerOptions, files: ["broken.ts"] },
+    };
+    const nearestProject = nearestProjects[layout] ?? emptyProject;
     writeFileSync(
       path.join(root, "tsconfig.json"),
       JSON.stringify(nearestProject),
