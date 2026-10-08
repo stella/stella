@@ -58,7 +58,7 @@ import {
   TestProcessSupervisor,
   testProcessBudgets,
 } from "./test-process-supervisor";
-import { durationSeconds } from "./test-timings";
+import { durationSeconds, testFileDurationWeights } from "./test-timings";
 
 const PROPERTY_FLAG = "--property";
 const TEST_ROOT_SET = new Set<string>(TEST_ROOTS);
@@ -332,7 +332,7 @@ const composedBatches = await planApiTestBatches({
 });
 const plannedBatches = orderBatchesForLanes(
   composedBatches.flatMap((group) => planBatches(group)),
-  durationSeconds(durations),
+  testFileDurationWeights(allTestPaths, durationSeconds(durations)),
 );
 
 const testProcessEnv: Record<string, string | undefined> = {
