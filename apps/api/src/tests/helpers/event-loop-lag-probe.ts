@@ -30,7 +30,7 @@ import { expect } from "bun:test";
 import { nextMacrotask } from "@stll/concurrency/event-loop";
 import { sleep } from "@stll/concurrency/sleep";
 
-export type BlockedSpan = {
+type BlockedSpan = {
   /** When the blocked span began, in ms since the probe started. */
   startedAtMs: number;
   blockedMs: number;
