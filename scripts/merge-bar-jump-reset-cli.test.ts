@@ -180,7 +180,9 @@ if (endpoint === "graphql") {
       if (scenario === "dry-unseeded") {
         expect(existsSync(state)).toBe(false);
       } else {
-        expect(readdirSync(path.join(state, "jump-resets"))).toEqual(
+        // Directory listing order is not specified; compare sorted names.
+        const entries = readdirSync(path.join(state, "jump-resets")).toSorted();
+        expect(entries).toEqual(
           scenario === "reserved" ? ["jumps", "rearms"] : ["jumps"],
         );
       }
