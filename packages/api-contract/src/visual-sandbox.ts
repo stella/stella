@@ -74,3 +74,11 @@ export const visualGuestMessageSchema = v.variant("kind", [
   }),
 ]);
 export type VisualGuestMessage = v.InferOutput<typeof visualGuestMessageSchema>;
+
+/**
+ * The one window message a view's runtime sends: it carries the private port
+ * that every later message from the view travels on.
+ */
+export const visualGuestPortMessageSchema = v.strictObject({
+  kind: v.literal("port"),
+});

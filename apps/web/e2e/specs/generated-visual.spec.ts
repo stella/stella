@@ -28,7 +28,7 @@ const externalUrl = "https://example.test/decision?language=cs&year=2026";
 const title = "Court timeline";
 const visual = v.parse(generatedVisualPageSchema, {
   title,
-  html: `<section class="stella-card"><p id="note">Decisions by court</p><div style="height:480px"></div><button id="drill">Court year</button><button id="internal">Open decision</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));document.querySelector('#internal').addEventListener('click',()=>stella.openDecision('decision'));stella.drill({court:bucket.court,year:bucket.year});stella.openDecision('decision');document.querySelector('a').click();document.body.dataset.initialActions='sent';stella.ready();</script>`,
+  html: `<section class="stella-card"><p id="note">Decisions by court</p><div id="space" style="height:480px"></div><button id="drill">Court year</button><button id="internal">Open decision</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));document.querySelector('#internal').addEventListener('click',()=>stella.openDecision('decision'));document.querySelector('#note').addEventListener('click',()=>setTimeout(()=>{stella.drill({court:bucket.court,year:bucket.year});document.querySelector('#space').style.height='800px';document.body.dataset.laterDrill='sent';},1500),{once:true});stella.drill({court:bucket.court,year:bucket.year});stella.openDecision('decision');document.querySelector('a').click();document.body.dataset.initialActions='sent';stella.ready();</script>`,
   data: { courtYear: { buckets: [{ court: "CZ:ns", year: 2026 }] } },
   links: [{ id: "decision", decisionId: DOCKED_CHAT_LEGAL_ROUTES.decision.id }],
   literalLinks: [externalUrl],
@@ -142,6 +142,20 @@ test("generated view is live inline, reloads, and acts only on user gestures", a
       .locator("body")
       .evaluate(() => window.getSelection()?.toString().trim()),
   ).toBe("Decisions by court");
+  // A gesture backs one action only while it is recent: script that acts
+  // on a timer more than a second after the selection reaches nothing. The
+  // view resizes right after that action, and the view's messages arrive in
+  // order, so the new height shows the action would have arrived by now.
+  await expect(guest.locator("body")).toHaveAttribute(
+    "data-later-drill",
+    "sent",
+  );
+  await expect
+    .poll(async () =>
+      outer.evaluate((element) => element.getBoundingClientRect().height),
+    )
+    .toBeGreaterThan(800);
+  await expect(prompts).toHaveCount(0);
   // A real click inside the view acts at once.
   await guest.locator("#drill").click();
   await expect(prompts).toHaveCount(1);

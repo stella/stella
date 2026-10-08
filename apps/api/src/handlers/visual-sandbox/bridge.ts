@@ -2,7 +2,10 @@ import * as v from "valibot";
 
 import { visualRenderMessageSchema } from "@stll/api-contract/generated-visual";
 import { createVisualActionGate } from "@stll/api-contract/visual-bridge-policy";
-import { visualGuestMessageSchema } from "@stll/api-contract/visual-sandbox";
+import {
+  visualGuestMessageSchema,
+  visualGuestPortMessageSchema,
+} from "@stll/api-contract/visual-sandbox";
 import {
   visualThemeMessageSchema,
   type VisualTheme,
@@ -16,6 +19,32 @@ type SanitizedRenderMessage = Omit<
   "html"
 > & {
   html: SanitizedVisualHtml;
+};
+
+/** The shell's end of the private channel a view's runtime opens. */
+export type VisualGuestPort = {
+  listen: (receive: (data: unknown) => void) => void;
+  close: () => void;
+};
+
+export const visualGuestPortFrom = (port: MessagePort): VisualGuestPort => ({
+  listen: (receive) => {
+    port.addEventListener("message", (event) => receive(event.data));
+    // A listener added this way leaves the port's queue paused until start.
+    port.start();
+  },
+  close: () => port.close(),
+});
+
+type VisualGuestPortState =
+  | { type: "awaiting" }
+  | { type: "bound"; port: VisualGuestPort };
+
+type VisualFrameEvent = {
+  source: unknown;
+  origin: string;
+  data: unknown;
+  ports?: readonly VisualGuestPort[];
 };
 
 type VisualMessageHandlerOptions = {
@@ -54,7 +83,60 @@ export const createVisualMessageHandler = ({
   let hostOrigin: string | undefined;
   const lastAction = new Map<string, number>();
   let actionGate: ReturnType<typeof createVisualActionGate> | undefined;
-  return (event: { source: unknown; origin: string; data: unknown }) => {
+  // Each render loads a new view, whose runtime sends its port first, before
+  // any page script runs. Only that first port is bound for the render.
+  let guestPort: VisualGuestPortState = { type: "awaiting" };
+  const receiveGuest = (data: unknown) => {
+    if (!hostOrigin) {
+      return;
+    }
+    const parsed = v.safeParse(visualGuestMessageSchema, data);
+    if (!parsed.success) {
+      return;
+    }
+    const sizing =
+      parsed.output.kind === "resize" || parsed.output.kind === "ready";
+    // The view is live from the start. Its runtime sends one action per
+    // trusted gesture inside the view, through its private port, so page
+    // script cannot act on the user's behalf. This frame checks again that
+    // a gesture is recent and allows at most one of each kind per interval.
+    if (!sizing) {
+      const current = now();
+      const previous =
+        lastAction.get(parsed.output.kind) ?? Number.NEGATIVE_INFINITY;
+      if (
+        !hasUserActivation() ||
+        current - previous < GUEST_ACTION_INTERVAL_MS
+      ) {
+        return;
+      }
+      if (!actionGate?.(parsed.output)) {
+        return;
+      }
+      lastAction.set(parsed.output.kind, current);
+    } else if (!actionGate?.(parsed.output)) {
+      return;
+    }
+    onGuestMessage(parsed.output, hostOrigin);
+  };
+  const bindGuestPort = (event: VisualFrameEvent) => {
+    const port = event.ports?.length === 1 ? event.ports[0] : undefined;
+    if (
+      guestPort.type !== "awaiting" ||
+      port === undefined ||
+      !v.safeParse(visualGuestPortMessageSchema, event.data).success
+    ) {
+      return;
+    }
+    const bound: VisualGuestPortState = { type: "bound", port };
+    guestPort = bound;
+    port.listen((data) => {
+      if (guestPort === bound) {
+        receiveGuest(data);
+      }
+    });
+  };
+  return (event: VisualFrameEvent) => {
     if (event.source === parentWindow) {
       if (event.origin === outerOrigin || !origins.includes(event.origin)) {
         return;
@@ -84,6 +166,10 @@ export const createVisualMessageHandler = ({
         literalLinks: sanitized.value.literalLinks,
         now,
       });
+      if (guestPort.type === "bound") {
+        guestPort.port.close();
+      }
+      guestPort = { type: "awaiting" };
       onRender({
         type: parsed.output.type,
         title: parsed.output.title,
@@ -94,6 +180,8 @@ export const createVisualMessageHandler = ({
       });
       return;
     }
+    // Messages from the view arrive only on its port; the window carries
+    // just the one message that hands the port over.
     if (
       event.source !== innerWindow ||
       event.origin !== "null" ||
@@ -101,32 +189,6 @@ export const createVisualMessageHandler = ({
     ) {
       return;
     }
-    const parsed = v.safeParse(visualGuestMessageSchema, event.data);
-    if (!parsed.success) {
-      return;
-    }
-    const sizing =
-      parsed.output.kind === "resize" || parsed.output.kind === "ready";
-    // The view is live from the start, so an action reaches the app only
-    // right after a gesture inside it, and at most one of each kind per
-    // interval. Script that runs on load cannot act on the user's behalf.
-    if (!sizing) {
-      const current = now();
-      const previous =
-        lastAction.get(parsed.output.kind) ?? Number.NEGATIVE_INFINITY;
-      if (
-        !hasUserActivation() ||
-        current - previous < GUEST_ACTION_INTERVAL_MS
-      ) {
-        return;
-      }
-      if (!actionGate?.(parsed.output)) {
-        return;
-      }
-      lastAction.set(parsed.output.kind, current);
-    } else if (!actionGate?.(parsed.output)) {
-      return;
-    }
-    onGuestMessage(parsed.output, hostOrigin);
+    bindGuestPort(event);
   };
 };

@@ -16,17 +16,29 @@ import {
   type VisualTheme,
 } from "@stll/api-contract/visual-theme";
 
-import { createVisualMessageHandler } from "../bridge";
+import { createVisualMessageHandler, visualGuestPortFrom } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
 import { parseVisualOuterConfig, whenVisualDocumentReady } from "./boot";
 import { createVisualCharts } from "./charts";
 import { createVisualGuestApi } from "./guest-api";
+import { createVisualGestureGate } from "./guest-gesture";
 import { createVisualThemeHandler } from "./guest-theme";
 import { isolateVisualGuest } from "./isolation";
 import { applyVisualTheme, installVisualPresentation } from "./presentation";
 import { visualShellReadyMessage } from "./shell-ready";
 
 const bootGuest = (): void => {
+  // This runs before any page script. Every message to the shell travels on
+  // a private port whose sender is captured here, so page script can neither
+  // reach the port nor replace how it sends. The shell binds only the first
+  // port a view hands over and ignores view messages sent to the window.
+  const channel = new MessageChannel();
+  const send = channel.port1.postMessage.bind(channel.port1);
+  window.parent.postMessage({ kind: "port" }, "*", [channel.port2]);
+  const gesture = createVisualGestureGate({
+    now: performance.now.bind(performance),
+  });
+  gesture.listen(window);
   try {
     isolateVisualGuest();
     installVisualPresentation(document);
@@ -56,7 +68,8 @@ const bootGuest = (): void => {
       value: Object.freeze({
         ...createVisualGuestApi({
           data,
-          postMessage: (message) => window.parent.postMessage(message, "*"),
+          postMessage: (message) => send(message),
+          takeGesture: gesture.take,
           measureSize: () => ({
             width: Math.max(
               1,
@@ -108,8 +121,8 @@ const bootGuest = (): void => {
       visualLinkSchema,
       Reflect.apply(getAttribute, anchor, ["data-stella-link"]),
     );
-    if (parsed.success) {
-      window.parent.postMessage({ kind: "open-link", url: parsed.output }, "*");
+    if (parsed.success && gesture.take()) {
+      send({ kind: "open-link", url: parsed.output });
     }
   };
   document.addEventListener("click", requestLink);
@@ -119,19 +132,16 @@ const bootGuest = (): void => {
     }
   });
   const reportSize = () =>
-    window.parent.postMessage(
-      {
-        kind: "resize",
-        height: Math.max(
-          1,
-          Math.min(
-            VISUAL_SANDBOX_LIMITS.height,
-            Math.ceil(document.documentElement.scrollHeight),
-          ),
+    send({
+      kind: "resize",
+      height: Math.max(
+        1,
+        Math.min(
+          VISUAL_SANDBOX_LIMITS.height,
+          Math.ceil(document.documentElement.scrollHeight),
         ),
-      },
-      "*",
-    );
+      ),
+    });
   whenVisualDocumentReady(document, () => {
     for (const anchor of document.querySelectorAll("a[data-stella-link]")) {
       anchor.setAttribute("role", "link");
@@ -157,7 +167,12 @@ const bootOuter = (runtime: string) => {
   } = { current: { type: "initializing" } };
   window.addEventListener("message", (event: MessageEvent<unknown>) => {
     if (boot.current.type === "ready") {
-      boot.current.receive(event);
+      boot.current.receive({
+        source: event.source,
+        origin: event.origin,
+        data: event.data,
+        ports: event.ports.map(visualGuestPortFrom),
+      });
     }
   });
   const parsedConfig = parseVisualOuterConfig(config.textContent);

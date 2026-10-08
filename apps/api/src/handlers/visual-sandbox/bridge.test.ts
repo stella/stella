@@ -2,7 +2,33 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 
-import { createVisualMessageHandler } from "./bridge";
+import {
+  createVisualMessageHandler,
+  visualGuestPortFrom,
+  type VisualGuestPort,
+} from "./bridge";
+
+const createFakePort = () => {
+  const state: { receive?: (data: unknown) => void; closed: boolean } = {
+    closed: false,
+  };
+  const port: VisualGuestPort = {
+    listen: (receive) => {
+      state.receive = receive;
+    },
+    close: () => {
+      state.closed = true;
+    },
+  };
+  return { port, state, send: (data: unknown) => state.receive?.(data) };
+};
+
+const timelineRender = {
+  type: "render",
+  data: {},
+  title: "Timeline",
+  html: "<p>Dates</p>",
+};
 
 const setup = () => {
   const parentWindow = {};
@@ -27,9 +53,27 @@ const setup = () => {
     hasUserActivation: () => activation.active,
     now: () => clock.now,
   });
+  const connect = () => {
+    const fake = createFakePort();
+    handle({
+      source: innerWindow,
+      origin: "null",
+      data: { kind: "port" },
+      ports: [fake.port],
+    });
+    return fake;
+  };
+  const renderView = () =>
+    handle({
+      source: parentWindow,
+      origin: "https://web.example.test",
+      data: timelineRender,
+    });
   return {
     parentWindow,
     innerWindow,
+    connect,
+    renderView,
     onRender,
     onTheme,
     onGuestMessage,
@@ -141,25 +185,14 @@ describe("visual frame bridge", () => {
   });
 
   test("pins the first valid parent origin and returns validated guest messages to it", () => {
-    const { parentWindow, innerWindow, onRender, onGuestMessage, handle } =
-      setup();
-    const render = {
-      type: "render",
-      data: {},
-      title: "Timeline",
-      html: "<p>Dates</p>",
-    };
+    const { parentWindow, connect, onRender, onGuestMessage, handle } = setup();
     handle({
       source: parentWindow,
       origin: "https://web.example.test",
-      data: render,
+      data: timelineRender,
     });
-    expect(onRender).toHaveBeenCalledWith({ ...render, links: [] });
-    handle({
-      source: innerWindow,
-      origin: "null",
-      data: { kind: "resize", height: 300 },
-    });
+    expect(onRender).toHaveBeenCalledWith({ ...timelineRender, links: [] });
+    connect().send({ kind: "resize", height: 300 });
     expect(onGuestMessage).toHaveBeenCalledWith(
       { kind: "resize", height: 300 },
       "https://web.example.test",
@@ -167,7 +200,7 @@ describe("visual frame bridge", () => {
     handle({
       source: parentWindow,
       origin: "https://alternate.example.test",
-      data: render,
+      data: timelineRender,
     });
     expect(onRender).toHaveBeenCalledTimes(1);
   });
@@ -205,28 +238,13 @@ describe("visual frame bridge", () => {
   });
 
   test("the frame shell forwards sizing without forwarding link actions", () => {
-    const { parentWindow, innerWindow, onGuestMessage, handle } = setup();
-    handle({
-      source: parentWindow,
-      origin: "https://web.example.test",
-      data: {
-        type: "render",
-        data: {},
-        title: "Timeline",
-        html: "<p>Dates</p>",
-      },
-    });
-    handle({
-      source: innerWindow,
-      origin: "null",
-      data: { kind: "open-link", url: "https://example.test/decision" },
-    });
+    const { renderView, connect, onGuestMessage, activation } = setup();
+    renderView();
+    const { send } = connect();
+    activation.active = true;
+    send({ kind: "open-link", url: "https://example.test/decision" });
     expect(onGuestMessage).not.toHaveBeenCalled();
-    handle({
-      source: innerWindow,
-      origin: "null",
-      data: { kind: "resize", height: 300 },
-    });
+    send({ kind: "resize", height: 300 });
     expect(onGuestMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -264,78 +282,172 @@ describe("visual frame bridge", () => {
   });
 
   test("requires matching windows, origins, bounded bytes and strict message shapes", () => {
-    const { parentWindow, innerWindow, onRender, onGuestMessage, handle } =
-      setup();
-    const render = {
-      type: "render",
-      data: {},
-      title: "Timeline",
-      html: "<p>Dates</p>",
-    };
-    handle({
-      source: innerWindow,
-      origin: "null",
-      data: { kind: "resize", height: 300 },
-    });
-    expect(onGuestMessage).not.toHaveBeenCalled();
+    const {
+      parentWindow,
+      renderView,
+      connect,
+      onRender,
+      onGuestMessage,
+      handle,
+    } = setup();
     for (const event of [
-      { source: {}, origin: "https://web.example.test", data: render },
+      { source: {}, origin: "https://web.example.test", data: timelineRender },
       {
         source: parentWindow,
         origin: "https://other.example.test",
-        data: render,
+        data: timelineRender,
       },
       {
         source: parentWindow,
         origin: "https://api.example.test",
-        data: render,
+        data: timelineRender,
       },
       {
         source: parentWindow,
         origin: "https://web.example.test",
-        data: { ...render, extra: "Dates" },
+        data: { ...timelineRender, extra: "Dates" },
       },
       {
         source: parentWindow,
         origin: "https://web.example.test",
-        data: { ...render, html: "§".repeat(VISUAL_SANDBOX_LIMITS.htmlBytes) },
+        data: {
+          ...timelineRender,
+          html: "§".repeat(VISUAL_SANDBOX_LIMITS.htmlBytes),
+        },
       },
     ]) {
       handle(event);
     }
     expect(onRender).not.toHaveBeenCalled();
-    handle({
-      source: parentWindow,
-      origin: "https://web.example.test",
-      data: render,
-    });
-    for (const event of [
-      { source: {}, origin: "null", data: { kind: "resize", height: 300 } },
-      {
-        source: innerWindow,
-        origin: "https://api.example.test",
-        data: { kind: "resize", height: 300 },
-      },
-      {
-        source: innerWindow,
-        origin: "null",
-        data: { kind: "resize", height: 300, title: "Timeline" },
-      },
+    renderView();
+    const { send } = connect();
+    for (const data of [
+      { kind: "resize", height: 0 },
+      { kind: "resize", height: 300, title: "Timeline" },
+      { kind: "port" },
+      "resize",
     ]) {
-      handle(event);
+      send(data);
+    }
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    send({ kind: "resize", height: 300 });
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+  });
+
+  test("binds only the view's first port, from the view frame, after a render", () => {
+    const { innerWindow, renderView, connect, onGuestMessage, handle } =
+      setup();
+    const resize = { kind: "resize", height: 300 };
+    const offer = (event: {
+      source: unknown;
+      origin: string;
+      data?: unknown;
+      count?: number;
+    }) => {
+      const fakes = Array.from({ length: event.count ?? 1 }, createFakePort);
+      handle({
+        source: event.source,
+        origin: event.origin,
+        data: event.data ?? { kind: "port" },
+        ports: fakes.map(({ port }) => port),
+      });
+      for (const fake of fakes) {
+        fake.send(resize);
+      }
+    };
+    // Before a render pins the host, no port is bound.
+    connect().send(resize);
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    renderView();
+    for (const event of [
+      { source: {}, origin: "null" },
+      { source: innerWindow, origin: "https://web.example.test" },
+      { source: innerWindow, origin: "null", data: { kind: "ports" } },
+      { source: innerWindow, origin: "null", data: { kind: "port", id: 1 } },
+      { source: innerWindow, origin: "null", count: 0 },
+      { source: innerWindow, origin: "null", count: 2 },
+    ]) {
+      offer(event);
+    }
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    const first = connect();
+    const second = connect();
+    second.send(resize);
+    expect(onGuestMessage).not.toHaveBeenCalled();
+    first.send(resize);
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+  });
+
+  test("ignores view messages sent to the window instead of the port", () => {
+    const {
+      innerWindow,
+      renderView,
+      connect,
+      onGuestMessage,
+      handle,
+      activation,
+    } = setup();
+    renderView();
+    connect();
+    activation.active = true;
+    for (const data of [
+      { kind: "resize", height: 300 },
+      { kind: "ready", size: { width: 300, height: 300 } },
+      { kind: "open-link", url: "https://example.test/decision" },
+    ]) {
+      handle({ source: innerWindow, origin: "null", data });
     }
     expect(onGuestMessage).not.toHaveBeenCalled();
   });
 
-  test("forwards guest actions only right after a gesture inside the view, one of each kind per second", () => {
-    const {
-      parentWindow,
-      innerWindow,
-      onGuestMessage,
-      handle,
-      activation,
-      clock,
-    } = setup();
+  test("each render binds a fresh port and closes the previous one", () => {
+    const { renderView, connect, onGuestMessage } = setup();
+    renderView();
+    const previous = connect();
+    previous.send({ kind: "resize", height: 100 });
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+    renderView();
+    expect(previous.state.closed).toBe(true);
+    previous.send({ kind: "resize", height: 200 });
+    expect(onGuestMessage).toHaveBeenCalledTimes(1);
+    const next = connect();
+    expect(next.state.closed).toBe(false);
+    next.send({ kind: "resize", height: 300 });
+    expect(onGuestMessage).toHaveBeenCalledTimes(2);
+    expect(onGuestMessage).toHaveBeenLastCalledWith(
+      { kind: "resize", height: 300 },
+      "https://web.example.test",
+    );
+  });
+
+  test("receives view messages on a browser message port", async () => {
+    const { innerWindow, renderView, onGuestMessage, handle } = setup();
+    renderView();
+    const channel = new MessageChannel();
+    handle({
+      source: innerWindow,
+      origin: "null",
+      data: { kind: "port" },
+      ports: [visualGuestPortFrom(channel.port2)],
+    });
+    const delivered = new Promise<void>((resolve) => {
+      onGuestMessage.mockImplementationOnce(() => {
+        resolve();
+        return undefined;
+      });
+    });
+    channel.port1.postMessage({ kind: "resize", height: 300 });
+    await delivered;
+    expect(onGuestMessage).toHaveBeenCalledWith(
+      { kind: "resize", height: 300 },
+      "https://web.example.test",
+    );
+    channel.port1.close();
+  });
+
+  test("forwards port actions only right after a gesture inside the view, one of each kind per second", () => {
+    const { parentWindow, connect, onGuestMessage, handle, activation, clock } =
+      setup();
     handle({
       source: parentWindow,
       origin: "https://web.example.test",
@@ -352,8 +464,7 @@ describe("visual frame bridge", () => {
       { kind: "open-internal", linkId: "decision" },
       { kind: "open-link", url: "https://example.test/decision" },
     ] as const;
-    const send = (data: unknown) =>
-      handle({ source: innerWindow, origin: "null", data });
+    const { send } = connect();
     // Script on load, with no gesture: nothing reaches the app.
     for (const action of actions) {
       send(action);
