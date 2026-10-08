@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { shouldRecordAccountActivity } from "./account-activity";
+import { shouldRecordAccountActivity } from "../src/shared/account-activity";
 
 const activity = {
   windowLabel: "clipboard",
