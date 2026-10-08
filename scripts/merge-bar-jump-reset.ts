@@ -69,8 +69,13 @@ export const classifyJumpReset = ({
     return { type: "not-reset" };
   }
   // A failed step is a real failure whatever its job concluded, so it rules
-  // a reset out before any conclusion is read.
-  if (evidence.jobs.some((job) => job.failedStep === true)) {
+  // a reset out before any conclusion is read. A summary job's step fails
+  // whenever it reports cancelled jobs, so only regular jobs count here.
+  if (
+    evidence.jobs.some(
+      (job) => job.failedStep === true && !SUMMARY_JOBS.has(job.name ?? ""),
+    )
+  ) {
     return { type: "not-reset" };
   }
   // Jobs that finished before the jump keep their success; a failed, timed

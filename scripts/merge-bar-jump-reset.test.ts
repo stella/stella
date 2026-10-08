@@ -80,6 +80,9 @@ describe("classifying merge queue cancellations", () => {
               name: "ci-result",
               conclusion: "failure",
               completedAt: jump.at,
+              // The summary job fails through a failing step, as the reader
+              // reports it.
+              failedStep: true,
             },
           ],
         },
@@ -98,6 +101,9 @@ describe("classifying merge queue cancellations", () => {
               name: "ci-result",
               conclusion: "failure",
               completedAt: jump.at,
+              // The summary job fails through a failing step, as the reader
+              // reports it.
+              failedStep: true,
             },
           ],
         },
