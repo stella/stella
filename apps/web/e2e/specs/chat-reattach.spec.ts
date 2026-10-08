@@ -80,9 +80,9 @@ test("a pending question survives reload and continues its original turn", async
   });
   expect(page.url()).toBe(threadUrl);
   await expect(transcript).toContainText("Buyer");
-  await expect(
-    transcript.getByText("Which side?", { exact: true }),
-  ).toHaveCount(1);
+  // The answered card numbers its questions ("1. Which side?"); the question
+  // must appear once, not once per delivery.
+  await expect(transcript.getByText("Which side?")).toHaveCount(1);
 });
 
 test("Stop in another tab cancels a detached turn and settles both viewers", async ({

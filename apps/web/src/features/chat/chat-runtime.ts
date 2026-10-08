@@ -606,10 +606,21 @@ export const createChatRuntime = ({
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
+  // The SDK rejoins a persisted in-flight run only while a view tails it, and
+  // drops a resume that lands earlier. Read server truth once one is attached.
+  const viewerAttached = Promise.withResolvers<undefined>();
+  const attachedPersistence = {
+    ...persistence,
+    getItem: async (threadId: string) => {
+      await viewerAttached.promise;
+      return await persistence.getItem(threadId);
+    },
+  } satisfies typeof persistence;
+
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
-    persistence,
+    persistence: attachedPersistence,
     connection,
     onError: (error) => {
       // A request of a turn the user stopped fails as the stop's own effect
@@ -803,11 +814,17 @@ export const createChatRuntime = ({
     client.stop();
   };
 
+  /** Tails the client first, so a persisted resume read after it rejoins. */
+  const attachClient = () => {
+    client.attach();
+    viewerAttached.resolve(undefined);
+  };
+
   const startClientSend = (
     message: ChatUserMessageInput,
     options: ChatSendMessageOptions | undefined,
   ): ChatRouteHandoffStart => {
-    client.attach();
+    attachClient();
     supersedePendingInterrupts();
     const stream = client.sendMessage(message, options?.body);
     if (!hasUserMessage(snapshot.messages, message.id)) {
@@ -1107,7 +1124,7 @@ export const createChatRuntime = ({
     subscribe: (listener) => {
       listeners.add(listener);
       subscriberCount += 1;
-      client.attach();
+      attachClient();
       return () => {
         listeners.delete(listener);
         subscriberCount -= 1;

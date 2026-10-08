@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 
 import { ChatReconnectError } from "@stll/chat/durable-transport";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
@@ -49,6 +50,47 @@ const awaitProbe = async (
   await settled.promise;
   unsubscribe();
 };
+
+test("a running turn rejoins when its page mounts after the runtime was created", async () => {
+  const RUN_ID = "run-rejoin";
+  let joins = 0;
+  const joined = Promise.withResolvers<undefined>();
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/join")) {
+        joins += 1;
+        joined.resolve(undefined);
+        return new Response(
+          [
+            { type: "RUN_STARTED", runId: RUN_ID, threadId: "thread-rejoin" },
+            { type: "RUN_FINISHED", runId: RUN_ID, threadId: "thread-rejoin" },
+          ]
+            .map((event, id) => `id: ${id}\ndata: ${JSON.stringify(event)}\n\n`)
+            .join(""),
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      }
+      return Response.json({
+        type: "running",
+        turnId: "turn-rejoin",
+        runId: RUN_ID,
+      });
+    },
+    { preconnect: () => undefined },
+  );
+  const page = openLoadedTurn();
+  // Hydration subscribes well after the loader built the runtime.
+  await sleep(50);
+  const unsubscribe = page.runtime.subscribe(() => undefined);
+  try {
+    await Promise.race([joined.promise, sleep(2000)]);
+    expect(joins).toBe(1);
+    expect(page.errors).toEqual([]);
+  } finally {
+    unsubscribe();
+  }
+});
 
 test("a missing running turn refreshes settled history once after its loader probe", async () => {
   let probes = 0;

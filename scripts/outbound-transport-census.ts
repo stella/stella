@@ -947,6 +947,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "apps/web/src/features/chat/chat-runtime.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes a chat turn's resume state on the configured API before rejoining it.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     class: "third-party",
     reason: "Reads GitHub commit metadata for a public tool contribution.",
