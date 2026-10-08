@@ -1,10 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import type { RedactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
@@ -22,10 +22,31 @@ if failure and cjson.decode(failure).failureId == ARGV[1] then
 end
 return 0
 `;
+/**
+ * What a failure keeps for the organization's other readers: which provider
+ * refused and the catalogue code for it, never the provider's own text. The
+ * record sits in a shared cache, and a provider's message can echo the
+ * prompt, so the text stays only in the tenant's stored diagnostic.
+ */
+const failureGuidanceSchema = v.strictObject({
+  provider: v.string(),
+  code: v.nullable(v.picklist(Object.values(PROVIDER_SETUP_ERROR_CODE))),
+});
+type AnalysisFailureGuidance = v.InferOutput<typeof failureGuidanceSchema>;
+
 const failureSchema = v.strictObject({
   failureId: v.pipe(v.string(), v.uuid()),
   status: v.literal("error"),
-  providerDiagnostic: v.optional(providerDiagnosticSchema),
+  guidance: v.optional(failureGuidanceSchema),
+});
+
+/** The guidance a diagnostic leaves for the shared failure record. */
+export const analysisFailureGuidance = ({
+  provider,
+  code,
+}: Pick<ProviderDiagnostic, "code" | "provider">): AnalysisFailureGuidance => ({
+  provider,
+  code,
 });
 
 export class AnalysisFailureStoreError extends TaggedError(
@@ -122,12 +143,18 @@ export const createAnalysisFailureStore = ({
   return {
     write: async (
       scope: AnalysisFailureScope,
-      providerDiagnostic: RedactedProviderDiagnostic | undefined,
+      guidance: AnalysisFailureGuidance | undefined,
     ) => {
+      // Fields are copied one by one, so a wider object passed as guidance
+      // (a whole diagnostic) still writes only these.
       const failure = {
         failureId: Bun.randomUUIDv7(),
         status: "error",
-        ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+        ...(guidance === undefined
+          ? {}
+          : {
+              guidance: { provider: guidance.provider, code: guidance.code },
+            }),
       } as const;
       const result = await command({
         name: "SET",

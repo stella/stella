@@ -81,7 +81,7 @@ test("failures are isolated by organization, decision, and input fingerprint and
   ).map((result) => result.unwrap());
   expect(deliveries.at(0)).toMatchObject({
     status: "error",
-    providerDiagnostic: diagnostic,
+    guidance: { provider: "anthropic", code: diagnostic.code },
   });
   expect(deliveries.at(1)).toEqual(deliveries.at(0));
   const failure = deliveries.at(0);
@@ -92,6 +92,22 @@ test("failures are isolated by organization, decision, and input fingerprint and
   expect((await store.clear(scope, failure.failureId)).unwrap()).toBe(true);
   expect((await store.read(scope)).unwrap()).toBeNull();
   expect(redis.calls.at(0)?.args.at(0)).toContain("{");
+});
+
+test("a failure caused by a provider writes no provider text to the shared cache", async () => {
+  const redis = fakeRedis();
+  const store = createAnalysisFailureStore({ createRedis: () => redis.client });
+  // A whole diagnostic, message included, handed in where guidance belongs.
+  expect(Result.isOk(await store.write(scope, diagnostic))).toBe(true);
+  const written = redis.calls.find(({ command }) => command === "SET");
+  const value = written?.args.at(1) ?? panic("Expected a written failure");
+  expect(value).not.toContain(diagnostic.message);
+  expect(value).not.toContain("message");
+  expect(JSON.parse(value)).toEqual({
+    failureId: expect.any(String),
+    status: "error",
+    guidance: { provider: "anthropic", code: diagnostic.code },
+  });
 });
 
 test("failure delivery expires after its bounded ten-minute window", async () => {
@@ -108,9 +124,15 @@ for (const malformed of [
   JSON.stringify({ status: "done" }),
   JSON.stringify({
     status: "error",
-    providerDiagnostic: {
+    guidance: { provider: "anthropic", code: "unowned-code" },
+  }),
+  // A record that carries provider text is refused on read, too.
+  JSON.stringify({
+    failureId: "01a2b3c4-0000-7000-8000-000000000000",
+    status: "error",
+    guidance: {
       provider: "anthropic",
-      code: "unowned-code",
+      code: null,
       message: "Reason",
     },
   }),

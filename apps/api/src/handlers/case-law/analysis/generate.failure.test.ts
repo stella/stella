@@ -24,7 +24,10 @@ import {
 
 import * as inputOwner from "./analysis-input";
 import type { AnalysisInputResolution } from "./analysis-input";
-import { generateAnalysis } from "./generate";
+import {
+  ANALYSIS_PROVIDER_REFUSAL_MESSAGE,
+  generateAnalysis,
+} from "./generate";
 
 const organizationId = toSafeId<"organization">("org_analysis_failure");
 const decisionId = toSafeId<"caseLawDecision">("decision_analysis_failure");
@@ -215,7 +218,13 @@ test("two polls retain the same terminal failure and make no model calls", async
     ).toEqual({
       status: "error",
       error: "Analysis generation failed",
-      providerDiagnostic: diagnostic,
+      // The catalogue code and our words; the provider's own text stays
+      // out of the shared failure record.
+      providerDiagnostic: {
+        provider: diagnostic.provider,
+        code: diagnostic.code,
+        message: ANALYSIS_PROVIDER_REFUSAL_MESSAGE,
+      },
     });
   }
   expect(model).toHaveBeenCalledTimes(0);
@@ -282,7 +291,10 @@ for (const schedule of ["single", "concurrent", "delayed-admission"] as const) {
         ).unwrap(),
       ).toMatchObject({
         status: "error",
-        providerDiagnostic: error.providerDiagnostic,
+        guidance: {
+          provider: "openai",
+          code: error.providerDiagnostic?.code ?? null,
+        },
       });
     } finally {
       logs.restore();
@@ -370,7 +382,7 @@ test("a retry clear outage preserves the failure and releases its claim without 
       (await store.read({ organizationId, decisionId, fingerprint })).unwrap(),
     ).toMatchObject({
       status: "error",
-      providerDiagnostic: diagnostic,
+      guidance: { provider: diagnostic.provider, code: diagnostic.code },
     });
   } finally {
     logs.restore();
@@ -401,14 +413,14 @@ for (const delivery of ["available", "outage"] as const) {
     spyOn(failureOwner, "analysisFailureStore").mockReturnValue({
       clear: async () => Result.ok(true),
       read: async () => Result.ok(null),
-      write: async (scope, providerDiagnostic) => {
+      write: async (scope, guidance) => {
         operations.push("write");
-        snapshots.push({ scope, providerDiagnostic });
+        snapshots.push({ scope, guidance });
         if (delivery === "outage") {
           return Result.err(
             new failureOwner.AnalysisFailureStoreError({
               message: "Fixture unavailable",
-              cause: providerDiagnostic,
+              cause: guidance,
             }),
           );
         }
@@ -430,9 +442,16 @@ for (const delivery of ["available", "outage"] as const) {
       expect(snapshots).toEqual([
         {
           scope: { organizationId, decisionId, fingerprint },
-          providerDiagnostic: error.providerDiagnostic,
+          guidance: {
+            provider: "openai",
+            code: error.providerDiagnostic?.code ?? null,
+          },
         },
       ]);
+      // The shared failure record never receives the provider's text.
+      expect(JSON.stringify(snapshots)).not.toContain(
+        "Full scoped provider reason",
+      );
       expect(saved).not.toHaveBeenCalled();
       expect(cleared).toHaveBeenCalledWith({
         decisionId,

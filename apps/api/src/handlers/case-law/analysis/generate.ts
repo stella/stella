@@ -25,6 +25,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  analysisFailureGuidance,
   analysisFailureStore,
   AnalysisFailureStoreError,
 } from "@/api/lib/case-law/analysis-failure";
@@ -41,7 +42,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
-  redactedProviderDiagnostic,
+  redactProviderMessage,
   type RedactedProviderDiagnostic,
 } from "@/api/lib/provider-diagnostic";
 import {
@@ -170,7 +171,10 @@ const runGeneration = async ({
     aiAnalytics.captureError(error);
     const delivered = await analysisFailureStore().write(
       { organizationId, decisionId, fingerprint: input.fingerprint },
-      error instanceof ProviderCallError ? error.providerDiagnostic : undefined,
+      error instanceof ProviderCallError &&
+        error.providerDiagnostic !== undefined
+        ? analysisFailureGuidance(error.providerDiagnostic)
+        : undefined,
     );
     if (Result.isError(delivered)) {
       observeFailure(
@@ -193,6 +197,14 @@ const runGeneration = async ({
       });
   }
 };
+
+/**
+ * What a later reader of a failed analysis is told. The failure record keeps
+ * only the provider and its catalogue code, so the guidance is the
+ * catalogue's and the words are ours, never the provider's.
+ */
+export const ANALYSIS_PROVIDER_REFUSAL_MESSAGE =
+  "The AI provider refused the analysis request.";
 
 type GenerateAnalysisResponse =
   | { status: "done"; analysis: PersistedDecisionAnalysis }
@@ -329,12 +341,13 @@ export const generateAnalysis = async ({
     return Result.ok({
       status: "error",
       error: "Analysis generation failed",
-      ...(failure.value.providerDiagnostic === undefined
+      ...(failure.value.guidance === undefined
         ? {}
         : {
-            providerDiagnostic: redactedProviderDiagnostic(
-              failure.value.providerDiagnostic,
-            ),
+            providerDiagnostic: {
+              ...failure.value.guidance,
+              message: redactProviderMessage(ANALYSIS_PROVIDER_REFUSAL_MESSAGE),
+            },
           }),
     });
   }
