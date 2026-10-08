@@ -9242,5 +9242,17 @@
   "src/lib/observability/event-loop-delay.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/lib/anthropic-config.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/credential-text.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/provider-error-catalogue.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

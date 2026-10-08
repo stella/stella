@@ -25,7 +25,7 @@ const createErrorToasts = {
   },
   promise: async () => {
     const result = await Result.tryPromise({
-      try: () =>
+      try: async () =>
         stellaToast.promise(Promise.reject(new Error(REASON)), {
           loading: "Verifying",
           success: "Verified",
