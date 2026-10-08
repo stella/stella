@@ -177,6 +177,42 @@ describe("resource-bound OAuth refresh", () => {
       }
     },
   );
+
+  test("keeps refreshing after the browser session that granted it ends", async () => {
+    const browser = await signInHuman(
+      `refresh-signout-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const organization = await getAuth().api.createOrganization({
+      body: { name: "Refresh", slug: `refresh-${Bun.randomUUIDv7()}` },
+      headers: browser.headers(),
+    });
+    await browser.setActiveOrganization(organization.id);
+    const client = await registerOAuthClient();
+    const granted = await grantOAuthClient(browser, client);
+
+    await getAuth().api.signOut({ headers: browser.headers() });
+
+    // The browser session is gone; the offline refresh token must outlive it,
+    // so a connected app keeps working without a new sign-in.
+    expect(
+      await getAuth().api.getSession({ headers: browser.headers() }),
+    ).toBeNull();
+    let refreshToken = granted.refreshToken;
+    for (let rotation = 0; rotation < 2; rotation += 1) {
+      const response = await refreshOAuthGrant({ client, refreshToken });
+      expect(response.status, await response.clone().text()).toBe(200);
+      const tokens = v.parse(
+        v.looseObject({
+          access_token: v.pipe(v.string(), v.minLength(1)),
+          refresh_token: v.pipe(v.string(), v.minLength(1)),
+          scope: v.string(),
+        }),
+        await response.json(),
+      );
+      expect(tokens.scope.split(" ")).toContain("offline_access");
+      refreshToken = tokens.refresh_token;
+    }
+  });
 });
 
 describe("disconnecting a connected app", () => {
