@@ -1,5 +1,5 @@
-//! Opt-in local window metadata. Browser details are withheld when privacy
-//! require separate browser consent: captions can omit private markers.
+//! Opt-in local window metadata. Browser titles require separate consent:
+//! captions can omit private-browsing markers.
 use crate::{
   activity::{ActivityDetailsAccess, MAX_DETAIL_BYTES},
   foreground_app::{self, ForegroundApp},
