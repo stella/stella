@@ -105,15 +105,14 @@ export const useOpenChatThreadDecision = () => {
 
   return (
     event: MouseEvent<HTMLAnchorElement>,
-    {
-      decision,
-      id,
-      title,
-    }: Pick<ChatHistoryItem, "id" | "title"> & {
-      decision: ChatThreadDecision;
-    },
+    chat: ChatHistoryItem,
   ): boolean => {
-    if (!inspectorAvailable || !isPlainPrimaryClick(event)) {
+    const decision = drawableChatThreadDecision(chat);
+    if (
+      decision === null ||
+      !inspectorAvailable ||
+      !isPlainPrimaryClick(event)
+    ) {
       return false;
     }
     event.preventDefault();
@@ -131,10 +130,12 @@ export const useOpenChatThreadDecision = () => {
     );
     // Last, so the chat the reader clicked is the tab in front; the decision
     // is one tab away.
+    // A matter chat keeps its matter, or the tab would load it as global.
     openChat({
       activeLegalKey: decisionChatKey(decisionId),
-      id: toChatThreadId(id),
-      label: title,
+      id: toChatThreadId(chat.id),
+      label: chat.title,
+      ...(chat.scope === "workspace" ? { workspaceId: chat.workspaceId } : {}),
     });
     return true;
   };

@@ -442,13 +442,7 @@ const ThreadRow = ({
                 <Link
                   className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
                   onClick={(event) => {
-                    if (decision !== null) {
-                      openChatThreadDecision(event, {
-                        decision,
-                        id: thread.id,
-                        title: thread.title,
-                      });
-                    }
+                    openChatThreadDecision(event, thread);
                     onOpenChange(false);
                   }}
                   {...(threadRef.scope === "global"

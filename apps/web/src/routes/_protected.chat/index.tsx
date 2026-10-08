@@ -423,14 +423,7 @@ function ChatIndex() {
   const openChatThreadDecision = useOpenChatThreadDecision();
   const openDecisionChatOnClick =
     (chat: ChatHistoryItem) => (event: MouseEvent<HTMLAnchorElement>) => {
-      const decision = drawableChatThreadDecision(chat);
-      if (decision !== null) {
-        openChatThreadDecision(event, {
-          decision,
-          id: chat.id,
-          title: chat.title,
-        });
-      }
+      openChatThreadDecision(event, chat);
     };
   const storedMatterColor = (workspaceId: string) =>
     workspaces?.find(({ id }) => id === workspaceId)?.color ?? null;
