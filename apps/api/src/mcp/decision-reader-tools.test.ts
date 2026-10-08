@@ -1,0 +1,494 @@
+import { describe, expect, test } from "bun:test";
+import { status } from "elysia";
+import * as v from "valibot";
+
+import { blockSchema } from "@stll/legal-ast/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import type { McpRequestContext } from "./context";
+import {
+  blocksDecisionOutput,
+  openDecisionOutput,
+  provisionPreviewOutput,
+  READER_PAGE_MAX_CHARS,
+  READER_WITHHELD_TEXT_POLICY,
+} from "./decision-reader-contract";
+import {
+  createReaderBlocksTool,
+  DECISION_READER_TOOL_SET,
+} from "./decision-reader-tools";
+import type { ReaderSource } from "./decision-reader.logic";
+
+const id = "af6c7d89-41ab-42ba-814e-b657703584eb";
+const otherId = "af6c7d89-41ab-42ba-814e-b657703584ec";
+const documentId = brandPersistedLegislationDocumentId(
+  "cc6c7d89-41ab-42ba-814e-b657703584eb",
+);
+const astOf = (count = 8): DocumentAst => ({
+  version: 1,
+  source: {
+    system: "test",
+    documentId: id,
+    webUrl: "https://example.test/decision",
+    printUrl: "",
+  },
+  metadata: {
+    caseNumber: "1 Test 2026",
+    ecli: null,
+    court: "Test court",
+    decisionDate: "2026-01-01",
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks: Array.from({ length: count }, (_, index) => ({
+    type: "paragraph",
+    id: `block-${index}`,
+    anchorId: `court-${index}`,
+    number: index + 48,
+    inlines: [
+      { type: "text", text: `Paragraph ${index + 48} ${"text ".repeat(600)}` },
+    ],
+    plainText: `Paragraph ${index + 48} ${"text ".repeat(600)}`,
+  })),
+});
+const sourceOf = (ast = astOf(), allowsDerivedAi = true) =>
+  ({
+    status: "read",
+    decision: {
+      id: brandPersistedCaseLawDecisionId(id),
+      caseNumber: "1 Test 2026",
+      court: "Test court",
+      country: "CZE",
+      decisionDate: "2026-01-01",
+      ecli: null,
+      language: "cs",
+      languageAlternates: [],
+      slug: null,
+      source: { allowsDerivedAi },
+    },
+    ast,
+    citationAnchors: [
+      {
+        pieceId: "block-0",
+        start: 0,
+        end: 8,
+        citationId: "citation",
+        decisionId: otherId,
+      },
+    ],
+    provisionAnchors: [
+      {
+        pieceId: "block-0",
+        start: 10,
+        end: 16,
+        provision: {
+          document_id: documentId,
+          anchor: "par_1",
+          cited_anchor: "par_1-odst_1",
+        },
+      },
+    ],
+    referenceNextCursor: null,
+  }) satisfies ReaderSource;
+const contextWith = (
+  testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
+) => asTestRaw<McpRequestContext>({ testDependencies });
+
+const open = DECISION_READER_TOOL_SET.handlers.open_case_law_decision;
+const blocks = DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks;
+const preview = DECISION_READER_TOOL_SET.handlers.preview_cited_provision;
+
+describe("decision reader tool contracts", () => {
+  test("anchor page offsets reset across reference cursors and phase transitions", async () => {
+    const source = sourceOf(astOf(1));
+    const citationPages = [80, 7].map((count, page) =>
+      Array.from({ length: count }, (_, index) => ({
+        pieceId: `piece-${"x".repeat(800)}`,
+        start: 0,
+        end: 8,
+        citationId: `citation-${page}-${index}`,
+        decisionId: otherId,
+      })),
+    );
+    const provisionPages = [3, 2].map((count, page) =>
+      Array.from({ length: count }, (_, index) => ({
+        pieceId: `provision-${page}-${index}`,
+        start: 0,
+        end: 8,
+        provision: {
+          document_id: documentId,
+          anchor: `par_${page}_${index}`,
+          cited_anchor: `par_${page}_${index}`,
+        },
+      })),
+    );
+    const reads = new Set<string>();
+    const context = contextWith({
+      readDecisionReaderSource: async ({ phase, referenceCursor }) => {
+        reads.add(`${phase}:${referenceCursor ?? "first"}`);
+        const page = referenceCursor === undefined ? 0 : 1;
+        return {
+          ...source,
+          citationAnchors:
+            phase === "citations" ? (citationPages.at(page) ?? []) : [],
+          provisionAnchors:
+            phase === "provisions" ? (provisionPages.at(page) ?? []) : [],
+          referenceNextCursor:
+            phase === "blocks" || page === 1 ? null : `${phase}-next`,
+        };
+      },
+    });
+    const citations: string[] = [];
+    const provisions: string[] = [];
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    let completed = false;
+    for (let page = 0; page < 30; page += 1) {
+      const result = await blocks({
+        args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
+        context,
+      });
+      if (result.status !== "success" || result.data.status !== "available") {
+        throw new Error("Expected a bounded anchor page");
+      }
+      expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
+        READER_PAGE_MAX_CHARS,
+      );
+      expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
+      citations.push(
+        ...result.data.citationAnchors.map((anchor) => anchor.citationId),
+      );
+      provisions.push(
+        ...result.data.provisionAnchors.map(
+          (anchor) => anchor.provision.anchor,
+        ),
+      );
+      if (result.data.nextCursor === null) {
+        completed = true;
+        break;
+      }
+      expect(cursors.has(result.data.nextCursor)).toBe(false);
+      cursors.add(result.data.nextCursor);
+      cursor = result.data.nextCursor;
+    }
+    expect(completed).toBe(true);
+    expect(citations).toEqual(
+      citationPages.flat().map((anchor) => anchor.citationId),
+    );
+    expect(provisions).toEqual(
+      provisionPages.flat().map((anchor) => anchor.provision.anchor),
+    );
+    expect([...reads]).toEqual([
+      "blocks:first",
+      "citations:first",
+      "citations:citations-next",
+      "provisions:first",
+      "provisions:provisions-next",
+    ]);
+  });
+  test("opening uses court numbers and a canonical web fragment with a small schema-valid result", async () => {
+    const context = contextWith({
+      readDecisionReaderSource: async () => sourceOf(),
+    });
+    const result = await open({
+      args: { decision_id: id, paragraphs: "48–49" },
+      context,
+    });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected a decision opening result");
+    }
+    expect(v.safeParse(openDecisionOutput, result.data).success).toBe(true);
+    if (result.data.status !== "available") {
+      throw new Error("Expected an available decision");
+    }
+    expect(result.data.window.map((item) => item.anchorId)).toEqual([
+      "court-0",
+      "court-1",
+    ]);
+    expect(result.data.metadata.appUrl).toEndWith("#par=48-49");
+    expect(JSON.stringify(result.data).length).toBeLessThan(12_000);
+    expect(result.data).not.toHaveProperty("items");
+  });
+  test("all range and identifier rejections are typed before reading", async () => {
+    let reads = 0;
+    const context = contextWith({
+      readDecisionReaderSource: async () => {
+        reads += 1;
+        return sourceOf();
+      },
+    });
+    for (const args of [
+      { decision_id: "invalid" },
+      { decision_id: id, paragraphs: "49-48" },
+      { decision_id: id, paragraphs: "1-501" },
+    ]) {
+      const result = await open({ args, context });
+      expect(result.status).toBe("error");
+      if (result.status === "error" && result.error.type === "structured") {
+        expect(result.error.code).toBe("validation_error");
+      }
+    }
+    expect(reads).toBe(0);
+    const absent = await open({
+      args: { decision_id: id, paragraphs: "1" },
+      context,
+    });
+    expect(absent.status).toBe("error");
+    if (absent.status === "error" && absent.error.type === "structured") {
+      expect(absent.error.code).toBe("not_found");
+    }
+  });
+  test("whole decision pagination emits blocks and each anchor stream exactly once", async () => {
+    const source = sourceOf(astOf(80));
+    let calls = 0;
+    const phases: string[] = [];
+    const context = contextWith({
+      readDecisionReaderSource: async ({ phase }) => {
+        calls += 1;
+        phases.push(phase);
+        return source;
+      },
+    });
+    const ids: string[] = [];
+    const citationIds: string[] = [];
+    const provisionIds: string[] = [];
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    for (;;) {
+      const result = await blocks({
+        args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
+        context,
+      });
+      expect(result.status).toBe("success");
+      if (result.status !== "success" || result.data.status !== "available") {
+        throw new Error("Expected an available block page");
+      }
+      expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
+      expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
+        READER_PAGE_MAX_CHARS,
+      );
+      ids.push(...result.data.items.map((block) => block.id));
+      citationIds.push(
+        ...result.data.citationAnchors.map((anchor) => anchor.citationId),
+      );
+      provisionIds.push(
+        ...result.data.provisionAnchors.map(
+          (anchor) => anchor.provision.document_id,
+        ),
+      );
+      if (result.data.nextCursor === null) {
+        break;
+      }
+      expect(cursors.has(result.data.nextCursor)).toBe(false);
+      cursors.add(result.data.nextCursor);
+      cursor = result.data.nextCursor;
+    }
+    expect(ids).toEqual(source.ast.blocks.map((block) => block.id));
+    expect(new Set(ids).size).toBe(80);
+    expect(citationIds).toEqual(["citation"]);
+    expect(provisionIds).toEqual([documentId]);
+    expect(phases.at(-2)).toBe("citations");
+    expect(phases.at(-1)).toBe("provisions");
+    expect(calls).toBeLessThan(30);
+  });
+  test("oversized AST blocks reassemble losslessly across bounded Unicode fragments", async () => {
+    const ast = astOf(3);
+    const large = ast.blocks.at(1);
+    if (large?.type !== "paragraph") {
+      throw new Error("Expected the paragraph fixture");
+    }
+    large.plainText = '"\\\n😀'.repeat(20_000);
+    large.inlines = [{ type: "text", text: large.plainText }];
+    const source = sourceOf(ast);
+    const context = contextWith({
+      readDecisionReaderSource: async () => source,
+    });
+    const read: DocumentAst["blocks"] = [];
+    let fragmentText = "";
+    let cursor: string | undefined;
+    for (;;) {
+      const result = await blocks({
+        args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
+        context,
+      });
+      if (result.status !== "success" || result.data.status !== "available") {
+        throw new Error("Expected the fragment page");
+      }
+      expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
+      expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
+        READER_PAGE_MAX_CHARS,
+      );
+      read.push(...result.data.items);
+      for (const fragment of result.data.blockFragments) {
+        expect(fragment.blockId).toBe(large.id);
+        expect(fragment.offset).toBe(fragmentText.length);
+        fragmentText += fragment.json;
+        if (fragmentText.length === fragment.totalChars) {
+          read.push(v.parse(blockSchema, JSON.parse(fragmentText)));
+          fragmentText = "";
+        }
+      }
+      if (result.data.nextCursor === null) {
+        break;
+      }
+      cursor = result.data.nextCursor;
+    }
+    expect(fragmentText).toBe("");
+    expect(read).toEqual(ast.blocks);
+    expect(new Set(read.map((block) => block.id)).size).toBe(3);
+  });
+  test("cursors reject cross-decision reuse and AST revisions", async () => {
+    let source = sourceOf(astOf(20));
+    const context = contextWith({
+      readDecisionReaderSource: async () => source,
+    });
+    const first = await blocks({ args: { decision_id: id }, context });
+    if (
+      first.status !== "success" ||
+      first.data.status !== "available" ||
+      first.data.nextCursor === null
+    ) {
+      throw new Error("Expected a cursor for the multi-page fixture");
+    }
+    const cross = await blocks({
+      args: { decision_id: otherId, cursor: first.data.nextCursor },
+      context,
+    });
+    expect(cross.status).toBe("error");
+    if (cross.status === "error" && cross.error.type === "structured") {
+      expect(cross.error.code).toBe("validation_error");
+    }
+    source = sourceOf(astOf(21));
+    const changed = await blocks({
+      args: { decision_id: id, cursor: first.data.nextCursor },
+      context,
+    });
+    expect(changed.status).toBe("error");
+    if (changed.status === "error" && changed.error.type === "structured") {
+      expect(changed.error.code).toBe("conflict");
+    }
+  });
+  test("both withheld policies are explicit and opening never includes withheld text", async () => {
+    expect(READER_WITHHELD_TEXT_POLICY).toBe("metadata-only");
+    const source = sourceOf(astOf(), false);
+    const policies: string[] = [];
+    const context = contextWith({
+      readDecisionReaderSource: async ({ withheldTextPolicy }) => {
+        policies.push(withheldTextPolicy);
+        return source;
+      },
+    });
+    const withheld = await createReaderBlocksTool("metadata-only")({
+      args: { decision_id: id },
+      context,
+    });
+    expect(withheld.status).toBe("success");
+    if (withheld.status !== "success") {
+      throw new Error("Expected withheld metadata");
+    }
+    expect(withheld.data.status).toBe("withheld");
+    expect(JSON.stringify(withheld.data)).not.toContain("Paragraph 48");
+    expect(withheld.data).not.toHaveProperty("items");
+    expect(withheld.data).not.toHaveProperty("citationAnchors");
+    expect(v.safeParse(blocksDecisionOutput, withheld.data).success).toBe(true);
+    const shown = await createReaderBlocksTool("show-to-user")({
+      args: { decision_id: id },
+      context,
+    });
+    expect(shown.status).toBe("success");
+    if (shown.status !== "success" || shown.data.status !== "available") {
+      throw new Error("Expected human-only blocks");
+    }
+    expect(shown.data.items.length).toBeGreaterThan(0);
+    const model = await open({
+      args: { decision_id: id, paragraphs: "48" },
+      context,
+    });
+    expect(model.status).toBe("success");
+    if (model.status !== "success") {
+      throw new Error("Expected opening metadata");
+    }
+    expect(model.data.status).toBe("withheld");
+    expect(JSON.stringify(model.data)).not.toContain("Paragraph 48");
+    expect(policies).toEqual([
+      "metadata-only",
+      "show-to-user",
+      "metadata-only",
+    ]);
+  });
+  test("missing or gated decisions are typed not-found and expose no source data", async () => {
+    const context = contextWith({ readDecisionReaderSource: async () => null });
+    for (const tool of [open, blocks]) {
+      const result = await tool({ args: { decision_id: id }, context });
+      expect(result.status).toBe("error");
+      if (result.status === "error" && result.error.type === "structured") {
+        expect(result.error.code).toBe("not_found");
+      }
+    }
+  });
+  test("the provision tool reuses the exact consolidated web preview service", async () => {
+    let reads = 0;
+    const context = contextWith({
+      readProvisionPreviewHandler: async ({
+        documentId: receivedId,
+        anchor,
+        citedAnchor,
+      }) => {
+        reads += 1;
+        expect(receivedId).toBe(documentId);
+        expect(anchor).toBe("par_1");
+        expect(citedAnchor).toBe("par_1-odst_1");
+        return {
+          documentId,
+          language: "cs",
+          anchorId: anchor,
+          citedAnchorId: citedAnchor ?? null,
+          headings: [],
+          heading: null,
+          blocks: [
+            {
+              id: "block",
+              anchorId: "par_1-odst_1",
+              text: "Provision wording",
+            },
+          ],
+        };
+      },
+    });
+    const result = await preview({
+      args: {
+        provision: {
+          document_id: documentId,
+          anchor: "par_1",
+          cited_anchor: "par_1-odst_1",
+        },
+      },
+      context,
+    });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected a provision preview");
+    }
+    expect(v.safeParse(provisionPreviewOutput, result.data).success).toBe(true);
+    expect(reads).toBe(1);
+    const absent = await preview({
+      args: { provision: { document_id: documentId, anchor: "par_1" } },
+      context: contextWith({
+        readProvisionPreviewHandler: async () =>
+          status(404, { message: "Provision not found" }),
+      }),
+    });
+    expect(absent.status).toBe("error");
+    if (absent.status === "error" && absent.error.type === "structured") {
+      expect(absent.error.code).toBe("not_found");
+    }
+  });
+});

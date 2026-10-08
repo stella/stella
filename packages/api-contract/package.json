@@ -39,6 +39,7 @@
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
     "./case-law-text-field": "./src/case-law-text-field.ts",
     "./decision-document-role": "./src/decision-document-role.ts",
+    "./decision-paragraph-range": "./src/decision-paragraph-range.ts",
     "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
     "./decision-docket-identity.fixtures": "./src/decision-docket-identity.fixtures.ts",

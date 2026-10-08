@@ -586,8 +586,6 @@ export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
 
 const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
 
-const HTTPS_PROTOCOL = "https:";
-
 /**
  * An image address, and never image bytes.
  *
@@ -598,13 +596,10 @@ const HTTPS_PROTOCOL = "https:";
  * The same check rejects every other scheme, so an address is always one
  * a reader can fetch over TLS.
  */
-const isHttpsUrl = (src: string): boolean =>
-  URL.canParse(src) && new URL(src).protocol === HTTPS_PROTOCOL;
-
 const imageSrcSchema = v.pipe(
   v.string(),
   v.url(),
-  v.check(isHttpsUrl, "Image src must be an https URL"),
+  v.regex(/^[Hh][Tt][Tt][Pp][Ss]:/u, "Image src must be an https URL"),
 );
 
 /** A span of more than one cell. A span of one is the default, so it is
@@ -687,7 +682,7 @@ const tableCellSchema: v.GenericSchema<TableCell> = v.object({
   plainText: v.string(),
 });
 
-const blockSchema: v.GenericSchema<Block> = v.variant("type", [
+export const blockSchema: v.GenericSchema<Block> = v.variant("type", [
   v.object({ ...headingEntries, plainText: v.string() }),
   v.object({ ...paragraphEntries, plainText: v.string() }),
   v.object({ ...imageEntries, plainText: v.string() }),

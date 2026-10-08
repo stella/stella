@@ -50,6 +50,11 @@ export type {
   TableBlock,
   TableCell,
 } from "./document-ast.js";
+export { resolveDecisionParagraphRange } from "./paragraph-range.js";
+export type {
+  DecisionParagraphRangeResolution,
+  ParagraphRange,
+} from "./paragraph-range.js";
 export {
   flattenInlineText,
   hasInlineChildren,
