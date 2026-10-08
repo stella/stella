@@ -348,9 +348,18 @@ test("computed template imports and require calls retain their test importers", 
 });
 
 // Two walks over the real repository graph: the limit only catches a hang.
-// Their cost grows with the repository and the runner's load, so it is not a
-// performance budget (the scan test above uses the same limit).
+// Their cost grows with the graph, the number of tests and the runner's load,
+// so it is not a performance budget (the scan test above uses the same limit).
 test("the repository graph reaches real handler tests and workspace consumers", () => {
+  const listed = Bun.spawnSync(["git", "ls-files", "-z", "apps/api"], {
+    cwd: path.resolve(import.meta.dir, ".."),
+  });
+  expect(listed.exitCode).toBe(0);
+  const apiTestCount = listed.stdout
+    .toString()
+    .split("\0")
+    .filter((file) => /\.test\.[cm]?[jt]sx?$/u.test(file)).length;
+  expect(apiTestCount).toBeGreaterThan(100);
   const handler = selectApiTestImpact({
     changed: ["apps/api/src/handlers/case-law/provisions/response.ts"],
   });
@@ -363,6 +372,9 @@ test("the repository graph reaches real handler tests and workspace consumers", 
   });
   expect(pkg.mode).toBe("selected");
   expect(pkg.files).toContain("src/handlers/api-keys/list.db.test.ts");
+  // A selector that returns every test must not pass as "selected".
+  expect(handler.files.length).toBeLessThan(apiTestCount);
+  expect(pkg.files.length).toBeLessThan(apiTestCount);
 }, 30_000);
 
 test("selection is a deterministic union through cycles, duplicates and reordered changes", () => {
