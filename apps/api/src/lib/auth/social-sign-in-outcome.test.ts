@@ -1,7 +1,10 @@
 import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { classifySocialCallback } from "@/api/lib/auth/social-sign-in-outcome";
+import {
+  classifySocialCallback,
+  socialCallbackErrorUrl,
+} from "@/api/lib/auth/social-sign-in-outcome";
 import type { SocialSignInOutcome } from "@/api/lib/observability/request-metrics";
 import {
   emitSocialSignInOutcome,
@@ -31,6 +34,40 @@ describe("social sign-in outcome", () => {
     expect(classifySocialCallback(redirectTo(location), errorUrl)).toBe(
       outcome,
     );
+  });
+
+  test("classifies against the sign-in's own error destination", () => {
+    const customErrorUrl = "https://app.example.test/sign-in/failed";
+    const effective = socialCallbackErrorUrl(
+      { callbackURL: "https://app.example.test/", errorURL: customErrorUrl },
+      errorUrl,
+    );
+    expect(effective).toBe(customErrorUrl);
+    expect(
+      classifySocialCallback(
+        redirectTo(`${customErrorUrl}?error=account_not_linked`),
+        effective,
+      ),
+    ).toBe("account_not_linked");
+    expect(
+      classifySocialCallback(
+        redirectTo(`${customErrorUrl}?error=identity_not_allowed`),
+        effective,
+      ),
+    ).toBe("identity_not_allowed");
+    // A completed sign-in still lands on its callback URL.
+    expect(
+      classifySocialCallback(
+        redirectTo("https://app.example.test/"),
+        effective,
+      ),
+    ).toBe("completed");
+  });
+
+  test("falls back to the global error URL without a per-sign-in one", () => {
+    for (const state of [null, undefined, {}, { errorURL: "" }, "x"]) {
+      expect(socialCallbackErrorUrl(state, errorUrl)).toBe(errorUrl);
+    }
   });
 
   test("treats anything but a redirect as a failure", () => {

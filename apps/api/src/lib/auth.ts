@@ -10,6 +10,7 @@ import {
   APIError,
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
+  getOAuthState,
 } from "better-auth/api";
 import {
   emailOTP,
@@ -139,6 +140,7 @@ import {
 } from "@/api/lib/auth/social-identity-policy";
 import {
   classifySocialCallback,
+  socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -966,8 +968,11 @@ const socialSignInOutcomePlugin = {
           emitSocialSignInOutcome(
             classifySocialCallback(
               ctx.context.returned,
-              ctx.context.options.onAPIError?.errorURL ??
-                `${ctx.context.baseURL}/error`,
+              socialCallbackErrorUrl(
+                await getOAuthState(),
+                ctx.context.options.onAPIError?.errorURL ??
+                  `${ctx.context.baseURL}/error`,
+              ),
             ),
             socialSignInProvider(ctx.params?.["id"]),
           );

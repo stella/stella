@@ -3,6 +3,21 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const KNOWN_PROVIDERS = new Set(["google", "microsoft"]);
 
+/**
+ * Where this callback reports failures: the sign-in's own error destination
+ * when it chose one, otherwise the global error URL. The callback's parsed
+ * OAuth state carries the per-sign-in choice.
+ */
+export const socialCallbackErrorUrl = (
+  state: unknown,
+  globalErrorUrl: string,
+): string => {
+  const errorUrl = isRecord(state) ? state["errorURL"] : undefined;
+  return typeof errorUrl === "string" && errorUrl.length > 0
+    ? errorUrl
+    : globalErrorUrl;
+};
+
 /** The provider dimension: a known provider id, otherwise `other`. */
 export const socialSignInProvider = (provider: unknown): string =>
   typeof provider === "string" && KNOWN_PROVIDERS.has(provider)
