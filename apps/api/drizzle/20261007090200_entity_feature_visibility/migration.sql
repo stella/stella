@@ -1,4 +1,5 @@
--- requires: 20261005120300_list_verification_access_revoked, 20261007090100_validate_case_law_citation_review_provenance
+-- requires: 20261005120300_list_verification_access_revoked
+-- requires: 20261007090100_validate_case_law_citation_review_provenance
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '10s';--> statement-breakpoint
 CREATE POLICY "workspace_entity_feature" ON "public"."anonymization_allowlist_entries" AS RESTRICTIVE FOR ALL TO "stella" USING ((CASE WHEN "anonymization_allowlist_entries"."entity_id" IS NULL THEN true ELSE EXISTS (SELECT 1 FROM public.entities e WHERE e.id = "anonymization_allowlist_entries"."entity_id") END)) WITH CHECK ((CASE WHEN "anonymization_allowlist_entries"."entity_id" IS NULL THEN true ELSE EXISTS (SELECT 1 FROM public.entities e WHERE e.id = "anonymization_allowlist_entries"."entity_id") END));
