@@ -228,12 +228,16 @@ function ConsentPage() {
     const outcome = await Result.tryPromise(
       async () => await authClient.organization.setActive({ organizationId }),
     );
+    // On failure the request may still have reached the server, so re-read
+    // the session: the page must show the organization Allow would bind to.
     if (outcome.isErr()) {
+      await refreshAuthQueries(queryClient);
       setSubmission({ status: "error" });
       notifyUserError(outcome.error, t("consent.error"));
       return;
     }
     if (outcome.value.error) {
+      await refreshAuthQueries(queryClient);
       setSubmission({ status: "error" });
       notifyUserError(
         toAuthClientError(outcome.value.error),
