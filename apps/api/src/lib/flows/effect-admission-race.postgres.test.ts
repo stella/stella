@@ -796,6 +796,111 @@ if (!databaseUrl || !enabled) {
     );
   });
   describe("SQL flow claim lease recovery (postgres)", () => {
+    test("an expired replacement claim refuses a previous worker's failure", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const observer = openClient();
+        const worker = openClient();
+        const f = await flowReviewGateFixture(observer.db, {
+          intermediate: false,
+          initialRunStatus: "pending",
+        });
+        const clock = new Date("2030-01-01T12:00:00.000Z");
+        const originalStartedAt = new Date(
+          clock.getTime() - FLOW_STEP_LEASE_MS * 3,
+        );
+        const replacementStartedAt = new Date(
+          clock.getTime() - FLOW_STEP_LEASE_MS * 2,
+        );
+        const safeDb = f.safeDb(worker.db);
+        const scopedDb: ScopedDb = async (work) => {
+          const result = await safeDb(work);
+          if (result.isErr()) {
+            throw result.error;
+          }
+          return result.value;
+        };
+        let broadcasts = 0;
+        const readToken = async () => {
+          const row = (
+            await observer.db
+              .select({ token: timestampCasToken(flowRunSteps.startedAt) })
+              .from(flowRunSteps)
+              .where(
+                and(eq(flowRunSteps.runId, f.runId), eq(flowRunSteps.index, 0)),
+              )
+          ).at(0);
+          return row?.token ?? panic("Expected committed claim token");
+        };
+        try {
+          await observer.db
+            .update(flowRuns)
+            .set({ status: "running", startedAt: originalStartedAt })
+            .where(eq(flowRuns.id, f.runId));
+          await observer.db
+            .update(flowRunSteps)
+            .set({ status: "running", startedAt: originalStartedAt })
+            .where(eq(flowRunSteps.runId, f.runId));
+          const originalToken = await readToken();
+          await observer.db
+            .update(flowRunSteps)
+            .set({ startedAt: replacementStartedAt })
+            .where(eq(flowRunSteps.runId, f.runId));
+          const replacementToken = await readToken();
+          expect(replacementToken).not.toBe(originalToken);
+          expect(replacementStartedAt.getTime()).toBeLessThan(
+            clock.getTime() - FLOW_STEP_LEASE_MS,
+          );
+          const replacementState = await f.read();
+          const noticeCount = await observer.db.$count(
+            notifications,
+            eq(notifications.workspaceId, f.workspaceId),
+          );
+          const failure = new FlowStepError({ message: "Step unavailable" });
+          const dependencies = {
+            database: worker.db,
+            now: () => clock,
+            makeScopedDb: () => scopedDb,
+            broadcastUpdate: () => {
+              broadcasts += 1;
+            },
+          };
+          expect(
+            await failFlowRunFromWorker(
+              { runId: f.runId, stepIndex: 0 },
+              failure,
+              {
+                ...dependencies,
+                claimedStartedAt: originalToken,
+              },
+            ),
+          ).toEqual({ status: "stale" });
+          expect(await f.read()).toEqual(replacementState);
+          expect(
+            await observer.db.$count(
+              notifications,
+              eq(notifications.workspaceId, f.workspaceId),
+            ),
+          ).toBe(noticeCount);
+          expect(broadcasts).toBe(0);
+          expect(
+            await failFlowRunFromWorker(
+              { runId: f.runId, stepIndex: 0 },
+              failure,
+              {
+                ...dependencies,
+                claimedStartedAt: replacementToken,
+              },
+            ),
+          ).toEqual({ status: "completed" });
+          expect((await f.read()).steps.at(0)).toMatchObject({
+            status: "failed",
+            startedAt: replacementStartedAt,
+          });
+        } finally {
+          await f.cleanup();
+        }
+      });
+    });
     test.each([
       "queue-write-failure",
       "worker-loss",

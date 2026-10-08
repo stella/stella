@@ -148,6 +148,10 @@ export const flowUploadTriggerIntents = p.pgTable(
       .index("flow_upload_trigger_intents_awaiting_grant_idx")
       .on(table.organizationId, table.workspaceId)
       .where(sql`${table.status} = 'awaiting_grant'`),
+    p
+      .index("flow_upload_trigger_intents_skipped_recovery_idx")
+      .on(table.definitionId, table.retryAt, table.entityId)
+      .where(sql`${table.status} = 'skipped'`),
     ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
   ],
 );

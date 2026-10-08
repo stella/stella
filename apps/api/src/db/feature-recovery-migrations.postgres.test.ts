@@ -46,6 +46,11 @@ const MIGRATIONS = [
     index: "flow_runs_completion_notice_pending_idx",
     table: "flow_runs",
   },
+  {
+    name: "20261008193000_upload_trigger_skipped_recovery_index",
+    index: "flow_upload_trigger_intents_skipped_recovery_idx",
+    table: "flow_upload_trigger_intents",
+  },
 ] as const;
 const DEPENDENCIES = [
   "organization",

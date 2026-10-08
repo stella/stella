@@ -1599,14 +1599,17 @@ const decideFlowFailureClaim = ({
     step.status === "running" &&
     step.startedAt !== null &&
     step.startedAt.getTime() <= now.getTime() - FLOW_STEP_LEASE_MS;
-  if (
-    retainedClaim !== step.startedAtToken &&
-    !expired &&
-    !(
-      retainedClaim === undefined &&
-      (actorRemoved || step.status === "pending")
-    )
-  ) {
+  if (retainedClaim !== undefined) {
+    if (retainedClaim !== step.startedAtToken) {
+      return { type: "stale" } as const;
+    }
+    return {
+      type: "settle",
+      token: retainedClaim,
+      reclaimAt: null,
+    } as const;
+  }
+  if (!expired && !actorRemoved && step.status !== "pending") {
     return { type: "stale" } as const;
   }
   return {
