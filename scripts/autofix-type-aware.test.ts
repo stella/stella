@@ -209,6 +209,11 @@ const projectCases = [
     invalid: false,
   },
   {
+    name: "included exempt fixtures are still type-checked",
+    layout: "nearest",
+    invalid: false,
+  },
+  {
     name: "sibling project covers root sources",
     layout: "sibling",
     invalid: false,
@@ -246,11 +251,14 @@ const projectCases = [
 ] as const;
 
 test.each(projectCases)("autofix $name", ({ name, layout, invalid }) => {
-  // An invalid lint-rule fixture no project covers rides along with the
-  // sources; autofix must skip it, as the coverage check exempts it.
-  const exemptFixture = name.startsWith("exempt")
-    ? ".oxlint-plugins/__fixtures__/bad.fixture.ts"
-    : undefined;
+  // An invalid lint-rule fixture rides along with the sources. When no
+  // project includes it, autofix skips it as the coverage check exempts it;
+  // when the covering project includes it, its errors still fail the run.
+  const includeFixture = name.startsWith("included exempt");
+  const exemptFixture =
+    name.startsWith("exempt") || includeFixture
+      ? ".oxlint-plugins/__fixtures__/bad.fixture.ts"
+      : undefined;
   const root = mkdtempSync(path.join(tmpdir(), "autofix-project-"));
   const repo = path.resolve(import.meta.dirname, "..");
   try {
@@ -318,7 +326,13 @@ process.exit(result.exitCode);
     );
     writeFileSync(path.join(root, second), "export const other = 2;");
     const compilerOptions = { strict: true, types: [], target: "ESNext" };
-    const config = { compilerOptions, files: [file, second] };
+    const config = {
+      compilerOptions,
+      files:
+        includeFixture && exemptFixture
+          ? [file, second, exemptFixture]
+          : [file, second],
+    };
     // The nearest project fails to compile on a file the targets do not need.
     writeFileSync(
       path.join(root, "broken.ts"),
@@ -378,13 +392,20 @@ process.exit(result.exitCode);
         process.execPath,
         "scripts/typecheck-coverage.ts",
         "--autofix",
-        file,
-        second,
+        // A change that touches only an included fixture must still compile.
+        ...(includeFixture ? [] : [file, second]),
         ...(exemptFixture ? [exemptFixture] : []),
       ],
       { cwd: root, stdout: "pipe", stderr: "pipe" },
     );
     const output = result.stdout.toString() + result.stderr.toString();
+    if (includeFixture) {
+      expect(result.exitCode).not.toBe(0);
+      expect(output).toContain("TS2322");
+      expect(output).toContain("bad.fixture.ts");
+      expect(output).not.toContain("Autofix types skipped");
+      return;
+    }
     if (exemptFixture) {
       expect(output).toContain(
         `Autofix types skipped (exempt fixture): ${exemptFixture}`,
@@ -420,6 +441,11 @@ process.exit(result.exitCode);
       }
       if (layout !== "nearest") {
         expectedProjects.push(project);
+      }
+      // An uncovered fixture is proven uncovered by compiling every
+      // candidate once before it is skipped.
+      if (exemptFixture) {
+        expectedProjects.push("tsconfig.oxlint-plugins.json");
       }
       // The nested sibling is found before any root config is compiled.
       expect(checked).toEqual(

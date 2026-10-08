@@ -558,12 +558,6 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
     if (file === ".." || file.startsWith("../") || path.isAbsolute(file)) {
       panic(`Autofix source is outside the repository: ${rawFile}`);
     }
-    // Lint-rule fixtures are invalid on purpose and excluded from every
-    // project, exactly as the coverage check exempts them.
-    if (isExempt(file)) {
-      console.log(`Autofix types skipped (exempt fixture): ${file}`);
-      continue;
-    }
     const nearest = nearestOxcConfig({
       file,
       configExists: (config) => existsSync(path.join(REPO_ROOT, config)),
@@ -603,6 +597,13 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
         break;
       }
       directory = path.posix.dirname(directory);
+    }
+    // Lint-rule fixtures are invalid on purpose; the ones no project includes
+    // are skipped, as the coverage check exempts them. A fixture a project
+    // does include (a declaration file) is type-checked like any source.
+    if (coveringProject === undefined && isExempt(file)) {
+      console.log(`Autofix types skipped (exempt fixture): ${file}`);
+      continue;
     }
     if (coveringProject === undefined) {
       panic(
