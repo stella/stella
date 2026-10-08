@@ -3,13 +3,14 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   workspaces,
   entities,
   flowRuns,
   flowRunSteps,
   workObligations,
+  signals,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -22,6 +23,8 @@ export const AGGREGATE_LOCKS = {
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
   entity: { rank: 500, kind: "row" },
+  signal: { rank: 600, kind: "row" },
+  automatedFlowRunCap: { rank: 700, kind: "advisory" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
 } as const;
@@ -38,6 +41,8 @@ type AggregateIdentities = {
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
+  automatedFlowRunCap: SafeId<"flowDefinition">;
   contactCapacity: { organizationId: SafeId<"organization"> };
   personalCatalog: {
     organizationId: SafeId<"organization">;
@@ -49,6 +54,7 @@ type AggregateLockOptions = {
   [Name in AggregateName]: {
     aggregate: Name;
     id: AggregateIdentities[Name];
+    mode?: Name extends "workspace" ? "share" | "update" : never;
     tx: { execute: (statement: SQL) => PromiseLike<unknown> };
   };
 }[AggregateName];
@@ -202,6 +208,7 @@ export const withAggregateSavepoint = async <T>(
 
 const lockIdentity = (options: AggregateLockOptions): string => {
   switch (options.aggregate) {
+    case "automatedFlowRunCap":
     case "organization":
       return JSON.stringify([options.aggregate, options.id]);
     case "workspace":
@@ -209,6 +216,7 @@ const lockIdentity = (options: AggregateLockOptions): string => {
     case "currentStep":
     case "obligation":
     case "entity":
+    case "signal":
       return JSON.stringify([options.aggregate, options.id.id]);
     case "contactCapacity":
       return JSON.stringify([options.aggregate, options.id.organizationId]);
@@ -224,12 +232,17 @@ const lockIdentity = (options: AggregateLockOptions): string => {
   }
 };
 
+// Keep the legacy per-definition advisory key shared by every automated starter.
+const FLOW_RUN_CAP_LOCK_NAMESPACE = 0x0f_10_cc_a9;
+
 const lockStatement = (options: AggregateLockOptions) => {
   switch (options.aggregate) {
     case "organization":
       return sql`SELECT ${organization.id} FROM ${organization} WHERE ${organization.id} = ${options.id} FOR UPDATE`;
-    case "workspace":
-      return sql`SELECT ${workspaces.id} FROM ${workspaces} WHERE ${workspaces.id} = ${options.id.id} AND ${workspaces.organizationId} = ${options.id.organizationId} FOR UPDATE`;
+    case "workspace": {
+      const mode = options.mode === "share" ? sql`FOR SHARE` : sql`FOR UPDATE`;
+      return sql`SELECT ${workspaces.id} FROM ${workspaces} WHERE ${workspaces.id} = ${options.id.id} AND ${workspaces.organizationId} = ${options.id.organizationId} ${mode}`;
+    }
     case "run":
       return sql`SELECT ${flowRuns.id} FROM ${flowRuns} WHERE ${flowRuns.id} = ${options.id.id} AND ${flowRuns.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
     case "currentStep":
@@ -238,6 +251,10 @@ const lockStatement = (options: AggregateLockOptions) => {
       return sql`SELECT ${workObligations.entityId} FROM ${workObligations} WHERE ${workObligations.entityId} = ${options.id.id} AND ${workObligations.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
     case "entity":
       return sql`SELECT ${entities.id} FROM ${entities} WHERE ${entities.id} = ${options.id.id} AND ${entities.workspaceId} = ${options.id.workspaceId} FOR UPDATE`;
+    case "signal":
+      return sql`SELECT ${signals.id} FROM ${signals} WHERE ${signals.id} = ${options.id.id} AND ${signals.organizationId} = ${options.id.organizationId} FOR UPDATE`;
+    case "automatedFlowRunCap":
+      return sql`SELECT pg_advisory_xact_lock(${FLOW_RUN_CAP_LOCK_NAMESPACE}, hashtext(${options.id}))`;
     case "contactCapacity":
       return sql`SELECT pg_advisory_xact_lock(hashtext('contact_capacity'), hashtext(${options.id.organizationId}))`;
     case "personalCatalog":
@@ -269,3 +286,22 @@ export const withAggregateLock = async (
   completeAcquisition(history);
   return acquired ? { status: "locked" } : { status: "missing" };
 };
+
+type AutomatedFlowRunCapLockOptions = {
+  definitionId: SafeId<"flowDefinition">;
+  database: Pick<typeof rootDb, "transaction">;
+};
+
+/** Own the cap transaction so the decision and insert share its advisory fence. */
+export const withAutomatedFlowRunCapLock = async <T>(
+  { definitionId, database }: AutomatedFlowRunCapLockOptions,
+  run: (tx: Transaction) => Promise<T>,
+): Promise<T> =>
+  await database.transaction(async (tx) => {
+    await withAggregateLock({
+      aggregate: "automatedFlowRunCap",
+      id: definitionId,
+      tx,
+    });
+    return await run(tx);
+  });

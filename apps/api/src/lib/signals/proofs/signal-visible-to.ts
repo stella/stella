@@ -1,10 +1,9 @@
 import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { signals } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -70,17 +69,11 @@ export const withVisibleSignal = async <R, E>(
           );
         }
         // Lock only the signal table: the display joins include nullable sides.
-        await tx
-          .select({ id: signals.id })
-          .from(signals)
-          .where(
-            and(
-              eq(signals.id, checkedEntityId),
-              eq(signals.organizationId, organizationId),
-            ),
-          )
-          .for("update")
-          .limit(1);
+        await withAggregateLock({
+          aggregate: "signal",
+          id: { id: checkedEntityId, organizationId },
+          tx,
+        });
         const rows = await selectVisibleSignalInTransaction({
           tx,
           organizationId,

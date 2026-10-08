@@ -5,6 +5,7 @@ import { Temporal } from "@stll/time";
 import type { rootDb } from "@/api/db/root";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAutomatedFlowRunCapLock } from "@/api/lib/db/aggregate-lock";
 import { isAutomatedRunCapReached } from "@/api/lib/flows/flow-trigger-logic";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
@@ -26,13 +27,6 @@ import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
  * an RLS-scoped, single-workspace session could not see. The run's
  * `workspace_id` still comes from a server-validated trigger source.
  */
-
-/**
- * Namespace for the per-definition advisory lock. `pg_advisory_xact_lock` keys
- * are process-global, so a fixed first key isolates this rail from unrelated
- * advisory locks; the definition-id hash is the second key.
- */
-const FLOW_RUN_CAP_LOCK_NAMESPACE = 0x0f_10_cc_a9;
 
 const startOfUtcDay = (now: Date): Date =>
   new Date(
@@ -71,32 +65,28 @@ export const insertAutomatedFlowRunWithinCap = async (
     database,
   } = snapshotOperationInput(input);
   const cutoff = startOfUtcDay(now);
-  return await database.transaction(async (tx) => {
-    // Serialize concurrent automated starts for this definition. The xact lock
-    // releases on commit/rollback, after the prior holder's run row is visible,
-    // so the count below can never miss a committed sibling.
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(${FLOW_RUN_CAP_LOCK_NAMESPACE}, hashtext(${definitionId}))`,
-    );
+  return await withAutomatedFlowRunCapLock(
+    { definitionId, database },
+    async (tx) => {
+      const dailyRunCount = await tx.$count(
+        flowRuns,
+        and(
+          eq(flowRuns.definitionId, definitionId),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
+          gte(flowRuns.createdAt, cutoff),
+          sql`${flowRuns.triggerSource}->>'type' in ('schedule', 'file-upload')`,
+        ),
+      );
+      if (isAutomatedRunCapReached(dailyRunCount)) {
+        return { outcome: "capped", dailyRunCount };
+      }
 
-    const dailyRunCount = await tx.$count(
-      flowRuns,
-      and(
-        eq(flowRuns.definitionId, definitionId),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
-        gte(flowRuns.createdAt, cutoff),
-        sql`${flowRuns.triggerSource}->>'type' in ('schedule', 'file-upload')`,
-      ),
-    );
-    if (isAutomatedRunCapReached(dailyRunCount)) {
-      return { outcome: "capped", dailyRunCount };
-    }
-
-    await tx.insert(flowRuns).values(rows.run);
-    await tx.insert(flowRunSteps).values(rows.steps);
-    // A refusal rolls the inserted run back. A later commit failure may rarely
-    // over-count the operational throttle; reservations are never refunded.
-    await reservePeriod?.();
-    return { outcome: "started" };
-  });
+      await tx.insert(flowRuns).values(rows.run);
+      await tx.insert(flowRunSteps).values(rows.steps);
+      // A refusal rolls the inserted run back. A later commit failure may rarely
+      // over-count the operational throttle; reservations are never refunded.
+      await reservePeriod?.();
+      return { outcome: "started" };
+    },
+  );
 };
