@@ -35,27 +35,32 @@ export const checkBundledSanctionsMatcher = async (): Promise<void> => {
     ],
   } satisfies ParsedList;
   try {
-    for (const useCache of [false, true]) {
-      const response = await pool.run(
-        async (session) =>
-          await session.match({
+    // The public path: index the edition once, then screen it from the cache.
+    const response = await pool.run(async (session) => {
+      const indexed = await session.load({
+        source: "eu",
+        editionId: "smoke",
+        list,
+      });
+      return indexed === "indexed"
+        ? await session.match({
             source: "eu",
             editionId: "smoke",
-            list: useCache ? null : list,
+            list: null,
             query: { name: "Česká společnost", entityType: "organisation" },
             cutoff: DEFAULT_CUTOFF,
             limit: 1,
-          }),
+          })
+        : null;
+    });
+    if (
+      response.status !== "completed" ||
+      response.value?.status !== "screened" ||
+      response.value.result.possibleMatches.at(0)?.entry.sourceId !== "smoke"
+    ) {
+      panic(
+        `Sanctions smoke pool did not screen its edition: ${failures.join(",")}`,
       );
-      if (
-        response.status !== "completed" ||
-        response.value.status !== "screened" ||
-        response.value.result.possibleMatches.at(0)?.entry.sourceId !== "smoke"
-      ) {
-        panic(
-          `Sanctions smoke pool did not screen its edition: ${failures.join(",")}`,
-        );
-      }
     }
   } finally {
     await pool.close();

@@ -72,10 +72,6 @@
     "reason": "Existing describeCapabilityArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/capability-tools.ts::invokeCapabilityArgsSchema::minLength:1::1",
-    "reason": "Existing invokeCapabilityArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/capability-tools.ts::listCapabilitiesArgsSchema::minValue:1::1",
     "reason": "Existing listCapabilitiesArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -880,10 +876,6 @@
     "reason": "Existing PLAIN_TEXT_NODE_NAMES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/chat/chat-ui-tools.test.ts::<module>::domain:[\"delete_clause\",\"delete_contact\",\"delete_document\",\"delete_matter\",\"delete_time_entry\",\"manage_organization\",\"suggest_changes\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/chat/chat-user-actions.test.ts::<module>::domain:[\"idle\",\"pending\",\"failed\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -1256,7 +1248,7 @@
     "reason": "Existing INDIGOBOOK_MONTHS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/features/case-law/citation-format.ts::POLISH_GENITIVE_MONTHS::domain:[\"stycznia\",\"lutego\",\"marca\",\"kwietnia\",\"maja\",\"czerwca\",\"lipca\",\"sierpnia\",\"września\",\"października\",\"listopada\",\"grudnia\"]::1",
+    "id": "apps/web/src/features/case-law/citation-format.ts::POLISH_GENITIVE_MONTHS::domain:[\"stycznia\",\"lutego\",\"marca\",\"kwietnia\",\"maja\",\"czerwca\",\"lipca\",\"sierpnia\",\"wrze\u015bnia\",\"pa\u017adziernika\",\"listopada\",\"grudnia\"]::1",
     "reason": "Existing POLISH_GENITIVE_MONTHS domain; contract ownership pending migration."
   },
   {
@@ -1296,7 +1288,7 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"٠\",\"٢٬٠٤٨\"]::1",
+    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"\u0660\",\"\u0662\u066c\u0660\u0664\u0668\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
@@ -2116,11 +2108,11 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_HEADERS::domain:[\"Položka\",\"Rok\",\"Sazba\",\"Základ\",\"Koeficient\",\"Úrok\",\"Náklady\",\"Daň\",\"Celkem\",\"Měna\",\"Splatnost\",\"Poznámka\"]::1",
+    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_HEADERS::domain:[\"Polo\u017eka\",\"Rok\",\"Sazba\",\"Z\u00e1klad\",\"Koeficient\",\"\u00darok\",\"N\u00e1klady\",\"Da\u0148\",\"Celkem\",\"M\u011bna\",\"Splatnost\",\"Pozn\u00e1mka\"]::1",
     "reason": "Existing BENCH_TABLE_HEADERS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_ROW::domain:[\"Náhrada nemajetkové újmy\",\"2022\",\"14,25 %\",\"1 240 000\",\"1,35\",\"62 400\",\"18 150\",\"21 %\",\"1 341 700\",\"CZK\",\"30. 6. 2022\",\"§ 2958 odst. 1 písm. b)\"]::1",
+    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_ROW::domain:[\"N\u00e1hrada nemajetkov\u00e9 \u00fajmy\",\"2022\",\"14,25 %\",\"1 240 000\",\"1,35\",\"62 400\",\"18 150\",\"21 %\",\"1 341 700\",\"CZK\",\"30. 6. 2022\",\"\u00a7 2958 odst. 1 p\u00edsm. b)\"]::1",
     "reason": "Existing BENCH_TABLE_ROW domain; contract ownership pending migration."
   },
   {
@@ -2160,22 +2152,6 @@
     "reason": "Existing FLOW_EXAMPLE_KEYS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::ASK_CONTENT_TYPES::domain:[\"text\",\"date\",\"int\",\"single-select\"]::1",
-    "reason": "Existing ASK_CONTENT_TYPES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::CHECK_KINDS::domain:[\"presence\",\"constraint\"]::1",
-    "reason": "Existing CHECK_KINDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::EXPECTATIONS::domain:[\"required\",\"restricted\"]::1",
-    "reason": "Existing EXPECTATIONS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/knowledge/-components/position-editor.tsx::OPTION_COLORS::domain:[\"blue\",\"green\",\"amber\",\"violet\",\"red\",\"teal\",\"fuchsia\",\"sky\"]::1",
-    "reason": "Existing OPTION_COLORS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/knowledge/-components/skill-metadata-draft.logic.test.ts::FIELDS::domain:[\"command\",\"description\",\"enabled\",\"name\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -2212,7 +2188,7 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::PATH_SEGMENTS::domain:[\"buyer\",\"name\",\"fee_2\",\"sub-total\",\"díl\"]::1",
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::PATH_SEGMENTS::domain:[\"buyer\",\"name\",\"fee_2\",\"sub-total\",\"d\u00edl\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
