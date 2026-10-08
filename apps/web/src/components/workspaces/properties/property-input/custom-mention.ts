@@ -19,7 +19,7 @@ export type MentionOption = {
   label: string;
 };
 
-export const CustomMention = MentionExtension.extend({
+const CustomMention = MentionExtension.extend({
   parseHTML() {
     return [
       {

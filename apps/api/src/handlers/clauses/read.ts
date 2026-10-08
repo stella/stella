@@ -68,7 +68,7 @@ type ListClausesProps = {
  *  terms — `non-compete` → `non:* & compete:*`, matching the FTS lexemes — rather
  *  than one mashed-together token; the separators are also `tsquery` operators
  *  that would otherwise throw. */
-export const toClausePrefixTsQuery = (raw: string): string =>
+const toClausePrefixTsQuery = (raw: string): string =>
   raw
     .split(/[^\p{L}\p{N}]+/u)
     .filter((term) => term.length > 0)

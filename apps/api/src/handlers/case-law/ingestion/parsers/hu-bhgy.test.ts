@@ -23,8 +23,8 @@ import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
 import {
   huDecisionDateFrom,
   huDecisionTypeFrom,

@@ -40,6 +40,8 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  // The run is queued here; its worker takes a background slot.
+  actionAdmission: { type: "handler", actionKind: "list-verification.start" },
   description:
     "Start checking one document (DOCX, PDF, or a file with a PDF " +
     "rendition) against the facts of one list. Every claim the document " +

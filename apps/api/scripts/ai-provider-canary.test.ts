@@ -16,6 +16,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
@@ -142,6 +143,7 @@ const generateProbeTextFinishing = async (finish: ProbeFinish) => {
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
     maxOutputTokens: 16,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Reply with exactly OK.",
     resolveTextModel: () => model,

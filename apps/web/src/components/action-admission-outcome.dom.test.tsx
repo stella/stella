@@ -5,6 +5,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { sleep } from "@stll/concurrency/sleep";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
@@ -27,9 +28,7 @@ afterEach(cleanup);
 afterAll(async () => {
   cleanup();
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
   await GlobalRegistrator.unregister();
 });

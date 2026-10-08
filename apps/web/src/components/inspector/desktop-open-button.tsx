@@ -1,5 +1,6 @@
 import { Button } from "@stll/ui/button";
 import { LaptopIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -60,6 +61,7 @@ export const DesktopOpenButton = ({
   return (
     <>
       <Button
+        aria-busy={isOpening || undefined}
         aria-label={label}
         className={cn(
           attentionSequence !== null &&
@@ -84,7 +86,11 @@ export const DesktopOpenButton = ({
         tooltip={label}
         variant="ghost"
       >
-        <LaptopIcon className={cn("size-3.5", isOpening && "animate-pulse")} />
+        {isOpening ? (
+          <Loader className="size-3.5" size="sm" variant="decorative" />
+        ) : (
+          <LaptopIcon className="size-3.5" />
+        )}
       </Button>
       <DesktopRequiredDialog {...gate.requiredDialog} />
     </>

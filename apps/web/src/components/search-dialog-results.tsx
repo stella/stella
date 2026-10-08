@@ -12,12 +12,12 @@ import {
   FileTextIcon,
   HistoryIcon,
   LandmarkIcon,
-  LoaderIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
   AiActionIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
@@ -41,6 +41,7 @@ import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type { RecentFile, RecentSearch } from "@/lib/search-recents";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SearchSummaryData = NonNullable<
@@ -151,7 +152,7 @@ export const SearchSummaryItem = ({
       >
         <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
           {isPending ? (
-            <LoaderIcon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <AiActionIcon className="size-3.5" />
           )}
@@ -187,6 +188,7 @@ export const SearchSummaryItem = ({
       </div>
       <div className="border-border/70 mt-2 border-t pt-2">
         <Button
+          aria-busy={isOpeningChat || undefined}
           className="h-auto gap-2 px-1.5 py-1"
           disabled={isOpeningChat}
           onClick={onOpenChat}
@@ -194,7 +196,7 @@ export const SearchSummaryItem = ({
           variant="ghost"
         >
           {isOpeningChat ? (
-            <LoaderIcon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <MessageSquareIcon className="size-3.5" />
           )}
@@ -445,10 +447,13 @@ export const SearchResultItem = ({
 export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
   // Recents store identifiers, not thumbnail availability. Observe metadata
   // already loaded by the file view without fetching every recent on open.
-  const { data: entity } = useQuery({
+  const entityQuery = useQuery({
     ...entityOptions(file.workspaceId, file.entityId),
     enabled: false,
   });
+  const entityView = useQueryView(entityQuery);
+  useQueryViewError(entityView);
+  const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({
         fields: entity.fields,

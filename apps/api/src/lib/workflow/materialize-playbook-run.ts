@@ -159,7 +159,7 @@ export const resolveDocTypeClassifier = async (
 // its classified type matches. Returns null (ungated, legacy behavior) when the
 // scope's type slug is unknown for the org or the workspace has no matching
 // single-select AI classifier.
-export const resolveDocTypeGate = async ({
+const resolveDocTypeGate = async ({
   tx,
   workspaceId,
   organizationId,

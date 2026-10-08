@@ -1,9 +1,5 @@
 import { type ReactNode, useRef, useState } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
@@ -49,6 +45,7 @@ import {
   stageMatterFolder,
 } from "@/components/matter-target-picker.logic";
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -56,7 +53,12 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   useCreateEntities,
   useMoveEntity,
@@ -436,7 +438,10 @@ export const MatterTargetPicker = ({
   const t = useTranslations();
   const [search, setSearch] = useState("");
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data } = useQuery(workspacesOptions(activeOrganizationId));
+  const dataQuery = useQuery(workspacesOptions(activeOrganizationId));
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   // The endpoint returns matters ordered by most recent activity; keep that
   // order so the matter the user just touched is on top.
@@ -469,6 +474,7 @@ export const MatterTargetPicker = ({
 
   return (
     <div className="space-y-4">
+      <QueryViewFeedback view={dataView} />
       <div className="space-y-2">
         <Label>{t("workspaces.copyToMatter.targetMatter")}</Label>
         <Input
@@ -485,6 +491,9 @@ export const MatterTargetPicker = ({
         >
           <div className="p-1">
             {(() => {
+              if (data === undefined) {
+                return null;
+              }
               if (matters.length === 0) {
                 return (
                   <p className="text-muted-foreground p-2 text-sm">

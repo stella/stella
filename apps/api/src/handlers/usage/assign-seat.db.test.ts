@@ -18,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -82,6 +83,7 @@ type AssignSeatCtx = Parameters<typeof assignSeat.handler>[0];
 type UnassignSeatCtx = Parameters<typeof unassignSeat.handler>[0];
 
 const contextOverridesFor = (userId: string) => ({
+  recordAuditEvent: auditRecorderDouble(),
   body: { userId },
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userAdmin },

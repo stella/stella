@@ -14,13 +14,15 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
   Inline,
   ParagraphRole,
   TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   buildValidationHtml,

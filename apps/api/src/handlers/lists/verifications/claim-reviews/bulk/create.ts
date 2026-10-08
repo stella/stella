@@ -5,12 +5,11 @@
  */
 
 import { Result, panic } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
   legalListClaimReviewEvents,
-  legalListClaims,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -24,6 +23,7 @@ import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contract";
 import {
   readClaimReviews,
+  readClaimsForBulkReview,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
 import {
@@ -88,26 +88,12 @@ const createBulkClaimReviews = createSafeHandler(
         if (run === undefined) {
           return { type: "not-found" } as const;
         }
-        // Id order is the lock order every caller shares, so two overlapping
-        // bulk accepts cannot deadlock.
-        const claims = await tx
-          .select({
-            id: legalListClaims.id,
-            state: legalListClaims.state,
-            refs: legalListClaims.refs,
-            recordConflict: legalListClaims.recordConflict,
-          })
-          .from(legalListClaims)
-          .where(
-            and(
-              eq(legalListClaims.workspaceId, workspaceId),
-              eq(legalListClaims.runId, runId),
-              inArray(legalListClaims.id, claimIds),
-            ),
-          )
-          .orderBy(asc(legalListClaims.id))
-          .limit(claimIds.length)
-          .for("update");
+        const claims = await readClaimsForBulkReview({
+          tx,
+          workspaceId,
+          runId,
+          claimIds,
+        });
         if (claims.length !== claimIds.length) {
           return { type: "not-found" } as const;
         }

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import {
   followStorageOwner,
@@ -236,9 +238,7 @@ describe("a persisted store across owners", () => {
   };
 
   const settle = async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
   };
 
   test("a visitor's state gives way to the signed-in user's saved one, untouched", async () => {

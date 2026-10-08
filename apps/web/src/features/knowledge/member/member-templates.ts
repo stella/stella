@@ -14,6 +14,7 @@ import {
   templatesOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type TemplatePatch = Parameters<ReturnType<typeof api.templates>["post"]>[0];
 
@@ -33,9 +34,13 @@ const useTemplates = (
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery(templatesOptions(organizationId, selectedCategoryId));
-  const { data: categoriesData } = useQuery(
+  const categoriesDataQuery = useQuery(
     templateCategoriesOptions(organizationId),
   );
+  const categoriesDataView = useQueryView(categoriesDataQuery);
+  useQueryViewError(categoriesDataView);
+  const categoriesData =
+    categoriesDataView.type === "items" ? categoriesDataView.items : undefined;
 
   const templates = templatesData
     ? templatesData.pages.flatMap((page) => page.items)

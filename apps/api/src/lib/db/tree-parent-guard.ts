@@ -40,7 +40,7 @@ export const TREE_PARENT_GUARD_SQLSTATE = "23514";
 export const TREE_PARENT_CYCLE_ERROR_CODE = "tree_parent_cycle";
 
 /** Second key of the clause-category tree lock; the organization hash is the first. */
-export const CLAUSE_CATEGORY_TREE_LOCK_NAMESPACE = 0x43_4c_43_54;
+const CLAUSE_CATEGORY_TREE_LOCK_NAMESPACE = 0x43_4c_43_54;
 
 type TreeLock =
   /** The matter row `FOR UPDATE`, as `lockWorkspacesForEntityCap` takes it. */
