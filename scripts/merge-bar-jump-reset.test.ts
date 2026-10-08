@@ -95,22 +95,19 @@ describe("classifying merge queue cancellations", () => {
     ).toEqual({ type: "not-reset" });
   });
 
-  test.each([
-    "failure",
-    "timed_out",
-    "neutral",
-    "action_required",
-    null,
-  ])("refuses reset when any job concludes %s", (conclusion) => {
-    expect(
-      classify({
-        evidence: {
-          ...evidence,
-          jobs: [...evidence.jobs, { conclusion, completedAt: jump.at }],
-        },
-      }),
-    ).toEqual({ type: "not-reset" });
-  });
+  test.each(["failure", "timed_out", "neutral", "action_required", null])(
+    "refuses reset when any job concludes %s",
+    (conclusion) => {
+      expect(
+        classify({
+          evidence: {
+            ...evidence,
+            jobs: [...evidence.jobs, { conclusion, completedAt: jump.at }],
+          },
+        }),
+      ).toEqual({ type: "not-reset" });
+    },
+  );
 
   test.each([-1, JUMP_RESET_WINDOW_MS + 1])(
     "refuses cancellation outside the causal window: %i",
