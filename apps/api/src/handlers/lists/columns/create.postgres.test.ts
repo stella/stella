@@ -27,9 +27,12 @@ import {
 } from "@/api/tests/helpers/auth-provider-id";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import readList from "../get";
 import createColumn from "./create";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -67,10 +70,9 @@ if (!databaseUrl || !runPostgres) {
         email: `${userId}@example.test`,
         emailVerified: true,
       });
-      const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-      env.API_FEATURE_ACCESS_GRANTS = organizationFeatureGrants(
-        organizationId,
-        [LEGAL_LISTS_FEATURE_ID],
+      testState.setConfig(
+        "API_FEATURE_ACCESS_GRANTS",
+        organizationFeatureGrants(organizationId, [LEGAL_LISTS_FEATURE_ID]),
       );
       try {
         await db.insert(member).values({
@@ -267,7 +269,6 @@ if (!databaseUrl || !runPostgres) {
           ),
         ).toBe(LIMITS.legalListColumnsPerList + 1);
       } finally {
-        env.API_FEATURE_ACCESS_GRANTS = previousGrants;
         await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
         await db
           .delete(organization)

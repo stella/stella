@@ -11,6 +11,9 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const grant = { type: "organization", organizationId: "fixture-org" } as const;
 const memberIdentity = { email: "member@example.test", emailVerified: true };
@@ -39,82 +42,77 @@ const withDeployment = async (
   },
   fn: () => Promise<void>,
 ) => {
-  const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-  const previousFlag = env.FEATURE_LEGAL_LISTS;
   const restoreMode = setRuntimeModeForTesting({ mode: options.mode });
   try {
-    env.FEATURE_LEGAL_LISTS = options.legalLists;
-    env.API_FEATURE_ACCESS_GRANTS = Object.fromEntries(
-      options.featureIds.map((id) => [id, [grant]]),
+    testState.setConfig("FEATURE_LEGAL_LISTS", options.legalLists);
+    testState.setConfig(
+      "API_FEATURE_ACCESS_GRANTS",
+      Object.fromEntries(options.featureIds.map((id) => [id, [grant]])),
     );
     await fn();
   } finally {
     restoreMode();
-    env.FEATURE_LEGAL_LISTS = previousFlag;
-    env.API_FEATURE_ACCESS_GRANTS = previousGrants;
   }
 };
 
 test("authenticated feature scope derives the complete prerequisite grant decision", async () => {
-  const previous = env.API_FEATURE_ACCESS_GRANTS;
-  try {
-    for (const featureIds of [
-      [],
-      [LEGAL_LISTS_FEATURE_ID],
-      [LIST_VERIFICATION_FEATURE_ID],
-      [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
-    ]) {
-      env.API_FEATURE_ACCESS_GRANTS = Object.fromEntries(
-        featureIds.map((id) => [id, [grant]]),
-      );
-      let queries = 0;
-      const tx = {
-        execute: async () => {
-          queries += 1;
-          return [{ email: "member@example.test", emailVerified: true }];
-        },
-      };
-      const actual = await resolveScopedFeatureIds({
-        tx,
-        organizationId: grant.organizationId,
-        userId: "fixture-user",
-      });
-      const expected = featureIds.includes(LEGAL_LISTS_FEATURE_ID)
-        ? featureIds
-        : [];
-      expect(actual).toEqual(expected);
-      expect(queries).toBe(expected.length === 0 ? 0 : 1);
-    }
-    env.API_FEATURE_ACCESS_GRANTS = { [LEGAL_LISTS_FEATURE_ID]: [grant] };
-    for (const identity of [
-      [],
-      [{ email: "member@example.test", emailVerified: false }],
-    ]) {
-      expect(
-        await resolveScopedFeatureIds({
-          tx: { execute: async () => identity },
-          organizationId: grant.organizationId,
-          userId: "fixture-user",
-        }),
-      ).toEqual([]);
-    }
-    let serviceQueries = 0;
+  for (const featureIds of [
+    [],
+    [LEGAL_LISTS_FEATURE_ID],
+    [LIST_VERIFICATION_FEATURE_ID],
+    [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
+  ]) {
+    testState.setConfig(
+      "API_FEATURE_ACCESS_GRANTS",
+      Object.fromEntries(featureIds.map((id) => [id, [grant]])),
+    );
+    let queries = 0;
+    const tx = {
+      execute: async () => {
+        queries += 1;
+        return [{ email: "member@example.test", emailVerified: true }];
+      },
+    };
+    const actual = await resolveScopedFeatureIds({
+      tx,
+      organizationId: grant.organizationId,
+      userId: "fixture-user",
+    });
+    const expected = featureIds.includes(LEGAL_LISTS_FEATURE_ID)
+      ? featureIds
+      : [];
+    expect(actual).toEqual(expected);
+    expect(queries).toBe(expected.length === 0 ? 0 : 1);
+  }
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    [LEGAL_LISTS_FEATURE_ID]: [grant],
+  });
+  for (const identity of [
+    [],
+    [{ email: "member@example.test", emailVerified: false }],
+  ]) {
     expect(
       await resolveScopedFeatureIds({
-        tx: {
-          execute: async () => {
-            serviceQueries += 1;
-            return [];
-          },
-        },
+        tx: { execute: async () => identity },
         organizationId: grant.organizationId,
-        userId: null,
+        userId: "fixture-user",
       }),
     ).toEqual([]);
-    expect(serviceQueries).toBe(0);
-  } finally {
-    env.API_FEATURE_ACCESS_GRANTS = previous;
   }
+  let serviceQueries = 0;
+  expect(
+    await resolveScopedFeatureIds({
+      tx: {
+        execute: async () => {
+          serviceQueries += 1;
+          return [];
+        },
+      },
+      organizationId: grant.organizationId,
+      userId: null,
+    }),
+  ).toEqual([]);
+  expect(serviceQueries).toBe(0);
 });
 
 test("a disabled legal-lists deployment admits neither the feature nor its dependants", async () => {

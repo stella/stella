@@ -8,7 +8,7 @@
  */
 
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
@@ -40,6 +40,7 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -49,9 +50,10 @@ import type {
 
 type ReadListItemsCtx = Parameters<typeof readListItems.handler>[0];
 
+setDefaultTimeout(30_000);
+
 let testDb: TestDatabase;
-const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-const previousDeployment = env.FEATURE_LEGAL_LISTS;
+const testState = createTestState({ file: import.meta.path, config: env });
 const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
 const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
 const workspaceId = createSafeId<"workspace">();
@@ -64,176 +66,171 @@ const emailVersionId = createSafeId<"entityVersion">();
 const minutesDocumentId = createSafeId<"entity">();
 const minutesVersionId = createSafeId<"entityVersion">();
 
-beforeAll(
-  async () => {
-    env.FEATURE_LEGAL_LISTS = true;
-    env.API_FEATURE_ACCESS_GRANTS = {
-      "legal-lists": [{ type: "organization", organizationId }],
-    };
-    testDb = await getTestDb();
-    await testDb.transaction(async (tx: TestDatabaseTransaction) => {
-      await tx.execute(sql.raw("RESET ROLE"));
-      await tx.insert(organization).values({
-        id: organizationId,
-        name: "List items firm",
-        slug: `list-items-${Bun.randomUUIDv7()}`,
-        createdAt: new Date(),
-      });
-      await tx.insert(user).values({
-        id: userId,
-        name: "List Items User",
-        email: `${userId}@example.test`,
-        emailVerified: true,
-      });
-      await tx.insert(member).values({
-        id: Bun.randomUUIDv7(),
-        organizationId,
-        userId,
-        role: "owner",
-        createdAt: new Date(),
-      });
-      await tx.insert(workspaces).values({
-        id: workspaceId,
-        organizationId,
-        name: "List items matter",
-        reference: Bun.randomUUIDv7().slice(0, 8),
-      });
-      await tx.insert(legalLists).values({
-        id: listId,
+testState.beforeAll(async () => {
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "legal-lists": [{ type: "organization", organizationId }],
+  });
+  testDb = await getTestDb();
+  await testDb.transaction(async (tx: TestDatabaseTransaction) => {
+    await tx.execute(sql.raw("RESET ROLE"));
+    await tx.insert(organization).values({
+      id: organizationId,
+      name: "List items firm",
+      slug: `list-items-${Bun.randomUUIDv7()}`,
+      createdAt: new Date(),
+    });
+    await tx.insert(user).values({
+      id: userId,
+      name: "List Items User",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+    });
+    await tx.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId,
+      role: "owner",
+      createdAt: new Date(),
+    });
+    await tx.insert(workspaces).values({
+      id: workspaceId,
+      organizationId,
+      name: "List items matter",
+      reference: Bun.randomUUIDv7().slice(0, 8),
+    });
+    await tx.insert(legalLists).values({
+      id: listId,
+      workspaceId,
+      name: "Chronology",
+      status: "active",
+      createdBy: userId,
+    });
+
+    const facts = [
+      { id: undatedFactId, name: "Meeting at the warehouse", position: "a" },
+      { id: datedFactId, name: "Contract signed", position: "b" },
+      { id: bareFactId, name: "Invoice disputed", position: "c" },
+    ];
+    await tx.insert(entities).values(
+      facts.map((fact) => ({
+        id: fact.id,
         workspaceId,
-        name: "Chronology",
-        status: "active",
+        kind: "task" as const,
+        listItemType: LIST_ITEM_TYPE.FACT,
+        name: fact.name,
         createdBy: userId,
-      });
-
-      const facts = [
-        { id: undatedFactId, name: "Meeting at the warehouse", position: "a" },
-        { id: datedFactId, name: "Contract signed", position: "b" },
-        { id: bareFactId, name: "Invoice disputed", position: "c" },
-      ];
-      await tx.insert(entities).values(
-        facts.map((fact) => ({
-          id: fact.id,
-          workspaceId,
-          kind: "task" as const,
-          listItemType: LIST_ITEM_TYPE.FACT,
-          name: fact.name,
-          createdBy: userId,
-          agendaKind: "task" as const,
-          status: "open" as const,
-          priority: "none" as const,
-          agendaSource: "manual" as const,
-        })),
-      );
-      await tx.insert(legalListItems).values(
-        facts.map((fact) => ({
-          entityId: fact.id,
-          workspaceId,
-          listId,
-          position: fact.position,
-          addedBy: userId,
-        })),
-      );
-      await tx.insert(legalListFactDetails).values([
-        {
-          itemEntityId: undatedFactId,
-          workspaceId,
-          listId,
-          confidence: "medium",
-          scoring: "held",
-          interpretationNote: "Witnesses disagree on who attended.",
-        },
-        {
-          itemEntityId: datedFactId,
-          workspaceId,
-          listId,
-          occurredOn: "2021-07-01",
-          occurredOnPrecision: "month",
-          evidenceKind: "document",
-          medium: "email",
-          confidence: "high",
-        },
-      ]);
-
-      await tx.insert(entities).values([
-        {
-          id: emailDocumentId,
-          workspaceId,
-          kind: "document" as const,
-          name: "Email bundle.pdf",
-          createdBy: userId,
-        },
-        {
-          id: minutesDocumentId,
-          workspaceId,
-          kind: "document" as const,
-          name: "Board minutes.docx",
-          createdBy: userId,
-        },
-      ]);
-      await tx.insert(entityVersions).values([
-        { id: emailVersionId, workspaceId, entityId: emailDocumentId },
-        { id: minutesVersionId, workspaceId, entityId: minutesDocumentId },
-      ]);
-      const email = {
-        sourceEntityId: emailDocumentId,
-        sourceEntityVersionId: emailVersionId,
-      };
-      const minutes = {
-        sourceEntityId: minutesDocumentId,
-        sourceEntityVersionId: minutesVersionId,
-      };
-      const itemSource = (
-        itemEntityId: SafeId<"entity">,
-        createdAt: string,
-        values: Pick<
-          typeof legalListItemSources.$inferInsert,
-          | "sourceEntityId"
-          | "sourceEntityVersionId"
-          | "locator"
-          | "verificationStatus"
-        >,
-      ): typeof legalListItemSources.$inferInsert => ({
-        id: createSafeId<"legalListItemSource">(),
+        agendaKind: "task" as const,
+        status: "open" as const,
+        priority: "none" as const,
+        agendaSource: "manual" as const,
+      })),
+    );
+    await tx.insert(legalListItems).values(
+      facts.map((fact) => ({
+        entityId: fact.id,
         workspaceId,
         listId,
-        itemEntityId,
-        createdAt: new Date(createdAt),
+        position: fact.position,
+        addedBy: userId,
+      })),
+    );
+    await tx.insert(legalListFactDetails).values([
+      {
+        itemEntityId: undatedFactId,
+        workspaceId,
+        listId,
+        confidence: "medium",
+        scoring: "held",
+        interpretationNote: "Witnesses disagree on who attended.",
+      },
+      {
+        itemEntityId: datedFactId,
+        workspaceId,
+        listId,
+        occurredOn: "2021-07-01",
+        occurredOnPrecision: "month",
+        evidenceKind: "document",
+        medium: "email",
+        confidence: "high",
+      },
+    ]);
+
+    await tx.insert(entities).values([
+      {
+        id: emailDocumentId,
+        workspaceId,
+        kind: "document" as const,
+        name: "Email bundle.pdf",
         createdBy: userId,
-        ...values,
-      });
-      await tx.insert(legalListItemSources).values([
-        // The dated fact's oldest source was rejected, so the next one leads.
-        itemSource(datedFactId, "2026-01-01T00:00:00Z", {
-          ...minutes,
-          locator: { type: "docx-block", blockId: "p4" },
-          verificationStatus: "rejected",
-        }),
-        itemSource(datedFactId, "2026-01-03T00:00:00Z", {
-          ...minutes,
-          locator: { type: "document" },
-          verificationStatus: "verified",
-        }),
-        itemSource(datedFactId, "2026-01-02T00:00:00Z", {
-          ...email,
-          locator: { type: "pdf-page", pageNumber: 488 },
-          verificationStatus: "unverified",
-        }),
-        // A fact whose only source was rejected lists none.
-        itemSource(undatedFactId, "2026-01-01T00:00:00Z", {
-          ...email,
-          locator: { type: "pdf-page", pageNumber: 2 },
-          verificationStatus: "rejected",
-        }),
-      ]);
+      },
+      {
+        id: minutesDocumentId,
+        workspaceId,
+        kind: "document" as const,
+        name: "Board minutes.docx",
+        createdBy: userId,
+      },
+    ]);
+    await tx.insert(entityVersions).values([
+      { id: emailVersionId, workspaceId, entityId: emailDocumentId },
+      { id: minutesVersionId, workspaceId, entityId: minutesDocumentId },
+    ]);
+    const email = {
+      sourceEntityId: emailDocumentId,
+      sourceEntityVersionId: emailVersionId,
+    };
+    const minutes = {
+      sourceEntityId: minutesDocumentId,
+      sourceEntityVersionId: minutesVersionId,
+    };
+    const itemSource = (
+      itemEntityId: SafeId<"entity">,
+      createdAt: string,
+      values: Pick<
+        typeof legalListItemSources.$inferInsert,
+        | "sourceEntityId"
+        | "sourceEntityVersionId"
+        | "locator"
+        | "verificationStatus"
+      >,
+    ): typeof legalListItemSources.$inferInsert => ({
+      id: createSafeId<"legalListItemSource">(),
+      workspaceId,
+      listId,
+      itemEntityId,
+      createdAt: new Date(createdAt),
+      createdBy: userId,
+      ...values,
     });
-  },
-  { timeout: 30_000 },
-);
+    await tx.insert(legalListItemSources).values([
+      // The dated fact's oldest source was rejected, so the next one leads.
+      itemSource(datedFactId, "2026-01-01T00:00:00Z", {
+        ...minutes,
+        locator: { type: "docx-block", blockId: "p4" },
+        verificationStatus: "rejected",
+      }),
+      itemSource(datedFactId, "2026-01-03T00:00:00Z", {
+        ...minutes,
+        locator: { type: "document" },
+        verificationStatus: "verified",
+      }),
+      itemSource(datedFactId, "2026-01-02T00:00:00Z", {
+        ...email,
+        locator: { type: "pdf-page", pageNumber: 488 },
+        verificationStatus: "unverified",
+      }),
+      // A fact whose only source was rejected lists none.
+      itemSource(undatedFactId, "2026-01-01T00:00:00Z", {
+        ...email,
+        locator: { type: "pdf-page", pageNumber: 2 },
+        verificationStatus: "rejected",
+      }),
+    ]);
+  });
+});
 
 afterAll(async () => {
-  env.API_FEATURE_ACCESS_GRANTS = previousGrants;
-  env.FEATURE_LEGAL_LISTS = previousDeployment;
   await testDb
     .delete(organization)
     .where(inArray(organization.id, [organizationId]));
