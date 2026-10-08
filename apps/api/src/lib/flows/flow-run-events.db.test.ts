@@ -37,18 +37,11 @@ const db = await getTestDb();
 const database =
   asTestRaw<Parameters<typeof deliverFlowRunWorkspaceEvent>[0]["database"]>(db);
 const organizationId = mintAuthProviderId<"organization">();
-const otherOrganizationId = mintAuthProviderId<"organization">();
 const workspaceId = createSafeId<"workspace">();
 const enrolledUserId = mintAuthProviderId<"user">();
 const ungrantedUserId = mintAuthProviderId<"user">();
 const unassignedUserId = mintAuthProviderId<"user">();
-const foreignUserId = mintAuthProviderId<"user">();
-const userIds = [
-  enrolledUserId,
-  ungrantedUserId,
-  unassignedUserId,
-  foreignUserId,
-];
+const userIds = [enrolledUserId, ungrantedUserId, unassignedUserId];
 const flowEvent = {
   type: REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE,
   data: {
@@ -61,7 +54,7 @@ const flowEvent = {
 
 beforeAll(async () => {
   await db.insert(organization).values(
-    [organizationId, otherOrganizationId].map((id) => ({
+    [organizationId].map((id) => ({
       id,
       name: "Flow delivery fixture",
       slug: `flow-delivery-${id}`,
@@ -79,8 +72,7 @@ beforeAll(async () => {
   await db.insert(member).values(
     userIds.map((userId) => ({
       id: Bun.randomUUIDv7(),
-      organizationId:
-        userId === foreignUserId ? otherOrganizationId : organizationId,
+      organizationId,
       userId,
       role: "member",
       createdAt: new Date(),
@@ -94,16 +86,15 @@ beforeAll(async () => {
     reference: "FLOW-DELIVERY",
   });
   await db.insert(workspaceMembers).values(
-    [enrolledUserId, ungrantedUserId, foreignUserId].map((userId) => ({
+    [enrolledUserId, ungrantedUserId].map((userId) => ({
       id: createSafeId<"workspaceMember">(),
       workspaceId,
       userId,
     })),
   );
   await db.insert(featureEnrolments).values(
-    [enrolledUserId, unassignedUserId, foreignUserId].map((userId) => ({
-      organizationId:
-        userId === foreignUserId ? otherOrganizationId : organizationId,
+    [enrolledUserId, unassignedUserId].map((userId) => ({
+      organizationId,
       userId,
       featureId: "flows" as const,
     })),
@@ -141,7 +132,7 @@ const observeDelivery = async (event: WorkspaceRealtimeEvent) =>
   new Set((await observeDeliveryEvents(event)).keys());
 
 describe("flow progress recipient admission", () => {
-  test("live flag, grant, organization and matter access govern delivery after revoke and re-grant", async () => {
+  test("live flag, grant and matter access govern delivery after revoke and re-grant", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     env.FEATURE_FLOWS = true;

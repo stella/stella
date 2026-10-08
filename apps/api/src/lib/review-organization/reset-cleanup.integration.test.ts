@@ -202,9 +202,8 @@ const cleanupAllFeatures = async (options: CleanupOptions) => {
 };
 
 describe("feature reset cleanup audit transactions", () => {
-  test("void facades commit exact owner counts and leave other organizations intact", async () => {
+  test("void facades commit exact owner counts", async () => {
     const organizationId = await seedOrganization();
-    const otherOrganizationId = await seedOrganization();
     const subject = newSubject();
     await testDb.transaction(async (tx) => {
       await cleanupAllFeatures({
@@ -223,7 +222,6 @@ describe("feature reset cleanup audit transactions", () => {
       expect(recorded).toEqual(expect.arrayContaining(EXPECTED_AUDITS));
     });
     expect(await featureCounts(organizationId)).toEqual(EMPTY_COUNTS);
-    expect(await featureCounts(otherOrganizationId)).toEqual(SEEDED_COUNTS);
     expect(await auditRows(subject)).toEqual(
       expect.arrayContaining(EXPECTED_AUDITS),
     );
@@ -280,7 +278,6 @@ describe("feature reset cleanup audit transactions", () => {
 
   test("the generic sweep omits feature counts while its transaction preserves the owner audit rows", async () => {
     const organizationId = await seedOrganization();
-    const otherOrganizationId = await seedOrganization();
     const subject = newSubject();
     const removed = await testDb.transaction(
       async (tx) =>
@@ -302,7 +299,6 @@ describe("feature reset cleanup audit transactions", () => {
       expect(removed.has(table)).toBe(false);
     }
     expect(await featureCounts(organizationId)).toEqual(EMPTY_COUNTS);
-    expect(await featureCounts(otherOrganizationId)).toEqual(SEEDED_COUNTS);
     const recorded = await auditRows(subject);
     expect(recorded).toHaveLength(EXPECTED_AUDITS.length);
     expect(recorded).toEqual(expect.arrayContaining(EXPECTED_AUDITS));

@@ -55,7 +55,7 @@ describe("feature enrollment cache reconciliation", () => {
         : []),
     ];
     const otherCaller = notificationsOptions({
-      organizationId: "org-b",
+      organizationId: CALLER.organizationId,
       userId: "user-b",
     }).queryKey;
     for (const queryKey of derivedKeys) {

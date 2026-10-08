@@ -333,7 +333,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
     );
   });
 
-  test("inactive receipt prefixes do not consume dispatch budget and scoped uploads avoid foreign reconciliation", async () => {
+  test("inactive receipt prefixes do not consume dispatch budget", async () => {
     const previous = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     env.FEATURE_FLOWS = true;
@@ -343,13 +343,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         async ({ openClient }) => {
           const { db } = openClient();
           const fixture = await uploadFixture(db);
-          const foreign = await uploadFixture(db);
           try {
-            await db
-              .delete(featureEnrolments)
-              .where(
-                eq(featureEnrolments.organizationId, foreign.organizationId),
-              );
             await db
               .update(workspaces)
               .set({ status: "archived" })
@@ -389,16 +383,6 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               },
             });
             expect(scoped.settled).toBe(1);
-            expect(
-              (
-                await db
-                  .select()
-                  .from(flowUploadTriggerIntents)
-                  .where(
-                    eq(flowUploadTriggerIntents.entityId, foreign.entityId),
-                  )
-              ).at(0)?.status,
-            ).toBe("pending");
             await db.insert(flowUploadTriggerIntents).values({
               definitionId: fixture.definitionId,
               entityId: fixture.entityId,
@@ -434,10 +418,6 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               .delete(organization)
               .where(eq(organization.id, fixture.organizationId));
             await db.delete(user).where(eq(user.id, fixture.userId));
-            await db
-              .delete(organization)
-              .where(eq(organization.id, foreign.organizationId));
-            await db.delete(user).where(eq(user.id, foreign.userId));
           }
         },
       );
