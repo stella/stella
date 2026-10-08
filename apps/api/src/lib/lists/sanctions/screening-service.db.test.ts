@@ -33,6 +33,8 @@ import type { SanctionsActiveEdition } from "@/api/lib/lists/sanctions/screening
 import {
   SANCTIONS_MATCH_LIMIT,
   screenSanctionsSubject,
+  signedInScreening,
+  unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import type { SanctionsListOutcome } from "@/api/lib/lists/sanctions/screening-service";
 import {
@@ -1680,3 +1682,27 @@ test.each(Object.values(boundaryFaults))(
     }
   },
 );
+
+test("signed-in screenings pass through every reason but warming, which is a defect", () => {
+  for (const reason of [
+    "not-loaded",
+    "load-failed",
+    "company-not-found",
+  ] as const) {
+    const screening = unavailableSanctionsScreening({
+      reason,
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+    });
+    expect(signedInScreening(screening)).toEqual(screening);
+  }
+  expect(() =>
+    signedInScreening(
+      unavailableSanctionsScreening({
+        reason: "warming",
+        practiceJurisdictions: [],
+        now: FRESH_NOW,
+      }),
+    ),
+  ).toThrow("A signed-in sanctions screening reported a warming list");
+});
