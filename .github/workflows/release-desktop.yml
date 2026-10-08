@@ -296,7 +296,7 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        shell: pwsh
+        shell: bash
         run: bun ci --ignore-scripts
         env:
           # Signing-key secrets are loaded into later steps in this job.
@@ -425,7 +425,7 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.os == 'windows'
-        shell: pwsh
+        shell: bash
         working-directory: apps/desktop
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
