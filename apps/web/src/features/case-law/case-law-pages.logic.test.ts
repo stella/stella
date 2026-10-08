@@ -147,6 +147,31 @@ describe("an empty numbered jump", () => {
     expect(await caseLawLandingPage({ ...search.landing, wanted: 8 })).toBe(3);
   });
 
+  test("an entirely filtered page in the middle of the results bounds nothing", async () => {
+    // Four pages of text results; every row of page 3 is a pinned decision,
+    // so page 3 is empty while the search reports more after it. The
+    // understated estimate steers the probe through page 3.
+    const search = searchOver({
+      dropped: { page: 3, rows: PAGE_SIZE },
+      realResults: 4 * PAGE_SIZE,
+      total: estimated(60),
+    });
+
+    expect(await caseLawLandingPage({ ...search.landing, wanted: 8 })).toBe(4);
+    expect(search.reads).toContain(3);
+  });
+
+  test("a jump to an entirely filtered page with results after it stays there", async () => {
+    const search = searchOver({
+      dropped: { page: 3, rows: PAGE_SIZE },
+      realResults: 4 * PAGE_SIZE,
+      total: estimated(60),
+    });
+
+    expect(await caseLawLandingPage({ ...search.landing, wanted: 3 })).toBe(3);
+    expect(search.reads).toEqual([3]);
+  });
+
   test("a page with rows is kept after one read", async () => {
     const search = searchOver({ realResults: 120, total: estimated(1000) });
 
@@ -229,13 +254,18 @@ describe("a page as evidence of where the results end", () => {
     // Short, yet the search reports more: not the last page.
     expect(
       caseLawPageEvidence({ decisions: [null], hasMore: true, reach: PLACED }),
-    ).toEqual({ type: "rows", rest: "more" });
+    ).toEqual({ type: "continues" });
+    // Empty, yet the search reports more (every row was a pinned decision):
+    // no bound on the results at all.
+    expect(
+      caseLawPageEvidence({ decisions: [], hasMore: true, reach: PLACED }),
+    ).toEqual({ type: "continues" });
     expect(
       caseLawPageEvidence({ decisions: [null], hasMore: false, reach: PLACED }),
-    ).toEqual({ type: "rows", rest: "end" });
+    ).toEqual({ type: "last" });
     expect(
       caseLawPageEvidence({ decisions: [], hasMore: false, reach: PLACED }),
-    ).toEqual({ type: "empty" });
+    ).toEqual({ type: "past_end" });
     expect(
       caseLawPageEvidence({
         decisions: [],

@@ -77,17 +77,20 @@ export const caseLawPageBeforeEnd = ({
 
 /**
  * What reading one page proved about where the results end. Only the page's
- * own end signal decides: its row count never does, because a page can be
- * short without being the last (decisions a reference pins are dropped from
- * every text page they would have appeared on).
+ * own end signal decides; neither its row count nor its being empty does,
+ * because decisions a reference pins are dropped from every text page they
+ * would have appeared on, so a page can be short, or even empty, with
+ * results after it. Only `past_end` bounds the results from above.
  */
 export type CaseLawPageEvidence =
   /** The read failed, or the search could not place the page: no proof. */
   | { type: "unknown" }
-  /** The page holds nothing: the results end before it. */
-  | { type: "empty" }
-  /** The page holds rows; `rest` says whether the search reported more. */
-  | { type: "rows"; rest: "more" | "end" };
+  /** The search reports results after the page, whatever the page holds. */
+  | { type: "continues" }
+  /** The page holds rows and the search reports nothing after them. */
+  | { type: "last" }
+  /** The page holds nothing and the search reports nothing after it. */
+  | { type: "past_end" };
 
 type CaseLawLandingPageInput = {
   /** The page a link or a pager button named. */
@@ -100,18 +103,18 @@ type CaseLawLandingPageInput = {
 };
 
 /**
- * The page a navigation lands on: the page it named when that page holds
- * rows, otherwise the deepest page before it that does.
+ * The page a navigation lands on: the page it named unless that page lies
+ * past the end of the results, otherwise the last page before it.
  *
  * The count says where to look first, but an estimate can overstate or
  * understate the results and a listing may not be counted at all, so the
- * last page with rows is searched for between the deepest page known to hold
- * rows (the first, until a read says otherwise) and the shallowest page known
- * to be empty. A page whose answer reports no more results is the last one,
- * so the search stops there. Reads are sequential by nature, each deciding
- * the next, and number at most two plus the halvings between the first page
- * and the page named, which the depth bound caps. A read that proves nothing
- * keeps the page the navigation named.
+ * last page is searched for between the deepest page known to lie before the
+ * end (the first, until a read says otherwise) and the shallowest page known
+ * to lie past it. A page whose answer reports no more results after its rows
+ * is the last one, so the search stops there. Reads are sequential by
+ * nature, each deciding the next, and number at most two plus the halvings
+ * between the first page and the page named, which the depth bound caps. A
+ * read that proves nothing keeps the page the navigation named.
  */
 export const caseLawLandingPage = async ({
   evidenceOn,
@@ -122,41 +125,40 @@ export const caseLawLandingPage = async ({
   if (wanted <= 1) {
     return 1;
   }
-  if ((await evidenceOn(wanted)).type !== "empty") {
+  if ((await evidenceOn(wanted)).type !== "past_end") {
     return wanted;
   }
-  /** Deepest page known to hold rows; the first stands in until one is read. */
-  let holding = 1;
-  /** Shallowest page known to be empty. */
-  let empty = wanted;
+  /** Deepest page known to lie before the end of the results. */
+  let before = 1;
+  /** Shallowest page known to lie past the end. */
+  let pastEnd = wanted;
   const suggested = caseLawPageBeforeEnd({
     emptyPage: wanted,
     pageSize,
     total,
   });
   let probe =
-    suggested > holding ? suggested : Math.floor((holding + empty) / 2);
-  while (probe > holding && probe < empty) {
+    suggested > before ? suggested : Math.floor((before + pastEnd) / 2);
+  while (probe > before && probe < pastEnd) {
     const evidence = await evidenceOn(probe);
     switch (evidence.type) {
       case "unknown":
         return wanted;
-      case "empty":
-        empty = probe;
+      case "past_end":
+        pastEnd = probe;
         break;
-      case "rows":
-        if (evidence.rest === "end") {
-          return probe;
-        }
-        holding = probe;
+      case "last":
+        return probe;
+      case "continues":
+        before = probe;
         break;
       default:
         evidence satisfies never;
         return panic("Unhandled page evidence");
     }
-    probe = Math.floor((holding + empty) / 2);
+    probe = Math.floor((before + pastEnd) / 2);
   }
-  return holding;
+  return before;
 };
 
 /** What a page's own answer says about the results around it. */
@@ -169,7 +171,9 @@ type CaseLawPageAnswer = {
 /**
  * What a page's answer proves about where the results end: nothing for a
  * page the search could not place, whose rows (however few) prove nothing;
- * otherwise empty, or rows with the search's own word on whether more follow.
+ * otherwise the search's own word on whether more follow, with the page's
+ * rows deciding only whether a page with nothing after it is the last page
+ * or past the end.
  */
 export const caseLawPageEvidence = (
   page: CaseLawPageAnswer & { decisions: readonly unknown[] },
@@ -177,10 +181,10 @@ export const caseLawPageEvidence = (
   if (page.reach === SEARCH_PAGE_REACH.SCAN_BUDGET) {
     return { type: "unknown" };
   }
-  if (page.decisions.length === 0) {
-    return { type: "empty" };
+  if (page.hasMore) {
+    return { type: "continues" };
   }
-  return { type: "rows", rest: page.hasMore ? "more" : "end" };
+  return page.decisions.length === 0 ? { type: "past_end" } : { type: "last" };
 };
 
 type CaseLawPageRestInput = {
