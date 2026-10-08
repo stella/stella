@@ -2385,6 +2385,8 @@
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
       "thirdPartyBoundaryRefusal": "A solicitação tentou usar conteúdo fora do contexto permitido do espaço de trabalho.",
       "usageLimitExceeded": "Limite de uso atingido.",
+      "verificationActiveLimitReached": "Sua organização atingiu o limite de verificações simultâneas. Aguarde a conclusão de uma verificação e tente novamente.",
+      "verificationDailyLimitReached": "Sua organização atingiu o limite diário de verificações. Tente novamente após a meia-noite (Europe/Prague).",
       "versionConflict": "Outra pessoa alterou isto enquanto você editava. Recarregue para obter a versão atual."
     },
     "failedToAcceptInvitation": "Falha ao aceitar o convite",

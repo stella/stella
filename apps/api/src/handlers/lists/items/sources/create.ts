@@ -40,8 +40,7 @@ const config = {
     "Attach a source to one list item: the document version it comes from " +
     "plus a locator (the whole document, a DOCX block, or a PDF page) and an " +
     "optional quote. The source must be a live document version in this " +
-    "matter. A new source starts unverified; change that with " +
-    "lists.items.sources.verification.update.",
+    "matter.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: legalListRealtimeUpdates,
