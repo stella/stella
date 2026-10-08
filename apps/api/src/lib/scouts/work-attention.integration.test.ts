@@ -13,9 +13,11 @@ import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 import { DAY_IN_MS, parseTimeZoneId } from "@stll/time";
 
+import { user } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   entities,
+  featureEnrolments,
   organizationSettings,
   scoutRuns,
   signals,
@@ -58,6 +60,7 @@ type Tenant = "A" | "B";
 type SeedWork = {
   label: string;
   tenant: Tenant;
+  recipient?: { workspaceId: SafeId<"workspace">; userId: SafeId<"user"> };
   status: WorkObligationStatus;
   hardDeadlineDate: string | null;
   /** Days before `NOW` the row itself was created. */
@@ -144,7 +147,7 @@ const entityIdOf = (label: string) =>
 
 const seedWork = async (work: SeedWork) => {
   const entityId = createSafeId<"entity">();
-  const { workspaceId, userId } = tenantScope(work.tenant);
+  const { workspaceId, userId } = work.recipient ?? tenantScope(work.tenant);
   seededEntityIds.push(entityId);
   seeded.set(work.label, entityId);
   const acknowledged = work.status === WORK_OBLIGATION_STATUS.ACTIVE;
@@ -259,6 +262,14 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(inArray(user.id, [ids.userA1, ids.userB1]));
+  await testDb.insert(featureEnrolments).values([
+    { featureId: "signals", organizationId: ids.orgA, userId: ids.userA1 },
+    { featureId: "signals", organizationId: ids.orgB, userId: ids.userB1 },
+  ]);
   for (const work of SEED) {
     await seedWork(work);
   }
@@ -266,6 +277,18 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    await testDb
+      .delete(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.featureId, "signals"),
+          inArray(featureEnrolments.organizationId, [ids.orgA, ids.orgB]),
+        ),
+      );
+    await testDb
+      .update(user)
+      .set({ emailVerified: false })
+      .where(inArray(user.id, [ids.userA1, ids.userB1]));
     await testDb
       .delete(signals)
       .where(eq(signals.scoutKey, SCOUT_KEY.WORK_ATTENTION));
@@ -548,6 +571,159 @@ describe("work attention scout", () => {
         .update(organizationSettings)
         .set({ timeZone: null })
         .where(eq(organizationSettings.organizationId, ids.orgA));
+    }
+  });
+  test("does not emit for an ungranted owner even when another member is enrolled", async () => {
+    const label = "ungranted owner with enrolled peer";
+    await seedWork({
+      label,
+      tenant: "A",
+      status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      hardDeadlineDate: null,
+      createdDaysAgo: 20,
+      assignedDaysAgo: 10,
+    });
+    await testDb
+      .update(user)
+      .set({ emailVerified: true })
+      .where(eq(user.id, ids.userA2));
+    await testDb.insert(featureEnrolments).values({
+      featureId: "signals",
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    });
+    await testDb
+      .delete(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.organizationId, ids.orgA),
+          eq(featureEnrolments.userId, ids.userA1),
+          eq(featureEnrolments.featureId, "signals"),
+        ),
+      );
+    try {
+      await runWorkAttentionScout({
+        cursor: null,
+        now: NOW,
+        dependencies: dependencies(),
+      });
+      expect(await signalsFor(label)).toEqual([]);
+    } finally {
+      await testDb.insert(featureEnrolments).values({
+        featureId: "signals",
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      });
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.organizationId, ids.orgA),
+            eq(featureEnrolments.userId, ids.userA2),
+            eq(featureEnrolments.featureId, "signals"),
+          ),
+        );
+      await testDb
+        .update(user)
+        .set({ emailVerified: false })
+        .where(eq(user.id, ids.userA2));
+    }
+  });
+
+  test("each enrolled recipient emits through their own RLS scope in the same organization", async () => {
+    await testDb
+      .update(user)
+      .set({ emailVerified: true })
+      .where(eq(user.id, ids.userA2));
+    await testDb.insert(featureEnrolments).values({
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+      featureId: "signals",
+    });
+    const labels = [
+      "first enrolled recipient",
+      "second enrolled recipient",
+    ] as const;
+    await seedWork({
+      label: labels[0],
+      tenant: "A",
+      status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      hardDeadlineDate: null,
+      createdDaysAgo: 20,
+      assignedDaysAgo: 10,
+    });
+    await seedWork({
+      label: labels[1],
+      tenant: "A",
+      status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      hardDeadlineDate: null,
+      createdDaysAgo: 20,
+      assignedDaysAgo: 10,
+      recipient: { workspaceId: ids.wsA2, userId: ids.userA2 },
+    });
+    try {
+      const outcome = await runWorkAttentionScout({
+        cursor: null,
+        now: NOW,
+        dependencies: dependencies(),
+      });
+      for (const label of labels) {
+        expect(await signalsFor(label)).toHaveLength(1);
+      }
+      expect(outcome.organizations).toBe(2);
+    } finally {
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          and(
+            eq(featureEnrolments.organizationId, ids.orgA),
+            eq(featureEnrolments.userId, ids.userA2),
+            eq(featureEnrolments.featureId, "signals"),
+          ),
+        );
+      await testDb
+        .update(user)
+        .set({ emailVerified: false })
+        .where(eq(user.id, ids.userA2));
+    }
+  });
+
+  test("rechecks a recipient opt-out before emission", async () => {
+    const label = "recipient opted out before emission";
+    await seedWork({
+      label,
+      tenant: "A",
+      status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      hardDeadlineDate: null,
+      createdDaysAgo: 20,
+      assignedDaysAgo: 10,
+    });
+    try {
+      await runWorkAttentionScout({
+        cursor: null,
+        now: NOW,
+        dependencies: dependenciesMutatingBeforeEmit(async () => {
+          await testDb
+            .delete(featureEnrolments)
+            .where(
+              and(
+                eq(featureEnrolments.organizationId, ids.orgA),
+                eq(featureEnrolments.userId, ids.userA1),
+                eq(featureEnrolments.featureId, "signals"),
+              ),
+            );
+        }),
+      });
+      expect(await signalsFor(label)).toEqual([]);
+    } finally {
+      await testDb
+        .insert(featureEnrolments)
+        .values({
+          featureId: "signals",
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        })
+        .onConflictDoNothing();
     }
   });
 });

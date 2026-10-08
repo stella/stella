@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
@@ -8,14 +8,12 @@ import {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
-import { member as organizationMembers } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
   extractedContent,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
@@ -24,9 +22,14 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  findSignalsBackgroundActor,
+  isBackgroundFeatureEnabled,
+} from "@/api/lib/feature-access/background";
+import { logger } from "@/api/lib/observability/logger";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import {
   capText,
@@ -49,7 +52,7 @@ const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // A 2,000-token allowance truncated valid extractions before JSON could close.
 const DEADLINE_MAX_OUTPUT_TOKENS = 8192;
 const DEADLINE_SCOUT_ERROR_CODE = {
-  NO_ACTOR: "no_actor",
+  FEATURE_NOT_GRANTED: "feature_not_granted",
   OBSERVATION_FAILED: "observation_failed",
   SOURCE_SUPERSEDED: "source_superseded",
 } as const;
@@ -96,50 +99,6 @@ const claimRun = async (
     )
     .returning();
   return claimed.at(0) ?? null;
-};
-
-const resolveActorUserId = async (
-  db: DeadlineScoutDb,
-  run: ClaimedRun,
-): Promise<SafeId<"user"> | null> => {
-  const candidates = await db
-    .select({ userId: workspaceMembers.userId })
-    .from(workspaceMembers)
-    .innerJoin(
-      organizationMembers,
-      and(
-        eq(organizationMembers.organizationId, run.organizationId),
-        eq(organizationMembers.userId, workspaceMembers.userId),
-      ),
-    )
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, workspaceMembers.workspaceId),
-        eq(workspaces.organizationId, run.organizationId),
-      ),
-    )
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, run.entityId),
-        eq(entities.workspaceId, workspaces.id),
-      ),
-    )
-    .where(eq(workspaceMembers.workspaceId, run.workspaceId))
-    .orderBy(
-      sql`CASE
-        WHEN ${workspaceMembers.userId} = ${run.requestedBy} THEN 0
-        WHEN ${workspaceMembers.userId} = ${entities.createdBy} THEN 1
-        WHEN ${workspaceMembers.userId} = ${workspaces.leadUserId} THEN 2
-        ELSE 3
-      END`,
-      asc(workspaceMembers.createdAt),
-      asc(workspaceMembers.id),
-    )
-    .limit(1);
-  const actor = candidates.at(0);
-  return actor ? brandPersistedUserId(actor.userId) : null;
 };
 
 type ExtractDeadlinesOptions = {
@@ -361,8 +320,111 @@ export const skipDeadlineScan = async ({
   });
 };
 
+const admittedDeadlineScoutActor = async ({
+  db,
+  sourceRunId,
+}: RunDocumentDeadlineScoutArgs) => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    logger.info("scout.document_deadlines.skipped", {
+      sourceRunId,
+      reason: "deployment_disabled",
+    });
+    return null;
+  }
+  const sourceRun = (
+    await db
+      .select()
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, sourceRunId))
+      .limit(1)
+  ).at(0);
+  if (!sourceRun) {
+    return null;
+  }
+  const actorUserId = await findSignalsBackgroundActor({
+    tx: db,
+    organizationId: sourceRun.organizationId,
+    workspaceId: sourceRun.workspaceId,
+  });
+  if (!actorUserId) {
+    logger.info("scout.document_deadlines.skipped", {
+      sourceRunId,
+      reason: "no_granted_member",
+    });
+    return null;
+  }
+  return actorUserId;
+};
+
+type ValidateDeadlineSourceOptions = {
+  tx: Parameters<typeof isBackgroundFeatureEnabled>[0]["tx"];
+  run: ClaimedRun;
+  actorUserId: SafeId<"user">;
+};
+
+const validateDeadlineSource = async ({
+  tx,
+  run,
+  actorUserId,
+}: ValidateDeadlineSourceOptions) => {
+  if (
+    !(await isBackgroundFeatureEnabled({
+      tx,
+      organizationId: run.organizationId,
+      userId: actorUserId,
+      featureId: "signals",
+    }))
+  ) {
+    return "not-granted" as const;
+  }
+  const current = await tx
+    .select({ entityId: extractedContent.entityId })
+    .from(extractedContent)
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.id, extractedContent.entityId),
+        eq(entities.workspaceId, extractedContent.workspaceId),
+      ),
+    )
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, extractedContent.workspaceId),
+        eq(workspaces.organizationId, extractedContent.organizationId),
+      ),
+    )
+    .where(currentSourceWhere(run))
+    .limit(1);
+  return current.length === 1 ? ("current" as const) : ("superseded" as const);
+};
+
+type PauseDeadlineScoutOptions = {
+  db: DeadlineScoutDb;
+  run: ClaimedRun;
+};
+
+const pauseDeadlineScout = async ({ db, run }: PauseDeadlineScoutOptions): Promise<void> => {
+  await settleRun({
+    db,
+    run,
+    settlement: {
+      errorCode: DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
+      status: "pending",
+    },
+  });
+  logger.info("scout.document_deadlines.skipped", {
+    sourceRunId: run.id,
+    reason: "actor_not_granted",
+  });
+};
+
+type DeadlineScoutAdmission =
+  | DeadlineScanAdmission
+  | { type: "feature_not_granted" };
+
 type SettleFailedObservationOptions = RejectDeadlineObservationOptions & {
-  admission: DeadlineScanAdmission;
+  admission: DeadlineScoutAdmission;
 };
 
 const settleFailedObservation = async ({
@@ -372,6 +434,9 @@ const settleFailedObservation = async ({
   error,
 }: SettleFailedObservationOptions): Promise<void> => {
   switch (admission.type) {
+    case "feature_not_granted":
+      await pauseDeadlineScout({ db, run });
+      return;
     case "period_exhausted":
       await skipDeadlineScan({
         db,
@@ -395,21 +460,12 @@ export const runDocumentDeadlineScout = async ({
   db,
   sourceRunId,
 }: RunDocumentDeadlineScoutArgs): Promise<void> => {
-  const run = await claimRun(db, sourceRunId);
-  if (!run) {
+  const actorUserId = await admittedDeadlineScoutActor({ db, sourceRunId });
+  if (!actorUserId) {
     return;
   }
-
-  const actorUserId = await resolveActorUserId(db, run);
-  if (!actorUserId) {
-    await settleRun({
-      db,
-      run,
-      settlement: {
-        errorCode: DEADLINE_SCOUT_ERROR_CODE.NO_ACTOR,
-        status: "failed",
-      },
-    });
+  const run = await claimRun(db, sourceRunId);
+  if (!run) {
     return;
   }
 
@@ -424,7 +480,7 @@ export const runDocumentDeadlineScout = async ({
     workspaceIds: [run.workspaceId],
   });
 
-  const scan: { admission: DeadlineScanAdmission } = {
+  const scan: { admission: DeadlineScoutAdmission } = {
     admission: { type: "admitted" },
   };
   // The config is read before the scout run opens: an organization barred
@@ -544,29 +600,11 @@ export const runDocumentDeadlineScout = async ({
             });
           },
           validate: async (tx) => {
-            const current = await tx
-              .select({ entityId: extractedContent.entityId })
-              .from(extractedContent)
-              .innerJoin(
-                entities,
-                and(
-                  eq(entities.id, extractedContent.entityId),
-                  eq(entities.workspaceId, extractedContent.workspaceId),
-                ),
-              )
-              .innerJoin(
-                workspaces,
-                and(
-                  eq(workspaces.id, extractedContent.workspaceId),
-                  eq(
-                    workspaces.organizationId,
-                    extractedContent.organizationId,
-                  ),
-                ),
-              )
-              .where(currentSourceWhere(run))
-              .limit(1);
-            return current.length === 1;
+            const decision = await validateDeadlineSource({ tx, run, actorUserId });
+            if (decision === "not-granted") {
+              scan.admission = { type: "feature_not_granted" };
+            }
+            return decision === "current";
           },
         }),
       );
@@ -580,6 +618,19 @@ export const runDocumentDeadlineScout = async ({
       admission: scan.admission,
       error: observed.error,
     });
+    return;
+  }
+
+  if (
+    scan.admission.type === "feature_not_granted" ||
+    !(await isBackgroundFeatureEnabled({
+      tx: db,
+      organizationId: run.organizationId,
+      userId: actorUserId,
+      featureId: "signals",
+    }))
+  ) {
+    await pauseDeadlineScout({ db, run });
     return;
   }
 

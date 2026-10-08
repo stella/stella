@@ -14,9 +14,18 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+import { eq } from "drizzle-orm";
+
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { flowDefinitions, workspaces } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  flowDefinitions,
+  schedulerJobs,
+  workspaces,
+} from "@/api/db/schema";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
@@ -24,6 +33,7 @@ import type { FlowTrigger } from "@/api/lib/flows/flow-types";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb, SchedulerJob } from "@/api/lib/scheduler/types";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -52,6 +62,7 @@ describe("scheduled flow due day", () => {
   const started: string[] = [];
   const task = createScheduledFlowTask(async (input) => {
     started.push(input.definitionId);
+    return { status: "settled" };
   });
 
   beforeAll(async () => {
@@ -64,7 +75,8 @@ describe("scheduled flow due day", () => {
     await testDb.insert(user).values({
       id: authorId,
       name: "Flow Author",
-      email: `${authorId}@test.local`,
+      emailVerified: true,
+      email: `${authorId}@example.test`,
     });
     await testDb.insert(member).values({
       id: Bun.randomUUIDv7(),
@@ -73,6 +85,9 @@ describe("scheduled flow due day", () => {
       role: "member",
       createdAt: new Date(),
     });
+    await testDb
+      .insert(featureEnrolments)
+      .values({ featureId: "flows", organizationId, userId: authorId });
     await testDb.insert(workspaces).values({
       id: workspaceId,
       organizationId,
@@ -120,12 +135,15 @@ describe("scheduled flow due day", () => {
     nextRunAt: Date,
     wallClock: Date,
   ) => {
+    const persisted = await testDb.query.schedulerJobs.findFirst({
+      where: { id: { eq: flowScheduleJobId(definitionId) } },
+    });
     const job: SchedulerJob = {
       id: flowScheduleJobId(definitionId),
       task: FLOW_RUN_TASK,
       description: null,
       schedule: flowScheduleToSchedulerSchedule(schedule),
-      payload: { definitionId },
+      payload: persisted?.payload ?? { definitionId },
       enabled: true,
       pausedBy: null,
       pausedUntil: null,
@@ -141,6 +159,14 @@ describe("scheduled flow due day", () => {
       createdAt: nextRunAt,
       updatedAt: nextRunAt,
     };
+    await testDb
+      .insert(schedulerJobs)
+      .values(job)
+      .onConflictDoUpdate({
+        target: schedulerJobs.id,
+        set: { nextRunAt, lockedAt: wallClock, lockedBy: "test-lease" },
+      });
+    let continuationAt: Date | null = null;
     setSystemTime(wallClock);
     await task({
       db: asTestRaw<SchedulerDb>(testDb),
@@ -149,10 +175,84 @@ describe("scheduled flow due day", () => {
       logger,
       payload: job.payload,
       runId: createSafeId<"schedulerJobRun">(),
-      scheduleContinuation: () => undefined,
+      scheduleContinuation: (next) => {
+        continuationAt = next;
+      },
       signal: new AbortController().signal,
     });
+    return {
+      continuationAt,
+      payload: (
+        await testDb.query.schedulerJobs.findFirst({
+          where: { id: { eq: job.id } },
+        })
+      )?.payload,
+    };
   };
+
+  test("deployment disabled skips the no-caller scheduled start before lookup", async () => {
+    const previousFlag = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = false;
+    try {
+      const schedule: Schedule = { frequency: "daily", hourUtc: 23 };
+      const definitionId = await createDefinition(schedule);
+      await runTick(definitionId, schedule, MONDAY_SLOT, MONDAY_SLOT);
+      expect(started.filter((id) => id === definitionId)).toHaveLength(0);
+    } finally {
+      env.FEATURE_FLOWS = previousFlag;
+      restore();
+    }
+  });
+
+  test("ungranted definition author skips the no-caller scheduled start", async () => {
+    await testDb
+      .delete(featureEnrolments)
+      .where(eq(featureEnrolments.userId, authorId));
+    try {
+      const schedule: Schedule = { frequency: "daily", hourUtc: 23 };
+      const definitionId = await createDefinition(schedule);
+      await runTick(definitionId, schedule, MONDAY_SLOT, MONDAY_SLOT);
+      expect(started.filter((id) => id === definitionId)).toHaveLength(0);
+    } finally {
+      await testDb
+        .insert(featureEnrolments)
+        .values({ featureId: "flows", organizationId, userId: authorId });
+    }
+  });
+
+  test("a paused weekly slot survives opt-out and resumes on its original due day", async () => {
+    const schedule: Schedule = {
+      frequency: "weekly",
+      hourUtc: 23,
+      dayOfWeek: 1,
+    };
+    const definitionId = await createDefinition(schedule);
+    await testDb
+      .delete(featureEnrolments)
+      .where(eq(featureEnrolments.userId, authorId));
+    try {
+      const paused = await runTick(
+        definitionId,
+        schedule,
+        MONDAY_SLOT,
+        TUESDAY_AFTER_MIDNIGHT,
+      );
+      expect(paused.continuationAt).toEqual(
+        new Date(TUESDAY_AFTER_MIDNIGHT.getTime() + 5 * 60 * 1000),
+      );
+      expect(paused.payload?.["pendingDueAt"]).toBe(MONDAY_SLOT.toISOString());
+      expect(started.filter((id) => id === definitionId)).toHaveLength(0);
+    } finally {
+      await testDb
+        .insert(featureEnrolments)
+        .values({ featureId: "flows", organizationId, userId: authorId });
+    }
+    const retryAt = new Date(TUESDAY_AFTER_MIDNIGHT.getTime() + 5 * 60 * 1000);
+    const resumed = await runTick(definitionId, schedule, retryAt, retryAt);
+    expect(started.filter((id) => id === definitionId)).toHaveLength(1);
+    expect(resumed.payload).toEqual({ definitionId });
+  });
 
   test("a Monday slot claimed after midnight still starts Monday's weekly run", async () => {
     const schedule: Schedule = {

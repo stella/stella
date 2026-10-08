@@ -23,6 +23,7 @@ import {
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 const config = {
+  featureAccess: { featureId: "signals", type: "required" },
   description:
     "Assign an open inbox signal to an organization member, or clear the " +
     "assignment with null.",

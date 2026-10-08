@@ -13,9 +13,13 @@ import {
   expect,
   test,
 } from "bun:test";
+import { and, eq } from "drizzle-orm";
 
-import { organization } from "@/api/db/auth-schema";
-import { flowRuns, workspaces } from "@/api/db/schema";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
+import { member, organization, user } from "@/api/db/auth-schema";
+import { featureEnrolments, flowRuns, workspaces } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
@@ -24,6 +28,7 @@ import type {
   FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -70,6 +75,22 @@ describe("reconcileOrphanedFlowRuns", () => {
       slug: `reconcile-${organizationId}`,
       createdAt: new Date(),
     });
+    await testDb.insert(user).values({
+      id: userId,
+      name: "Flow actor",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+    });
+    await testDb.insert(member).values({
+      id: Bun.randomUUIDv7(),
+      organizationId,
+      userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    await testDb
+      .insert(featureEnrolments)
+      .values({ featureId: "flows", organizationId, userId });
     await testDb.insert(workspaces).values({
       id: workspaceId,
       organizationId,
@@ -150,5 +171,44 @@ describe("reconcileOrphanedFlowRuns", () => {
     );
 
     expect(enqueuedRunIds.toSorted()).toEqual([...stalledRunIds].toSorted());
+  });
+  test("opt-out pauses recovery without changing runs and regrant resumes", async () => {
+    await testDb
+      .delete(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.organizationId, organizationId),
+          eq(featureEnrolments.featureId, "flows"),
+        ),
+      );
+    try {
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      expect(enqueuedRunIds).toEqual([]);
+      expect(
+        await testDb
+          .select({ id: flowRuns.id })
+          .from(flowRuns)
+          .where(eq(flowRuns.workspaceId, workspaceId)),
+      ).toHaveLength(nonTerminalRunIds.length + 1);
+    } finally {
+      await testDb
+        .insert(featureEnrolments)
+        .values({ featureId: "flows", organizationId, userId });
+    }
+    await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+    expect(enqueuedRunIds.toSorted()).toEqual(nonTerminalRunIds.toSorted());
+  });
+
+  test("deployment off pauses recovery for enrolled actors", async () => {
+    const previous = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = false;
+    try {
+      await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
+      expect(enqueuedRunIds).toEqual([]);
+    } finally {
+      env.FEATURE_FLOWS = previous;
+      restore();
+    }
   });
 });

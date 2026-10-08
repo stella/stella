@@ -201,6 +201,7 @@ describe("flow kickoff acceptance", () => {
           },
           {
             findDefinition: async () => definition,
+            featureEnabled: async () => true,
             resolveAuthorization: async () => ({
               memberId: "member",
               email: "member@example.test",

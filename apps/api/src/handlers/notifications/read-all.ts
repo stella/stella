@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { notifications } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { flowNotificationVisibilityCondition } from "@/api/lib/flows/review-gate-task";
 
 import { readUnreadCount } from "./read-model";
 
@@ -23,6 +24,13 @@ const config = {
 const markAllNotificationsRead = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user }) {
+    const visibility = yield* Result.await(
+      flowNotificationVisibilityCondition({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }),
+    );
     const updated = yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — per-user read-state bookkeeping; no shared resource changes
@@ -34,6 +42,7 @@ const markAllNotificationsRead = createSafeRootHandler(
               eq(notifications.userId, user.id),
               eq(notifications.organizationId, session.activeOrganizationId),
               isNull(notifications.readAt),
+              visibility,
             ),
           )
           .returning({ id: notifications.id });
@@ -49,6 +58,7 @@ const markAllNotificationsRead = createSafeRootHandler(
       readUnreadCount(safeDb, {
         organizationId: session.activeOrganizationId,
         userId: user.id,
+        visibility,
       }),
     );
 

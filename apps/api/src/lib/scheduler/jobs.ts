@@ -59,6 +59,7 @@ import { RESET_REVIEW_ORGANIZATION_TASK } from "@/api/lib/scheduler/tasks/review
 import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
 import { BACKFILL_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
+import { RECOVER_SCOUT_EMISSION_TASK } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -66,6 +67,7 @@ import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/s
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
+import { RECOVER_UPLOAD_FLOW_TRIGGERS_TASK } from "@/api/lib/scheduler/tasks/upload-flow-trigger-recovery";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
@@ -412,6 +414,20 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REPAIR_SEARCH_PROJECTIONS_TASK,
+  },
+  {
+    description: "Recover deferred signal emissions for enrolled recipients",
+    id: "signals.recoverScoutEmission.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECOVER_SCOUT_EMISSION_TASK,
+  },
+  {
+    description: "Recover deferred upload flow triggers for enrolled authors",
+    id: "flows.recoverUploadTriggers.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECOVER_UPLOAD_FLOW_TRIGGERS_TASK,
   },
   {
     description: "Re-enqueue flow-run steps no queued job owns anymore",

@@ -6,7 +6,9 @@ import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type {
   InsertAutomatedFlowRunWithinCapInput,
@@ -75,6 +77,10 @@ type StartAutomatedFlowRunDependencies = {
     | undefined
   >;
   resolveAuthorization: typeof resolveCredentialMemberAuthorization;
+  featureEnabled: (args: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  }) => Promise<boolean>;
   insertWithinCap: (
     input: Omit<InsertAutomatedFlowRunWithinCapInput, "database">,
   ) => Promise<InsertAutomatedFlowRunWithinCapResult>;
@@ -101,12 +107,24 @@ export const automatedFlowRunDependencies = (
       },
       columns: { id: true, name: true, steps: true, enabled: true },
     }),
+  featureEnabled: async (principal) =>
+    await isBackgroundFeatureEnabled({
+      tx: database,
+      organizationId: principal.organizationId,
+      userId: principal.userId,
+      featureId: "flows",
+    }),
   resolveAuthorization: async (lookup) =>
     await resolveMemberAuthorization(lookup, database),
   insertWithinCap: async (input) =>
     await insertAutomatedFlowRunWithinCap({ ...input, database }),
   enqueueStep: enqueueFlowStep,
 });
+
+export type StartAutomatedFlowRunOutcome =
+  | { status: "paused" }
+  | { status: "retry" }
+  | { status: "settled" };
 
 export const startAutomatedFlowRun = async (
   {
@@ -121,19 +139,47 @@ export const startAutomatedFlowRun = async (
   }: StartAutomatedFlowRunArgs,
   {
     findDefinition,
+    featureEnabled,
     resolveAuthorization,
     insertWithinCap,
     enqueueStep,
     kickoff = runQueuedKickoff,
   }: StartAutomatedFlowRunDependencies,
-): Promise<void> => {
+): Promise<StartAutomatedFlowRunOutcome> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+    logger.info("flow.automated_run_skipped", {
+      ...logContext,
+      reason: "deployment_disabled",
+    });
+    return { status: "paused" };
+  }
   if (createdByUserId === null) {
     logger.warn("flow.automated_run_skipped_no_actor", logContext);
-    return;
+    return { status: "settled" };
   }
 
   // Snapshot fields (name, steps) come from a root read: the automated triggers
   // run in a background context and the cap is an org-wide rail.
+  const admission = await Result.tryPromise(() =>
+    featureEnabled({
+      organizationId,
+      userId: brandPersistedUserId(createdByUserId),
+    }),
+  );
+  if (Result.isError(admission)) {
+    observeFailure(admission.error, {
+      sink: AUTOMATED_RUN_START_FAILURE,
+      ctx: { workspaceId, organizationId },
+    });
+    return { status: "retry" };
+  }
+  if (!admission.value) {
+    logger.info("flow.automated_run_skipped", {
+      ...logContext,
+      reason: "actor_not_granted",
+    });
+    return { status: "paused" };
+  }
   const definitionResult = await Result.tryPromise({
     try: async () => await findDefinition({ definitionId, organizationId }),
     catch: (cause) => cause,
@@ -144,16 +190,16 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       "error.type": errorTag(definitionResult.error),
     });
-    return;
+    return { status: "retry" };
   }
   const definition = definitionResult.value;
   if (!definition) {
     logger.info("flow.automated_run_definition_missing", logContext);
-    return;
+    return { status: "settled" };
   }
   if (!definition.enabled) {
     logger.info("flow.automated_run_definition_disabled", logContext);
-    return;
+    return { status: "settled" };
   }
 
   // The run will execute as the author against a root-scoped grant for
@@ -179,15 +225,16 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       "error.type": errorTag(authorization.error),
     });
-    return;
+    return { status: "retry" };
   }
   const authorizedWorkspace = authorization.value?.workspace;
   if (authorizedWorkspace === undefined || authorizedWorkspace === null) {
     logger.warn("flow.automated_run_actor_unauthorized", logContext);
-    return;
+    return { status: "settled" };
   }
 
   const runId = createSafeId<"flowRun">();
+  let outcome: StartAutomatedFlowRunOutcome = { status: "retry" };
   const createAndEnqueue = async (
     signal?: AbortSignal,
     reservePeriod?: () => Promise<void>,
@@ -219,13 +266,20 @@ export const startAutomatedFlowRun = async (
       });
       return;
     }
+    if (insertResult.value.outcome === "already-started") {
+      outcome = { status: "settled" };
+      return;
+    }
     if (insertResult.value.outcome === "capped") {
+      outcome = { status: "retry" };
       logger.info("flow.automated_run_capped", {
         ...logContext,
         dailyRunCount: insertResult.value.dailyRunCount,
       });
       return;
     }
+
+    outcome = { status: "settled" };
 
     // Enqueue after the rows commit. A failure here leaves the run `pending`; the
     // worker's boot reconciler re-enqueues its current step, so the run is never
@@ -272,4 +326,5 @@ export const startAutomatedFlowRun = async (
       ctx: { workspaceId, organizationId },
     });
   }
+  return outcome;
 };

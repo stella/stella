@@ -41,6 +41,7 @@ import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 
 const config = {
+  featureAccess: { featureId: "signals", type: "required" },
   description:
     "Accept an inbox signal by taking one of its suggestions. Task and " +
     "deadline suggestions are created here; for the others the client " +

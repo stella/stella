@@ -3,7 +3,11 @@ import { Result } from "better-result";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+  reviewGateForTask,
+} from "@/api/lib/flows/review-gate-task";
 
 const readTaskByIdParamsSchema = workspaceParams({ taskId: tSafeId("entity") });
 
@@ -16,11 +20,23 @@ const readTaskById = createSafeHandler(
       "directions, and who created it.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: FLOW_TASK_FEATURE_ACCESS,
     mcp: { type: "covered", by: "list_tasks" },
     access: "read",
     params: readTaskByIdParamsSchema,
   },
-  async function* ({ workspaceId, params, safeDb }) {
+  async function* ({ workspaceId, params, safeDb, user }) {
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, {
+            workspaceId,
+            taskEntityId: params.taskId,
+            userId: user.id,
+          }),
+      ),
+    );
+    yield* admission;
     const task = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({

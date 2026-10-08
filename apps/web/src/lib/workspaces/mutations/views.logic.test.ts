@@ -169,7 +169,7 @@ describe("view reorder cache path", () => {
     const unrelatedWorkspaceListKey = workspacesKeys.list("org_navigation");
     queryClient.setQueryData(navigationKey, {
       workspaces: [],
-      features: { timeBilling: false },
+      features: { timeBilling: false, signals: false, flows: false },
     });
     queryClient.setQueryData(unrelatedWorkspaceListKey, { workspaces: [] });
 

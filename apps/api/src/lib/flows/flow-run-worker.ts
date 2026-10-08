@@ -1,13 +1,18 @@
+import { panic } from "better-result";
 import type { Job } from "bullmq";
-import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
-import { flowRuns } from "@/api/db/schema";
+import { flowDefinitions, flowRuns, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  isBackgroundFeatureEnabled,
+  loadBackgroundFeatureActors,
+} from "@/api/lib/feature-access/background";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
@@ -23,7 +28,10 @@ import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedFlowRunId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 
 // The BullMQ worker side of the flow-run engine. It lives in its own module so
 // the executor can depend on the queue's `enqueueFlowStep` without a cycle: the
@@ -59,9 +67,11 @@ const executeAdmittedFlowStep = async ({
   signal,
   database,
 }: AdmittedFlowStepOptions) => {
-  // This worker door resolves tenant and actor from the durable run, never
-  // job-supplied identity. It does so with admission off too: the step's
-  // model dispatch needs the admission `runBackgroundJob` grants either way.
+  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+    logger.info("flow.work_skipped", { reason: "deployment_disabled" });
+    return;
+  }
+  // Resolve tenant and actor from the durable run before granting model admission.
   const row = await database.query.flowRuns.findFirst({
     where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
   });
@@ -76,6 +86,15 @@ const executeAdmittedFlowStep = async ({
   if (!workspace || !actor) {
     // The executor refuses a run without tenant or actor before any step.
     await executeFlowStep(job.data, signal, { admission: null, database });
+    return;
+  }
+  if (!(await isBackgroundFeatureEnabled({
+    tx: database,
+    organizationId: workspace.organizationId,
+    userId: actor,
+    featureId: "flows",
+  }))) {
+    logger.info("flow.work_skipped", { reason: "actor_not_granted", runId: row.id });
     return;
   }
   await runBackgroundJob({
@@ -212,7 +231,7 @@ type ReconcileOrphanedFlowRunsOptions = {
 };
 
 type ReconcileOrphanedFlowRunsDependencies = {
-  database: Pick<typeof rootDb, "select">;
+  database: Pick<typeof rootDb, "select" | "query">;
   enqueueStep?: typeof enqueueFlowStep;
 };
 
@@ -233,6 +252,10 @@ export const reconcileOrphanedFlowRuns = async (
     enqueueStep = enqueueFlowStep,
   }: ReconcileOrphanedFlowRunsDependencies,
 ): Promise<void> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+    logger.info("flow.work_skipped", { reason: "deployment_disabled" });
+    return;
+  }
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
 
@@ -245,8 +268,19 @@ export const reconcileOrphanedFlowRuns = async (
       .select({
         id: flowRuns.id,
         currentStepIndex: flowRuns.currentStepIndex,
+        createdByUserId: flowDefinitions.createdByUserId,
+        triggerSource: flowRuns.triggerSource,
+        organizationId: workspaces.organizationId,
       })
       .from(flowRuns)
+      .innerJoin(workspaces, eq(workspaces.id, flowRuns.workspaceId))
+      .leftJoin(
+        flowDefinitions,
+        and(
+          eq(flowDefinitions.id, flowRuns.definitionId),
+          eq(flowDefinitions.organizationId, workspaces.organizationId),
+        ),
+      )
       .where(
         and(
           inArray(flowRuns.status, ["pending", "running"]),
@@ -268,11 +302,48 @@ export const reconcileOrphanedFlowRuns = async (
       break;
     }
 
+    const actors = new Map<SafeId<"flowRun">, SafeId<"user">>();
     for (const row of batch) {
-      await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
+      switch (row.triggerSource.type) {
+        case "manual":
+          actors.set(row.id, brandPersistedUserId(row.triggerSource.userId));
+          break;
+        case "schedule":
+        case "file-upload":
+          if (row.createdByUserId !== null) {
+            actors.set(row.id, brandPersistedUserId(row.createdByUserId));
+          }
+          break;
+        default:
+          row.triggerSource satisfies never;
+          return panic("Unknown flow trigger source");
+      }
     }
-
-    reconciled += batch.length;
+    const admitted = await loadBackgroundFeatureActors({
+      tx: database,
+      featureId: "flows",
+      principals: batch.flatMap((row) => {
+        const userId = actors.get(row.id);
+        return userId === undefined
+          ? []
+          : [{ organizationId: row.organizationId, userId }];
+      }),
+    });
+    for (const row of batch) {
+      const actor = actors.get(row.id);
+      if (
+        actor === undefined ||
+        admitted.get(row.organizationId)?.has(actor) !== true
+      ) {
+        logger.info("flow.work_skipped", {
+          reason: "actor_not_granted",
+          runId: row.id,
+        });
+        continue;
+      }
+      await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
+      reconciled += 1;
+    }
 
     const lastRow = batch.at(-1);
     if (lastRow === undefined || batch.length < batchSize) {

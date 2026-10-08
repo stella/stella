@@ -129,7 +129,7 @@ test("mention sources keep cached empty data with a failed refresh notice", asyn
   });
   client.setQueryData(options.queryKey, {
     workspaces: [],
-    features: { timeBilling: false },
+    features: { timeBilling: false, signals: false, flows: false },
   });
   markFailed(client, options.queryKey);
   const markup = render(

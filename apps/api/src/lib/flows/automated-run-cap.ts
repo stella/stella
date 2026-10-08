@@ -57,6 +57,7 @@ export type InsertAutomatedFlowRunWithinCapInput = {
  */
 export type InsertAutomatedFlowRunWithinCapResult =
   | { outcome: "started" }
+  | { outcome: "already-started" }
   | { outcome: "capped"; dailyRunCount: number };
 
 export const insertAutomatedFlowRunWithinCap = async ({
@@ -73,6 +74,26 @@ export const insertAutomatedFlowRunWithinCap = async ({
     await tx.execute(
       sql`select pg_advisory_xact_lock(${FLOW_RUN_CAP_LOCK_NAMESPACE}, hashtext(${definitionId}))`,
     );
+
+    // Recovery may replay after the run committed but before its receipt settled.
+    // The same definition lock makes this decision atomic with every insertion.
+    if (rows.run.triggerSource.type === "file-upload") {
+      const existing = await tx
+        .select({ id: flowRuns.id })
+        .from(flowRuns)
+        .where(
+          and(
+            eq(flowRuns.definitionId, definitionId),
+            eq(flowRuns.workspaceId, rows.run.workspaceId),
+            sql`${flowRuns.triggerSource}->>'type' = 'file-upload'`,
+            sql`${flowRuns.triggerSource}->>'entityId' = ${rows.run.triggerSource.entityId}`,
+          ),
+        )
+        .limit(1);
+      if (existing.length !== 0) {
+        return { outcome: "already-started" };
+      }
+    }
 
     const dailyRunCount = await tx.$count(
       flowRuns,

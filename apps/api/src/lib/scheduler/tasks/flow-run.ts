@@ -1,17 +1,22 @@
-import { eq } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { schedulerJobs } from "@/api/db/schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { isScheduledFlowDue } from "@/api/lib/flows/flow-trigger-logic";
 import {
   automatedFlowRunDependencies,
   startAutomatedFlowRun,
 } from "@/api/lib/flows/start-automated-flow-run";
+import type { StartAutomatedFlowRunOutcome } from "@/api/lib/flows/start-automated-flow-run";
 import {
   brandPersistedFlowDefinitionId,
   brandPersistedOrganizationId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 /**
@@ -30,12 +35,13 @@ export const flowScheduleJobId = (definitionId: string): string =>
 
 const flowRunPayloadSchema = v.strictObject({
   definitionId: v.pipe(v.string(), v.uuid()),
+  pendingDueAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
 });
 
 type StartScheduledFlowRun = (
   input: Parameters<typeof startAutomatedFlowRun>[0],
   db: SchedulerDb,
-) => Promise<unknown>;
+) => Promise<StartAutomatedFlowRunOutcome>;
 
 const startScheduledFlowRun: StartScheduledFlowRun = async (input, db) =>
   await startAutomatedFlowRun(input, automatedFlowRunDependencies(db));
@@ -46,7 +52,33 @@ const startScheduledFlowRun: StartScheduledFlowRun = async (input, db) =>
  */
 export const createScheduledFlowTask =
   (start: StartScheduledFlowRun): SchedulerTask =>
-  async ({ db, dueAt, payload, logger }) => {
+  async ({ db, dueAt, job, payload, logger, scheduleContinuation }) => {
+    const retrySlot = async () => {
+      const leaseToken =
+        job.lockedBy ?? panic("Scheduled flow requires a scheduler lease");
+      const pendingDueAt =
+        typeof payload?.["pendingDueAt"] === "string"
+          ? payload["pendingDueAt"]
+          : dueAt.toDate().toISOString();
+      // audit: skip — retains the original due slot; scheduler_job_runs records each attempt.
+      await db
+        .update(schedulerJobs)
+        .set({ payload: { ...payload, pendingDueAt } })
+        .where(
+          and(
+            eq(schedulerJobs.id, job.id),
+            eq(schedulerJobs.lockedBy, leaseToken),
+          ),
+        );
+      scheduleContinuation(
+        new Date(dueAt.claimedAtDate().getTime() + 5 * 60 * 1000),
+      );
+    };
+    if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+      logger.info("flow.schedule_skipped", { reason: "deployment_disabled" });
+      await retrySlot();
+      return;
+    }
     const parsed = v.safeParse(flowRunPayloadSchema, payload);
     if (!parsed.success) {
       logger.error("flow.schedule_invalid_payload", {
@@ -81,6 +113,22 @@ export const createScheduledFlowTask =
       return;
     }
 
+    if (
+      !(await isBackgroundFeatureEnabled({
+        tx: db,
+        organizationId: brandPersistedOrganizationId(definition.organizationId),
+        userId: definition.createdByUserId,
+        featureId: "flows",
+      }))
+    ) {
+      logger.info("flow.schedule_skipped", {
+        reason: "actor_not_granted",
+        definitionId,
+      });
+      await retrySlot();
+      return;
+    }
+
     if (!definition.enabled || definition.trigger.type !== "schedule") {
       // A disabled flow or a trigger changed away from `schedule`; the sync hook
       // owns row removal, so just skip this tick.
@@ -93,7 +141,14 @@ export const createScheduledFlowTask =
     }
 
     const trigger = definition.trigger;
-    if (!isScheduledFlowDue(trigger.schedule, dueAt)) {
+    const originalSlot =
+      parsed.output.pendingDueAt === undefined
+        ? dueAt
+        : DueSlot.of({
+            nextRunAt: new Date(parsed.output.pendingDueAt),
+            lockedAt: dueAt.claimedAtDate(),
+          });
+    if (!isScheduledFlowDue(trigger.schedule, originalSlot)) {
       logger.debug("flow.schedule_not_due_today", {
         definitionId,
         frequency: trigger.schedule.frequency,
@@ -122,7 +177,7 @@ export const createScheduledFlowTask =
       return;
     }
 
-    await start(
+    const outcome = await start(
       {
         definitionId,
         organizationId,
@@ -134,6 +189,24 @@ export const createScheduledFlowTask =
       },
       db,
     );
+    if (outcome.status !== "settled") {
+      await retrySlot();
+      return;
+    }
+    if (parsed.output.pendingDueAt !== undefined) {
+      const leaseToken =
+        job.lockedBy ?? panic("Scheduled flow requires a scheduler lease");
+      // audit: skip — retains the original due slot; scheduler_job_runs records each attempt.
+      await db
+        .update(schedulerJobs)
+        .set({ payload: { definitionId } })
+        .where(
+          and(
+            eq(schedulerJobs.id, job.id),
+            eq(schedulerJobs.lockedBy, leaseToken),
+          ),
+        );
+    }
   };
 
 export const runScheduledFlow: SchedulerTask = createScheduledFlowTask(

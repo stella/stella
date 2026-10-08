@@ -213,9 +213,7 @@ const PublicSidebar = ({
     hotkeyPlatform,
   );
   const [searchOpen, setSearchOpen] = useState(false);
-  // The Inbox has no isomorphic gate of its own (a beta host must not show
-  // it to every visitor), so this defers the browser toggle past mount
-  // rather than reading localStorage during the hydrating render.
+  // Anonymous visitors have no feature enrolment; members use navigation.
   const inboxEntryEnabled = usePublicShellInboxEntryEnabled();
   // This shell is server-rendered; the localStorage-backed preview
   // toggle is browser-only and would mismatch hydration. The host/env

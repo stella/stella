@@ -1,16 +1,36 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
+
+import {
+  NOTIFICATION_ENTITY_TYPE,
+  NOTIFICATION_KIND,
+  NOTIFICATION_KINDS,
+} from "@stll/api-contract/notifications";
+import type { NotificationKind } from "@stll/api-contract/notifications";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { flowRunSteps, workspaces } from "@/api/db/schema";
+import {
+  entities,
+  flowRunSteps,
+  notifications,
+  workspaces,
+} from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  loadFeatureAccessSnapshot,
+  resolveFeatureAccessSnapshot,
+} from "@/api/lib/auth/feature-access/context";
+import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
+import { isRecord } from "@/api/lib/type-guards";
 import { WORK_OBLIGATION_TRANSITION_ACTION } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
 
@@ -61,6 +81,149 @@ export const reviewGateForTask = async (
     .limit(1);
   return gates.at(0);
 };
+
+type AdmitTaskFlowAccessOptions = ReviewGateForTaskOptions & {
+  userId: SafeId<"user">;
+};
+
+/** Shared task entry points and native tools admit linked flow work here. */
+export const admitTaskFlowAccess = async (
+  tx: Transaction,
+  { userId, ...task }: AdmitTaskFlowAccessOptions,
+): Promise<Result<void, HandlerError>> => {
+  const gate = await reviewGateForTask(tx, task);
+  if (gate === undefined) {
+    return Result.ok(undefined);
+  }
+  if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+    return Result.err(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  const principal = { organizationId: gate.organizationId, userId };
+  const snapshot = await resolveFeatureAccessSnapshot({ tx, ...principal });
+  return isFeatureEnabled(snapshot, "flows", principal)
+    ? Result.ok(undefined)
+    : Result.err(new HandlerError({ status: 404, message: "Not found" }));
+};
+
+type FlowReviewTaskVisibilityOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: string;
+};
+
+/** A retained flow pointer has the same admission as its owning flow. */
+export const canViewFlowData = async ({
+  safeDb,
+  organizationId,
+  userId,
+}: FlowReviewTaskVisibilityOptions) => {
+  if (isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+    const snapshot = await loadFeatureAccessSnapshot({
+      safeDb,
+      organizationId,
+      userId,
+    });
+    if (snapshot.isErr()) {
+      return Result.err(snapshot.error);
+    }
+    if (isFeatureEnabled(snapshot.value, "flows", { organizationId, userId })) {
+      return Result.ok(true);
+    }
+  }
+  return Result.ok(false);
+};
+
+/** Apply before pagination so hidden reviews consume neither rows nor cursors. */
+export const flowReviewTaskVisibilityCondition = async (
+  options: FlowReviewTaskVisibilityOptions,
+) => {
+  const access = await canViewFlowData(options);
+  if (access.isErr()) {
+    return Result.err(access.error);
+  }
+  if (access.value) {
+    return Result.ok(undefined);
+  }
+  return Result.ok(sql`NOT EXISTS (
+    SELECT 1 FROM ${flowRunSteps}
+    WHERE ${flowRunSteps.workspaceId} = ${entities.workspaceId}
+      AND ${flowRunSteps.reviewTaskEntityId} = ${entities.id}
+  )`);
+};
+
+const NOTIFICATION_FEATURE_OWNER = {
+  [NOTIFICATION_KIND.MENTION]: "shared",
+  [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: "shared",
+  [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]: "shared",
+  [NOTIFICATION_KIND.FLOW_RUN_COMPLETED]: "flows",
+  [NOTIFICATION_KIND.FLOW_RUN_FAILED]: "flows",
+  [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]: "flows",
+  [NOTIFICATION_KIND.ANNOUNCEMENT]: "shared",
+} as const satisfies Record<NotificationKind, "flows" | "shared">;
+
+const FLOW_NOTIFICATION_KINDS = NOTIFICATION_KINDS.filter(
+  (kind) => NOTIFICATION_FEATURE_OWNER[kind] === "flows",
+);
+
+/** Hide retained outcomes and mentions of linked review tasks on opt-out. */
+export const flowNotificationVisibilityCondition = async (
+  options: FlowReviewTaskVisibilityOptions,
+) => {
+  const access = await canViewFlowData(options);
+  if (access.isErr()) {
+    return Result.err(access.error);
+  }
+  if (access.value) {
+    return Result.ok(undefined);
+  }
+  return Result.ok(
+    and(
+      notInArray(notifications.kind, FLOW_NOTIFICATION_KINDS),
+      sql`${notifications.entityType} IS DISTINCT FROM ${NOTIFICATION_ENTITY_TYPE.FLOW_RUN}`,
+      sql`NOT EXISTS (
+      SELECT 1 FROM ${flowRunSteps}
+      WHERE ${notifications.entityType} = ${NOTIFICATION_ENTITY_TYPE.ENTITY}
+        AND ${flowRunSteps.workspaceId} = ${notifications.workspaceId}
+        AND ${flowRunSteps.reviewTaskEntityId}::text = ${notifications.entityId}
+    )`,
+    ),
+  );
+};
+
+export const FLOW_TASK_FEATURE_ACCESS = {
+  featureId: "flows",
+  type: "conditional",
+  usesFeature: async (context) => {
+    const { body, params, workspaceId, scopedDb } = context;
+    if (workspaceId === undefined) {
+      return false;
+    }
+    const taskId = isRecord(params)
+      ? (params["taskId"] ?? params["entityId"])
+      : undefined;
+    const entityId =
+      taskId ??
+      (isRecord(body) ? (body["taskId"] ?? body["entityId"]) : undefined);
+    if (typeof entityId !== "string") {
+      return false;
+    }
+    const gates = await scopedDb((tx) =>
+      tx
+        .select({ runId: flowRunSteps.runId })
+        .from(flowRunSteps)
+        .where(
+          and(
+            eq(flowRunSteps.workspaceId, workspaceId),
+            eq(flowRunSteps.reviewTaskEntityId, sql`${entityId}`),
+          ),
+        )
+        .limit(1),
+    );
+    return gates.length !== 0;
+  },
+  // The feature is selected by the persisted task link, not an input option.
+  projectInputSchema: (schemas) => schemas,
+} as const satisfies FeatureAccessRequirement;
 
 type GateDecisionForTaskStatusOptions = ReviewGateForTaskOptions & {
   requestedStatus: string | undefined;
@@ -157,6 +320,13 @@ export const decideGateForTask = async (
         }),
       );
     }
+    const admission = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await admitTaskFlowAccess(tx, { workspaceId, taskEntityId, userId }),
+      ),
+    );
+    yield* admission;
     const resolved = yield* Result.await(
       resolveFlowReviewGate(
         {

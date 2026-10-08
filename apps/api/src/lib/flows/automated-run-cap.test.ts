@@ -82,7 +82,11 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     createdAt: Date,
   ): Promise<void> => {
     for (let index = 0; index < count; index += 1) {
-      await seedRun(definitionId, FILE_UPLOAD_SOURCE, createdAt);
+      await seedRun(
+        definitionId,
+        { type: "file-upload", entityId: createSafeId<"entity">() },
+        createdAt,
+      );
     }
   };
 
@@ -107,13 +111,14 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     definitionId: SafeId<"flowDefinition">,
     reservePeriod?: () => Promise<void>,
     runId: SafeId<"flowRun"> = createSafeId<"flowRun">(),
+    triggerSource: FlowTriggerSource = FILE_UPLOAD_SOURCE,
   ) => {
     const rows = buildFlowRunRows({
       runId,
       workspaceId,
       definitionId,
       definition: { name: "Automated cap flow", steps: [AI_STEP] },
-      triggerSource: FILE_UPLOAD_SOURCE,
+      triggerSource,
       inputEntityIds: [],
     });
     const result = await insertAutomatedFlowRunWithinCap({
@@ -214,7 +219,15 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     expect(accepted.result.outcome).toBe("started");
     expect(reserved).toBe(1);
 
-    const cappedRetry = await attemptStart(definitionId, reservePeriod);
+    const replay = await attemptStart(definitionId, reservePeriod);
+    expect(replay.result.outcome).toBe("already-started");
+    expect(reserved).toBe(1);
+    const cappedRetry = await attemptStart(
+      definitionId,
+      reservePeriod,
+      createSafeId<"flowRun">(),
+      { type: "file-upload", entityId: createSafeId<"entity">() },
+    );
     expect(cappedRetry.result.outcome).toBe("capped");
     expect(reserved).toBe(1);
   });
@@ -261,11 +274,33 @@ describe("insertAutomatedFlowRunWithinCap", () => {
         { type: "manual", userId: "manual-actor" },
         new Date(),
       );
-      await seedRun(definitionId, FILE_UPLOAD_SOURCE, yesterday);
+      await seedRun(
+        definitionId,
+        { type: "file-upload", entityId: createSafeId<"entity">() },
+        yesterday,
+      );
     }
 
     const { result } = await attemptStart(definitionId);
 
     expect(result.outcome).toBe("started");
+  });
+
+  test("upload replay converges across calendar days without inserting duplicate steps", async () => {
+    const definitionId = await createDefinition();
+    await seedRun(
+      definitionId,
+      FILE_UPLOAD_SOURCE,
+      new Date(Date.now() - 24 * 60 * 60 * 1000),
+    );
+    const replay = await attemptStart(definitionId);
+    expect(replay.result.outcome).toBe("already-started");
+    expect(await countRunsForDefinition(definitionId)).toBe(1);
+    expect(
+      await testDb
+        .select()
+        .from(flowRunSteps)
+        .where(eq(flowRunSteps.runId, replay.runId)),
+    ).toHaveLength(0);
   });
 });

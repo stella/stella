@@ -46,6 +46,7 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
@@ -709,9 +710,11 @@ const completeDocumentProcessingRun = async ({
   database: typeof rootDb;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<boolean> => {
-  const shouldDispatchDeadlineScout = documentScoutsEnabled(
+  const scoutRequested = documentScoutsEnabled(
     envDocumentProcessingWorker.FEATURE_INBOX_DOCUMENT_SCOUTS,
   );
+  const shouldDispatchDeadlineScout =
+    scoutRequested && isDeploymentFeatureEnabled("FEATURE_SIGNALS");
   const completed = await database
     .update(documentProcessingRuns)
     .set({
@@ -721,9 +724,7 @@ const completeDocumentProcessingRun = async ({
       deadlineScoutClaimedAt: null,
       deadlineScoutErrorCode: null,
       deadlineScoutSkippedUntil: null,
-      deadlineScoutStatus: shouldDispatchDeadlineScout
-        ? "pending"
-        : "not_requested",
+      deadlineScoutStatus: scoutRequested ? "pending" : "not_requested",
       errorAt: null,
       errorCode: null,
       finishedAt: new Date(),
@@ -1774,6 +1775,12 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   database,
   enqueueDocumentDeadlineScout: enqueueScout = enqueueDocumentDeadlineScout,
 }: RecoverDocumentDeadlineScoutDispatchesOptions): Promise<ReconciliationPhaseResult> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    logger.info("scout.document_deadlines.recovery_skipped", {
+      reason: "deployment_disabled",
+    });
+    return { count: 0, hasMore: false };
+  }
   const staleBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
   );

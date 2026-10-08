@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { deploymentFeatureFor } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
 const featureAccessProof = Symbol("featureAccessProof");
@@ -164,6 +166,13 @@ export const isFeatureEnabled = (
 ): boolean => {
   if (featureId === undefined) {
     return true;
+  }
+  const deploymentFeature = deploymentFeatureFor(featureId);
+  if (
+    deploymentFeature !== undefined &&
+    !isDeploymentFeatureEnabled(deploymentFeature)
+  ) {
+    return false;
   }
   if (!isFeatureAccessSnapshotForPrincipal(snapshot, principal)) {
     return false;

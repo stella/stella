@@ -675,6 +675,8 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_SIGNALS: v.optional(v.pipe(v.string(), v.parseBoolean()), "true"),
+  FEATURE_FLOWS: v.optional(v.pipe(v.string(), v.parseBoolean()), "true"),
   FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,

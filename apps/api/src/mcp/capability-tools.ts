@@ -1169,7 +1169,9 @@ const describeCapabilityHandler: McpToolHandler<
   // AND rejected on direct dispatch, so describing a gated-off capability is
   // refused too (never leak a disabled feature's schema by direct id).
   if (!contextFeatureEnabled(entry.feature, context)) {
-    return featureDisabledResult(entry.feature);
+    return entry.featureId === undefined
+      ? featureDisabledResult(entry.feature)
+      : notFoundResult("Not found");
   }
   if (!capabilityFeatureEnabled(entry, context)) {
     return notFoundResult("Not found");
@@ -1653,7 +1655,9 @@ const invokeCapabilityHandler = async ({
   // guess-the-id bypass. Runs before every other gate (validateOnly included)
   // so a disabled feature leaks nothing about its capabilities.
   if (!contextFeatureEnabled(entry.feature, context)) {
-    return featureDisabledResult(entry.feature);
+    return entry.featureId === undefined
+      ? featureDisabledResult(entry.feature)
+      : notFoundResult("Not found");
   }
   if (!capabilityFeatureEnabled(entry, context)) {
     return notFoundResult("Not found");

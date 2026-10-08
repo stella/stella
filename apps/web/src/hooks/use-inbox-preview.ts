@@ -1,30 +1,18 @@
-import { env } from "@/env";
-import { useHasMounted } from "@/hooks/use-chrome-query";
-import { betaFeaturesAvailable } from "@/lib/beta-features";
-import { publicShellPreviewEntryVisible } from "@/lib/beta-features.logic";
-import { useDevStore } from "@/lib/dev-store";
+import type { QueryClient } from "@tanstack/react-query";
 
-const isInboxPreviewEnabledForDevState = (
-  devPreviewEnabled: boolean,
-): boolean =>
-  env.VITE_FEATURE_INBOX || (betaFeaturesAvailable() && devPreviewEnabled);
+import {
+  isNavigationFeatureEnabled,
+  useNavigationFeatureEnabled,
+} from "@/hooks/use-navigation-feature";
+import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
 
-export const isInboxPreviewEnabled = (): boolean =>
-  isInboxPreviewEnabledForDevState(useDevStore.getState().inboxPreview);
+export const isInboxPreviewEnabled = async (
+  queryClient: QueryClient,
+  caller: WorkspaceNavigationCaller,
+): Promise<boolean> =>
+  await isNavigationFeatureEnabled(queryClient, { feature: "signals", caller });
 
-export const useInboxPreviewEnabled = (): boolean => {
-  const devPreviewEnabled = useDevStore((s) => s.inboxPreview);
-  return isInboxPreviewEnabledForDevState(devPreviewEnabled);
-};
+export const useInboxPreviewEnabled = (): boolean =>
+  useNavigationFeatureEnabled("signals");
 
-// The Inbox entry in the server-rendered public shell (/law, /tools), which
-// unlike the app sidebar renders for signed-out visitors too.
-export const usePublicShellInboxEntryEnabled = (): boolean => {
-  const browserPreviewEnabled = useInboxPreviewEnabled();
-  const mounted = useHasMounted();
-  return publicShellPreviewEntryVisible({
-    browserPreviewEnabled,
-    deploymentEnabled: env.VITE_FEATURE_INBOX,
-    mounted,
-  });
-};
+export const usePublicShellInboxEntryEnabled = useInboxPreviewEnabled;

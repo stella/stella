@@ -16,6 +16,7 @@ import type {
 import {
   jsonb,
   orgPolicies,
+  organizationOptionalWorkspacePolicies,
   organization,
   p,
   pUuid,
@@ -62,6 +63,49 @@ export const flowDefinitions = p.pgTable(
       .on(table.organizationId, table.createdAt),
     p.unique("flow_definitions_id_org_unq").on(table.id, table.organizationId),
     ...orgPolicies(),
+  ],
+);
+
+/** Upload-trigger receipts commit with the document and survive admission pauses. */
+export const flowUploadTriggerIntents = p.pgTable(
+  "flow_upload_trigger_intents",
+  {
+    definitionId: safeUuid<"flowDefinition">("definition_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    fileExtension: p.text("file_extension"),
+    retryAt: timestamptz("retry_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.definitionId, table.entityId] }),
+    p
+      .foreignKey({
+        columns: [table.definitionId, table.organizationId],
+        foreignColumns: [flowDefinitions.id, flowDefinitions.organizationId],
+        name: "flow_upload_trigger_intents_definition_org_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "flow_upload_trigger_intents_entity_ws_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "flow_upload_trigger_intents_workspace_org_fk",
+      })
+      .onDelete("cascade"),
+    p.index("flow_upload_trigger_intents_ws_idx").on(table.workspaceId),
+    p
+      .index("flow_upload_trigger_intents_retry_idx")
+      .on(table.retryAt, table.definitionId, table.entityId),
+    ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
   ],
 );
 
@@ -112,6 +156,14 @@ export const flowRuns = p.pgTable(
       .index("flow_runs_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc(), table.id),
     p.index("flow_runs_definition_id_idx").on(table.definitionId),
+    p
+      .index("flow_runs_upload_identity_idx")
+      .on(
+        table.definitionId,
+        table.workspaceId,
+        sql`(${table.triggerSource}->>'entityId')`,
+      )
+      .where(sql`${table.triggerSource}->>'type' = 'file-upload'`),
     p.unique("flow_runs_id_ws_unq").on(table.id, table.workspaceId),
     ...wsPolicies(),
   ],

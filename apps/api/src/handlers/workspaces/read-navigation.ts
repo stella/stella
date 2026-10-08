@@ -164,6 +164,14 @@ const readWorkspaceNavigation = createSafeRootHandler(
 
     return Result.ok({
       features: {
+        signals: isFeatureEnabled(featureAccessSnapshot, "signals", {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+        flows: isFeatureEnabled(featureAccessSnapshot, "flows", {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
         timeBilling: isFeatureEnabled(featureAccessSnapshot, "time-billing", {
           organizationId: session.activeOrganizationId,
           userId: user.id,

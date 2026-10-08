@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 11,
+  "reason": "Deferred signal and upload receipts, their retry claims and settlement, and preserved scheduler due slots are derived delivery bookkeeping. Source document/import writes and emitted signals retain their transaction-bound audits; scheduler_job_runs records attempts. The eleven directives cover one upload receipt insert, two flow-schedule writes, two signal-recovery writes, two upload-recovery writes, and two writes in each review and hearing producer."
+}

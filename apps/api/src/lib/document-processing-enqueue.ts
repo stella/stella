@@ -3,6 +3,8 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { logger } from "@/api/lib/observability/logger";
 
 export const DOCUMENT_PROCESSING_QUEUE_NAME = "document-processing";
 export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
@@ -99,6 +101,13 @@ export const enqueueDocumentDeadlineScoutJob = async ({
 export const enqueueDocumentDeadlineScout = async (
   job: DocumentDeadlineScoutJobData,
 ): Promise<void> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    logger.info("scout.document_deadlines.dispatch_skipped", {
+      reason: "deployment_disabled",
+      sourceRunId: job.sourceRunId,
+    });
+    return;
+  }
   await enqueueDocumentDeadlineScoutJob({
     scoutQueue: getDeadlineScoutQueue(),
     job,
