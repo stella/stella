@@ -11,11 +11,13 @@ import {
   entities,
   entityVersions,
   fields,
+  organizationSettings,
   properties,
   searchDocuments,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { persistManualOcrRun } from "@/api/lib/document-processing-request";
@@ -352,4 +354,190 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
   }, 15_000);
+
+  const deletionSchedules = (
+    ["request", "restore", "automatic"] as const
+  ).flatMap((path) =>
+    (["workspace", "organization"] as const).flatMap((parent) =>
+      (["deletion", "ocr"] as const).map((first) => ({ path, parent, first })),
+    ),
+  );
+  test.each(deletionSchedules)(
+    "$path and $parent deletion serialize when $first starts first",
+    async ({ path, parent, first }) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const setup = openClient();
+        const ocr = openClient({ connection: { statement_timeout: 5000 } });
+        const deletion = openClient({
+          connection: { statement_timeout: 5000 },
+        });
+        const observer = openClient();
+        const fixture = await seedOcrFixture(setup.db);
+        const { organizationId, workspaceId, userId, source } = fixture;
+        const ready = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const pending: Promise<void>[] = [];
+        try {
+          await setup.db.insert(organizationSettings).values({
+            organizationId,
+            documentProcessingMode: "searchable-text",
+          });
+          if (path === "restore") {
+            await setup.db.insert(documentProcessingRuns).values({
+              id: createSafeId<"documentProcessingRun">(),
+              organizationId,
+              workspaceId,
+              ...source,
+              kind: "ocr",
+              processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+              requestSource: "manual",
+              requestedBy: userId,
+              status: "failed",
+              errorCode: "search_index_failed",
+            });
+          }
+          const ocrPid =
+            (
+              await ocr.sql<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("OCR session missing");
+          const deletionPid =
+            (
+              await deletion.sql<
+                { pid: number }[]
+              >`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Deletion session missing");
+          const ocrDatabase = {
+            transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+              await ocr.db.transaction(async (tx) => {
+                const result = await run(tx);
+                if (first === "ocr") {
+                  expect(
+                    await tx
+                      .select({ status: documentProcessingRuns.status })
+                      .from(documentProcessingRuns)
+                      .where(
+                        eq(documentProcessingRuns.entityId, source.entityId),
+                      ),
+                  ).toEqual([{ status: "queued" }]);
+                  ready.resolve(undefined);
+                  await release.promise;
+                }
+                return result;
+              }),
+          };
+          const runOcr = async () => {
+            switch (path) {
+              case "request": {
+                const result = await persistManualOcrRun({
+                  db: ocrDatabase,
+                  organizationId,
+                  workspaceId,
+                  userId,
+                  source,
+                  recordAuditEvent: async () => undefined,
+                });
+                if (first === "deletion") {
+                  expect(result).toBeNull();
+                } else {
+                  expect(result?.status).toBe("queued");
+                }
+                return;
+              }
+              case "restore":
+                expect(
+                  await restoreManualOcrRunAfterProjectionLoss({
+                    db: ocrDatabase,
+                    organizationId,
+                    workspaceId,
+                    ...source,
+                  }),
+                ).toBeUndefined();
+                return;
+              case "automatic":
+                expect(
+                  await requestAutomaticDocumentOcr({
+                    db: ocrDatabase,
+                    organizationId,
+                    workspaceId,
+                    ...source,
+                    requestSource: "upload",
+                  }),
+                ).toBeUndefined();
+                return;
+              default:
+                path satisfies never;
+            }
+          };
+          const runDeletion = async () => {
+            await deletion.db.transaction(async (tx) => {
+              if (parent === "organization") {
+                await tx
+                  .select({ id: organization.id })
+                  .from(organization)
+                  .where(eq(organization.id, organizationId))
+                  .for("update");
+              } else {
+                await tx
+                  .select({ id: workspaces.id })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, workspaceId))
+                  .for("update");
+              }
+              if (first === "deletion") {
+                ready.resolve(undefined);
+                await release.promise;
+              }
+              if (parent === "organization") {
+                await tx
+                  .delete(organization)
+                  .where(eq(organization.id, organizationId));
+              } else {
+                await tx
+                  .delete(workspaces)
+                  .where(eq(workspaces.id, workspaceId));
+              }
+            });
+          };
+          pending.push(first === "deletion" ? runDeletion() : runOcr());
+          await withTimeout(async () => await ready.promise, {
+            label: "OCR deletion transaction barrier",
+            timeoutMs: 3000,
+          });
+          pending.push(first === "deletion" ? runOcr() : runDeletion());
+          // Observe the lock wait before allowing deletion to cascade to children.
+          await waitForBlockedPid(observer.sql, {
+            waitingPid: first === "deletion" ? ocrPid : deletionPid,
+            holdingPid: first === "deletion" ? deletionPid : ocrPid,
+          });
+          release.resolve(undefined);
+          const outcomes = await Promise.allSettled(pending);
+          expect(outcomes.map(({ status }) => status)).toEqual([
+            "fulfilled",
+            "fulfilled",
+          ]);
+          expect(
+            await setup.db
+              .select({ id: documentProcessingRuns.id })
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.workspaceId, workspaceId)),
+          ).toEqual([]);
+          expect(
+            await setup.db
+              .select({ id: entities.id })
+              .from(entities)
+              .where(eq(entities.workspaceId, workspaceId)),
+          ).toEqual([]);
+        } finally {
+          release.resolve(undefined);
+          await Promise.allSettled(pending);
+          try {
+            await Promise.all(pending);
+          } finally {
+            await fixture.cleanup();
+          }
+        }
+      });
+    },
+    15_000,
+  );
 }

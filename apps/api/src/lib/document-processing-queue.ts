@@ -42,6 +42,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -497,6 +498,16 @@ const persistOcrProjection = async ({
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
   await database.transaction(async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: [run.organizationId],
+      workspaceIds: [run.workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(run.organizationId) ||
+      !parents.workspaceIds.has(run.workspaceId)
+    ) {
+      return "source_cancelled";
+    }
     const lockedRows = await tx
       .select({
         content: fields.content,
@@ -852,6 +863,17 @@ export const processDocumentProcessingRun = async (
       .limit(1);
     const runContext = runRows.at(0);
     if (!runContext) {
+      return null;
+    }
+
+    const parents = await lockForWrite(tx, {
+      organizationIds: [runContext.organizationId],
+      workspaceIds: [runContext.workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(runContext.organizationId) ||
+      !parents.workspaceIds.has(runContext.workspaceId)
+    ) {
       return null;
     }
 
@@ -1468,6 +1490,18 @@ const persistMissingNativeExtractionRuns = async (
   }
 
   return await database.transaction(async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: candidates.map((candidate) => candidate.organizationId),
+      workspaceIds: candidates.map((candidate) => candidate.workspaceId),
+    });
+    const liveCandidates = candidates.filter(
+      (candidate) =>
+        parents.organizationIds.has(candidate.organizationId) &&
+        parents.workspaceIds.has(candidate.workspaceId),
+    );
+    if (liveCandidates.length === 0) {
+      return [];
+    }
     const lockedEntities = await tx
       .select({
         currentVersionId: entities.currentVersionId,
@@ -1480,11 +1514,11 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             entities.id,
-            candidates.map(({ entityId }) => entityId),
+            liveCandidates.map(({ entityId }) => entityId),
           ),
           inArray(
             entities.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       )
@@ -1506,11 +1540,11 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             fields.id,
-            candidates.map(({ fieldId }) => fieldId),
+            liveCandidates.map(({ fieldId }) => fieldId),
           ),
           inArray(
             fields.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       )
@@ -1531,15 +1565,15 @@ const persistMissingNativeExtractionRuns = async (
         and(
           inArray(
             extractedContent.organizationId,
-            candidates.map((candidate) => candidate.organizationId),
+            liveCandidates.map((candidate) => candidate.organizationId),
           ),
           inArray(
             extractedContent.workspaceId,
-            candidates.map((candidate) => candidate.workspaceId),
+            liveCandidates.map((candidate) => candidate.workspaceId),
           ),
           inArray(
             extractedContent.entityId,
-            candidates.map(({ entityId }) => entityId),
+            liveCandidates.map(({ entityId }) => entityId),
           ),
         ),
       )
@@ -1548,7 +1582,7 @@ const persistMissingNativeExtractionRuns = async (
       currentProjections.map((projection) => [projection.entityId, projection]),
     );
     const queuedAt = new Date();
-    const values = candidates.flatMap((candidate) => {
+    const values = liveCandidates.flatMap((candidate) => {
       const entity = lockedEntityById.get(candidate.entityId);
       const field = currentFieldById.get(candidate.fieldId);
       const projection = currentProjectionByEntityId.get(candidate.entityId);
