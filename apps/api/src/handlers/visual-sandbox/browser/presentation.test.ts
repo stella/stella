@@ -7,7 +7,7 @@ test("keeps the theme in its own stylesheet when authored markup reuses an id", 
   const prepended: { tagName: string; textContent: string; id?: string }[] = [];
   const events: string[] = [];
   const document = {
-    createElement: (tagName: string) => ({ tagName, textContent: "" }),
+    createElement: (tagName: string) => ({ tagName, textContent: "", id: "" }),
     head: {
       prepend: (element: { tagName: string; textContent: string }) =>
         prepended.push(element),
@@ -18,7 +18,7 @@ test("keeps the theme in its own stylesheet when authored markup reuses an id", 
     defaultView: {
       dispatchEvent: (event: Event) => events.push(event.type),
     },
-  } as unknown as Document;
+  };
 
   applyVisualTheme(document, {
     appearance: "dark",

@@ -63,7 +63,9 @@ describe("generated visual host theme", () => {
         getPropertyValue: (name) => (name === "--background" ? "" : "1px"),
         fontFamily: "sans-serif",
       },
-      report: (error) => reported.push(error),
+      report: (error) => {
+        reported.push(error);
+      },
     });
     expect(theme).toBeUndefined();
     expect(reported).toHaveLength(1);
@@ -77,7 +79,9 @@ describe("generated visual host theme", () => {
     const theme = readVisualThemeOrOmit({
       appearance: "dark",
       style: { getPropertyValue: () => "1px", fontFamily: "sans-serif" },
-      report: (error) => reported.push(error),
+      report: (error) => {
+        reported.push(error);
+      },
     });
     expect(theme?.appearance).toBe("dark");
     expect(theme?.variables["--background"]).toBe("1px");

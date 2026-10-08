@@ -40,16 +40,29 @@ export const installVisualPresentation = (document: Document) => {
   document.head.prepend(style);
 };
 
-// Authored markup may reuse any id, so the runtime keeps its own reference.
-const themeStyles = new WeakMap<Document, HTMLStyleElement>();
+type ThemeStyle = { id: string; textContent: string | null };
 
-export const applyVisualTheme = (document: Document, theme: VisualTheme) => {
+// Only the members the theme writer touches, so tests pass a plain object.
+type ThemeDocument<Style extends ThemeStyle> = {
+  createElement: (tagName: "style") => Style;
+  head: { prepend: (style: Style) => void };
+  defaultView: { dispatchEvent: (event: Event) => unknown } | null;
+};
+
+// Authored markup may reuse any id, so the runtime keeps its own reference.
+const themeStyles = new WeakMap<object, ThemeStyle>();
+
+export const applyVisualTheme = <Style extends ThemeStyle>(
+  document: ThemeDocument<Style>,
+  theme: VisualTheme,
+) => {
   let style = themeStyles.get(document);
   if (style === undefined) {
-    style = document.createElement("style");
-    style.id = "stella-theme";
-    themeStyles.set(document, style);
-    document.head.prepend(style);
+    const created = document.createElement("style");
+    created.id = "stella-theme";
+    document.head.prepend(created);
+    themeStyles.set(document, created);
+    style = created;
   }
   // The caller validates host messages with the shared theme schema.
   style.textContent = `:root{color-scheme:${theme.appearance};${Object.entries(
