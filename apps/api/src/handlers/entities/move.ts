@@ -8,7 +8,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -22,7 +21,15 @@ import {
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
+
+const searchRepairFailure = failureSink({
+  event: "entities.move_search_repair_failed",
+  expected: [],
+  legacy: { severity: "ERROR", capture: true },
+});
 
 const moveEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -219,7 +226,7 @@ export const moveEntityHandler = async function* ({
   ).then((searchAttempt) => {
     const result = searchAttempt.andThen((value) => value);
     if (result.isErr()) {
-      captureError(result.error);
+      observeFailure(result.error, { sink: searchRepairFailure });
     }
     return result;
   });

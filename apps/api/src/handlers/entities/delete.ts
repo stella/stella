@@ -39,6 +39,8 @@ import {
 } from "@/api/lib/flows/review-gate-task";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   forEachOcrDerivativePage,
   ocrDerivativeCursorFilter,
@@ -49,6 +51,12 @@ import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
+
+const searchRepairFailure = failureSink({
+  event: "entities.delete_search_repair_failed",
+  expected: [],
+  legacy: { severity: "ERROR", capture: true },
+});
 
 const deleteEntitiesBodySchema = t.Object({
   entityIds: t.Array(tSafeId("entity"), {
@@ -363,7 +371,7 @@ export const deleteEntitiesHandler = async function* ({
     ).then((searchAttempt) => {
       const result = searchAttempt.andThen((value) => value);
       if (result.isErr()) {
-        captureError(result.error);
+        observeFailure(result.error, { sink: searchRepairFailure });
       }
       return result;
     });

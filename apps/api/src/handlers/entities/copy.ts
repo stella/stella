@@ -48,6 +48,8 @@ import {
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import {
@@ -57,6 +59,12 @@ import {
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
+
+const searchRepairFailure = failureSink({
+  event: "entities.copy_search_repair_failed",
+  expected: [],
+  legacy: { severity: "ERROR", capture: true },
+});
 
 const copyToWorkspaceBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -683,7 +691,7 @@ const copyToWorkspaceHandler = async function* ({
   ).then((searchAttempt) => {
     const result = searchAttempt.andThen((value) => value);
     if (result.isErr()) {
-      captureError(result.error);
+      observeFailure(result.error, { sink: searchRepairFailure });
     }
     return result;
   });
@@ -700,7 +708,7 @@ const copyToWorkspaceHandler = async function* ({
     ).then((searchAttempt) => {
       const result = searchAttempt.andThen((value) => value);
       if (result.isErr()) {
-        captureError(result.error);
+        observeFailure(result.error, { sink: searchRepairFailure });
       }
       return result;
     });

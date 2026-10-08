@@ -3,7 +3,7 @@ import {
   EU_COMPLETION_APPROVAL_PROOF,
   EU_COMPLETION_CONTROL_LIFECYCLE,
   EU_COMPLETION_RECEIPT_LIFECYCLE,
-} from "@/api/handlers/case-law/ingestion/eu-completion-transitions";
+} from "@/api/lib/case-law/eu-completion-transitions";
 import {
   FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,

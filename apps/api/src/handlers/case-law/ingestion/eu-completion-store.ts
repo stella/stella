@@ -39,11 +39,11 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   EU_COMPLETION_CONTROL_LIFECYCLE,
   EU_COMPLETION_RECEIPT_LIFECYCLE,
-} from "@/api/handlers/case-law/ingestion/eu-completion-transitions";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/case-law/eu-completion-transitions";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import {
   permitsLifecycleMove,
