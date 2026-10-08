@@ -105,7 +105,7 @@ test("generated view is live inline, reloads, and acts only on user gestures", a
   const prompts = composer.locator('[data-source="prompt"]');
   // Initial sizing confirms the view is ready before direct interaction.
   await expect
-    .poll(() =>
+    .poll(async () =>
       outer.evaluate((element) => element.getBoundingClientRect().height),
     )
     .toBeGreaterThan(480);
@@ -118,7 +118,7 @@ test("generated view is live inline, reloads, and acts only on user gestures", a
     .frameLocator("iframe");
   await expect
     .poll(
-      () =>
+      async () =>
         outer.evaluate((element) => {
           const section = element.closest("section");
           const message = element.closest("[data-chat-message-id]");

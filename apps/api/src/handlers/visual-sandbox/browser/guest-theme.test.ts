@@ -32,5 +32,6 @@ test("guest applies only validated theme updates from its captured parent", () =
   }
   expect(onTheme).not.toHaveBeenCalled();
   receive({ source: parentWindow, data });
-  expect(onTheme.mock.calls).toEqual([[theme]]);
+  expect(onTheme).toHaveBeenCalledTimes(1);
+  expect(onTheme).toHaveBeenCalledWith(theme);
 });
