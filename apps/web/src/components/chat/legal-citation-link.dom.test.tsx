@@ -447,17 +447,18 @@ for (const anchorId of [null, "p-12"]) {
     const primary = await view.findByRole("button", {
       name: decisionReference,
     });
-    expect(primary.getAttribute("href")).toBe(
-      new URL(
-        createCaseLawDecisionPath(
-          createCaseLawDecisionRouteParams({
-            ...fullDecision,
-            decisionId: fullDecision.id,
-          }),
-        ),
-        env.VITE_PUBLIC_APP_URL,
-      ).href,
+    const reader = new URL(
+      createCaseLawDecisionPath(
+        createCaseLawDecisionRouteParams({
+          ...fullDecision,
+          decisionId: fullDecision.id,
+        }),
+      ),
+      env.VITE_PUBLIC_APP_URL,
     );
+    // Native navigation follows the href, so a cited passage rides in it.
+    reader.hash = anchorId ?? "";
+    expect(primary.getAttribute("href")).toBe(reader.href);
     expect(primary.textContent).toBe("NS");
     expect(primary.textContent).not.toContain(target.caseNumber);
     fireEvent.focus(primary);

@@ -7,7 +7,10 @@ import { panic } from "better-result";
 import { createCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 
-import { openCaseLawDecision } from "@/components/chat/case-law-open";
+import {
+  openCaseLawDecision,
+  openReadCaseLawDecision,
+} from "@/components/chat/case-law-open";
 import { CitationReadFeedback } from "@/components/chat/chat-decision-citation-feedback";
 import {
   readyCitationMetadata,
@@ -142,9 +145,13 @@ const ActiveChatDecisionCitation = ({
       presentationById={answer?.presentations}
       onOpen={() =>
         detached(
-          openCaseLawDecision({ type: "ref", ref: decisionId }, open, {
-            anchorId: props.anchorId,
-          }),
+          view.type === "items"
+            ? openReadCaseLawDecision(view.items, open, {
+                anchorId: props.anchorId,
+              })
+            : openCaseLawDecision({ type: "ref", ref: decisionId }, open, {
+                anchorId: props.anchorId,
+              }),
           "chat-decision-citation.open",
         )
       }
@@ -174,9 +181,13 @@ const ActiveChatRouteDecisionCitation = ({
       presentationById={answer?.presentations}
       onOpen={() =>
         detached(
-          openCaseLawDecision({ type: "route", params }, open, {
-            anchorId: props.anchorId,
-          }),
+          view.type === "items"
+            ? openReadCaseLawDecision(view.items, open, {
+                anchorId: props.anchorId,
+              })
+            : openCaseLawDecision({ type: "route", params }, open, {
+                anchorId: props.anchorId,
+              }),
           "chat-decision-citation.open-route",
         )
       }
