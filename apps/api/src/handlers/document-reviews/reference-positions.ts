@@ -59,6 +59,7 @@ import {
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   generateTanStackObjectForRole,
   streamTanStackObjectForRole,
@@ -135,6 +136,7 @@ type ProposalRequestArgs = {
   perspective: ReviewPerspective;
   targetEntityVersionId: SafeId<"entityVersion">;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -155,6 +157,7 @@ const buildProposalRequest = ({
   perspective,
   targetEntityVersionId,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -219,6 +222,7 @@ const buildProposalRequest = ({
       orgAIConfig,
       managedAIResidency,
       organizationId,
+      admission,
       analytics,
       caching,
       serviceTier,

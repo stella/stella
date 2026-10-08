@@ -4,8 +4,6 @@ import {
   useDocxFitZoom,
 } from "@/components/docx-preview-zoom";
 
-export const DOCX_DOCUMENT_SHELL_WIDTH = "min(72vw, 52rem)";
-
 type DocxLoadingShellProps = {
   scaleOffset?: number | undefined;
   zoom?: number | undefined;

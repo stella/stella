@@ -84,7 +84,7 @@ const isSeverity = (value: string): value is PositionSeverity =>
 
 /** How much a position matters, as a word, where it cannot be changed: the
  *  same chip the editors offer, minus the menu. */
-export const SeverityWord = ({ severity }: { severity: PositionSeverity }) => {
+const SeverityWord = ({ severity }: { severity: PositionSeverity }) => {
   const t = useTranslations();
   const level = POSITION_SEVERITY_LEVEL[severity];
   return (

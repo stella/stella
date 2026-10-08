@@ -732,7 +732,7 @@ describe("chat thread messages", () => {
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain("animate-pulse");
+      expect(output).not.toContain('data-slot="loader"');
       expect(output).not.toContain("Working with context");
     }
   });

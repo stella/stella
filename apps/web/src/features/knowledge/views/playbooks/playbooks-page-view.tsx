@@ -8,9 +8,9 @@ import {
   ClipboardCheckIcon,
   ClipboardListIcon,
   Clock3Icon,
-  LoaderIcon,
   RotateCcwIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
@@ -255,7 +255,11 @@ const PlaybookStarterCards = ({
               </span>
               <span className="text-foreground mt-auto flex items-center gap-1 pt-4 text-sm font-medium">
                 {isPending ? (
-                  <LoaderIcon className="size-4 animate-spin" />
+                  <Loader
+                    className="size-4"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 ) : (
                   <>
                     {t("knowledge.playbooks.starters.useStarter")}

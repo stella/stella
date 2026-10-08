@@ -1,6 +1,6 @@
 import { isNonNullObject } from "@stll/template-conditions/path";
 
-export type SavedGeneratedDocumentDraft = {
+type SavedGeneratedDocumentDraft = {
   entityId: string;
   entityRef: string;
   fieldId: string;

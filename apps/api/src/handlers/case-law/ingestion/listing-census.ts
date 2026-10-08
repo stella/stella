@@ -98,7 +98,7 @@ const checkpointSchema = v.variant("status", [
   }),
 ]);
 
-export type ListingCensusCheckpoint = v.InferOutput<typeof checkpointSchema>;
+type ListingCensusCheckpoint = v.InferOutput<typeof checkpointSchema>;
 
 type CountingCheckpoint = Extract<
   ListingCensusCheckpoint,
@@ -120,7 +120,7 @@ export type ListingCensusAdapter = Pick<
 > & { key: string };
 
 /** How a call begins, decided from the stored checkpoint and the request. */
-export type ListingCensusStart =
+type ListingCensusStart =
   | { type: "fresh" }
   /** A census over a different range was stored; this one replaces it. */
   | { type: "restart"; replaced: ListingCensusCheckpoint }

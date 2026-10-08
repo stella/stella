@@ -245,9 +245,12 @@ export const GENERATORS = [
   {
     id: "module-ownership",
     outputKind: "committed",
-    outputs: ["docs/module-ownership.md"],
+    outputs: ["docs/module-ownership.md", "docs/module-ownership/*.md"],
     inputs: [
       "scripts/ownership.ts",
+      "scripts/ownership/*.ts",
+      "scripts/ownership-loader.ts",
+      "scripts/ownership-types.ts",
       "scripts/generated-artifacts.ts",
       ".oxfmtrc.json",
       "apps/**",
@@ -332,6 +335,24 @@ export const GENERATORS = [
     check: null,
     checkedBy: "Route tree drift guard",
     autofix: true,
+    after: [],
+  },
+  {
+    id: "model-catalog-inputs",
+    outputKind: "committed",
+    outputs: [
+      "packages/ai-catalog/upstream/models.dev.gen.json",
+      "packages/ai-catalog/upstream/openrouter.gen.json",
+    ],
+    inputs: [
+      ...MODEL_CATALOG_INPUTS,
+      "packages/scripts/src/model-catalog-snapshot.ts",
+      "packages/ai-catalog/upstream/*.gen.json",
+      "scripts/offline-network-preload.ts",
+    ],
+    write: ["bun", "--filter", "@stll/ai-catalog", "gen:rates", "--refresh"],
+    check: ["bun", "--filter", "@stll/ai-catalog", "gen:rates", "--check"],
+    autofix: false,
     after: [],
   },
   {

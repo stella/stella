@@ -159,6 +159,11 @@ export const CHAT_ORACLE = {
    *  provider publishes and to the provider's documented rules the schema
    *  leaves out (`provider-request-schema.ts`). */
   providerWireRequestRules: "chat.provider-wire.request-rules",
+  // Reported by the tool-call end test
+  // (`apps/api/src/handlers/chat/tool-call-end-arguments.test.ts`).
+  /** A tool call's stored arguments are its normalized input, never the raw
+   *  wire string the provider streamed. */
+  providerWireToolArguments: "chat.provider-wire.tool-arguments",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

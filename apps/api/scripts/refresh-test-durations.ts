@@ -81,6 +81,26 @@ export const estimateMissingTestDurations = ({
   );
 };
 
+/** Append estimates without reserializing, rounding or deleting existing entries. */
+export const addMissingTestDurations = (
+  text: string,
+  files: readonly string[],
+) => {
+  const previous = readDurationWeights(JSON.parse(text));
+  const missing = files.filter((file) => previous[file] === undefined);
+  if (missing.length === 0) {
+    return text;
+  }
+  const estimated = estimateMissingTestDurations({ files, previous });
+  const additions = Object.fromEntries(
+    Object.entries(estimated).filter(([file]) => previous[file] === undefined),
+  );
+  const closing = text.lastIndexOf("}");
+  const prefix = text.slice(0, closing).trimEnd();
+  const entries = serializeTestDurations(additions).slice(2, -3);
+  return `${prefix}${Object.keys(previous).length > 0 ? "," : ""}\n${entries}\n${text.slice(closing)}`;
+};
+
 /**
  * Without timings, --check is the pull-request gate; with a shard's timings it
  * runs after merge, where drift and gaps are advisory.
@@ -92,10 +112,34 @@ export const missingTestDurationMode = (timingInputs: readonly string[]) =>
 
 if (import.meta.main) {
   const [mode, ...inputs] = process.argv.slice(2);
-  if (mode !== "--write" && mode !== "--check") {
+  if (mode !== "--write" && mode !== "--check" && mode !== "--add-missing") {
     panic(
-      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write|--check [timings.json|directory]...",
+      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write|--check [timings.json|directory]... | --add-missing [API-relative test path]...",
     );
+  }
+  if (mode === "--add-missing") {
+    const destination = new URL("test-durations.json", import.meta.url);
+    const text = readFileSync(destination, "utf-8");
+    const files = listApiTestPaths(path.resolve(import.meta.dirname, ".."));
+    for (const input of inputs) {
+      if (!files.includes(input)) {
+        panic(`Not a live API test path: ${input}`);
+      }
+    }
+    const previous = readDurationWeights(JSON.parse(text));
+    const updated = addMissingTestDurations(
+      text,
+      files.filter(
+        (file) =>
+          inputs.length === 0 ||
+          inputs.includes(file) ||
+          previous[file] !== undefined,
+      ),
+    );
+    if (updated !== text) {
+      writeFileSync(destination, updated);
+    }
+    process.exit(0);
   }
   const artifacts = inputs.flatMap((input) =>
     input.endsWith(".json")

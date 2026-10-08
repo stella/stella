@@ -1,0 +1,1174 @@
+{
+  "data": [
+    {
+      "id": "aion-labs/aion-3.5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "aion-labs/aion-3.5-mini",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5.1",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5.1:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-haiku-5.5",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "anthropic/claude-haiku-5.5:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-4.6",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-4.6:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-4.7",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-4.7:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-4.8",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-4.8:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-5.5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-5:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.6",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.6:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "bytedance-seed/seed-2.0-code",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "bytedance-seed/seed-2.0-lite",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "bytedance-seed/seed-2.0-mini",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash-0731",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash-vision-exp",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro-0813",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "fireworks/ember-1",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "google/gemini-3-flash-preview",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3-flash-preview:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-flash-image",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-flash-image-preview",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite-image",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite-preview",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite:batch",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-pro-preview",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-pro-preview-customtools",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.1-pro-preview:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.5-flash",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.5-flash-lite",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.5-flash-lite:batch",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "google/gemini-3.5-flash:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.6-flash",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.6-flash:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.7-flash",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.7-flash:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.8-flash",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-3.8-flash:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-nano-banana-2.1",
+      "reasoning": {
+        "default_effort": "minimal"
+      }
+    },
+    {
+      "id": "ibm-granite/granite-4.2-8b",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "inception/mercury-2",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "inception/mercury-2.5",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-glimmer-30b",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-spark-1.1",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-spark-1.2",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-spark-1.2-contributor",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-spark-1.3",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-spark-1.3-contributor",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "mistralai/mistral-large-4-0",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "mistralai/mistral-medium-3-5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "mistralai/mistral-medium-3-5:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "mistralai/mistral-small-2603",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "mistralai/mistral-small-2603:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "moonshotai/kimi-k3",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "moonshotai/kimi-k3:batch",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "nex-agi/nex-n2.5-mini",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "nex-agi/nex-n2.5-pro",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "openai/gpt-5",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5-mini",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5-mini:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5-nano",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5-nano:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5-pro",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "openai/gpt-5-pro:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "openai/gpt-5.1",
+      "reasoning": {
+        "default_effort": "none"
+      }
+    },
+    {
+      "id": "openai/gpt-5.1-codex",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.1-codex-max",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.1-codex-mini",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.1:batch",
+      "reasoning": {
+        "default_effort": "none"
+      }
+    },
+    {
+      "id": "openai/gpt-5.2",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.2-codex",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.2-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.2-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.2:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.3-codex",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-image-2",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-mini",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-mini:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-nano",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-nano:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.4:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.5",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.5-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.5-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.5:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-luna",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-luna-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-luna-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-luna:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-sol",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-sol-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-sol-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-sol:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-terra",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-terra-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-terra-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-terra:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-5:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-luna",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-luna-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-luna-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-luna:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-sol",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-sol-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-sol-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6-sol:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-sol",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-sol-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-oss-120b",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-oss-120b:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-oss-20b",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-oss-20b:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/o3-mini-high",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "openai/o4-mini-high",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "perceptron/perceptron-mk1.5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "prism-ml/ternary-bonsai-2-27b",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "qwen/qwen3.8-2.4t-a95b",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "qwen/qwen3.8-27b",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "qwen/qwen3.8-max-0902",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "qwen/qwen3.8-max-prime",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "sakana/fugu-max",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "sakana/fugu-ultra",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "sakana/fugu-ultra-v2",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "sakana/sakana-namazu",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "stepfun/step-3.7-flash",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "tencent/hy3",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "tencent/hy3-preview",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "tencent/hy4-preview",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling-small",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling-small:free",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling:free",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "upstage/solar-mini4",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "upstage/solar-pro-3",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "upstage/solar-pro4",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.20-multi-agent",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.3",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.3:batch",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.5",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.6",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.7",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3-flash",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3-flash:batch",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3-flashx",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3-prime",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3:batch",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "~anthropic/claude-fable-latest",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "~anthropic/claude-haiku-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~anthropic/claude-opus-latest",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "~anthropic/claude-sonnet-latest",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "~deepseek/deepseek-flash-latest",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "~deepseek/deepseek-pro-latest",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "~deepseek/deepseek-v4-flash-latest",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "~google/gemini-flash-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~google/gemini-pro-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~moonshotai/kimi-latest",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "~openai/gpt-astra-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~openai/gpt-luna-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~openai/gpt-mini-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~openai/gpt-sol-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~openai/gpt-terra-latest",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "~x-ai/grok-latest",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "~z-ai/glm-flash-latest",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "~z-ai/glm-latest",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    }
+  ]
+}

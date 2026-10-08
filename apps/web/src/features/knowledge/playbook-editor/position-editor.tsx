@@ -1,9 +1,5 @@
 import { useId, useState } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -78,6 +74,7 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { Switch } from "@/components/switch";
 import type { ResolvedPositionSource } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -85,6 +82,10 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import {
   type DeterministicCheck,
   type FallbackEntry,
@@ -111,6 +112,7 @@ import {
   type PositionDecisionSummary,
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".
@@ -1264,7 +1266,11 @@ const ClausePicker = ({
     300,
   );
 
-  const { data } = useQuery(clausesOptions(organizationId, { search }));
+  const dataQuery = useQuery(clausesOptions(organizationId, { search }));
+  const dataView = useQueryView(dataQuery, {
+    isEmpty: (data) => "items" in data && data.items.length === 0,
+  });
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const items: ClauseOption[] =
     data && "items" in data
       ? data.items.map((clause) => ({ id: clause.id, title: clause.title }))
@@ -1274,9 +1280,11 @@ const ClausePicker = ({
     ...clauseDetailOptions(organizationId, clauseId),
     enabled: clauseId !== "",
   });
+  const detailView = useQueryView(detailQuery);
+  useQueryViewError(detailView);
 
   const resolvedTitle = (() => {
-    const detail = detailQuery.data;
+    const detail = detailView.type === "items" ? detailView.items : undefined;
     if (detail && "title" in detail && typeof detail.title === "string") {
       return detail.title;
     }
@@ -1301,6 +1309,7 @@ const ClausePicker = ({
         startAddon={selected ? <Link2Icon /> : <SearchIcon />}
       />
       <ComboboxPopup>
+        <QueryViewFeedback view={dataView} />
         <ComboboxList>
           {items.map((item) => (
             <ComboboxItem dir="auto" key={item.id} value={item}>
@@ -1308,9 +1317,11 @@ const ClausePicker = ({
             </ComboboxItem>
           ))}
         </ComboboxList>
-        <ComboboxEmpty>
-          {t("knowledge.playbooks.clauseSearchEmpty")}
-        </ComboboxEmpty>
+        {(dataView.type === "items" || dataView.type === "empty") && (
+          <ComboboxEmpty>
+            {t("knowledge.playbooks.clauseSearchEmpty")}
+          </ComboboxEmpty>
+        )}
       </ComboboxPopup>
     </Combobox>
   );

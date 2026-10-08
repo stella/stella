@@ -13,6 +13,7 @@ import {
   type ChatSkillMenuAvailability,
   type ComposerSkillChatContext,
 } from "@/lib/prompts/chat-skill-availability.logic";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The skills chat cannot offer the caller, keyed by id, with the tools each
@@ -24,13 +25,19 @@ export const useChatUnavailableSkills = (
   organizationId: string | undefined,
   userId: string | undefined,
 ): ReadonlyMap<string, readonly string[]> | undefined => {
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...chatUnavailableSkillsOptions(
       organizationId ?? "",
       userId ?? SIGNED_OUT_QUERY_OWNER,
     ),
     enabled: organizationId !== undefined && userId !== undefined,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data =
+    dataView.type === "items" && dataView.refetchError === undefined
+      ? dataView.items
+      : undefined;
   return useMemo(
     () =>
       data === undefined
@@ -83,10 +90,16 @@ export const useComposerSkillAvailability = ({
       ? undefined
       : chatSkillAvailabilityQuery({ anonymized, browserExtension, chat });
   const known = query !== null;
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...chatUnavailableSkillsOptions(organizationId, userId, query ?? undefined),
     enabled: enabled && known,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data =
+    dataView.type === "items" && dataView.refetchError === undefined
+      ? dataView.items
+      : undefined;
   // A chat not known yet reads no answer, not the widest chat's cached one.
   return useMemo(
     () => (known ? chatSkillMenuAvailability(data) : undefined),

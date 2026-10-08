@@ -90,6 +90,7 @@ import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
@@ -216,12 +217,19 @@ export const ProtectedAppFrame = ({
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const { data: workspaceNavigation } = useChromeQuery(
-    workspacesNavigationOptions({
-      organizationId: inspectorBroadcastOrganizationId,
-      userId: inspectorBroadcastUserId,
-    }),
+  const workspaceNavigationView = useQueryView(
+    useChromeQuery(
+      workspacesNavigationOptions({
+        organizationId: inspectorBroadcastOrganizationId,
+        userId: inspectorBroadcastUserId,
+      }),
+    ),
   );
+  useQueryViewError(workspaceNavigationView);
+  const workspaceNavigation =
+    workspaceNavigationView.type === "items"
+      ? workspaceNavigationView.items
+      : undefined;
   const activeWorkspace = workspaceNavigation?.workspaces.find(
     ({ id }) => id === activeWorkspaceId,
   );
@@ -417,10 +425,15 @@ function ProtectedContent() {
     setChatMenuOpen(false);
   };
 
-  const { data: workspace } = useChromeQuery({
-    ...workspaceOptions(workspaceId ?? ""),
-    enabled: !!workspaceId,
-  });
+  const workspaceView = useQueryView(
+    useChromeQuery({
+      ...workspaceOptions(workspaceId ?? ""),
+      enabled: !!workspaceId,
+    }),
+  );
+  useQueryViewError(workspaceView);
+  const workspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (
     <div
       className="ms-auto flex shrink-0 items-center gap-0.5"

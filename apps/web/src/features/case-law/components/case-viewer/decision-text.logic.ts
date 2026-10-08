@@ -8,6 +8,7 @@ import {
   type ReadDecisionTextFields,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
+import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_CAPTION_FORMS,
@@ -34,10 +35,33 @@ import {
   LINE_CONTINUATION_SEPARATOR,
   planBlockLineWrap,
 } from "@stll/legal-ast/line-wrap";
+import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
+import { buildFulltextParagraphBlocks } from "@/components/legal-reader/document-ast-text";
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { optionalArray } from "@/lib/arrays";
+
+/** Account for provision links displaced by any other kind of rendered link. */
+export const resolveDecisionLinkOverlaps = <
+  T extends { key: string; start: number; end: number },
+>(
+  anchors: readonly T[],
+) => {
+  const links = dropOverlappingSpans(anchors);
+  const retained = new Set(links);
+  const failures: ProvisionPlacementFailure[] = [];
+  for (const anchor of anchors) {
+    if (anchor.key.startsWith("provision:") && !retained.has(anchor)) {
+      failures.push({
+        id: anchor.key.slice("provision:".length),
+        reason: "span-overlap",
+      });
+    }
+  }
+  return { links, failures };
+};
 
 /**
  * The mark the court's own top matter carries: the court's chip where the
@@ -241,16 +265,13 @@ export const decisionDisplayReference = ({
 export const visibleDecisionBlocks = (
   ast: DocumentAst | null,
   caseNumberType: DecisionPrimaryReferenceType,
+  fulltext?: string | null,
 ): Block[] => {
-  if (ast === null) {
-    return [];
-  }
-
   const docketIsReferenceLine =
     caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const visible: Block[] = [];
   let inReasoning = false;
-  for (const block of ast.blocks) {
+  for (const block of optionalArray(ast?.blocks)) {
     if (
       (docketIsReferenceLine &&
         block.type === "paragraph" &&
@@ -283,7 +304,10 @@ export const visibleDecisionBlocks = (
     }
     visible.push(block);
   }
-  return visible;
+  if (visible.length > 0 || !fulltext) {
+    return visible;
+  }
+  return buildFulltextParagraphBlocks(fulltext);
 };
 
 /** Search-piece ids for publisher text the reader renders from a field. */

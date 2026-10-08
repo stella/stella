@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { errorTag } from "@/api/lib/errors/error-tag";
+import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import {
@@ -31,7 +33,7 @@ export const createSweepFileComparisonUploadsTask =
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
-    const sweptUploads = await sweep({
+    const outcome = await sweep({
       limit: FILE_COMPARISON_SWEEP_LIMIT,
       safeDb:
         rootSafeDb ??
@@ -40,13 +42,45 @@ export const createSweepFileComparisonUploadsTask =
       signal,
     });
 
-    await recordSystemAudit(db, "system:file-comparison-sweep", {
-      subject: runId,
-      counts: { sweptUploads },
+    const summary = Result.isError(outcome)
+      ? outcome.error.summary
+      : outcome.value;
+    const { sweptUploads } = summary;
+    const audit = await Result.tryPromise({
+      try: async () =>
+        await recordSystemAudit(db, "system:file-comparison-sweep", {
+          subject: runId,
+          counts: { sweptUploads },
+        }),
+      catch: (cause) => cause,
     });
     logger.info("scheduler.file_comparison_uploads_swept", {
       "fileComparisonUploads.swept": sweptUploads,
+      "fileComparisonUploads.scanned": summary.scanned,
+      "fileComparisonUploads.failed": summary.failed,
     });
+    if (Result.isError(outcome)) {
+      if (Result.isError(audit)) {
+        logger.warn("file_comparison.sweep_audit_failed", {
+          "error.type": errorTag(audit.error),
+        });
+      }
+      return Result.err(
+        new SchedulerTaskFailure({
+          cause: outcome.error,
+          message: outcome.error.message,
+        }),
+      );
+    }
+    if (Result.isError(audit)) {
+      return Result.err(
+        new SchedulerTaskFailure({
+          cause: audit.error,
+          message: "Comparison expiry audit failed",
+        }),
+      );
+    }
+    return Result.ok(undefined);
   };
 
 export const sweepFileComparisonUploads =

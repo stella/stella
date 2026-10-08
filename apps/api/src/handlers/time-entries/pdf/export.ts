@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { timeEntryAmount, MoneyTotals } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
@@ -146,10 +147,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
   // ~50 lines per page at 10pt with 14pt leading
   const linesPerPage = 50;
-  const pages: string[][] = [];
-  for (let i = 0; i < lines.length; i += linesPerPage) {
-    pages.push(lines.slice(i, i + linesPerPage));
-  }
+  const pages = chunkItems(lines, linesPerPage);
   if (pages.length === 0) {
     pages.push(["No data"]);
   }

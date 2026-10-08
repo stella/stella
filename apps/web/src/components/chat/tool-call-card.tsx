@@ -35,6 +35,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type ToolPart = ChatToolCallPart;
 
@@ -378,10 +379,14 @@ export const ToolCallCard = ({
   const user = useMaybeAuthenticatedUser();
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
-  const { data: catalogData } = useQuery({
+  const catalogDataQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: mcpToolInfo !== null,
   });
+  const catalogDataView = useQueryView(catalogDataQuery);
+  useQueryViewError(catalogDataView);
+  const catalogData =
+    catalogDataView.type === "items" ? catalogDataView.items : undefined;
   const connectors = catalogData ? catalogData.connectors : [];
   const catalogEntry = findCatalogEntry({
     toolName: name,

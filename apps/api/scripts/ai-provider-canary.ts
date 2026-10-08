@@ -15,6 +15,7 @@ import {
 } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -22,6 +23,7 @@ import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
 import {
   abortControllerFromSignal,
@@ -796,7 +798,12 @@ export const runCanaryProbe = async ({
       ) {
         return { attempts: attempt, error, signal, status: "failed" };
       }
-      await wait(retryDelayMs * CANARY_PROBE_RETRY_BACKOFF ** (attempt - 1));
+      await wait(
+        backoffDelay(attempt - 1, {
+          baseMs: retryDelayMs,
+          factor: CANARY_PROBE_RETRY_BACKOFF,
+        }),
+      );
     }
   }
 
@@ -1003,6 +1010,7 @@ const capabilityProbes = [
           role: CAPABILITY_ROLE,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         outputMode: "generative",
         outputSchema: structuredOutputSchema,
@@ -1042,6 +1050,7 @@ const capabilityProbes = [
           propertyCount: edge.propertyCount,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         outputSchema: edge.outputSchema,
         prompt:
@@ -1107,6 +1116,7 @@ const capabilityProbes = [
           role: CAPABILITY_ROLE,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         prompt: SYNTHETIC_PROMPT,
         role: CAPABILITY_ROLE,
@@ -1167,6 +1177,7 @@ const runModelRoleProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
     role: selection.role,
   });
@@ -1189,6 +1200,7 @@ const runModelRoleProbe = async ({
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
     role: selection.role,
     serviceTier: "standard",
@@ -1211,6 +1223,7 @@ const runStructuredOutputModelRoleProbe = async ({
       role,
     }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
@@ -1234,6 +1247,7 @@ const runWeeklyModelRoleProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     role,
   });
@@ -1256,6 +1270,7 @@ const runWeeklyModelRoleProbe = async ({
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     role,
     serviceTier: "standard",
@@ -1278,6 +1293,7 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
       role,
     }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
@@ -1434,6 +1450,7 @@ const runToolProbe = async ({
   const model = await resolveTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role,
   });
@@ -1858,6 +1875,7 @@ const runCatalogModelProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role: CATALOG_PROBE_ROLE,
   });
@@ -1878,6 +1896,7 @@ const runCatalogModelProbe = async ({
     }),
     prompt: SYNTHETIC_PROMPT,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role: CATALOG_PROBE_ROLE,
     serviceTier: "standard",

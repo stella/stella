@@ -39,6 +39,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ViewLayoutType } from "@/lib/api-contract";
@@ -46,6 +47,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { useQueryView } from "@/lib/use-query-view";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
@@ -92,13 +94,17 @@ export const TemplatePickerDialog = ({
   const [previewLayout, setPreviewLayout] = useState<ViewLayoutType | null>(
     null,
   );
-  const { data: templates, isPending } = useQuery({
+  const templatesQuery = useQuery({
     ...viewTemplatesOptions({
       key: { organizationId, userId },
       context: { workspaceId },
     }),
     enabled: open,
   });
+  const { isPending } = templatesQuery;
+  const templatesView = useQueryView(templatesQuery);
+  const templates =
+    templatesView.type === "items" ? templatesView.items : undefined;
   const visibleTemplates = templates?.filter(
     (template) => !disallowedLayoutTypes.has(template.layoutType),
   );
@@ -197,6 +203,9 @@ export const TemplatePickerDialog = ({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
+          {templatesView.type !== "pending" && (
+            <QueryViewFeedback view={templatesView} />
+          )}
           <div className="flex items-stretch">
             <div className="min-w-0 flex-1">
               {offersAvt && (
@@ -208,17 +217,20 @@ export const TemplatePickerDialog = ({
                   onUse={handleCreateAvt}
                 />
               )}
-              {(!offersAvt || isPending || hasSavedTemplates) && (
-                <TemplateList
-                  canDeleteTemplate={canDeleteTemplate}
-                  isMutating={createView.isPending || deleteTemplate.isPending}
-                  isPending={isPending}
-                  onDelete={handleDelete}
-                  onPreview={setPreviewLayout}
-                  onUse={handleUse}
-                  templates={visibleTemplates}
-                />
-              )}
+              {templatesView.type !== "error" &&
+                (!offersAvt || isPending || hasSavedTemplates) && (
+                  <TemplateList
+                    canDeleteTemplate={canDeleteTemplate}
+                    isMutating={
+                      createView.isPending || deleteTemplate.isPending
+                    }
+                    isPending={isPending}
+                    onDelete={handleDelete}
+                    onPreview={setPreviewLayout}
+                    onUse={handleUse}
+                    templates={visibleTemplates}
+                  />
+                )}
             </div>
             {hasTemplates && (
               <div className="ms-3 hidden border-s ps-1 sm:block">

@@ -40,6 +40,7 @@ import { cn } from "@stll/ui/utils";
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
 import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
 import type { PlaybookSnapshot } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   canAutosave,
   draftToAdopt,
@@ -107,7 +108,7 @@ import {
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
@@ -645,9 +646,13 @@ const PlaybookEditorForm = ({
   const [documentTypeKey, setDocumentTypeKey] = useState(
     initial.draft.documentTypeKey,
   );
-  const { data: documentTypesData } = useQuery(
-    documentTypesOptions(organizationId),
-  );
+  const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
+  const documentTypesDataView = useQueryView(documentTypesDataQuery);
+  useQueryViewError(documentTypesDataView);
+  const documentTypesData =
+    documentTypesDataView.type === "items"
+      ? documentTypesDataView.items
+      : undefined;
   const documentTypes = documentTypesData ? documentTypesData.items : [];
 
   const setNavOpen = usePlaybookNavStore((s) => s.setOpen);
@@ -1474,6 +1479,7 @@ const PlaybookEditorForm = ({
               />
             </div>
 
+            <QueryViewFeedback view={documentTypesDataView} />
             {documentTypes.length > 0 && (
               <div className="grid gap-1.5">
                 <Label htmlFor={documentTypeId}>{t("common.type")}</Label>
