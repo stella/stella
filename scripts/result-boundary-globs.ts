@@ -175,6 +175,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/runtime-mode/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
   "packages/sha256/src/**/*.ts",
+  "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/time/src/**/*.ts",
