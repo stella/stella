@@ -141,8 +141,10 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
   describe_capability:
     "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
-  invoke_capability:
-    "no dedicated endpoint: curated meta-tool dispatching the whole capability catalog via generated dispatch (apps/api/src/mcp/capability-tools.ts)",
+  read_capability:
+    "no dedicated endpoint: curated read executor dispatching read catalog capabilities (apps/api/src/mcp/capability-tools.ts)",
+  write_capability:
+    "no dedicated endpoint: curated write executor dispatching mutation catalog capabilities (apps/api/src/mcp/capability-tools.ts)",
   upload_document_version:
     "no dedicated endpoint: MCP host adapter bridges attached files through the canonical upload lifecycle (apps/api/src/mcp/document-file-upload.ts)",
   open_document_version_upload:

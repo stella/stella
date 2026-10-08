@@ -180,7 +180,7 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
 
 /** Write tools with no REST or UI counterpart, each with the reason. */
 const NO_REST_COUNTERPART = {
-  invoke_capability:
+  write_capability:
     "Dispatches a catalog capability chosen at call time; that capability's own REST permissions are checked before dispatch.",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -1163,7 +1163,7 @@ describe("CLI and MCP write tool parity", () => {
           rows.push({
             id,
             cli: capabilityIds.has(id) || !jsonInvocable.has(id),
-            // The catalog (which the CLI and invoke_capability read) carries
+            // The catalog (which the CLI and write_capability read) carries
             // the same grant as the live REST handler config.
             samePermissions:
               JSON.stringify(
