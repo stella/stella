@@ -4,10 +4,11 @@ import ts from "typescript";
 
 const BADGE_OWNER = "packages/ui/src/components/document-identity-badge.tsx";
 const DOCUMENT_ROW_DATA =
-  /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|StatuteViewPayload|ProvisionViewPayload|CaseDecisionViewPayload|statuteTitle|courtAbbreviation|caseNumber)\b|\bstatute\.title\b|["'](?:statute|decision|case-law)["']/u;
-const ROW_TAG = /^(?:TableRow|TableCell|li|CommandItem|PublicLawRow)$/u;
+  /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|StatuteViewPayload|ProvisionViewPayload|CaseDecisionViewPayload|statuteTitle|courtAbbreviation|caseNumber|documentIdentity)\b|\bstatute\.title\b|["'](?:statute|decision|case-law)["']/u;
+const ROW_TAG =
+  /^(?:TableRow|TableCell|li|CommandItem|PublicLawRow|PublicLawTable)$/u;
 const DOCUMENT_INPUT =
-  /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|CitingDecisionRow|ResolvedCitedStatute)\b/u;
+  /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|CitingDecisionRow|ResolvedCitedStatute|DecisionRowData)\b/u;
 const ROW_IDENTITY =
   /\.(?:caseNumber|courtAbbreviation|statuteTitle|decisionId)\b|\bstatute\.title\b/u;
 
@@ -116,6 +117,90 @@ const reachesBadge = ({
   );
 };
 
+type CollectInitializerOptions = {
+  name: string;
+  expression: ts.Expression;
+  collect: (name: string, node: ts.FunctionLikeDeclaration) => void;
+};
+
+const collectInitializer = ({
+  name,
+  expression,
+  collect,
+}: CollectInitializerOptions) => {
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+    collect(name, expression);
+    return;
+  }
+  if (!ts.isCallExpression(expression)) {
+    return;
+  }
+  for (const argument of expression.arguments) {
+    if (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) {
+      collect(name, argument);
+    }
+  }
+};
+
+type DocumentRendererOptions = {
+  name: string;
+  node: ts.FunctionLikeDeclaration;
+  file: ts.SourceFile;
+  hasJsx: boolean;
+  hasRows: boolean;
+  rowProjectsIdentity: boolean;
+  hasIdentityValue: boolean;
+};
+
+const isDocumentRenderer = ({
+  name,
+  node,
+  file,
+  hasJsx,
+  hasRows,
+  rowProjectsIdentity,
+  hasIdentityValue,
+}: DocumentRendererOptions) => {
+  if (!hasJsx) {
+    return false;
+  }
+  const typedDocumentInput = node.parameters.some((parameter) =>
+    DOCUMENT_INPUT.test(parameter.getText(file)),
+  );
+  // Maps of language menus, legal text ASTs and charts are not document rows.
+  // A row projects an identity value and has a list/table/command slot.
+  return (
+    (hasRows &&
+      (rowProjectsIdentity ||
+        typedDocumentInput ||
+        /\bDecisionRowData\b/u.test(node.getText(file)))) ||
+    (hasIdentityValue && /Cell$/u.test(name)) ||
+    (typedDocumentInput && /Item$|References$/u.test(name)) ||
+    (DOCUMENT_ROW_DATA.test(node.getText(file)) &&
+      /RailIcon$|HitIcon$|Recent.*Icon$/u.test(name))
+  );
+};
+
+const gatherBindings = (
+  body: ts.Node,
+  bindings: Map<string, ts.Expression>,
+) => {
+  const visit = (child: ts.Node) => {
+    if (child !== body && ts.isFunctionLike(child)) {
+      return;
+    }
+    if (
+      ts.isVariableDeclaration(child) &&
+      ts.isIdentifier(child.name) &&
+      child.initializer !== undefined
+    ) {
+      bindings.set(child.name.text, child.initializer);
+    }
+    ts.forEachChild(child, visit);
+  };
+  visit(body);
+};
+
 /** Discover document rows and registered rails, then follow their rendered output. */
 export const checkDocumentIdentitySources = (
   sources: ReadonlyMap<string, string>,
@@ -139,24 +224,12 @@ export const checkDocumentIdentitySources = (
       let hasRows = false;
       let rowProjectsIdentity = false;
       let hasJsx = false;
+      let hasIdentityValue = false;
       const body = node.body;
       if (body === undefined) {
         return;
       }
-      const gatherBindings = (child: ts.Node) => {
-        if (child !== body && ts.isFunctionLike(child)) {
-          return;
-        }
-        if (
-          ts.isVariableDeclaration(child) &&
-          ts.isIdentifier(child.name) &&
-          child.initializer !== undefined
-        ) {
-          bindings.set(child.name.text, child.initializer);
-        }
-        ts.forEachChild(child, gatherBindings);
-      };
-      gatherBindings(body);
+      gatherBindings(body, bindings);
       const visitedBindings = new Set<string>();
       const visit = (child: ts.Node) => {
         if (ts.isIdentifier(child)) {
@@ -171,6 +244,15 @@ export const checkDocumentIdentitySources = (
           /^on[A-Z]/u.test(child.name.getText(file))
         ) {
           return;
+        }
+        if (
+          ts.isJsxExpression(child) &&
+          child.expression !== undefined &&
+          /\b(?:caseNumber|courtAbbreviation|statuteTitle|documentIdentity)\b/u.test(
+            child.expression.getText(file),
+          )
+        ) {
+          hasIdentityValue = true;
         }
         if (
           ts.isJsxOpeningElement(child) ||
@@ -189,6 +271,13 @@ export const checkDocumentIdentitySources = (
         }
         if (ts.isCallExpression(child)) {
           references.add(reference(child.expression.getText(file)));
+        }
+        if (
+          ts.isBinaryExpression(child) &&
+          child.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+          child.left.kind === ts.SyntaxKind.FalseKeyword
+        ) {
+          return;
         }
         // A literal-false conditional cannot render its consequent.
         if (
@@ -213,6 +302,15 @@ export const checkDocumentIdentitySources = (
           }
           return;
         }
+        if (ts.isBlock(child)) {
+          for (const statement of child.statements) {
+            returned(statement);
+            if (ts.isReturnStatement(statement)) {
+              break;
+            }
+          }
+          return;
+        }
         if (ts.isReturnStatement(child)) {
           if (child.expression !== undefined) {
             visit(child.expression);
@@ -227,40 +325,18 @@ export const checkDocumentIdentitySources = (
         visit(body);
       }
       renderers.set(id, { path: filename, name, references });
-      // Maps of language menus, legal text ASTs and charts are not document rows.
-      // A row projects an identity value and has a list/table/command slot.
-      const typedDocumentInput = node.parameters.some((parameter) =>
-        DOCUMENT_INPUT.test(parameter.getText(file)),
-      );
-      if (hasJsx && hasRows && (rowProjectsIdentity || typedDocumentInput)) {
-        roots.add(id);
-      }
-      if (hasJsx && typedDocumentInput && /Item$|References$/u.test(name)) {
-        roots.add(id);
-      }
       if (
-        hasJsx &&
-        DOCUMENT_ROW_DATA.test(node.getText(file)) &&
-        /RailIcon$|HitIcon$|Recent.*Icon$/u.test(name)
+        isDocumentRenderer({
+          name,
+          node,
+          file,
+          hasJsx,
+          hasRows,
+          rowProjectsIdentity,
+          hasIdentityValue,
+        })
       ) {
         roots.add(id);
-      }
-    };
-    const collectInitializer = (name: string, expression: ts.Expression) => {
-      if (
-        ts.isArrowFunction(expression) ||
-        ts.isFunctionExpression(expression)
-      ) {
-        collect(name, expression);
-        return;
-      }
-      if (!ts.isCallExpression(expression)) {
-        return;
-      }
-      for (const argument of expression.arguments) {
-        if (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) {
-          collect(name, argument);
-        }
       }
     };
     for (const statement of file.statements) {
@@ -268,7 +344,11 @@ export const checkDocumentIdentitySources = (
         collect(statement.name?.text ?? "default", statement);
       }
       if (ts.isExportAssignment(statement)) {
-        collectInitializer("default", statement.expression);
+        collectInitializer({
+          name: "default",
+          expression: statement.expression,
+          collect,
+        });
       }
       if (ts.isVariableStatement(statement)) {
         for (const declaration of statement.declarationList.declarations) {
@@ -276,7 +356,11 @@ export const checkDocumentIdentitySources = (
             ts.isIdentifier(declaration.name) &&
             declaration.initializer !== undefined
           ) {
-            collectInitializer(declaration.name.text, declaration.initializer);
+            collectInitializer({
+              name: declaration.name.text,
+              expression: declaration.initializer,
+              collect,
+            });
           }
         }
       }

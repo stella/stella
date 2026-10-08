@@ -10,7 +10,6 @@ import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
-  FileTextIcon,
   HistoryIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
@@ -445,6 +444,18 @@ export const SearchResultItem = ({
 };
 
 export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
+  if (file.documentIdentity !== undefined) {
+    return (
+      <DocumentIdentityBadge
+        identity={file.documentIdentity}
+        title={file.title}
+      />
+    );
+  }
+  return <RecentFileTypeIcon file={file} />;
+};
+
+const RecentFileTypeIcon = ({ file }: { file: RecentFile }) => {
   // Recents store identifiers, not thumbnail availability. Observe metadata
   // already loaded by the file view without fetching every recent on open.
   const entityQuery = useQuery({
@@ -466,7 +477,12 @@ export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
   const content = field?.content.type === "file" ? field.content : null;
   const mimeType = content?.mimeType ?? file.mimeType;
   if (!mimeType) {
-    return <FileTextIcon className="text-muted-foreground size-4 shrink-0" />;
+    return (
+      <DocumentIdentityBadge
+        identity={{ kind: "unknown" }}
+        title={file.title}
+      />
+    );
   }
   return (
     <DocumentIcon

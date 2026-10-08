@@ -37,7 +37,18 @@ for (const locale of ["en", "ar"] as const) {
         const mark = button
           .querySelector('[data-slot="document-identity-badge"]')
           ?.getBoundingClientRect();
+        const text =
+          button.querySelector('[data-slot="court-badge"]') ??
+          [...button.querySelectorAll("bdi")].find(
+            (element) => getComputedStyle(element).display !== "none",
+          );
+        const range = document.createRange();
+        if (text !== undefined && text !== null) {
+          range.selectNodeContents(text);
+        }
+        const glyphs = range.getBoundingClientRect();
         return {
+          glyphs: { start: glyphs.left, end: glyphs.right },
           slot: { start: slot.left, end: slot.right },
           mark:
             mark === undefined ? null : { start: mark.left, end: mark.right },
@@ -46,6 +57,8 @@ for (const locale of ["en", "ar"] as const) {
       expect(bounds.mark).not.toBeNull();
       expect(bounds.mark?.start).toBeGreaterThanOrEqual(bounds.slot.start);
       expect(bounds.mark?.end).toBeLessThanOrEqual(bounds.slot.end);
+      expect(bounds.glyphs.start).toBeGreaterThanOrEqual(bounds.slot.start);
+      expect(bounds.glyphs.end).toBeLessThanOrEqual(bounds.slot.end);
     }
     await narrow.locator('[data-slot="tooltip-trigger"]').hover();
     await expect(page.getByRole("tooltip")).toHaveText(

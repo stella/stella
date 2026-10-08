@@ -66,6 +66,66 @@ describe("document identity ownership guard", () => {
     expect(checkDocumentIdentitySources(sources).violations).toHaveLength(1);
   });
 
+  test.each([
+    "export const RenamedList = ({ hits }: { hits: StatuteSearchHit[] }) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>;",
+    "export const WrappedList = memo(({ hits }: { hits: StatuteSearchHit[] }) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>);",
+    "export const RefList = forwardRef(({ hits }: { hits: StatuteSearchHit[] }, ref) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>);",
+    "export default ({ hits }: { hits: StatuteSearchHit[] }) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>;",
+    "export default function ({ hits }: { hits: StatuteSearchHit[] }) { return <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>; }",
+  ])(
+    "a new document list cannot evade discovery through its name or component wrapper",
+    (source) => {
+      const result = checkDocumentIdentitySources(
+        fixture("apps/web/src/features/statutes/another-list.tsx", source),
+      );
+      expect(result.surfaces).toHaveLength(1);
+      expect(result.violations).toEqual(result.surfaces);
+    },
+  );
+
+  test.each([
+    "const unused = <DocumentIdentityBadge identity={hit.identity} />;",
+    "const unused = DocumentIdentityBadge({ identity: hit.identity });",
+    "if (false) return <DocumentIdentityBadge identity={hit.identity} />;",
+  ])(
+    "discarded and unreachable badge output does not protect a document row",
+    (discarded) => {
+      const source = `${IMPORT}export const DecisionRow = ({ hit }) => { ${discarded} return <li>{hit.caseNumber}</li>; };`;
+      const result = checkDocumentIdentitySources(
+        fixture("apps/web/src/features/case-law/another-row.tsx", source),
+      );
+      expect(result.surfaces).toHaveLength(1);
+      expect(result.violations).toEqual(result.surfaces);
+    },
+  );
+
+  test("every requested surface fails the guard if its shared rendering is replaced", () => {
+    const sources = readDocumentIdentitySources(
+      path.resolve(import.meta.dir, ".."),
+    );
+    const baseline = checkDocumentIdentitySources(sources);
+    expect(baseline.violations).toEqual([]);
+    for (const [filename, source] of sources) {
+      if (!source.includes("<DocumentIdentityBadge")) {
+        continue;
+      }
+      const ownedSurfaces = baseline.surfaces.filter((surface) =>
+        surface.startsWith(`${filename}#`),
+      );
+      if (ownedSurfaces.length === 0) {
+        continue;
+      }
+      const replacement = source.replaceAll("<DocumentIdentityBadge", "<span");
+      expect(replacement).not.toBe(source);
+      const mutated = new Map(sources);
+      mutated.set(filename, replacement);
+      const result = checkDocumentIdentitySources(mutated);
+      for (const surface of ownedSurfaces) {
+        expect(result.violations).toContain(surface);
+      }
+    }
+  });
+
   test("every discovered repository document row or rail reaches the shared badge", () => {
     const sources = readDocumentIdentitySources(
       path.resolve(import.meta.dir, ".."),
@@ -77,6 +137,8 @@ describe("document identity ownership guard", () => {
       "apps/web/src/features/statutes/statute-inspector-registration.tsx#StatuteRailIcon",
       "apps/web/src/features/statutes/components/statute-search-results.tsx#StatuteSearchResults",
       "apps/web/src/components/search-dialog-results.tsx#SearchHitIcon",
+      "apps/web/src/components/search-dialog-results.tsx#RecentFileIcon",
+      "apps/web/src/features/case-law/components/decision-cells.tsx#CaseNumberCell",
       "apps/api/src/mcp/apps/case-law-results/app.tsx#ResultsTable",
     ]) {
       expect(result.surfaces).toContain(surface);

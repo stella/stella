@@ -3,6 +3,8 @@ import * as v from "valibot";
 
 import { isSafeIdValue } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import type { DocumentIdentity } from "@stll/ui/document-identity-badge.logic";
+import { COURT_TIER_WEIGHT } from "@stll/ui/document-identity-badge.logic";
 
 import { getStorageKey } from "@/consts";
 import { browserStateStorage } from "@/lib/account/browser-storage";
@@ -30,6 +32,7 @@ export type RecentSearch = {
 };
 
 export type RecentFile = {
+  documentIdentity?: DocumentIdentity | undefined;
   entityId: string;
   fileFieldId?: string | null | undefined;
   filePropertyId?: string | null | undefined;
@@ -66,9 +69,39 @@ const isRecentSearch = (value: unknown): value is RecentSearch =>
   typeof value["query"] === "string" &&
   typeof value["searchedAt"] === "string";
 
+const isRecentDocumentIdentity = (
+  value: unknown,
+): value is DocumentIdentity => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  switch (value["kind"]) {
+    case "unknown":
+      return true;
+    case "statute":
+      return (
+        (value["number"] === null || typeof value["number"] === "string") &&
+        (value["year"] === null || typeof value["year"] === "string")
+      );
+    case "decision":
+      return (
+        (value["courtAbbreviation"] === undefined ||
+          value["courtAbbreviation"] === null ||
+          typeof value["courtAbbreviation"] === "string") &&
+        (value["courtTier"] === undefined ||
+          (typeof value["courtTier"] === "string" &&
+            Object.hasOwn(COURT_TIER_WEIGHT, value["courtTier"])))
+      );
+    default:
+      return false;
+  }
+};
+
 const isRecentFile = (value: unknown): value is RecentFile =>
   isRecord(value) &&
   isResourceId(value["entityId"]) &&
+  (value["documentIdentity"] === undefined ||
+    isRecentDocumentIdentity(value["documentIdentity"])) &&
   (value["fileFieldId"] === undefined ||
     value["fileFieldId"] === null ||
     typeof value["fileFieldId"] === "string") &&
