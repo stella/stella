@@ -261,6 +261,75 @@ describe("request secret card", () => {
     queryClient.clear();
   });
 
+  test("keeps the continuation retry after the tool part completed", async () => {
+    const submissions: RequestSecretDecision[] = [];
+    const continuations: RequestSecretOutput[] = [];
+    let rejectFirst: (reason: Error) => void = () => {
+      throw new Error("continuation not started");
+    };
+    const { queryClient, renderCard, view } = mountCard({
+      handleRequestSecret: async (_toolCallId, decision) => {
+        submissions.push(decision);
+        return providedOutput;
+      },
+      continueRequestSecret: (_toolCallId, receipt) => {
+        continuations.push(receipt);
+        if (continuations.length > 1) {
+          return Promise.resolve();
+        }
+        return new Promise<void>((_resolve, reject) => {
+          rejectFirst = reject;
+        });
+      },
+    });
+
+    const credentialField = await screen.findByLabelText(
+      messages.chat.requestSecret.valueLabel,
+    );
+    fireEvent.change(credentialField, { target: { value: "sample-value" } });
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.chat.requestSecret.provideAction,
+        }),
+      ),
+    );
+    // addToolResult completes the part before the chat resumes.
+    const completedPart: RequestSecretPart = {
+      ...pendingPart(),
+      output: providedOutput,
+      state: "complete",
+    };
+    await act(async () => view.rerender(renderCard(completedPart)));
+    await act(async () => rejectFirst(new Error("continuation unavailable")));
+
+    expect(
+      await screen.findByText(messages.chat.requestSecret.continuationError),
+    ).not.toBeNull();
+    expect(
+      screen.getByText(messages.chat.requestSecret.provided),
+    ).not.toBeNull();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.chat.requestSecret.retryContinuationAction,
+        }),
+      ),
+    );
+
+    expect(submissions).toHaveLength(1);
+    expect(continuations).toEqual([providedOutput, providedOutput]);
+    expect(
+      screen.queryByRole("button", {
+        name: messages.chat.requestSecret.retryContinuationAction,
+      }),
+    ).toBeNull();
+    expect(
+      screen.getByText(messages.chat.requestSecret.provided),
+    ).not.toBeNull();
+    queryClient.clear();
+  });
+
   test("requires confirmation before replacing a normal connection", async () => {
     const submissions: RequestSecretDecision[] = [];
     const { queryClient } = mountCard({

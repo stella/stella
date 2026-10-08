@@ -218,6 +218,8 @@ export const RequestSecretCard = ({
   // value). Held so a failed chat continuation retries only the
   // continuation instead of re-submitting the credential.
   const [heldReceipt, setHeldReceipt] = useState<RequestSecretOutput>();
+  // Retry availability follows the failed continuation, not the part state:
+  // addToolResult writes the output onto the part before resuming the chat.
   const [hasContinuationError, setHasContinuationError] = useState(false);
   const input = part.state === "input-streaming" ? null : part.input;
   const output = part.state === "complete" ? part.output : undefined;
@@ -248,7 +250,7 @@ export const RequestSecretCard = ({
   };
 
   const retryContinuation = async () => {
-    if (heldReceipt === undefined || !isPending || isSubmitting) {
+    if (heldReceipt === undefined || isSubmitting) {
       return;
     }
     await continueWithReceipt(heldReceipt);
@@ -357,7 +359,7 @@ export const RequestSecretCard = ({
             : t("chat.requestSecret.declined")}
         </p>
       ) : null}
-      {isPending && heldReceipt !== undefined ? (
+      {heldReceipt !== undefined ? (
         <RequestSecretContinuationRetry
           hasError={hasContinuationError}
           isSubmitting={isSubmitting}
