@@ -107,12 +107,13 @@ export const CitedProvisionLink = ({
     // The Query observer below owns preview failures; the demand read shares
     // its cache entry and must not report the same failure a second time.
     detached(
-      Result.tryPromise(() =>
-        loadProvisionPreview({
-          anchor: provision.payload.anchorId,
-          citedAnchor: provision.payload.highlightAnchorId,
-          documentId: provision.document.id,
-        }),
+      Result.tryPromise(
+        async () =>
+          await loadProvisionPreview({
+            anchor: provision.payload.anchorId,
+            citedAnchor: provision.payload.highlightAnchorId,
+            documentId: provision.document.id,
+          }),
       ),
       "legal-reader.provision-preview",
     );

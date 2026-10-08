@@ -160,9 +160,9 @@ const renderMark = ({
     case "search":
       return (
         <TextMark
+          key={key}
           {...SEARCH_HIT_MARK}
           data-reader-match-index={range.matchIndex}
-          key={key}
           // The one match the find is standing on wears the active mark, so
           // stepping through the matches is visible.
           state={range.matchIndex === activeMatchIndex ? "active" : "rest"}

@@ -62,8 +62,8 @@ export const readerTextScaleBounds = (scale: number): ReaderTextScaleBounds => {
 export const parseReaderTextScale = (raw: string | null): number | null =>
   raw === null
     ? null
-    : Result.try(() => JSON.parse(raw))
-        .map((value: unknown) => {
+    : Result.try((): unknown => JSON.parse(raw))
+        .map((value) => {
           const parsed = v.safeParse(StoredReaderTextScaleSchema, value);
           return parsed.success ? parsed.output : null;
         })

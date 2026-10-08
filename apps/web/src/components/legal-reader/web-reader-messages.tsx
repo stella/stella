@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useTranslations } from "use-intl";
 
 import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
@@ -24,9 +26,11 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "statutes.currentWording": t("statutes.currentWording"),
     "statutes.wordingVersionUnknown": t("statutes.wordingVersionUnknown"),
     "statutes.openProvision": t("statutes.openProvision"),
-    sourceAttribution: (source, link) =>
+    // Explicit ReactNode: the inferred `t.rich` result carries React 19's
+    // Promise<AwaitedReactNode> member, which promise-function-async flags.
+    sourceAttribution: (source, link): ReactNode =>
       t.rich("caseLaw.reader.sourceAttribution", { source, link }),
-    dissentByline: (names) =>
+    dissentByline: (names): ReactNode =>
       t.rich("caseLaw.viewer.dissentByline", {
         bdi: (chunks) => <BidiText>{chunks}</BidiText>,
         names: format.list([...names]),

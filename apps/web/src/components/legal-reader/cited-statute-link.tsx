@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { LEGAL_CITATION_LINK_CLASS_NAME } from "@stll/decision-reader/citation-link";
+import type { CitedStatuteTarget } from "@stll/decision-reader/reader-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   PreviewCard,
@@ -16,18 +17,6 @@ import { opensCitationInInspector } from "@/components/inspector/case-decision-v
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
-
-/** A work-level statute citation: the consolidation it resolved to, named. */
-export type CitedStatuteTarget = {
-  document: {
-    country: string;
-    eli: string | null;
-    id: string;
-    slug: string | null;
-    versionValidFrom: string | null;
-  };
-  statuteTitle: string;
-};
 
 /**
  * A work-level statute citation: no provision locator is required.

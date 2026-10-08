@@ -91,7 +91,11 @@ test("a refused storage write keeps the selected scale visible and reports one f
         throw cause;
       },
     },
-    analytics: { captureError: (error: unknown) => failures.push(error) },
+    analytics: {
+      captureError: (error) => {
+        failures.push(error);
+      },
+    },
   } satisfies ReaderTextScaleOptions;
   const ScaleControls = () => {
     const scale = useReaderTextScale(options);
@@ -105,7 +109,9 @@ test("a refused storage write keeps the selected scale visible and reports one f
     );
   };
   try {
-    await act(() => root.render(<ScaleControls />));
+    await act(async () => {
+      root.render(<ScaleControls />);
+    });
     const article =
       container.querySelector("article") ?? panic("Missing scale root");
     const button =
@@ -113,7 +119,9 @@ test("a refused storage write keeps the selected scale visible and reports one f
     expect(article.style.getPropertyValue("--reader-text-scale")).toBe("1");
     expect(failures).toEqual([]);
 
-    await act(() => button.click());
+    await act(async () => {
+      button.click();
+    });
     expect(article.style.getPropertyValue("--reader-text-scale")).toBe("1.1");
     expect(article.querySelector("output")?.textContent).toBe("1.1");
     expect(writes).toEqual([
@@ -125,11 +133,15 @@ test("a refused storage write keeps the selected scale visible and reports one f
       cause,
     });
 
-    await act(() => root.render(<ScaleControls />));
+    await act(async () => {
+      root.render(<ScaleControls />);
+    });
     expect(article.style.getPropertyValue("--reader-text-scale")).toBe("1.1");
     expect(failures).toHaveLength(1);
   } finally {
-    await act(() => root.unmount());
+    await act(async () => {
+      root.unmount();
+    });
     container.remove();
     if (previousActEnvironment === undefined) {
       Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");

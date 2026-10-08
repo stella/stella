@@ -52,7 +52,7 @@ export const useDecisionStatuteCitationAnchors = (
     if (statute === undefined) {
       return [];
     }
-    const target: CitedStatuteTarget = {
+    const target = {
       document: {
         country: statute.country,
         eli: statute.eli,

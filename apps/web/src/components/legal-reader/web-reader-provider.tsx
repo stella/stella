@@ -58,7 +58,7 @@ export const WebReaderProvider = ({ children }: { children: ReactNode }) => {
     loadProvisionPreview: async (ref) =>
       await (
         queryClient ?? panic("Reader previews require QueryClientProvider")
-      ).fetchQuery(provisionPreviewOptions(ref)),
+      ).query(provisionPreviewOptions(ref)),
   } satisfies DecisionReaderAdapters;
 
   return (

@@ -131,7 +131,7 @@ const moduleSpecifiers = (source: string) => {
     ) {
       const expression = node.moduleReference.expression;
       specifiers.push(
-        expression && ts.isStringLiteral(expression)
+        ts.isStringLiteral(expression)
           ? expression.text
           : "<computed module specifier>",
       );
