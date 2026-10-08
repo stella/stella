@@ -32,6 +32,9 @@ const legacy = (registrations: ReturnType<typeof enumerate>) =>
     reason: "Existing fixture awaits ownership declaration.",
   }));
 
+/** Typed fixture pairs, so destructuring yields strings. */
+const pairs = (...items: [string, string][]) => items;
+
 describe("aggregate mutation route coverage", () => {
   test("a planted mutation outside the inventory fails", () => {
     const original = enumerate(fixture('post("/existing", existing.handler)'));
@@ -349,6 +352,30 @@ describe("aggregate mutation route coverage", () => {
       `${imports.replace("@/api/lib/db/aggregate-lock", "@/api/lib/fake-lock")} ${routeSource}`,
     );
     expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+  });
+
+  test("inline declarations resolve named imported handlers by trusted binding", () => {
+    const sources = fixture(
+      'post("/imported", declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}))',
+    );
+    sources.set(
+      routes,
+      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { existing } from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
+    );
+    const module = "apps/api/src/handlers/example/create.ts";
+    const imports =
+      'import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+    const locking =
+      'createSafeHandler({}, async () => { await withAggregateLock({aggregate: "workspace", id, tx}); })';
+    sources.set(module, `${imports} export const existing = ${locking};`);
+    expect(enumerate(sources).at(0)?.declared).toBe(true);
+    sources.set(
+      module,
+      `${imports} export let existing = ${locking}; existing = createSafeHandler({}, async () => {});`,
+    );
+    expect(() => enumerate(sources)).toThrow(
+      "Cannot resolve declared aggregate handler implementation",
+    );
   });
 
   test("mounted producers are followed regardless of their filename", () => {
@@ -716,7 +743,7 @@ describe("aggregate mutation route coverage", () => {
       const sources = setup();
       const imports =
         'import { lockExample } from "@/api/services/example-lock";';
-      for (const [definition, body] of [
+      for (const [definition, body] of pairs(
         [
           `export async function* lockExample(tx) { ${acquisition} }`,
           "await safeDb(async (tx) => { await lockExample(tx); });",
@@ -733,7 +760,7 @@ describe("aggregate mutation route coverage", () => {
           `export const lockExample = async (tx) => { ${acquisition} };`,
           "await safeDb(async (tx) => { await lockExample.call(undefined, tx); });",
         ],
-      ]) {
+      )) {
         sources.set(service, `${lockImport} ${definition}`);
         sources.set(module, handlerModule({ imports, body }));
         expect(() => enumerate(sources)).toThrow(
@@ -754,7 +781,7 @@ describe("aggregate mutation route coverage", () => {
       );
       sources.set(module, handlerModule({ imports: named, body }));
       expect(enumerate(sources).at(0)?.declared).toBe(true);
-      for (const [definition, imports] of [
+      for (const [definition, imports] of pairs(
         [
           `const lockExample = ${locking}; const noop = async () => {}; export { noop as lockExample };`,
           named,
@@ -784,7 +811,7 @@ describe("aggregate mutation route coverage", () => {
           `export const lockExample = ${locking};`,
           'import * as lockExample from "@/api/services/example-lock";',
         ],
-      ]) {
+      )) {
         sources.set(service, `${lockImport} ${definition}`);
         sources.set(module, handlerModule({ imports, body }));
         expect(() => enumerate(sources)).toThrow(

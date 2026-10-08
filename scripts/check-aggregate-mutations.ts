@@ -753,7 +753,7 @@ const importedReference = ({
     });
     const specifier = statement.moduleSpecifier.text;
     const clause = statement.importClause;
-    if (clause?.isTypeOnly === true) {
+    if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
       // Type-only imports have no runtime value; a same-named binding is
       // never trusted.
       if (
@@ -837,7 +837,6 @@ const handlerImplementation = ({
     const factory = trustedBinding({
       identifier: handler.expression,
       access,
-      source,
     });
     const callback = handler.arguments.at(1);
     if (
@@ -863,7 +862,30 @@ const handlerImplementation = ({
     return undefined;
   }
   visited.add(key);
-  const binding = trustedBinding({ identifier: handler, access, source });
+  return bindingImplementation({
+    binding: trustedBinding({ identifier: handler, access }),
+    source,
+    file,
+    access,
+    visited,
+  });
+};
+
+type BindingImplementationOptions = Omit<
+  HandlerImplementationOptions,
+  "handler"
+> & {
+  binding: TrustedBinding | undefined;
+  visited: Set<string>;
+};
+/** The handler implementation a trusted top-level binding resolves to. */
+const bindingImplementation = ({
+  binding,
+  source,
+  file,
+  access,
+  visited,
+}: BindingImplementationOptions): HandlerImplementation => {
   if (binding?.kind === "function") {
     return { body: binding.body, source, file };
   }
@@ -876,27 +898,39 @@ const handlerImplementation = ({
       visited,
     });
   }
-  const imported = binding?.kind === "import" ? binding : undefined;
-  if (imported?.module === undefined) {
+  if (binding?.kind !== "import" || binding.module === undefined) {
     return undefined;
   }
-  const content = access.load(imported.module);
+  const content = access.load(binding.module);
   if (content === undefined) {
     return undefined;
   }
-  const importedSource = parse({ file: imported.module, source: content });
-  let exported = ts.factory.createIdentifier(imported.exported);
-  if (imported.exported === "default") {
-    const assignment = importedSource.statements.find(ts.isExportAssignment);
-    if (assignment === undefined || !ts.isIdentifier(assignment.expression)) {
-      return undefined;
-    }
-    exported = assignment.expression;
+  const target = parse({ file: binding.module, source: content });
+  if (binding.exported === "default") {
+    const assignment = target.statements.find(ts.isExportAssignment);
+    return assignment === undefined || !ts.isIdentifier(assignment.expression)
+      ? undefined
+      : handlerImplementation({
+          handler: assignment.expression,
+          source: target,
+          file: binding.module,
+          access,
+          visited,
+        });
   }
-  return handlerImplementation({
-    handler: exported,
-    source: importedSource,
-    file: imported.module,
+  const key = `${binding.module}#${binding.exported}`;
+  if (visited.has(key)) {
+    return undefined;
+  }
+  visited.add(key);
+  return bindingImplementation({
+    binding: trustedTopLevel({
+      name: binding.exported,
+      source: target,
+      access,
+    }),
+    source: target,
+    file: binding.module,
     access,
     visited,
   });
@@ -1177,8 +1211,6 @@ const trustedTopLevel = ({
 type TrustedBindingOptions = {
   identifier: ts.Identifier;
   access: SourceAccess;
-  /** Required for synthetic identifiers that have no parent. */
-  source?: ts.SourceFile;
 };
 /**
  * The single trust check for identifiers the checker relies on: resolved
@@ -1189,14 +1221,8 @@ type TrustedBindingOptions = {
 const trustedBinding = ({
   identifier,
   access,
-  source,
 }: TrustedBindingOptions): TrustedBinding | undefined => {
   const name = identifier.text;
-  if (identifier.parent === undefined) {
-    return source === undefined
-      ? undefined
-      : trustedTopLevel({ name, source, access });
-  }
   const scope = bindingScope(identifier, name);
   if (scope === undefined) {
     return trustedTopLevel({
