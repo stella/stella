@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Não salvo",
-      "failedTitle": "Sua alteração não foi salva",
-      "saved": "Salvo",
-      "saving": "Salvando…"
+      "failedTitle": "Sua alteração não foi salva"
     },
     "sourceMediumTooltip": "Meio da fonte — um descritor neutro. Por si só, não reduz a confiança.",
     "states": {
@@ -1880,6 +1878,8 @@
     "saveAndLeave": "Salvar e sair",
     "saveAsPdf": "Salvar como PDF",
     "saveChanges": "Salvar alterações",
+    "saved": "Salvo",
+    "saving": "Salvando…",
     "scopeThisPage": "(esta página)",
     "scrollToBottom": "Rolar para baixo",
     "scrollToTop": "Rolar para o topo",
@@ -3572,6 +3572,11 @@
       "askContentLabel": "Tipo de resposta",
       "askQuestionLabel": "Pergunta",
       "askQuestionPlaceholder": "O que devemos ler de cada documento? Deixe em branco para entrada manual.",
+      "autosave": {
+        "failed": "Não foi possível salvar",
+        "nameMissing": "Não salvo: adicione um nome",
+        "positionsNeedAttention": "Não salvo: {count, plural, one {# posição precisa} other {# posições precisam}} de atenção"
+      },
       "check": "Usar uma regra exata em vez de IA",
       "checkHint": "Para condições mensuráveis, por exemplo: prazo de pagamento ≤ 30 dias.",
       "checkKind": {
@@ -3601,6 +3606,7 @@
       "deletePlaybook": "Excluir playbook",
       "deletePosition": "Excluir posição",
       "deleted": "Playbook excluído",
+      "deletedElsewhere": "Este playbook foi excluído.",
       "derivedAutomatically": "A pergunta de extração e o formato de resposta são gerados com base nesta posição. Nenhuma configuração é necessária.",
       "derivedQuestion": "Pergunta de extração",
       "derivedType": "Formato da resposta",
@@ -3653,10 +3659,12 @@
       },
       "noPositions": "Ainda não há posições. Adicione a primeira.",
       "noSettledPosition": "Nenhuma posição estabelecida",
+      "openInPane": "Abrir playbook",
       "optionPlaceholder": "Valor da opção",
       "optionsLabel": "Opções",
       "outline": "Esquema",
       "positionOfTotal": "Posição {index} de {total}",
+      "positionRemoved": "Posição removida",
       "positions": "Posições",
       "recent": "Usados recentemente",
       "recommended": "Modelos recomendados",
