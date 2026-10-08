@@ -1,7 +1,6 @@
 import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
 
 import { Temporal } from "@stll/time";
 
@@ -64,10 +63,6 @@ const checkpointFolioCollabRoomBodySchema = t.Object({
   expectedSnapshotRevision: t.Integer({ minimum: 0 }),
   roomId: tSafeId("folioCollabRoom"),
 });
-
-type CheckpointFolioCollabRoomBody = Static<
-  typeof checkpointFolioCollabRoomBodySchema
->;
 
 type FolioCollabSnapshotCut = {
   baseVersionId: SafeId<"entityVersion">;
@@ -512,4 +507,3 @@ const checkpointFolioCollabRoom = createSafeHandler(
 );
 
 export default checkpointFolioCollabRoom;
-export type { CheckpointFolioCollabRoomBody };

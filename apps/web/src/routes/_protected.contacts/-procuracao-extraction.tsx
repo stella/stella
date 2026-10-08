@@ -5,8 +5,10 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex } from "@stll/sha256/browser";
 import { openFilePicker } from "@stll/ui/file-picker";
-import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "@stll/ui/icons";
+import { AlertTriangleIcon, FileTextIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -18,7 +20,6 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sha256Hex } from "@/lib/files/sha256";
 import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
   ImportCandidate,
@@ -107,7 +108,7 @@ const toImportCandidate = (
  * `idle` shows the drop zone (plus whatever else the host renders),
  * `review` shows editable outorgante rows, `done` shows the import receipt.
  */
-export type ProcuracaoExtractionStage = "idle" | "review" | "done";
+type ProcuracaoExtractionStage = "idle" | "review" | "done";
 
 export type ProcuracaoExtractionState = {
   stage: ProcuracaoExtractionStage;
@@ -293,7 +294,7 @@ export const ProcuracaoDropZone = ({
         type="button"
       >
         {isExtracting ? (
-          <Loader2Icon className="text-muted-foreground size-5 animate-spin" />
+          <Loader className="size-5" size="sm" variant="decorative" />
         ) : (
           <FileTextIcon className="text-muted-foreground size-5" />
         )}

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Parser-local type exports removed; parsing and document output are unchanged.
 /**
  * Polish Constitutional Tribunal (ipo.trybunal.gov.pl) page reader.
  *
@@ -16,6 +17,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
@@ -23,7 +25,8 @@ import type {
   Inline,
   ParagraphBlock,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   inlinesToPlainText,
   isExcludedHtmlTag,
@@ -117,15 +120,15 @@ const metadataUrlOf = (href: string | undefined) => {
 
 // ── Page structure ───────────────────────────────────────
 
-export type PlTkLink = { text: string; url: SafeHref | MetadataUrlDefect };
+type PlTkLink = { text: string; url: SafeHref | MetadataUrlDefect };
 
 /** One line of `Miejsce publikacji`: the citation and the links beside it. */
-export type PlTkPublication = { text: string; links: PlTkLink[] };
+type PlTkPublication = { text: string; links: PlTkLink[] };
 
 /** One legal act of a `Przedmiot sprawy` or `Wzorce` tree, with its units. */
-export type PlTkActProvisions = { act: string; provisions: string[] };
+type PlTkActProvisions = { act: string; provisions: string[] };
 
-export type PlTkPanelJudge = {
+type PlTkPanelJudge = {
   name: string;
   /** The portal's own judge id (`Szukaj?sedzia=`), where it links one. */
   judgeId: string | undefined;
@@ -134,7 +137,7 @@ export type PlTkPanelJudge = {
 };
 
 /** One dissenting opinion appended to the ruling's text. */
-export type PlTkDissent = {
+type PlTkDissent = {
   /** The printed heading line naming its authors, in the genitive. */
   authorsAsPrinted: string;
   /** Judges of the bench the heading names, as the bench table prints them. */

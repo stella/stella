@@ -798,6 +798,7 @@ const createGuardedLease = ({
 }: GuardedLeaseOptions): CaseLawSourceIngestionLease => ({
   source: lease.source,
   leaseToken: lease.leaseToken,
+  purpose: lease.purpose,
   release: lease.release,
   beforeDatabaseMark: async () => {
     const admitted = await ensure();

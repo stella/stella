@@ -6,12 +6,12 @@ import {
   toFactDetailsBody,
   withFactDetails,
 } from "@/features/avt/fact-details.logic";
-import type { FactDetails } from "@/features/avt/types";
+import type { EditableFactDetails, FactDetails } from "@/features/avt/types";
 import { toSafeId } from "@/lib/safe-id";
 
 const listId = toSafeId<"legalList">("0199a3c4-5b6d-7e8f-9a0b-000000009004");
 
-const details: FactDetails = {
+const details = {
   occurredOn: "2021-07-01",
   occurredOnPrecision: "month",
   evidenceKind: "Bank record",
@@ -19,7 +19,7 @@ const details: FactDetails = {
   confidence: "medium",
   interpretationNote: null,
   scoring: "included",
-};
+} as const satisfies EditableFactDetails;
 
 const item = (suffix: number, factDetails: FactDetails | null) => ({
   id: factId(suffix),

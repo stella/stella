@@ -1,16 +1,18 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as v from "valibot";
 
 import {
   extractPlanSelector,
@@ -18,6 +20,7 @@ import {
   runPlanScopes,
   runPlanSelector,
 } from "./ci-plan-selector";
+import { pilotFastJobs } from "./ci-pr-pilot-plan";
 import {
   armAndVerify,
   checkEjectedHead,
@@ -51,6 +54,12 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
+import {
+  parseCiCoverageLog,
+  type CiCoverageEvidence,
+  type CiRunEvidence,
+} from "./merge-bar-ci-coverage";
+import { RATCHET_METRICS } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 
 // The CLI runs below spawn the real script offline against a fake gh, as a
@@ -1766,6 +1775,7 @@ describe("green result freshness", () => {
     runSelector: () => {
       throw new Error("unexpected plan run");
     },
+    readRunCoverage: () => Result.ok({ profile: "normal-v1" as const }),
     readRunJobs: () => {
       throw new Error("unexpected run jobs read");
     },
@@ -1814,6 +1824,15 @@ describe("green result freshness", () => {
         },
         ["scripts/ratchet.ts"],
         "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/ownership/example.ts" }],
+        },
+        ["scripts/ownership/another.ts"],
+        "main changed the ratchet since the green run (scripts/ownership/example.ts) and this PR changes it too",
       ],
     ] as const) {
       const result = direct(
@@ -1979,6 +1998,410 @@ describe("green result freshness", () => {
       );
     },
   );
+
+  test("green pilot coverage defers only jobs guarded by the actual pilot predicate", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const jobs = readFastRequiredJobs(source) ?? [];
+    const fast = pilotFastJobs(Bun.YAML.parse(source));
+    if (fast.status !== "valid") {
+      panic(fast.message);
+    }
+    const deferred = jobs.filter(
+      (job) =>
+        job.pilotGate === "deferred-capable" && !fast.jobs.includes(job.id),
+    );
+    expect(deferred.map((job) => job.id)).toContain("dependency-malware");
+    expect(deferred.map((job) => job.id)).toContain("parser-version-guard");
+    const plan = new Map(
+      jobs.flatMap(({ scope }) =>
+        scope.type === "selector" ? [[scope.variable, true] as const] : [],
+      ),
+    );
+    const completed = jobs
+      .filter((job) => !deferred.includes(job))
+      .map((job) => ({ name: job.id, conclusion: "success" }));
+    const evaluateFreshness = (
+      profile: "normal-v1" | "pilot-fast-v1",
+      runs: readonly RunJob[],
+    ) =>
+      checkGreenResultFreshness({
+        ...readers({ status: "ahead", ahead_by: 1, files: [] }),
+        readBaseWorkflow: () => source,
+        runSelector: () => Result.ok(plan),
+        readRunJobs: () => runs,
+        readRunCoverage: () =>
+          Result.ok(
+            profile === "normal-v1"
+              ? { profile }
+              : { profile, jobs: fast.jobs },
+          ),
+      });
+    expect(evaluateFreshness("pilot-fast-v1", completed).isOk()).toBe(true);
+    const missing = evaluateFreshness(
+      "pilot-fast-v1",
+      completed.filter((job) => job.name !== "ci-tests"),
+    );
+    expect(missing.isErr() && missing.error.message).toContain(
+      "STALE_PLAN: main's CI plan now selects ci-tests",
+    );
+    const normal = evaluateFreshness("normal-v1", completed);
+    expect(normal.isErr() && normal.error.message).toContain(
+      "parser-version-guard",
+    );
+    expect(
+      evaluateFreshness(
+        "normal-v1",
+        jobs.map((job) => ({ name: job.id, conclusion: "success" })),
+      ).isOk(),
+    ).toBe(true);
+  });
+
+  test("every fast-required predicate rejects a planted unmodeled gate", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const original = readFastRequiredJobs(source) ?? [];
+    expect(original.length).toBeGreaterThan(0);
+    for (const job of original) {
+      const workflow = v.parse(
+        v.record(v.string(), v.unknown()),
+        Bun.YAML.parse(source),
+      );
+      const jobs = v.parse(v.record(v.string(), v.unknown()), workflow["jobs"]);
+      const body = v.parse(v.record(v.string(), v.unknown()), jobs[job.id]);
+      jobs[job.id] = body;
+      workflow["jobs"] = jobs;
+      body["if"] =
+        `(${v.parse(v.string(), body["if"])}) && vars.UNMODELED_GATE == 'on'`;
+      expect(
+        () => readFastRequiredJobs(JSON.stringify(workflow)),
+        job.id,
+      ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
+      const condition = v.parse(v.string(), body["if"]);
+      const contexts = [
+        ...new Set(
+          Array.from(
+            condition.matchAll(
+              /(?:needs\.ci-plan\.outputs\.\w+|inputs\.heavy_only|github\.event_name)/gu,
+            ),
+            (match) => match[0],
+          ),
+        ),
+      ];
+      expect(contexts.length, job.id).toBeGreaterThan(0);
+      for (const gate of contexts) {
+        body["if"] = condition
+          .replaceAll(gate, "vars.UNMODELED_GATE")
+          .replace(" && vars.UNMODELED_GATE == 'on'", "");
+        expect(
+          () => readFastRequiredJobs(JSON.stringify(workflow)),
+          `${job.id}: ${gate}`,
+        ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
+      }
+    }
+  });
+
+  test("coverage log parsing retains the zero super-linear-regex budget", () => {
+    const metric = RATCHET_METRICS.find(
+      (entry) => entry.id === "super-linear-regexes",
+    );
+    if (metric?.scope !== "file" || metric.measurement !== undefined) {
+      panic("Missing super-linear regex file metric");
+    }
+    const file = "scripts/merge-bar-ci-coverage.ts";
+    const legacy = String.raw`const entry = /^\s+([A-Z_]+):\s*(.*)$/u;`;
+    expect(metric.count(legacy, { file })).toBe(1);
+    expect(
+      metric.count(readFileSync(path.join(REPO_ROOT, file), "utf-8"), { file }),
+    ).toBe(0);
+  });
+
+  test("coverage evidence follows timestamped entries across raw multiline values", () => {
+    const log = `2000-01-01T00:00:00.0000000Z ##[group]Run neutral command
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   NEEDS: {
+  "neutral": {
+    "result": "success"
+  }
+}
+2000-01-01T00:00:00.0000000Z   MULTILINE: neutral
+  COVERAGE_PROFILE: normal-v1
+  PILOT_FAST_JOBS: []
+##[endgroup]
+env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ["ci-tests"]
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const result = parseCiCoverageLog(log);
+    expect(result.isOk() && result.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: ["ci-tests"],
+    });
+    const forged = log.replace(
+      "2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1\n",
+      "",
+    );
+    expect(parseCiCoverageLog(forged).isErr()).toBe(true);
+    const continued = log.replace(
+      "  COVERAGE_PROFILE: pilot-fast-v1\n",
+      "  COVERAGE_PROFILE: pilot-fast-v1\ninvalid continuation\n",
+    );
+    expect(parseCiCoverageLog(continued).isErr()).toBe(true);
+  });
+
+  test("every saved real CI-result log yields its declared coverage evidence", () => {
+    const pilot = {
+      profile: "pilot-fast-v1",
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    } satisfies CiCoverageEvidence;
+    const expected = {
+      "merge-bar-coverage-pilot-pr-37632840538.log": pilot,
+      "merge-bar-coverage-pilot-pr-37636655670.log": pilot,
+      "merge-bar-coverage-queue-validation-37635149518.log": {
+        profile: "queue-validation",
+      },
+      "merge-bar-coverage-merge-group-37635202900.log": {
+        profile: "normal-v1",
+      },
+      "merge-bar-coverage-merge-group-37635199875.log": {
+        profile: "normal-v1",
+      },
+      "merge-bar-coverage-queue-validation-37646416358.log": {
+        profile: "queue-validation",
+      },
+      // Retain the previously saved single-line env envelope too.
+      "merge-bar-pilot-coverage.log": pilot,
+    } satisfies Record<string, CiRunEvidence>;
+    const directory = path.join(REPO_ROOT, "scripts/fixtures");
+    expect(
+      readdirSync(directory)
+        .filter(
+          (file) =>
+            file.startsWith("merge-bar-coverage-") ||
+            file === "merge-bar-pilot-coverage.log",
+        )
+        .toSorted(),
+    ).toEqual(Object.keys(expected).toSorted());
+    for (const [file, evidence] of Object.entries(expected)) {
+      const result = parseCiCoverageLog(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      expect(
+        result.isOk(),
+        `${file}: ${result.isErr() ? result.error.message : ""}`,
+      ).toBe(true);
+      expect(result.isOk() && result.value, file).toEqual(evidence);
+    }
+  });
+
+  describe("an ejected head's queue validation", () => {
+    // Real runs of one head: the pilot-fast coverage run, then the pull_request
+    // `enqueued` validation that outlived its ejected merge-queue entry.
+    const COVERAGE_RUN = 37_636_655_670;
+    const VALIDATION_RUN = 37_646_416_358;
+    const fixture = (file: string) =>
+      parseCiCoverageLog(
+        readFileSync(path.join(REPO_ROOT, "scripts/fixtures", file), "utf-8"),
+      );
+    const logs = new Map([
+      [COVERAGE_RUN, fixture("merge-bar-coverage-pilot-pr-37636655670.log")],
+      [
+        VALIDATION_RUN,
+        fixture("merge-bar-coverage-queue-validation-37646416358.log"),
+      ],
+    ]);
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const jobs = readFastRequiredJobs(source) ?? [];
+    const fast = pilotFastJobs(Bun.YAML.parse(source));
+    if (fast.status !== "valid") {
+      panic(fast.message);
+    }
+    const fastJobs = fast.jobs;
+    const plan = new Map(
+      jobs.flatMap(({ scope }) =>
+        scope.type === "selector" ? [[scope.variable, true] as const] : [],
+      ),
+    );
+    // The validation run plans and aggregates; every other job is skipped.
+    const runJobs = new Map<number, RunJob[]>([
+      [
+        COVERAGE_RUN,
+        jobs
+          .filter(({ id }) => fastJobs.includes(id))
+          .map(({ id }) => ({ name: id, conclusion: "success" })),
+      ],
+      [
+        VALIDATION_RUN,
+        jobs.map(({ id }) => ({
+          name: id,
+          conclusion: id === "ci-result" ? "success" : "skipped",
+        })),
+      ],
+    ]);
+    const ciResult = (id: number, conclusion = "success") => ({
+      id,
+      name: "ci-result",
+      status: "completed",
+      conclusion,
+    });
+    const evaluate = (
+      ciResults: ReturnType<typeof ciResult>[],
+      overrides: Partial<Parameters<typeof checkGreenResultFreshness>[0]> = {},
+    ) => {
+      const coverageReads: number[] = [];
+      const snapshot = passingSnapshot();
+      const result = checkGreenResultFreshness({
+        ...readers({ status: "ahead", ahead_by: 1, files: [] }),
+        checkRuns: [
+          ...snapshot.checkRuns.filter(({ name }) => name !== "ci-result"),
+          ...ciResults,
+        ],
+        // Check-run ids stand in for their workflow runs here.
+        readWorkflowRun: (checkRunId: number) => ({ ...run, id: checkRunId }),
+        readBaseComparison: () => ({ status: "ahead", ahead_by: 1, files: [] }),
+        readBaseWorkflow: () => source,
+        runSelector: () => Result.ok(plan),
+        readRunCoverage: (runId: number) => {
+          coverageReads.push(runId);
+          return logs.get(runId) ?? panic(`unexpected run ${runId}`);
+        },
+        readRunJobs: (runId: number) =>
+          runJobs.get(runId) ?? panic(`unexpected run ${runId}`),
+        ...overrides,
+      });
+      return { result, coverageReads };
+    };
+
+    test("the real logs carry the evidence this relies on", () => {
+      const evidence = (runId: number) => {
+        const log = logs.get(runId);
+        return log?.match({
+          ok: (value): CiRunEvidence | string => value,
+          err: (error) => error.message,
+        });
+      };
+      expect(evidence(VALIDATION_RUN)).toEqual({ profile: "queue-validation" });
+      expect(evidence(COVERAGE_RUN)).toEqual({
+        profile: "pilot-fast-v1",
+        jobs: fastJobs,
+      });
+    });
+
+    test("is judged by the coverage run it re-checked", () => {
+      const { result, coverageReads } = evaluate([
+        ciResult(COVERAGE_RUN),
+        ciResult(VALIDATION_RUN),
+      ]);
+      expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
+        true,
+      );
+      expect(coverageReads).toEqual([VALIDATION_RUN, COVERAGE_RUN]);
+    });
+
+    test("without a green run below it, refuses instead of trusting skipped jobs", () => {
+      const alone = evaluate([ciResult(VALIDATION_RUN)]).result;
+      expect(alone.isErr() && alone.error.message).toContain(
+        "no green ci-result run below the queue validation covers this head",
+      );
+      for (const conclusion of ["failure", "cancelled", "skipped"]) {
+        const { result, coverageReads } = evaluate([
+          ciResult(COVERAGE_RUN, conclusion),
+          ciResult(VALIDATION_RUN),
+        ]);
+        expect(result.isErr(), conclusion).toBe(true);
+        expect(coverageReads).toEqual([VALIDATION_RUN]);
+      }
+    });
+
+    test("the coverage run below it still faces main's new plan", () => {
+      const missing = new Map(runJobs);
+      missing.set(
+        COVERAGE_RUN,
+        (runJobs.get(COVERAGE_RUN) ?? []).filter(
+          ({ name }) => name !== "ci-tests",
+        ),
+      );
+      const { result } = evaluate(
+        [ciResult(COVERAGE_RUN), ciResult(VALIDATION_RUN)],
+        {
+          readRunJobs: (runId: number) =>
+            missing.get(runId) ?? panic(`unexpected run ${runId}`),
+        },
+      );
+      expect(result.isErr() && result.error.message).toContain(
+        "STALE_PLAN: main's CI plan now selects ci-tests",
+      );
+    });
+  });
+
+  test("CI result coverage evidence reads producer-shaped environment logs", () => {
+    const log = (
+      profile: string,
+      jobs: string,
+    ) => `2000-01-01T00:00:00.0000000Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
+2000-01-01T00:00:00.0000000Z shell: /usr/bin/bash -e {0}
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: ${profile}
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ${jobs}
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const pilot = parseCiCoverageLog(
+      readFileSync(
+        path.join(REPO_ROOT, "scripts/fixtures/merge-bar-pilot-coverage.log"),
+        "utf-8",
+      ),
+    );
+    expect(pilot.isOk(), pilot.isErr() ? pilot.error.message : "").toBe(true);
+    expect(pilot.isOk() && pilot.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    });
+    expect(parseCiCoverageLog(log("normal-v1", "")).isOk()).toBe(true);
+    for (const malformed of [
+      "",
+      log("unknown", "[]"),
+      log("pilot-fast-v1", "[]"),
+      log("pilot-fast-v1", '["ci-tests","ci-tests"]'),
+      log("pilot-fast-v1", "invalid"),
+      log("pilot-fast-v1", '["ci-tests"]') + log("normal-v1", "[]"),
+    ]) {
+      expect(parseCiCoverageLog(malformed).isErr()).toBe(true);
+    }
+  });
 
   test("main's real gate maps fast-required jobs to how they are planned", () => {
     const jobs =
@@ -2277,6 +2700,19 @@ jobs:
       }
       closure.add(file);
       const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      for (const [, directory] of source.matchAll(
+        /loadOwnershipDeclarations\(\s*new URL\("([^"]+)"/gu,
+      )) {
+        if (directory === undefined) {
+          continue;
+        }
+        const relative = path.posix.join(path.posix.dirname(file), directory);
+        pending.push(
+          ...readdirSync(path.join(repositoryRoot, relative))
+            .filter((name) => name.endsWith(".ts"))
+            .map((name) => path.posix.join(relative, name)),
+        );
+      }
       for (const [, specifier] of source.matchAll(
         /^(?:import|export)\b[^;]*?\bfrom "(\.{1,2}\/[^"]+)"/gmu,
       )) {
@@ -2294,7 +2730,16 @@ jobs:
     }
     expect(
       [...closure].filter((file) => file.endsWith(".ts")).toSorted(),
-    ).toEqual(ratchetDefinitionPaths.toSorted());
+    ).toEqual(
+      ratchetDefinitionPaths
+        .flatMap((pattern) => [
+          ...new Bun.Glob(pattern).scanSync({
+            cwd: repositoryRoot,
+            onlyFiles: true,
+          }),
+        ])
+        .toSorted(),
+    );
   });
 
   test("rewritten history refuses a stale green result", () => {
@@ -2956,7 +3401,9 @@ case "$*" in
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *contents/scripts/ratchet-definition-paths.json*) printf '%s\\n' "$FIXTURE_RATCHET_DEFINITIONS";;
   *contents/.github/workflows/ci.yml*) printf '%s\\n' "$FIXTURE_WORKFLOW";;
+  *'actions/runs/1/jobs'*'select(.name == "ci-result") | .id'*) printf '%s\\n' '2';;
   *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
+  *actions/jobs/2/logs*) printf '%s\\n' "$FIXTURE_COVERAGE_LOG";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *'actions/runs?head_sha='*) ;;
@@ -3043,6 +3490,13 @@ esac
         FIXTURE_RUN_JOBS: runJobs
           .map(({ name, conclusion }) => `${name}\t${conclusion}`)
           .join("\n"),
+        FIXTURE_COVERAGE_LOG: readFileSync(
+          path.join(
+            REPO_ROOT,
+            "scripts/fixtures/merge-bar-coverage-merge-group-37635202900.log",
+          ),
+          "utf-8",
+        ),
       },
       stdout: "pipe",
       stderr: "pipe",

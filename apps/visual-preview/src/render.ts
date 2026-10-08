@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import type { Browser, LaunchOptions } from "playwright-core";
+import type { Browser, LaunchOptions, Page } from "playwright-core";
 import * as v from "valibot";
 
 import {
@@ -34,6 +34,32 @@ export type VisualPreviewLaunchOptions = Required<Pick<LaunchOptions, "args">>;
 type RenderVisualOptions = {
   input: VisualPreviewInput;
   launch: (options: VisualPreviewLaunchOptions) => Promise<Browser>;
+};
+
+const MAX_RESIZE_ATTEMPTS = 4;
+
+const measureContentHeight = () => {
+  // document.body is typed as always present; a bodyless document has none.
+  const body = document.querySelector("body");
+  if (body === null) {
+    return null;
+  }
+  return Math.max(body.scrollHeight, document.documentElement.scrollHeight);
+};
+
+const settleLayout = async () => {
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+};
+
+const resizePreview = async (page: Page, height: number) => {
+  await page.setViewportSize({ width: VISUAL_PREVIEW_LIMITS.width, height });
+  await page.locator("iframe").evaluate((iframe, size) => {
+    iframe.style.height = `${size}px`;
+  }, height);
 };
 
 export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
@@ -173,23 +199,39 @@ export const renderVisual = async ({ input, launch }: RenderVisualOptions) => {
         });
       });
     }
-    const contentHeight = await frame.evaluate(() =>
-      Math.max(
-        document.body.scrollHeight,
-        document.documentElement.scrollHeight,
-      ),
-    );
-    const height = Math.min(
-      VISUAL_PREVIEW_LIMITS.height,
-      Math.max(1, Math.ceil(contentHeight)),
-    );
-    await page.setViewportSize({
-      width: VISUAL_PREVIEW_LIMITS.width,
-      height,
-    });
-    await page.locator("iframe").evaluate((iframe, size) => {
-      iframe.style.height = `${size}px`;
-    }, height);
+    const contentHeight = await frame.evaluate(measureContentHeight);
+    if (contentHeight === null) {
+      return Result.err(
+        new VisualRenderError({ message: "Preview document has no body" }),
+      );
+    }
+    const clampHeight = (measured: number) =>
+      Math.min(VISUAL_PREVIEW_LIMITS.height, Math.max(1, Math.ceil(measured)));
+    // Content may change height each time the viewport does, so resize,
+    // settle and measure until it is stable, a bounded number of times.
+    let height = clampHeight(contentHeight);
+    let stable = false;
+    for (
+      let attempt = 0;
+      attempt < MAX_RESIZE_ATTEMPTS && !stable;
+      attempt += 1
+    ) {
+      await resizePreview(page, height);
+      await frame.evaluate(settleLayout);
+      const measured = await frame.evaluate(measureContentHeight);
+      if (measured === null) {
+        return Result.err(
+          new VisualRenderError({ message: "Preview document has no body" }),
+        );
+      }
+      const next = clampHeight(measured);
+      stable = next === height;
+      height = next;
+    }
+    if (!stable) {
+      await resizePreview(page, height);
+      await frame.evaluate(settleLayout);
+    }
     const png = await page.screenshot({
       type: "png",
       animations: "disabled",

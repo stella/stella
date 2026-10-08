@@ -336,6 +336,10 @@ describe("unsignalled skip shapes", () => {
       'for (const row of rows) { const found = items.find(match); if (found === undefined) { issues.push({ code: "unknown_source_id", row }); continue; } }',
     ],
     [
+      "typed reason collected into a failure list",
+      'for (const source of sources) { if (source.span === undefined) { failures.push({ id: source.id, reason: "span-out-of-bounds" }); continue; } }',
+    ],
+    [
       "switch break then rethrow",
       'try { read(); } catch (cause) { switch (kind) { case "a": cleanup(); break; } throw cause; }',
     ],

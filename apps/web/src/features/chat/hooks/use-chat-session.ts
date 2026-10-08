@@ -15,6 +15,8 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { sleep } from "@stll/concurrency/sleep";
+import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
@@ -71,8 +73,8 @@ import {
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import "@/components/chat/create-document-draft-inspector";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
+import "@/components/chat/create-document-draft-inspector";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -134,11 +136,10 @@ import {
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
-import { sha256Hex } from "@/lib/files/sha256";
 import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   workspacesKeys,
@@ -290,7 +291,11 @@ export const useChatSession = ({
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
-  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
+  const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
+  const mcpCatalogView = useQueryView(mcpCatalogQuery);
+  useQueryViewError(mcpCatalogView);
+  const mcpCatalog =
+    mcpCatalogView.type === "items" ? mcpCatalogView.items : undefined;
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
   const readConversationGrants = useCallback(
@@ -533,9 +538,7 @@ export const useChatSession = ({
               });
             },
             wait: async () => {
-              await new Promise<void>((resolve) => {
-                setTimeout(resolve, 250);
-              });
+              await sleep(250);
             },
           });
           if (settleResult.status === "failed") {

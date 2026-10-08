@@ -274,6 +274,22 @@ describe("test input coverage", () => {
     expect(checkTestInputCoverage(root)).toEqual([]);
   });
 
+  test("counts an explicitly declared read of a workspace dependency", () => {
+    const root = createRoot({
+      files: {
+        "apps/alpha/src/guard.test.ts":
+          'readFileSync(path.join(root, "packages/shared/src/index.ts"));\n',
+      },
+      tasks: {
+        "@stll/alpha#test": {
+          inputs: ["$TURBO_ROOT$/packages/shared/src/**"],
+        },
+      },
+    });
+
+    expect(checkTestInputCoverage(root)).toEqual([]);
+  });
+
   test("ignores a path compared by a matcher rather than read", () => {
     const root = createRoot({
       files: {

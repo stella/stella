@@ -126,7 +126,11 @@ const plan = {
   api_image_deps_required: "true",
   run_required: "true",
   trusted: "true",
+  coverage_profile: "normal-v1",
+  pilot_fast_jobs: "[]",
+  queue_required_jobs: "[]",
   suite_depth: "full",
+  service_suites_pr_required: "false",
   fix_tests_on_base_required: "false",
 };
 const events = [
@@ -165,6 +169,7 @@ const context = ({
   vars: {
     MERGE_QUEUE_DEPTH: variable,
     QUEUE_BROWSER_SUITES: queueBrowserSuites,
+    CI_POSTGRES_PR_SELECTION: "",
   },
   inputs: { heavy_only: false },
   needs: Object.fromEntries(
@@ -303,6 +308,73 @@ const expectedPrSelection = ({
       return panic(`Unexpected CI event disposition: ${job}/${disposition}`);
   }
 };
+// Postgres PR selection is a declared exception to the historical full-depth gate.
+const expectedServiceSelection = (value: ReturnType<typeof context>) => {
+  const outputs = value.needs["ci-plan"]?.outputs;
+  if (!outputs) {
+    panic("Missing Postgres planner context");
+  }
+  const event = value.github.event_name;
+  return (
+    outputs["run_required"] !== "false" &&
+    (event !== "pull_request" ||
+      value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
+    outputs["queue_depth"] !== "thin" &&
+    (outputs["package_checks_required"] === "true" ||
+      outputs["collab_redis_required"] === "true") &&
+    (outputs["trusted"] === "true" || event === "workflow_dispatch") &&
+    (outputs["suite_depth"] === "full" ||
+      (outputs["suite_depth"] === "fast" &&
+        outputs["service_suites_pr_required"] === "true"))
+  );
+};
+
+test("declared Postgres selection preserves every scope, depth, trust and PR opt-in gate", () => {
+  for (const event of events) {
+    for (const suiteDepth of ["full", "fast", "unknown"]) {
+      for (const queueDepth of ["full", "thin"]) {
+        for (const prSwitch of ["", "off", "on"]) {
+          for (const trusted of ["true", "false"]) {
+            for (const required of ["true", "false"]) {
+              for (const prRequired of ["true", "false"]) {
+                for (const runRequired of ["true", "false"]) {
+                  const value = context({ event, variable: "", queueDepth });
+                  value.vars.CI_POSTGRES_PR_SELECTION = prSwitch;
+                  const planner = value.needs["ci-plan"];
+                  if (!planner) {
+                    panic("Missing Postgres planner context");
+                  }
+                  Object.assign(planner.outputs, {
+                    suite_depth: suiteDepth,
+                    trusted,
+                    package_checks_required: required,
+                    collab_redis_required: "false",
+                    service_suites_pr_required: prRequired,
+                    run_required: runRequired,
+                  });
+                  expect(
+                    selected(ci.jobs["service-suites"]?.if, value),
+                    JSON.stringify({
+                      event,
+                      suiteDepth,
+                      queueDepth,
+                      prSwitch,
+                      trusted,
+                      required,
+                      prRequired,
+                      runRequired,
+                    }),
+                  ).toBe(expectedServiceSelection(value));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
 const templateValue = (template: string, value: object) =>
   template.replaceAll(/\$\{\{([\s\S]*?)\}\}/gu, (_, expression: string) =>
     String(
@@ -642,7 +714,7 @@ test("route smoke certifies planned queue and heavy builds while skipping PRs", 
   }
 });
 
-test("unset and full preserve historical predicates except declared PR and route ownership changes", () => {
+test("unset and full preserve historical predicates except declared PR, Postgres and route ownership changes", () => {
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
@@ -671,7 +743,9 @@ test("unset and full preserve historical predicates except declared PR and route
           continue;
         }
         let expected = selected(body.if, value);
-        if (job === "route-smoke") {
+        if (job === "service-suites") {
+          expected = expectedServiceSelection(value);
+        } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({ job, baseline: expected, value });
@@ -759,7 +833,9 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
               }
             : value;
         let expected = selected(baseline.jobs[job]?.if, certified);
-        if (job === "route-smoke") {
+        if (job === "service-suites") {
+          expected = expectedServiceSelection(value);
+        } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({ job, baseline: expected, value });
@@ -878,6 +954,9 @@ const evaluate = ({
       TRUSTED: "true",
       SUITE_DEPTH: "full",
       HEAVY_ONLY: "false",
+      COVERAGE_PROFILE: "normal-v1",
+      QUEUE_VALIDATION: "false",
+      QUEUE_REQUIRED_JOBS: "[]",
       QUEUE_DEPTH: queueDepth,
       THIN_JOBS: JSON.stringify(THIN_JOBS),
       HEAVY_JOBS: JSON.stringify(heavy),
@@ -970,13 +1049,13 @@ test("ordinary pushes cannot bypass the hourly heavy scheduling contract", () =>
   expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
 }, 30_000);
 
-test("invalid configuration is validated before fetching code and publishes no commit status", () => {
+test("invalid configuration blocks ordinary heavy selection and publishes no commit status", () => {
   const validation = step({
     workflow: main,
     job: "validate",
     name: "Validate merge queue depth",
   });
-  expect(main.jobs["validate"]?.steps?.at(0)).toEqual(validation);
+  expect(main.jobs["validate"]?.steps?.at(1)).toEqual(validation);
   expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );

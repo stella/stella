@@ -40,9 +40,11 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  getImportedName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
+  resolveImportedExpression,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -104,57 +106,38 @@ const isHookCall = (node) => {
   return false;
 };
 
-const findContainingFunction = (node) => {
-  let current = isAstNode(node) ? node.parent : null;
-  while (isAstNode(current)) {
-    if (
-      current.type === "FunctionDeclaration" ||
-      current.type === "FunctionExpression" ||
-      current.type === "ArrowFunctionExpression"
-    ) {
-      return current;
-    }
-    current = current.parent;
+// Inspect only top-level declarations in function bodies. The shared scope
+// resolver stops at shadows; module constants, parameters and values built
+// in nested statements remain opaque under this syntactic policy.
+const resolveLocalBindingInit = (context, identifier) => {
+  const definition = resolveVariable(context, identifier)?.defs.at(0);
+  if (
+    definition?.type !== "Variable" ||
+    !isAstNode(definition.node) ||
+    definition.node.type !== "VariableDeclarator" ||
+    !isIdentifier(definition.node.id) ||
+    !isAstNode(definition.parent) ||
+    definition.parent.type !== "VariableDeclaration"
+  ) {
+    return null;
   }
-  return null;
-};
-
-// Resolve `name` against the top-level statements of the function bodies
-// enclosing `fromNode` (innermost first). Returns the declarator's `init`
-// for a plain `const name = ...` declaration, or null when the binding is
-// not found in any enclosing function body — module-level constants and
-// imports deliberately resolve to null (stable by definition here).
-const resolveLocalBindingInit = (name, fromNode) => {
-  let scope = findContainingFunction(fromNode);
-  while (scope !== null) {
-    const body = scope.body;
-    const statements =
-      isAstNode(body) && body.type === "BlockStatement" ? body.body : null;
-    if (Array.isArray(statements)) {
-      for (const statement of statements) {
-        if (!isAstNode(statement) || statement.type !== "VariableDeclaration") {
-          continue;
-        }
-        const declarations = statement.declarations;
-        if (!Array.isArray(declarations)) {
-          continue;
-        }
-        for (const declarator of declarations) {
-          if (
-            !isAstNode(declarator) ||
-            declarator.type !== "VariableDeclarator"
-          ) {
-            continue;
-          }
-          if (isIdentifier(declarator.id, name)) {
-            return declarator.init ?? null;
-          }
-        }
-      }
-    }
-    scope = findContainingFunction(scope);
+  const body = definition.parent.parent;
+  if (!isAstNode(body) || body.type !== "BlockStatement") {
+    return null;
   }
-  return null;
+  const owner = body.parent;
+  if (
+    !isAstNode(owner) ||
+    ![
+      "FunctionDeclaration",
+      "FunctionExpression",
+      "ArrowFunctionExpression",
+    ].includes(owner.type) ||
+    owner.body !== body
+  ) {
+    return null;
+  }
+  return definition.node.init ?? null;
 };
 
 // A value is unstable when it is a fresh literal/call inline, or an
@@ -163,15 +146,15 @@ const resolveLocalBindingInit = (name, fromNode) => {
 // custom `useX`) counts as captured/stable; destructured hook results
 // (`const [x] = useState(...)`) never match a plain-identifier declarator
 // and so resolve to null (not flagged).
-const isUnstableOptionValue = (node, fromNode) => {
+const isUnstableOptionValue = (node, context) => {
   if (isFreshIdentity(node)) {
     return true;
   }
   const unwrapped = unwrapExpression(node);
-  if (!isIdentifier(unwrapped)) {
+  if (!isIdentifierReference(unwrapped)) {
     return false;
   }
-  const init = resolveLocalBindingInit(unwrapped.name, fromNode);
+  const init = resolveLocalBindingInit(context, unwrapped);
   // Unwrap before classifying so `useMemo(...) as T` / `satisfies T`
   // initializers still count as hook-captured rather than fresh calls.
   if (init === null || isHookCall(unwrapExpression(init))) {
@@ -206,29 +189,13 @@ export default eslintCompatPlugin({
         schema: [],
       },
       createOnce(context) {
-        const useEditorAliases = new Set();
-
         return {
-          before() {
-            useEditorAliases.clear();
-          },
-          ImportDeclaration(node) {
-            if (node.source.value !== TIPTAP_REACT_MODULE) {
-              return;
-            }
-            for (const specifier of node.specifiers) {
-              if (
-                specifier.type === "ImportSpecifier" &&
-                getImportedName(specifier) === "useEditor"
-              ) {
-                useEditorAliases.add(specifier.local.name);
-              }
-            }
-          },
-
           CallExpression(node) {
-            const callee = node.callee;
-            if (!isIdentifier(callee) || !useEditorAliases.has(callee.name)) {
+            const factory = resolveImportedExpression(context, node.callee);
+            if (
+              factory?.source !== TIPTAP_REACT_MODULE ||
+              factory.imported !== "useEditor"
+            ) {
               return;
             }
 
@@ -249,7 +216,7 @@ export default eslintCompatPlugin({
               if (name === null || HANDLER_OPTION_KEYS.has(name)) {
                 continue;
               }
-              if (isUnstableOptionValue(property.value, node)) {
+              if (isUnstableOptionValue(property.value, context)) {
                 context.report({
                   node: property,
                   messageId: "unstableOption",

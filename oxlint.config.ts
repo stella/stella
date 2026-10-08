@@ -7,6 +7,7 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import { SYSTEM_AUDIT_MODULES } from "./apps/api/src/lib/system-audit/modules.ts";
@@ -342,6 +343,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-user-id-schema.fixture.ts", [
     "no-raw-user-id-schema/no-raw-user-id-schema",
+  ]),
+  fixtureRuleOverride("confine-aggregate-lock.fixture.ts", [
+    "confine-aggregate-lock/confine-aggregate-lock",
   ]),
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
@@ -719,26 +723,26 @@ const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
 // adapter directly. `monitorForElements` (no per-element registry) is not
 // restricted.
 const webPragmaticDragAdapterImport = {
-  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  name: "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
   importNames: ["draggable", "dropTargetForElements"],
   message:
-    "Register kanban element drag sources and drop targets through use-kanban-drop-targets.ts's attachElementDropTarget/draggable, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+    "Register element drag sources and drop targets through '@/lib/drag-and-drop/element-registration'.",
 };
 
 const uiPragmaticDragAdapterImport = {
-  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  name: "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
   importNames: ["draggable", "dropTargetForElements"],
   message:
-    "Register kanban element drag sources and drop targets through kanban/drag-interactions.ts, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+    "Register element drag sources and drop targets through the surface's registration owner (kanban: drag-interactions.ts), not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
 };
 
 // The adapter is a single published entry point with no public subpaths;
 // nothing should import a level deeper than the module the two bans above
 // already cover.
 const pragmaticDragAdapterDeepImportBan = {
-  group: ["@atlaskit/pragmatic-drag-and-drop/element/adapter/*"],
+  group: ["@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter/*"],
   message:
-    "Import only '@atlaskit/pragmatic-drag-and-drop/element/adapter'; it has no public subpaths.",
+    "Import only '@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter'; it has no public subpaths.",
 };
 
 // Oxlint 1.80 split the monolithic react/react-compiler rule into categories.
@@ -910,6 +914,7 @@ const config = defineConfig({
     },
   },
   rules: {
+    "confine-aggregate-lock/confine-aggregate-lock": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
       { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
@@ -1395,12 +1400,14 @@ const config = defineConfig({
   ],
 
   jsPlugins: [
+    { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
+    "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1605,6 +1612,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
@@ -1619,6 +1627,45 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/**/*.{ts,tsx,js,mjs}",
+        "packages/**/*.{ts,tsx,js,mjs}",
+        "scripts/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/no-hand-rolled-concurrency.fixture.ts",
+      ],
+      rules: {
+        "no-hand-rolled-concurrency/no-hand-rolled-concurrency": [
+          "error",
+          { exceptions: concurrencyExceptions },
+        ],
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "gdp-ts/no-define-proof": "error",
+        "gdp-ts/no-proof-assertion": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/signals/**/*.ts",
+        "apps/api/src/lib/signals/**/*.ts",
+        "apps/api/src/lib/proofs/**/*.ts",
+      ],
+      rules: {
+        "gdp-ts/no-type-assertion": "error",
+        "gdp-ts/no-any": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
+      rules: {
+        "gdp-ts/no-define-proof": "off",
+        "gdp-ts/no-exported-prover": "error",
+      },
+    },
     {
       files: ["apps/web/e2e/**", "scripts/**"],
       rules: {
@@ -1997,78 +2044,7 @@ const config = defineConfig({
         "packages/workspace-ui/src/**/*.tsx",
       ],
       rules: {
-        "no-adhoc-loader/no-adhoc-loader": [
-          "error",
-          {
-            // Sites that predate `@stll/ui/loader`. A ratchet: entries can
-            // only be removed as each site moves to `Loader`/`Skeleton`, and
-            // no new file may add itself.
-            allowedFiles: [
-              "apps/web/src/components/ai-rewrite-control.tsx",
-              "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
-              "apps/web/src/components/ai-suggestions/host.tsx",
-              "apps/web/src/components/bilingual-run-panel.tsx",
-              "apps/web/src/components/chat/ask-user-card.tsx",
-              "apps/web/src/components/chat/chat-prompt-improve-button.tsx",
-              "apps/web/src/components/chat/chat-thread-messages.tsx",
-              "apps/web/src/components/chat/message-export-menu.tsx",
-              "apps/web/src/components/chat/needs-matter-card.tsx",
-              "apps/web/src/components/chat/spawn-subagents-card.tsx",
-              "apps/web/src/components/chat/tool-approval-card.tsx",
-              "apps/web/src/components/docx/docx-browser-editor.tsx",
-              "apps/web/src/components/inspector/desktop-open-button.tsx",
-              "apps/web/src/components/inspector/document-ai-source-bar.tsx",
-              "apps/web/src/components/inspector/file-tab-panel.tsx",
-              "apps/web/src/components/inspector/inspector-facet-bar.tsx",
-              "apps/web/src/components/pdf/creating-citations.tsx",
-              "apps/web/src/components/pdf/pdf-viewer.tsx",
-              "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx",
-              "apps/web/src/components/pdf/versions-sidebar.tsx",
-              "apps/web/src/components/saved-searches.tsx",
-              "apps/web/src/components/search-dialog-results.tsx",
-              "apps/web/src/components/search-dialog.tsx",
-              "apps/web/src/components/translate-document-dialog.tsx",
-              "apps/web/src/components/versions/version-list.tsx",
-              "apps/web/src/components/workspaces/entity-kind-icon.tsx",
-              "apps/web/src/components/workspaces/field-value.tsx",
-              "apps/web/src/features/chat/components/chat-title-rename.tsx",
-              "apps/web/src/features/knowledge/views/playbooks/playbooks-page-view.tsx",
-              "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx",
-              "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
-              "apps/web/src/routes/_protected.contacts/import.tsx",
-              "apps/web/src/routes/knowledge/-components/blueprint-gallery-sheet.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/add-mcp-server-sheet.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/catalogue-browser.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/install-pack-button.tsx",
-              "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-view.tsx",
-              "apps/web/src/routes/knowledge/-components/clause-detail.tsx",
-              "apps/web/src/routes/knowledge/-components/clause-editor.tsx",
-              "apps/web/src/routes/knowledge/-components/import-skill-dialog.tsx",
-              "apps/web/src/routes/knowledge/-components/template-clauses-tab.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-fields.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-inspector.tsx",
-              "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx",
-              "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx",
-              "apps/web/src/routes/_protected.settings/account.profile.tsx",
-              "apps/web/src/routes/_protected.settings/organization.usage.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx",
-              "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
-              {
-                path: "packages/ui/src/components/button.tsx",
-                reason:
-                  "The Button `loading` state spins a lucide icon in place of the button's own icon; it moves to `Loader` once the size-in-slot behaviour is ported.",
-              },
-              {
-                path: "packages/ui/src/components/toast.tsx",
-                reason:
-                  "The loading toast type spins a lucide icon in the toast's icon slot; it moves to `Loader` with the button port.",
-              },
-            ],
-          },
-        ],
+        "no-adhoc-loader/no-adhoc-loader": "error",
       },
     },
     {
@@ -2295,12 +2271,6 @@ const config = defineConfig({
             // exact existing utility, so another layout transition in the same
             // file still fails.
             allowedFiles: [
-              {
-                path: "apps/web/src/routes/_protected.settings/organization.usage.tsx",
-                reason:
-                  "Usage meter animates the bar width it owns as the quota fills.",
-                utilities: ["transition-[width]"],
-              },
               {
                 path: "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx",
                 reason:
@@ -3438,14 +3408,8 @@ const config = defineConfig({
       },
     },
     {
-      // The kanban drag-and-drop owner: the one web module that may call the
-      // adapter's `draggable`/`dropTargetForElements` directly (it exports
-      // the conflict-guarded `attachElementDropTarget` every kanban drop
-      // target and the column draggable go through). Every other apps/web
-      // import restriction still applies, so it is restated here.
-      files: [
-        "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
-      ],
+      // Web element registrations share one owner and conflict registry.
+      files: ["apps/web/src/lib/drag-and-drop/element-registration.ts"],
       rules: {
         "no-restricted-imports": [
           "error",

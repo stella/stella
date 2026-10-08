@@ -5,6 +5,8 @@ import { useMatch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { FileDropZone } from "@/components/file-drop-zone";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useQueryView } from "@/lib/use-query-view";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
@@ -24,7 +26,9 @@ export const WorkspaceDropZone = ({
     from: "/_protected/workspaces/$workspaceId/$viewId",
     shouldThrow: false,
   });
-  const { data: views } = useQuery(viewsOptions(workspaceId));
+  const viewsQuery = useQuery(viewsOptions(workspaceId));
+  const viewsView = useQueryView(viewsQuery);
+  const views = viewsView.type === "items" ? viewsView.items : undefined;
   const activeViewId = viewMatch?.params.viewId;
   const activeView = activeViewId
     ? views?.find((view) => view.id === activeViewId)
@@ -39,18 +43,27 @@ export const WorkspaceDropZone = ({
       coverage="viewport"
       label={t("workspaces.dropToUploadFiles")}
       onDrop={(files) => {
-        if (isPending) {
+        if (
+          isPending ||
+          viewsView.type !== "items" ||
+          viewsView.refetchError !== undefined
+        ) {
           return;
         }
         createFileEntities({ files, parentId: uploadParentId });
       }}
       onDropTree={(tree) => {
-        if (isPending) {
+        if (
+          isPending ||
+          viewsView.type !== "items" ||
+          viewsView.refetchError !== undefined
+        ) {
           return;
         }
         createFileEntities({ tree, parentId: uploadParentId });
       }}
     >
+      <QueryViewFeedback view={viewsView} />
       {children}
     </FileDropZone>
   );

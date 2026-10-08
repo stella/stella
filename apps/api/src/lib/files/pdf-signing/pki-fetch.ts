@@ -14,6 +14,7 @@ import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   fetchWithResolvedAddress,
   OUTBOUND_PROTOCOL_POLICY,
@@ -27,6 +28,7 @@ type PkiFetchRequest = {
   contentType?: string;
   maxBytes: number;
   method: "GET" | "POST";
+  permit: ThirdPartyOutboundPermit;
   url: string;
 };
 
@@ -54,6 +56,7 @@ export const safePkiFetch: PkiFetcher = async ({
   contentType,
   maxBytes,
   method,
+  permit,
   url,
 }) => {
   const target = await validateOutboundFetchTarget(url, {
@@ -70,6 +73,7 @@ export const safePkiFetch: PkiFetcher = async ({
     headers:
       contentType === undefined ? undefined : { "content-type": contentType },
     maxBytes,
+    permit,
     method,
     redirect: "error",
     timeoutMs: PKI_FETCH_TIMEOUT_MS,

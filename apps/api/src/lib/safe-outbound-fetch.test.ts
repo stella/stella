@@ -1,8 +1,14 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import { createServer } from "node:http";
 import type { RequestListener } from "node:http";
 
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
 import {
   fetchStreamWithResolvedAddress,
   fetchWithResolvedAddress,
@@ -10,6 +16,7 @@ import {
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
+import { outboundPermitContract } from "@/api/lib/safe-outbound-fetch.type-test";
 
 describe("fetchWithResolvedAddress", () => {
   test("connects to the pre-resolved address while preserving the URL host", async () => {
@@ -19,6 +26,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           timeoutMs: 1000,
@@ -44,6 +52,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [
             { address: "::1", family: 6 },
             { address: "127.0.0.1", family: 4 },
@@ -69,6 +78,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 4,
           timeoutMs: 1000,
@@ -88,6 +98,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           timeoutMs: 1000,
@@ -107,6 +118,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           redirect: "manual",
@@ -134,13 +146,16 @@ describe("fetchWithResolvedAddress", () => {
       async (port) => {
         const controller = new AbortController();
         const pending = fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           signal: controller.signal,
           timeoutMs: 1000,
           url: new URL(`http://example.test:${port}/stalled`),
         });
-        setTimeout(() => controller.abort(), 10);
+        setTimeout(() => {
+          controller.abort();
+        }, 10);
         const result = await pending;
         expect(Result.isError(result)).toBe(true);
       },
@@ -161,6 +176,7 @@ describe("fetchWithResolvedAddress", () => {
           fetchStreamWithResolvedAddress,
         ]) {
           const result = await fetch({
+            permit: grantThirdPartyOutboundPermit(),
             addresses: [{ address: "127.0.0.1", family: 4 }],
             maxBytes: 1024,
             signal: controller.signal,
@@ -176,6 +192,125 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("stream redirects remain refused unless manual handling is requested", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(302, { Location: "/target" });
+        response.end();
+      },
+      async (port) => {
+        const options = {
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/redirect`),
+        } as const;
+        const refused = await fetchStreamWithResolvedAddress(options);
+        expect(refused.isErr()).toBe(true);
+        if (refused.isErr()) {
+          expect(refused.error.message).toBe("Redirects are not allowed");
+        }
+        const manual = await fetchStreamWithResolvedAddress({
+          ...options,
+          redirect: "manual",
+        });
+        const response = manual.unwrap();
+        expect(response.status).toBe(302);
+        expect(response.headers.get("location")).toBe("/target");
+        await response.body.cancel();
+      },
+    );
+  });
+
+  test("revalidates streamed redirect targets before another connection", async () => {
+    for (const location of [
+      "https://127.0.0.1/private?token=secret",
+      "http://publisher.test/plaintext",
+      "https://name:secret@publisher.test/file",
+      "https://publisher.test/file#fragment",
+    ]) {
+      let connections = 0;
+      await withHttpServer(
+        (_request, response) => {
+          connections += 1;
+          response.writeHead(302, { Location: location });
+          response.write("redirect body remains open");
+        },
+        async (port) => {
+          const result = await fetchStreamFollowingRedirects({
+            url: "https://publisher.test/file",
+            maxHops: 4,
+            fetchStream: async (target) => {
+              const validated = await validateOutboundFetchTarget(target, {
+                resolveAddresses: async () =>
+                  Result.ok([{ address: "93.184.216.34", family: 4 }]),
+              });
+              if (validated.isErr()) {
+                return validated;
+              }
+              const transportUrl = new URL(validated.value.url);
+              transportUrl.protocol = "http:";
+              transportUrl.port = String(port);
+              return await fetchStreamWithResolvedAddress({
+                permit: grantThirdPartyOutboundPermit(),
+                addresses: [{ address: "127.0.0.1", family: 4 }],
+                maxBytes: 1024,
+                redirect: "manual",
+                timeoutMs: 1000,
+                url: transportUrl,
+              });
+            },
+          });
+          expect(result.isErr()).toBe(true);
+          expect(connections).toBe(1);
+          if (result.isErr()) {
+            expect(result.error.message).not.toContain("secret");
+          }
+        },
+      );
+    }
+  });
+
+  test("a shared abort signal bounds the final body after streamed redirects", async () => {
+    await withHttpServer(
+      (request, response) => {
+        if (request.url === "/start") {
+          response.writeHead(302, { Location: "/stalled" });
+          response.write("redirect");
+          return;
+        }
+        response.writeHead(200);
+        response.write("partial");
+      },
+      async (port) => {
+        const controller = new AbortController();
+        const abortReason = new Error("shared deadline reached");
+        const result = await fetchStreamFollowingRedirects({
+          url: `http://publisher.test:${port}/start`,
+          maxHops: 4,
+          fetchStream: async (target) =>
+            await fetchStreamWithResolvedAddress({
+              permit: grantThirdPartyOutboundPermit(),
+              addresses: [{ address: "127.0.0.1", family: 4 }],
+              maxBytes: 1024,
+              redirect: "manual",
+              signal: controller.signal,
+              timeoutMs: 1000,
+              url: new URL(target),
+            }),
+        });
+        const reader = result.unwrap().body.getReader();
+        expect((await reader.read()).done).toBe(false);
+        const pendingRead = reader.read();
+        controller.abort(abortReason);
+        const read = await Result.tryPromise(async () => await pendingRead);
+        expect(read.isErr()).toBe(true);
+        reader.releaseLock();
+      },
+    );
+  });
+
   test("returns streaming responses before the server closes the body", async () => {
     await withHttpServer(
       (_request, response) => {
@@ -184,6 +319,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           timeoutMs: 1000,
@@ -215,6 +351,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [
             { address: "::1", family: 6 },
             { address: "127.0.0.1", family: 4 },
@@ -611,3 +748,57 @@ const withHttpServer = async (
     });
   }
 };
+
+describe("outbound request authority", () => {
+  const requests = Object.values(outboundPermitContract);
+
+  test("checks issued identities before request preparation", async () => {
+    for (const request of requests) {
+      for (const permit of [
+        undefined,
+        null,
+        {},
+        { ...grantThirdPartyOutboundPermit() },
+      ]) {
+        expect(
+          await rejectionOf(Reflect.apply(request, undefined, [{ permit }])),
+        ).toMatchObject({
+          message: "An issued third-party outbound permit is required",
+        });
+      }
+    }
+  });
+
+  test("issued identities reach request validation", async () => {
+    for (const request of requests) {
+      const result = await request({
+        addresses: [],
+        maxBytes: 1024,
+        permit: grantThirdPartyOutboundPermit(),
+        timeoutMs: 1000,
+        url: new URL("file:///fixture"),
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toMatch(
+          /No resolved address available|URL must use HTTPS/u,
+        );
+      }
+    }
+  });
+
+  test("outbound authority accepts only issued identities", async () => {
+    await assertProperty(
+      "outbound authority accepts only issued identities",
+      fc.asyncProperty(fc.jsonValue(), async (permit) => {
+        for (const request of requests) {
+          expect(
+            await rejectionOf(Reflect.apply(request, undefined, [{ permit }])),
+          ).toMatchObject({
+            message: "An issued third-party outbound permit is required",
+          });
+        }
+      }),
+    );
+  });
+});

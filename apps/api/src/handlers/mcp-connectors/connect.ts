@@ -14,6 +14,8 @@ import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-se
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -88,13 +90,14 @@ export const createConnectMcpConnectorHandler = ({
           slug: requestParams.slug,
         }),
       );
-
       if (connector.authType === "bearer") {
         return Result.ok<ConnectMcpConnectorResult>({
           type: "bearer",
           requiresToken: true,
         });
       }
+
+      const permit = grantThirdPartyOutboundPermit();
 
       if (connector.authType === "none") {
         const saved = yield* Result.await(
@@ -140,6 +143,7 @@ export const createConnectMcpConnectorHandler = ({
           await refreshCachedMcpToolsForConnection({
             connectionId: connection.id,
             organizationId: session.activeOrganizationId,
+            permit,
             safeDb,
             userId: user.id,
           });
@@ -160,6 +164,7 @@ export const createConnectMcpConnectorHandler = ({
           userId: user.id,
           safeDb,
           recordAuditEvent,
+          permit,
         }),
       );
 
@@ -191,6 +196,7 @@ export const createConnectMcpConnectorHandler = ({
           metadata,
           registrationMode,
           requestedScopes,
+          permit,
         }),
       );
       const pkce = createPkce();
@@ -316,6 +322,7 @@ type LoadApprovedMcpMetadataOptions = ConnectMcpConnectorDependencies & {
   userId: SafeId<"user">;
   safeDb: SafeDb;
   recordAuditEvent: AuditRecorder;
+  permit: ThirdPartyOutboundPermit;
 };
 
 const loadApprovedMcpMetadata = async ({
@@ -326,11 +333,15 @@ const loadApprovedMcpMetadata = async ({
   userId,
   safeDb,
   recordAuditEvent,
+  permit,
 }: LoadApprovedMcpMetadataOptions): Promise<
   Result<BoundOAuthMetadata, HandlerError<400 | 409 | 502> | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const discovery = await discoverMetadata(connector.url);
+    const discovery = await discoverMetadata({
+      rawMcpUrl: connector.url,
+      permit,
+    });
     if (Result.isError(discovery)) {
       if (discovery.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
         yield* Result.await(
@@ -430,6 +441,7 @@ const loadApprovedMcpMetadata = async ({
   });
 
 type EnsureOAuthClientOptions = {
+  permit: ThirdPartyOutboundPermit;
   metadata: Parameters<typeof registerOAuthClient>[0]["metadata"];
   connectorId: typeof mcpConnectors.$inferSelect.id;
   connectorSlug: string;
@@ -441,6 +453,7 @@ type EnsureOAuthClientOptions = {
 };
 
 const ensureOAuthClient = async ({
+  permit,
   metadata,
   connectorId,
   connectorSlug,
@@ -494,6 +507,7 @@ const ensureOAuthClient = async ({
         : yield* Result.await(
             registerOAuthClient({
               metadata,
+              permit,
               connectorSlug,
               redirectUri,
               requestedScopes,

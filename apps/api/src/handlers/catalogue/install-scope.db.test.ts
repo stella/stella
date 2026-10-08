@@ -4,6 +4,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb } from "@/api/db/scoped";
 import createSkill from "@/api/handlers/skills/create";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -42,6 +43,7 @@ const installAsMember = async (scope: "private" | "team") => {
   const result = await installBundledSkill.handler(
     createTestHandlerContext<Parameters<typeof installBundledSkill.handler>[0]>(
       {
+        recordAuditEvent: auditRecorderDouble(),
         memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },

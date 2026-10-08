@@ -57,7 +57,7 @@ export type ReviewSeedDependencies = {
   timeBillingAdmitted?: (() => boolean) | undefined;
 };
 
-export type ReviewSeedKind =
+type ReviewSeedKind =
   | "contacts"
   | "matters"
   | "documents"

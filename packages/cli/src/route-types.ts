@@ -15,6 +15,7 @@ export type ToolScope = McpCliToolScope;
 
 /** Wire fields from `tools/list` (build-time: projected from `DEFAULT_MCP_TOOL_DEFINITIONS`). */
 export type RegistryToolListing = {
+  feature?: string;
   featureId?: string;
   name: string;
   description: string;
@@ -38,6 +39,7 @@ export type DiscriminatorSubcommand = {
 
 /** Baked-in per-tool annotation (spec S1), keyed by tool name and merged with the listing. */
 export type ToolAnnotation = {
+  feature?: string;
   featureId?: string;
   command: readonly string[];
   additionalScopes?: readonly ToolScope[];
@@ -121,6 +123,7 @@ export type FlagSpec = {
 
 /** The generator's per-leaf output before handing to stricli's `buildCommand`. */
 export type LeafCommandSpec = {
+  feature?: string;
   featureId?: string;
   commandPath: readonly string[];
   additionalScopes?: readonly ToolScope[];
@@ -186,6 +189,7 @@ export type CapabilityFlagSpec = FlagSpec & {
  * `{ capability: capabilityId, input: { body?, params?, query? } }`.
  */
 export type CapabilityLeafSpec = {
+  feature?: string;
   featureId?: string;
   commandPath: readonly string[];
   capabilityId: string;
@@ -229,24 +233,6 @@ export type CapabilityLeafSpec = {
    * command and the REST endpoint.
    */
   filelessField?: string;
-};
-
-/**
- * Commands the connected server attested are gated off in this deployment.
- * They stay in the tree (invoking one yields the server's `feature_disabled`);
- * every listing marks them from this one value.
- */
-export type DisabledCommands = {
-  /** Curated tool names (`x-stella-feature-omitted-tools`). */
-  tools: readonly string[];
-  /** Catalog capability ids (`x-stella-feature-omitted-capabilities`). */
-  capabilities: readonly string[];
-};
-
-/** No attestation: a server that sent no evidence, or no server at all. */
-export const NO_DISABLED_COMMANDS: DisabledCommands = {
-  tools: [],
-  capabilities: [],
 };
 
 /** stricli assembly: `LeafCommandSpec[]` folds into a nested route tree. */

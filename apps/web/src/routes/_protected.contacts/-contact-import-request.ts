@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
+
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import {
   isCurrentStorageOwner,
@@ -39,21 +41,13 @@ class ContactImportRequestPersistenceError extends TaggedError(
 const sessionStorageOrUndefined = (): ContactImportRequestStorage | undefined =>
   requireBrowserStorage("session").unwrapOr(undefined);
 
-const sha256Hex = async (input: BufferSource): Promise<string> => {
-  const digest = await crypto.subtle.digest("SHA-256", input);
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-};
-
 const operationStorageKey = async (
   payload: ImportCommitPayload,
   scope: ContactImportRequestScope,
 ): Promise<string> => {
-  const encoder = new TextEncoder();
   const [payloadHash, scopeHash] = await Promise.all([
-    sha256Hex(encoder.encode(JSON.stringify(payload))),
-    sha256Hex(encoder.encode(JSON.stringify(scope))),
+    hashSha256Hex(JSON.stringify(payload)),
+    hashSha256Hex(JSON.stringify(scope)),
   ]);
   return userStorageKey(
     `${CONTACT_IMPORT_REQUEST_STORAGE_PREFIX}${scopeHash}:${payloadHash}`,

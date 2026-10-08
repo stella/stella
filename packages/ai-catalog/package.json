@@ -1,6 +1,6 @@
 {
   "name": "@stll/ai-catalog",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Provider-neutral AI model roles, capabilities, and curated model metadata.",
   "keywords": [
     "ai",
@@ -37,8 +37,8 @@
     "clean": "git clean -xdf dist .cache .turbo node_modules",
     "build": "tsdown",
     "gen:benchmarks": "bun ../scripts/src/model-catalog-benchmarks-gen.ts",
-    "gen:capabilities": "bun ../scripts/src/model-catalog-capabilities-gen.ts",
-    "gen:rates": "bun ../scripts/src/model-catalog-rates-gen.ts",
+    "gen:capabilities": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-capabilities-gen.ts",
+    "gen:rates": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-rates-gen.ts",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",

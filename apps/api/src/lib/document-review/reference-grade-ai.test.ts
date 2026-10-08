@@ -17,6 +17,7 @@ import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import { gradeReferencePositions } from "@/api/lib/document-review/reference-grade";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -120,6 +121,7 @@ const grade = async () =>
       toSafeId<"entityVersion">("reference-version-fixture"),
     ],
     organizationId,
+    admission: testModelAdmission(organizationId),
     workspaceId,
     orgAIConfig: null,
     managedAIResidency: "eu" as const,

@@ -47,6 +47,10 @@ import {
   type TrackedRule,
 } from "./lint-suppressions";
 import {
+  isApiProductionModule,
+  outboundTransportReferences,
+} from "./outbound-transport-ownership";
+import {
   ROOT_CONNECTION_DOORS,
   STATUS_TRANSITION_OWNERSHIP,
 } from "./ownership";
@@ -2978,6 +2982,39 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "repo",
+    id: "api-legacy-outbound-transports",
+    description:
+      "Raw transport and client capabilities acquired by each classified API owner; each file's capability set only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const keys: string[] = [];
+      for (const file of scanRepoFiles(context, [
+        "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ])) {
+        if (
+          !isApiProductionModule(file) ||
+          file === "apps/api/src/lib/safe-outbound-fetch.ts"
+        ) {
+          continue;
+        }
+        for (const capability of outboundTransportReferences({
+          file,
+          text: readSource(context, file),
+        })) {
+          if (capability !== "permit:grant") {
+            keys.push(`${file}#${capability}`);
+          }
+        }
+      }
+      return {
+        count: keys.length,
+        files: Object.fromEntries(keys.map((key) => [key, 1])),
+      };
+    },
+  },
+  {
+    scope: "repo",
     id: "schema-introspection-files",
     description:
       "Shared schema introspection paths, gated independently; additions require a justified allowance and pass the schema-only dependency guard",
@@ -4254,6 +4291,27 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
   };
 };
 
+const shellArgument = (value: string): string =>
+  `'${value.replaceAll("'", "'\\''")}'`;
+
+export const allowanceRemovalCommand = (paths: readonly string[]): string =>
+  `rm -- ${paths.map(shellArgument).join(" ")}`;
+
+type AllowanceAdjustmentCommandOptions = {
+  target: string;
+  remove: readonly string[];
+  template: RatchetAllowance;
+};
+export const allowanceAdjustmentCommand = ({
+  target,
+  remove,
+  template,
+}: AllowanceAdjustmentCommandOptions): string => {
+  const consolidate =
+    remove.length === 0 ? "" : `${allowanceRemovalCommand(remove)} && `;
+  return `mkdir -p ${shellArgument(ALLOWANCE_DIRECTORY)} && ${consolidate}printf '%s\\n' ${shellArgument(JSON.stringify(template))} > ${shellArgument(target)}`;
+};
+
 // Presence in the measured base makes an allowance inert, even if the head
 // edits its contents. Read committed head files so funding has the same Git
 // boundary.
@@ -4343,14 +4401,25 @@ const checkAllowances = ({
         delta,
         reason: "Explain why this increase is needed",
       };
+      const command = allowanceAdjustmentCommand({
+        target: filename,
+        remove: funded?.paths.slice(1) ?? [],
+        template,
+      });
+      const adjustment =
+        funded === undefined
+          ? `Add ${filename}`
+          : `Adjust ${funded.paths.join(", ")}, merging their funding into ${filename}`;
       errors.push(
-        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}`,
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${adjustment} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
+          `    After deciding the increase is required, run: ${command}\n` +
+          "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }
   }
   for (const [key, { paths, delta }] of funding) {
     errors.push(
-      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove the added allowance`,
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: ${allowanceRemovalCommand(paths)}`,
     );
   }
   return errors;
@@ -4453,7 +4522,7 @@ const runCheck = (): number => {
     console.error(`\n${remedy}`);
   }
   console.error(
-    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR. Recheck with `bun scripts/ratchet.ts --check`.",
   );
   return 1;
 };

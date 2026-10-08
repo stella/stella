@@ -1674,39 +1674,53 @@ const renderTableBlock = ({
   );
 };
 
+export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
+  text.split(/\n{2,}/u).map((paragraph, index) => ({
+    id: `fulltext:${index}`,
+    anchorId: `fulltext:${index}`,
+    type: "paragraph",
+    plainText: paragraph,
+    inlines: [{ text: paragraph, type: "text" }],
+  }));
+
 export const FulltextFallback = ({
   activeMatchIndex,
   anchorsByPieceId,
+  notesByAnchorId,
   rangesByPieceId,
   text,
 }: {
   activeMatchIndex: number;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
+  /** Content drawn after the paragraph whose anchor it is keyed by. */
+  notesByAnchorId?: ReadonlyMap<string, ReactNode> | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
   text: string;
 }) => {
-  const paragraphs = text.split(/\n{2,}/u);
+  const paragraphs = buildFulltextParagraphBlocks(text);
 
   return (
     <>
-      {paragraphs.map((paragraph, index) => {
-        const pieceId = `fulltext:${index}`;
+      {paragraphs.map((paragraph) => {
+        const pieceId = paragraph.id;
 
         return (
-          <p
-            className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
-            data-anchor={pieceId}
-            id={pieceId}
-            key={pieceId}
-          >
-            <InlineContent
-              activeMatchIndex={activeMatchIndex}
-              anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
-              inlines={[{ text: paragraph, type: "text" }]}
-              pieceId={pieceId}
-              ranges={rangesForPiece(rangesByPieceId, pieceId)}
-            />
-          </p>
+          <Fragment key={pieceId}>
+            <p
+              className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
+              data-anchor={pieceId}
+              id={pieceId}
+            >
+              <InlineContent
+                activeMatchIndex={activeMatchIndex}
+                anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
+                inlines={paragraph.inlines}
+                pieceId={pieceId}
+                ranges={rangesForPiece(rangesByPieceId, pieceId)}
+              />
+            </p>
+            {notesByAnchorId?.get(paragraph.anchorId)}
+          </Fragment>
         );
       })}
     </>

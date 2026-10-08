@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Wybierz listę",
+      "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} many {# elementów usunięto} other {# elementów usunięto}}",
     "description": "Opis",
     "details": "Szczegóły",
+    "detailsHiddenFeatureUnavailable": "Szczegóły ukryte: funkcja nie jest włączona",
     "disconnect": "Rozłącz",
     "dismiss": "Odrzuć",
     "displayName": "Nazwa wyświetlana",
@@ -2368,6 +2370,7 @@
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
+      "fileSecurityRejected": "Plik został odrzucony przez kontrolę bezpieczeństwa. Usuń oznaczoną zawartość i prześlij oczyszczoną kopię.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
@@ -2382,6 +2385,8 @@
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
+      "verificationActiveLimitReached": "Twoja organizacja osiągnęła limit jednoczesnych weryfikacji. Poczekaj na zakończenie jednej z nich i spróbuj ponownie.",
+      "verificationDailyLimitReached": "Twoja organizacja osiągnęła dzienny limit weryfikacji. Spróbuj ponownie po północy (Europe/Prague).",
       "versionConflict": "Ktoś inny zmienił to podczas Twojej edycji. Wczytaj ponownie, aby pobrać aktualną wersję."
     },
     "failedToAcceptInvitation": "Nie udało się przyjąć zaproszenia",
@@ -5340,7 +5345,6 @@
       "noLanguagesFound": "Nie znaleziono języków",
       "notConfigured": "DeepL nie jest skonfigurowany dla tej organizacji. Aby włączyć tłumaczenie, dodaj klucz API DeepL w ustawieniach organizacji.",
       "outputLabel": "Typ tłumaczenia",
-      "progress": "Postęp tłumaczenia",
       "progressCount": "Ukończono {completed} z {total}",
       "providerUnavailable": "Usługa tłumaczenia jest niedostępna. Spróbuj ponownie później lub skontaktuj się z administratorem.",
       "runFailed": "Nie udało się ukończyć tłumaczenia.",
@@ -5472,14 +5476,8 @@
     "exportToCsv": "Eksportuj do CSV",
     "fields": {
       "calculating": "Obliczanie...",
-      "currencyLabel": "Waluta (opcjonalnie)",
-      "currencyPlaceholder": "np. USD, EUR",
-      "editFieldValue": "Edytuj wartość pola",
       "errored": "Błąd",
-      "fieldValueLabel": "Wartość pola",
-      "fieldValuePlaceholder": "Wprowadź wartość pola",
       "formatNotSupported": "Format nie jest obsługiwany",
-      "numberPlaceholder": "Wprowadź liczbę",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości"
     },

@@ -41,6 +41,7 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_create_group => "clipboard_create_group",
       clipboard_commands::clipboard_delete_group => "clipboard_delete_group",
       clipboard_commands::clipboard_update_group => "clipboard_update_group",
+      clipboard_commands::clipboard_move_group => "clipboard_move_group",
       clipboard_commands::clipboard_update_item => "clipboard_update_item",
       clipboard_commands::clipboard_set_item_group => "clipboard_set_item_group",
       clipboard_commands::clipboard_set_item_name => "clipboard_set_item_name",

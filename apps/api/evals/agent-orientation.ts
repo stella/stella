@@ -57,6 +57,7 @@ import {
   streamChatChunks,
   toolCallEndInputOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -2580,6 +2581,7 @@ const resolveModels = async (
         managedAIResidency: "eu",
         role: "chat",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

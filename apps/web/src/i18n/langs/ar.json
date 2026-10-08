@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "اختيار قائمة",
+      "createList": "إنشاء قائمة",
       "evidenceList": "الوقائع من",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
@@ -1700,6 +1701,7 @@
     "deletedCount": "{count, plural, zero {تم حذف أي عنصر} one {تم حذف عنصر واحد} two {تم حذف عنصرين} few {تم حذف # عناصر} many {تم حذف # عنصرًا} other {تم حذف # عنصر}}",
     "description": "الوصف",
     "details": "التفاصيل",
+    "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
@@ -2368,6 +2370,7 @@
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",
       "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "filePropertyTypeImmutable": "لا يمكن تغيير نوع خاصية الملف. احتفظ بالنوع الحالي؛ وأنشئ خاصية مخصصة للقيم الأخرى.",
+      "fileSecurityRejected": "رفض فحص أمني الملف. أزِل المحتوى المُعلَّم ثم ارفع نسخة نظيفة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "hostedCheckoutOpen": "توجد عملية دفع مفتوحة بالفعل لهذه المؤسسة. أكملها، أو ابدأ عملية جديدة بعد انتهاء صلاحيتها.",
       "hostedSubscriptionLive": "لدى هذه المؤسسة اشتراك بالفعل. غيّره من «إدارة الاستخدام المُستضاف».",
@@ -2382,6 +2385,8 @@
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
+      "verificationActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى لعمليات التحقق المتزامنة. انتظر حتى تكتمل إحدى عمليات التحقق، ثم حاول مرة أخرى.",
+      "verificationDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي لعمليات التحقق. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "versionConflict": "غيّر شخص آخر هذا أثناء تحريرك له. أعد التحميل للحصول على النسخة الحالية."
     },
     "failedToAcceptInvitation": "تعذّر قبول الدعوة",
@@ -5340,7 +5345,6 @@
       "noLanguagesFound": "لم يتم العثور على لغات",
       "notConfigured": "DeepL غير مُهيّأ لهذه المؤسسة. أضِف مفتاح API الخاص بـ DeepL في إعدادات المؤسسة لتمكين الترجمة.",
       "outputLabel": "نوع الترجمة",
-      "progress": "تقدم الترجمة",
       "progressCount": "اكتمل {completed} من {total}",
       "providerUnavailable": "خدمة الترجمة غير متاحة. حاول مرة أخرى لاحقًا أو تواصل مع المسؤول.",
       "runFailed": "تعذّر إكمال الترجمة.",
@@ -5472,14 +5476,8 @@
     "exportToCsv": "تصدير إلى CSV",
     "fields": {
       "calculating": "جارٍ الحساب...",
-      "currencyLabel": "العملة (اختياري)",
-      "currencyPlaceholder": "مثل USD أو EUR",
-      "editFieldValue": "تعديل قيمة الحقل",
       "errored": "حدث خطأ",
-      "fieldValueLabel": "قيمة الحقل",
-      "fieldValuePlaceholder": "أدخل قيمة الحقل",
       "formatNotSupported": "التنسيق غير مدعوم",
-      "numberPlaceholder": "أدخل رقمًا",
       "selectAValue": "اختر قيمة",
       "selectValues": "اختر القيم"
     },

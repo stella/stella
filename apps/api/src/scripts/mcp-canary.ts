@@ -26,6 +26,10 @@ import {
 } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 
+import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+
+export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+
 const PROBE_TIMEOUT_MS = MCP_NOTIFICATION_KEEP_ALIVE_MS * 4;
 const STREAM_OPEN_OBSERVATION_MS = 100;
 const SSE_CONTENT_TYPE = "text/event-stream";
@@ -1387,6 +1391,7 @@ const reviewEnvelopeCode = (body: unknown): string => {
       "invalid_scope",
       "invalid_grant",
       "access_denied",
+      "account_access_unavailable",
       "INVALID_EMAIL_OR_PASSWORD",
       "TOO_MANY_REQUESTS",
     ].includes(code)
@@ -2064,7 +2069,8 @@ const run = async () => {
     return;
   }
 
-  const token = process.env["MCP_CANARY_TOKEN"];
+  const token =
+    process.env[MCP_CANARY_JOURNEY_CREDENTIALS.productionBearer.env.token];
   const mode = process.env["MCP_CANARY_MODE"] ?? "frequent";
   if (mode !== "frequent" && mode !== "full") {
     console.error("[mcp-canary] MCP_CANARY_MODE must be frequent or full.");
@@ -2091,10 +2097,14 @@ const run = async () => {
     ...(await runReviewAccountJourney({
       baseUrl,
       configuredBaseUrl:
-        process.env["MCP_CANARY_CONFIGURED_BASE_URL"] ?? "https://api.stll.app",
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.configuredBaseUrl
+        ] ?? "https://api.stll.app",
       frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
-      email: process.env["APP_REVIEW_ACCOUNT_EMAIL"],
-      password: process.env["REVIEW_ACCOUNT_PASSWORD"],
+      email:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.email],
+      password:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.password],
       mode,
     })),
   );
@@ -2102,7 +2112,10 @@ const run = async () => {
     results.push(
       ...(await runStagingCredentialJourneys({
         baseUrl,
-        smokeSecret: process.env["SMOKE_SESSION_SECRET"],
+        smokeSecret:
+          process.env[
+            MCP_CANARY_JOURNEY_CREDENTIALS.stagingSession.env.smokeSecret
+          ],
       })),
     );
   } else {

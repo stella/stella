@@ -95,6 +95,7 @@ jobs:
           MCP_CANARY_FRONTEND_URL: ${{ vars.MCP_CANARY_FRONTEND_URL || 'https://my.stll.app' }}
           MCP_CANARY_CONFIGURED_BASE_URL: ${{ vars.MCP_CANARY_BASE_URL || 'https://api.stll.app' }}
           APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
+          APP_REVIEW_ORGANIZATION_ID: ${{ vars.APP_REVIEW_ORGANIZATION_ID }}
           REVIEW_ACCOUNT_PASSWORD: ${{ steps.target.outputs.authenticated == 'true' && secrets.REVIEW_ACCOUNT_PASSWORD || '' }}
           MCP_CANARY_MODE: ${{ github.event.schedule == '17 3 * * *' && 'full' || inputs.mode || 'frequent' }}
           MCP_CANARY_TOKEN: ${{ steps.target.outputs.authenticated == 'true' && secrets.MCP_CANARY_TOKEN || '' }}

@@ -1164,10 +1164,6 @@
     "reason": "Existing TINT_PRIORITY domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/workspaces/edit-field-dialog.tsx::EditFieldDialog::maxLength:3::1",
-    "reason": "Existing EditFieldDialog UI validation or presentation bound; contract migration pending."
-  },
-  {
     "id": "apps/web/src/components/workspaces/entity-utils.ts::INTERNAL_PROPERTIES::domain:[\"name\",\"created-by\",\"updated-at\",\"version\",\"kind\",\"list-item-type\",\"status\",\"priority\",\"due-date\",\"assignee\"]::1",
     "reason": "Existing INTERNAL_PROPERTIES domain; contract ownership pending migration."
   },

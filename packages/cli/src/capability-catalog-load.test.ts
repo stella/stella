@@ -25,6 +25,30 @@ const validEntry = (
 });
 
 describe("parseCapabilityCatalog fail-closed parsing", () => {
+  test("preserves deployment ownership independently from caller feature access", () => {
+    expect(
+      parseCapabilityCatalog([validEntry({ feature: "FEATURE_EXAMPLE" })]),
+    ).toEqual([
+      {
+        id: "matters.list",
+        handlerKind: "workspace",
+        access: "read",
+        destructive: false,
+        scope: "stella:read",
+        inputSchema: {},
+        transport: { type: "json" },
+        feature: "FEATURE_EXAMPLE",
+      },
+    ]);
+  });
+
+  test.each(["", "x".repeat(129), 42, null])(
+    "rejects malformed deployment ownership %j",
+    (feature) => {
+      expect(parseCapabilityCatalog([validEntry({ feature })])).toBeNull();
+    },
+  );
+
   test("returns null for values that are not an array", () => {
     expect(parseCapabilityCatalog(null)).toBeNull();
     expect(parseCapabilityCatalog(undefined)).toBeNull();

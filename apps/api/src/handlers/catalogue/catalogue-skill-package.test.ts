@@ -6,6 +6,7 @@ import {
   parseInTreeCatalogueSkill,
   resolveCatalogueSkillPackage,
 } from "@/api/handlers/catalogue/catalogue-skill-package";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { GithubSkillPath } from "@/api/lib/skills/skill-package";
 
@@ -45,6 +46,7 @@ describe("resolveCatalogueSkillPackage", () => {
   test("returns 404 for an unknown slug and never fetches upstream", async () => {
     let fetched = false;
     const result = await resolveCatalogueSkillPackage("does-not-exist", {
+      permit: grantThirdPartyOutboundPermit(),
       fetchGithubSkill: async () => {
         fetched = true;
         return Result.ok({
@@ -82,6 +84,7 @@ describe("resolveCatalogueSkillPackage", () => {
     const result = await resolveCatalogueSkillPackage(
       "jurisrank-csjn-analysis",
       {
+        permit: grantThirdPartyOutboundPermit(),
         fetchGithubSkill: async ({ target, sourceUrl }) => {
           captured.target = target;
           captured.sourceUrl = sourceUrl;
@@ -118,6 +121,7 @@ describe("resolveCatalogueSkillPackage", () => {
     const result = await resolveCatalogueSkillPackage(
       "jurisrank-csjn-analysis",
       {
+        permit: grantThirdPartyOutboundPermit(),
         fetchGithubSkill: async () =>
           Result.ok(parsedGithubPackage({ license: "MIT" })),
       },
@@ -221,6 +225,7 @@ describe("github catalogue package cache", () => {
 });
 
 const githubPackageOptions = () => ({
+  permit: grantThirdPartyOutboundPermit(),
   sourceUrl: `https://raw.githubusercontent.com/acme/legal/${"a".repeat(40)}`,
   target: {
     owner: "acme",

@@ -13,15 +13,23 @@
 // It does not prove helper internals, runtime environment values, or dynamic
 // control flow outside the accepted shape.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isImportedFrom,
+  isIdentifierReference,
+  isSingleAssignment,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
+import type { AstNode, resolveImport, ScopeContext } from "./utils.ts";
+
+const ALTERNATE_READERS = new Set([
+  "readPublicDecisionLanguageAlternatesByGroup",
+]);
 
 const SEARCH_FUNCTIONS = new Set([
   "searchPostgresDecisions",
@@ -66,17 +74,26 @@ const walkOwnFunctionBody = (
   walk(functionNode.body);
 };
 
-const callsIdentifier = (node: AstNode, name: string): boolean =>
-  node.type === "CallExpression" &&
-  isIdentifier(unwrapExpression(node.callee), name);
-
 const firstArgument = (node: AstNode): unknown =>
   Array.isArray(node.arguments) ? node.arguments.at(0) : undefined;
 
-const invokesInOwnBody = (functionNode: AstNode, name: string): boolean => {
+type ImportResolutionContext = Parameters<typeof resolveImport>[0];
+
+const invokesInOwnBody = (
+  functionNode: AstNode,
+  context: ImportResolutionContext,
+): boolean => {
   let found = false;
   walkOwnFunctionBody(functionNode, (node) => {
-    if (callsIdentifier(node, name)) {
+    if (
+      node.type === "CallExpression" &&
+      isImportedFrom({
+        context,
+        node: node.callee,
+        modules: ["apps/api/src/lib/case-law/language-alternates"],
+        names: ALTERNATE_READERS,
+      })
+    ) {
       found = true;
     }
   });
@@ -114,26 +131,6 @@ const statementsIn = (node: unknown): readonly AstNode[] =>
     ? node.body.filter(isAstNode)
     : [];
 
-const callsConfiguration = (node: unknown, name: string): boolean => {
-  if (!isAstNode(node)) {
-    return false;
-  }
-  if (callsIdentifier(node, name)) {
-    return isIdentifier(unwrapExpression(firstArgument(node)), "tx");
-  }
-  return false;
-};
-
-const invokesSharedCallback = (node: unknown): boolean => {
-  if (!isAstNode(node)) {
-    return false;
-  }
-  if (callsIdentifier(node, "fn")) {
-    return isIdentifier(unwrapExpression(firstArgument(node)), "tx");
-  }
-  return false;
-};
-
 const directAwaitedCall = (statement: unknown): AstNode | undefined => {
   if (!isAstNode(statement) || statement.type !== "ExpressionStatement") {
     return undefined;
@@ -146,51 +143,126 @@ const directAwaitedCall = (statement: unknown): AstNode | undefined => {
   return call?.type === "CallExpression" ? call : undefined;
 };
 
-const directlyReturnsSharedCallback = (statement: unknown): boolean => {
-  if (!isAstNode(statement) || statement.type !== "ReturnStatement") {
+const transactionsAreConfigured = (
+  context: ScopeContext,
+  functionNode: AstNode,
+): boolean => {
+  const sharedParameter = Array.isArray(functionNode.params)
+    ? functionNode.params.at(0)
+    : null;
+  if (!isIdentifierReference(sharedParameter)) {
     return false;
   }
-  const returned = unwrapExpression(statement.argument);
-  const call =
-    returned?.type === "AwaitExpression"
-      ? unwrapExpression(returned.argument)
-      : returned;
-  return invokesSharedCallback(call);
-};
-
-const transactionCallbackIsConfigured = (functionNode: AstNode): boolean => {
-  const callbacks: AstNode[] = [];
-  walkOwnFunctionBody(functionNode, (node) => {
-    if (!isMemberCall(node, "transaction") || callbacks.length > 0) {
-      return;
+  const sharedBinding = resolveVariable(context, sharedParameter);
+  if (sharedBinding === null || !isSingleAssignment(sharedBinding)) {
+    return false;
+  }
+  // The owner helper is a module binding; a callback-local namesake cannot
+  // establish transaction configuration.
+  let configurationBinding: Variable | null = null;
+  let scope = context.sourceCode.getScope(sharedParameter);
+  while (true) {
+    if (scope.type === "module" || scope.type === "global") {
+      configurationBinding = scope.set.get("configureReadTransaction") ?? null;
+      break;
     }
-    const candidate = unwrapExpression(firstArgument(node));
-    if (isFunctionLike(candidate)) {
-      callbacks.push(candidate);
+    if (scope.upper === null) {
+      break;
+    }
+    scope = scope.upper;
+  }
+  if (
+    configurationBinding === null ||
+    !isSingleAssignment(configurationBinding)
+  ) {
+    return false;
+  }
+  const transactions: AstNode[] = [];
+  walkOwnFunctionBody(functionNode, (node) => {
+    if (isMemberCall(node, "transaction")) {
+      transactions.push(node);
     }
   });
-  const callback = callbacks.at(0);
-  if (callback === undefined) {
-    return false;
-  }
-
-  const statements = statementsIn(callback.body);
-  // Unconditional on purpose: which guards a read gets is the guard set's
-  // decision, but that a read is configured at all must not depend on a branch
-  // the reader could take the other way.
-  const configurationIndex = statements.findIndex((statement) =>
-    callsConfiguration(
-      directAwaitedCall(statement),
-      "configureReadTransaction",
-    ),
+  return (
+    transactions.length > 0 &&
+    transactions.every((transaction) => {
+      const callback = unwrapExpression(firstArgument(transaction));
+      if (!isFunctionLike(callback)) {
+        return false;
+      }
+      const transactionParameter = Array.isArray(callback.params)
+        ? callback.params.at(0)
+        : null;
+      if (!isIdentifierReference(transactionParameter)) {
+        return false;
+      }
+      const transactionBinding = resolveVariable(context, transactionParameter);
+      if (
+        transactionBinding === null ||
+        !isSingleAssignment(transactionBinding)
+      ) {
+        return false;
+      }
+      const takesTransaction = (call: AstNode) => {
+        const argument = unwrapExpression(firstArgument(call));
+        return (
+          isIdentifierReference(argument) &&
+          resolveVariable(context, argument) === transactionBinding
+        );
+      };
+      const invokesSharedCallback = (node: unknown): node is AstNode => {
+        if (!isAstNode(node) || node.type !== "CallExpression") {
+          return false;
+        }
+        const callee = unwrapExpression(node.callee);
+        return (
+          isIdentifierReference(callee) &&
+          resolveVariable(context, callee) === sharedBinding
+        );
+      };
+      const statements = statementsIn(callback.body);
+      // Conditional configuration cannot establish a configured read on every path.
+      const configurationIndex = statements.findIndex((statement) => {
+        const call = directAwaitedCall(statement);
+        const callee =
+          call === undefined ? null : unwrapExpression(call.callee);
+        return (
+          call !== undefined &&
+          isIdentifierReference(callee) &&
+          callee.name === "configureReadTransaction" &&
+          resolveVariable(context, callee) === configurationBinding &&
+          takesTransaction(call)
+        );
+      });
+      const configuration = statements.at(configurationIndex);
+      if (configurationIndex === -1 || configuration === undefined) {
+        return false;
+      }
+      const unconfiguredInvocations: AstNode[] = [];
+      walkOwnFunctionBody(callback, (node) => {
+        if (
+          invokesSharedCallback(node) &&
+          (!takesTransaction(node) || node.range[0] < configuration.range[1])
+        ) {
+          unconfiguredInvocations.push(node);
+        }
+      });
+      return (
+        unconfiguredInvocations.length === 0 &&
+        statements.slice(configurationIndex + 1).some((statement) => {
+          if (statement.type !== "ReturnStatement") {
+            return false;
+          }
+          const returned = unwrapExpression(statement.argument);
+          const call =
+            returned?.type === "AwaitExpression"
+              ? unwrapExpression(returned.argument)
+              : returned;
+          return invokesSharedCallback(call) && takesTransaction(call);
+        })
+      );
+    })
   );
-  if (configurationIndex === -1) {
-    return false;
-  }
-
-  return statements
-    .slice(configurationIndex + 1)
-    .some(directlyReturnsSharedCallback);
 };
 
 export default eslintCompatPlugin({
@@ -207,6 +279,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const functions = new Map<string, AstNode>();
         return {
+          // createOnce keeps this closure across files: start each file empty.
+          before() {
+            functions.clear();
+          },
           FunctionDeclaration(node) {
             if (
               isAstNode(node) &&
@@ -230,10 +306,7 @@ export default eslintCompatPlugin({
               const functionNode = functions.get(functionName);
               if (
                 functionNode === undefined ||
-                !invokesInOwnBody(
-                  functionNode,
-                  "readPublicDecisionLanguageAlternatesByGroup",
-                )
+                !invokesInOwnBody(functionNode, context)
               ) {
                 context.report({
                   node: functionNode ?? node,
@@ -257,6 +330,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         let publicLawReadFunction: AstNode | null = null;
         return {
+          // createOnce keeps this closure across files: start each file empty.
+          before() {
+            publicLawReadFunction = null;
+          },
           VariableDeclarator(node) {
             const functionEntry = namedFunctionFromDeclarator(node);
             if (functionEntry?.[0] === "publicLawReadDb") {
@@ -266,7 +343,7 @@ export default eslintCompatPlugin({
           "Program:exit"(node) {
             if (
               publicLawReadFunction === null ||
-              !transactionCallbackIsConfigured(publicLawReadFunction)
+              !transactionsAreConfigured(context, publicLawReadFunction)
             ) {
               context.report({
                 node: publicLawReadFunction ?? node,

@@ -433,6 +433,9 @@
   .inset-y-0 {
     inset-block: 0px;
   }
+  .inset-y-1 {
+    inset-block: var(--spacing);
+  }
   .-start-1 {
     inset-inline-start: calc(var(--spacing) * -1);
   }
@@ -960,6 +963,9 @@
   .h-full {
     height: 100%;
   }
+  .h-lh {
+    height: 1lh;
+  }
   .h-px {
     height: 1px;
   }
@@ -1070,6 +1076,12 @@
   }
   .w-\(--sidebar-width\) {
     width: var(--sidebar-width);
+  }
+  .w-0 {
+    width: 0px;
+  }
+  .w-0\.5 {
+    width: calc(var(--spacing) * 0.5);
   }
   .w-1 {
     width: var(--spacing);
@@ -2602,6 +2614,9 @@
   .text-highlight-foreground {
     color: var(--highlight-foreground);
   }
+  .text-info {
+    color: var(--info);
+  }
   .text-inherit {
     color: inherit;
   }
@@ -2631,6 +2646,9 @@
   }
   .text-success-foreground {
     color: var(--success-foreground);
+  }
+  .text-warning {
+    color: var(--warning);
   }
   .text-warning-foreground {
     color: var(--warning-foreground);
@@ -4010,24 +4028,6 @@
     :where([data-slot="frame"]) .in-data-\[slot\=frame\]\:hover\:bg-transparent:hover {
       background-color: transparent;
     }
-  }
-  :where([data-type="error"]) .in-data-\[type\=error\]\:text-destructive {
-    color: var(--destructive);
-  }
-  :where([data-type="info"]) .in-data-\[type\=info\]\:text-info {
-    color: var(--info);
-  }
-  :where([data-type="loading"]) .in-data-\[type\=loading\]\:animate-spin {
-    animation: var(--animate-spin);
-  }
-  :where([data-type="loading"]) .in-data-\[type\=loading\]\:opacity-80 {
-    opacity: 80%;
-  }
-  :where([data-type="success"]) .in-data-\[type\=success\]\:text-success {
-    color: var(--success);
-  }
-  :where([data-type="warning"]) .in-data-\[type\=warning\]\:text-warning {
-    color: var(--warning);
   }
   :where(:is([data-slot=alert-dialog-popup]:has([data-slot=alert-dialog-footer]))) .in-\[\[data-slot\=alert-dialog-popup\]\:has\(\[data-slot\=alert-dialog-footer\]\)\]\:pb-4 {
     padding-bottom: calc(var(--spacing) * 4);
@@ -5514,7 +5514,7 @@
       height: calc(var(--spacing) * 4);
     }
   }
-  .\[\&_svg\:not\(\[data-slot\=button-loader\]\)\]\:hidden svg:not([data-slot=button-loader]) {
+  .\[\&_svg\:not\(\[data-slot\=button-loader\]_svg\)\]\:hidden svg:not([data-slot=button-loader] svg) {
     display: none;
   }
   .\[\&_tr\]\:border-b tr {

@@ -53,6 +53,8 @@ export const MCP_ERROR_CODES = [
   "action_concurrency_busy",
   "action_not_enabled",
   "action_admission_unavailable",
+  "verification_active_limit_reached",
+  "verification_daily_limit_reached",
   "validation_error",
   "result_too_large",
   "missing_scope",
@@ -69,6 +71,12 @@ export const MCP_ERROR_CODES = [
   "internal_error",
 ] as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+export const VERIFICATION_RUN_CAP_CODES = {
+  active: "verification_active_limit_reached",
+  daily: "verification_daily_limit_reached",
+} as const;
+export type VerificationRunCapCode =
+  (typeof VERIFICATION_RUN_CAP_CODES)[keyof typeof VERIFICATION_RUN_CAP_CODES];
 export const ACTION_ADMISSION_REFUSALS = {
   action_period_exhausted: {
     status: 403,

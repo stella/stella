@@ -5,6 +5,7 @@ import {
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
   MCP_LAW_HTTP_PATH,
+  MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
 
 /**
@@ -113,7 +114,10 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
   MCP_MODES.map((mode) => {
     const config = getMcpResourceModeConfig(mode);
     return {
-      allowedScopes: [...config.resourceScopes],
+      // Better Auth intersects the entire grant with this list and persists
+      // that result on refresh tokens. Protocol scopes must survive issuance;
+      // protected-resource metadata still advertises only resourceScopes.
+      allowedScopes: [...config.resourceScopes, ...MCP_OAUTH_PROTOCOL_SCOPES],
       identifier: new URL(
         config.httpPath,
         `${baseUrl.replace(/\/$/u, "")}/`,
@@ -121,6 +125,30 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
       name: config.resourceName,
     };
   });
+
+/**
+ * The allowed scopes a stored resource row carried before protocol scopes
+ * joined the issuance policy: the configured set minus
+ * `MCP_OAUTH_PROTOCOL_SCOPES`.
+ *
+ * Expand step of an expand/contract rollout. The previous API release's boot
+ * census compares `oauth_resource.allowed_scopes` exactly against this
+ * predecessor set, so rewriting the rows in the same release as the policy
+ * change would stop any previous-release task (an autoscaled task mid-rollout,
+ * or a rollback) from booting. This release therefore accepts both the
+ * predecessor set and the configured set and rewrites nothing; the next
+ * release upgrades predecessor rows in the deploy repair and drops this
+ * acceptance, once no running task requires the predecessor set.
+ */
+export const predecessorOAuthResourceScopes = (
+  allowedScopes: readonly string[],
+): string[] =>
+  allowedScopes.filter(
+    (scope) =>
+      !MCP_OAUTH_PROTOCOL_SCOPES.some(
+        (protocolScope) => protocolScope === scope,
+      ),
+  );
 
 export const normalizeBetterAuthOAuthBaseUrl = (value: string) => {
   const parsed = URL.parse(value);

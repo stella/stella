@@ -36,33 +36,21 @@ const spawnIsolated = (args: readonly string[]) => {
 
 describe("stella CLI shell", () => {
   test("--version prints the package version", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "--version"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["--version"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString().trim()).toBe(packageJson.version);
   });
 
   test("--help exits 0", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "--help"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["--help"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("Stella command-line client");
   });
 
   test("--help documents the exit-code contract", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "--help"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["--help"]);
 
     const stdout = result.stdout.toString();
     expect(stdout).toContain("Exit codes:");
@@ -72,28 +60,20 @@ describe("stella CLI shell", () => {
   });
 
   test("tools list enumerates the generated command tree", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "tools", "list"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["tools", "list"]);
 
     expect(result.exitCode).toBe(0);
     const stdout = result.stdout.toString();
     expect(stdout).toContain("matter list");
     expect(stdout).toContain("(list_matters)");
-    expect(stdout).toContain("usage get");
+    expect(stdout).not.toContain("usage get");
     // Excluded compat shims never surface.
     expect(stdout).not.toContain("(search)");
     expect(stdout).not.toContain("(fetch)");
   });
 
   test("generated domain commands are wired into the root", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "matter", "--help"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["matter", "--help"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("list");
@@ -234,9 +214,9 @@ describe("stella CLI: offline registry projection", () => {
 });
 
 // The server's feature-omission evidence, once cached for the configured
-// origin, marks the same commands in every listing. No token is stored, so
+// origin, projects the same commands from every listing. No token is stored, so
 // nothing reaches the network.
-describe("stella CLI: server-attested disabled commands", () => {
+describe("stella CLI: deployment command discovery", () => {
   const SERVER = "https://stella.example";
   const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-disabled-"));
   const cacheHome = path.join(home, ".cache");
@@ -273,30 +253,24 @@ describe("stella CLI: server-attested disabled commands", () => {
     return result.stdout.toString();
   };
 
-  test("root --help marks the gated-off group and names it under capability", () => {
+  test("root help omits empty deployment-disabled groups", () => {
     const stdout = spawnAgainstServer(["--help"]);
-    expect(stdout).toMatch(
-      /^ {2}usage +usage commands: get \[disabled on this server\]$/mu,
-    );
-    expect(stdout).toMatch(
-      /^ {2}capability +capability commands: .*\[disabled on this server: usage\]$/mu,
-    );
+    expect(stdout).not.toMatch(/^ {2}usage +/mu);
+    expect(stdout).not.toContain("disabled on this server");
+    expect(stdout).toMatch(/^ {2}matter +/mu);
   });
 
-  test("capability --help marks the gated-off capability", () => {
-    const stdout = spawnAgainstServer(["capability", "usage", "--help"]);
-    expect(stdout).toMatch(
-      /^ {2}entitlement-get .*\[disabled on this server\]$/mu,
-    );
+  test("capability help omits the disabled domain", () => {
+    const stdout = spawnAgainstServer(["capability", "--help"]);
+    expect(stdout).not.toMatch(/^ {2}usage +/mu);
+    expect(stdout).not.toContain("disabled on this server");
   });
 
-  test("tools list marks the gated-off tool and capability, and nothing else", () => {
-    const marked = spawnAgainstServer(["tools", "list"])
-      .split("\n")
-      .filter((line) => line.endsWith("[disabled on this server]"));
-    expect(marked).toEqual([
-      "capability usage entitlement-get\t(read_capability: usage.entitlement.get) [disabled on this server]",
-      "usage get\t(get_usage) [disabled on this server]",
-    ]);
+  test("tools list omits disabled identities and keeps eligible commands", () => {
+    const stdout = spawnAgainstServer(["tools", "list"]);
+    expect(stdout).not.toContain("usage.entitlement.get");
+    expect(stdout).not.toContain("(get_usage)");
+    expect(stdout).not.toContain("disabled on this server");
+    expect(stdout).toContain("(list_matters)");
   });
 });
