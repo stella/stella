@@ -2,6 +2,12 @@ import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -20,6 +26,7 @@ import type {
 import { AiHeadnotes } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { editorialSupplementBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -83,6 +90,7 @@ const renderDecision = (abstract: string): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
+        surface="development"
         decision={textDecision({
           sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
           textFields: {
@@ -96,6 +104,110 @@ const renderDecision = (abstract: string): string =>
       />
     </IntlProvider>,
   );
+
+const renderStorageFulltext = async (
+  expandProvisions: boolean,
+): Promise<string> => {
+  const fulltext = "Soud použil § 42 zákona.\n\nSoud odkázal na 2 As 2/2025.";
+  const rootRoute = createRootRoute({
+    component: () => (
+      <DecisionText
+        surface="development"
+        decision={textDecision({ documentAst: null, fulltext })}
+        decisionId="dec-1"
+        expandProvisions={expandProvisions}
+        isHydrated
+        citationAnchors={[
+          {
+            id: "case-citation",
+            citationText: "2 As 2/2025",
+            treatment: "neutral",
+            decision: {
+              id: toSafeId<"caseLawDecision">(
+                "2c1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+              ),
+              caseNumber: "2 As 2/2025",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              country: "CZE",
+              court: "Test court",
+              ecli: null,
+              language: "cs",
+              languageAlternates: [],
+              slug: "2-as-2-2025",
+              decisionDate: "2025-01-01",
+              decisionType: "Judgment",
+            },
+          },
+        ]}
+        provisionAnchors={[
+          {
+            id: "provision-citation",
+            sentenceText: "Soud použil § 42 zákona.",
+            spanStart: 12,
+            reference: {
+              unit: "section",
+              section: 42,
+              sectionSuffix: null,
+              subsection: null,
+              letter: null,
+            },
+            target: {
+              document: {
+                country: "CZE",
+                eli: "/eli/cz/sb/2000/1",
+                id: "01a02a37-1111-7111-8111-111111111111",
+                slug: "1-2000-sb",
+                versionValidFrom: "2000-01-01",
+              },
+              preview: null,
+              payload: {
+                documentId: "01a02a37-1111-7111-8111-111111111111",
+                eli: "/eli/cz/sb/2000/1",
+                jurisdiction: "CZE",
+                anchorId: "par_42",
+                provisionLabel: "§ 42",
+                statuteTitle: "Test statute",
+                versionValidFrom: "2000-01-01",
+                versionCount: 1,
+              },
+            },
+          },
+        ]}
+      />
+    ),
+  });
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  await router.load();
+  return renderToStaticMarkup(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+};
+
+test("storage-resolved fulltext retains stored provision and decision links without an AST", async () => {
+  const markup = await renderStorageFulltext(false);
+  expect(markup).toContain('data-anchor="fulltext:0"');
+  expect(markup).toContain('data-anchor="fulltext:1"');
+  expect(markup).toMatch(/<a[^>]*href="[^"]*par_42"/u);
+  expect(markup).toMatch(/<a[^>]*href="[^"]*2-as-2-2025"/u);
+  expect(markup).not.toContain('data-slot="provision-card"');
+});
+
+test("expanded provisions on storage-resolved fulltext draw under their paragraph", async () => {
+  const markup = await renderStorageFulltext(true);
+  const card = markup.indexOf('data-slot="provision-card"');
+  expect(card).toBeGreaterThan(markup.indexOf('data-anchor="fulltext:0"'));
+  expect(card).toBeLessThan(markup.indexOf('data-anchor="fulltext:1"'));
+  expect(markup.slice(card)).toContain("§ 42");
+});
 
 describe("editorial legal text annotations", () => {
   test("every rendered source block has a stable selection anchor", () => {
@@ -126,6 +238,7 @@ describe("a decision whose text did not resolve", () => {
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <QueryClientProvider client={new QueryClient()}>
           <DecisionText
+            surface="development"
             decision={textDecision({
               documentAst: null,
               documentPending: true,
@@ -234,6 +347,7 @@ const renderLandedDecision = ({
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
+        surface="development"
         decision={textDecision({ documentAst: landingAst, language: "en" })}
         decisionId="dec-1"
         landingAnchorId={landingAnchorId}
@@ -286,6 +400,7 @@ const renderTopMatter = ({
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
+        surface="development"
         aiHeadnotes={
           analysis === undefined ? null : (
             <AiHeadnotes analysis={analysis} onAnchorClick={() => undefined} />
@@ -590,6 +705,7 @@ const renderWrappedDecision = (lines: readonly string[]): string =>
         decision={textDecision({
           documentAst: { ...ast, blocks: lines.map(lineParagraph) },
         })}
+        surface="development"
         decisionId="dec-1"
         landingAnchorId="p-3"
       />
@@ -655,6 +771,7 @@ describe("a letter-spaced heading", () => {
               ],
             },
           })}
+          surface="development"
           decisionId="dec-1"
         />
       </IntlProvider>,
@@ -688,6 +805,7 @@ describe("quotation marks the publisher printed escaped", () => {
           decision={textDecision({
             documentAst: { ...ast, blocks: [lineParagraph(ESCAPED, 1)] },
           })}
+          surface="development"
           decisionId="dec-1"
         />
       </IntlProvider>,
@@ -747,6 +865,7 @@ describe("a caption stored run on", () => {
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <DecisionText
           decision={textDecision({ country, documentAst: runOnCaptionAst })}
+          surface="development"
           decisionId="dec-1"
         />
       </IntlProvider>,

@@ -12,11 +12,11 @@ import {
   ChevronRightIcon,
   ClockIcon,
   FileTextIcon,
-  Loader2Icon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -676,7 +676,7 @@ type LoadOlderSentinelProps = {
  * Top-of-list paging affordance. The `div` is the IntersectionObserver
  * target that auto-loads when scrolled near; the button is the manual,
  * keyboard-accessible fallback. While a page is in flight it shows a
- * spinner instead so the observer (re-armed only when idle) cannot
+ * loader instead so the observer (re-armed only when idle) cannot
  * stack requests.
  */
 const LoadOlderSentinel = ({
@@ -689,8 +689,12 @@ const LoadOlderSentinel = ({
   return (
     <div className="flex justify-center py-1" ref={ref}>
       {isLoadingOlder ? (
-        <span className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (

@@ -38,6 +38,7 @@ import {
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -59,9 +60,11 @@ export const StatuteInspectorView = ({
   } = useQuery(statuteOptions(payload.documentId));
   // A provision opened from a heading offers its drafting history only where
   // the work has more than one consolidation, and the count is what says so.
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);

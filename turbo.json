@@ -126,6 +126,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -145,6 +148,9 @@
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/outbound-transport-census.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
@@ -161,6 +167,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -215,7 +224,11 @@
     },
     "@stll/extension#build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/VERSION",
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+      ],
       "outputs": [".output/**"]
     },
     "dev": {
@@ -333,6 +346,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -382,6 +398,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -422,6 +441,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -457,6 +479,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -568,6 +593,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -685,6 +713,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
         "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -743,6 +774,8 @@
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/*.woff2",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
+        "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
@@ -791,6 +824,15 @@
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/scripts/**"
+      ]
+    },
+    "@stll/catalogue#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/catalogue-upstream.yml",
+        "$TURBO_ROOT$/.github/workflows/model-catalog-check.yml",
+        "$TURBO_ROOT$/scripts/offline-network-preload.ts"
       ]
     },
     "@stll/scripts#test": {

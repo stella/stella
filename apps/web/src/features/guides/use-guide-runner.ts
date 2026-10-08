@@ -5,6 +5,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -46,26 +47,21 @@ const ROUTE_RENDER_TIMEOUT_MS = 45_000;
 const isPendingAnchor = (anchorId: GuideAnchorId): boolean =>
   PENDING_GUIDE_ANCHOR_IDS.includes(anchorId);
 
-const delay = async (ms: number, signal: AbortSignal): Promise<boolean> =>
-  await new Promise<boolean>((resolve) => {
-    let settled = false;
-    const settle = (elapsedNormally: boolean) => {
-      if (settled) {
-        return;
+const delay = async (ms: number, signal: AbortSignal): Promise<boolean> => {
+  if (signal.aborted) {
+    await sleep(ms);
+    return true;
+  }
+  return await sleep(ms, { signal }).then(
+    () => true,
+    (error: unknown) => {
+      if (signal.aborted && Object.is(error, signal.reason)) {
+        return false;
       }
-      settled = true;
-      signal.removeEventListener("abort", handleAbort);
-      resolve(elapsedNormally);
-    };
-    const handleAbort = () => {
-      clearTimeout(timeout);
-      settle(false);
-    };
-    const timeout = setTimeout(() => {
-      settle(true);
-    }, ms);
-    signal.addEventListener("abort", handleAbort, { once: true });
-  });
+      return panic("Sleep rejected without caller cancellation", error);
+    },
+  );
+};
 
 // Races this consumer's await against the run's abort signal. The query
 // itself is left alone: `viewsOptions` is shared with `useQuery` readers, so

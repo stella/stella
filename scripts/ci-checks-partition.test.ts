@@ -44,7 +44,7 @@ const cancellationJobSchema = (canonical: object) =>
       return { ...job, permissions, steps: job.steps.slice(0, -1) };
     }),
   );
-const jobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
+const headJobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
 const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const removalSchema = v.array(
   v.object({ name: v.string(), reason: v.pipe(v.string(), v.minLength(1)) }),
@@ -262,10 +262,10 @@ const preparationSteps = new Set([
   "Restore generated sources",
 ]);
 const prerequisites = new Set([...setupPrerequisites, ...preparationSteps]);
-const partitions = partitionIds.map((id) => v.parse(jobSchema, jobs[id]));
+const partitions = partitionIds.map((id) => v.parse(headJobSchema, jobs[id]));
 const readBaseline = (
   source: v.InferOutput<typeof workflowSchema>["jobs"],
-  schema = jobSchema,
+  schema = headJobSchema,
 ) => {
   if (source["ci-checks"] !== undefined) {
     for (const id of partitionIds) {
@@ -277,7 +277,7 @@ const readBaseline = (
 };
 const baseline = readBaseline(baseJobs, baseJobSchema);
 
-type Step = v.InferOutput<typeof jobSchema>["steps"][number];
+type Step = v.InferOutput<typeof headJobSchema>["steps"][number];
 // A full commit SHA pin is version metadata that dependency updates bump; the
 // action path, the fact that it is pinned, and everything else about the step
 // must stay intact. A branch or tag ref is left as written, so moving a step
@@ -565,7 +565,7 @@ const expectCoverage = ({ current, base, removed }: CoverageOptions) => {
 // removing another leg's protection implicitly.
 const baselineIds = baseJobs["ci-checks"] ? ["ci-checks"] : partitionIds;
 const legSteps = (
-  legs: readonly v.InferOutput<typeof jobSchema>[],
+  legs: readonly v.InferOutput<typeof headJobSchema>[],
   ids: readonly string[],
 ) =>
   legs.flatMap(({ steps }, index) => {
@@ -623,7 +623,7 @@ test("CI legs normalize only the complete canonical cancellation tail and its pe
     permissions: { contents: "read", actions: "write" },
     steps: [guard, cancellation],
   };
-  expect(v.parse(jobSchema, job)).toEqual(base);
+  expect(v.parse(headJobSchema, job)).toEqual(base);
   for (const changed of [
     { ...cancellation, if: "failure()" },
     { ...cancellation, uses: "actions/github-script@main" },
@@ -631,21 +631,21 @@ test("CI legs normalize only the complete canonical cancellation tail and its pe
     { ...cancellation, with: { ...cancellation.with, script: "exit 0" } },
     { ...cancellation, "continue-on-error": true },
   ]) {
-    expect(v.parse(jobSchema, { ...job, steps: [guard, changed] })).not.toEqual(
-      base,
-    );
+    expect(
+      v.parse(headJobSchema, { ...job, steps: [guard, changed] }),
+    ).not.toEqual(base);
   }
   expect(
-    v.parse(jobSchema, { ...job, steps: [cancellation, guard] }),
+    v.parse(headJobSchema, { ...job, steps: [cancellation, guard] }),
   ).not.toEqual(base);
   expect(() =>
-    v.parse(jobSchema, {
+    v.parse(headJobSchema, {
       ...job,
       permissions: { contents: "read", actions: "read" },
     }),
   ).toThrow("toBe");
   expect(
-    v.parse(jobSchema, {
+    v.parse(headJobSchema, {
       ...job,
       permissions: { ...job.permissions, contents: "write" },
     }),
@@ -1132,8 +1132,8 @@ test("the check census preserves nested commands and their failure conditions", 
     if: "!cancelled() && steps.install.outcome == 'success'",
     run: "bun test scripts/ci-plan.test.ts",
   };
-  const serial = v.parse(jobSchema, { steps: [step] });
-  const concurrent = v.parse(jobSchema, {
+  const serial = v.parse(headJobSchema, { steps: [step] });
+  const concurrent = v.parse(headJobSchema, {
     steps: [
       {
         parallel: [{ parallel: [{ ...step, id: "guard", background: true }] }],
@@ -1145,7 +1145,7 @@ test("the check census preserves nested commands and their failure conditions", 
   expect(concurrent.steps.at(0)?.["if"]).toBe(step.if);
   expect(
     ownedSteps(
-      v.parse(jobSchema, {
+      v.parse(headJobSchema, {
         steps: [{ parallel: [{ ...step, run: "exit 0" }] }],
       }).steps,
     ),
@@ -1513,7 +1513,7 @@ type SimulateLegOptions = {
   lockfileScope: "true" | "false";
 };
 const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
-  const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+  const { steps } = v.parse(headJobSchema, jobs["ci-checks-rest"]);
   const outcomes: Record<string, { outcome: string }> = {};
   const results: Record<string, string> = {};
   let failed = false;
@@ -1577,7 +1577,7 @@ test("an unrelated pre-install failure still runs planned safety, installation a
 });
 
 test("a failed background guard leaves every other planned check runnable", () => {
-  const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+  const { steps } = v.parse(headJobSchema, jobs["ci-checks-rest"]);
   for (const background of steps.filter(
     (step) => step["background"] === true,
   )) {
@@ -1605,7 +1605,7 @@ test("a failed planned safety guard prevents installation and every post-install
     });
     expect(results[guard]).toBe("failure");
     expect(results["Install dependencies"]).toBe("skipped");
-    const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+    const { steps } = v.parse(headJobSchema, jobs["ci-checks-rest"]);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",
     );
@@ -1660,7 +1660,7 @@ test("continued guard conditions preserve every previously runnable plan outcome
             panic("CI check leg has no identifier");
           }
           const originals = v.parse(
-            jobSchema,
+            headJobSchema,
             baseJobs["ci-checks"] ?? baseJobs[id],
           ).steps;
           const outcomes = Object.fromEntries(
@@ -1817,35 +1817,46 @@ test("documentation policy widens only its package gate and retains successful i
   }
 });
 
-test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
+const expectCancellationNormalization = (
+  schema: typeof headJobSchema,
+  candidateJobs: Record<string, unknown>,
+) => {
   for (const id of partitionIds) {
-    const raw = v.parse(
-      v.looseObject({ steps: v.array(v.looseObject({ name: v.string() })) }),
-      baseJobs[id],
+    const original = v.parse(
+      v.looseObject({ steps: v.unknown() }),
+      candidateJobs[id],
     );
-    const normalized = v.parse(baseJobSchema, baseJobs[id]);
-    const leaves = flattenWorkflowSteps(raw.steps).filter(
+    const leaves = flattenWorkflowSteps(original.steps).filter(
       (step) => !isWorkflowBarrier(step),
     );
-    // The leaves are the wider type, so they are the subject of the match.
+    const normalized = v.parse(schema, original);
+    // The wider leaves are the subject of Bun’s typed equality matcher.
     expect(leaves.slice(0, -1)).toEqual(normalized.steps);
     const tail = leaves.at(-1);
     if (!tail) {
-      panic("Baseline cancellation tail unavailable");
+      panic("Workflow cancellation tail unavailable");
     }
-    const original = v.parse(v.record(v.string(), v.unknown()), baseJobs[id]);
-    const mutated = {
-      ...original,
-      steps: [
-        ...raw.steps.slice(0, -1),
-        { ...tail, "continue-on-error": true },
-      ],
-    };
+    const mutated = structuredClone(original);
+    const changedTail = flattenWorkflowSteps(mutated.steps).findLast(
+      (step) => !isWorkflowBarrier(step),
+    );
+    if (!changedTail) {
+      panic("Cloned workflow cancellation tail unavailable");
+    }
+    changedTail["continue-on-error"] = true;
     expect([
       ...leaves.slice(0, -1),
       { ...tail, "continue-on-error": true },
-    ]).toEqual(v.parse(baseJobSchema, mutated).steps);
+    ]).toEqual(v.parse(schema, mutated).steps);
   }
+};
+
+test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
+  expectCancellationNormalization(baseJobSchema, baseJobs);
+});
+
+test("head cancellation normalization is valid as the next base and rejects changed tails", () => {
+  expectCancellationNormalization(headJobSchema, jobs);
 });
 
 test("already hydrated merge-base jobs retain their generated manifest environment", () => {

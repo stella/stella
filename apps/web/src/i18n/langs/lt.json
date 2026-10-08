@@ -349,6 +349,7 @@
     },
     "view": {
       "chooseList": "Pasirinkti sąrašą",
+      "createList": "Sukurti sąrašą",
       "evidenceList": "Faktai iš",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
@@ -2368,6 +2369,7 @@
       "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",
       "encryptedContent": "Užšifruoto dokumento turinio išgauti negalima. Pašalinkite failo slaptažodį ir bandykite dar kartą.",
       "filePropertyTypeImmutable": "Failo savybės tipo keisti negalima. Palikite esamą tipą; kitoms reikšmėms sukurkite pasirinktinę savybę.",
+      "fileSecurityRejected": "Saugumo patikra atmetė failą. Pašalinkite pažymėtą turinį ir įkelkite išvalytą kopiją.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
       "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
@@ -2382,6 +2384,8 @@
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
+      "verificationActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų patikrų limitą. Palaukite, kol viena patikra bus baigta, ir bandykite dar kartą.",
+      "verificationDailyLimitReached": "Jūsų organizacija pasiekė dienos patikrų limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
     },
     "failedToAcceptInvitation": "Nepavyko priimti kvietimo",
@@ -5340,7 +5344,6 @@
       "noLanguagesFound": "Kalbų nerasta",
       "notConfigured": "DeepL nesukonfigūruotas šiai organizacijai. Norėdami įjungti vertimą, organizacijos nustatymuose pridėkite DeepL API raktą.",
       "outputLabel": "Vertimo tipas",
-      "progress": "Vertimo eiga",
       "progressCount": "Atlikta {completed} iš {total}",
       "providerUnavailable": "Vertimo paslauga nepasiekiama. Bandykite vėliau dar kartą arba susisiekite su administratoriumi.",
       "runFailed": "Vertimo nepavyko užbaigti.",
@@ -5472,14 +5475,8 @@
     "exportToCsv": "Eksportuoti į CSV",
     "fields": {
       "calculating": "Skaičiuojama...",
-      "currencyLabel": "Valiuta (neprivaloma)",
-      "currencyPlaceholder": "pvz. USD, EUR",
-      "editFieldValue": "Redaguoti lauko reikšmę",
       "errored": "Klaida",
-      "fieldValueLabel": "Lauko reikšmė",
-      "fieldValuePlaceholder": "Įveskite lauko reikšmę",
       "formatNotSupported": "Formatas nepalaikomas",
-      "numberPlaceholder": "Įveskite skaičių",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes"
     },

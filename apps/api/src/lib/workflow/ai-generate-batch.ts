@@ -14,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import {
@@ -69,6 +70,7 @@ type GenerateWorkflowDataProps = {
   linkedSkillsMessage: string | null;
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   entityVersionId: string;
   orgAIConfig?: OrgAIConfig | null;
@@ -285,6 +287,7 @@ export const generateWorkflowData = async ({
   abortSignal,
   entityVersionId,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -326,6 +329,7 @@ export const generateWorkflowData = async ({
         role: "pdf",
         orgAIConfig,
         organizationId,
+        admission,
       }),
     catch: (error) =>
       new WorkflowIntegrationError({
@@ -476,6 +480,7 @@ export const generateWorkflowData = async ({
           orgAIConfig,
           managedAIResidency,
           organizationId,
+          admission,
           tenantWorkspaceIds: [workspaceId],
           analytics: aiAnalytics,
           caching: cachingDecision,

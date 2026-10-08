@@ -1,11 +1,13 @@
-import { Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, inArray, lte } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { fileComparisonUploads } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { logger } from "@/api/lib/observability/logger";
+import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -28,6 +30,47 @@ type SweepOptions = {
   signal?: AbortSignal | undefined;
 };
 
+type SweepSummary = {
+  scanned: number;
+  sweptUploads: number;
+  failed: number;
+};
+
+export class FileComparisonSweepError extends TaggedError(
+  "FileComparisonSweepError",
+)<{
+  message: string;
+  cause: unknown;
+  summary: SweepSummary;
+}> {}
+
+type SweepFailureDiagnostic =
+  | {
+      stage: "object";
+      cause: unknown;
+      uploadId: SafeId<"fileComparisonUpload">;
+    }
+  | { stage: "rows"; cause: unknown; failed: number };
+
+const reportSweepFailure = (diagnostic: SweepFailureDiagnostic) => {
+  const attributes: LoggerAttributes = {
+    "sweep.stage": diagnostic.stage,
+    "error.type": errorTag(diagnostic.cause),
+  };
+  switch (diagnostic.stage) {
+    case "object":
+      attributes["fileComparisonUpload.id"] = diagnostic.uploadId;
+      break;
+    case "rows":
+      attributes["fileComparisonUploads.failed"] = diagnostic.failed;
+      break;
+    default:
+      diagnostic satisfies never;
+      panic("Unhandled comparison sweep failure stage");
+  }
+  logger.warn("file_comparison.sweep_delete_failed", attributes);
+};
+
 type ExpiredRow = {
   id: SafeId<"fileComparisonUpload">;
   organizationId: SafeId<"organization">;
@@ -48,7 +91,8 @@ export const sweepExpiredFileComparisonUploads = async ({
   limit = FILE_COMPARISON_SWEEP_LIMIT,
   safeDb,
   signal,
-}: SweepOptions): Promise<number> => {
+}: SweepOptions): Promise<Result<SweepSummary, FileComparisonSweepError>> => {
+  const summary = { scanned: 0, sweptUploads: 0, failed: 0 };
   const expired = await safeDb(
     async (tx) =>
       await tx
@@ -64,9 +108,16 @@ export const sweepExpiredFileComparisonUploads = async ({
         )
         .limit(limit),
   );
-  if (Result.isError(expired) || expired.value.length === 0) {
-    return 0;
+  if (Result.isError(expired)) {
+    return Result.err(
+      new FileComparisonSweepError({
+        message: "Comparison expiry scan failed",
+        cause: expired.error,
+        summary,
+      }),
+    );
   }
+  summary.scanned = expired.value.length;
 
   const cleared = await Promise.all(
     expired.value.map(async (row: ExpiredRow) => {
@@ -91,22 +142,34 @@ export const sweepExpiredFileComparisonUploads = async ({
       );
       if (Result.isError(deletion)) {
         // The row stays, so the next tick retries this key.
-        captureError(deletion.error, {
-          fileComparisonUploadId: row.id,
-          objectKey: key,
-          stage: "file-comparison-sweep",
+        reportSweepFailure({
+          stage: "object",
+          uploadId: row.id,
+          cause: deletion.error,
         });
-        return null;
+        return Result.err(deletion.error);
       }
-      return row.id;
+      return Result.ok(row.id);
     }),
   );
 
-  const clearedIds = cleared.filter(
-    (id): id is SafeId<"fileComparisonUpload"> => id !== null,
-  );
+  const clearedIds: SafeId<"fileComparisonUpload">[] = [];
+  let failure: FileComparisonSweepError | undefined;
+  // Promise.all preserves scan order, so the first cause is deterministic.
+  for (const deletion of cleared) {
+    if (Result.isError(deletion)) {
+      summary.failed += 1;
+      failure ??= new FileComparisonSweepError({
+        message: "Comparison expiry deletion failed",
+        cause: deletion.error,
+        summary,
+      });
+      continue;
+    }
+    clearedIds.push(deletion.value);
+  }
   if (clearedIds.length === 0) {
-    return 0;
+    return failure ? Result.err(failure) : Result.ok(summary);
   }
 
   // audit: skip — expiry of the caller's own short-lived staging objects, whose
@@ -120,7 +183,23 @@ export const sweepExpiredFileComparisonUploads = async ({
             inArray(fileComparisonUploads.id, clearedIds),
             lte(fileComparisonUploads.expiresAt, new Date()),
           ),
-        ),
+        )
+        .returning({ id: fileComparisonUploads.id }),
   );
-  return Result.isError(removed) ? 0 : clearedIds.length;
+  if (Result.isError(removed)) {
+    summary.failed += clearedIds.length;
+    reportSweepFailure({
+      stage: "rows",
+      failed: clearedIds.length,
+      cause: removed.error,
+    });
+    failure ??= new FileComparisonSweepError({
+      message: "Comparison expiry row removal failed",
+      cause: removed.error,
+      summary,
+    });
+  } else {
+    summary.sweptUploads = removed.value.length;
+  }
+  return failure ? Result.err(failure) : Result.ok(summary);
 };

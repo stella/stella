@@ -8,6 +8,7 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
 import {
   createTreemapModel,
+  createTreemapNumberFormatter,
   localizedTierLabel,
   treemapCategoryValue,
   treemapColorDomain,
@@ -38,7 +39,9 @@ const readChartColors = (win: Window, el: HTMLElement) => {
     muted: token("--muted"),
     border: token("--border"),
     primaryForeground: token("--primary-foreground"),
-    palette: Array.from({ length: 8 }, (_, index) => token(`--chart-${index + 1}`)),
+    palette: Array.from({ length: 8 }, (_, index) =>
+      token(`--chart-${index + 1}`),
+    ),
     primary: token("--chart-1"),
     negative: token("--chart-6"),
     positive: token("--chart-2"),
@@ -53,7 +56,11 @@ type NumericColorsOptions = {
   colors: ChartColors;
 };
 
-const createNumericColors = ({ mode, domain, colors }: NumericColorsOptions) => {
+const createNumericColors = ({
+  mode,
+  domain,
+  colors,
+}: NumericColorsOptions) => {
   const intensity = scaleLinear()
     .domain(domain)
     .range(mode === "citations" ? [0, 1] : [-1, 1])
@@ -123,7 +130,7 @@ const renderTreemapLegend = ({
     }
     return;
   }
-  const formatter = new Intl.NumberFormat(language);
+  const formatter = createTreemapNumberFormatter(language);
   const low = owner.createElement("span");
   const ramp = owner.createElement("span");
   const high = owner.createElement("span");
@@ -144,29 +151,27 @@ type MountTreemapOptions = {
   opts: VisualTreemapOptions;
 };
 
-const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
-  if (el.ownerDocument !== win.document) {
-    panic("Treemap container must belong to its runtime document");
-  }
-  const model = createTreemapModel(opts.data);
-  let mode = opts.color.mode;
-  // Switching into category mode requires an explicitly authored field.
-  const categoryField = opts.color.field ?? null;
-  let categories: string[] = [];
+const treemapCategories = (
+  model: ReturnType<typeof createTreemapModel>,
+  categoryField: VisualTreemapColor["field"] | null,
+): string[] => {
   if (categoryField === "tier") {
-    categories = [...COURT_TIER_LABELS];
-  } else if (categoryField !== null) {
-    categories = [
-      ...new Set(
-        model
-          .nodes()
-          .map((node) => treemapCategoryValue(node, categoryField))
-          .filter((value) => value !== null),
-      ),
-    ];
+    return [...COURT_TIER_LABELS];
   }
-  let destroyed = false;
-  const owner = win.document;
+  if (categoryField === null) {
+    return [];
+  }
+  return [
+    ...new Set(
+      model
+        .nodes()
+        .map((node) => treemapCategoryValue(node, categoryField))
+        .filter((value) => value !== null),
+    ),
+  ];
+};
+
+const createTreemapLayout = (owner: Document, showLegend: boolean) => {
   const layout = owner.createElement("div");
   const surface = owner.createElement("div");
   const legend = owner.createElement("div");
@@ -179,9 +184,27 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
   legend.style.cssText =
     "display:flex;flex-shrink:0;align-items:center;flex-wrap:wrap;gap:0.5rem;font-variant-numeric:tabular-nums;margin-block-start:0.5rem;color:inherit";
   layout.append(surface);
-  if (opts.color.legend) {
+  if (showLegend) {
     layout.append(legend);
   }
+  return { layout, surface, legend };
+};
+
+const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
+  if (el.ownerDocument !== win.document) {
+    panic("Treemap container must belong to its runtime document");
+  }
+  const model = createTreemapModel(opts.data);
+  let mode = opts.color.mode;
+  // Switching into category mode requires an explicitly authored field.
+  const categoryField = opts.color.field ?? null;
+  const categories = treemapCategories(model, categoryField);
+  let destroyed = false;
+  const owner = win.document;
+  const { layout, surface, legend } = createTreemapLayout(
+    owner,
+    opts.color.legend,
+  );
   el.append(layout);
   const language =
     el.closest("[lang]")?.getAttribute("lang") ||
@@ -200,7 +223,11 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
     const rows = model.visible();
     const domain =
       mode === "category" ? ([0, 0] as const) : treemapColorDomain(rows, mode);
-    const { intensity, numericFill } = createNumericColors({ mode, domain, colors });
+    const { intensity, numericFill } = createNumericColors({
+      mode,
+      domain,
+      colors,
+    });
     const rowFill = (row: (typeof rows)[number]) => {
       if (mode !== "category") {
         return numericFill(

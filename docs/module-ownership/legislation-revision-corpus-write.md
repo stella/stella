@@ -1,0 +1,7 @@
+# Writing a legislation revision's corpus payload
+
+Generated from `scripts/ownership/legislation-revision-corpus-write.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                            | Owner                                           | Enforcement                                                                                     | Summary                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `legislation-revision-corpus-write` — Writing a legislation revision's corpus payload | `apps/api/src/handlers/legislation/revision.ts` | import `writeCorpusDocument` from `@/api/lib/legal-search/corpus-storage` (plus 1 allowed file) | The revision owner writes the normalized payload that its metadata describes. Ingestion supplies a complete revision; callers cannot independently replace its corpus body. |

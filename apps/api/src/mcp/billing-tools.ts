@@ -1562,7 +1562,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save time entry",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,

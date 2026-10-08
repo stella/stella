@@ -3,16 +3,16 @@ import { load } from "cheerio";
 import { isTag } from "domhandler";
 import * as v from "valibot";
 
-import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
 import {
   VISUAL_SANDBOX_LIMITS,
   visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
+import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
 
 const sanitizedHtmlSchema = v.pipe(v.string(), v.brand("SanitizedVisualHtml"));
 export type SanitizedVisualHtml = v.InferOutput<typeof sanitizedHtmlSchema>;
 
-export class VisualMarkupError extends TaggedError("VisualMarkupError")<{
+class VisualMarkupError extends TaggedError("VisualMarkupError")<{
   message: string;
   reason: "size" | "depth" | "nodes" | "input";
 }> {}

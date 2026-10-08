@@ -17,8 +17,10 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
-  /** scripts/check-oxlint-rule-coverage.ts */
-  oxlintRuleCoverage: "scripts/oxlint-rule-coverage-baseline.json",
+  /** scripts/check-aggregate-locks.ts */
+  aggregateLocks: "scripts/aggregate-lock-baseline.json",
+  /** scripts/check-aggregate-mutations.ts */
+  aggregateMutations: "scripts/aggregate-mutations-baseline.json",
   /** scripts/check-oxlint-effective-config.ts */
   oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -53,9 +55,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
   await GlobalRegistrator.unregister();
 });
@@ -183,9 +183,7 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
 
 const settle = async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
+    await sleep(20);
   });
 };
 

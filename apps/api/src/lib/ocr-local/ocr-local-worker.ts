@@ -1,3 +1,4 @@
+import { PDFiumLibrary } from "@hyzyla/pdfium";
 /**
  * Isolated local OCR worker.
  *
@@ -17,10 +18,10 @@
  *   stdout → JSON { pages: [{ width, height, lines: [...] }] }
  *   exit 0 = success, exit 1 = OCR error
  */
-
-import { PDFiumLibrary } from "@hyzyla/pdfium";
 import path from "node:path";
 import * as ort from "onnxruntime-node";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   OCR_LOCAL_MODEL_FILES,
@@ -126,11 +127,13 @@ const recognize = async (
     .toSorted((a, b) => (ratios[a] ?? 0) - (ratios[b] ?? 0));
   const lines: (DocumentOcrLine | null)[] = boxes.map(() => null);
 
-  const recognizeBatch = async (start: number): Promise<void> => {
-    if (start >= order.length) {
+  const itemBatches = chunkItems(order, REC_BATCH_SIZE)[Symbol.iterator]();
+  const recognizeBatch = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
-    const batch = order.slice(start, start + REC_BATCH_SIZE);
+    const batch = nextBatch.value;
     const maxRatio = Math.max(...batch.map((index) => ratios[index] ?? 1));
     const batchWidth = Math.min(
       REC_MAX_INPUT_WIDTH,
@@ -226,10 +229,10 @@ const recognize = async (
         text,
       };
     }
-    await recognizeBatch(start + REC_BATCH_SIZE);
+    await recognizeBatch();
   };
 
-  await recognizeBatch(0);
+  await recognizeBatch();
 
   const orderedBoxes = boxes
     .map((box, index) => ({ box, line: lines[index] }))

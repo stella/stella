@@ -4,13 +4,14 @@ import { BunSQLSession } from "drizzle-orm/bun-sql/session";
 import { PgAsyncPreparedQuery } from "drizzle-orm/pg-core/async/session";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { AGGREGATE_LOCKS } from "@/api/lib/db/aggregate-lock";
 
 export const FLOW_LOCK_RANKS = {
-  workspace: 0,
-  run: 1,
-  currentStep: 2,
-  obligation: 3,
-  entity: 4,
+  workspace: AGGREGATE_LOCKS.workspace.rank,
+  run: AGGREGATE_LOCKS.run.rank,
+  currentStep: AGGREGATE_LOCKS.currentStep.rank,
+  obligation: AGGREGATE_LOCKS.obligation.rank,
+  entity: AGGREGATE_LOCKS.entity.rank,
 } as const;
 
 const FLOW_TABLE_AGGREGATES: Readonly<Record<string, string>> = {

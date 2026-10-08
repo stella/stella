@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { legalListColumns } from "@/api/db/schema";
+import { legalListColumns, legalLists } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -11,6 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { LIST_COLUMN_LIMIT_ERROR_CODE } from "@/api/lib/lists/column-error-codes";
 
 const bodySchema = t.Object({
   listId: tSafeId("legalList"),
@@ -43,33 +44,35 @@ const createColumn = createSafeHandler(
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const [list, property, count] = await Promise.all([
-          tx.query.legalLists.findFirst({
-            where: {
-              id: { eq: body.listId },
-              workspaceId: { eq: workspaceId },
-              status: { eq: "active" },
-            },
-            columns: { id: true },
-          }),
-          tx.query.properties.findFirst({
-            where: {
-              id: { eq: body.propertyId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { id: true },
-          }),
-          tx.$count(
-            legalListColumns,
+        const lists = await tx
+          .select({ id: legalLists.id })
+          .from(legalLists)
+          .where(
             and(
-              eq(legalListColumns.workspaceId, workspaceId),
-              eq(legalListColumns.listId, body.listId),
+              eq(legalLists.id, body.listId),
+              eq(legalLists.workspaceId, workspaceId),
+              eq(legalLists.status, "active"),
             ),
-          ),
-        ]);
+          )
+          .for("update");
+        const list = lists.at(0);
+        const property = await tx.query.properties.findFirst({
+          where: {
+            id: { eq: body.propertyId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { id: true },
+        });
         if (!list || !property) {
           return { status: "missing" as const };
         }
+        const count = await tx.$count(
+          legalListColumns,
+          and(
+            eq(legalListColumns.workspaceId, workspaceId),
+            eq(legalListColumns.listId, body.listId),
+          ),
+        );
         if (count >= LIMITS.legalListColumnsPerList) {
           return { status: "limit" as const };
         }
@@ -121,7 +124,12 @@ const createColumn = createSafeHandler(
     }
     if (result.status === "limit") {
       return Result.err(
-        new HandlerError({ status: 400, message: "List column limit reached" }),
+        new HandlerError({
+          status: 400,
+          code: LIST_COLUMN_LIMIT_ERROR_CODE,
+          message: "List column limit reached",
+          hint: "Use the existing columns or call lists.create to create another list.",
+        }),
       );
     }
     if (result.status === "internal") {

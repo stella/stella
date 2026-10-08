@@ -517,13 +517,13 @@ describe("isApprovalPart", () => {
 });
 
 describe("tool approval grants", () => {
-  test("keeps sensitive write approvals per call", () => {
+  test("keeps sensitive and update-capable write approvals per call", () => {
     expect(isApprovalOnceChatToolName("suggest_changes")).toBe(true);
     expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
+    expect(isApprovalOnceChatToolName("save_clause")).toBe(true);
   });
 
-  test("rejects persistent grants for destructive deletes and the approve-once writes, without the stronger never-auto bar", () => {
+  test("rejects persistent grants for deletes and update-capable writes, without the stronger never-auto bar", () => {
     for (const name of [
       "delete_clause",
       "delete_contact",
@@ -538,9 +538,11 @@ describe("tool approval grants", () => {
     }
   });
 
-  test("keeps an ordinary mutation grantable", () => {
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
-    expect(isNonPersistentGrantChatToolName("save_clause")).toBe(false);
+  test("keeps a create-only mutation grantable", () => {
+    expect(isApprovalOnceChatToolName("create_reader_annotation")).toBe(false);
+    expect(isNonPersistentGrantChatToolName("create_reader_annotation")).toBe(
+      false,
+    );
   });
 
   test("renders the registry-write summary only for tools opted into it", () => {

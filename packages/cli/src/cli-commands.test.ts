@@ -90,8 +90,17 @@ type MockHandler = (request: JsonRpcRequest, callIndex: number) => MockResponse;
 
 type PutHandler = (request: Request) => Response | Promise<Response>;
 
-const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
+type StartMockServerOptions = {
+  putHandler?: PutHandler;
+  deploymentEvidence?: "available" | "unknown";
+};
+
+const startMockServer = (
+  handler: MockHandler,
+  { putHandler, deploymentEvidence = "available" }: StartMockServerOptions = {},
+) => {
   const requests: JsonRpcRequest[] = [];
+  const discoveries: JsonRpcRequest[] = [];
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
@@ -109,7 +118,19 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
         return lifecycle;
       }
       if (body.method === "tools/list") {
-        return Response.json({ jsonrpc: "2.0", id: 1, result: registryResult });
+        discoveries.push(body);
+        return Response.json(
+          { jsonrpc: "2.0", id: 1, result: registryResult },
+          {
+            headers:
+              deploymentEvidence === "available"
+                ? {
+                    "x-stella-feature-omitted-tools": "",
+                    "x-stella-feature-omitted-capabilities": "",
+                  }
+                : {},
+          },
+        );
       }
       const index = requests.length;
       requests.push(body);
@@ -147,6 +168,7 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
   });
   return {
     requests,
+    discoveries,
     url: server.url.origin,
     stop: () => {
       void server.stop(true);
@@ -335,10 +357,12 @@ describe("one-command document upload", () => {
           },
         };
       },
-      async (request) => {
-        putBodies.push(await request.text());
-        putChecksums.push(request.headers.get("x-amz-checksum-sha256") ?? "");
-        return new Response(null, { status: 200 });
+      {
+        putHandler: async (request) => {
+          putBodies.push(await request.text());
+          putChecksums.push(request.headers.get("x-amz-checksum-sha256") ?? "");
+          return new Response(null, { status: 200 });
+        },
       },
     );
     putUrl = `${server.url}/presigned/upload-1`;
@@ -422,7 +446,7 @@ describe("one-command document upload", () => {
         }
         return { toolPayload: { message: "finalize failed" }, isError: true };
       },
-      () => new Response(null, { status: 200 }),
+      { putHandler: () => new Response(null, { status: 200 }) },
     );
     putUrl = `${server.url}/presigned/upload-1`;
 
@@ -979,7 +1003,15 @@ describe("value flags and validation (S3)", () => {
       toolPayload: { contactId: "c1" },
     }));
     const result = await runCli({
-      args: ["contact", "save", "--contact-id", "c1", "--first-name", "null"],
+      args: [
+        "contact",
+        "save",
+        "--contact-id",
+        "c1",
+        "--first-name",
+        "null",
+        "--yes",
+      ],
       url: server.url,
       token: WRITE,
     });
@@ -996,7 +1028,7 @@ describe("--input escape hatch (S3)", () => {
   test("--input '<json>' supplies the whole args object", async () => {
     const server = startMockServer(() => ({ toolPayload: { matterId: "m9" } }));
     const result = await runCli({
-      args: ["matter", "save", "--input", '{"name":"New Matter"}'],
+      args: ["matter", "save", "--input", '{"name":"New Matter"}', "--yes"],
       url: server.url,
       token: WRITE,
     });
@@ -1010,7 +1042,7 @@ describe("--input escape hatch (S3)", () => {
   test("--input - reads the object from stdin", async () => {
     const server = startMockServer(() => ({ toolPayload: { matterId: "m9" } }));
     const result = await runCli({
-      args: ["matter", "save", "--input", "-"],
+      args: ["matter", "save", "--input", "-", "--yes"],
       url: server.url,
       token: WRITE,
       stdin: '{"name":"From Stdin"}',
@@ -1030,7 +1062,7 @@ describe("--input escape hatch (S3)", () => {
     );
     await writeFile(file, '{"name":"From File"}');
     const result = await runCli({
-      args: ["matter", "save", "--input", `@${file}`],
+      args: ["matter", "save", "--input", `@${file}`, "--yes"],
       url: server.url,
       token: WRITE,
     });
@@ -1052,6 +1084,7 @@ describe("--input escape hatch (S3)", () => {
         '{"name":"FromJson"}',
         "--name",
         "FromFlag",
+        "--yes",
       ],
       url: server.url,
       token: WRITE,
@@ -1072,7 +1105,7 @@ describe("--input escape hatch (S3)", () => {
       isError: true,
     }));
     const result = await runCli({
-      args: ["matter", "save", "--input", '{"status":"bogus"}'],
+      args: ["matter", "save", "--input", '{"status":"bogus"}', "--yes"],
       url: server.url,
       token: WRITE,
     });
@@ -1424,6 +1457,7 @@ describe("template persistence discriminator split", () => {
         "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
+        "--yes",
       ],
       url: server.url,
       token: makeToken(["documents_write"]),
@@ -1460,6 +1494,7 @@ describe("template persistence discriminator split", () => {
         "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
+        "--yes",
       ],
       url: server.url,
       token: makeToken(["documents_write", "templates"]),
@@ -1617,6 +1652,36 @@ describe("audit-log Page envelope (Phase 4)", () => {
 });
 
 describe("feature-disabled exit class (S4/Phase 4)", () => {
+  test.each(["available", "unknown"] as const)(
+    "current deployment evidence %s controls command admission",
+    async (deploymentEvidence) => {
+      const server = startMockServer(() => ({ toolPayload: { items: [] } }), {
+        deploymentEvidence,
+      });
+      const result = await runCli({
+        args: ["time-entry", "list"],
+        url: server.url,
+        token: READ,
+      });
+      server.stop();
+      expect(server.discoveries).toHaveLength(1);
+      expect(result.exitCode).toBe(
+        deploymentEvidence === "available"
+          ? EXIT_CODES.ok
+          : EXIT_CODES.validation,
+      );
+      expect(server.requests).toHaveLength(
+        deploymentEvidence === "available" ? 1 : 0,
+      );
+      if (deploymentEvidence === "available") {
+        expect(server.requests.at(0)).toMatchObject({
+          method: "tools/call",
+          params: { name: "list_time_entries" },
+        });
+      }
+    },
+  );
+
   test("a plain-text feature error has no machine code and falls to exit 4", async () => {
     const server = startMockServer(() => ({
       toolPayload: "This feature is not enabled on this deployment",
@@ -1628,6 +1693,12 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
       token: READ,
     });
     server.stop();
+    expect(server.discoveries).toHaveLength(1);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)).toMatchObject({
+      method: "tools/call",
+      params: { name: "list_time_entries" },
+    });
     expect(result.exitCode).toBe(4);
     expect(result.stderr).toContain("not enabled");
   });
@@ -1643,6 +1714,12 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
       token: READ,
     });
     server.stop();
+    expect(server.discoveries).toHaveLength(1);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)).toMatchObject({
+      method: "tools/call",
+      params: { name: "list_time_entries" },
+    });
     expect(result.exitCode).toBe(5);
   });
 });
@@ -1669,6 +1746,12 @@ describe("structured error envelope -> exit codes (S4)", () => {
       token: READ,
     });
     server.stop();
+    expect(server.discoveries).toHaveLength(1);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)).toMatchObject({
+      method: "tools/call",
+      params: { name: "list_time_entries" },
+    });
     expect(result.exitCode).toBe(5);
     expect(result.stderr).toContain(
       "error: Something went wrong: feature_disabled",

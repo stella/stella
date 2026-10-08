@@ -1,5 +1,7 @@
 import { matchError, Result } from "better-result";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import type {
   WorkflowIntegrationError,
@@ -7,10 +9,10 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import type { ExecutionLevel } from "@/api/lib/workflow/get-execution-plan";
 
-export const STANDARD_WORKFLOW_BATCH_AI_TIMEOUT_MS = 120 * 1000;
-export const DEFERRED_WORKFLOW_BATCH_AI_TIMEOUT_MS = 16 * 60 * 1000;
+const STANDARD_WORKFLOW_BATCH_AI_TIMEOUT_MS = 120 * 1000;
+const DEFERRED_WORKFLOW_BATCH_AI_TIMEOUT_MS = 16 * 60 * 1000;
 export const WORKFLOW_INTEGRATION_ERROR_RETRY_DELAY_MS = 5 * 1000;
-export const WORKFLOW_INTEGRATION_ERROR_ATTEMPTS = 2;
+const WORKFLOW_INTEGRATION_ERROR_ATTEMPTS = 2;
 export const WORKFLOW_ENTITY_JOB_ATTEMPTS = 2;
 export const WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS = 5 * 1000;
 
@@ -66,7 +68,9 @@ const computeWorkflowEntityJobBackoffMs = (): number => {
     retryIndex < WORKFLOW_ENTITY_JOB_ATTEMPTS - 1;
     retryIndex++
   ) {
-    backoffMs += WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS * 2 ** retryIndex;
+    backoffMs += backoffDelay(retryIndex, {
+      baseMs: WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
+    });
   }
   return backoffMs;
 };
@@ -88,7 +92,7 @@ export const computeWorkflowRunLockTtlSec = (
   );
 };
 
-export const shouldRetryWorkflowBatchError = ({
+const shouldRetryWorkflowBatchError = ({
   attempt,
   error,
   maxAttempts = WORKFLOW_INTEGRATION_ERROR_ATTEMPTS,

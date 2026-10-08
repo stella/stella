@@ -1,5 +1,7 @@
 import { Panic, panic, Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import {
   commitOrganizationFilesBytes,
   OrganizationFileUsageError,
@@ -36,24 +38,19 @@ export const copyOrganizationFiles = async <T, E>({
     panic("Copy concurrency must be a positive safe integer");
   }
   const copies: Result<T, E | OrganizationFileUsageError>[] = [];
-  for (
-    let roundStart = 0;
-    roundStart < inputs.length;
-    roundStart += ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT
-  ) {
-    const round = inputs.slice(
-      roundStart,
-      roundStart + ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
-    );
+  for (const round of chunkItems(
+    inputs,
+    ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
+  )) {
     // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
     const reserved = await reserveOrganizationFilesBytes(round, db);
     if (Result.isError(reserved)) {
       return Result.err(reserved.error);
     }
     const roundCopies: Result<T, E | OrganizationFileUsageError>[] = [];
-    for (let start = 0; start < round.length; start += concurrency) {
+    for (const batch of chunkItems(round, concurrency)) {
       const results = await Promise.all(
-        round.slice(start, start + concurrency).map(async ({ copy }) =>
+        batch.map(async ({ copy }) =>
           Result.flatten(
             await Result.tryPromise({
               try: copy,

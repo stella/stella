@@ -2,7 +2,10 @@ import { EventType, StreamProcessor } from "@tanstack/ai";
 import type { AdapterYieldChunk, Tool, UIMessage } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
+
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
 // `patches/@tanstack%2Fai@0.61.0.patch` makes `StreamProcessor` write
 // `TOOL_CALL_END.input` into the tool-call part's `arguments` even when
@@ -279,5 +282,18 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
 
   const part = persistToolCallPart(chunks);
   expect(part.input).toEqual(NORMALIZED_INPUT);
-  expect(JSON.parse(part.arguments)).toEqual(NORMALIZED_INPUT);
+  // Named, so the chat mutation matrix can count this as the kill for the
+  // patch: the chat pipeline re-derives `arguments` from the validated input
+  // too, so no end-to-end scenario can see the patch on its own.
+  const violations = violationsOf(
+    CHAT_ORACLE.providerWireToolArguments,
+    Bun.deepEquals(JSON.parse(part.arguments), NORMALIZED_INPUT)
+      ? []
+      : [{ arguments: part.arguments, expected: NORMALIZED_INPUT }],
+  );
+  if (violations.length > 0) {
+    panic(
+      `The persisted arguments keep the wire string: ${JSON.stringify(violations)}`,
+    );
+  }
 });

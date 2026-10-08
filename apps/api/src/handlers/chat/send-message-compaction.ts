@@ -22,6 +22,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 type ChatCompactionModelProps = {
   /** Effective chat model override for this turn; see `resolveEffectiveChatModelSelection`. */
@@ -35,6 +36,8 @@ type ChatCompactionModelProps = {
 
 type CompactMessagesForContextProps = ChatCompactionModelProps & {
   abortSignal: AbortSignal;
+  /** The turn's admission: compaction is a step of the turn. */
+  admission: ModelDispatchAdmission;
   boundary: ChatThirdPartyBoundary;
   messages: ChatMessage[];
   safeDb: SafeDb;
@@ -91,6 +94,7 @@ export const compactMessagesForContext = async ({
   chatModelOverride,
   messages,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
   reasoningEffort,
@@ -147,6 +151,7 @@ export const compactMessagesForContext = async ({
       });
     },
     organizationId,
+    admission,
     orgAIConfig,
     managedAIResidency,
     reasoningEffort,

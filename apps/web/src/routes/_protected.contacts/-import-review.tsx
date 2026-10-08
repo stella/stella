@@ -142,14 +142,14 @@ const IS_MULTILINE_IMPORT_FIELD = {
   tax_id: false,
 } as const satisfies Record<ImportEditableTextField, boolean>;
 
-export type ImportReviewSeedRow = {
+type ImportReviewSeedRow = {
   candidate: ImportCandidate;
   issues: ImportIssue[];
   /** Position in the source, kept stable while rows are edited or removed. */
   rowNumber: number;
 };
 
-export type ImportReviewRow = ImportReviewSeedRow & {
+type ImportReviewRow = ImportReviewSeedRow & {
   /** The contact id the commit will use; stable so a retry replays. */
   id: SafeId<"contact">;
 };
