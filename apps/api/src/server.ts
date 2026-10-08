@@ -715,7 +715,6 @@ const startServer = async (): Promise<void> => {
   }
 
   startMemoryPressureHandler();
-  startEventLoopDelayReporting();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
@@ -765,6 +764,10 @@ const startServer = async (): Promise<void> => {
     // well inside this window.
     idleTimeout: HTTP_IDLE_TIMEOUT_S,
   });
+
+  // From here the loop serves requests; boot work before this point delays
+  // none, so it stays out of the stall signal.
+  startEventLoopDelayReporting();
 
   // Filled in after the handlers below are attached, so a signal arriving
   // during scheduler registration still finds a shutdown path. A holder rather
