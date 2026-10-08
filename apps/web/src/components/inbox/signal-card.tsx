@@ -39,6 +39,7 @@ import {
 } from "@/components/inbox/signal-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import {
   INBOX_SIGNAL_VIEW,
@@ -62,6 +63,7 @@ import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { organizationOptions } from "@/lib/organization/queries";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
@@ -393,10 +395,14 @@ const OriginChip = ({
   createdByUserId,
   organizationId,
 }: OriginChipProps) => {
-  const { data: organization } = useQuery({
+  const organizationQuery = useQuery({
     ...organizationOptions(organizationId),
     enabled: origin === "manual" && createdByUserId !== null,
   });
+  const organizationView = useQueryView(organizationQuery);
+  useQueryViewError(organizationView);
+  const organization =
+    organizationView.type === "items" ? organizationView.items : undefined;
   const author =
     origin === "manual" && createdByUserId !== null
       ? organization?.members.find((m) => m.userId === createdByUserId)?.user
@@ -426,9 +432,12 @@ const WorkspaceName = ({
   organizationId: string;
 }) => {
   const { id: userId } = useAuthenticatedUser();
-  const { data } = useQuery(
+  const dataQuery = useQuery(
     workspacesNavigationOptions({ organizationId, userId }),
   );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
   return (
     <MatterRefLink
@@ -541,7 +550,11 @@ const AssignMenu = ({
   onAssign,
 }: AssignMenuProps) => {
   const t = useTranslations();
-  const { data: organization } = useQuery(organizationOptions(organizationId));
+  const organizationQuery = useQuery(organizationOptions(organizationId));
+  const organizationView = useQueryView(organizationQuery);
+  useQueryViewError(organizationView);
+  const organization =
+    organizationView.type === "items" ? organizationView.items : undefined;
   const members = organization ? organization.members : [];
   return (
     <Menu>
@@ -551,6 +564,7 @@ const AssignMenu = ({
         {label}
       </MenuTrigger>
       <MenuPopup>
+        <QueryViewFeedback view={organizationView} />
         <MenuGroup>
           <MenuGroupLabel>{t("inbox.assignTo")}</MenuGroupLabel>
           {members.map((member) => (
