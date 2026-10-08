@@ -336,7 +336,7 @@ export default eslintCompatPlugin({
             }
           },
           MemberExpression(node) {
-            if (memberPropertyName(node) !== "concurrent") {
+            if (!isAstNode(node) || memberPropertyName(node) !== "concurrent") {
               return;
             }
             const binding = resolveImport(context, node.object);
