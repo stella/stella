@@ -1917,6 +1917,7 @@
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
     "stale": "Pasenusi",
+    "start": "Pradėti",
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
@@ -2913,8 +2914,7 @@
   "guides": {
     "action": {
       "replay": "Pradėti iš naujo",
-      "skip": "Praleisti",
-      "start": "Pradėti"
+      "skip": "Praleisti"
     },
     "checklist": {
       "progress": "Atlikta {completed} iš {total}"
@@ -3593,6 +3593,10 @@
         "failed": "Nepavyko išsaugoti",
         "nameMissing": "Neišsaugota: pridėkite pavadinimą",
         "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja}} dėmesio"
+      },
+      "buildWithAi": {
+        "description": "Atsakykite į kelis klausimus pokalbyje, o peržiūros vadovas bus išsaugomas eigoje.",
+        "title": "Kurti su DI"
       },
       "check": "Naudoti tikslią taisyklę vietoje DI",
       "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",

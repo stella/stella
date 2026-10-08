@@ -1917,6 +1917,7 @@
     "sort": "Ordenar",
     "source": "Fuente",
     "stale": "Obsoleto",
+    "start": "Empezar",
     "status": "Estado",
     "stepCount": "{count, plural, one {# paso} other {# pasos}}",
     "stepProgress": "{current} de {total}",
@@ -2913,8 +2914,7 @@
   "guides": {
     "action": {
       "replay": "Volver a empezar",
-      "skip": "Omitir",
-      "start": "Empezar"
+      "skip": "Omitir"
     },
     "checklist": {
       "progress": "{completed} de {total} completado"
@@ -3593,6 +3593,10 @@
         "failed": "No se pudo guardar",
         "nameMissing": "Sin guardar: añade un nombre",
         "positionsNeedAttention": "Sin guardar: {count, plural, one {# posición requiere} other {# posiciones requieren}} atención"
+      },
+      "buildWithAi": {
+        "description": "Responda a unas preguntas en un chat y el playbook se irá guardando sobre la marcha.",
+        "title": "Crear con IA"
       },
       "check": "Usar una regla exacta en lugar de IA",
       "checkHint": "Para condiciones medibles, como: plazo de pago ≤ 30 días.",

@@ -1917,6 +1917,7 @@
     "sort": "Sorteeri",
     "source": "Allikas",
     "stale": "Aegunud",
+    "start": "Alusta",
     "status": "Olek",
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
     "stepProgress": "{current} / {total}",
@@ -2913,8 +2914,7 @@
   "guides": {
     "action": {
       "replay": "Alusta uuesti",
-      "skip": "Jäta vahele",
-      "start": "Alusta"
+      "skip": "Jäta vahele"
     },
     "checklist": {
       "progress": "{completed} / {total} tehtud"
@@ -3593,6 +3593,10 @@
         "failed": "Salvestamine ebaõnnestus",
         "nameMissing": "Salvestamata: lisage nimi",
         "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
+      },
+      "buildWithAi": {
+        "description": "Vasta vestluses mõnele küsimusele ja playbook salvestatakse jooksvalt.",
+        "title": "Loo AI-ga"
       },
       "check": "Kasuta tehisintellekti asemel täpset reeglit",
       "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",

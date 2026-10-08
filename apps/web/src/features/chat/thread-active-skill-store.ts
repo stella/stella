@@ -13,6 +13,9 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
+/** The built-in skill that interviews a user and saves a playbook. */
+export const PLAYBOOK_BUILDER_SKILL_NAME = "playbook-builder";
+
 const MAX_THREAD_ACTIVE_SKILLS = 50;
 const MAX_THREAD_KEY_LENGTH = 256;
 

@@ -169,7 +169,7 @@ const GuideTourCard = ({
         return (
           <>
             <Button disabled={disabled} onClick={onStart} size="sm">
-              {t("guides.action.start")}
+              {t("common.start")}
             </Button>
             <Button
               disabled={disabled}
@@ -195,7 +195,7 @@ const GuideTourCard = ({
       case "skipped":
         return (
           <Button disabled={disabled} onClick={onStart} size="sm">
-            {t("guides.action.start")}
+            {t("common.start")}
           </Button>
         );
       default:

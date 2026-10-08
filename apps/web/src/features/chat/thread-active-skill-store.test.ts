@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { listSkillMetadata } from "@stll/skills";
+
 import {
+  PLAYBOOK_BUILDER_SKILL_NAME,
   setThreadActiveSkill,
   useThreadActiveSkillStore,
 } from "@/features/chat/thread-active-skill-store";
@@ -79,4 +82,10 @@ describe("thread active skill store", () => {
     expect(keys).toHaveLength(50);
     expect(keys.at(0)).toBe("global:t-10");
   });
+});
+
+test("the playbook builder's name names a shipped built-in skill", () => {
+  expect(listSkillMetadata().map(({ name }) => name)).toContain(
+    PLAYBOOK_BUILDER_SKILL_NAME,
+  );
 });

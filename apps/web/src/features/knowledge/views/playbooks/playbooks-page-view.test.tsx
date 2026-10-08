@@ -52,6 +52,19 @@ describe("playbooks page", () => {
     ).toContain("Mutual NDA");
   });
 
+  test("the build card shows only with its action", () => {
+    const builder = { start: noop, status: "idle" } as const;
+    expect(
+      render(
+        { starters: STARTERS },
+        { ...ACTIONS, startFrom: noop, buildWithAi: builder },
+      ),
+    ).toContain("Build with AI");
+    expect(
+      render({ starters: STARTERS }, { ...ACTIONS, startFrom: noop }),
+    ).not.toContain("Build with AI");
+  });
+
   // Where there is no library there is nothing recent and no full list; the
   // page must not show their empty states as if the library were empty.
   test("shows no library sections without a library", () => {
