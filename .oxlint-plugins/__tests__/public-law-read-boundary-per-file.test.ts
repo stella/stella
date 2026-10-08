@@ -20,7 +20,7 @@ const orders = (compliant: string, missing: string) => [
 
 test("a configured publicLawReadDb in one file never satisfies another file", async () => {
   const configured =
-    "// one\n// two\nconst publicLawReadDb = fn => database.transaction(async tx => { await configureReadTransaction(tx); return fn(tx); });";
+    "// one\n// two\nconst configureReadTransaction = async tx => setup(tx); const publicLawReadDb = fn => database.transaction(async tx => { await configureReadTransaction(tx); return fn(tx); });";
   const missing = MISSING;
   for (const files of orders(configured, missing)) {
     const lines = await lintRuleAcrossFiles(

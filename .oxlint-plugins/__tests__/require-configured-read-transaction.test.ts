@@ -1,6 +1,15 @@
 import { expect, test } from "bun:test";
 
-import { lintSingleRule } from "./lint-single-rule.ts";
+import { lintSingleRule as lintRule } from "./lint-single-rule.ts";
+
+// The owner module declares the helper; it shares line 1 with each source so
+// reported lines stay put.
+const OWNER = "const configureReadTransaction = async tx => setup(tx); ";
+const lintSingleRule = async (
+  ruleName: string,
+  source: string,
+  options: Parameters<typeof lintRule>[2],
+) => lintRule(ruleName, `${OWNER}${source}`, options);
 
 test("rejects conditional or unawaited configuration", async () => {
   for (const source of [

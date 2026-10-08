@@ -9,10 +9,17 @@ const deploymentBranches = (callbacks: readonly [string, string, string]) =>
   `const publicLawReadDb = async fn => { if (env.PUBLIC_LAW_DATABASE_URL) return external.transaction(${callbacks[0]}); if (fallback) return secondary.transaction(${callbacks[1]}); return primary.transaction(${callbacks[2]}); };`;
 const readTransaction = (body: string) =>
   `const publicLawReadDb = fn => database.transaction(async tx => { ${body} });`;
+// The owner module declares the helper; it shares line 1 with each source so
+// reported lines stay put.
+const OWNER = "const configureReadTransaction = async tx => setup(tx); ";
 const lint = async (source: string) =>
-  lintSingleRule("require-configured-read-transaction", source, {
-    plugin: "public-law-read-boundary",
-  });
+  lintSingleRule(
+    "require-configured-read-transaction",
+    source.startsWith("const configureReadTransaction")
+      ? source
+      : `${OWNER}${source}`,
+    { plugin: "public-law-read-boundary" },
+  );
 
 test("requires every deployment transaction to be configured regardless of branch order", async () => {
   for (const missing of [0, 1, 2]) {
@@ -161,4 +168,14 @@ test("requires the module configuration helper rather than a local namesake", as
       `const configureReadTransaction = async tx => setup(tx); ${readTransaction("await configureReadTransaction(tx); return fn(tx);")}`,
     ),
   ).toEqual([]);
+});
+
+test("rejects a configuration call with no helper binding in the module", async () => {
+  expect(
+    await lintSingleRule(
+      "require-configured-read-transaction",
+      readTransaction("await configureReadTransaction(tx); return fn(tx);"),
+      { plugin: "public-law-read-boundary" },
+    ),
+  ).toEqual([1]);
 });

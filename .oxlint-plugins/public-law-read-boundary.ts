@@ -172,7 +172,7 @@ const transactionsAreConfigured = (
     scope = scope.upper;
   }
   if (
-    configurationBinding !== null &&
+    configurationBinding === null ||
     !isSingleAssignment(configurationBinding)
   ) {
     return false;
