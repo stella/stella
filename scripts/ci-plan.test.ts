@@ -3856,6 +3856,28 @@ test("each folded service step follows its own dependency scope at PR depth", ()
   ]);
 });
 
+test("pull requests leave corpus engine suites to full-depth runs", () => {
+  const scopes = [
+    "postgres_suites_required",
+    "corpus_suites_required",
+    "valkey_suites_required",
+    "service_suites_pr_required",
+  ];
+  const changed = ["apps/api/src/handlers/example.test.ts"];
+  expect(runSelector(changed, scopes)).toEqual([
+    "true",
+    "false",
+    "true",
+    "true",
+  ]);
+  expect(runSelector(changed, scopes, "full", "false", "merge_group")).toEqual([
+    "true",
+    "true",
+    "true",
+    "true",
+  ]);
+});
+
 test("an empty full-depth diff preserves the original API service-suite selection", () => {
   const outputs = runChangedFilesStep({ suiteDepth: "full" });
   for (const scope of [
@@ -3883,8 +3905,15 @@ test("the production service-scope capture rejects crashed or malformed detector
     { mode: 0o755 },
   );
   try {
-    for (const { output, exit, expected } of [
+    for (const { output, exit, expected, event = "push", scopes = output } of [
       { output: "false true false false", exit: "0", expected: 0 },
+      {
+        output: "false true false false",
+        exit: "0",
+        expected: 0,
+        event: "pull_request",
+        scopes: "false false false false",
+      },
       { output: "false false false false", exit: "0", expected: 0 },
       { output: "true true true true", exit: "1", expected: 1 },
       { output: "", exit: "1", expected: 1 },
@@ -3913,6 +3942,7 @@ test("the production service-scope capture rejects crashed or malformed detector
             PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             DETECTOR_OUTPUT: output,
             DETECTOR_EXIT: exit,
+            EVENT_NAME: event,
             package_checks_required: "true",
           },
           stdout: "pipe",
@@ -3922,7 +3952,7 @@ test("the production service-scope capture rejects crashed or malformed detector
       expect(result.exitCode, `${exit}: ${output}`).toBe(expected);
       const stdout = new TextDecoder().decode(result.stdout);
       if (expected === 0) {
-        expect(stdout).toContain(`SCOPES=${output}`);
+        expect(stdout).toContain(`SCOPES=${scopes}`);
       } else {
         expect(stdout).not.toContain("SCOPES=");
       }
