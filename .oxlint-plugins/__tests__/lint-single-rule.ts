@@ -14,17 +14,17 @@ const isUnknownArray = (value: unknown): value is readonly unknown[] =>
 
 /** The line one diagnostic with `code` reports, or null for any other. */
 const reportedLine = (diagnostic: unknown, code: string): number | null => {
-  if (!isRecord(diagnostic) || typeof diagnostic.code !== "string") {
+  if (!isRecord(diagnostic) || typeof diagnostic["code"] !== "string") {
     return null;
   }
-  if (!diagnostic.code.startsWith(code)) {
+  if (!diagnostic["code"].startsWith(code)) {
     return null;
   }
-  const label = isUnknownArray(diagnostic.labels)
-    ? diagnostic.labels.at(0)
+  const label = isUnknownArray(diagnostic["labels"])
+    ? diagnostic["labels"].at(0)
     : undefined;
-  const span = isRecord(label) ? label.span : undefined;
-  const line = isRecord(span) ? span.line : undefined;
+  const span = isRecord(label) ? label["span"] : undefined;
+  const line = isRecord(span) ? span["line"] : undefined;
   return typeof line === "number" ? line : null;
 };
 
@@ -129,15 +129,15 @@ export const runSingleRule = async (
     return panic(`oxlint did not produce valid JSON:\n${output}`);
   }
   const diagnostics = isRecord(report.value)
-    ? report.value.diagnostics
+    ? report.value["diagnostics"]
     : undefined;
   if (!isUnknownArray(diagnostics)) {
     return panic(`oxlint reported no diagnostics array:\n${output}`);
   }
   if (
     !isRecord(report.value) ||
-    report.value.number_of_files !== 1 ||
-    report.value.number_of_rules !== 1
+    report.value["number_of_files"] !== 1 ||
+    report.value["number_of_rules"] !== 1
   ) {
     return panic(
       `oxlint must execute exactly one file and one rule:\n${output}`,
@@ -148,7 +148,7 @@ export const runSingleRule = async (
   }
   if (
     diagnostics.some(
-      (diagnostic) => isRecord(diagnostic) && diagnostic.code === undefined,
+      (diagnostic) => isRecord(diagnostic) && diagnostic["code"] === undefined,
     )
   ) {
     return panic(`oxlint reported a parser or configuration error:\n${output}`);
@@ -167,7 +167,7 @@ export const runSingleRule = async (
       `oxlint failed without reporting the requested rule:\n${output}`,
     );
   }
-  const coveragePath = process.env.OXLINT_RULE_COVERAGE_PATH;
+  const coveragePath = process.env["OXLINT_RULE_COVERAGE_PATH"];
   if (coveragePath !== undefined) {
     appendFileSync(
       coveragePath,
@@ -241,8 +241,8 @@ export const lintRuleAcrossFiles = async (
   if (
     Result.isError(report) ||
     !isRecord(report.value) ||
-    !isUnknownArray(report.value.diagnostics) ||
-    report.value.number_of_files !== names.length ||
+    !isUnknownArray(report.value["diagnostics"]) ||
+    report.value["number_of_files"] !== names.length ||
     (exitCode !== 0 && exitCode !== 1)
   ) {
     return panic(`oxlint must lint every file once:\n${stdout}`);
@@ -250,11 +250,11 @@ export const lintRuleAcrossFiles = async (
   const linesByFile: Record<string, number[]> = Object.fromEntries(
     names.map((name) => [name, []]),
   );
-  for (const diagnostic of report.value.diagnostics) {
+  for (const diagnostic of report.value["diagnostics"]) {
     const line = reportedLine(diagnostic, `${plugin}(${ruleName})`);
     const filename =
-      isRecord(diagnostic) && typeof diagnostic.filename === "string"
-        ? path.basename(diagnostic.filename)
+      isRecord(diagnostic) && typeof diagnostic["filename"] === "string"
+        ? path.basename(diagnostic["filename"])
         : undefined;
     const lines = filename === undefined ? undefined : linesByFile[filename];
     if (line === null || lines === undefined) {
