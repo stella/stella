@@ -1,7 +1,13 @@
+import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  REALTIME_EVENT_TYPE,
+  RESOURCE_TYPE,
+  resourcesChangedRealtimeEvent,
+  type WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -50,6 +56,7 @@ export const deliverFlowRunWorkspaceEvent = async ({
     return;
   }
   await withAggregateTransaction(database, async (tx) => {
+    let ordinaryEvent: WorkspaceRealtimeEvent | undefined;
     if (event.type !== FLOW_RUN_UPDATE_EVENT_TYPE) {
       const entityIds = [];
       switch (event.type) {
@@ -70,11 +77,11 @@ export const deliverFlowRunWorkspaceEvent = async ({
           break;
       }
       if (entityIds.length === 0) {
-        deliver(new Set(userIds));
+        deliver(new Set(userIds), event);
         return;
       }
       const linked = await tx
-        .select({ id: flowRunSteps.id })
+        .select({ entityId: flowRunSteps.reviewTaskEntityId })
         .from(flowRunSteps)
         .where(
           and(
@@ -82,13 +89,36 @@ export const deliverFlowRunWorkspaceEvent = async ({
             inArray(flowRunSteps.reviewTaskEntityId, entityIds),
           ),
         )
-        .limit(1);
+        .groupBy(flowRunSteps.reviewTaskEntityId)
+        .limit(entityIds.length);
       if (linked.length === 0) {
-        deliver(new Set(userIds));
+        deliver(new Set(userIds), event);
         return;
+      }
+      if (event.type === REALTIME_EVENT_TYPE.RESOURCES_CHANGED) {
+        const linkedIds = new Set(
+          linked.map(
+            ({ entityId }) =>
+              entityId ??
+              panic(
+                "Linked resource predicate returned a null entity identity",
+              ),
+          ),
+        );
+        const ordinaryChanges = event.changes.filter(
+          ({ resource }) =>
+            resource.type !== RESOURCE_TYPE.ENTITY ||
+            !linkedIds.has(resource.id),
+        );
+        if (ordinaryChanges.length !== 0) {
+          ordinaryEvent = resourcesChangedRealtimeEvent(ordinaryChanges);
+        }
       }
     }
     if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+      if (ordinaryEvent !== undefined) {
+        deliver(new Set(userIds), ordinaryEvent);
+      }
       return;
     }
     const recipients = await tx
@@ -108,11 +138,16 @@ export const deliverFlowRunWorkspaceEvent = async ({
         ),
       );
     // Delivery is a pure read: it uses current admission without blocking grant changes.
-    deliver(
-      new Set(
-        recipients.map((recipient) => brandPersistedUserId(recipient.userId)),
-      ),
+    const admitted = new Set(
+      recipients.map((recipient) => brandPersistedUserId(recipient.userId)),
     );
+    deliver(admitted, event);
+    if (ordinaryEvent !== undefined) {
+      deliver(
+        new Set(userIds.filter((recipient) => !admitted.has(recipient))),
+        ordinaryEvent,
+      );
+    }
   });
 };
 

@@ -17,6 +17,7 @@ import {
   isBackgroundFeatureEnabled,
 } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import {
   flowScheduleToSchedulerSchedule,
   flowScheduleToSchedulerScheduleSql,
@@ -221,7 +222,7 @@ export const repairFlowScheduleTriggers = async ({
   let cursor: SafeId<"flowDefinition"> | null = null;
   const expectedEnabled = sql`(
     ${flowDefinitions.enabled}
-    AND ${isDeploymentFeatureEnabled("FEATURE_FLOWS")}
+    AND ${isDeploymentFeatureEnabled(FEATURE_REGISTRY.flows.deploymentFeature)}
     AND ${backgroundFeatureMemberExists({
       organizationId: flowDefinitions.organizationId,
       userId: flowDefinitions.createdByUserId,

@@ -596,56 +596,78 @@ export const resumeUploadTriggersAfterGrant = async ({
   });
 };
 
+type UploadTriggerGrantRepairStatus = "awaiting_grant" | "skipped";
+
+// Literal predicates preserve the partial-index path for generic prepared plans too.
+const uploadTriggerGrantRepairStatusCondition = (
+  status: UploadTriggerGrantRepairStatus,
+) => {
+  switch (status) {
+    case "awaiting_grant":
+      return sql`${flowUploadTriggerIntents.status} = 'awaiting_grant'`;
+    case "skipped":
+      return sql`${flowUploadTriggerIntents.status} = 'skipped'`;
+    default:
+      status satisfies never;
+      return panic("Unknown upload grant repair status");
+  }
+};
+
+export const uploadTriggerGrantRepairQuery = (
+  database: SchedulerDb,
+  status: UploadTriggerGrantRepairStatus,
+) =>
+  database
+    .select({
+      ...getTableColumns(flowUploadTriggerIntents),
+      retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
+    })
+    .from(flowDefinitions)
+    .innerJoin(
+      flowUploadTriggerIntents,
+      and(
+        eq(flowUploadTriggerIntents.definitionId, flowDefinitions.id),
+        eq(
+          flowUploadTriggerIntents.organizationId,
+          flowDefinitions.organizationId,
+        ),
+      ),
+    )
+    .where(
+      and(
+        eq(flowDefinitions.enabled, true),
+        isNotNull(flowDefinitions.createdByUserId),
+        uploadTriggerGrantRepairStatusCondition(status),
+        backgroundFeatureActorExists({
+          organizationId: flowDefinitions.organizationId,
+          workspaceId: flowUploadTriggerIntents.workspaceId,
+          featureId: "flows",
+          userId: flowDefinitions.createdByUserId,
+        }),
+        fileUploadTriggerMatchesSql({
+          trigger: flowDefinitions.trigger,
+          workspaceId: flowUploadTriggerIntents.workspaceId,
+          extension: flowUploadTriggerIntents.fileExtension,
+        }),
+      ),
+    )
+    .orderBy(
+      asc(flowUploadTriggerIntents.definitionId),
+      asc(flowUploadTriggerIntents.retryAt),
+      asc(flowUploadTriggerIntents.entityId),
+    )
+    .limit(UPLOAD_TRIGGER_BATCH_SIZE + 1)
+    .$dynamic();
+
 const selectResumedUploadTriggerState = async (
   database: SchedulerDb,
-  status: "awaiting_grant" | "skipped",
+  status: UploadTriggerGrantRepairStatus,
 ) =>
   (
-    await readCursorPage(
-      database
-        .select({
-          ...getTableColumns(flowUploadTriggerIntents),
-          retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
-        })
-        .from(flowDefinitions)
-        .innerJoin(
-          flowUploadTriggerIntents,
-          and(
-            eq(flowUploadTriggerIntents.definitionId, flowDefinitions.id),
-            eq(
-              flowUploadTriggerIntents.organizationId,
-              flowDefinitions.organizationId,
-            ),
-          ),
-        )
-        .where(
-          and(
-            eq(flowDefinitions.enabled, true),
-            isNotNull(flowDefinitions.createdByUserId),
-            eq(flowUploadTriggerIntents.status, status),
-            backgroundFeatureActorExists({
-              organizationId: flowDefinitions.organizationId,
-              workspaceId: flowUploadTriggerIntents.workspaceId,
-              featureId: "flows",
-              userId: flowDefinitions.createdByUserId,
-            }),
-            fileUploadTriggerMatchesSql({
-              trigger: flowDefinitions.trigger,
-              workspaceId: flowUploadTriggerIntents.workspaceId,
-              extension: flowUploadTriggerIntents.fileExtension,
-            }),
-          ),
-        )
-        .orderBy(
-          asc(flowUploadTriggerIntents.definitionId),
-          asc(flowUploadTriggerIntents.retryAt),
-          asc(flowUploadTriggerIntents.entityId),
-        ),
-      {
-        limit: UPLOAD_TRIGGER_BATCH_SIZE,
-        cursorForItem: (row) => row.entityId,
-      },
-    )
+    await readCursorPage(uploadTriggerGrantRepairQuery(database, status), {
+      limit: UPLOAD_TRIGGER_BATCH_SIZE,
+      cursorForItem: (row) => row.entityId,
+    })
   ).items;
 
 type ReconcileUploadTriggerGrantStateOptions = {

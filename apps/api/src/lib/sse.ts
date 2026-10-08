@@ -59,7 +59,10 @@ type WorkspaceEventDeliveryAuthorizer = (lookup: {
   workspaceId: SafeId<"workspace">;
   userIds: readonly SafeId<"user">[];
   event: WorkspaceRealtimeEvent;
-  deliver: (userIds: ReadonlySet<SafeId<"user">>) => void;
+  deliver: (
+    userIds: ReadonlySet<SafeId<"user">>,
+    event: WorkspaceRealtimeEvent,
+  ) => void;
 }) => Promise<void>;
 
 /**
@@ -521,7 +524,6 @@ const broadcastLocal = async (
   const deliveryAuthorizer =
     authorizeWorkspaceEventDelivery ??
     panic("Workspace SSE event authorizer is missing");
-  const chunk = formatSSE(event);
   await Promise.all(
     [...recipients].map(
       async ([organizationId, users]) =>
@@ -530,7 +532,8 @@ const broadcastLocal = async (
           workspaceId,
           userIds: [...users],
           event,
-          deliver: (admittedUserIds) => {
+          deliver: (admittedUserIds, authorizedEvent) => {
+            const chunk = formatSSE(authorizedEvent);
             for (const conn of targets) {
               if (
                 set.has(conn) &&

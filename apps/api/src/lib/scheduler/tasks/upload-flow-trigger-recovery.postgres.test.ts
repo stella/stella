@@ -37,11 +37,16 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  explainRoot,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
 
 import { recoverScoutEmission } from "./scout-emission-recovery";
 import {
   recoverUploadFlowTriggerIntents,
   resumeUploadTriggersAfterGrant,
+  uploadTriggerGrantRepairQuery,
 } from "./upload-flow-trigger-recovery";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -1075,14 +1080,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
         await withGatedTestClients(
           databaseUrl ?? panic("Missing PostgreSQL test URL"),
           async ({ openClient }) => {
-            const queries: string[] = [];
-            const { db } = openClient({
-              logger: {
-                logQuery(query) {
-                  queries.push(query);
-                },
-              },
-            });
+            const { db } = openClient();
             const disabled = await uploadFixture(db);
             const authorless = await uploadFixture(db);
             const eligible = await uploadFixture(db);
@@ -1166,8 +1164,45 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                     asc(flowUploadTriggerIntents.definitionId),
                     asc(flowUploadTriggerIntents.entityId),
                   );
+              if (status === "skipped") {
+                await db.execute(sql`WITH seeded AS (
+                  INSERT INTO ${entities} (id, workspace_id, name, kind, created_by)
+                  SELECT gen_random_uuid(), ${disabled.workspaceId}, 'Retained upload', 'document', ${disabled.userId}
+                  FROM generate_series(1, 10000)
+                  RETURNING id
+                )
+                INSERT INTO ${flowUploadTriggerIntents}
+                  (definition_id, entity_id, organization_id, workspace_id, file_extension, status, retry_at)
+                SELECT ${disabled.definitionId}, id, ${disabled.organizationId}, ${disabled.workspaceId}, 'pdf', 'awaiting_grant', ${older}::timestamptz FROM seeded`);
+                await db.execute(sql`ANALYZE ${flowDefinitions}`);
+                await db.execute(sql`ANALYZE ${flowUploadTriggerIntents}`);
+                const query = uploadTriggerGrantRepairQuery(
+                  asTestRaw<SchedulerDb>(db),
+                  "skipped",
+                );
+                const plan = explainRoot(
+                  await db.execute(
+                    sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`,
+                  ),
+                );
+                const scans = scanOccurrences(plan).filter(
+                  ({ relation }) => relation === "flow_upload_trigger_intents",
+                );
+                expect(scans.length).toBeGreaterThan(0);
+                expect(
+                  scans.some(({ index }) =>
+                    index
+                      ?.split(", ")
+                      .includes(
+                        "flow_upload_trigger_intents_skipped_recovery_idx",
+                      ),
+                  ),
+                ).toBe(true);
+                expect(
+                  scans.some(({ nodeType }) => nodeType === "Seq Scan"),
+                ).toBe(false);
+              }
               const before = await retained();
-              queries.length = 0;
               const started: string[] = [];
               await recoverUploadFlowTriggerIntents({
                 database: asTestRaw<SchedulerDb>(db),
@@ -1188,16 +1223,6 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                   ),
                 ),
               ).toBe(0);
-              const resumedQuery = queries.find((query) =>
-                /from\s+"flow_definitions"\s+inner join\s+"flow_upload_trigger_intents"/iu.test(
-                  query,
-                ),
-              );
-              expect(resumedQuery).toBeDefined();
-              expect(resumedQuery).toContain('"flow_definitions"."enabled"');
-              expect(resumedQuery?.toLowerCase()).toContain(
-                '"flow_definitions"."created_by_user_id" is not null',
-              );
             } finally {
               for (const fixture of [disabled, authorless, eligible]) {
                 // db-await-in-loop: clean each separately seeded tenant and its principal.

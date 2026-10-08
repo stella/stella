@@ -21,6 +21,7 @@ import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 type BackgroundFeatureAccessOptions = {
@@ -230,10 +231,17 @@ export const loadBackgroundFeatureActors = async ({
   return admitted;
 };
 
+// This SQL policy is valid only for these self-serve registry entries.
+// A registry policy change must fail compilation before this query can drift.
+const BACKGROUND_MEMBER_POLICIES = {
+  signals: FEATURE_REGISTRY.signals.enrolment,
+  flows: FEATURE_REGISTRY.flows.enrolment,
+} as const satisfies Record<"signals" | "flows", "self-serve">;
+
 type BackgroundFeatureMemberExistsOptions = {
   organizationId: SQLWrapper | string;
   userId: SQLWrapper | string;
-  featureId: "signals" | "flows";
+  featureId: keyof typeof BACKGROUND_MEMBER_POLICIES;
 };
 
 /** SQL admission for org-only automation owners, matching live self-serve policy. */
