@@ -1,21 +1,50 @@
-import {
-  factId,
-  makeClaim,
-  makeFact,
-  makeRun,
-  recordConflict,
-} from "../../src/features/avt/avt.test-fixtures";
-import { EMPTY_CLAIM_REVIEW } from "../../src/features/avt/claim-review.logic";
-import type {
-  ClaimReview,
-  VerificationRun,
-} from "../../src/features/avt/types";
-import type { WorkspaceView } from "../../src/lib/types";
-import { EMPTY_AVT_LAYOUT } from "../../src/lib/workspaces/view-layout";
-import type { OrganizationSettings } from "../../src/queries/organization-settings";
 import { apiGet } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
+
+// The web's verification types reach the generated route tree, which the E2E
+// project does not compile, so this journey states its wire fixtures directly.
+type ViewSummary = { id: string; name: string; layout: unknown };
+type OrganizationSettingsSummary = {
+  declaredFeatureIds: string[];
+  capabilities: Record<string, unknown>;
+};
+
+const uuid = (suffix: number) =>
+  `0199a3c4-5b6d-7e8f-9a0b-${String(suffix).padStart(12, "0")}`;
+const governingFactId = uuid(5);
+const competingFactId = uuid(6);
+const emptyReview = {
+  status: null,
+  statusOrigin: null,
+  override: null,
+  note: "",
+  noteSavedAt: null,
+  decidedAt: null,
+  decidedBy: null,
+  reopened: false,
+  recordConflictResolution: null,
+};
+const avtLayout = {
+  version: 1,
+  type: "avt",
+  filters: [],
+  sorts: [],
+  hiddenProperties: [],
+  calculations: [],
+  listId: null,
+};
+const fact = (factEntityId: string, text: string) => ({
+  factEntityId,
+  text,
+  occurredOn: null,
+  occurredOnPrecision: null,
+  evidenceKind: null,
+  medium: null,
+  confidence: "high",
+  interpretationNote: null,
+  sources: [],
+});
 
 test("a reviewer reconciles conflicting records, confirms the verdict, and reloads", async ({
   page,
@@ -23,11 +52,11 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
 }) => {
   const workspace = await createTestWorkspace(request, "verification-review");
   try {
-    const views = await apiGet<WorkspaceView[]>(
+    const views = await apiGet<ViewSummary[]>(
       request,
       `/views/${workspace.id}`,
     );
-    const settings = await apiGet<OrganizationSettings>(
+    const settings = await apiGet<OrganizationSettingsSummary>(
       request,
       "/organization-settings",
     );
@@ -35,18 +64,41 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
     await page.context().addCookies(cookies);
     const text = "The drawdown occurred on 5 July 2021.";
     const claim = {
-      ...makeClaim({ suffix: 1, verdict: recordConflict }),
+      id: uuid(1001),
+      position: 1,
+      type: "fact",
+      framing: "asserted",
+      verdict: {
+        state: "recordconflict",
+        score: null,
+        recordConflict: {
+          subject: "Date of the drawdown",
+          factEntityIds: [governingFactId, competingFactId],
+          values: ["5 July 2021", "28 July 2021"],
+          governingStates: ["supported", "contradicted"],
+        },
+      },
       text,
       anchor: { type: "docx-block", blockId: "b1", start: 0, end: text.length },
-    } as const satisfies VerificationRun["claims"][number];
+      refs: [],
+    };
     const run = {
-      ...makeRun(
-        [claim],
-        [
-          makeFact(5, { text: "The bank ledger records 5 July 2021." }),
-          makeFact(6, { text: "The payment notice records 28 July 2021." }),
+      id: uuid(9000),
+      entityId: uuid(9001),
+      fileFieldId: uuid(9002),
+      entityVersionId: uuid(9003),
+      evidence: {
+        listId: uuid(9004),
+        facts: [
+          fact(governingFactId, "The bank ledger records 5 July 2021."),
+          fact(competingFactId, "The payment notice records 28 July 2021."),
         ],
-      ),
+      },
+      status: "completed",
+      errorCode: null,
+      pipelineVersion: 1,
+      modelRef: null,
+      requestedBy: null,
       blocks: [
         {
           ordinal: 0,
@@ -56,8 +108,11 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
           text,
         },
       ],
-    } as const satisfies VerificationRun;
-    let review: ClaimReview | null = null;
+      createdAt: "2026-09-01T09:00:00.000Z",
+      startedAt: "2026-09-01T09:00:01.000Z",
+      finishedAt: "2026-09-01T09:01:00.000Z",
+    };
+    let review: Record<string, unknown> | null = null;
     let reviewWrites = 0;
     const forbiddenRequests: string[] = [];
 
@@ -78,14 +133,14 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
             "list-verification": { status: "enabled" },
             "legal-lists": { status: "enabled" },
           },
-        } satisfies OrganizationSettings,
+        } satisfies OrganizationSettingsSummary,
       });
     });
     await page.route(`**/v1/views/${workspace.id}*`, async (route) => {
       await route.fulfill({
         json: views.map((view) =>
           view.id === workspace.viewId
-            ? { ...view, name: "Verification", layout: EMPTY_AVT_LAYOUT }
+            ? { ...view, name: "Verification", layout: avtLayout }
             : view,
         ),
       });
@@ -121,7 +176,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
           reviewWrites === 0
             ? {
                 kind: "record-conflict",
-                resolution: { kind: "governed", factEntityId: factId(5) },
+                resolution: { kind: "governed", factEntityId: governingFactId },
               }
             : { kind: "status", status: "reviewed" };
         expect(route.request().postDataJSON()).toEqual({
@@ -131,12 +186,12 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
         });
         reviewWrites += 1;
         review = {
-          ...EMPTY_CLAIM_REVIEW,
+          ...emptyReview,
           decidedAt: "2026-09-01T10:00:00.000Z",
           decidedBy: "0199a3c4-5b6d-7e8f-9a0b-000000009005",
           recordConflictResolution: {
             kind: "governed",
-            factEntityId: factId(5),
+            factEntityId: governingFactId,
           },
           ...(reviewWrites === 2
             ? ({ status: "reviewed", statusOrigin: "single" } as const)
@@ -154,6 +209,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
 
     await page.goto(
       `/workspaces/${workspace.id}/${workspace.viewId}?run=${run.id}`,
+      { waitUntil: "commit" },
     );
     await expect(
       page.getByText("Verdict withheld", { exact: true }),
@@ -178,11 +234,22 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
     await expect(
       page.getByText("Verdict withheld", { exact: true }),
     ).toBeVisible();
+    const confirmation = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname ===
+          `/v1/lists/${workspace.id}/claim-reviews` &&
+        (response.request().postData() ?? "").includes('"kind":"status"'),
+    );
     await page
       .getByRole("button", { name: "Confirm — ready", exact: true })
       .click();
-    await expect.poll(() => reviewWrites).toBe(2);
-    await page.reload();
+    expect((await confirmation).ok()).toBe(true);
+    // The response alone does not prove the client applied it; reload only
+    // once the product shows the save as complete.
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+    expect(reviewWrites).toBe(2);
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(
       page.getByText("5 July 2021 governs:", { exact: false }),
     ).toBeVisible();

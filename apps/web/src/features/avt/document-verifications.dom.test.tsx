@@ -101,7 +101,9 @@ const mountDocuments = (locale: "en" | "cs" = "en") => {
           <DocumentVerifications
             workspaceId={workspaceId}
             listId={listId}
-            onOpenRun={(id) => opened.push(id)}
+            onOpenRun={(id) => {
+              opened.push(id);
+            }}
           />
         </QueryClientProvider>
       </FormattingProvider>

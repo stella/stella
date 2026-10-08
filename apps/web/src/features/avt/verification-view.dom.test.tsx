@@ -6,18 +6,37 @@ import type { ClaimState, VerificationRun } from "./types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
-const rejectUnexpectedRequest = Object.assign(
-  async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = new Request(input, init);
-    if (new URL(request.url).pathname.startsWith("/api/auth/")) {
-      return Response.json(null);
-    }
-    panic(`Unexpected network request: ${request.method} ${request.url}`);
-  },
-  { preconnect: () => undefined },
-);
+type RecordedRequest = { method: string; path: string; body: unknown };
+// Background auth reads are answered and ignored; every other request must be
+// one a test seeded a response for, so assertions see only product traffic.
+const requests: RecordedRequest[] = [];
+const unexpectedRequests: string[] = [];
+const answers: (Response | Promise<Response>)[] = [];
 const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  rejectUnexpectedRequest,
+  Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      const { pathname } = new URL(request.url);
+      if (pathname.startsWith("/api/auth/")) {
+        return Response.json(null);
+      }
+      const text = await request.text();
+      requests.push({
+        method: request.method,
+        path: pathname,
+        body: text === "" ? null : JSON.parse(text),
+      });
+      const answer = answers.shift();
+      if (answer === undefined) {
+        unexpectedRequests.push(`${request.method} ${pathname}`);
+        return panic(
+          `Unexpected network request: ${request.method} ${pathname}`,
+        );
+      }
+      return await answer;
+    },
+    { preconnect: () => undefined },
+  ),
 );
 const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
@@ -60,8 +79,11 @@ afterEach(() => {
     client.clear();
   }
   clients.length = 0;
-  fetchBoundary.mockReset();
-  fetchBoundary.mockImplementation(rejectUnexpectedRequest);
+  const unexpected = unexpectedRequests.splice(0);
+  const unused = answers.splice(0);
+  requests.length = 0;
+  expect(unexpected).toEqual([]);
+  expect(unused).toHaveLength(0);
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
@@ -215,11 +237,9 @@ const claimButton = (suffix: number) => {
 const selectClaim = (suffix: number) => fireEvent.click(claimButton(suffix));
 
 test("all verdicts expose their evidence and score explanations in the real detail panel", async () => {
-  fetchBoundary.mockImplementation(rejectUnexpectedRequest);
   const { run } = await mount();
-  expect(run.claims.map(({ verdict }) => verdict.state).toSorted()).toEqual(
-    Object.keys(STATE_META).toSorted(),
-  );
+  const seededStates: string[] = run.claims.map(({ verdict }) => verdict.state);
+  expect(seededStates.toSorted()).toEqual(Object.keys(STATE_META).toSorted());
   for (const { claim, text, label } of Object.values(claimFixtures)) {
     const suffix = claim.position;
     selectClaim(suffix);
@@ -254,7 +274,7 @@ test("all verdicts expose their evidence and score explanations in the real deta
       expect(screen.getByText("28 July 2021")).toBeTruthy();
     }
   }
-  expect(fetchBoundary).not.toHaveBeenCalled();
+  expect(requests).toEqual([]);
 });
 
 test("single review reduces the attention queue while bulk acceptance only settles routine claims", async () => {
@@ -272,9 +292,7 @@ test("single review reduces the attention queue while bulk acceptance only settl
     decidedAt: at,
     decidedBy: actorId,
   } as const;
-  fetchBoundary.mockResolvedValueOnce(
-    Response.json({ claimId: claim.id, review: reviewed }),
-  );
+  answers.push(Response.json({ claimId: claim.id, review: reviewed }));
   fireEvent.click(
     screen.getByRole("button", { name: messages.avt.verification.showQueue }),
   );
@@ -290,13 +308,11 @@ test("single review reduces the attention queue while bulk acceptance only settl
     ).toEqual(reviewed),
   );
   expect(screen.getByText("1/3")).toBeTruthy();
-  expect(fetchBoundary.mock.calls.at(0)?.[1]?.body).toBe(
-    JSON.stringify({
-      runId: run.id,
-      claimId: claim.id,
-      event: { kind: "status", status: "reviewed" },
-    }),
-  );
+  expect(requests.at(0)?.body).toEqual({
+    runId: run.id,
+    claimId: claim.id,
+    event: { kind: "status", status: "reviewed" },
+  });
   const routine = run.claims.filter(
     ({ verdict }) =>
       verdict.state === "supported" ||
@@ -304,7 +320,7 @@ test("single review reduces the attention queue while bulk acceptance only settl
       verdict.state === "notverifiable",
   );
   const bulkReview = { ...reviewed, statusOrigin: "bulk" } as const;
-  fetchBoundary.mockResolvedValueOnce(
+  answers.push(
     Response.json({
       reviews: routine.map(({ id }) => ({ claimId: id, review: bulkReview })),
     }),
@@ -317,10 +333,11 @@ test("single review reduces the attention queue while bulk acceptance only settl
       screen.queryByRole("button", { name: /^Accept .*routine claim/u }),
     ).toBeNull(),
   );
-  await waitFor(() => expect(fetchBoundary).toHaveBeenCalledTimes(2));
-  expect(fetchBoundary.mock.calls.at(1)?.[1]?.body).toBe(
-    JSON.stringify({ runId: run.id, claimIds: routine.map(({ id }) => id) }),
-  );
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests.at(1)?.body).toEqual({
+    runId: run.id,
+    claimIds: routine.map(({ id }) => id),
+  });
   const cached = client.getQueryData(
     verificationRunOptions(workspaceId, run.id).queryKey,
   );
@@ -351,9 +368,7 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     decidedAt: at,
     decidedBy: actorId,
   } as const;
-  fetchBoundary.mockResolvedValueOnce(
-    Response.json({ claimId: claim.id, review: governed }),
-  );
+  answers.push(Response.json({ claimId: claim.id, review: governed }));
   const governingButton = screen
     .getAllByRole("button", {
       name: messages.avt.claimDetail.recordConflict.treatAsGoverningRecord,
@@ -370,20 +385,18 @@ test("a governing record changes the verdict and escalation keeps the conflict o
         ?.claims.at(4)?.review,
     ).toEqual(governed),
   );
-  expect(fetchBoundary.mock.calls.at(0)?.[1]?.method).toBe("POST");
-  expect(String(fetchBoundary.mock.calls.at(0)?.[0])).toContain(
-    `/lists/${workspaceId}/claim-reviews`,
-  );
-  expect(fetchBoundary.mock.calls.at(0)?.[1]?.body).toBe(
-    JSON.stringify({
+  expect(requests.at(0)).toEqual({
+    method: "POST",
+    path: `/v1/lists/${workspaceId}/claim-reviews`,
+    body: {
       runId: run.id,
       claimId: claim.id,
       event: {
         kind: "record-conflict",
         resolution: { kind: "governed", factEntityId: factId(5) },
       },
-    }),
-  );
+    },
+  });
   expect(claimButton(5).textContent).toContain("Supported");
   expect(screen.getByText("0/2")).toBeTruthy();
   expect(
@@ -397,9 +410,7 @@ test("a governing record changes the verdict and escalation keeps the conflict o
     decidedAt: at,
     decidedBy: actorId,
   } as const;
-  fetchBoundary.mockResolvedValueOnce(
-    Response.json({ claimId: claim.id, review: escalated }),
-  );
+  answers.push(Response.json({ claimId: claim.id, review: escalated }));
   fireEvent.click(
     screen.getByRole("button", {
       name: messages.avt.claimDetail.recordConflict.flagForEvidenceTeam,
@@ -417,17 +428,15 @@ test("a governing record changes the verdict and escalation keeps the conflict o
         ?.claims.at(4)?.review,
     ).toEqual(escalated),
   );
-  expect(fetchBoundary.mock.calls.at(1)?.[1]?.method).toBe("POST");
-  expect(String(fetchBoundary.mock.calls.at(1)?.[0])).toContain(
-    `/lists/${workspaceId}/claim-reviews`,
-  );
-  expect(fetchBoundary.mock.calls.at(1)?.[1]?.body).toBe(
-    JSON.stringify({
+  expect(requests.at(1)).toEqual({
+    method: "POST",
+    path: `/v1/lists/${workspaceId}/claim-reviews`,
+    body: {
       runId: run.id,
       claimId: claim.id,
       event: { kind: "record-conflict", resolution: { kind: "escalated" } },
-    }),
-  );
+    },
+  });
   expect(
     screen
       .getByRole("button", { name: messages.avt.confirm.recordConflict })
@@ -445,25 +454,15 @@ test("a governing record changes the verdict and escalation keeps the conflict o
 test("a rejected review restores the claim and attention queue and surfaces the failed save", async () => {
   const { client, run } = await mount();
   selectClaim(2);
-  let rejectReview: ((response: Response) => void) | undefined;
-  fetchBoundary.mockImplementationOnce(
-    Object.assign(
-      () =>
-        new Promise<Response>((resolve) => {
-          rejectReview = resolve;
-        }),
-      { preconnect: () => undefined },
-    ),
-  );
+  const pendingReview = Promise.withResolvers<Response>();
+  answers.push(pendingReview.promise);
   fireEvent.click(
     screen.getByRole("button", { name: messages.avt.confirm.verdict }),
   );
   await waitFor(() => expect(screen.getByText("1/3")).toBeTruthy());
   expect(claimButton(2).textContent).toContain("reviewed");
-  if (rejectReview === undefined) {
-    panic("Review did not reach fetch boundary");
-  }
-  rejectReview(
+  await waitFor(() => expect(requests).toHaveLength(1));
+  pendingReview.resolve(
     Response.json(
       { code: "INTERNAL_SERVER_ERROR", message: "Review service unavailable" },
       { status: 500 },
