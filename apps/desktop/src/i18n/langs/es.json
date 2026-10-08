@@ -248,6 +248,8 @@
     "link": "Enlace",
     "local": "Local",
     "memoryOnly": "El almacenamiento cifrado no está disponible. El historial del portapapeles y la configuración de aplicaciones excluidas se conservarán solo hasta cerrar stella desktop.",
+    "moveGroupEarlier": "Mover a la izquierda",
+    "moveGroupLater": "Mover a la derecha",
     "moreOptions": "Más opciones",
     "noResults": "No hay recortes coincidentes",
     "noResultsDescription": "¿Quieres buscar «{query}» en los registros?",

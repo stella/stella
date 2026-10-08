@@ -46,6 +46,8 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
   Building2Icon,
   ChevronsUpDownIcon,
   ClipboardIcon,
@@ -110,7 +112,9 @@ import {
 import {
   adjacentClipboardIndex,
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
+  CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
@@ -1015,7 +1019,8 @@ type ClipboardDragState =
       itemId: string;
       target: { type: "none" } | { groupId: string | null; type: "group" };
       type: "dragging";
-    };
+    }
+  | { groupId: string; overGroupId: string | null; type: "reordering" };
 
 type ClipboardContextMenuProps = {
   groupLimit: number;
@@ -1990,12 +1995,42 @@ const ClipboardApp = () => {
       ) {
         continue;
       }
+      if (groupId !== null) {
+        // Chips reorder by dragging one onto another; it takes that slot.
+        cleanups.push(
+          draggable({
+            element,
+            getInitialData: () => ({
+              groupId,
+              type: CLIPBOARD_GROUP_DRAG_TYPE,
+            }),
+            onDragStart: () => {
+              setDragState({ groupId, overGroupId: null, type: "reordering" });
+            },
+            onDrop: () => setDragState({ type: "idle" }),
+          }),
+        );
+      }
       cleanups.push(
         dropTargetForElements({
           canDrop: ({ source }) =>
-            clipboardDraggedItemId(source.data, itemIds) !== null,
+            clipboardDraggedItemId(source.data, itemIds) !== null ||
+            (groupId !== null &&
+              clipboardDraggedGroupId(source.data, groupIds) !== null),
           element,
           onDragEnter: ({ source }) => {
+            const draggedGroupId = clipboardDraggedGroupId(
+              source.data,
+              groupIds,
+            );
+            if (draggedGroupId) {
+              setDragState({
+                groupId: draggedGroupId,
+                overGroupId: groupId,
+                type: "reordering",
+              });
+              return;
+            }
             const itemId = clipboardDraggedItemId(source.data, itemIds);
             if (!itemId) {
               return;
@@ -2007,6 +2042,18 @@ const ClipboardApp = () => {
             });
           },
           onDragLeave: ({ source }) => {
+            const draggedGroupId = clipboardDraggedGroupId(
+              source.data,
+              groupIds,
+            );
+            if (draggedGroupId) {
+              setDragState({
+                groupId: draggedGroupId,
+                overGroupId: null,
+                type: "reordering",
+              });
+              return;
+            }
             const itemId = clipboardDraggedItemId(source.data, itemIds);
             if (!itemId) {
               return;
@@ -2018,8 +2065,24 @@ const ClipboardApp = () => {
             });
           },
           onDrop: ({ source }) => {
-            const itemId = clipboardDraggedItemId(source.data, itemIds);
             setDragState({ type: "idle" });
+            const draggedGroupId = clipboardDraggedGroupId(
+              source.data,
+              groupIds,
+            );
+            if (draggedGroupId) {
+              const index = snapshot.groups.findIndex(
+                (group) => group.id === groupId,
+              );
+              if (draggedGroupId !== groupId && index !== -1) {
+                applySnapshotCommand("clipboard_move_group", {
+                  id: draggedGroupId,
+                  index,
+                });
+              }
+              return;
+            }
+            const itemId = clipboardDraggedItemId(source.data, itemIds);
             if (!itemId) {
               return;
             }
@@ -2044,9 +2107,14 @@ const ClipboardApp = () => {
   ]);
 
   const isDropTarget = (groupId: string | null) =>
-    dragState.type === "dragging" &&
-    dragState.target.type === "group" &&
-    dragState.target.groupId === groupId;
+    (dragState.type === "dragging" &&
+      dragState.target.type === "group" &&
+      dragState.target.groupId === groupId) ||
+    (dragState.type === "reordering" &&
+      dragState.overGroupId !== dragState.groupId &&
+      dragState.overGroupId === groupId);
+  const moveGroup = (groupId: string, index: number) =>
+    applySnapshotCommand("clipboard_move_group", { id: groupId, index });
 
   const selectIndex = (index: number) => {
     // Mount a virtualized target before focusing it. Deferring focus to a
@@ -2790,7 +2858,7 @@ const ClipboardApp = () => {
                   >
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
-                  {snapshot.groups.map((group) => {
+                  {snapshot.groups.map((group, groupIndex) => {
                     const groupStyle: ClipboardGroupStyle = {
                       "--clipboard-group-accent": group.color,
                     };
@@ -2807,6 +2875,29 @@ const ClipboardApp = () => {
                                 name: group.name,
                                 type: "editGroup",
                               }),
+                          },
+                          {
+                            disabled: groupIndex === 0,
+                            icon: (
+                              <ArrowLeftIcon
+                                aria-hidden="true"
+                                className="rtl:rotate-180"
+                              />
+                            ),
+                            label: t("moveGroupEarlier"),
+                            onClick: () => moveGroup(group.id, groupIndex - 1),
+                            separatorBefore: true,
+                          },
+                          {
+                            disabled: groupIndex === snapshot.groups.length - 1,
+                            icon: (
+                              <ArrowRightIcon
+                                aria-hidden="true"
+                                className="rtl:rotate-180"
+                              />
+                            ),
+                            label: t("moveGroupLater"),
+                            onClick: () => moveGroup(group.id, groupIndex + 1),
                           },
                           {
                             icon: <Trash2Icon aria-hidden="true" />,
@@ -2828,6 +2919,12 @@ const ClipboardApp = () => {
                           aria-pressed={activeGroupId === group.id}
                           className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
                           data-clipboard-group-id={group.id}
+                          data-dragging={
+                            dragState.type === "reordering" &&
+                            dragState.groupId === group.id
+                              ? ""
+                              : undefined
+                          }
                           data-drop-target={
                             isDropTarget(group.id) ? "" : undefined
                           }
