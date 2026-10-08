@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
@@ -30,6 +30,7 @@ import {
   GripVerticalIcon,
   Link2Icon,
   MessageSquareIcon,
+  MoreHorizontalIcon,
   PlusIcon,
   RepeatIcon,
   SearchIcon,
@@ -45,6 +46,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { optionColors } from "@stll/ui/option-color";
 import {
   Select,
   SelectItem,
@@ -75,6 +77,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { Switch } from "@/components/switch";
+import type { ResolvedPositionSource } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
@@ -111,22 +114,22 @@ import {
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-import type { ResolvedPositionSource } from "@/routes/knowledge/-components/playbook-editor.logic";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".
-export const POSITION_DRAG_TYPE = "stella/playbook-position";
+const POSITION_DRAG_TYPE = "stella/playbook-position";
 
 // ── Option metadata (typed translation keys) ──────────
 
-type AskContentType = "text" | "date" | "int" | "single-select";
+type AskContentType = Extract<
+  PositionAskContent["type"],
+  "text" | "date" | "int" | "single-select"
+>;
 
 type SelectAskContent = Extract<
   PositionAskContent,
   { type: "single-select" | "multi-select" }
 >;
-
-const ASK_CONTENT_TYPES = ["text", "date", "int", "single-select"] as const;
 
 const ASK_CONTENT_LABEL_KEYS = {
   text: "knowledge.playbooks.contentType.text",
@@ -135,35 +138,21 @@ const ASK_CONTENT_LABEL_KEYS = {
   "single-select": "knowledge.playbooks.contentType.singleSelect",
 } as const satisfies Record<AskContentType, TranslationKey>;
 
-// Cycled named colors for single-select choices; every member is in the schema's
-// option-color enum, so the produced content always validates.
-const OPTION_COLORS = [
-  "blue",
-  "green",
-  "amber",
-  "violet",
-  "red",
-  "teal",
-  "fuchsia",
-  "sky",
-] as const;
-
-const CHECK_KINDS = ["presence", "constraint"] as const;
-
 const CHECK_KIND_LABEL_KEYS = {
   presence: "knowledge.playbooks.checkKind.presence",
   constraint: "knowledge.playbooks.checkKind.constraint",
-} as const satisfies Record<(typeof CHECK_KINDS)[number], TranslationKey>;
-
-const EXPECTATIONS = ["required", "restricted"] as const;
+} as const satisfies Record<DeterministicCheck["kind"], TranslationKey>;
 
 const EXPECTATION_LABEL_KEYS = {
   required: "knowledge.playbooks.expectation.required",
   restricted: "knowledge.playbooks.expectation.restricted",
-} as const satisfies Record<(typeof EXPECTATIONS)[number], TranslationKey>;
+} as const satisfies Record<
+  Extract<DeterministicCheck, { kind: "presence" }>["expectation"],
+  TranslationKey
+>;
 
 const isAskContentType = (value: string): value is AskContentType =>
-  ASK_CONTENT_TYPES.some((contentType) => contentType === value);
+  Object.hasOwn(ASK_CONTENT_LABEL_KEYS, value);
 
 // ── Discriminated-union builders (explicit construction) ──
 
@@ -222,6 +211,8 @@ type PositionEditorProps = {
   onRemove: () => void;
   onDuplicate: () => void;
   onConvertMode: () => void;
+  /** Focus moved from inside the card to somewhere outside it. */
+  onFocusLeave: () => void;
   onReorder: (draggedSourceId: string, targetSourceId: string) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -244,6 +235,7 @@ export const PositionEditor = ({
   onRemove,
   onDuplicate,
   onConvertMode,
+  onFocusLeave,
   onReorder,
   onMoveUp,
   onMoveDown,
@@ -255,9 +247,8 @@ export const PositionEditor = ({
   const { sourceId } = position;
   const announcementName =
     position.issue.trim() || t("knowledge.playbooks.untitledPosition");
-  const bodyId = `position-body-${sourceId}`;
+  const bodyId = useId();
   const handleReorder = useLatestCallback(onReorder);
-
   useExternalSyncEffect(() => {
     if (!cardRef || !gripRef) {
       return undefined;
@@ -334,36 +325,71 @@ export const PositionEditor = ({
         !position.enabled && "opacity-60",
         isDropTarget && "ring-primary ring-2",
       )}
-      id={`position-${sourceId}`}
+      data-position-id={sourceId}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          onFocusLeave();
+        }
+      }}
       ref={setCardRef}
     >
       <PositionHeader
+        // The header is one row at every pane width: the title gives way
+        // (ellipsis) before any control wraps, and the rarer controls sit
+        // behind the actions menu.
         actions={
-          <>
+          <span className="ms-auto flex shrink-0 items-center gap-1">
+            {position.mode === "graded" ? (
+              <SeverityChip
+                labelClassName="hidden @sm:inline"
+                onChange={(severity) => onChange({ ...position, severity })}
+                severity={position.severity}
+              />
+            ) : (
+              <span className={POSITION_HEADER_META_CLASS}>
+                {t("knowledge.playbooks.extractOnlyBadge")}
+              </span>
+            )}
+            {!open && position.mode === "graded" && (
+              <CollapsedTierDots position={position} />
+            )}
+            {!position.enabled && (
+              <span
+                className={cn(POSITION_HEADER_META_CLASS, "hidden @xl:inline")}
+              >
+                {t("knowledge.playbooks.disabledBadge")}
+              </span>
+            )}
             <Switch
               aria-label={t("knowledge.playbooks.enablePosition")}
               checked={position.enabled}
               className="shrink-0"
               onCheckedChange={(enabled) => onChange({ ...position, enabled })}
             />
-            <Button
-              aria-label={t("knowledge.playbooks.duplicatePosition")}
-              onClick={onDuplicate}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-            >
-              <CopyIcon />
-            </Button>
-            <Button
-              aria-label={t("knowledge.playbooks.deletePosition")}
-              onClick={onRemove}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-            >
-              <Trash2Icon />
-            </Button>
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    aria-label={t("common.actions")}
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                  />
+                }
+              >
+                <MoreHorizontalIcon />
+              </MenuTrigger>
+              <MenuPopup align="end">
+                <MenuItem onClick={onDuplicate}>
+                  <CopyIcon />
+                  {t("knowledge.playbooks.duplicatePosition")}
+                </MenuItem>
+                <MenuItem onClick={onRemove} variant="destructive">
+                  <Trash2Icon />
+                  {t("knowledge.playbooks.deletePosition")}
+                </MenuItem>
+              </MenuPopup>
+            </Menu>
             <Button
               aria-controls={bodyId}
               aria-expanded={open}
@@ -381,33 +407,10 @@ export const PositionEditor = ({
                 className={cn("transition-transform", open && "rotate-180")}
               />
             </Button>
-          </>
+          </span>
         }
+        className="gap-1.5"
         index={index}
-        label={
-          <>
-            {position.mode === "graded" ? (
-              <SeverityChip
-                onChange={(severity) => onChange({ ...position, severity })}
-                severity={position.severity}
-              />
-            ) : (
-              <span className={POSITION_HEADER_META_CLASS}>
-                {t("knowledge.playbooks.extractOnlyBadge")}
-              </span>
-            )}
-            {!open && position.mode === "graded" && (
-              <CollapsedTierDots position={position} />
-            )}
-            {!position.enabled && (
-              <span
-                className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}
-              >
-                {t("knowledge.playbooks.disabledBadge")}
-              </span>
-            )}
-          </>
-        }
         leading={
           <Button
             aria-label={t("knowledge.playbooks.reorderPosition")}
@@ -435,6 +438,7 @@ export const PositionEditor = ({
             value={position.issue}
           />
         }
+        titleClassName="min-w-16"
       />
 
       {open && (
@@ -554,7 +558,7 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
   // the standard comes from instead.
   if (tiers === null) {
     return (
-      <span className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}>
+      <span className={cn(POSITION_HEADER_META_CLASS, "hidden @xl:inline")}>
         {t("knowledge.playbooks.referenceStandard")}
       </span>
     );
@@ -574,7 +578,7 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
   }
 
   return (
-    <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
+    <span className="hidden shrink-0 items-center gap-1.5 @xl:flex">
       {counts.map((entry) => (
         <span className="flex items-center gap-1" key={entry.key}>
           <span className={cn("size-1.5 rounded-full", entry.cls)} />
@@ -996,7 +1000,7 @@ const TierSection = ({
   const t = useTranslations();
   return (
     <section className={cn("rounded-lg border", TIER_TONE_CLASS[tone])}>
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span
           className={cn(
             "flex size-4.5 items-center justify-center rounded",
@@ -1010,7 +1014,7 @@ const TierSection = ({
         >
           {title}
         </span>
-        <div className="ms-auto flex items-center gap-1">
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-1">
           {trailingAction}
           <InlineAction onClick={onAddRule}>
             + {t("knowledge.playbooks.addRule")}
@@ -1039,12 +1043,13 @@ const RuleRow = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="flex items-start gap-2">
-      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
+    <div className="flex items-start gap-x-2">
+      <span className="text-muted-foreground text-3xs shrink-0 pt-2 tracking-wide uppercase tabular-nums">
         {label}
       </span>
       <Input
-        className="h-8 flex-1 text-sm"
+        aria-label={label}
+        className="h-8 min-w-0 flex-1 text-sm"
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         value={value}
@@ -1084,11 +1089,11 @@ const FallbackEntryRow = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="flex items-start gap-2">
-      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
+    <div className="flex items-start gap-x-2">
+      <span className="text-muted-foreground text-3xs min-w-4 shrink-0 pt-2.5 tracking-wide uppercase tabular-nums">
         {t("knowledge.playbooks.entryRank", { index: String(index + 1) })}
       </span>
-      <div className="flex-1 space-y-1.5">
+      <div className="min-w-0 flex-1 space-y-1.5">
         <Input
           className="h-8 text-sm"
           onChange={(e) => onChange({ ...entry, text: e.target.value })}
@@ -1102,28 +1107,30 @@ const FallbackEntryRow = ({
           value={entry.label ?? ""}
         />
       </div>
-      <div className="flex shrink-0 flex-col">
-        <Button
-          aria-label={t("common.moveUp")}
-          disabled={index === 0}
-          onClick={onMoveUp}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ChevronUpIcon />
-        </Button>
-        <Button
-          aria-label={t("common.moveDown")}
-          disabled={index === total - 1}
-          onClick={onMoveDown}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ChevronDownIcon />
-        </Button>
-      </div>
+      {total > 1 && (
+        <div className="-me-1 flex shrink-0 flex-col">
+          <Button
+            aria-label={t("common.moveUp")}
+            disabled={index === 0}
+            onClick={onMoveUp}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <ChevronUpIcon />
+          </Button>
+          <Button
+            aria-label={t("common.moveDown")}
+            disabled={index === total - 1}
+            onClick={onMoveDown}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <ChevronDownIcon />
+          </Button>
+        </div>
+      )}
       <Button
         aria-label={t("common.remove")}
         className="shrink-0"
@@ -1155,9 +1162,9 @@ const IdealEditor = ({
 }) => {
   const t = useTranslations();
   return (
-    <div className="border-border ms-11 space-y-2 border-s-2 ps-3">
+    <div className="border-border space-y-2 border-s-2 ps-3">
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground text-3xs tracking-wide uppercase">
+        <span className="text-muted-foreground text-3xs shrink-0 tracking-wide uppercase">
           {t("knowledge.playbooks.idealLanguage")}
         </span>
         <Select
@@ -1171,7 +1178,7 @@ const IdealEditor = ({
           }}
           value={ideal.source}
         >
-          <SelectTrigger className="h-6 w-32 text-xs">
+          <SelectTrigger className="h-6 w-28 min-w-0 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
@@ -1324,6 +1331,8 @@ const NegotiationSection = ({
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
+  const rationaleId = useId();
+  const escalationId = useId();
   const { negotiation } = position;
   const talkingPoints = optionalArray(negotiation?.talkingPoints);
 
@@ -1349,15 +1358,12 @@ const NegotiationSection = ({
       {open && (
         <div className="bg-muted/50 mt-3 space-y-4 rounded-md p-3">
           <div className="grid gap-1.5">
-            <Label
-              className="text-xs"
-              htmlFor={`position-negotiation-rationale-${position.sourceId}`}
-            >
+            <Label className="text-xs" htmlFor={rationaleId}>
               {t("knowledge.playbooks.negotiation.rationaleLabel")}
             </Label>
             <Textarea
               className="min-h-[52px] text-sm"
-              id={`position-negotiation-rationale-${position.sourceId}`}
+              id={rationaleId}
               onChange={(e) =>
                 onChange(
                   updateNegotiation(position, { rationale: e.target.value }),
@@ -1422,14 +1428,11 @@ const NegotiationSection = ({
           </div>
 
           <div className="grid gap-1.5">
-            <Label
-              className="text-xs"
-              htmlFor={`position-negotiation-escalation-${position.sourceId}`}
-            >
+            <Label className="text-xs" htmlFor={escalationId}>
               {t("knowledge.playbooks.negotiation.escalationLabel")}
             </Label>
             <Input
-              id={`position-negotiation-escalation-${position.sourceId}`}
+              id={escalationId}
               maxLength={NEGOTIATION_FIELD_LIMITS.escalation}
               onChange={(e) =>
                 onChange(
@@ -1650,7 +1653,6 @@ const ExtractionAdvanced = ({
           onChange({ ...position, ask: { ...ask, question } })
         }
         question={ask.question}
-        sourceId={position.sourceId}
       />
       <Button
         onClick={() => onChange({ ...position, ask: { mode: "auto" } })}
@@ -1742,9 +1744,9 @@ const CheckEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            {CHECK_KINDS.map((kind) => (
+            {Object.entries(CHECK_KIND_LABEL_KEYS).map(([kind, labelKey]) => (
               <SelectItem key={kind} value={kind}>
-                {t(CHECK_KIND_LABEL_KEYS[kind])}
+                {t(labelKey)}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -1774,11 +1776,13 @@ const CheckEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            {EXPECTATIONS.map((expectation) => (
-              <SelectItem key={expectation} value={expectation}>
-                {t(EXPECTATION_LABEL_KEYS[expectation])}
-              </SelectItem>
-            ))}
+            {Object.entries(EXPECTATION_LABEL_KEYS).map(
+              ([expectation, labelKey]) => (
+                <SelectItem key={expectation} value={expectation}>
+                  {t(labelKey)}
+                </SelectItem>
+              ),
+            )}
           </SelectPopup>
         </Select>
       )}
@@ -1949,7 +1953,6 @@ const ExtractBody = ({
                 onChange({ ...position, ask: { ...position.ask, question } })
               }
               question={position.ask.question}
-              sourceId={position.sourceId}
             />
           )}
           {settingsView === POSITION_SETTINGS_VIEW.guidance && (
@@ -1964,28 +1967,27 @@ const ExtractBody = ({
 // ── Shared: ask content editor (question + type + options) ──
 
 const AskContentEditor = ({
-  sourceId,
   question,
   content,
   onChangeQuestion,
   onChangeContent,
 }: {
-  sourceId: string;
   question: string;
   content: PositionAskContent;
   onChangeQuestion: (question: string) => void;
   onChangeContent: (content: PositionAskContent) => void;
 }) => {
   const t = useTranslations();
+  const questionId = useId();
   return (
     <div className="space-y-3">
       <div className="grid gap-1.5">
-        <Label className="text-xs" htmlFor={`position-question-${sourceId}`}>
+        <Label className="text-xs" htmlFor={questionId}>
           {t("knowledge.playbooks.askQuestionLabel")}
         </Label>
         <Textarea
           className="min-h-[52px] text-sm"
-          id={`position-question-${sourceId}`}
+          id={questionId}
           onChange={(e) => onChangeQuestion(e.target.value)}
           placeholder={t("knowledge.playbooks.askQuestionPlaceholder")}
           value={question}
@@ -2007,9 +2009,9 @@ const AskContentEditor = ({
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            {ASK_CONTENT_TYPES.map((type) => (
+            {Object.entries(ASK_CONTENT_LABEL_KEYS).map(([type, labelKey]) => (
               <SelectItem key={type} value={type}>
-                {t(ASK_CONTENT_LABEL_KEYS[type])}
+                {t(labelKey)}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -2085,7 +2087,7 @@ const SelectOptionsEditor = ({
             ...content.options,
             {
               color:
-                OPTION_COLORS[content.options.length % OPTION_COLORS.length] ??
+                optionColors[content.options.length % optionColors.length] ??
                 "gray",
               value: "",
             },
@@ -2112,18 +2114,16 @@ const GuidanceField = ({
   onChange: (position: Position) => void;
 }) => {
   const t = useTranslations();
+  const guidanceId = useId();
 
   return (
     <div className="grid gap-1.5">
-      <Label
-        className="text-xs"
-        htmlFor={`position-guidance-${position.sourceId}`}
-      >
+      <Label className="text-xs" htmlFor={guidanceId}>
         {t("knowledge.playbooks.guidanceLabel")}
       </Label>
       <Textarea
         className="min-h-[44px] text-sm"
-        id={`position-guidance-${position.sourceId}`}
+        id={guidanceId}
         onChange={(e) => onChange({ ...position, guidance: e.target.value })}
         placeholder={t("knowledge.playbooks.guidancePlaceholder")}
         value={position.guidance ?? ""}

@@ -84,7 +84,7 @@ describe("MCP app registry and contracts", () => {
   test("the guard refuses a write call in a presentation app", () => {
     const apps = MCP_APPS.map((app) =>
       app.type === "presentation"
-        ? { ...app, callableTools: ["invoke_capability"] }
+        ? { ...app, callableTools: ["write_capability"] }
         : app,
     );
     expect(
@@ -93,7 +93,7 @@ describe("MCP app registry and contracts", () => {
         tools: DEFAULT_MCP_TOOL_DEFINITIONS,
         directories,
       }),
-    ).toContain("Presentation apps require read-only tools: invoke_capability");
+    ).toContain("Presentation apps require read-only tools: write_capability");
   });
   test("the guard refuses an app with no call class", () => {
     expect(
