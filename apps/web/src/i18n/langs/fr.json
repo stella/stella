@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
     "openCitation": "Ouvrir la citation {label}",
     "openThread": "Ouvrir la conversation",
+    "overlayLoadFailed": "Impossible de charger la conversation du document.",
+    "overlayUpdated": "stella a été mise à jour. Rechargez la page pour utiliser la conversation du document.",
     "pastedChars": "Collé · {count} caractères",
     "pastedText": {
       "expand": "Afficher le texte complet",

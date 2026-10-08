@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "Tato citace už není dostupná.",
     "openCitation": "Otevřít citaci {label}",
     "openThread": "Otevřít konverzaci",
+    "overlayLoadFailed": "Chat k dokumentu se nepodařilo načíst.",
+    "overlayUpdated": "stella byla aktualizována. Chcete-li používat chat k dokumentu, načtěte stránku znovu.",
     "pastedChars": "Vloženo · {count} znaků",
     "pastedText": {
       "expand": "Zobrazit celý text",

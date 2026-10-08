@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
     "openCitation": "Hivatkozás megnyitása: {label}",
     "openThread": "Beszélgetés megnyitása",
+    "overlayLoadFailed": "A dokumentum csevegését nem sikerült betölteni.",
+    "overlayUpdated": "A stella frissült. Töltse be újra az oldalt a dokumentum csevegésének használatához.",
     "pastedChars": "Beillesztve · {count} karakter",
     "pastedText": {
       "expand": "Teljes szöveg megjelenítése",

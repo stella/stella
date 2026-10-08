@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
     "openCitation": "فتح الاستشهاد {label}",
     "openThread": "فتح المحادثة",
+    "overlayLoadFailed": "تعذّر تحميل دردشة المستند.",
+    "overlayUpdated": "تم تحديث stella. أعد تحميل الصفحة لاستخدام دردشة المستند.",
     "pastedChars": "تم اللصق · {count} حرف",
     "pastedText": {
       "expand": "عرض النص الكامل",

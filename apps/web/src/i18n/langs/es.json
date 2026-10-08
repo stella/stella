@@ -1271,6 +1271,8 @@
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
     "openCitation": "Abrir cita {label}",
     "openThread": "Abrir conversación",
+    "overlayLoadFailed": "No se pudo cargar el chat del documento.",
+    "overlayUpdated": "stella se ha actualizado. Recarga la página para usar el chat del documento.",
     "pastedChars": "Pegado · {count} caracteres",
     "pastedText": {
       "expand": "Mostrar texto completo",

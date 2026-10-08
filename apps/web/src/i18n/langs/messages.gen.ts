@@ -1274,6 +1274,8 @@ type Messages = {
     "officeCitationUnavailable": "This citation is no longer available.";
     "openCitation": "Open citation {label}";
     "openThread": "Open conversation";
+    "overlayLoadFailed": "The document chat couldn't load.";
+    "overlayUpdated": "stella was updated. Reload the page to use the document chat.";
     "pastedChars": "Pasted · {count} chars";
     "pastedText": {
       "expand": "Show full text";
