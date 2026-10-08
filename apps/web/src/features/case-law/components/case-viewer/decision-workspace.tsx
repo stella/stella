@@ -42,7 +42,7 @@ import {
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
-import { applyDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
+import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
 import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import {
@@ -61,7 +61,6 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
@@ -261,13 +260,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     setLandingAnchorId(resolvedLandingAnchorId);
   }
 
-  useExternalSyncEffect(() => {
-    const container = mainRef.current;
-    if (container === null) {
-      return undefined;
-    }
-    return applyDecisionParagraphLanding(container, paragraphLanding);
-  }, [paragraphLanding]);
+  useDecisionParagraphLanding({
+    containerRef: mainRef,
+    documentAst: decision.documentAst,
+    fragment: initialAnchorId,
+  });
 
   const jumpToAnchor = (anchorId: string) => {
     setLandingAnchorId(undefined);

@@ -1,7 +1,14 @@
+import { useRef } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
-import { applyDecisionParagraphLanding } from "./decision-paragraph-landing";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import {
+  applyDecisionParagraphLanding,
+  useDecisionParagraphLanding,
+} from "./decision-paragraph-landing";
 
 GlobalRegistrator.register();
 const { render, cleanup } = await import("@testing-library/react");
@@ -13,7 +20,7 @@ afterAll(async () => {
 const fixture = () => {
   const { container } = render(null);
   container.innerHTML =
-    '<article><p data-anchor="p-1">Before</p><details><summary>Text</summary><p data-anchor="p-12">First</p><p data-anchor="p-13">Last</p></details></article>';
+    '<article><p data-anchor="p-1">Before</p><details><summary>Text</summary><p data-anchor="p-12" /><p data-anchor="p-13">Last</p></details></article>';
   const first = container.querySelector<HTMLElement>('[data-anchor="p-12"]');
   if (first === null) {
     throw new Error("Expected first fixture paragraph");
@@ -88,3 +95,94 @@ for (const landing of [
     expect(container.querySelectorAll("[data-reader-landing]").length).toBe(0);
   });
 }
+
+const storedAst = {
+  version: 1,
+  source: { system: "", documentId: "", webUrl: "", printUrl: "" },
+  metadata: {
+    caseNumber: null,
+    ecli: null,
+    court: null,
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks: [
+    {
+      type: "paragraph",
+      id: "b-12",
+      plainText: "First",
+      anchorId: "p-12",
+      number: 48,
+      inlines: [{ type: "text", text: "First" }],
+    },
+    {
+      type: "paragraph",
+      id: "b-13",
+      plainText: "Second",
+      anchorId: "p-13",
+      number: 49,
+      inlines: [{ type: "text", text: "Second" }],
+    },
+  ],
+} satisfies DocumentAst;
+
+type LandingHarnessProps = {
+  documentAst: unknown;
+  fragment: string;
+  label: string;
+};
+
+const LandingHarness = ({
+  documentAst,
+  fragment,
+  label,
+}: LandingHarnessProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useDecisionParagraphLanding({ containerRef, documentAst, fragment });
+  return (
+    <div ref={containerRef}>
+      <button type="button">{label}</button>
+      <article>
+        <p data-anchor="p-12" />
+        <p data-anchor="p-13" />
+      </article>
+    </div>
+  );
+};
+
+test("lands once per stored AST and fragment, not on every render", () => {
+  const scroll = mock(() => {});
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = scroll;
+  try {
+    const { container, getByRole, rerender } = render(
+      <LandingHarness documentAst={storedAst} fragment="par=48" label="a" />,
+    );
+    const first = container.querySelector<HTMLElement>('[data-anchor="p-12"]');
+    expect(container.ownerDocument.activeElement).toBe(first);
+    expect(scroll).toHaveBeenCalledTimes(1);
+
+    const elsewhere = getByRole("button");
+    elsewhere.focus();
+    scroll.mockClear();
+    rerender(
+      <LandingHarness documentAst={storedAst} fragment="par=48" label="b" />,
+    );
+    expect(scroll).not.toHaveBeenCalled();
+    expect(container.ownerDocument.activeElement).toBe(elsewhere);
+    expect(first?.dataset["readerLanding"]).toBe("");
+
+    rerender(
+      <LandingHarness documentAst={storedAst} fragment="par=49" label="b" />,
+    );
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(container.ownerDocument.activeElement).toBe(
+      container.querySelector('[data-anchor="p-13"]'),
+    );
+    expect(first?.dataset["readerLanding"]).toBeUndefined();
+  } finally {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  }
+});

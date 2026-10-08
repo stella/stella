@@ -1,11 +1,16 @@
+import type { RefObject } from "react";
+
 import { panic } from "better-result";
+
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   holdLanding,
   readerBlockByAnchor,
 } from "@/components/legal-reader/reader-landing";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
-import type { decisionParagraphLanding } from "./decision-paragraph-landing.logic";
+import { decisionParagraphLanding } from "./decision-paragraph-landing.logic";
 
 /** Synchronizes the resolved URL target with this reader's rendered paragraphs. */
 export const applyDecisionParagraphLanding = (
@@ -64,4 +69,33 @@ export const applyDecisionParagraphLanding = (
       target.setAttribute("tabindex", previousTabIndex);
     }
   };
+};
+
+type DecisionParagraphLandingSyncOptions = {
+  containerRef: RefObject<HTMLElement | null>;
+  /** The decision's stored AST; its reference, not a per-render parse, keys the landing. */
+  documentAst: unknown;
+  fragment: string | undefined;
+};
+
+/**
+ * Lands once per stored AST and fragment. Keyed on those inputs rather than
+ * a derived landing object, so an unrelated render never refocuses or
+ * rescrolls a reader who has moved on.
+ */
+export const useDecisionParagraphLanding = ({
+  containerRef,
+  documentAst,
+  fragment,
+}: DecisionParagraphLandingSyncOptions) => {
+  useExternalSyncEffect(() => {
+    const container = containerRef.current;
+    if (container === null) {
+      return undefined;
+    }
+    return applyDecisionParagraphLanding(
+      container,
+      decisionParagraphLanding(parseDocumentAst(documentAst), fragment),
+    );
+  }, [containerRef, documentAst, fragment]);
 };
