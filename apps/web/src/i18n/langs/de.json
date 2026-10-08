@@ -4035,9 +4035,6 @@
       "customModelBadge": "Benutzerdefiniert · {provider}",
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
-      "dataRegion": "Datenregion",
-      "dataRegionDescription": "Leitet KI-Anfragen zwecks Datensouveränität über die ausgewählte Region.",
-      "dataRegionUnsupported": "Regionales Routing ist nur für Google AI (Vertex AI) verfügbar.",
       "decision": {
         "add": "Entscheidungsmodell hinzufügen",
         "description": "Fragen mit fester Antwort, etwa Dokumentkategorien oder die Polarität von Zitaten, gehen an dieses Modell; ohne eines beantwortet sie das generative Modell.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Für komplexe Aufgaben, die sorgfältiges Schlussfolgern erfordern."
       },
       "deploymentNamePlaceholder": "Bereitstellungsname",
-      "description": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität.",
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
       "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Ungültig",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
-      "regions": {
-        "ch": "Schweiz (europe-west6)",
-        "eu": "EU (europe-west4)",
-        "global": "Global"
-      },
       "removeLastProviderConfirm": "{provider} entfernen? Dadurch wird auch die benutzerdefinierte Auswahl der KI-Modelle zurückgesetzt.",
       "removeProvider": "Provider entfernen",
       "removeProviderConfirm": "{provider} und die gespeicherten Zugangsdaten entfernen?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktive Mitglieder",
       "ai": "KI-Konfiguration",
-      "aiDescription": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität",
+      "aiDescription": "Verbinden Sie Ihre eigenen API-Schlüssel für KI-Anbieter.",
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",

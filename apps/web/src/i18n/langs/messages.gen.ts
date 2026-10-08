@@ -4038,9 +4038,6 @@ type Messages = {
       "customModelBadge": "Custom · {provider}";
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.";
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.";
-      "dataRegion": "Data region";
-      "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.";
-      "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).";
       "decision": {
         "add": "Add decision model";
         "description": "Questions with a fixed answer, such as document categories and citation polarity, go to this model; without one the generative model answers them.";
@@ -4058,7 +4055,6 @@ type Messages = {
         "reasoning": "For complex tasks that need careful reasoning.";
       };
       "deploymentNamePlaceholder": "Deployment name";
-      "description": "Bring your own API key or configure data sovereignty region.";
       "editProviders": "Edit providers";
       "endpoint": "Endpoint";
       "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.";
@@ -4092,11 +4088,6 @@ type Messages = {
       "providerKeyInvalidShort": "Invalid";
       "providersDescription": "Add the provider credentials you want stella to use.";
       "providersPanel": "Providers";
-      "regions": {
-        "ch": "Switzerland (europe-west6)";
-        "eu": "EU (europe-west4)";
-        "global": "Global";
-      };
       "removeLastProviderConfirm": "Remove {provider}? This also resets the custom AI model choices.";
       "removeProvider": "Remove provider";
       "removeProviderConfirm": "Remove {provider} and its saved credential?";
@@ -4548,7 +4539,7 @@ type Messages = {
     "organization": {
       "activeMembers": "Active members";
       "ai": "AI configuration";
-      "aiDescription": "Bring your own API key or configure data sovereignty region";
+      "aiDescription": "Connect your own AI provider keys.";
       "anonymization": {
         "addPlaceholder": "Term to always mask (e.g. team name)";
         "deleteAction": "Delete term";

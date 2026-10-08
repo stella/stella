@@ -4035,9 +4035,6 @@
       "customModelBadge": "Pasirinktinis · {provider}",
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
-      "dataRegion": "Duomenų regionas",
-      "dataRegionDescription": "Nukreipia DI užklausas per pasirinktą regioną dėl duomenų suverenumo.",
-      "dataRegionUnsupported": "Nukreipimas pagal regioną galimas tik su Google AI (Vertex AI).",
       "decision": {
         "add": "Pridėti sprendimų modelį",
         "description": "Klausimai su fiksuotu atsakymu, pavyzdžiui, dokumentų kategorijos ar citatų poliškumas, siunčiami šiam modeliui; jo neturint, į juos atsako generatyvusis modelis.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Sudėtingoms užduotims, kurioms reikia kruopštaus samprotavimo."
       },
       "deploymentNamePlaceholder": "Diegimo pavadinimas",
-      "description": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną.",
       "editProviders": "Redaguoti teikėjus",
       "endpoint": "Galinis taškas",
       "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. stella išsaugo normalizuotą galinį tašką.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Negaliojantis",
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
-      "regions": {
-        "ch": "Šveicarija (europe-west6)",
-        "eu": "ES (europe-west4)",
-        "global": "Globalus"
-      },
       "removeLastProviderConfirm": "Pašalinti {provider}? Taip pat bus atkurti numatytieji DI modelių pasirinkimai.",
       "removeProvider": "Pašalinti teikėją",
       "removeProviderConfirm": "Pašalinti {provider} ir išsaugotus prisijungimo duomenis?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktyvūs nariai",
       "ai": "DI konfigūracija",
-      "aiDescription": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną",
+      "aiDescription": "Prijunkite savo DI paslaugų teikėjų raktus.",
       "anonymization": {
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",

@@ -4035,9 +4035,6 @@
       "customModelBadge": "Vlastný · {provider}",
       "customModelDescription": "Toto ID modelu nie je v katalógu stella. Vybranému poskytovateľovi sa odošle presne tak, ako je zadané.",
       "customModelHint": "Žiadna zhoda v katalógu. Zadajte ľubovoľné ID modelu; vlastné ID sa uloží presne tak, ako je napísané.",
-      "dataRegion": "Dátový región",
-      "dataRegionDescription": "Smeruje AI volania cez vybraný región kvôli dátovej suverenite.",
-      "dataRegionUnsupported": "Regionálne smerovanie je dostupné iba pre Google AI (Vertex AI).",
       "decision": {
         "add": "Pridať rozhodovací model",
         "description": "Otázky s pevne danou odpoveďou, napríklad kategórie dokumentov alebo polarita citácií, smerujú na tento model; bez neho na ne odpovedá generatívny model.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Na zložité úlohy vyžadujúce dôkladné uvažovanie."
       },
       "deploymentNamePlaceholder": "Názov nasadenia",
-      "description": "Použite vlastný API kľúč alebo zvoľte región pre suverenitu dát.",
       "editProviders": "Upraviť poskytovateľov",
       "endpoint": "Endpoint",
       "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Neplatný",
       "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má stella používať.",
       "providersPanel": "Poskytovatelia",
-      "regions": {
-        "ch": "Švajčiarsko (europe-west6)",
-        "eu": "EÚ (europe-west4)",
-        "global": "Globálne"
-      },
       "removeLastProviderConfirm": "Odstrániť {provider}? Tým sa tiež obnoví predvolený výber modelov AI.",
       "removeProvider": "Odstrániť poskytovateľa",
       "removeProviderConfirm": "Odstrániť {provider} aj uložené prihlasovacie údaje?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktívni členovia",
       "ai": "Konfigurácia AI",
-      "aiDescription": "Použite vlastný API kľúč alebo nakonfigurujte región dátovej suverenity",
+      "aiDescription": "Pripojte vlastné kľúče poskytovateľov AI.",
       "anonymization": {
         "addPlaceholder": "Pojem, ktorý sa má vždy maskovať (napr. názov tímu)",
         "deleteAction": "Zmazať pojem",

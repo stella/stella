@@ -4035,9 +4035,6 @@
       "customModelBadge": "Egyedi · {provider}",
       "customModelDescription": "Ez a modellazonosító nincs a stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
       "customModelHint": "Nincs katalógustalálat. Írjon be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
-      "dataRegion": "Adatrégió",
-      "dataRegionDescription": "Az adatszuverenitás érdekében a kiválasztott régión keresztül irányítja az AI-hívásokat.",
-      "dataRegionUnsupported": "A regionális útválasztás csak a Google AI (Vertex AI) esetén érhető el.",
       "decision": {
         "add": "Döntési modell hozzáadása",
         "description": "A rögzített válaszú kérdések, például a dokumentumkategóriák vagy a hivatkozások polaritása, ehhez a modellhez kerülnek; enélkül a generatív modell válaszol rájuk.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Alapos érvelést igénylő összetett feladatokhoz."
       },
       "deploymentNamePlaceholder": "Üzembe helyezés neve",
-      "description": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót.",
       "editProviders": "Szolgáltatók szerkesztése",
       "endpoint": "Végpont",
       "endpointDescription": "Használja az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A stella a normalizált végpontot menti.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Érvénytelen",
       "providersDescription": "Adja meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket stella használ.",
       "providersPanel": "Szolgáltatók",
-      "regions": {
-        "ch": "Svájc (europe-west6)",
-        "eu": "EU (europe-west4)",
-        "global": "Globális"
-      },
       "removeLastProviderConfirm": "Eltávolítja a(z) {provider} szolgáltatót? Ezzel az egyéni AI-modellválasztás is visszaáll az alapértelmezésre.",
       "removeProvider": "Szolgáltató eltávolítása",
       "removeProviderConfirm": "Eltávolítja a(z) {provider} szolgáltatót és a mentett hitelesítő adatait?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktív tagok",
       "ai": "AI-konfiguráció",
-      "aiDescription": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót",
+      "aiDescription": "Csatlakoztassa saját AI-szolgáltatói kulcsait.",
       "anonymization": {
         "addPlaceholder": "Mindig maszkolandó kifejezés (pl. csapat neve)",
         "deleteAction": "Kifejezés törlése",

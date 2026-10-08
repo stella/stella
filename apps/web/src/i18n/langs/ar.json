@@ -4035,9 +4035,6 @@
       "customModelBadge": "مخصص · {provider}",
       "customModelDescription": "معرّف هذا النموذج غير موجود في كتالوج stella. سيُمرَّر إلى المزوّد المحدد كما هو مكتوب.",
       "customModelHint": "لا تطابق في الكتالوج. اكتب أي معرّف نموذج؛ تُحفظ المعرّفات المخصصة كما هي مكتوبة.",
-      "dataRegion": "منطقة البيانات",
-      "dataRegionDescription": "يوجّه طلبات الذكاء الاصطناعي عبر المنطقة المحددة لضمان سيادة البيانات.",
-      "dataRegionUnsupported": "التوجيه الإقليمي متاح فقط لـ Google AI (Vertex AI).",
       "decision": {
         "add": "إضافة نموذج قرار",
         "description": "الأسئلة ذات الإجابة المحددة، مثل فئات المستندات وقطبية الاستشهادات، تُوجَّه إلى هذا النموذج؛ وبدونه يجيب عنها النموذج التوليدي.",
@@ -4055,7 +4052,6 @@
         "reasoning": "للمهام المعقدة التي تتطلب استدلالًا متأنيًا."
       },
       "deploymentNamePlaceholder": "اسم النشر",
-      "description": "أحضر مفتاح API الخاص بك أو اضبط منطقة سيادة البيانات.",
       "editProviders": "تعديل المزوّدين",
       "endpoint": "نقطة النهاية",
       "endpointDescription": "استخدم نقطة نهاية Azure OpenAI أو Azure Foundry ‏/openai/v1. تخزّن stella نقطة النهاية المُسوّاة.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "غير صالح",
       "providersDescription": "أضف بيانات اعتماد المزوّد التي تريد أن تستخدمها stella.",
       "providersPanel": "المزوّدون",
-      "regions": {
-        "ch": "سويسرا (europe-west6)",
-        "eu": "الاتحاد الأوروبي (europe-west4)",
-        "global": "عالمي"
-      },
       "removeLastProviderConfirm": "هل تريد إزالة {provider}؟ سيؤدي ذلك أيضًا إلى إعادة تعيين الاختيارات المخصصة لنماذج الذكاء الاصطناعي.",
       "removeProvider": "إزالة المزوّد",
       "removeProviderConfirm": "هل تريد إزالة {provider} وبيانات الاعتماد المحفوظة؟",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "الأعضاء النشطون",
       "ai": "إعدادات الذكاء الاصطناعي",
-      "aiDescription": "استخدم مفتاح API الخاص بك أو اضبط منطقة سيادة البيانات",
+      "aiDescription": "اربط مفاتيحك الخاصة لمزوّدي الذكاء الاصطناعي.",
       "anonymization": {
         "addPlaceholder": "مصطلح لإخفائه دائمًا (مثل اسم الفريق)",
         "deleteAction": "حذف المصطلح",

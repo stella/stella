@@ -4035,9 +4035,6 @@
       "customModelBadge": "Kohandatud · {provider}",
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
-      "dataRegion": "Andmepiirkond",
-      "dataRegionDescription": "Suunab AI päringud valitud piirkonna kaudu andmesuveräänsuse tagamiseks.",
-      "dataRegionUnsupported": "Piirkondlik marsruutimine on saadaval ainult Google AI (Vertex AI) puhul.",
       "decision": {
         "add": "Lisa otsustusmudel",
         "description": "Kindla vastusega küsimused, näiteks dokumendikategooriad või viidete polaarsus, suunatakse sellele mudelile; ilma selleta vastab neile generatiivne mudel.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Keerukateks ülesanneteks, mis nõuavad põhjalikku arutlemist."
       },
       "deploymentNamePlaceholder": "Juurutuse nimi",
-      "description": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond.",
       "editProviders": "Muuda teenusepakkujaid",
       "endpoint": "Lõpp-punkt",
       "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. stella salvestab normaliseeritud endpointi.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Vigane",
       "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
-      "regions": {
-        "ch": "Šveits (europe-west6)",
-        "eu": "EL (europe-west4)",
-        "global": "Globaalne"
-      },
       "removeLastProviderConfirm": "Kas eemaldada {provider}? See lähtestab ka kohandatud tehisintellektimudelite valikud.",
       "removeProvider": "Eemalda teenusepakkuja",
       "removeProviderConfirm": "Kas eemaldada {provider} ja salvestatud autentimisandmed?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
       "ai": "AI seadistus",
-      "aiDescription": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond",
+      "aiDescription": "Ühendage oma tehisintellekti teenusepakkujate võtmed.",
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",

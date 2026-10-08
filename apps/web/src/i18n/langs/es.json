@@ -4035,9 +4035,6 @@
       "customModelBadge": "Personalizado · {provider}",
       "customModelDescription": "Este ID de modelo no está en el catálogo de stella. Se enviará al proveedor seleccionado tal como lo escribiste.",
       "customModelHint": "No hay coincidencias en el catálogo. Escribe cualquier ID de modelo; los IDs personalizados se guardan tal cual.",
-      "dataRegion": "Región de datos",
-      "dataRegionDescription": "Enruta las llamadas de IA a través de la región seleccionada para la soberanía de los datos.",
-      "dataRegionUnsupported": "El enrutamiento regional solo está disponible para Google AI (Vertex AI).",
       "decision": {
         "add": "Añadir modelo de decisión",
         "description": "Las preguntas con respuesta fija, como las categorías de documentos o la polaridad de las citas, van a este modelo; sin él, las responde el modelo generativo.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Para tareas complejas que requieren un razonamiento cuidadoso."
       },
       "deploymentNamePlaceholder": "Nombre de implementación",
-      "description": "Usa tu propia clave de API o configura la región de soberanía de los datos.",
       "editProviders": "Editar proveedores",
       "endpoint": "Punto de conexión",
       "endpointDescription": "Usa el punto de conexión /openai/v1 de Azure OpenAI o Azure Foundry. stella guarda el punto de conexión normalizado.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "No válida",
       "providersDescription": "Añade las credenciales de los proveedores que quieres que use stella.",
       "providersPanel": "Proveedores",
-      "regions": {
-        "ch": "Suiza (europe-west6)",
-        "eu": "UE (europe-west4)",
-        "global": "Global"
-      },
       "removeLastProviderConfirm": "¿Eliminar {provider}? Esto también restablece la selección personalizada de modelos de IA.",
       "removeProvider": "Quitar proveedor",
       "removeProviderConfirm": "¿Eliminar {provider} y sus credenciales guardadas?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Miembros activos",
       "ai": "Configuración de IA",
-      "aiDescription": "Usa tu propia clave de API o configura la región de soberanía de datos",
+      "aiDescription": "Conecta tus propias claves de proveedores de IA.",
       "anonymization": {
         "addPlaceholder": "Término que siempre se enmascarará (p. ej. nombre del equipo)",
         "deleteAction": "Eliminar término",

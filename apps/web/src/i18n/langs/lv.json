@@ -4035,9 +4035,6 @@
       "customModelBadge": "Pielāgots · {provider}",
       "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
-      "dataRegion": "Datu reģions",
-      "dataRegionDescription": "Novirza AI pieprasījumus caur izvēlēto reģionu datu suverenitātes nodrošināšanai.",
-      "dataRegionUnsupported": "Reģionālā maršrutēšana pieejama tikai Google AI (Vertex AI).",
       "decision": {
         "add": "Pievienot lēmumu modeli",
         "description": "Jautājumi ar noteiktu atbildi, piemēram, dokumentu kategorijas vai citātu polaritāte, nonāk pie šī modeļa; bez tā uz tiem atbild ģeneratīvais modelis.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Sarežģītiem uzdevumiem, kam nepieciešama rūpīga spriešana."
       },
       "deploymentNamePlaceholder": "Izvietojuma nosaukums",
-      "description": "Izmantojiet savu API atslēgu vai konfigurējiet datu suverenitātes reģionu.",
       "editProviders": "Rediģēt pakalpojumu sniedzējus",
       "endpoint": "Galamērķis",
       "endpointDescription": "Izmantojiet Azure OpenAI vai Azure Foundry /openai/v1 galamērķi. stella saglabā normalizēto galamērķi.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Nederīgs",
       "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus stella izmantos.",
       "providersPanel": "Pakalpojumu sniedzēji",
-      "regions": {
-        "ch": "Šveice (europe-west6)",
-        "eu": "ES (europe-west4)",
-        "global": "Globāls"
-      },
       "removeLastProviderConfirm": "Noņemt {provider}? Tiks atiestatīta arī pielāgotā AI modeļu izvēle.",
       "removeProvider": "Noņemt pakalpojumu sniedzēju",
       "removeProviderConfirm": "Noņemt {provider} un saglabātos autentifikācijas datus?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktīvie dalībnieki",
       "ai": "AI konfigurācija",
-      "aiDescription": "Izmantojiet savu API atslēgu vai konfigurējiet datu suverenitātes reģionu",
+      "aiDescription": "Pievienojiet savas AI pakalpojumu sniedzēju atslēgas.",
       "anonymization": {
         "addPlaceholder": "Termins, kas vienmēr jāmaskē (piem., komandas nosaukums)",
         "deleteAction": "Dzēst terminu",

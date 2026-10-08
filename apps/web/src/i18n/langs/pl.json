@@ -4035,9 +4035,6 @@
       "customModelBadge": "Niestandardowy · {provider}",
       "customModelDescription": "Tego identyfikatora modelu nie ma w katalogu stella. Zostanie przekazany do wybranego dostawcy dokładnie tak, jak wpisano.",
       "customModelHint": "Brak dopasowania w katalogu. Wpisz dowolny identyfikator modelu; niestandardowe ID są zapisywane bez zmian.",
-      "dataRegion": "Region danych",
-      "dataRegionDescription": "Kieruje żądania AI przez wybrany region dla zachowania suwerenności danych.",
-      "dataRegionUnsupported": "Routing regionalny jest dostępny tylko dla Google AI (Vertex AI).",
       "decision": {
         "add": "Dodaj model decyzyjny",
         "description": "Pytania o ustalonej odpowiedzi, takie jak kategorie dokumentów czy polaryzacja cytowań, trafiają do tego modelu; bez niego odpowiada na nie model generatywny.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Do złożonych zadań wymagających starannego rozumowania."
       },
       "deploymentNamePlaceholder": "Nazwa wdrożenia",
-      "description": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych.",
       "editProviders": "Edytuj dostawców",
       "endpoint": "Punkt końcowy",
       "endpointDescription": "Użyj endpointu Azure OpenAI lub Azure Foundry /openai/v1. stella zapisze znormalizowany endpoint.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Nieprawidłowy",
       "providersDescription": "Dodaj dane uwierzytelniające dostawców, których stella ma używać.",
       "providersPanel": "Dostawcy",
-      "regions": {
-        "ch": "Szwajcaria (europe-west6)",
-        "eu": "UE (europe-west4)",
-        "global": "Globalny"
-      },
       "removeLastProviderConfirm": "Usunąć {provider}? Spowoduje to również zresetowanie niestandardowego wyboru modeli AI.",
       "removeProvider": "Usuń dostawcę",
       "removeProviderConfirm": "Usunąć {provider} i zapisane dane uwierzytelniające?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktywni członkowie",
       "ai": "Konfiguracja AI",
-      "aiDescription": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych",
+      "aiDescription": "Podłącz własne klucze dostawców AI.",
       "anonymization": {
         "addPlaceholder": "Termin, który ma być zawsze maskowany (np. nazwa zespołu)",
         "deleteAction": "Usuń termin",

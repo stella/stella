@@ -4035,9 +4035,6 @@
       "customModelBadge": "Vlastní · {provider}",
       "customModelDescription": "Toto ID modelu není v katalogu stella. Vybranému poskytovateli se předá přesně tak, jak je zadané.",
       "customModelHint": "Žádná shoda v katalogu. Zadejte libovolné ID modelu; vlastní ID se uloží přesně tak, jak je napsané.",
-      "dataRegion": "Region dat",
-      "dataRegionDescription": "Volání AI poteče přes vybraný region kvůli suverenitě dat.",
-      "dataRegionUnsupported": "Regionální směrování je dostupné jen pro Google AI (Vertex AI).",
       "decision": {
         "add": "Přidat rozhodovací model",
         "description": "Otázky s pevně danou odpovědí, například kategorie dokumentů nebo polarita citací, míří na tento model; bez něj na ně odpovídá generativní model.",
@@ -4055,7 +4052,6 @@
         "reasoning": "Pro složité úkoly vyžadující důkladné uvažování."
       },
       "deploymentNamePlaceholder": "Název nasazení",
-      "description": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat.",
       "editProviders": "Upravit poskytovatele",
       "endpoint": "Endpoint",
       "endpointDescription": "Použijte Azure OpenAI nebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
@@ -4089,11 +4085,6 @@
       "providerKeyInvalidShort": "Neplatný",
       "providersDescription": "Přidejte přihlašovací údaje poskytovatelů, které má stella používat.",
       "providersPanel": "Poskytovatelé",
-      "regions": {
-        "ch": "Švýcarsko (europe-west6)",
-        "eu": "EU (europe-west4)",
-        "global": "Globální"
-      },
       "removeLastProviderConfirm": "Odebrat {provider}? Tím se také obnoví výchozí výběr modelů AI.",
       "removeProvider": "Odebrat poskytovatele",
       "removeProviderConfirm": "Odebrat {provider} i uložené přihlašovací údaje?",
@@ -4545,7 +4536,7 @@
     "organization": {
       "activeMembers": "Aktivní členové",
       "ai": "Nastavení AI",
-      "aiDescription": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat",
+      "aiDescription": "Připojte vlastní klíče poskytovatelů AI.",
       "anonymization": {
         "addPlaceholder": "Pojem, který se má vždy maskovat (např. název týmu)",
         "deleteAction": "Smazat pojem",
