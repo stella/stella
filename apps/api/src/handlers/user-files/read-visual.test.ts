@@ -3,7 +3,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import {
   createTestIds,
@@ -48,13 +51,13 @@ const read = async (
   });
   return await fileReader.handler(
     createTestHandlerContext<Parameters<typeof reader.handler>[0]>({
+      scopedDb: NO_DB,
       params: { fileId },
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       workspaceId: ids.wsA1,
       safeDb: createSafeDb(database, [ids.wsA1], ids.orgA, ids.userA1),
-      recordAuditEvent: record,
-      createAuditRecorder: () => record,
+      audit: record,
       request,
     }),
   );

@@ -41,7 +41,11 @@ import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions"
 import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
 import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const FLAG = "FEATURE_TIME_BILLING";
@@ -246,6 +250,8 @@ describe("time billing admission census", () => {
               resolveAuth: async () => ({
                 ok: true,
                 value: createTestHandlerContext<ValidateAuthValue>({
+                  audit: NO_AUDIT,
+                  scopedDb: NO_DB,
                   featureAccessSnapshot: snapshot,
                   // The member lookup already decided feature access: the
                   // gate itself must not open a transaction or query.
