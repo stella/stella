@@ -2,6 +2,8 @@ import { createContext, use } from "react";
 
 import { panic } from "better-result";
 
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+
 import type {
   ApprovalToolName,
   ToolApprovalGrant,
@@ -36,6 +38,18 @@ type ChatApprovalContextValue = {
     options?: ChatSendMessageOptions,
   ) => void | PromiseLike<void>;
   handleDeny: (id: string) => void | PromiseLike<void>;
+  handleRequestSecret: (
+    toolCallId: string,
+    decision:
+      | { decision: "provide"; value: string; saveForFuture: boolean }
+      | { decision: "use-saved" }
+      | { decision: "decline" },
+  ) => PromiseLike<RequestSecretOutput>;
+  secretAvailabilityKey: string;
+  checkSavedSecretAvailability: (
+    connectorSlug: string,
+    signal: AbortSignal,
+  ) => Promise<boolean>;
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
   /**

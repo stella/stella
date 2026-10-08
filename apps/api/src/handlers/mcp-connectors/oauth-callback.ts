@@ -5,7 +5,11 @@ import { t } from "elysia";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { mcpOAuthState, mcpUserConnections } from "@/api/db/schema";
+import {
+  mcpOAuthState,
+  mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -388,6 +392,8 @@ const saveOAuthConnection = async ({
           authorizationServerUrl: pending.authorizationServerUrl,
           expiresAt: tokenExpiresAt(token),
           status: "connected",
+          responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+          responseTargetUrl: null,
           enabled: true,
         })
         .onConflictDoUpdate({
@@ -413,6 +419,8 @@ const saveOAuthConnection = async ({
             cachedTools: null,
             cachedToolsRefreshedAt: null,
             status: "connected",
+            responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+            responseTargetUrl: null,
             enabled: true,
             updatedAt: new Date(),
           },

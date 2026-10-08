@@ -234,6 +234,9 @@ export const ChatThreadPage = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    checkSavedSecretAvailability,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
@@ -571,6 +574,9 @@ export const ChatThreadPage = ({
             handleAlwaysAllow,
             handleApprove,
             handleDeny,
+            handleRequestSecret,
+            checkSavedSecretAvailability,
+            secretAvailabilityKey,
           }}
         >
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">

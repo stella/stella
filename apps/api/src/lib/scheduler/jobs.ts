@@ -34,6 +34,7 @@ import {
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
+import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-retention";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
@@ -473,6 +474,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_CHAT_RUN_LOGS_TASK,
+  },
+  {
+    description: "Clear expired chat secret payloads",
+    id: "chat.purgeSecrets.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: PURGE_CHAT_SECRETS_TASK,
   },
   {
     description: "Re-drive document review runs no queued job owns anymore",

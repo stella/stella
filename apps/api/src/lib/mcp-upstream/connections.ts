@@ -13,6 +13,7 @@ import {
   mcpConnectors,
   mcpOAuthClients,
   mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import type {
   CachedMcpToolDefinition,
@@ -152,6 +153,7 @@ const DEFAULT_OUTBOUND_FETCH_DEPENDENCIES: OutboundFetchDependencies = {
 };
 
 type RawConnectionRow = {
+  responseDisposition: typeof mcpUserConnections.$inferSelect.responseDisposition;
   accessTokenEncrypted: Buffer | null;
   accessTokenIv: Buffer | null;
   allowedTools: string[] | null;
@@ -241,6 +243,7 @@ const bindMcpConnection = (
 };
 
 const selectConnectionFields = {
+  responseDisposition: mcpUserConnections.responseDisposition,
   userConnectionId: mcpUserConnections.id,
   connectorId: mcpConnectors.id,
   slug: mcpConnectors.slug,
@@ -414,7 +417,15 @@ const normalizeConnectionRows = async ({
 }: NormalizeConnectionRowsOptions): Promise<LoadedMcpConnection[]> => {
   const loaded: LoadedMcpConnection[] = [];
   const needsReauthIds: SafeId<"mcpUserConnection">[] = [];
-  for (const rawRow of rows) {
+  // Receipt-only connections never enter discovery, including direct connection loads.
+  const normalRows = rows.filter(
+    (
+      row,
+    ): row is RawConnectionRow & {
+      responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
+    } => row.responseDisposition === MCP_RESPONSE_DISPOSITION.normal,
+  );
+  for (const rawRow of normalRows) {
     const normalized = normalizeMcpConnectionRow(rawRow);
     switch (normalized.type) {
       case "loaded":
@@ -720,7 +731,7 @@ export const proxyMcpToolCall = async ({
   }
 };
 
-const createSafeMcpFetch = (
+export const createSafeMcpFetch = (
   safeOutboundFetchStreamImpl: typeof safeOutboundFetchStream,
   permit: ThirdPartyOutboundPermit,
 ): typeof fetch => {

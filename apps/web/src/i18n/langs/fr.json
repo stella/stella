@@ -1172,6 +1172,12 @@
       "previewWaiting": "En attente du contenu…",
       "savePendingReview": "Traitez les suggestions de l’IA en attente avant d’enregistrer le document."
     },
+    "credentialPasteAction": "Utiliser une carte privée",
+    "credentialPasteDescription": "Ce texte ressemble à un identifiant. Utilisez une carte privée pour qu’il n’apparaisse pas dans la conversation. Collez-le à nouveau dans la carte lorsqu’elle s’affiche.",
+    "credentialPasteTitle": "Collage d’identifiant suspendu",
+    "credentialSendAction": "Envoyer quand même",
+    "credentialSendDescription": "Envoyez-le uniquement si vous souhaitez partager cette valeur dans la conversation.",
+    "credentialSendTitle": "Ce message peut contenir un identifiant",
     "deleteThread": "Supprimer la conversation",
     "editMode": {
       "autoDirect": "Automatique · réécrire",
@@ -1308,6 +1314,23 @@
     "removeSuggestion": "(supprimer)",
     "renameThread": "Renommer la conversation",
     "renameUnavailableEmptyThread": "Envoyez d'abord un message, la conversation pourra ensuite être renommée.",
+    "requestSecret": {
+      "declined": "Refusé",
+      "description": "L’assistant en a besoin pour continuer",
+      "error": "Impossible d’envoyer l’identifiant. Réessayez.",
+      "kind": {
+        "token": "Jeton d’accès"
+      },
+      "private": "L’assistant ne verra pas cette valeur.",
+      "provideAction": "Fournir",
+      "provided": "Fourni",
+      "saveForFuture": "Enregistrer pour les prochaines conversations",
+      "savedAvailabilityError": "Impossible de vérifier si un identifiant est enregistré.",
+      "target": "Cible : {target}",
+      "title": "Demander un identifiant privé",
+      "useSavedAction": "Utiliser l’identifiant enregistré",
+      "valueLabel": "Identifiant"
+    },
     "resend": "Renvoyer",
     "resizeThread": "Redimensionner la conversation",
     "richContentLoading": "Chargement du contenu interactif…",
@@ -1431,6 +1454,7 @@
       "read_story": "Lecture d'une partie du document",
       "remember": "Mémorisation",
       "reply_comment": "Réponse au commentaire",
+      "request_secret": "Demande d’identifiant privé",
       "resolve_comment": "Résolution du commentaire",
       "review_folder_consistency": "Vérification de la cohérence du dossier",
       "run-stella-query": "Lecture des données du dossier",
@@ -1464,6 +1488,7 @@
       "update-entity-fields": "Mise à jour des métadonnées",
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
+      "use_connector_secret": "Utilisation de l’identifiant du connecteur",
       "web_search": "Recherche web"
     },
     "toolCall": {

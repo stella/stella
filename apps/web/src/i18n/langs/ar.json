@@ -1172,6 +1172,12 @@
       "previewWaiting": "في انتظار المحتوى…",
       "savePendingReview": "احسم الاقتراحات قيد المراجعة قبل حفظ المستند."
     },
+    "credentialPasteAction": "استخدام بطاقة خاصة",
+    "credentialPasteDescription": "يبدو هذا النص كبيانات اعتماد. استخدم بطاقة خاصة لإبقائه خارج الدردشة. أعد لصق القيمة في البطاقة عند ظهورها.",
+    "credentialPasteTitle": "تم إيقاف لصق بيانات الاعتماد",
+    "credentialSendAction": "إرسال على أي حال",
+    "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
+    "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",
@@ -1308,6 +1314,23 @@
     "removeSuggestion": "(إزالة)",
     "renameThread": "إعادة تسمية المحادثة",
     "renameUnavailableEmptyThread": "أرسل رسالة أولاً، ثم يمكن إعادة تسمية المحادثة.",
+    "requestSecret": {
+      "declined": "تم الرفض",
+      "description": "يحتاج المساعد إليها للمتابعة",
+      "error": "تعذر إرسال بيانات الاعتماد. حاول مرة أخرى.",
+      "kind": {
+        "token": "رمز وصول"
+      },
+      "private": "لن يرى المساعد هذه القيمة.",
+      "provideAction": "تقديم",
+      "provided": "تم التقديم",
+      "saveForFuture": "حفظ للدردشات المستقبلية",
+      "savedAvailabilityError": "تعذر التحقق من وجود بيانات اعتماد محفوظة.",
+      "target": "الهدف: {target}",
+      "title": "طلب بيانات اعتماد خاصة",
+      "useSavedAction": "استخدام بيانات الاعتماد المحفوظة",
+      "valueLabel": "بيانات الاعتماد"
+    },
     "resend": "إعادة الإرسال",
     "resizeThread": "تغيير حجم المحادثة",
     "richContentLoading": "جارٍ تحميل المحتوى التفاعلي…",
@@ -1431,6 +1454,7 @@
       "read_story": "قراءة جزء من المستند",
       "remember": "الحفظ في الذاكرة",
       "reply_comment": "الرد على التعليق",
+      "request_secret": "طلب بيانات اعتماد خاصة",
       "resolve_comment": "حل التعليق",
       "review_folder_consistency": "مراجعة اتساق المجلد",
       "run-stella-query": "قراءة بيانات الملف",
@@ -1464,6 +1488,7 @@
       "update-entity-fields": "تحديث البيانات الوصفية",
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
+      "use_connector_secret": "استخدام بيانات اعتماد الموصل",
       "web_search": "البحث على الويب"
     },
     "toolCall": {

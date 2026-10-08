@@ -1172,6 +1172,12 @@
       "previewWaiting": "Várakozás a tartalomra…",
       "savePendingReview": "A dokumentum mentése előtt kezelje a felülvizsgálatra váró AI-javaslatokat."
     },
+    "credentialPasteAction": "Privát kártya használata",
+    "credentialPasteDescription": "Ez a szöveg hitelesítő adatnak tűnik. Használj privát kártyát, hogy ne kerüljön a csevegésbe. Amikor megjelenik a kártya, illeszd be újra az értéket.",
+    "credentialPasteTitle": "Hitelesítő adat beillesztése felfüggesztve",
+    "credentialSendAction": "Küldés mindenképpen",
+    "credentialSendDescription": "Csak akkor küldd el, ha meg szeretnéd osztani ezt az értéket a beszélgetésben.",
+    "credentialSendTitle": "Ez az üzenet hitelesítő adatot tartalmazhat",
     "deleteThread": "Beszélgetés törlése",
     "editMode": {
       "autoDirect": "Automatikus · átírás",
@@ -1308,6 +1314,23 @@
     "removeSuggestion": "(eltávolítás)",
     "renameThread": "Beszélgetés átnevezése",
     "renameUnavailableEmptyThread": "Először küldjön egy üzenetet, utána a beszélgetés átnevezhető.",
+    "requestSecret": {
+      "declined": "Elutasítva",
+      "description": "Az asszisztensnek szüksége van erre a folytatáshoz",
+      "error": "Nem sikerült elküldeni a hitelesítő adatot. Próbáld újra.",
+      "kind": {
+        "token": "Hozzáférési token"
+      },
+      "private": "Az asszisztens nem fogja látni ezt az értéket.",
+      "provideAction": "Megadás",
+      "provided": "Megadva",
+      "saveForFuture": "Mentés későbbi csevegésekhez",
+      "savedAvailabilityError": "Nem sikerült ellenőrizni a mentett hitelesítő adatot.",
+      "target": "Cél: {target}",
+      "title": "Privát hitelesítő adat kérése",
+      "useSavedAction": "Mentett hitelesítő adat használata",
+      "valueLabel": "Hitelesítő adat"
+    },
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",
     "richContentLoading": "Interaktív tartalom betöltése…",
@@ -1431,6 +1454,7 @@
       "read_story": "Dokumentumrész olvasása",
       "remember": "Mentés a memóriába",
       "reply_comment": "Megjegyzés megválaszolása",
+      "request_secret": "Privát hitelesítő adat kérése",
       "resolve_comment": "Megjegyzés megoldása",
       "review_folder_consistency": "Mappa konzisztenciájának ellenőrzése",
       "run-stella-query": "Ügyadatok olvasása",
@@ -1464,6 +1488,7 @@
       "update-entity-fields": "Metaadatok frissítése",
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
+      "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {

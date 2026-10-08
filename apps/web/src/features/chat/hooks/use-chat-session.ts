@@ -15,6 +15,7 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -131,6 +132,7 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
+  unwrapEden,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -917,6 +919,45 @@ export const useChatSession = ({
     },
     [addToolResult],
   );
+  const handleRequestSecret = useCallback(
+    async (
+      toolCallId: string,
+      decision:
+        | {
+            decision: "provide";
+            value: string;
+            saveForFuture: boolean;
+          }
+        | { decision: "use-saved" }
+        | { decision: "decline" },
+    ): Promise<RequestSecretOutput> => {
+      const output = await unwrapEden(
+        await api.chat
+          .threads({ threadId: toSafeId<"chatThread">(conversationId) })
+          .secrets({ toolCallId })
+          .post(decision),
+      );
+      await addToolResult({
+        tool: "request_secret",
+        toolCallId,
+        output,
+      });
+      return output;
+    },
+    [addToolResult, conversationId],
+  );
+  const checkSavedSecretAvailability = useCallback(
+    async (connectorSlug: string, signal: AbortSignal): Promise<boolean> => {
+      const response = await api.chat
+        .threads({ threadId: toSafeId<"chatThread">(conversationId) })
+        ["saved-secret"].get({
+          query: { connectorSlug },
+          fetch: { signal },
+        });
+      return unwrapEden(response).available;
+    },
+    [conversationId],
+  );
 
   /**
    * Edit an already-answered ask-user card and replay the model
@@ -1552,6 +1593,9 @@ export const useChatSession = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleRequestSecret,
+    checkSavedSecretAvailability,
+    secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,

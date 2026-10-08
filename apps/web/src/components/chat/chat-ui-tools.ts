@@ -102,12 +102,12 @@ export type ChatClientTools =
 export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-// `create-document` is client-executed and renders its own draft UI, not the
-// approval flow. Keep it out of the approval set so `NeedsMatterCard` renders
-// instead of `ToolApprovalCard`.
+// These tools have dedicated user-input cards or draft UI instead of the
+// approval flow. Keep them out of the approval set so their owning cards
+// handle the interaction.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
-  "ask-user" | "create-document"
+  "ask-user" | "create-document" | "request_secret"
 >;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
@@ -156,6 +156,7 @@ const isChatToolCallState = (
   Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   "ask-user": true,
+  request_secret: true,
 } as const satisfies Record<string, true>;
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
@@ -215,6 +216,8 @@ const CHAT_TOOL_TITLE_KEYS = {
   show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
+  request_secret: "chat.tool.request_secret",
+  use_connector_secret: "chat.tool.use_connector_secret",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
   boe_get_law_block: "chat.tool.boe_get_law_block",
@@ -586,7 +589,8 @@ export const isApprovalToolName = (
   return (
     isChatToolName(toolName) &&
     toolName !== "ask-user" &&
-    toolName !== "create-document"
+    toolName !== "create-document" &&
+    toolName !== "request_secret"
   );
 };
 

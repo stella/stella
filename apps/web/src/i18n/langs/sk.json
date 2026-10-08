@@ -1172,6 +1172,12 @@
       "previewWaiting": "Čaká sa na obsah…",
       "savePendingReview": "Pred uložením dokumentu vyriešte návrhy AI čakajúce na revíziu."
     },
+    "credentialPasteAction": "Použiť súkromnú kartu",
+    "credentialPasteDescription": "Tento text vyzerá ako prístupový údaj. Použite súkromnú kartu, aby sa nedostal do chatu. Keď sa karta zobrazí, vložte údaj znova do karty.",
+    "credentialPasteTitle": "Vloženie prístupového údaja pozastavené",
+    "credentialSendAction": "Napriek tomu odoslať",
+    "credentialSendDescription": "Odošlite ju iba vtedy, ak chcete túto hodnotu zdieľať v konverzácii.",
+    "credentialSendTitle": "Táto správa môže obsahovať prístupový údaj",
     "deleteThread": "Zmazať konverzáciu",
     "editMode": {
       "autoDirect": "Automaticky · prepísať",
@@ -1308,6 +1314,23 @@
     "removeSuggestion": "(odstrániť)",
     "renameThread": "Premenovať konverzáciu",
     "renameUnavailableEmptyThread": "Najprv odošlite správu, potom bude možné konverzáciu premenovať.",
+    "requestSecret": {
+      "declined": "Odmietnuté",
+      "description": "Asistent tento údaj potrebuje na pokračovanie",
+      "error": "Prístupový údaj sa nepodarilo odoslať. Skúste to znova.",
+      "kind": {
+        "token": "Prístupový token"
+      },
+      "private": "Asistent túto hodnotu neuvidí.",
+      "provideAction": "Poskytnúť",
+      "provided": "Poskytnuté",
+      "saveForFuture": "Uložiť pre budúce chaty",
+      "savedAvailabilityError": "Nepodarilo sa overiť, či sú prihlasovacie údaje uložené.",
+      "target": "Cieľ: {target}",
+      "title": "Žiadosť o súkromný prístupový údaj",
+      "useSavedAction": "Použiť uložený prístupový údaj",
+      "valueLabel": "Prístupový údaj"
+    },
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",
     "richContentLoading": "Načítava sa interaktívny obsah…",
@@ -1431,6 +1454,7 @@
       "read_story": "Čítanie časti dokumentu",
       "remember": "Ukladanie do pamäte",
       "reply_comment": "Odpovedanie na komentár",
+      "request_secret": "Žiadosť o súkromný prístupový údaj",
       "resolve_comment": "Riešenie komentára",
       "review_folder_consistency": "Kontrola konzistentnosti priečinka",
       "run-stella-query": "Čítam dáta spisu",
@@ -1464,6 +1488,7 @@
       "update-entity-fields": "Aktualizácia metadát",
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
+      "use_connector_secret": "Použitie prístupového údaja konektora",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {

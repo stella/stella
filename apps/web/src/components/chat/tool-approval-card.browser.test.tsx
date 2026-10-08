@@ -33,6 +33,12 @@ const renderCard = (part: unknown) => {
             handleAlwaysAllow: noop,
             handleApprove: noop,
             handleDeny: noop,
+            handleRequestSecret: async () => ({
+              status: "declined",
+              target: { type: "mcp-connector", connectorSlug: "test" },
+            }),
+            secretAvailabilityKey: "test-thread",
+            checkSavedSecretAvailability: async () => false,
           }}
         >
           <ToolApprovalCard isAwaitingUser isTurnActive={false} part={part} />

@@ -1172,6 +1172,12 @@
       "previewWaiting": "Oczekiwanie na treść…",
       "savePendingReview": "Przed zapisaniem dokumentu rozstrzygnij oczekujące sugestie AI."
     },
+    "credentialPasteAction": "Użyj prywatnej karty",
+    "credentialPasteDescription": "Ten tekst przypomina dane dostępowe. Użyj prywatnej karty, aby nie trafił do czatu. Gdy karta się pojawi, wklej wartość ponownie.",
+    "credentialPasteTitle": "Wstrzymano wklejanie danych dostępowych",
+    "credentialSendAction": "Mimo to wyślij",
+    "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
+    "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
@@ -1308,6 +1314,23 @@
     "removeSuggestion": "(usuń)",
     "renameThread": "Zmień nazwę rozmowy",
     "renameUnavailableEmptyThread": "Najpierw wyślij wiadomość, potem będzie można zmienić nazwę rozmowy.",
+    "requestSecret": {
+      "declined": "Odmówiono",
+      "description": "Asystent potrzebuje ich, aby kontynuować",
+      "error": "Nie udało się przekazać danych dostępowych. Spróbuj ponownie.",
+      "kind": {
+        "token": "Token dostępu"
+      },
+      "private": "Asystent nie zobaczy tej wartości.",
+      "provideAction": "Przekaż",
+      "provided": "Przekazano",
+      "saveForFuture": "Zapisz na potrzeby przyszłych czatów",
+      "savedAvailabilityError": "Nie udało się sprawdzić, czy zapisano dane dostępowe.",
+      "target": "Cel: {target}",
+      "title": "Prośba o prywatne dane dostępowe",
+      "useSavedAction": "Użyj zapisanych danych dostępowych",
+      "valueLabel": "Dane dostępowe"
+    },
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",
     "richContentLoading": "Wczytywanie interaktywnej treści…",
@@ -1431,6 +1454,7 @@
       "read_story": "Odczytywanie części dokumentu",
       "remember": "Zapamiętywanie",
       "reply_comment": "Odpowiadanie na komentarz",
+      "request_secret": "Prośba o prywatne dane dostępowe",
       "resolve_comment": "Rozwiązywanie komentarza",
       "review_folder_consistency": "Sprawdzanie spójności folderu",
       "run-stella-query": "Odczytywanie danych sprawy",
@@ -1464,6 +1488,7 @@
       "update-entity-fields": "Aktualizacja metadanych",
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
+      "use_connector_secret": "Używanie danych dostępowych łącznika",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {

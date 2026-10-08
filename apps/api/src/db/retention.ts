@@ -3,6 +3,11 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  mcp_user_connections: {
+    boundedBy:
+      "One saved connection per organization, account and connector; cascade-deleted with any owner.",
+  },
+  chat_secrets: { ttlColumn: "expires_at", sweeper: "chat.purgeSecrets" },
   desktop_presence: {
     boundedBy:
       "One observation per account, organization and installation, overwritten by heartbeats and cascade-deleted with the account or organization.",

@@ -240,6 +240,7 @@ const makeSafeDb = () => {
         {
           ...row,
           authType: row.type,
+          responseDisposition: "normal",
           oauthConnectorIssuer: "https://auth.example.com",
           oauthConnectorConfirmedEndpointOrigins: null,
           oauthReviewApprovedIssuer: null,
@@ -1077,6 +1078,7 @@ describe("MCP upstream connection lifecycle", () => {
 
 describe("loading a user's active MCP connections", () => {
   const storedRow = (overrides: Record<string, unknown>) => ({
+    responseDisposition: "normal",
     accessTokenEncrypted: Buffer.from("access"),
     accessTokenIv: Buffer.from("iv"),
     allowedTools: null,
@@ -1162,6 +1164,30 @@ describe("loading a user's active MCP connections", () => {
     ]);
     expect(listing.updates()).toBe(1);
     expect(hasStatusSet("needs_reauth")).toBe(true);
+  });
+
+  test("omits receipt-only connections from ordinary discovery", async () => {
+    const listing = makeListingSafeDb([
+      storedRow({ userConnectionId: "conn_1" }),
+      storedRow({
+        responseDisposition: "receipt-only",
+        userConnectionId: "conn_2",
+        description: "Private connector",
+        slug: "private",
+      }),
+    ]);
+    const loaded = await loadActiveMcpConnectionsForUser({
+      organizationId,
+      safeDb: listing.safeDb,
+      userId,
+    });
+    expect(loaded.map(({ userConnectionId }) => userConnectionId)).toEqual([
+      "conn_1",
+    ]);
+    expect(loaded.map(({ description }) => description)).toEqual([
+      "Registry connector",
+    ]);
+    expect(listing.updates()).toBe(0);
   });
 
   test("writes nothing when every row is usable", async () => {

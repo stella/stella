@@ -52,6 +52,12 @@ test("HTML-only, empty and unavailable clipboards never fall through", () => {
   expect(readChatPaste(null)).toEqual({ type: "ignore" });
 });
 
+test("holds a synthetic credential-shaped paste out of the composer draft", () => {
+  expect(
+    readChatPaste(clipboard({ "text/plain": `sk-${"a".repeat(32)}` })),
+  ).toEqual({ type: "credential" });
+});
+
 const passage = {
   caseNumber: "Case 123",
   court: "Court",

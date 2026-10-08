@@ -40,36 +40,53 @@ afterAll(() => {
   process.env["VITE_API_URL"] = previousApiUrl;
 });
 
-const withProviders = (children: ReactNode) => (
-  <ChatThreadTestRouter>
-    <QueryClientProvider client={new QueryClient()}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMattersContext
-          value={{
-            createDocumentMattersView: { type: "empty" },
-          }}
-        >
-          <ChatApprovalContext
+const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
+  const queryClient = new QueryClient();
+  if (savedSecretAvailable) {
+    queryClient.setQueryData(
+      ["chat-saved-secret", "test-thread", "sample"],
+      true,
+    );
+  }
+  return (
+    <ChatThreadTestRouter>
+      <QueryClientProvider client={queryClient}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatMattersContext
             value={{
-              activeOrganizationId: "test-active-organization",
-              alwaysApprovedTools: new Set(),
-              conversationApprovedTools: new Set(),
-              handleAllowInConversation: () => {},
-              handleAlwaysAllow: () => {},
-              handleApprove: () => {},
-              handleDeny: () => {},
+              createDocumentMattersView: { type: "empty" },
             }}
           >
-            <ChatEditorProvider>{children}</ChatEditorProvider>
-          </ChatApprovalContext>
-        </ChatMattersContext>
-      </IntlProvider>
-    </QueryClientProvider>
-  </ChatThreadTestRouter>
-);
+            <ChatApprovalContext
+              value={{
+                activeOrganizationId: "test-active-organization",
+                alwaysApprovedTools: new Set(),
+                conversationApprovedTools: new Set(),
+                handleAllowInConversation: () => {},
+                handleAlwaysAllow: () => {},
+                handleApprove: () => {},
+                handleDeny: () => {},
+                handleRequestSecret: async () => ({
+                  status: "declined",
+                  target: { type: "mcp-connector", connectorSlug: "test" },
+                }),
+                secretAvailabilityKey: "test-thread",
+                checkSavedSecretAvailability: async () => false,
+              }}
+            >
+              <ChatEditorProvider>{children}</ChatEditorProvider>
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ChatThreadTestRouter>
+  );
+};
 
-const renderWithProviders = (children: ReactNode) =>
-  renderToStaticMarkup(withProviders(children));
+const renderWithProviders = (
+  children: ReactNode,
+  savedSecretAvailable = false,
+) => renderToStaticMarkup(withProviders(children, savedSecretAvailable));
 
 const renderWithLoadedMarkdown = async (children: ReactNode) => {
   const stream = await renderToReadableStream(withProviders(children));
@@ -547,6 +564,54 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("<form");
     expect(html).toContain("Which matter?");
+  });
+
+  test("renders a private credential form in the user-owned turn", () => {
+    const secretInput = {
+      purpose: "Authenticate the sample connector",
+      kind: "token" as const,
+      target: { type: "mcp-connector" as const, connectorSlug: "sample" },
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Continue the lookup" }],
+            role: "user",
+          },
+          {
+            id: "message-secret",
+            parts: [
+              {
+                arguments: JSON.stringify(secretInput),
+                id: "tool-call-secret",
+                input: secretInput,
+                name: "request_secret",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+      true,
+    );
+
+    expect(html).toContain("Authenticate the sample connector");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("The assistant will not see this value.");
+    expect(html).toContain("Provide");
+    expect(html).toContain("Decline");
+    expect(html).toContain("Use saved credential");
   });
 
   // The same supersession withdraws a user-input card: the runtime has no

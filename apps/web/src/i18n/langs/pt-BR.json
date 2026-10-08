@@ -1172,6 +1172,12 @@
       "previewWaiting": "Aguardando conteúdo…",
       "savePendingReview": "Resolva as sugestões de IA pendentes antes de salvar o documento."
     },
+    "credentialPasteAction": "Usar um cartão privado",
+    "credentialPasteDescription": "Este texto parece ser uma credencial. Use um cartão privado para que não apareça no chat. Cole o valor novamente no cartão quando ele aparecer.",
+    "credentialPasteTitle": "Colagem de credencial interrompida",
+    "credentialSendAction": "Enviar mesmo assim",
+    "credentialSendDescription": "Envie somente se quiser compartilhar este valor na conversa.",
+    "credentialSendTitle": "Esta mensagem pode conter uma credencial",
     "deleteThread": "Excluir conversa",
     "editMode": {
       "autoDirect": "Automático · reescrever",
@@ -1308,6 +1314,23 @@
     "removeSuggestion": "(remover)",
     "renameThread": "Renomear conversa",
     "renameUnavailableEmptyThread": "Envie uma mensagem primeiro; depois será possível renomear a conversa.",
+    "requestSecret": {
+      "declined": "Recusada",
+      "description": "O assistente precisa dela para continuar",
+      "error": "Não foi possível enviar a credencial. Tente novamente.",
+      "kind": {
+        "token": "Token de acesso"
+      },
+      "private": "O assistente não verá este valor.",
+      "provideAction": "Fornecer",
+      "provided": "Fornecida",
+      "saveForFuture": "Salvar para futuras conversas",
+      "savedAvailabilityError": "Não foi possível verificar se há uma credencial salva.",
+      "target": "Destino: {target}",
+      "title": "Solicitar uma credencial privada",
+      "useSavedAction": "Usar credencial salva",
+      "valueLabel": "Credencial"
+    },
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
     "richContentLoading": "Carregando conteúdo interativo…",
@@ -1431,6 +1454,7 @@
       "read_story": "Lendo uma parte do documento",
       "remember": "Salvando na memória",
       "reply_comment": "Respondendo ao comentário",
+      "request_secret": "Solicitando uma credencial privada",
       "resolve_comment": "Resolvendo comentário",
       "review_folder_consistency": "Verificando a consistência da pasta",
       "run-stella-query": "Lendo dados do caso",
@@ -1464,6 +1488,7 @@
       "update-entity-fields": "Atualizando metadados",
       "update_reader_annotation": "Editar destaque ou comentário",
       "use-browser": "Usando seu navegador",
+      "use_connector_secret": "Usando a credencial do conector",
       "web_search": "Pesquisando na web"
     },
     "toolCall": {

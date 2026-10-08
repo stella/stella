@@ -1524,6 +1524,48 @@ export const chatTurnPolicies = () => [
   }),
 ];
 
+const chatSecretScopeCheck = sql`(
+  ${userCheck} AND ${organizationCheck} AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_secrets.thread_id
+      AND ct.organization_id = chat_secrets.organization_id
+      AND ct.user_id = chat_secrets.user_id
+  )
+)`;
+
+const chatSecretOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_secrets'::regclass)`;
+
+export const chatSecretPolicies = () => [
+  p.pgPolicy("chat_secrets_owner_access", {
+    for: "all",
+    to: "public",
+    using: chatSecretOwnerCheck,
+    withCheck: chatSecretOwnerCheck,
+  }),
+  p.pgPolicy("chat_secret_select", {
+    for: "select",
+    to: stella,
+    using: chatSecretScopeCheck,
+  }),
+  p.pgPolicy("chat_secret_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatSecretScopeCheck,
+  }),
+  p.pgPolicy("chat_secret_update", {
+    for: "update",
+    to: stella,
+    using: chatSecretScopeCheck,
+    withCheck: chatSecretScopeCheck,
+  }),
+  p.pgPolicy("chat_secret_delete", {
+    for: "delete",
+    to: stella,
+    using: chatSecretScopeCheck,
+  }),
+];
+
 export const chatThreadSearchDocumentPolicies = () => [
   p.pgPolicy("chat_thread_search_document_select", {
     for: "select",

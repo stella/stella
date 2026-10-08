@@ -505,6 +505,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:@tanstack/ai-mcp"],
   },
   {
+    path: "apps/api/src/lib/mcp-upstream/chat-secret.ts",
+    class: "third-party",
+    reason: "Calls a configured MCP connector with a scoped private reference.",
+    transports: ["module:@tanstack/ai-mcp"],
+  },
+  {
     path: "apps/api/src/lib/auth/demo-account-policy.ts",
     class: "vendor-sdk",
     reason: "Uses Better Auth middleware APIs for demo account policy.",
@@ -787,6 +793,10 @@ export type OutboundPermitGrantOwner = {
 
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/tools/secret-tools.ts",
+    reason: "Native chat tool boundary for a scoped connector request.",
+  },
   {
     path: "apps/api/src/handlers/catalogue/install.ts",
     reason: "Issues request authority for catalogue skill installation.",

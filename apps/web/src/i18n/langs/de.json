@@ -1172,6 +1172,12 @@
       "previewWaiting": "Warten auf Inhalt…",
       "savePendingReview": "Prüfen Sie die ausstehenden KI-Vorschläge, bevor Sie das Dokument speichern."
     },
+    "credentialPasteAction": "Private Karte verwenden",
+    "credentialPasteDescription": "Dieser Text sieht wie eine Zugangsinformation aus. Verwenden Sie eine private Karte, damit er nicht im Chat landet. Fügen Sie den Wert erneut in die Karte ein, sobald sie erscheint.",
+    "credentialPasteTitle": "Einfügen von Zugangsdaten angehalten",
+    "credentialSendAction": "Trotzdem senden",
+    "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
+    "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",
@@ -1308,6 +1314,23 @@
     "removeSuggestion": "(entfernen)",
     "renameThread": "Konversation umbenennen",
     "renameUnavailableEmptyThread": "Zuerst eine Nachricht senden, dann kann die Konversation umbenannt werden.",
+    "requestSecret": {
+      "declined": "Abgelehnt",
+      "description": "Der Assistent benötigt diese Angabe, um fortzufahren",
+      "error": "Die Zugangsdaten konnten nicht übermittelt werden. Versuchen Sie es erneut.",
+      "kind": {
+        "token": "Zugriffstoken"
+      },
+      "private": "Der Assistent sieht diesen Wert nicht.",
+      "provideAction": "Bereitstellen",
+      "provided": "Bereitgestellt",
+      "saveForFuture": "Für zukünftige Chats speichern",
+      "savedAvailabilityError": "Gespeicherte Zugangsdaten konnten nicht überprüft werden.",
+      "target": "Ziel: {target}",
+      "title": "Private Zugangsdaten anfordern",
+      "useSavedAction": "Gespeicherte Zugangsdaten verwenden",
+      "valueLabel": "Zugangsdaten"
+    },
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
@@ -1431,6 +1454,7 @@
       "read_story": "Dokumentteil lesen",
       "remember": "Erinnerung speichern",
       "reply_comment": "Auf Kommentar antworten",
+      "request_secret": "Private Zugangsdaten anfordern",
       "resolve_comment": "Kommentar erledigen",
       "review_folder_consistency": "Ordnerkonsistenz prüfen",
       "run-stella-query": "Akten-Daten lesen",
@@ -1464,6 +1488,7 @@
       "update-entity-fields": "Metadaten aktualisieren",
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
+      "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {

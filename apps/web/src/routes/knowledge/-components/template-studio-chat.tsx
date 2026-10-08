@@ -668,6 +668,9 @@ const TemplateStudioChatInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    checkSavedSecretAvailability,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
@@ -1329,6 +1332,9 @@ const TemplateStudioChatInner = ({
           handleAlwaysAllow,
           handleApprove: handleApproveForTemplate,
           handleDeny,
+          handleRequestSecret,
+          checkSavedSecretAvailability,
+          secretAvailabilityKey,
         }}
       >
         {threadVisible && (

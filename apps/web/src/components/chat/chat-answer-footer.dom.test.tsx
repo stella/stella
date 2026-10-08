@@ -63,6 +63,12 @@ const renderWithProviders = (children: ReactNode) => {
                 handleAlwaysAllow: () => {},
                 handleApprove: () => {},
                 handleDeny: () => {},
+                handleRequestSecret: async () => ({
+                  status: "declined",
+                  target: { type: "mcp-connector", connectorSlug: "test" },
+                }),
+                secretAvailabilityKey: "test-thread",
+                checkSavedSecretAvailability: async () => false,
               }}
             >
               <ChatEditorProvider>{children}</ChatEditorProvider>

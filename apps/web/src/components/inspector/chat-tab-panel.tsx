@@ -257,6 +257,9 @@ export const ChatTabPanel = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    checkSavedSecretAvailability,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
@@ -543,6 +546,9 @@ export const ChatTabPanel = ({
           handleAlwaysAllow,
           handleApprove,
           handleDeny,
+          handleRequestSecret,
+          checkSavedSecretAvailability,
+          secretAvailabilityKey,
         }}
       >
         <ChatTabPanelChrome
