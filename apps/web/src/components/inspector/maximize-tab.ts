@@ -11,6 +11,8 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
+import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type MaximizeContext = {
@@ -50,6 +52,10 @@ export const buildMaximizeTabAction = (
     return undefined;
   }
   const tabWorkspaceId = tab.workspaceId;
+  const threadRef: ChatThreadRef =
+    tabWorkspaceId === undefined
+      ? { scope: "global", threadId: tab.id }
+      : { scope: "workspace", threadId: tab.id, workspaceId: tabWorkspaceId };
   return () => {
     // The destination route shares this cache key with the inspector
     // tab — same scope, same threadId, same allowMissingThread — so
@@ -61,14 +67,7 @@ export const buildMaximizeTabAction = (
     const threadOptions = chatThreadOptions({
       activeOrganizationId,
       context: { allowMissingThread: true },
-      key:
-        tabWorkspaceId === undefined
-          ? { scope: "global", threadId: tab.id }
-          : {
-              scope: "workspace",
-              threadId: tab.id,
-              workspaceId: tabWorkspaceId,
-            },
+      key: threadRef,
     });
     queryClient.setQueryData(threadOptions.queryKey, (existing) =>
       existing
@@ -82,6 +81,9 @@ export const buildMaximizeTabAction = (
       }),
       "maximize-tab.invalidate-chat-thread-across-scopes",
     );
+    if (tab.activeSkill !== undefined) {
+      setThreadActiveSkill(threadRef, tab.activeSkill);
+    }
     useInspectorTabsStore.getState().closeTab(tab.id);
     if (tabWorkspaceId === undefined) {
       detached(
