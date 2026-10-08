@@ -72,8 +72,77 @@ type RestrictivePolicy = {
 
 /** The one restrictive policy allowed to admit rows: the entity feature fence. */
 const ENTITY_FEATURE_POLICY_NAME = "workspace_entity_feature";
-const ENTITY_FEATURE_FENCE =
-  /EXISTS \(\s*SELECT 1\s+FROM (?:public\.)?(?:entities e|entity_versions v|fields f|[a-z_]+ parent_row)\s|app\.enabled_features/u;
+
+const depthChange = (char: string | undefined): number => {
+  if (char === "(") {
+    return 1;
+  }
+  return char === ")" ? -1 : 0;
+};
+
+/** Drops parentheses that wrap the whole expression. */
+const unwrap = (expr: string): string => {
+  let current = expr.trim();
+  while (current.startsWith("(")) {
+    let depth = 0;
+    let closesAtEnd = false;
+    for (const [index, char] of [...current].entries()) {
+      depth += depthChange(char);
+      if (depth === 0) {
+        closesAtEnd = index === current.length - 1;
+        break;
+      }
+    }
+    if (!closesAtEnd) {
+      return current;
+    }
+    current = current.slice(1, -1).trim();
+  }
+  return current;
+};
+
+/** Splits on a boolean operator outside any parentheses. */
+const splitTopLevel = (expr: string, operator: "AND" | "OR"): string[] => {
+  const parts: string[] = [];
+  const separator = ` ${operator} `;
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < expr.length; index += 1) {
+    const char = expr[index];
+    depth += depthChange(char);
+    if (depth === 0 && expr.startsWith(separator, index)) {
+      parts.push(unwrap(expr.slice(start, index)));
+      start = index + separator.length;
+    }
+  }
+  parts.push(unwrap(expr.slice(start)));
+  return parts;
+};
+
+/** A nullable reference admits the row only while its owner is visible. */
+const OWNER_VISIBLE_CONJUNCT =
+  /^CASE WHEN \(\w+ IS NULL\) THEN true ELSE \(EXISTS \( SELECT 1\s+FROM (?:entities e|entity_versions v|fields f|\w+ parent_row)\s+WHERE \((?:e|v|f|parent_row)\.id = \w+\.\w+\)\)\) END$/u;
+
+/** A list item is visible when it is a task or the caller holds the lists grant. */
+const isListItemGate = (conjunct: string): boolean => {
+  const [isNull, isTask, granted, ...rest] = splitTopLevel(conjunct, "OR");
+  return (
+    rest.length === 0 &&
+    isNull === "list_item_type IS NULL" &&
+    isTask === "list_item_type = 'task'::text" &&
+    granted !== undefined &&
+    /^\(?COALESCE\(.*current_setting\('app\.enabled_features'::text, true\).*\? '[a-z-]+'::text$/su.test(
+      granted,
+    )
+  );
+};
+
+/** Every conjunct must be a recognised fence; one admitting all rows fails. */
+const isEntityFeatureFence = (expr: string): boolean =>
+  splitTopLevel(unwrap(expr), "AND").every(
+    (conjunct) =>
+      OWNER_VISIBLE_CONJUNCT.test(conjunct) || isListItemGate(conjunct),
+  );
 
 /** Every other restrictive policy is a deny; widening one must fail coverage. */
 const restrictivePolicyViolation = (
@@ -87,7 +156,7 @@ const restrictivePolicyViolation = (
   if (policy.using_expr !== policy.check_expr) {
     return `${name} must fence reads and writes alike`;
   }
-  return expr !== null && ENTITY_FEATURE_FENCE.test(expr)
+  return expr !== null && isEntityFeatureFence(expr)
     ? undefined
     : `${name} must fence through the entity owner: ${expr}`;
 };
@@ -150,6 +219,40 @@ describe("policy coverage", () => {
         check_expr: "true",
       }),
     ).toBeDefined();
+
+    const both = `((${fence.using_expr}) AND (${parentFence}))`;
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        using_expr: both,
+        check_expr: both,
+      }),
+    ).toBeUndefined();
+    const listGate =
+      "((list_item_type IS NULL) OR (list_item_type = 'task'::text) OR ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))";
+    expect(
+      restrictivePolicyViolation({
+        ...fence,
+        table_name: "entities",
+        using_expr: listGate,
+        check_expr: listGate,
+      }),
+    ).toBeUndefined();
+    // Each conjunct must fence on its own: an OR with true admits every row.
+    for (const widened of [
+      "(true OR (current_setting('app.enabled_features'::text, true))::jsonb ? 'legal-lists'::text)",
+      `(true OR ${fence.using_expr})`,
+      `((${fence.using_expr}) AND true)`,
+      listGate.replace("(list_item_type IS NULL)", "true"),
+    ]) {
+      expect(
+        restrictivePolicyViolation({
+          ...fence,
+          using_expr: widened,
+          check_expr: widened,
+        }),
+      ).toBeDefined();
+    }
   });
 
   // Tables exempt from RLS
