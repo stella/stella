@@ -245,6 +245,7 @@ describe("finalizing a PDF signature", () => {
       await definition.handler(
         createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
           recordAuditEvent: auditRecorderDouble(),
+          createAuditRecorder: () => auditRecorderDouble(),
           body: { sessionToken, signature },
           params: { sessionId },
         }),
@@ -292,6 +293,7 @@ describe("finalizing a PDF signature", () => {
     const result = await definition.handler(
       createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
         recordAuditEvent: auditRecorderDouble(),
+        createAuditRecorder: () => auditRecorderDouble(),
         body: {
           sessionToken,
           signature: Buffer.alloc(256, 7).toString("base64"),

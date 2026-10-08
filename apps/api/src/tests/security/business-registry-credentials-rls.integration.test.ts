@@ -116,6 +116,7 @@ describe("business registry credential organization isolation", () => {
           Parameters<typeof readBusinessRegistryCredentials.handler>[0]
         >({
           recordAuditEvent: auditRecorderDouble(),
+          createAuditRecorder: () => auditRecorderDouble(),
           scopedDb,
           safeDb: toSafeDbMock(scopedDb),
           session: { activeOrganizationId: organizationId },

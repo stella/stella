@@ -109,6 +109,7 @@ if (!databaseUrl || !runPostgres) {
         );
         const baseContext = {
           recordAuditEvent: auditRecorderDouble(),
+          createAuditRecorder: () => auditRecorderDouble(),
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },
