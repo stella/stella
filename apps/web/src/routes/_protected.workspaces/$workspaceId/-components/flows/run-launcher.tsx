@@ -19,6 +19,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
@@ -30,6 +31,7 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FLOW_PICKER_LIMIT, flowsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
@@ -58,9 +60,14 @@ export const RunLauncher = ({
   const [entityFilter, setEntityFilter] = useState("");
   const [starting, setStarting] = useState(false);
 
-  const { data: flowsData } = useQuery(
+  const flowsDataQuery = useQuery(
     flowsOptions(organizationId, FLOW_PICKER_LIMIT),
   );
+  const flowsDataView = useQueryView(flowsDataQuery, {
+    isEmpty: (data) => "items" in data && data.items.length === 0,
+  });
+  const flowsData =
+    flowsDataView.type === "items" ? flowsDataView.items : undefined;
   const {
     data: entities,
     isError: entitiesFailed,
@@ -127,9 +134,14 @@ export const RunLauncher = ({
     onStarted(response.data.runId);
   };
 
+  if (flowsDataView.type === "pending" || flowsDataView.type === "error") {
+    return <QueryViewFeedback view={flowsDataView} />;
+  }
+
   if (enabledFlows.length === 0) {
     return (
       <div className="rounded-lg border p-4">
+        <QueryViewFeedback view={flowsDataView} />
         <p className="text-muted-foreground text-sm">
           {t("flows.runs.noEnabledFlows", {
             sectionName: t("navigation.knowledge"),
@@ -141,6 +153,7 @@ export const RunLauncher = ({
 
   return (
     <div className="grid gap-4 rounded-lg border p-4">
+      <QueryViewFeedback view={flowsDataView} />
       <div className="grid gap-1.5">
         <Label htmlFor="flow-run-definition">
           {t("flows.runs.selectFlow")}

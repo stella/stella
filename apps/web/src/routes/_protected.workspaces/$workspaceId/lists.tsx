@@ -31,6 +31,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { FieldValue } from "@/components/workspaces/field-value";
 import {
@@ -58,6 +59,7 @@ import {
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   legalListActivityOptions,
   legalListItemsOptions,
@@ -245,17 +247,30 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const formatter = useFormatter();
   const queryClient = useQueryClient();
   const list = useQuery(legalListOptions(workspaceId, listId));
+  const listView = useQueryView(list);
+  const listData = listView.type === "items" ? listView.items : undefined;
   const items = useInfiniteQuery(legalListItemsOptions(workspaceId, listId));
+  const itemsView = useQueryView(items);
+  const itemsData = itemsView.type === "items" ? itemsView.items : undefined;
   const properties = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = useQueryView(properties, { isEmpty: () => false });
+  const propertiesData =
+    propertiesView.type === "items" ? propertiesView.items : undefined;
   const generations = useQuery(
     legalListGenerationsOptions(workspaceId, listId),
   );
-  const reviewRun = generations.data?.items.find(
+  const generationsView = useQueryView(generations);
+  const generationsData =
+    generationsView.type === "items" ? generationsView.items : undefined;
+  const reviewRun = generationsData?.items.find(
     (run) => run.status === "review" || run.status === "running",
   );
   const candidates = useQuery(
     legalListCandidatesOptions(workspaceId, listId, reviewRun?.id ?? ""),
   );
+  const candidatesView = useQueryView(candidates);
+  const candidatesData =
+    candidatesView.type === "items" ? candidatesView.items : undefined;
   const [name, setName] = useState("");
   const [itemType, setItemType] = useState<ListItemType>("task");
   const [sectionName, setSectionName] = useState("");
@@ -408,19 +423,29 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   if (list.isPending || items.isPending) {
     return <ListSkeleton />;
   }
-  if (!list.data || !items.data) {
-    return null;
+  if (!listData || !itemsData) {
+    return (
+      <>
+        <QueryViewFeedback view={listView} />
+        <QueryViewFeedback view={itemsView} />
+      </>
+    );
   }
-  const listItems = items.data.pages.flatMap((page) => page.items);
+  const listItems = itemsData.pages.flatMap((page) => page.items);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <QueryViewFeedback view={listView} />
+      <QueryViewFeedback view={itemsView} />
+      <QueryViewFeedback view={propertiesView} />
+      <QueryViewFeedback view={generationsView} />
+      {reviewRun && <QueryViewFeedback view={candidatesView} />}
       <header className="flex items-start justify-between gap-4 border-b px-6 py-4">
         <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold">{list.data.name}</h2>
-          {list.data.description && (
+          <h2 className="truncate text-lg font-semibold">{listData.name}</h2>
+          {listData.description && (
             <p className="text-muted-foreground mt-1 text-sm">
-              {list.data.description}
+              {listData.description}
             </p>
           )}
         </div>
@@ -448,7 +473,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             <PlusIcon />
             {t("common.add")}
           </Button>
-          {properties.data && (
+          {propertiesData && (
             <>
               <Select
                 onValueChange={(value) =>
@@ -459,7 +484,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                 <SelectTrigger className="w-44">
                   <SelectValue>
                     {(value) =>
-                      properties.data.find((property) => property.id === value)
+                      propertiesData.find((property) => property.id === value)
                         ?.name ?? t("common.add")
                     }
                   </SelectValue>
@@ -468,10 +493,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                   <SelectItem value={NO_COLUMN_VALUE}>
                     {t("common.empty")}
                   </SelectItem>
-                  {properties.data
+                  {propertiesData
                     .filter(
                       (property) =>
-                        !list.data.columns.some(
+                        !listData.columns.some(
                           (column) => column.propertyId === property.id,
                         ),
                     )
@@ -495,7 +520,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             </>
           )}
           <span className="text-muted-foreground rounded-md border px-2 py-1 text-xs">
-            {formatter.number(list.data.itemCount)}
+            {formatter.number(listData.itemCount)}
           </span>
         </form>
       </header>
@@ -540,7 +565,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             ))}
           </SelectPopup>
         </Select>
-        {list.data.sections.length > 0 && (
+        {listData.sections.length > 0 && (
           <Select
             onValueChange={(value) =>
               setSelectedSectionId(value ?? NO_SECTION_VALUE)
@@ -550,7 +575,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             <SelectTrigger className="w-48">
               <SelectValue>
                 {(value) =>
-                  list.data.sections.find((section) => section.id === value)
+                  listData.sections.find((section) => section.id === value)
                     ?.name ?? t("common.category")
                 }
               </SelectValue>
@@ -559,7 +584,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
               <SelectItem value={NO_SECTION_VALUE}>
                 {t("common.empty")}
               </SelectItem>
-              {list.data.sections.map((section) => (
+              {listData.sections.map((section) => (
                 <SelectItem key={section.id} value={section.id}>
                   {section.name}
                 </SelectItem>
@@ -572,8 +597,8 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           {t("common.add")}
         </Button>
       </form>
-      {candidates.data &&
-        candidates.data.items.some(
+      {candidatesData &&
+        candidatesData.items.some(
           (candidate) =>
             candidate.status === "pending" || candidate.status === "accepting",
         ) && (
@@ -582,7 +607,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
               {reviewRun?.instruction}
             </p>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {candidates.data.items
+              {candidatesData.items
                 .filter(
                   (candidate) =>
                     candidate.status === "pending" ||
@@ -661,7 +686,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
               <th className="px-4 py-2 text-start font-medium">
                 {t("tasks.dueDate")}
               </th>
-              {list.data.columns.map((column) => (
+              {listData.columns.map((column) => (
                 <th
                   className="px-4 py-2 text-start font-medium"
                   key={column.id}
@@ -703,7 +728,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                   {item.description ?? ""}
                 </td>
                 <td className="text-muted-foreground px-4 py-3">
-                  {list.data.sections.find(
+                  {listData.sections.find(
                     (section) => section.id === item.sectionId,
                   )?.name ?? ""}
                 </td>
@@ -730,8 +755,8 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                       )
                     : ""}
                 </td>
-                {list.data.columns.map((column) => {
-                  const property = properties.data?.find(
+                {listData.columns.map((column) => {
+                  const property = propertiesData?.find(
                     (candidate) => candidate.id === column.propertyId,
                   );
                   const field = item.customFields.find(
@@ -825,15 +850,23 @@ const ItemSourcesPanel = ({
   const t = useTranslations();
   const formatter = useFormatter();
   const openSourceDocument = useOpenSourceDocument(workspaceId);
-  const { data, isPending } = useQuery(
+  const dataQuery = useQuery(
     legalListSourcesOptions(workspaceId, listId, itemEntityId),
   );
+  const { isPending } = dataQuery;
+  const dataView = useQueryView(dataQuery);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const activity = useQuery(
     legalListActivityOptions(workspaceId, listId, itemEntityId),
   );
+  const activityView = useQueryView(activity);
+  const activityData =
+    activityView.type === "items" ? activityView.items : undefined;
 
   return (
     <aside className="bg-background max-h-72 shrink-0 overflow-y-auto border-t p-4">
+      {dataView.type !== "pending" && <QueryViewFeedback view={dataView} />}
+      <QueryViewFeedback view={activityView} />
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-medium">{t("common.document")}</h3>
         <Button
@@ -891,7 +924,7 @@ const ItemSourcesPanel = ({
           <section>
             <h4 className="mb-2 text-sm font-medium">{t("common.history")}</h4>
             <ol className="grid gap-2">
-              {activity.data?.items.map((event) => (
+              {activityData?.items.map((event) => (
                 <li className="rounded-lg border p-3 text-xs" key={event.id}>
                   <p>
                     <ActivityLabel
@@ -907,7 +940,7 @@ const ItemSourcesPanel = ({
                   </p>
                 </li>
               ))}
-              {activity.data?.items.length === 0 && (
+              {activityData?.items.length === 0 && (
                 <li className="text-muted-foreground text-sm">
                   {t("common.empty")}
                 </li>

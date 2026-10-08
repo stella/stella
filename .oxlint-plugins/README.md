@@ -138,7 +138,7 @@ runtime validation, or integration tests.
 
 ### React, routing, query state, and performance
 
-- [`query-data-requires-state`](./query-data-requires-state.ts) (`query-data-requires-state`): requires query data consumers to inspect response state through the owned query view or an explicit state read; existing bindings are held to a shrinking baseline.
+- [`query-data-requires-state`](./query-data-requires-state.ts) (`query-data-requires-state`): requires query data consumers to inspect response state through the owned query view or an explicit state read, with no grandfathered bindings. Rendered state uses `useQueryView` and retry feedback; optional reads use `useQueryViewError` to report failures while retaining cached content.
 - [`no-beforeload-redirect`](./no-beforeload-redirect.ts) (`no-beforeload-redirect`): rejects unconditional redirects from `beforeLoad` or `loader`; redirect-only routes must mount a navigation component so abandoned pending trees cannot leak.
 - [`no-centered-scroll-column`](./no-centered-scroll-column.ts) (`no-centered-scroll-column`): keeps the scrollbar on the full content pane instead of a centered, width-capped inner column.
 - [`no-detached-void`](./no-detached-void.ts) (`no-detached-void`): prevents `void promise` from hiding rejection ownership; use `await`, return the promise, or the monitored `detached()` helper.
