@@ -995,6 +995,7 @@ test("a stalled read that ignores cancellation is never repeated and the edition
   const stalling: SanctionsSource = "us-sdn";
   const started = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
+  const landed = Promise.withResolvers<undefined>();
   const signals: AbortSignal[] = [];
   const reads = { started: 0, outstanding: 0, peak: 0 };
   const publicScreen = createPublicSanctionsScreening({
@@ -1019,6 +1020,7 @@ test("a stalled read that ignores cancellation is never repeated and the edition
         signal: undefined,
       });
       reads.outstanding -= 1;
+      landed.resolve(undefined);
       return entries;
     },
   });
@@ -1065,8 +1067,12 @@ test("a stalled read that ignores cancellation is never repeated and the edition
         source: stalling,
       })),
     );
-    // When the read finally lands, the next attempt uses it.
+    // The read lands during the backoff; the next attempt takes its entries.
     release.resolve(undefined);
+    await landed.promise;
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
     clock.advance(SANCTIONS_WARM_RETRY_MS.initial * 4);
     await ask();
     await publicScreen.warmupSettled();

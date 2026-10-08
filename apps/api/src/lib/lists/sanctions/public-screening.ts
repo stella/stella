@@ -113,26 +113,29 @@ const createEditionReads = ({
       settled: Result.tryPromise(
         async () =>
           await loadEntries({ db, edition, signal: controller.signal }),
-      ).finally(() => {
-        if (reads.get(source) === read) {
-          reads.delete(source);
-        }
-      }),
+      ),
     };
     reads.set(source, read);
     return read;
   };
 
-  /** One stall window: the read's result, or "stalled" when it outlasts it. */
-  const awaitRead = async (read: EditionRead) => {
+  /**
+   * One stall window: the read's result, or "stalled" when it outlasts it. A
+   * read that lands after its window is kept until a later attempt takes it.
+   */
+  const awaitRead = async (source: SanctionsSource, read: EditionRead) => {
     const stalled = Promise.withResolvers<"stalled">();
     const cancelStall = clock.schedule(() => {
       read.controller.abort();
       stalled.resolve("stalled");
     }, SANCTIONS_WARM_READ_STALL_MS);
-    return await Promise.race([read.settled, stalled.promise]).finally(
+    const outcome = await Promise.race([read.settled, stalled.promise]).finally(
       cancelStall,
     );
+    if (outcome !== "stalled" && reads.get(source) === read) {
+      reads.delete(source);
+    }
+    return outcome;
   };
 
   return async (
@@ -145,12 +148,13 @@ const createEditionReads = ({
     if (
       previous !== undefined &&
       previous.editionId !== edition.id &&
-      (await awaitRead(previous)) === "stalled"
+      (await awaitRead(source, previous)) === "stalled"
     ) {
       return "stalled";
     }
     const current = reads.get(source);
     return await awaitRead(
+      source,
       current?.editionId === edition.id
         ? current
         : startRead(db, source, edition),
