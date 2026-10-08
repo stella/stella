@@ -82,12 +82,17 @@ export const REVIEW_RESET_MANUAL_TABLES = ["user_files"] as const;
 
 const removedCount = (rows: unknown[]): number => {
   const first = rows.at(0);
-  return typeof first === "object" &&
-    first !== null &&
-    "n" in first &&
-    typeof first.n === "number"
-    ? first.n
-    : 0;
+  if (
+    typeof first !== "object" ||
+    first === null ||
+    !("n" in first) ||
+    typeof first.n !== "number" ||
+    !Number.isSafeInteger(first.n) ||
+    first.n < 0
+  ) {
+    panic("Reset sweep must return its non-negative deletion count");
+  }
+  return first.n;
 };
 
 /**
