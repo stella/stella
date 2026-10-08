@@ -11,6 +11,7 @@ import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
@@ -25,6 +26,7 @@ import { appToday } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
@@ -219,7 +221,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     });
   })();
 
-  const { data: calendarTasks = [] } = useQuery({
+  const calendarTasksQuery = useQuery({
     ...calendarTasksOptions({
       workspaceId,
       filters,
@@ -229,8 +231,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       datePropertyIds: visibleDatePropertyIds,
       endDatePropertyId,
     }),
-    throwOnError: true,
   });
+  const calendarTasksView = useQueryView(calendarTasksQuery);
+  const calendarTasks =
+    calendarTasksView.type === "items" ? calendarTasksView.items : [];
 
   const hasInvalidYearTaskStatus =
     mode === "year" && calendarTasks.some((task) => !isTaskStatus(task.status));
@@ -545,6 +549,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     );
   }
 
+  if (
+    calendarTasksView.type === "pending" ||
+    calendarTasksView.type === "error"
+  ) {
+    return <QueryViewFeedback view={calendarTasksView} />;
+  }
+
   const monthLabel = formatMonthYearLabel(locale, year, month);
 
   const headerLabel = (() => {
@@ -564,6 +575,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
+      <QueryViewFeedback view={calendarTasksView} />
       <CalendarHeader
         headerLabel={headerLabel}
         month={month}

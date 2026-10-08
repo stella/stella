@@ -15,6 +15,7 @@ import {
 } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -797,7 +798,12 @@ export const runCanaryProbe = async ({
       ) {
         return { attempts: attempt, error, signal, status: "failed" };
       }
-      await wait(retryDelayMs * CANARY_PROBE_RETRY_BACKOFF ** (attempt - 1));
+      await wait(
+        backoffDelay(attempt - 1, {
+          baseMs: retryDelayMs,
+          factor: CANARY_PROBE_RETRY_BACKOFF,
+        }),
+      );
     }
   }
 

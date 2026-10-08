@@ -18,6 +18,7 @@
 import { Result } from "better-result";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -63,6 +64,8 @@ if (JURISDICTIONS.length === 0) {
   process.exit(2);
 }
 
+const CITATION_PROBE_CONCURRENCY = 8;
+
 let s3Attempts = 0;
 let s3Failures = 0;
 
@@ -72,8 +75,15 @@ const settleInBatches = async <T>(
 ): Promise<T[]> => {
   const results: T[] = [];
   let failures = 0;
-  const settleFrom = async (offset: number): Promise<void> => {
-    const batch = thunks.slice(offset, offset + 8);
+  const itemBatches = chunkItems(thunks, CITATION_PROBE_CONCURRENCY)[
+    Symbol.iterator
+  ]();
+  const settleFrom = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
+      return;
+    }
+    const batch = nextBatch.value;
     if (batch.length === 0) {
       return;
     }
@@ -88,10 +98,10 @@ const settleInBatches = async <T>(
         failures += 1;
       }
     }
-    return settleFrom(offset + 8);
+    return settleFrom();
   };
 
-  await settleFrom(0);
+  await settleFrom();
   if (failures > 0) {
     console.error(
       `citation-probe: ${failures} S3 operations failed; continuing`,

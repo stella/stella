@@ -91,7 +91,7 @@ jobs:
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
-      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
+      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
@@ -2918,6 +2918,14 @@ jobs:
         # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
         run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
+      - name: Offline check transport policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/offline-check-policy.test.ts
+          bun scripts/offline-check-policy.ts
+          bun --filter @stll/ai-catalog gen:rates --check
+          bun --filter @stll/ai-catalog gen:capabilities --check
+
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
         # These fetch models.dev and OpenRouter and byte-compare the
@@ -3324,6 +3332,10 @@ jobs:
       - name: Test projection-totality classification
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/check-projection-totality.test.ts
+
+      - name: Test aggregate inventories
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
 
       - name: Office fixture metadata
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4242,6 +4254,11 @@ jobs:
 
       - name: Projection totality
         run: bun run check:projection-totality
+
+      - name: Aggregate ownership
+        run: |
+          bun run check:aggregate-locks
+          bun run check:aggregate-mutations
 
       - name: Split-button census
         run: |

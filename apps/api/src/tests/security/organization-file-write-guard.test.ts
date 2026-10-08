@@ -602,8 +602,8 @@ describe("durable organization file writes", () => {
         copy: async () => await copyObject(file.source, file.target),
       });
       const prepared = [];
-      for (let start = 0; start < files.length; start += 4) {
-        prepared.push(...(await Promise.all(files.slice(start, start + 4).map(prepareFile))));
+      for (const batch of chunk(files, 4)) {
+        prepared.push(...(await Promise.all(batch.map(prepareFile))));
       }
       const inputs = Result.all(prepared);
       await copyOrganizationFiles({ inputs: inputs.value });

@@ -14,6 +14,8 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
@@ -138,16 +140,6 @@ const postFolioCollabJson = async ({
   }
   const data: unknown = await response.json();
   return data;
-};
-
-const waitForAbortableDelay = async (signal: AbortSignal, delayMs: number) => {
-  const retrySignal = AbortSignal.any([signal, AbortSignal.timeout(delayMs)]);
-  if (retrySignal.aborted) {
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    retrySignal.addEventListener("abort", () => resolve(), { once: true });
-  });
 };
 
 class CollaborationFlushError extends TaggedError("CollaborationFlushError")<{
@@ -381,14 +373,19 @@ export const useFolioCollaborationRoom = ({
             let reportedFailure = false;
             let retryDelayMs = GENERATION_REJOIN_RETRY_DELAY_MS;
             const waitForRetry = async () => {
-              await waitForAbortableDelay(
-                generationRejoinAbortController.signal,
-                retryDelayMs,
-              );
-              retryDelayMs = Math.min(
-                retryDelayMs * 2,
-                GENERATION_REJOIN_MAX_RETRY_DELAY_MS,
-              );
+              await sleep(retryDelayMs, {
+                signal: generationRejoinAbortController.signal,
+              }).catch((error: unknown) => {
+                const { signal } = generationRejoinAbortController;
+                if (signal.aborted && Object.is(error, signal.reason)) {
+                  return;
+                }
+                throw error;
+              });
+              retryDelayMs = backoffDelay(1, {
+                baseMs: retryDelayMs,
+                maxMs: GENERATION_REJOIN_MAX_RETRY_DELAY_MS,
+              });
             };
             const runAttempt = () => {
               const attempt = (async () => {

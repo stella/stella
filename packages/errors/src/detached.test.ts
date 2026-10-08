@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { createDetached } from "./detached";
 
 const settle = async () => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await sleep(0);
 };
 
 test("hands a rejection to the sink with the call site's label", async () => {

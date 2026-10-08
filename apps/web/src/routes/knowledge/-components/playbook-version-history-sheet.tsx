@@ -24,6 +24,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
@@ -37,6 +38,7 @@ import {
 } from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 
 type PlaybookVersionHistorySheetProps = {
   onOpenChange: (open: boolean) => void;
@@ -67,9 +69,14 @@ const PlaybookVersionHistorySheetBody = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery(
+  const dataQuery = useQuery(
     playbookVersionsOptions(organizationId, playbookId),
   );
+  const { isLoading } = dataQuery;
+  const dataView = useQueryView(dataQuery, {
+    isEmpty: (data) => data.items.length === 0,
+  });
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const versions = data ? data.items : [];
 
   const restore = useMutation({
@@ -112,13 +119,14 @@ const PlaybookVersionHistorySheetBody = ({
         </SheetTitle>
       </SheetHeader>
       <SheetPanel>
+        {dataView.type !== "pending" && <QueryViewFeedback view={dataView} />}
         <div className="flex flex-col gap-2">
           {isLoading &&
             SKELETON_ROW_KEYS.map((key) => (
               <Skeleton className="h-14 w-full rounded-lg" key={key} />
             ))}
 
-          {!isLoading && versions.length === 0 && (
+          {!isLoading && dataView.type !== "error" && versions.length === 0 && (
             <p className="text-muted-foreground py-4 text-center text-sm">
               {t("common.noVersions")}
             </p>

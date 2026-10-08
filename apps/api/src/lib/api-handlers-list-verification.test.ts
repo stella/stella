@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -219,9 +220,18 @@ test.each(["active", "daily"] as const)(
       grants: env.API_FEATURE_ACCESS_GRANTS,
       deployment: env.FEATURE_LEGAL_LISTS,
       enforcement: env.USAGE_ENFORCEMENT_ENABLED,
+      provider: env.AI_PROVIDER,
+      providerKey: env.OPENROUTER_API_KEY,
+      personalKey: env.REQUIRE_PERSONAL_AI_KEY,
     };
     env.FEATURE_LEGAL_LISTS = true;
     env.USAGE_ENFORCEMENT_ENABLED = false;
+    // The verification model role must be available, so the cap check is
+    // what refuses; configure the instance provider here instead of relying
+    // on whatever another suite in the same process left behind.
+    env.AI_PROVIDER = "openrouter";
+    env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
+    env.REQUIRE_PERSONAL_AI_KEY = false;
     env.API_FEATURE_ACCESS_GRANTS = {
       "list-verification": [
         {
@@ -325,6 +335,9 @@ test.each(["active", "daily"] as const)(
       env.API_FEATURE_ACCESS_GRANTS = previous.grants;
       env.FEATURE_LEGAL_LISTS = previous.deployment;
       env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
+      env.AI_PROVIDER = previous.provider;
+      env.OPENROUTER_API_KEY = previous.providerKey;
+      env.REQUIRE_PERSONAL_AI_KEY = previous.personalKey;
     }
   },
 );
