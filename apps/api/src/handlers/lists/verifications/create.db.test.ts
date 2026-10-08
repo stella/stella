@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import {
   afterAll,
   beforeAll,

@@ -343,3 +343,39 @@ test("malformed or stale selections widen, while none and valid selected plans s
     ),
   ).toEqual({ mode: "selected", files: ["src/db.test.ts"] });
 });
+
+test("verification suites participate in general Postgres discovery and changed-file selection", async () => {
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  const discovered = await discoverGatedTestFiles({ apiRoot, ...runner });
+  const verificationFiles = listApiTestPaths(apiRoot).filter((file) =>
+    /^(?:src\/(?:lib\/lists\/verification\/|handlers\/lists\/verifications\/).*\.db\.test\.ts|src\/lib\/views\/avt-layout\.db\.test\.ts|src\/db\/list-verification-rls\.db\.test\.ts|src\/lib\/api-handlers-list-verification\.test\.ts)$/u.test(
+      file,
+    ),
+  );
+  expect(verificationFiles.length).toBeGreaterThan(0);
+  for (const file of verificationFiles) {
+    expect(discovered, file).toContain(file);
+    const selection = await planPostgresTests({
+      event: "pull_request",
+      scopeUnknown: false,
+      changed: [`apps/api/${file}`],
+    });
+    expect(selection.mode, file).not.toBe("none");
+    if (selection.mode === "selected") {
+      expect(selection.files, file).toContain(file);
+    }
+  }
+  const sourceReview = await planPostgresTests({
+    event: "pull_request",
+    scopeUnknown: false,
+    changed: [
+      "apps/api/src/handlers/lists/items/sources/verification/update.ts",
+    ],
+  });
+  expect(sourceReview.mode).not.toBe("none");
+  if (sourceReview.mode === "selected") {
+    expect(sourceReview.files).toContain(
+      "src/lib/api-handlers-list-verification.test.ts",
+    );
+  }
+}, 30_000);

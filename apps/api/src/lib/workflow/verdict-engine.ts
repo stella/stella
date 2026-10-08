@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -764,15 +765,10 @@ export const computeVerdictBatch = async ({
 
   // Drain the position-match compares in bounded chunks so the per-entity LLM
   // fan-out stays capped (see POSITION_MATCH_CONCURRENCY).
-  for (
-    let index = 0;
-    index < positionMatchTasks.length;
-    index += POSITION_MATCH_CONCURRENCY
-  ) {
-    const chunk = positionMatchTasks.slice(
-      index,
-      index + POSITION_MATCH_CONCURRENCY,
-    );
+  for (const chunk of chunkItems(
+    positionMatchTasks,
+    POSITION_MATCH_CONCURRENCY,
+  )) {
     await Promise.all(
       chunk.map(async ({ property, askValue }) => {
         const graded = await gradeTierMatch({

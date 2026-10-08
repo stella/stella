@@ -49,6 +49,7 @@ import { organizationListOptions } from "@/lib/organization/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { pageTitle } from "@/lib/page-title";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { OAuthClientDetails } from "@/routes/consent/-components/oauth-client-details";
 
@@ -110,14 +111,24 @@ function ConsentPage() {
   });
   const isPending = submission.status === "pending";
   const hasError = submission.status === "error";
-  const { data: organizations } = useQuery(organizationListOptions(userId));
-  const { data: currentUserRole } = useQuery({
-    ...roleOptions,
-    enabled: activeOrganizationId !== null,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const organizationsView = useQueryView(
+    useQuery(organizationListOptions(userId)),
+  );
+  useQueryViewError(organizationsView);
+  const organizations =
+    organizationsView.type === "items" ? organizationsView.items : undefined;
+  const roleView = useQueryView(
+    useQuery({
+      ...roleOptions,
+      enabled: activeOrganizationId !== null,
+      staleTime: Number.POSITIVE_INFINITY,
+    }),
+  );
+  useQueryViewError(roleView);
   const canManageOrganization =
-    hasOrganizationManagementAccess(currentUserRole);
+    roleView.type === "items" &&
+    roleView.refetchError === undefined &&
+    hasOrganizationManagementAccess(roleView.items);
 
   const clientQuery = useQuery({
     enabled: clientId !== null,
@@ -140,16 +151,19 @@ function ConsentPage() {
     },
   });
 
-  const jurisdictionsQuery = useQuery({
-    ...optionalOrganizationSettingsOptions({
-      organizationId: activeOrganizationId,
-      userId,
+  const jurisdictionsView = useQueryView(
+    useQuery({
+      ...optionalOrganizationSettingsOptions({
+        organizationId: activeOrganizationId,
+        userId,
+      }),
+      enabled: activeOrganizationId !== null && canManageOrganization,
+      select: (settings) => settings.practiceJurisdictions,
     }),
-    enabled: activeOrganizationId !== null && canManageOrganization,
-    select: (settings) => settings.practiceJurisdictions,
-  });
+  );
+  useQueryViewError(jurisdictionsView);
   const showJurisdictionsNotice =
-    canManageOrganization && jurisdictionsQuery.data?.length === 0;
+    canManageOrganization && jurisdictionsView.type === "empty";
 
   const scopes = scope ? scope.split(" ").filter(Boolean) : [];
   const clientName =
@@ -348,7 +362,7 @@ function ConsentPage() {
             </Button>
             <Button
               className="min-h-11 w-full"
-              disabled={isPending || !clientQuery.data}
+              disabled={isPending || clientQuery.isError || !clientQuery.data}
               loading={isPending}
               onClick={() => {
                 detached(handleConsent(true), "consent.allow");

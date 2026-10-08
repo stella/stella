@@ -9,8 +9,12 @@ import type {
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
+
+const TRANSITION_INSERT_BATCH_SIZE = 128;
 
 const returnedTransitionRows = (result: unknown) =>
   executedRows(result).map((row) => {
@@ -680,12 +684,12 @@ export const transitionUpsertBatch = async <
   }
   if (values.length > 128) {
     const changedRows: ScopedChangedRow<TTable, TState>[] = [];
-    for (let offset = 0; offset < values.length; offset += 128) {
+    for (const itemBatch of chunkItems(values, TRANSITION_INSERT_BATCH_SIZE)) {
       changedRows.push(
         ...(await transitionUpsertBatch({
           tx,
           spec,
-          values: values.slice(offset, offset + 128),
+          values: itemBatch,
           recordTransitionAuditEvent: ignoreTransitionAudit,
         })),
       );

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * A withdrawal finds its version within one work, however large
  * `legislation_documents` grows: the lookup seeks the work by its identifier
@@ -7,11 +8,11 @@
  * the statement runs against the fixture so the index path is also the right
  * answer.
  */
-
-import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -106,9 +107,9 @@ beforeAll(
         expressionNamespace: `plan${source}`,
       })),
     );
-    for (let start = 0; start < rows.length; start += INSERT_BATCH) {
+    for (const itemBatch of chunkItems(rows, INSERT_BATCH)) {
       await db.insert(legislationDocuments).values(
-        rows.slice(start, start + INSERT_BATCH).map((row) => ({
+        itemBatch.map((row) => ({
           id: row.id,
           sourceId: row.sourceId,
           eli: `eli/plan/${row.work}`,

@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 import { Worker } from "node:worker_threads";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
@@ -169,8 +170,7 @@ const seedEntries = async (
   source: SanctionsSource,
   entries: SanctionsEntry[],
 ) => {
-  for (let offset = 0; offset < entries.length; offset += INSERT_BATCH_SIZE) {
-    const batch = entries.slice(offset, offset + INSERT_BATCH_SIZE);
+  for (const batch of chunkItems(entries, INSERT_BATCH_SIZE)) {
     await db.insert(sanctionsEntryPayloads).values(
       batch.map((payload) => ({
         contentHash: hash(JSON.stringify(payload)),

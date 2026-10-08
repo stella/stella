@@ -20,6 +20,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
@@ -2759,9 +2760,7 @@ describe("chat runtime", () => {
       id: "approval_tool-first",
     });
     // The answer is applied on a microtask; let it wait for the batch.
-    await new Promise((resolve) => {
-      setTimeout(() => resolve(undefined), 0);
-    });
+    await sleep(0);
     await sendThreadChatMessage(
       runtime,
       createOutgoingMessage(

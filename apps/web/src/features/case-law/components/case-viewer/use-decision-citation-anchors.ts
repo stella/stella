@@ -4,14 +4,18 @@ import type { CitationAnchorSource } from "@/features/case-law/citation-anchors"
 import { decisionCitationsInfiniteOptions } from "@/features/case-law/queries/citations";
 import { optionalArray } from "@/lib/arrays";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /** Resolved outgoing citations already loaded for inline linking in a decision. */
 export const useDecisionCitationAnchors = (
   decisionId: SafeId<"caseLawDecision">,
 ): CitationAnchorSource[] => {
-  const { data } = useInfiniteQuery(
+  const dataQuery = useInfiniteQuery(
     decisionCitationsInfiniteOptions(decisionId, "outgoing"),
   );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const anchors: CitationAnchorSource[] = [];
 
   for (const page of optionalArray(data?.pages)) {

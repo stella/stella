@@ -4735,10 +4735,6 @@
     "seconds": 0.164799,
     "source": "estimated"
   },
-  "src/lib/chunked.test.ts": {
-    "seconds": 0.044816,
-    "source": "estimated"
-  },
   "src/lib/clauses/body-schema.test.ts": {
     "seconds": 0.182119,
     "source": "estimated"
@@ -8889,6 +8885,10 @@
   },
   "src/tests/helpers/fake-s3.test.ts": {
     "seconds": 0.899616,
+    "source": "estimated"
+  },
+  "src/tests/helpers/handler-context.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/helpers/provider-request-transcript.test.ts": {

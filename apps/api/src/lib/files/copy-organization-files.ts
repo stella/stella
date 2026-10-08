@@ -1,5 +1,7 @@
 import { Panic, panic, Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import {
   commitOrganizationFilesBytes,
   OrganizationFileUsageError,
@@ -36,49 +38,42 @@ export const copyOrganizationFiles = async <T, E>(
     panic("Copy concurrency must be a positive safe integer");
   }
   const copies: Result<T, E | OrganizationFileUsageError>[] = [];
-  for (
-    let roundStart = 0;
-    roundStart < inputs.length;
-    roundStart += ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT
-  ) {
-    const round = inputs.slice(
-      roundStart,
-      roundStart + ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
-    );
+  for (const round of chunkItems(
+    inputs,
+    ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
+  )) {
+    // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
     const authorized = await authorizeOrganizationFileBatch(round, db);
     if (Result.isError(authorized)) {
       return Result.err(authorized.error);
     }
     const outcome = await authorized.value.execute(async ({ proof }) => {
       const roundCopies: Result<T, E | OrganizationFileUsageError>[] = [];
-      for (
-        let start = 0;
-        start < proof.input.value.operation.length;
-        start += concurrency
-      ) {
+      for (const batch of chunkItems(
+        proof.input.value.operation,
+        concurrency,
+      )) {
         const results = await Promise.all(
-          proof.input.value.operation
-            .slice(start, start + concurrency)
-            .map(async ({ copy }) =>
-              Result.flatten(
-                await Result.tryPromise({
-                  try: copy,
-                  catch: (cause) => {
-                    if (Panic.is(cause)) {
-                      return panic(
-                        "Organization file copy invariant failed",
-                        cause,
-                      );
-                    }
-                    return new OrganizationFileUsageError({
-                      message: "Organization file copy is unavailable",
-                      reason: "storage_unavailable",
+          batch.map(async ({ copy }) =>
+            Result.flatten(
+              await Result.tryPromise({
+                try: copy,
+                catch: (cause) => {
+                  if (Panic.is(cause)) {
+                    return panic(
+                      "Organization file copy invariant failed",
                       cause,
-                    });
-                  },
-                }),
-              ),
+                    );
+                  }
+                  return new OrganizationFileUsageError({
+                    message: "Organization file copy is unavailable",
+                    reason: "storage_unavailable",
+                    cause,
+                  });
+                },
+              }),
             ),
+          ),
         );
         roundCopies.push(...results);
       }
