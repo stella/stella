@@ -137,7 +137,7 @@ function ConsentPage() {
   useQueryViewError(sessionView);
   const activeOrganizationId =
     (sessionView.type === "items"
-      ? sessionView.items.session.activeOrganizationId
+      ? sessionView.items?.session.activeOrganizationId
       : null) ?? routeActiveOrganizationId;
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
   const email = Route.useRouteContext({ select: (ctx) => ctx.user?.email });
@@ -228,10 +228,17 @@ function ConsentPage() {
     const outcome = await Result.tryPromise(
       async () => await authClient.organization.setActive({ organizationId }),
     );
-    const error = outcome.isErr() ? outcome.error : outcome.value.error;
-    if (error) {
+    if (outcome.isErr()) {
       setSubmission({ status: "error" });
-      notifyUserError(toAuthClientError(error), t("consent.error"));
+      notifyUserError(outcome.error, t("consent.error"));
+      return;
+    }
+    if (outcome.value.error) {
+      setSubmission({ status: "error" });
+      notifyUserError(
+        toAuthClientError(outcome.value.error),
+        t("consent.error"),
+      );
       return;
     }
     await refreshAuthQueries(queryClient);
@@ -336,7 +343,7 @@ function ConsentPage() {
                 );
               }}
               organizationName={organizationName}
-              organizations={organizations ?? []}
+              organizations={organizations}
             />
             {organizationName ? (
               <p className="text-muted-foreground -mt-3 text-sm text-pretty">
@@ -400,7 +407,7 @@ type ConsentAccountRowsProps = {
   onAccountSwitch: () => void;
   onOrganizationSwitch: (organizationId: string) => void;
   organizationName: string | null;
-  organizations: readonly { id: string; name: string }[];
+  organizations: readonly { id: string; name: string }[] | undefined;
 };
 
 /** Who is granting access, and in which organization the app will work. */
@@ -432,7 +439,7 @@ function ConsentAccountRows({
         <>
           <dt className="text-muted-foreground">{t("common.organization")}</dt>
           <dd className="min-w-0">
-            {organizations.length > 1 ? (
+            {organizations !== undefined && organizations.length > 1 ? (
               <Select
                 disabled={disabled}
                 onValueChange={(organizationId) => {
@@ -537,7 +544,7 @@ function ScopeSummary({ groups }: { groups: OAuthScopeDisplayGroups }) {
           groups[group].length > 0 ? (
             <li key={group} className="text-pretty">
               {t.rich(summary, {
-                count: groups[group].length,
+                count: format.number(groups[group].length),
                 items: format.list(
                   orderOAuthScopeSummary(groups[group]).map((entry) =>
                     translateOAuthScopeSummary(t, entry),
