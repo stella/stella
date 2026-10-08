@@ -73,7 +73,18 @@ export const callWithChatSecret = async ({
         });
       }
       // The connection handles the action; only a fixed receipt can return to chat.
-      await tool.execute(operation.arguments);
+      const completion = await tool.execute(operation.arguments);
+      if (
+        completion !== null &&
+        typeof completion === "object" &&
+        "isError" in completion &&
+        completion.isError === true
+      ) {
+        throw new HandlerError({
+          status: 502,
+          message: "Connector request failed",
+        });
+      }
     } finally {
       await client.close();
     }
