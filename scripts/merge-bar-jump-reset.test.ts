@@ -213,6 +213,36 @@ describe("durable jump records and per-head reset reservations", () => {
     }
   });
 
+  test("records publish without leftovers and an interrupted write is never read as a record", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "jump-publish-"));
+    try {
+      const store = createJumpResetStore(directory);
+      expect(store.recordJump(jump).isOk()).toBe(true);
+      expect(store.reserve(`${jump.repo}#${jump.pr}@${jump.head}`).isOk()).toBe(
+        true,
+      );
+      for (const kind of ["jumps", "rearms"]) {
+        expect(
+          readdirSync(path.join(directory, kind)).filter((name) =>
+            name.endsWith(".tmp"),
+          ),
+        ).toEqual([]);
+      }
+      // What a crash between the write and the publish leaves behind.
+      writeFileSync(
+        path.join(directory, "jumps", "interrupted.json.0f.tmp"),
+        '{"repo":"stella/st',
+      );
+      const result = createJumpResetStore(directory).readJumps();
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toEqual([jump]);
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("corrupt accepted records fail closed", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "jump-corruption-"));
     try {

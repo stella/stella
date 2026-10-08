@@ -1,12 +1,15 @@
 import { Result, TaggedError } from "better-result";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
   fsyncSync,
+  linkSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -116,16 +119,28 @@ const validJumpRecord = (value: unknown): value is JumpRecord => {
   );
 };
 
+const TEMPORARY_SUFFIX = ".tmp";
+
 /** Reservations survive uncertain mutations; a second attempt requires a new head. */
 export const createJumpResetStore = (directory: string) => {
+  // The body is written and synced under a private temporary name, then
+  // published with link(): a crash leaves at most a stray temporary file, never
+  // a partial record under its final name, and link() still refuses to replace
+  // an existing record or reservation.
   const durableCreate = (filename: string, body: string) => {
     const created = mkdirSync(path.dirname(filename), { recursive: true });
-    const descriptor = openSync(filename, "wx", 0o600);
+    const temporary = `${filename}.${randomUUID()}${TEMPORARY_SUFFIX}`;
+    const descriptor = openSync(temporary, "wx", 0o600);
     try {
       writeFileSync(descriptor, body);
       fsyncSync(descriptor);
     } finally {
       closeSync(descriptor);
+    }
+    try {
+      linkSync(temporary, filename);
+    } finally {
+      rmSync(temporary, { force: true });
     }
     const parent = openSync(path.dirname(filename), "r");
     try {
@@ -164,7 +179,11 @@ export const createJumpResetStore = (directory: string) => {
         if (!existsSync(jumps)) {
           return [];
         }
-        return readdirSync(jumps).map((name) => {
+        // A temporary file is an unpublished write, never a record.
+        const records = readdirSync(jumps).filter(
+          (name) => !name.endsWith(TEMPORARY_SUFFIX),
+        );
+        return records.map((name) => {
           const value: unknown = JSON.parse(
             readFileSync(path.join(jumps, name), "utf-8"),
           );
