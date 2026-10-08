@@ -202,11 +202,11 @@ server says so in the form each host acts on:
 
 Per host (verify again when a host changes its client):
 
-| Host | Expired access token | Dead refresh token | Missing scope on a call |
-| --- | --- | --- | --- |
-| ChatGPT | Refreshes | 401 challenge, reconnect prompt | `_meta` challenge, inline reconnect |
-| Codex | Refreshes | 401 challenge, reconnect prompt | `_meta` challenge, inline reconnect |
-| Claude | Refreshes on 401 and before expiry | 401 challenge, OAuth rerun | Envelope `hint` only (Claude acts on transport 401/403, not `_meta`) |
+| Host    | Expired access token               | Dead refresh token              | Missing scope on a call                                              |
+| ------- | ---------------------------------- | ------------------------------- | -------------------------------------------------------------------- |
+| ChatGPT | Refreshes                          | 401 challenge, reconnect prompt | `_meta` challenge, inline reconnect                                  |
+| Codex   | Refreshes                          | 401 challenge, reconnect prompt | `_meta` challenge, inline reconnect                                  |
+| Claude  | Refreshes on 401 and before expiry | 401 challenge, OAuth rerun      | Envelope `hint` only (Claude acts on transport 401/403, not `_meta`) |
 
 ## Destructive-op confirm guardrail
 
