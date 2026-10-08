@@ -24,6 +24,7 @@ import {
   createDefaultRoleModels,
   ensureRoleModelsForProviders,
   getProviderValues,
+  hasProviderCredentialChanges,
   hasUsableDecisionModel,
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
@@ -193,12 +194,13 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving">("idle");
   const isDirty =
-    providers.some(
-      (provider) =>
-        provider.apiKey.length > 0 ||
-        provider.anthropicWorkspaceId !==
-          storedProviders.find((saved) => saved.provider === provider.provider)
-            ?.anthropicWorkspaceId,
+    providers.some((draft) =>
+      hasProviderCredentialChanges({
+        draft,
+        stored: storedProviders.find(
+          (saved) => saved.provider === draft.provider,
+        ),
+      }),
     ) ||
     decisionState.kind !== "untouched" ||
     JSON.stringify(roleModels) !== JSON.stringify(savedRoles);

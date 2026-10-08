@@ -13,6 +13,7 @@ import {
   getModelOptionsForRole,
   getProviderValues,
   getRolePickerRows,
+  hasProviderCredentialChanges,
   hasUsableDecisionModel,
   hasUsableProviderDrafts,
   isKnownModelSelection,
@@ -647,5 +648,45 @@ describe("decision model configuration", () => {
         stored,
       }),
     ).toBe(false);
+  });
+});
+
+describe("provider credential changes", () => {
+  test.each([
+    { draftId: undefined, storedId: undefined, changed: false },
+    { draftId: "", storedId: undefined, changed: false },
+    { draftId: "  ", storedId: undefined, changed: false },
+    { draftId: undefined, storedId: "  ", changed: false },
+    { draftId: " wrkspc_fixture ", storedId: "wrkspc_fixture", changed: false },
+    { draftId: "", storedId: "wrkspc_fixture", changed: true },
+    { draftId: "wrkspc_fixture", storedId: undefined, changed: true },
+  ])(
+    "normalizes workspace scope $draftId against $storedId",
+    ({ draftId, storedId, changed }) => {
+      expect(
+        hasProviderCredentialChanges({
+          draft: {
+            ...createProviderCredentialDraft("anthropic"),
+            anthropicWorkspaceId: draftId,
+          },
+          stored: {
+            ...createProviderCredentialDraft("anthropic"),
+            anthropicWorkspaceId: storedId,
+          },
+        }),
+      ).toBe(changed);
+    },
+  );
+  test("a key still needs saving when workspace scope is unchanged", () => {
+    expect(
+      hasProviderCredentialChanges({
+        draft: {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "sk-ant-usr-fixture",
+          anthropicWorkspaceId: "",
+        },
+        stored: undefined,
+      }),
+    ).toBe(true);
   });
 });

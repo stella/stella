@@ -420,3 +420,37 @@ test("card removal preserves the full Eden provider error in the saved row", asy
   expect(writes).toHaveLength(1);
   expect(writes.at(0)?.method).toBe("DELETE");
 });
+
+test("clearing a draft workspace ID back to absent clears row dirty state and the leave prompt", async () => {
+  const appRouter = await mount();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.organization.aiConfig.addProvider,
+    }),
+  );
+  const input = screen
+    .getAllByLabelText(messages.organization.aiConfig.apiKey)
+    .at(1);
+  if (input === undefined) {
+    panic("Anthropic draft key input must be present");
+  }
+  fireEvent.change(input, { target: { value: "sk-ant-usr-fixture" } });
+  const workspace = screen.getByLabelText(
+    messages.organization.aiConfig.anthropicWorkspaceId,
+  );
+  fireEvent.change(workspace, { target: { value: "wrkspc_fixture" } });
+  fireEvent.change(input, { target: { value: "" } });
+  expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
+  expect(hasUnsavedWork()).toBe(true);
+  fireEvent.change(workspace, { target: { value: "" } });
+  expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
+  expect(hasUnsavedWork()).toBe(false);
+  expect(
+    requests.filter(({ method }) => method === "POST" || method === "DELETE"),
+  ).toEqual([]);
+  await act(async () => {
+    await appRouter.navigate({ to: "/settings" });
+  });
+  expect(await screen.findByText(messages.common.done)).toBeDefined();
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+});

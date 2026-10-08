@@ -35,6 +35,7 @@ import {
   createProviderCredentialDraft,
   getAvailableProviderKeys,
   getNextAvailableProvider,
+  hasProviderCredentialChanges,
   isProviderValue,
   PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
@@ -89,13 +90,12 @@ export const AIProviderRows = ({
                 ? "configuration"
                 : "provider"
             }
-            dirty={
-              draft.apiKey.length > 0 ||
-              draft.anthropicWorkspaceId !==
-                storedProviders.find(
-                  (saved) => saved.provider === draft.provider,
-                )?.anthropicWorkspaceId
-            }
+            dirty={hasProviderCredentialChanges({
+              draft,
+              stored: storedProviders.find(
+                (saved) => saved.provider === draft.provider,
+              ),
+            })}
             options={getAvailableProviderKeys({
               currentProvider: draft.provider,
               providers,

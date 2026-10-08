@@ -54,6 +54,22 @@ export type ProviderCredentialDraft = {
   replacingKey: boolean;
 };
 
+type ProviderCredentialChangesOptions = {
+  draft: ProviderCredentialDraft;
+  stored: ProviderCredentialDraft | undefined;
+};
+
+const normalizeWorkspaceId = (value: string | undefined) =>
+  value?.trim() || undefined;
+
+export const hasProviderCredentialChanges = ({
+  draft,
+  stored,
+}: ProviderCredentialChangesOptions) =>
+  draft.apiKey.length > 0 ||
+  normalizeWorkspaceId(draft.anthropicWorkspaceId) !==
+    normalizeWorkspaceId(stored?.anthropicWorkspaceId);
+
 export type ModelSelection = {
   provider: ProviderValue;
   modelId: string;
