@@ -79,6 +79,18 @@ test("duration cache saves only after green main API shards", () => {
   expect(aggregate.indexOf("mkdir")).toBeLessThan(
     aggregate.indexOf("refresh-test-durations.ts"),
   );
+  // The aggregator imports API dependencies; a clean runner must install them first.
+  const steps = workflowJobSteps(workflow, "api-test-durations");
+  const stepIndex = (name: string) =>
+    steps.findIndex((step) => step.name === name);
+  const install = workflowStepByName(steps, "Install API script dependencies");
+  expect(String(install.run)).toContain("--filter @stll/api");
+  expect(stepIndex("Install API script dependencies")).toBeGreaterThan(
+    stepIndex("Setup Bun"),
+  );
+  expect(stepIndex("Install API script dependencies")).toBeLessThan(
+    stepIndex("Aggregate API test durations"),
+  );
 });
 
 test("API shards consume and verify the plan artifact before testing", () => {
