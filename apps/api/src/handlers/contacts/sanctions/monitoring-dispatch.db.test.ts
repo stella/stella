@@ -1,11 +1,11 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 import { roles } from "@stll/permissions";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { member } from "@/api/db/auth-schema";
 import { rlsDb } from "@/api/db/root";
@@ -310,7 +310,7 @@ const contactState = async (contactId: typeof contacts.$inferSelect.id) => ({
 
 const seedActiveEdition = async () => {
   const editionId = createSafeId<"sanctionsEdition">();
-  const hash = createHash("sha256").update(editionId).digest("hex");
+  const hash = hashSha256Hex(editionId);
   const payload = {
     source: "eu",
     issuer: SANCTIONS_SOURCES.eu.issuer,
