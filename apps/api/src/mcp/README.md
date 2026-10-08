@@ -28,7 +28,7 @@ instructions, because an orchestrator picks tools from the names it was handed:
   Tenant and personal text is redacted on egress; mutating tools and the dynamic
   gateway are not exposed.
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
-  the version-upload lifecycle through `invoke_capability`, whose capability IDs
+  the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
 - `/mcp-law`: the public legal corpus. Exactly twelve read tools (`search`,
   `fetch`, `search_case_law`, `lookup_case_law`, `read_case_law_decision`,

@@ -255,7 +255,7 @@ const seed = async (db: GatedTestDb) => {
   const capabilityRead = async () =>
     await handleMcpToolCall({
       context: await capabilityContext(),
-      toolName: "invoke_capability",
+      toolName: "read_capability",
       args: {
         capability: "lists.verifications.get",
         input: { params: { matterId: workspaceId, runId: runIds.completed } },
@@ -373,7 +373,7 @@ const seed = async (db: GatedTestDb) => {
       expect(exitCode ?? 0).toBe(0);
       expect(calls).toEqual([
         {
-          name: "invoke_capability",
+          name: "read_capability",
           arguments: {
             capability: "lists.verifications.get",
             input: {

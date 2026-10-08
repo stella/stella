@@ -11,7 +11,7 @@ import {
 
 import { Temporal } from "@stll/time";
 
-import type { LawRecentEntry } from "@/lib/law-search-history";
+import type { LawRecentEntry } from "@/lib/law-search-history/law-search-history";
 
 const local = new Map<string, string>();
 const memoryStorage = {
@@ -38,7 +38,7 @@ const {
   recordLawOpen,
   recordLawSearch,
   removeLawRecent,
-} = await import("@/lib/law-search-history");
+} = await import("@/lib/law-search-history/law-search-history");
 const { installUserScopedStorage } =
   await import("@/lib/account/install-user-scoped-storage");
 const { releaseUserStorage, userStorageKey } =
@@ -160,7 +160,7 @@ describe("browser-local law activity", () => {
     ]);
   });
 
-  test("isolates user-to-user and user-to-visitor transitions in the real store", () => {
+  test("isolates user-to-user and user-to-visitor transitions in the real store, keeping each user's history for them", () => {
     recordLawSearch("owner-a-query");
     recordLawOpen(opened("decision", "owner-a-item"));
     const firstKey = userStorageKey("law_search_history");
@@ -179,12 +179,15 @@ describe("browser-local law activity", () => {
       "search:owner-b-query",
       "statute:owner-b-item",
     ]);
-    expect(local.has(firstKey)).toBe(false);
+    // The first owner's history waits for them, unread by the second.
+    expect(
+      readLawRecent(local.get(firstKey) ?? null).map(lawRecentKey),
+    ).toEqual(["decision:owner-a-item", "search:owner-a-query"]);
 
     releaseUserStorage(storageAreas());
     recordLawSearch("visitor-query");
     expect(saved().map(lawRecentKey)).toEqual(["search:visitor-query"]);
-    expect(local.has(secondKey)).toBe(false);
+    expect(local.has(secondKey)).toBe(true);
     changeOwner(`synthetic-return-${ownerNumber}`);
     recordLawOpen(opened("decision", "new-owner-item"));
     expect(saved().map(lawRecentKey)).toEqual(["decision:new-owner-item"]);

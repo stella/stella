@@ -1,8 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import {
@@ -20,14 +22,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
-import {
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  HistoryIcon,
-  PlusIcon,
-  ShieldCheckIcon,
-  Trash2Icon,
-} from "@stll/ui/icons";
+import { ChevronDownIcon, PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -45,16 +40,57 @@ import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import Tooltip from "@/components/tooltip";
+import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
+import type { PlaybookSnapshot } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import {
-  guideAnchor,
-  guideReverseBlocked,
-} from "@/features/guides/guide-anchor";
-import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+  canAutosave,
+  draftToAdopt,
+  resolvePaneSaveStatus,
+  resolveServerFollow,
+  resolveSavedPlaybookState,
+  resolveLocalPlaybookIntent,
+} from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
+import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
+import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
+import type {
+  FresherDetail,
+  PlaybookDraft,
+  PositionSourceLookup,
+} from "@/features/knowledge/playbook-editor/playbook-editor.logic";
+import {
+  buildPlaybookSavePayload,
+  createPlaybookBaseline,
+  hasPlaybookDraftChanges,
+  hasResolvedPositionSources,
+  detailSeedGate,
+  invalidPositionIds,
+  latchedSeedGate,
+  refetchSupersededDetail,
+  resolveDetailSeed,
+  resolvePlaybookScrollTop,
+  resolvePositionSources,
+  toPositionSourceLookup,
+} from "@/features/knowledge/playbook-editor/playbook-editor.logic";
+import {
+  readParkedPlaybookPane,
+  useParkedPlaybookPaneSavePending,
+  clearPlaybookPaneDraft,
+} from "@/features/knowledge/playbook-editor/playbook-pane-parking";
+import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
+import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
+import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
+import {
+  usePlaybookSaveQueue,
+  usePlaybookDetailSaveSubscription,
+} from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
+import type {
+  SaveOutcome,
+  SendSaveArgs,
+} from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
-import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, APIError, unwrapEden } from "@/lib/errors/api";
@@ -64,13 +100,9 @@ import {
   duplicatePosition,
   extractToGraded,
   gradedToExtract,
-  hasErrors,
   moveAdjacent,
   newExtractPosition,
   newGradedPosition,
-  type PlaybookApprovalStatus,
-  type PlaybookPerspective,
-  type PlaybookTrigger,
   type Position,
   type PositionErrors,
   type PositionSeverity,
@@ -87,33 +119,20 @@ import {
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
-import type {
-  FresherDetail,
-  PlaybookDraft,
-  PositionSourceLookup,
-} from "@/routes/knowledge/-components/playbook-editor.logic";
-import {
-  buildPlaybookSavePayload,
-  createPlaybookBaseline,
-  hasPlaybookDraftChanges,
-  hasResolvedPositionSources,
-  detailSeedGate,
-  latchedSeedGate,
-  refetchSupersededDetail,
-  resolveDetailSeed,
-  resolvePlaybookScrollTop,
-  resolvePositionSources,
-  toPositionSourceLookup,
-} from "@/routes/knowledge/-components/playbook-editor.logic";
-import { PlaybookVersionHistorySheet } from "@/routes/knowledge/-components/playbook-version-history-sheet";
-import { PositionEditor } from "@/routes/knowledge/-components/position-editor";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
+import { usePlaybookPaneLifecycle } from "./use-playbook-pane-lifecycle";
+
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
+// Saves from a chat in this browser invalidate the detail at once; this
+// brings in the rest (the CLI, MCP, another browser) while an editor is open.
+const OPEN_EDITOR_REFETCH_INTERVAL_MS = 30_000;
 // Longer than a default error toast: the conflict toast carries the reload
 // affordance, so it has to outlive a glance.
 const VERSION_CONFLICT_TOAST_TIMEOUT_MS = 10_000;
+// A draft save keeps no version, so once this toast goes, a removed
+// position is gone for good.
+const POSITION_REMOVED_TOAST_TIMEOUT_MS = 10_000;
 
 // A 409 the optimistic-concurrency guard raised, off either channel the
 // editor uses: Eden's error field on a direct call, or the `APIError`
@@ -124,67 +143,206 @@ const isEdenVersionConflict = (error: ApiErrorInput): boolean =>
 const isThrownVersionConflict = (error: unknown): boolean =>
   APIError.is(error) && error.code === API_VERSION_CONFLICT_ERROR_CODE;
 
+const isNotFound = (error: unknown): boolean =>
+  APIError.is(error) && error.status === 404;
+
 /** Title plus localized detail, shared by the toast and conflict paths. */
 type ToastFailure = { title: string; description: string };
 
 // ── Root component ────────────────────────────────────
 
+/**
+ * The page's product-tour targets, supplied by the route that runs the tour.
+ * The pane has none: a second copy of a target would confuse the tour.
+ */
+type PlaybookEditorTourAnchors = {
+  /** The back button; `isDirty` marks it unsafe for the tour to press. */
+  back: (isDirty: boolean) => TourAttributes;
+  basics: TourAttributes;
+  addPosition: TourAttributes;
+};
+
+const NO_TOUR_ANCHORS: PlaybookEditorTourAnchors = {
+  back: () => ({}),
+  basics: {},
+  addPosition: {},
+};
+
+const NEW_PLAYBOOK_SNAPSHOT: PlaybookSnapshot = {
+  draft: {
+    name: "",
+    description: "",
+    documentTypeKey: null,
+    perspective: null,
+    trigger: null,
+    positions: [],
+  },
+  updatedAt: null,
+  status: "draft",
+  approvedAt: null,
+};
+
+/**
+ * Where the editor runs. Everything that differs between the two hosts is
+ * derived from this one value.
+ *
+ * - `page`: the Knowledge page. Explicit Save, a back button, the breadcrumb,
+ *   a route navigation blocker, product-tour anchors, and a version-conflict
+ *   toast.
+ * - `pane`: an inspector tab beside a chat. A draft saves itself after a
+ *   pause in editing; a newer server version is merged into the user's edits
+ *   instead of raising a conflict; the tab header closes it.
+ */
+type PlaybookEditorHost =
+  | {
+      type: "page";
+      onBack: () => void;
+      onSaved: () => void;
+      tourAnchors: PlaybookEditorTourAnchors;
+    }
+  | {
+      type: "pane";
+      tabId: string;
+      /** Read on unmount: a closed tab discards its parked state. */
+      isTabOpen: (tabId: string) => boolean;
+      onClose: () => void;
+    };
+
 type PlaybookEditorProps = {
   organizationId: string;
   playbookId: string | null;
-  onBack: () => void;
-  onSaved: () => void;
+  host: PlaybookEditorHost;
 };
 
 export const PlaybookEditor = ({
   organizationId,
   playbookId,
-  onBack,
-  onSaved,
+  host,
 }: PlaybookEditorProps) => {
   if (playbookId === null) {
     return (
       <PlaybookEditorForm
-        initialApprovedAt={null}
-        initialDescription=""
-        initialDocumentTypeKey={null}
-        initialName=""
-        initialPerspective={null}
-        initialStatus="draft"
-        initialTrigger={null}
-        initialPositions={[]}
-        onBack={onBack}
-        onSaved={onSaved}
+        autosaveQueryKey={null}
+        host={host}
         organizationId={organizationId}
         playbookId={null}
-        initialUpdatedAt={null}
+        server={NEW_PLAYBOOK_SNAPSHOT}
       />
     );
   }
 
   return (
     <PlaybookEditorLoader
-      onBack={onBack}
-      onSaved={onSaved}
+      host={host}
       organizationId={organizationId}
       playbookId={playbookId}
     />
   );
 };
 
+/** Leaving the editor: back to the list on the page, closing the tab in
+ *  the pane. */
+const leaveEditor = (host: PlaybookEditorHost) => {
+  switch (host.type) {
+    case "page":
+      host.onBack();
+      return;
+    case "pane":
+      host.onClose();
+      return;
+    default:
+      host satisfies never;
+      panic(`Unhandled playbook editor host: ${String(host)}`);
+  }
+};
+
+type PlaybookDetailData = Exclude<
+  NonNullable<
+    Extract<
+      Awaited<ReturnType<ReturnType<typeof api.playbooks>["get"]>>,
+      { data: unknown }
+    >["data"]
+  >,
+  Response
+>;
+
+const snapshotFromDetail = (
+  detail: PlaybookDetailData,
+): PlaybookSnapshot | null => {
+  if (!("positions" in detail)) {
+    return null;
+  }
+  return {
+    draft: {
+      name: detail.name,
+      description: detail.description ?? "",
+      documentTypeKey: detail.scope?.documentTypeKey ?? null,
+      perspective: detail.scope?.perspective ?? null,
+      trigger: detail.scope?.trigger ?? null,
+      positions: detail.positions.items,
+    },
+    updatedAt: detail.updatedAt,
+    status: detail.status,
+    approvedAt: detail.approvedAt,
+  };
+};
+
+type ReadEditorServerArgs = {
+  queryClient: QueryClient;
+  organizationId: string;
+  playbookId: string | null;
+  onReadError: (error: unknown) => void;
+};
+
+const readEditorServer = async ({
+  queryClient,
+  organizationId,
+  playbookId,
+  onReadError,
+}: ReadEditorServerArgs) => {
+  if (playbookId === null) {
+    return null;
+  }
+  const options = playbookDetailOptions(organizationId, playbookId);
+  const result = await Result.tryPromise({
+    try: async () => {
+      await queryClient.cancelQueries({
+        queryKey: options.queryKey,
+        exact: true,
+      });
+      return await queryClient.query({ ...options, staleTime: 0 });
+    },
+    catch: (error) => error,
+  });
+  if (Result.isError(result)) {
+    onReadError(result.error);
+    return null;
+  }
+  return snapshotFromDetail(result.value);
+};
+
 const PlaybookEditorLoader = ({
   organizationId,
   playbookId,
-  onBack,
-  onSaved,
+  host,
 }: {
   organizationId: string;
   playbookId: string;
-  onBack: () => void;
-  onSaved: () => void;
+  host: PlaybookEditorHost;
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const parkedWritePending = useParkedPlaybookPaneSavePending(
+    host.type === "pane" ? host.tabId : null,
+    playbookId,
+  );
+  const [parkedSeed, setParkedSeed] = useState(() =>
+    parkedWritePending ? ("waiting" as const) : ("ready" as const),
+  );
+  // Reopening waits for the old owner; parking an active form must not unmount it.
+  if (parkedSeed === "waiting" && !parkedWritePending) {
+    setParkedSeed("ready");
+  }
   const detailOptions = playbookDetailOptions(organizationId, playbookId);
   // The gate is computed just before the form takes its initial values: at
   // mount, and on each reload (after a version restore or a rejected stale
@@ -196,7 +354,13 @@ const PlaybookEditorLoader = ({
     reloadKey: 0,
     gate: detailSeedGate(queryClient.getQueryState(detailOptions.queryKey)),
   }));
-  const detailQuery = useQuery(detailOptions);
+  const detailQuery = useQuery({
+    ...detailOptions,
+    refetchInterval: ({ state }) =>
+      host.type !== "pane" || isNotFound(state.error)
+        ? false
+        : OPEN_EDITOR_REFETCH_INTERVAL_MS,
+  });
   const detailView = useQueryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
   });
@@ -241,6 +405,28 @@ const PlaybookEditorLoader = ({
     </div>
   );
 
+  const leaveButton = (
+    <Button onClick={() => leaveEditor(host)} variant="ghost">
+      {host.type === "page" ? t("common.goBack") : t("common.close")}
+    </Button>
+  );
+
+  // Deleted elsewhere (another editor, a chat, the CLI): the form has
+  // nothing left to save to.
+  if (isNotFound(detailQuery.error)) {
+    return (
+      <div
+        className="flex flex-1 flex-col items-center justify-center gap-2 p-8"
+        role="status"
+      >
+        <p className="text-muted-foreground text-sm">
+          {t("knowledge.playbooks.deletedElsewhere")}
+        </p>
+        {leaveButton}
+      </div>
+    );
+  }
+
   switch (detailView.type) {
     case "pending":
       return (
@@ -258,9 +444,7 @@ const PlaybookEditorLoader = ({
     case "empty":
       return (
         <div className="flex flex-1 items-center justify-center p-8">
-          <Button onClick={onBack} variant="ghost">
-            {t("common.goBack")}
-          </Button>
+          {leaveButton}
         </div>
       );
     case "items":
@@ -270,7 +454,10 @@ const PlaybookEditorLoader = ({
       return panic("Unhandled playbook detail query state");
   }
 
-  if (seed.type === "wait") {
+  if (
+    seed.type === "wait" ||
+    (parkedSeed === "waiting" && parkedWritePending)
+  ) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -281,7 +468,8 @@ const PlaybookEditorLoader = ({
   }
 
   const detail = detailView.items;
-  if (!("positions" in detail)) {
+  const snapshot = snapshotFromDetail(detail);
+  if (snapshot === null) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         {readFailure}
@@ -293,26 +481,17 @@ const PlaybookEditorLoader = ({
     <>
       {detailView.refetchError !== undefined && readFailure}
       <PlaybookEditorForm
-        initialApprovedAt={detail.approvedAt}
-        initialDescription={detail.description ?? ""}
-        initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
-        initialName={detail.name}
-        initialPerspective={detail.scope?.perspective ?? null}
-        initialStatus={detail.status}
-        initialTrigger={detail.scope?.trigger ?? null}
-        initialPositions={detail.positions.items}
+        autosaveQueryKey={host.type === "pane" ? detailOptions.queryKey : null}
+        host={host}
         key={seedState.reloadKey}
-        onBack={onBack}
-        // Derived from the org's findings on every read, so it tracks the cache
-        // rather than freezing at mount like the `initial*` seeds.
+        // Derived from the org's findings on every read, so it tracks the cache.
         positionDecisions={readPositionDecisions(detail.positionDecisions)}
         // Looked up for this reader on every read, like the decisions above.
         positionSources={toPositionSourceLookup(detail.positionSources)}
         onReload={reload}
-        onSaved={onSaved}
         organizationId={organizationId}
         playbookId={playbookId}
-        initialUpdatedAt={detail.updatedAt}
+        server={snapshot}
         staleDetail={
           seed.type === "stale"
             ? { fresher: seed.fresher, onRetry: refetchDetail }
@@ -402,34 +581,65 @@ const StaleDetailNotice = ({
 
 // ── Editor form ───────────────────────────────────────
 
+// Long enough that typing a sentence does not save once per word; short
+// enough that the model's next read sees what the user just changed.
+const AUTOSAVE_DELAY_MS = 2000;
+
+const SERVER_FOLLOW_BY_HOST = {
+  page: "keep",
+  pane: "rebase",
+} as const satisfies Record<PlaybookEditorHost["type"], "keep" | "rebase">;
+
+type SaveRequestState = "idle" | "in-flight" | "failed";
+
+/** What the form starts from: a parked pane state, or a server version. */
+type FormSeed = Omit<ParkedPlaybookPane, "playbookId">;
+
+type SeedFromServerArgs = { server: PlaybookSnapshot; isNew: boolean };
+
+const seedFromServer = ({ server, isNew }: SeedFromServerArgs): FormSeed => {
+  // A New Playbook form starts with one empty card the server never carried;
+  // the baseline includes it, so the form starts clean.
+  const positions =
+    isNew && server.draft.positions.length === 0
+      ? [newGradedPosition()]
+      : server.draft.positions;
+  const draft = { ...server.draft, positions };
+  return {
+    draft,
+    updatedAt: server.updatedAt,
+    baseline: createPlaybookBaseline(draft),
+    status: server.status,
+    approvedAt: server.approvedAt,
+    openIds: new Set(positions.slice(0, 1).map((p) => p.sourceId)),
+    revealedIds: new Set(),
+    leaveState: "saved",
+    unacknowledgedDrafts: [],
+    scrollTop: 0,
+  };
+};
+
 // Sentinel for the "every document type" (unscoped) choice; a Select value
 // can't be null, so it stands in and maps back to null.
 const SCOPE_ALL_VALUE = "__all__";
 
 type PlaybookEditorFormProps = {
+  autosaveQueryKey: QueryKey | null;
   organizationId: string;
   playbookId: string | null;
-  initialName: string;
-  initialDescription: string;
-  initialDocumentTypeKey: string | null;
-  initialPerspective: PlaybookPerspective | null;
-  initialTrigger: PlaybookTrigger | null;
-  initialPositions: Position[];
-  initialStatus: PlaybookApprovalStatus;
-  initialApprovedAt: string | null;
+  /** The playbook as the server last returned it, passed on every render:
+   *  the form seeds from it at mount and follows it while it has no edits. */
+  server: PlaybookSnapshot;
   /** What the org's reviewers did with each position, by `sourceId`; empty
    *  for a playbook that has never been run. */
   positionDecisions?: ReadonlyMap<string, PositionDecisionSummary> | undefined;
   /** The source documents this reader can open; absent for a new playbook,
    *  which has none. */
   positionSources?: PositionSourceLookup | undefined;
-  /** Concurrency token the seeds were read with; null for a new playbook. */
-  initialUpdatedAt: string | null;
   /** Set when the form was filled from an outdated detail because the
    *  refetch did not complete (offline, or the request failed). */
   staleDetail?: StaleDetail | undefined;
-  onBack: () => void;
-  onSaved: () => void;
+  host: PlaybookEditorHost;
   // Only supplied when editing an existing playbook (see
   // `PlaybookEditorLoader`): forces a remount on the freshly refetched
   // definition, after a version restore or a rejected stale save.
@@ -437,22 +647,14 @@ type PlaybookEditorFormProps = {
 };
 
 const PlaybookEditorForm = ({
+  autosaveQueryKey,
   organizationId,
   playbookId,
-  initialName,
-  initialDescription,
-  initialDocumentTypeKey,
-  initialPerspective,
-  initialTrigger,
-  initialPositions,
-  initialStatus,
-  initialApprovedAt,
+  server,
   positionDecisions,
   positionSources,
-  initialUpdatedAt,
   staleDetail,
-  onBack,
-  onSaved,
+  host,
   onReload,
 }: PlaybookEditorFormProps) => {
   const t = useTranslations();
@@ -464,31 +666,61 @@ const PlaybookEditorForm = ({
   const canDelete = usePermissions({ playbook: ["delete"] });
   const canApprove = usePermissions({ playbook: ["approve"] });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollTopRef = useRef(0);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  // The page and a pane can show the same playbook at once, so field ids are
+  // scoped to this form.
+  const fieldIdPrefix = useId();
+  const nameId = `${fieldIdPrefix}-name`;
+  const descriptionId = `${fieldIdPrefix}-description`;
+  const documentTypeId = `${fieldIdPrefix}-document-type`;
   const navigationLeaveRequestedRef = useRef(false);
+  const tourAnchors = host.type === "page" ? host.tourAnchors : NO_TOUR_ANCHORS;
 
-  // The token stays with the draft it was read with and moves only on this
-  // form's own writes. Were it to follow the cache, a refetch under the form
-  // (a chat save, another editor, a window refocus) would pair a fresh token
-  // with a stale draft, and the next save, a full replace, would silently
-  // drop the change that moved it instead of meeting the version conflict.
-  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
-  const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState(initialDescription);
-  const [status, setStatus] = useState<PlaybookApprovalStatus>(initialStatus);
-  const [approvedAt, setApprovedAt] = useState<string | null>(
-    initialApprovedAt,
+  // A pane that was left for another inspector tab comes back as it was.
+  const [initial] = useState(() =>
+    host.type === "pane" && playbookId !== null
+      ? (readParkedPlaybookPane(host.tabId, playbookId) ??
+        seedFromServer({ server, isNew: false }))
+      : seedFromServer({ server, isNew: playbookId === null }),
   );
+  // The token and the baseline share one state because they move together:
+  // on this form's own saves, or with the content when the form takes a newer
+  // server version. A token that moved alone would pair with a stale draft,
+  // and the next save, a full replace, would silently drop the other writer's
+  // change instead of meeting the version conflict.
+  const detailReadCount = () =>
+    autosaveQueryKey === null
+      ? 0
+      : (queryClient.getQueryState(autosaveQueryKey)?.dataUpdateCount ?? 0);
+  const [failedReadCount, setFailedReadCount] = useState(detailReadCount);
+  const [persisted, setPersisted] = useState(() => ({
+    updatedAt: initial.updatedAt,
+    baseline: initial.baseline,
+  }));
+  const updatedAt = persisted.updatedAt;
+  const baseline = persisted.baseline;
+  const [name, setName] = useState(initial.draft.name);
+  const [description, setDescription] = useState(initial.draft.description);
+  const [perspective, setPerspective] = useState(initial.draft.perspective);
+  const [trigger, setTrigger] = useState(initial.draft.trigger);
+  const [status, setStatus] = useState(initial.status);
+  const [approvedAt, setApprovedAt] = useState(initial.approvedAt);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
-  const [positions, setPositions] = useState<Position[]>(() =>
-    playbookId === null && initialPositions.length === 0
-      ? [newGradedPosition()]
-      : initialPositions,
-  );
-  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(
-    () => new Set(positions.slice(0, 1).map((p) => p.sourceId)),
-  );
+  const [positions, setPositions] = useState(initial.draft.positions);
+  const [openIds, setOpenIds] = useState(initial.openIds);
+  // Cards that show their errors before any save attempt (see
+  // `revealErrorsOnLeave`).
+  const [revealedIds, setRevealedIds] = useState(initial.revealedIds);
+  const editedIdsRef = useRef(new Set<string>());
+  const undoToastIdsRef = useRef<string[]>([]);
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveRequest, setSaveRequest] = useState<SaveRequestState>(() =>
+    initial.leaveState === "save-failed" ? "failed" : "idle",
+  );
+  // A playbook being deleted takes no more autosaves.
+  const deletionRef = useRef<"idle" | "in-flight" | "deleted">("idle");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   // Non-null while confirming a graded → extract conversion that would drop
@@ -497,23 +729,8 @@ const PlaybookEditorForm = ({
   // Which document type this playbook runs for (null = every document). A
   // files-table run gates the materialized columns on the Document Type
   // classifier, so this is what makes "a different playbook per type" work.
-  const [documentTypeKey, setDocumentTypeKey] = useState<string | null>(
-    initialDocumentTypeKey,
-  );
-  // The clean state every later draft is measured against. Seeded from the
-  // state above rather than from the props, so a New Playbook form — whose
-  // positions are seeded with one empty card the props never carried — starts
-  // clean instead of permanently dirty. Reseeded after every successful save;
-  // the fingerprint is computed once per baseline, not per render.
-  const [baseline, setBaseline] = useState(() =>
-    createPlaybookBaseline({
-      name,
-      description,
-      documentTypeKey,
-      perspective: initialPerspective,
-      trigger: initialTrigger,
-      positions,
-    }),
+  const [documentTypeKey, setDocumentTypeKey] = useState(
+    initial.draft.documentTypeKey,
   );
   const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
   const documentTypesDataView = useQueryView(documentTypesDataQuery);
@@ -533,43 +750,140 @@ const PlaybookEditorForm = ({
     name,
     description,
     documentTypeKey,
-    perspective: initialPerspective,
-    trigger: initialTrigger,
+    perspective,
+    trigger,
     positions,
   };
-  const isDirty = hasPlaybookDraftChanges({ baseline, current: draft });
+  const {
+    queueSave,
+    flushOnLeave: queueFinalDraft,
+    hasPendingSave,
+    pendingSaveCount,
+    unacknowledgedDrafts,
+    clearUnacknowledgedDrafts,
+  } = usePlaybookSaveQueue({
+    updatedAt,
+    initialUnacknowledgedDrafts: initial.unacknowledgedDrafts,
+    sendSave: async (args) => await sendSave(args),
+    onFailed: () => {
+      setFailedReadCount(detailReadCount());
+      setSaveRequest("failed");
+    },
+  });
+  const changedFromBaseline = hasPlaybookDraftChanges({
+    baseline,
+    current: draft,
+  });
+  const { isDirty, verifiedUnchanged } = resolveLocalPlaybookIntent({
+    unacknowledgedDrafts,
+    pendingSaveCount,
+    changedFromBaseline,
+    serverUpdatedAt: server.updatedAt,
+    updatedAt,
+    readCount: detailReadCount(),
+    failedReadCount,
+  });
+  if (verifiedUnchanged) {
+    clearUnacknowledgedDrafts();
+  }
+
+  /** Takes a server version's token and baseline, with `next` as the draft. */
+  const adoptServerVersion = (next: PlaybookDraft) => {
+    setName(next.name);
+    setDescription(next.description);
+    setDocumentTypeKey(next.documentTypeKey);
+    setPerspective(next.perspective);
+    setTrigger(next.trigger);
+    setPositions(next.positions);
+    setPersisted({
+      updatedAt: server.updatedAt,
+      baseline: createPlaybookBaseline(server.draft),
+    });
+    setStatus(server.status);
+    setApprovedAt(server.approvedAt);
+  };
+
+  // Another writer (a chat, an agent, a second editor) saved a newer version.
+  // A form without edits takes it in place: cards are keyed by `sourceId`, so
+  // expanded cards and scroll position hold. A form with edits rebases them
+  // onto it in the pane; on the page it keeps them and its next save meets
+  // the version conflict. Setting state during render settles before paint.
+  const serverFollow = resolveServerFollow({
+    formUpdatedAt: updatedAt,
+    serverUpdatedAt: server.updatedAt,
+    isDirty,
+  });
+  // A refetch may see our committed write before its response arrives.
+  // Keep the last acknowledged baseline so a pending revert remains local intent.
+  const adopted = draftToAdopt({
+    pendingSaveCount,
+    follow: serverFollow,
+    whenBehind: SERVER_FOLLOW_BY_HOST[host.type],
+    baseline: baseline.draft,
+    local: draft,
+    server: server.draft,
+    unacknowledgedDrafts,
+  });
+  if (adopted !== null) {
+    adoptServerVersion(adopted);
+    clearUnacknowledgedDrafts();
+  }
 
   const navigationBlocker = useUnsavedWork({
     surface: "playbook-editor",
-    guard: "confirm-navigation",
-    isDirty,
+    // The pane closes with its tab rather than on navigation; only a browser
+    // close or hard reload would lose its unsaved work.
+    ...(host.type === "page"
+      ? { guard: "confirm-navigation" }
+      : { guard: "unload" }),
+    isDirty: host.type === "page" && isDirty,
   });
 
-  const requestBack = useCallback(() => {
+  const onBack = host.type === "page" ? host.onBack : null;
+  const requestBack = useLatestCallback(() => {
+    if (onBack === null) {
+      return;
+    }
     if (isDirty) {
       setLeaveConfirmOpen(true);
       return;
     }
     onBack();
-  }, [isDirty, onBack]);
+  });
 
   // Publish the open playbook to the breadcrumb (Knowledge › Playbooks › Name)
-  // and wire its list crumb back through the in-page back affordance.
+  // and wire its list crumb back through the in-page back affordance. The
+  // pane sits beside another page and does not own its breadcrumb.
   useExternalSyncEffect(() => {
+    if (host.type !== "page") {
+      return undefined;
+    }
     setNavOpen({
       id: playbookId ?? "new",
       name: displayName,
       exit: requestBack,
     });
     return () => clearNav();
-  }, [playbookId, displayName, requestBack, setNavOpen, clearNav]);
+  }, [host.type, playbookId, displayName, requestBack, setNavOpen, clearNav]);
 
+  const invalidIds = invalidPositionIds({
+    positions,
+    persistedIds: baseline.persistedIds,
+  });
+  const invalidIdSet = new Set(invalidIds);
+  const nameMissing = name.trim() === "";
   const errorsById = new Map(
     positions.map((position): [string, PositionErrors] => [
       position.sourceId,
-      validatePosition(position),
+      invalidIdSet.has(position.sourceId) ? validatePosition(position) : {},
     ]),
   );
+  const autosaves = canAutosave({
+    host: host.type,
+    exists: playbookId !== null,
+    status,
+    canUpdate: canSave,
+  });
 
   // One read for the whole card list: a reference position quotes passages by
   // id, and the words come from the matters those references live in.
@@ -590,16 +904,54 @@ const PlaybookEditorForm = ({
   };
 
   const updatePosition = (sourceId: string, next: Position) => {
+    scheduleAutosaveFromEdit();
+    editedIdsRef.current.add(sourceId);
     setPositions((prev) =>
       prev.map((p) => (p.sourceId === sourceId ? next : p)),
     );
   };
 
+  // In the pane, a card's errors show once the user has edited it and moved
+  // on; a card just added stays quiet until then.
+  const revealErrorsOnLeave = (sourceId: string) => {
+    if (host.type !== "pane" || !editedIdsRef.current.has(sourceId)) {
+      return;
+    }
+    setRevealedIds((prev) =>
+      prev.has(sourceId) ? prev : new Set(prev).add(sourceId),
+    );
+  };
+
   const removePosition = (sourceId: string) => {
+    scheduleAutosaveFromEdit();
+    const index = positions.findIndex((p) => p.sourceId === sourceId);
+    const removed = positions[index];
     setPositions((prev) => prev.filter((p) => p.sourceId !== sourceId));
+    // The pane autosaves the removal, so it offers an undo.
+    if (host.type !== "pane" || removed === undefined) {
+      return;
+    }
+    undoToastIdsRef.current.push(
+      stellaToast.add({
+        title: t("knowledge.playbooks.positionRemoved"),
+        timeout: POSITION_REMOVED_TOAST_TIMEOUT_MS,
+        actionProps: {
+          children: t("common.undo"),
+          onClick: () => {
+            scheduleAutosaveFromEdit();
+            setPositions((prev) =>
+              prev.some((p) => p.sourceId === sourceId)
+                ? prev
+                : prev.toSpliced(Math.min(index, prev.length), 0, removed),
+            );
+          },
+        },
+      }),
+    );
   };
 
   const addPosition = (mode: "graded" | "extract") => {
+    scheduleAutosaveFromEdit();
     const position =
       mode === "graded" ? newGradedPosition() : newExtractPosition();
     setPositions((prev) => [...prev, position]);
@@ -612,6 +964,7 @@ const PlaybookEditorForm = ({
     if (!original) {
       return;
     }
+    scheduleAutosaveFromEdit();
     const copy = duplicatePosition(original);
     setPositions((prev) => {
       const at = prev.findIndex((p) => p.sourceId === sourceId);
@@ -657,6 +1010,7 @@ const PlaybookEditorForm = ({
   };
 
   const reorderPosition = (draggedSourceId: string, targetSourceId: string) => {
+    scheduleAutosaveFromEdit();
     setPositions((prev) => {
       const from = prev.findIndex((p) => p.sourceId === draggedSourceId);
       const to = prev.findIndex((p) => p.sourceId === targetSourceId);
@@ -672,6 +1026,7 @@ const PlaybookEditorForm = ({
   };
 
   const movePosition = (sourceId: string, direction: "up" | "down") => {
+    scheduleAutosaveFromEdit();
     setPositions((prev) => {
       const index = prev.findIndex((p) => p.sourceId === sourceId);
       return moveAdjacent(prev, index, direction) ?? prev;
@@ -682,7 +1037,7 @@ const PlaybookEditorForm = ({
     setOpen(sourceId, true);
     const container = scrollRef.current;
     const target = container?.querySelector<HTMLElement>(
-      `#position-${sourceId}`,
+      `[data-position-id="${CSS.escape(sourceId)}"]`,
     );
     if (!container || !target) {
       return;
@@ -704,18 +1059,44 @@ const PlaybookEditorForm = ({
       playbookDetailOptions(organizationId, id).queryKey,
     );
     if (fresh !== null && "updatedAt" in fresh) {
-      setUpdatedAt(fresh.updatedAt);
+      setPersisted((current) => ({ ...current, updatedAt: fresh.updatedAt }));
     }
   };
 
   /**
-   * A 409 means someone else moved the definition. Refetch and take the fresh
-   * token (the one place it moves without a write of this form's own): the
-   * user has now been told, so their next save is a deliberate overwrite
-   * rather than the same rejection again. Also offer a reload that swaps in
-   * the server's copy instead of leaving a toast the user can only re-trigger.
+   * A 409 means someone else moved the definition.
+   *
+   * On the page, refetch and take the fresh token (the one place it moves
+   * without the content): the user has now been told, so their next save is a
+   * deliberate overwrite rather than the same rejection again. Also offer a
+   * reload that swaps in the server's copy instead of leaving a toast the
+   * user can only re-trigger.
+   *
+   * In the pane, refetch: the form rebases onto the newer version. When the
+   * pane autosaves, the rebased draft saves by itself. An approval or an
+   * explicit Save is not repeated, so the pane says that it did not happen.
    */
-  const reportVersionConflict = (failure: ToastFailure) => {
+  const reportVersionConflict = (
+    failure: ToastFailure,
+    refused: "save" | "approval",
+  ) => {
+    if (host.type === "pane") {
+      if (playbookId !== null) {
+        detached(
+          refetchSupersededDetail(
+            queryClient,
+            playbookDetailOptions(organizationId, playbookId).queryKey,
+          ),
+          "playbook-editor.refetch-for-rebase",
+        );
+      }
+      if (refused === "approval" || !autosaves) {
+        notifyUserError(undefined, failure.title, {
+          description: failure.description,
+        });
+      }
+      return;
+    }
     if (playbookId !== null) {
       detached(
         takeFreshToken(playbookId),
@@ -740,33 +1121,114 @@ const PlaybookEditorForm = ({
     });
   };
 
+  /**
+   * Sends one save and records its outcome. Shared by the Save button and
+   * autosave; only the toasts around it differ.
+   */
+  const sendSave = async ({
+    savedDraft,
+    expectedUpdatedAt,
+  }: SendSaveArgs): Promise<SaveOutcome> => {
+    // The one place the save body is built — the same builder the dirty
+    // check fingerprints, so a field can never be saved without being tracked.
+    const payload = buildPlaybookSavePayload({
+      draft: savedDraft,
+      persistedIds: baseline.persistedIds,
+    });
+    // Each branch awaits its own Eden call and inspects `.error` before
+    // touching `.data`: Eden resolves rather than throwing, so a failed
+    // request reads as success anywhere the response is not checked.
+    const response =
+      playbookId === null
+        ? await api.playbooks.post(payload)
+        : await api
+            .playbooks({
+              playbookId: toSafeId<"playbookDefinition">(playbookId),
+            })
+            // Sent whenever the editor has a token: a save that would clobber
+            // someone else's is refused rather than silently winning.
+            .put({
+              ...payload,
+              ...(expectedUpdatedAt === null ? {} : { expectedUpdatedAt }),
+            });
+    if (response.error) {
+      return isEdenVersionConflict(response.error)
+        ? { type: "conflict", error: response.error }
+        : { type: "failed", error: response.error };
+    }
+    const savedAt =
+      "updatedAt" in response.data ? response.data.updatedAt : null;
+    // What was just persisted is the new clean state; the draft may have moved
+    // on during the request, and comparing against this snapshot keeps those
+    // later keystrokes dirty. A newer token a rebase already took stays.
+    setPersisted((current) =>
+      resolveSavedPlaybookState({ current, savedAt, savedDraft }),
+    );
+    recordSave(savedDraft, savedAt);
+    // Every update returns the playbook to draft.
+    setStatus("draft");
+    setApprovedAt(null);
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.playbooks.all(organizationId),
+      }),
+      "playbook-editor.invalidate",
+    );
+    return { type: "saved", updatedAt: savedAt };
+  };
+
+  const saveFailure = (error: ApiErrorInput): ToastFailure => ({
+    title: t("knowledge.playbooks.saveFailed"),
+    description: userErrorMessage(error, t("common.unexpectedError")),
+  });
+
+  const notifySaveFailed = (error: ApiErrorInput) => {
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.playbooks.all(organizationId),
+      }),
+      "playbook-editor.verify-failed-save",
+    );
+    const failure = saveFailure(error);
+    notifyUserError(toAPIError(error), failure.title, {
+      description: failure.description,
+    });
+  };
+
+  const revealInvalidPositions = () => {
+    setAttemptedSave(true);
+    // Expand every position that still has an error so the inline messages
+    // are visible, not hidden inside a collapsed card.
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      for (const id of invalidIds) {
+        next.add(id);
+      }
+      return next;
+    });
+    const first = invalidIds.at(0);
+    if (first !== undefined) {
+      jumpToPosition(first);
+    }
+  };
+
+  /** The pane's "not saved" status, pressed: shows what holds the save. */
+  const showProblems = () => {
+    revealInvalidPositions();
+    if (nameMissing && invalidIds.length === 0) {
+      nameInputRef.current?.focus();
+    }
+  };
+
+  /** The Save button: validates with toasts, then saves. */
   const handleSave = async (): Promise<boolean> => {
-    const trimmedName = name.trim();
-    if (trimmedName === "") {
+    if (nameMissing) {
       setAttemptedSave(true);
       notifyUserError(undefined, t("knowledge.playbooks.nameRequired"));
       return false;
     }
-
-    // Reuse the render-time validation map instead of re-running validatePosition
-    // per position twice more on the save path.
-    const invalidIds: string[] = [];
-    for (const [id, positionErrors] of errorsById) {
-      if (hasErrors(positionErrors)) {
-        invalidIds.push(id);
-      }
-    }
     if (invalidIds.length > 0) {
-      setAttemptedSave(true);
-      // Expand every position that still has an error so the inline messages
-      // are visible, not hidden inside a collapsed card.
-      setOpenIds((prev) => {
-        const next = new Set(prev);
-        for (const id of invalidIds) {
-          next.add(id);
-        }
-        return next;
-      });
+      revealInvalidPositions();
       notifyUserError(
         undefined,
         t("knowledge.playbooks.fixErrorsBeforeSaving"),
@@ -774,74 +1236,152 @@ const PlaybookEditorForm = ({
       return false;
     }
 
-    // The one place the save body is built — the same builder the dirty check
-    // fingerprints, so a field can never be saved without being tracked.
-    const savedDraft = draft;
-    const payload = buildPlaybookSavePayload(savedDraft);
-
-    // Shared by both endpoints: a 409 takes the conflict path (refetch plus a
-    // reload affordance), anything else is a plain error toast.
-    const reportSaveFailure = (error: ApiErrorInput) => {
-      const failure = {
-        title: t("knowledge.playbooks.saveFailed"),
-        description: userErrorMessage(error, t("common.unexpectedError")),
-      };
-      if (isEdenVersionConflict(error)) {
-        reportVersionConflict(failure);
-        return;
-      }
-      notifyUserError(toAPIError(error), failure.title, {
-        description: failure.description,
-      });
-    };
-
-    // Each branch awaits its own Eden call and inspects `.error` before
-    // touching `.data`: Eden resolves rather than throwing, so a failed
-    // request reads as success anywhere the response is not checked.
     setSaving(true);
-    if (playbookId === null) {
-      const response = await api.playbooks.post(payload);
-      setSaving(false);
-      if (response.error) {
-        reportSaveFailure(response.error);
-        return false;
-      }
-    } else {
-      const response = await api
-        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-        // Sent whenever the editor has a token: a save that would clobber
-        // someone else's is refused rather than silently winning.
-        .put({
-          ...payload,
-          ...(updatedAt === null ? {} : { expectedUpdatedAt: updatedAt }),
+    const { outcome } = await queueSave(draft);
+    setSaving(false);
+    setSaveRequest(outcome.type === "saved" ? "idle" : "failed");
+    switch (outcome.type) {
+      case "saved":
+        stellaToast.add({
+          type: "success",
+          title: isEdit
+            ? t("knowledge.playbooks.updated")
+            : t("knowledge.playbooks.created"),
         });
-      setSaving(false);
-      if (response.error) {
-        reportSaveFailure(response.error);
+        return true;
+      case "conflict":
+        detached(recordFailure(), "playbook-editor.verify-parked-save");
+        reportVersionConflict(saveFailure(outcome.error), "save");
         return false;
-      }
-      setUpdatedAt(response.data.updatedAt);
+      case "failed":
+        detached(recordFailure(), "playbook-editor.verify-parked-save");
+        notifySaveFailed(outcome.error);
+        return false;
+      default:
+        outcome satisfies never;
+        return panic(`Unhandled save outcome: ${String(outcome)}`);
     }
-
-    // What was just persisted is the new clean state; the draft may have moved
-    // on during the request, and comparing against this snapshot keeps those
-    // later keystrokes dirty.
-    setBaseline(createPlaybookBaseline(savedDraft));
-
-    stellaToast.add({
-      type: "success",
-      title: isEdit
-        ? t("knowledge.playbooks.updated")
-        : t("knowledge.playbooks.created"),
-    });
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.playbooks.all(organizationId),
-      }),
-      "playbook-editor.invalidate",
-    );
-    return true;
   };
+
+  const isAutosaveDue = (origin: "automatic" | "retry") =>
+    deletionRef.current === "idle" &&
+    (origin === "retry" || saveRequest !== "failed") &&
+    autosaves &&
+    (isDirty || hasPendingSave()) &&
+    !nameMissing &&
+    invalidIds.length === 0;
+
+  /** Saves the pane's draft. The status line reports it; only a failure
+   *  also raises a toast. */
+  const runAutosave = async (origin: "automatic" | "retry" = "automatic") => {
+    if (!isAutosaveDue(origin)) {
+      return;
+    }
+    setSaveRequest("in-flight");
+    const { outcome, isLatest } = await queueSave(draft);
+    switch (outcome.type) {
+      case "saved":
+        break;
+      case "conflict":
+        reportVersionConflict(saveFailure(outcome.error), "save");
+        break;
+      case "failed":
+        notifySaveFailed(outcome.error);
+        break;
+      default:
+        outcome satisfies never;
+        panic(`Unhandled save outcome: ${String(outcome)}`);
+    }
+    if (isLatest) {
+      setSaveRequest(outcome.type === "saved" ? "idle" : "failed");
+    }
+  };
+
+  const scheduleAutosave = useDebouncedCallback(() => {
+    detached(runAutosave(), "playbook-editor.autosave");
+  }, AUTOSAVE_DELAY_MS);
+
+  const scheduleAutosaveFromEdit = () => {
+    setSaveRequest((current) => (current === "failed" ? "idle" : current));
+    scheduleAutosave();
+  };
+
+  usePlaybookDetailSaveSubscription({
+    queryClient,
+    queryKey: autosaveQueryKey,
+    onSaved: scheduleAutosave,
+  });
+
+  /**
+   * Saves the draft as the pane unmounts, after any save still in flight.
+   * The status line is gone by then, so a failure is a toast.
+   */
+  const flushOnLeave = async (canSaveDraft: boolean) => {
+    const request = await queueFinalDraft({ draft, isDirty, canSaveDraft });
+    if (request === null) {
+      return null;
+    }
+    const { outcome } = request;
+    setSaveRequest(outcome.type === "saved" ? "idle" : "failed");
+    if (outcome.type !== "saved") {
+      notifySaveFailed(outcome.error);
+    }
+    return outcome;
+  };
+
+  const readServer = async () =>
+    await readEditorServer({
+      queryClient,
+      organizationId,
+      playbookId,
+      onReadError: (error) => {
+        notifyUserError(undefined, t("common.unexpectedError"), {
+          description: userErrorFromThrown(error, t("common.unexpectedError")),
+        });
+      },
+    });
+  const { leavePane, recordSave, recordFailure } = usePlaybookPaneLifecycle({
+    host,
+    playbookId,
+    state: {
+      draft,
+      updatedAt,
+      baseline,
+      status,
+      approvedAt,
+      openIds,
+      revealedIds,
+      unacknowledgedDrafts,
+    },
+    isDirty,
+    pendingSaveCount,
+    saveFailed: saveRequest === "failed",
+    autosaves,
+    canSave,
+    nameMissing,
+    invalidCount: invalidIds.length,
+    isDeleting: () => deletionRef.current !== "idle",
+    wasDeleted: () => deletionRef.current === "deleted",
+    readScrollTop: () => scrollTopRef.current,
+    flush: flushOnLeave,
+    readServer,
+  });
+
+  useMountEffect(() => {
+    if (scrollRef.current !== null && initial.scrollTop > 0) {
+      scrollRef.current.scrollTop = initial.scrollTop;
+    }
+    if (host.type === "pane" && isDirty && autosaves) {
+      scheduleAutosave();
+    }
+    return () => {
+      scheduleAutosave.cancel();
+      for (const toastId of undoToastIdsRef.current) {
+        stellaToast.close(toastId);
+      }
+      leavePane();
+    };
+  });
 
   /**
    * Runs the save and hands the outcome to `after`. The three "save now"
@@ -853,17 +1393,25 @@ const PlaybookEditorForm = ({
     after(await handleSave());
   };
 
+  const leaveIfSaved = (saved: boolean) => {
+    if (saved && host.type === "page") {
+      host.onSaved();
+    }
+  };
+
   const handleDelete = async () => {
     if (playbookId === null) {
       return;
     }
     setSaving(true);
+    deletionRef.current = "in-flight";
     const response = await api
       .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
       .delete();
     setSaving(false);
 
     if (response.error) {
+      deletionRef.current = "idle";
       notifyUserError(
         toAPIError(response.error),
         t("knowledge.playbooks.deleteFailed"),
@@ -877,6 +1425,7 @@ const PlaybookEditorForm = ({
       return;
     }
 
+    deletionRef.current = "deleted";
     stellaToast.add({
       type: "success",
       title: t("knowledge.playbooks.deleted"),
@@ -888,7 +1437,12 @@ const PlaybookEditorForm = ({
       }),
       "playbook-editor.invalidate",
     );
-    onSaved();
+    if (host.type === "page") {
+      host.onSaved();
+    } else {
+      clearPlaybookPaneDraft({ tabId: host.tabId, playbookId });
+      host.onClose();
+    }
   };
 
   const approveMutation = useMutation({
@@ -910,7 +1464,7 @@ const PlaybookEditorForm = ({
       // The approval's own `updatedAt`, not `approvedAt` standing in for it:
       // the two happen to coincide today, and a client that leans on that
       // breaks the moment the handler stops writing them together.
-      setUpdatedAt(data.updatedAt);
+      setPersisted((current) => ({ ...current, updatedAt: data.updatedAt }));
       detached(
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),
@@ -928,7 +1482,7 @@ const PlaybookEditorForm = ({
         description: userErrorFromThrown(error, t("common.unexpectedError")),
       };
       if (isThrownVersionConflict(error)) {
-        reportVersionConflict(failure);
+        reportVersionConflict(failure, "approval");
         return;
       }
       notifyUserError(error, failure.title, {
@@ -948,125 +1502,78 @@ const PlaybookEditorForm = ({
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      className="@container flex min-h-0 flex-1 flex-col overflow-y-auto"
+      // Read when the pane parks: the node is detached before unmount
+      // cleanup runs.
+      onScroll={(event) => {
+        scrollTopRef.current = event.currentTarget.scrollTop;
+      }}
       ref={scrollRef}
     >
-      <div className="mx-auto flex w-full max-w-5xl gap-8 p-6">
+      <div className="mx-auto flex w-full max-w-5xl gap-8 p-4 @lg:p-6">
         <div className="min-w-0 flex-1 space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button
-              onClick={requestBack}
-              size="sm"
-              type="button"
-              variant="ghost"
-              {...guideAnchor(GUIDE_ANCHORS.playbooksBack)}
-              {...guideReverseBlocked(isDirty)}
-            >
-              <ArrowLeftIcon />
-              {t("common.back")}
-            </Button>
-            <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
-              {isEdit && (
-                <PlaybookStatusBadge approvedAt={approvedAt} status={status} />
-              )}
-              {isDirty && (
-                <span className="text-muted-foreground text-xs">
-                  {t("knowledge.playbooks.unsavedChanges")}
-                </span>
-              )}
-              {isEdit && (
-                <Button
-                  onClick={() => setVersionHistoryOpen(true)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <HistoryIcon />
-                  {t("knowledge.playbooks.versions.versionHistory")}
-                </Button>
-              )}
-              {isEdit && canApprove && (
-                <Button
-                  disabled={isDirty || approveMutation.isPending}
-                  loading={approveMutation.isPending}
-                  onClick={handleApprove}
-                  size="sm"
-                  tooltip={
-                    isDirty
-                      ? t("knowledge.playbooks.approval.saveBeforeApprove")
-                      : undefined
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  <ShieldCheckIcon />
-                  {t("knowledge.playbooks.approval.approve")}
-                </Button>
-              )}
-              {isEdit && canDelete && (
-                <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
-                  <Button
-                    aria-label={t("knowledge.playbooks.deletePlaybook")}
-                    onClick={() => setDeleteOpen(true)}
-                    size="icon-sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Trash2Icon />
-                  </Button>
-                  <AlertDialogPopup>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {t("knowledge.playbooks.deletePlaybook")}
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {t("knowledge.playbooks.confirmDelete")}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogClose render={<Button variant="ghost" />}>
-                        {t("common.cancel")}
-                      </AlertDialogClose>
-                      <Button
-                        disabled={saving}
-                        onClick={() => {
-                          detached(handleDelete(), "playbook-editor.delete");
-                        }}
-                        variant="destructive"
-                      >
-                        {t("common.delete")}
-                      </Button>
-                    </AlertDialogFooter>
-                  </AlertDialogPopup>
-                </AlertDialog>
-              )}
-              <Button
-                disabled={!canSave || !isDirty || saving}
-                loading={saving}
-                onClick={() => {
-                  detached(
-                    saveThen((saved) => {
-                      if (saved) {
-                        onSaved();
-                      }
+          <PlaybookEditorToolbar
+            // The pane's save status stands in for the Save button and warns
+            // before a close loses edits, so it stays in view while scrolling.
+            className={cn(
+              host.type === "pane" && "bg-background sticky top-0 z-10 py-2",
+            )}
+            approvedAt={approvedAt}
+            approving={approveMutation.isPending}
+            busy={saving}
+            canApprove={canApprove}
+            canDelete={canDelete}
+            deleteOpen={deleteOpen}
+            isDirty={isDirty}
+            isEdit={isEdit}
+            onApprove={handleApprove}
+            backTourAttributes={tourAnchors.back(isDirty)}
+            onBack={onBack === null ? null : requestBack}
+            onDelete={() => {
+              detached(handleDelete(), "playbook-editor.delete");
+            }}
+            onDeleteOpenChange={setDeleteOpen}
+            onOpenVersionHistory={() => setVersionHistoryOpen(true)}
+            save={
+              autosaves
+                ? {
+                    type: "autosave",
+                    status: resolvePaneSaveStatus({
+                      isDirty,
+                      request: saveRequest,
+                      nameMissing,
+                      invalidPositions: invalidIds.length,
                     }),
-                    "playbook-editor.save",
-                  );
-                }}
-                type="button"
-              >
-                {t("common.save")}
-              </Button>
-            </div>
-          </div>
+                    onRetry: () => {
+                      detached(
+                        runAutosave("retry"),
+                        "playbook-editor.autosave-retry",
+                      );
+                    },
+                    onShowProblems: showProblems,
+                  }
+                : {
+                    type: "button",
+                    disabled: !canSave || !isDirty || saving,
+                    loading: saving,
+                    onSave: () => {
+                      detached(saveThen(leaveIfSaved), "playbook-editor.save");
+                    },
+                  }
+            }
+            status={status}
+          />
 
-          {staleDetail !== undefined && (
-            <StaleDetailNotice
-              isDirty={isDirty}
-              onReload={onReload}
-              staleDetail={staleDetail}
-            />
-          )}
+          {/* Once the fresher copy has loaded, a form without edits has already
+              followed it; the notice stays only over unsaved edits. */}
+          {staleDetail !== undefined &&
+            (staleDetail.fresher !== "loaded" || serverFollow === "behind") && (
+              <StaleDetailNotice
+                isDirty={isDirty}
+                onReload={onReload}
+                staleDetail={staleDetail}
+              />
+            )}
 
           {isEdit &&
             canApprove &&
@@ -1078,29 +1585,31 @@ const PlaybookEditorForm = ({
               </p>
             )}
 
-          <div
-            className="space-y-6"
-            {...guideAnchor(GUIDE_ANCHORS.playbooksBasics)}
-          >
+          <div className="space-y-6" {...tourAnchors.basics}>
             <div className="grid gap-1.5">
-              <Label htmlFor="playbook-name">{t("common.name")}</Label>
+              <Label htmlFor={nameId}>{t("common.name")}</Label>
               <Input
                 aria-invalid={attemptedSave && name.trim() === ""}
-                id="playbook-name"
-                onChange={(e) => setName(e.target.value)}
+                id={nameId}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  scheduleAutosaveFromEdit();
+                }}
+                ref={nameInputRef}
                 placeholder={t("knowledge.playbooks.namePlaceholder")}
                 value={name}
               />
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="playbook-description">
-                {t("common.description")}
-              </Label>
+              <Label htmlFor={descriptionId}>{t("common.description")}</Label>
               <Textarea
                 className="min-h-[60px]"
-                id="playbook-description"
-                onChange={(e) => setDescription(e.target.value)}
+                id={descriptionId}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  scheduleAutosaveFromEdit();
+                }}
                 placeholder={t("knowledge.playbooks.descriptionPlaceholder")}
                 value={description}
               />
@@ -1109,18 +1618,17 @@ const PlaybookEditorForm = ({
             <QueryViewFeedback view={documentTypesDataView} />
             {documentTypes.length > 0 && (
               <div className="grid gap-1.5">
-                <Label htmlFor="playbook-document-type">
-                  {t("common.type")}
-                </Label>
+                <Label htmlFor={documentTypeId}>{t("common.type")}</Label>
                 <Select
-                  onValueChange={(next) =>
+                  onValueChange={(next) => {
+                    scheduleAutosaveFromEdit();
                     setDocumentTypeKey(
                       next === null || next === SCOPE_ALL_VALUE ? null : next,
-                    )
-                  }
+                    );
+                  }}
                   value={documentTypeKey ?? SCOPE_ALL_VALUE}
                 >
-                  <SelectTrigger id="playbook-document-type">
+                  <SelectTrigger id={documentTypeId}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectPopup>
@@ -1152,7 +1660,10 @@ const PlaybookEditorForm = ({
               <h2 className="text-sm font-semibold">
                 {t("knowledge.playbooks.positions")}
               </h2>
-              <AddPositionMenu onAdd={addPosition} />
+              <AddPositionMenu
+                onAdd={addPosition}
+                tourAttributes={tourAnchors.addPosition}
+              />
             </div>
 
             {positions.length === 0 ? (
@@ -1169,6 +1680,7 @@ const PlaybookEditorForm = ({
                     key={position.sourceId}
                     onChange={(next) => updatePosition(position.sourceId, next)}
                     onConvertMode={() => convertMode(position.sourceId)}
+                    onFocusLeave={() => revealErrorsOnLeave(position.sourceId)}
                     onDuplicate={() => duplicateAt(position.sourceId)}
                     onMoveDown={() => movePosition(position.sourceId, "down")}
                     onMoveUp={() => movePosition(position.sourceId, "up")}
@@ -1179,7 +1691,9 @@ const PlaybookEditorForm = ({
                     organizationId={organizationId}
                     passageTexts={passageTexts}
                     position={position}
-                    showErrors={attemptedSave}
+                    showErrors={
+                      attemptedSave || revealedIds.has(position.sourceId)
+                    }
                     sources={
                       positionSources === undefined
                         ? []
@@ -1251,19 +1765,12 @@ const PlaybookEditorForm = ({
         primary={{
           label: t("common.saveAndLeave"),
           onClick: () => {
-            detached(
-              saveThen((saved) => {
-                if (saved) {
-                  onSaved();
-                }
-              }),
-              "playbook-editor.save-and-leave",
-            );
+            detached(saveThen(leaveIfSaved), "playbook-editor.save-and-leave");
           },
         }}
         secondary={{
           label: t("knowledge.playbooks.discardChanges"),
-          onClick: onBack,
+          onClick: () => leaveEditor(host),
           variant: "destructive",
         }}
       />
@@ -1322,52 +1829,14 @@ const PlaybookEditorForm = ({
   );
 };
 
-// ── Status badge ──────────────────────────────────────
-
-const PlaybookStatusBadge = ({
-  status,
-  approvedAt,
-}: {
-  status: PlaybookApprovalStatus;
-  approvedAt: string | null;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-
-  if (status === "approved") {
-    return (
-      <Tooltip
-        content={
-          approvedAt
-            ? t("knowledge.playbooks.approval.approvedOn", {
-                date: format.dateTime(new Date(approvedAt), {
-                  dateStyle: "medium",
-                }),
-              })
-            : undefined
-        }
-        render={
-          <span className="bg-success/15 text-success text-3xs inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase" />
-        }
-      >
-        {t("knowledge.playbooks.approval.statusApproved")}
-      </Tooltip>
-    );
-  }
-
-  return (
-    <span className="bg-muted text-muted-foreground text-3xs inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-      {t("knowledge.playbooks.approval.statusDraft")}
-    </span>
-  );
-};
-
 // ── Add-position menu (graded vs extract) ─────────────
 
 const AddPositionMenu = ({
   onAdd,
+  tourAttributes,
 }: {
   onAdd: (mode: "graded" | "extract") => void;
+  tourAttributes: TourAttributes;
 }) => {
   const t = useTranslations();
   return (
@@ -1378,7 +1847,7 @@ const AddPositionMenu = ({
             size="sm"
             type="button"
             variant="outline"
-            {...guideAnchor(GUIDE_ANCHORS.playbooksAddPosition)}
+            {...tourAttributes}
           />
         }
       >
@@ -1425,14 +1894,14 @@ const OutlineRail = ({
   positions,
   onJump,
 }: {
-  positions: Position[];
+  positions: readonly Position[];
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();
   return (
     <nav
       aria-label={t("knowledge.playbooks.outline")}
-      className="sticky top-6 hidden h-fit w-48 shrink-0 lg:block"
+      className="sticky top-6 hidden h-fit w-48 shrink-0 @3xl:block"
     >
       <p className="text-foreground-label mb-2 px-2 text-xs font-semibold">
         {t("knowledge.playbooks.outline")}
