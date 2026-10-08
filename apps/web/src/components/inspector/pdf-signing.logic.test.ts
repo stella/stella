@@ -30,6 +30,7 @@ describe("pdf signing poll decisions", () => {
       expect(
         decidePdfSigningPoll({
           deadline: NOW + 120_000,
+          handoffDeadline: NOW,
           now: NOW,
           session: openSession({ status: "cancelled", closeReason }),
         }),
@@ -44,12 +45,14 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession(),
       }),
     ).toEqual({
       type: "waiting",
       deadline: NOW + 60_000,
+      handoffDeadline: NOW,
       delayMs: PDF_SIGNING_POLL_INTERVAL_MS,
     });
   });
@@ -60,6 +63,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 30_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           expiresAt: new Date(NOW + 600_000).toISOString(),
@@ -68,6 +72,7 @@ describe("pdf signing poll decisions", () => {
     ).toEqual({
       type: "waiting",
       deadline: NOW + 600_000,
+      handoffDeadline: NOW,
       delayMs: PDF_SIGNING_POLL_INTERVAL_MS,
     });
   });
@@ -76,6 +81,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 500,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({ expiresAt: new Date(NOW + 500).toISOString() }),
       }),
@@ -86,16 +92,54 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({ expiresAt: new Date(NOW).toISOString() }),
       }),
-    ).toEqual({ type: "settled", outcome: { type: "expired" } });
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "handoff" },
+    });
+  });
+
+  test("an unredeemed handoff the server expired was never picked up", () => {
+    expect(
+      decidePdfSigningPoll({
+        deadline: NOW + 120_000,
+        handoffDeadline: NOW + 120_000,
+        now: NOW + 120_000,
+        session: openSession({
+          expiresAt: new Date(NOW + 120_000).toISOString(),
+          status: "expired",
+        }),
+      }),
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "handoff" },
+    });
+  });
+
+  test("a redeemed session that ran out was picked up by the desktop app", () => {
+    expect(
+      decidePdfSigningPoll({
+        deadline: NOW + 120_000,
+        handoffDeadline: NOW + 120_000,
+        now: NOW + 600_000,
+        session: openSession({
+          expiresAt: new Date(NOW + 600_000).toISOString(),
+        }),
+      }),
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "session" },
+    });
   });
 
   test("settles on the version the desktop app produced", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           finalizedVersionNumber: 7,
@@ -112,6 +156,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           finalizedVersionNumber: null,
@@ -128,6 +173,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           closeReason: "certificate_rejected",
@@ -144,10 +190,14 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 600_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({ status: "expired" }),
       }),
-    ).toEqual({ type: "settled", outcome: { type: "expired" } });
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "session" },
+    });
   });
 });
 
