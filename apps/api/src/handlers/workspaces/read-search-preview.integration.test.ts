@@ -15,6 +15,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { RUNTIME_MODE, setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -254,6 +255,7 @@ describe("matter search preview", () => {
       const readThroughHandler = async () => {
         const response = await readSearchPreview.handler(
           asTestRaw<Parameters<typeof readSearchPreview.handler>[0]>({
+            memberRole: sessionMemberRole("owner"),
             scopedDb,
             workspaceId: ids.wsA1,
             session: { activeOrganizationId: ids.orgA },
