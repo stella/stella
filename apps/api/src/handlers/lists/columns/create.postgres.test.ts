@@ -108,6 +108,13 @@ if (!databaseUrl || !runPostgres) {
           })),
         );
         const auditedOperations: unknown[] = [];
+        // The safe-handler wrapper binds each request's recorder from
+        // createAuditRecorder, replacing a directly supplied recordAuditEvent.
+        const recordAuditEvent = auditRecorderDouble((events) => {
+          auditedOperations.push(
+            ...events.map((event) => event.metadata?.["operation"]),
+          );
+        });
         const baseContext = {
           workspaceId,
           session: { activeOrganizationId: organizationId },
@@ -147,11 +154,8 @@ if (!databaseUrl || !runPostgres) {
                     Parameters<typeof createColumn.handler>[0]
                   >({
                     ...baseContext,
-                    recordAuditEvent: auditRecorderDouble((events) => {
-                      auditedOperations.push(
-                        ...events.map((event) => event.metadata?.["operation"]),
-                      );
-                    }),
+                    recordAuditEvent,
+                    createAuditRecorder: () => recordAuditEvent,
                     safeDb: createSafeDb(
                       workerDb,
                       [workspaceId],
