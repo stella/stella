@@ -228,7 +228,7 @@ describe("OpenAI decision credentials", () => {
       expect(runtime.analytics.exceptions().at(0)?.properties).toMatchObject({
         "error.class": "ConfigurationError",
         source: "resolveDecisionModel",
-        provider: "openai",
+        "failure.grade": "defect",
       });
       expect(runtime.fetch).not.toHaveBeenCalled();
     },
