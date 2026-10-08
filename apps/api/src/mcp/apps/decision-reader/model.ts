@@ -215,7 +215,7 @@ export const appendReaderPage = ({
       continue;
     }
     const completeJson = pendingFragment.json;
-    const parsed = Result.try(() => JSON.parse(completeJson));
+    const parsed = Result.try((): unknown => JSON.parse(completeJson));
     if (Result.isError(parsed)) {
       return invalidPage("Reader block fragment is invalid JSON");
     }
@@ -254,10 +254,7 @@ export const appendReaderPage = ({
   } as const;
 };
 
-export const readerDocumentAst = ({
-  metadata,
-  blocks,
-}: ReaderPager): DocumentAst => ({
+const readerDocumentAst = ({ metadata, blocks }: ReaderPager): DocumentAst => ({
   version: 1,
   source: {
     system: metadata.country,

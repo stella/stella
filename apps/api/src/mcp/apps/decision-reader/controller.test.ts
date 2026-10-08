@@ -91,7 +91,7 @@ const fixture = () => {
         listeners.delete(listener);
       };
     },
-    requestTool: (request: ToolRequest) => {
+    requestTool: async (request: ToolRequest) => {
       const call = { request, ...Promise.withResolvers<ToolResponse>() };
       calls.push(call);
       return call.promise;
@@ -239,19 +239,88 @@ describe("MCP decision reader controller", () => {
       paragraph(49),
     ]);
   });
-  test("concurrent page requests coalesce and superseded readers discard responses", async () => {
+  test("concurrent page requests coalesce within one reader", async () => {
     const host = fixture();
     host.emit({ status: "ready", view: open() });
     await host.controller.loadNext();
     expect(host.calls).toHaveLength(1);
-    const call = host.nextCall();
-    host.controller.supersede();
-    call.resolve(response(page(48)));
+    host.nextCall().resolve(response(page(48)));
     await settle();
-    expect(host.controller.getSnapshot().lifecycle).toBe("superseded");
+    expect(host.controller.getSnapshot().document?.blocks).toEqual([
+      paragraph(48),
+    ]);
+  });
+  test("separate reader sessions preserve their own documents and pagination", async () => {
+    const first = fixture();
+    first.emit({ status: "ready", view: open() });
+    first.nextCall().resolve(response(page(48, "page-2")));
+    await settle();
+    const second = fixture();
+    second.emit({ status: "ready", view: open() });
+    second.nextCall().resolve(response(page(49)));
+    await settle();
+    expect(first.controller.getSnapshot().document?.blocks).toEqual([
+      paragraph(48),
+    ]);
+    const continuation = first.controller.loadNext();
+    const call = first.nextCall();
+    expect(call.request.arguments["cursor"]).toBe("page-2");
+    call.resolve(response(page(50)));
+    await continuation;
+    expect(first.controller.getSnapshot().document?.blocks).toEqual([
+      paragraph(48),
+      paragraph(50),
+    ]);
+    expect(second.controller.getSnapshot().document?.blocks).toEqual([
+      paragraph(49),
+    ]);
+  });
+  test("repeated opens clear prior text and previews and reject their pending responses", async () => {
+    const host = fixture();
+    host.emit({ status: "ready", view: open() });
+    host.nextCall().resolve(response(page(48, "page-2")));
+    await settle();
+    const preview = {
+      appUrl: null,
+      documentId: metadata.decisionId,
+      language: "cs",
+      anchorId: "par-1",
+      citedAnchorId: null,
+      headings: [],
+      heading: null,
+      blocks: [],
+    } satisfies ProvisionPreview;
+    const initialPreview = host.controller.loadPreview({
+      document_id: metadata.decisionId,
+      anchor: "par-1",
+    });
+    host.nextCall().resolve(response(preview));
+    await initialPreview;
+    expect(host.controller.getSnapshot().preview?.anchorId).toBe("par-1");
+    const stalePaging = host.controller.loadNext();
+    const stalePage = host.nextCall();
+    const stalePreviewing = host.controller.loadPreview({
+      document_id: metadata.decisionId,
+      anchor: "par-2",
+    });
+    const stalePreview = host.nextCall();
+    host.emit({ status: "loading" });
     expect(host.controller.getSnapshot().document).toBeNull();
-    await host.controller.loadNext();
-    expect(host.calls).toHaveLength(0);
+    expect(host.controller.getSnapshot().preview).toBeNull();
+    host.emit({ status: "ready", view: open() });
+    const fresh = host.nextCall();
+    stalePage.resolve(response(page(49)));
+    stalePreview.resolve(response({ ...preview, anchorId: "par-2" }));
+    await Promise.all([stalePaging, stalePreviewing]);
+    expect(host.controller.getSnapshot().document?.blocks).toEqual([]);
+    expect(host.controller.getSnapshot().preview).toBeNull();
+    expect(host.controller.getSnapshot().requestStatus).toBe("loading");
+    fresh.resolve(response(page(50)));
+    await settle();
+    expect(host.controller.getSnapshot().document?.blocks).toEqual([
+      paragraph(50),
+    ]);
+    expect(host.controller.getSnapshot().preview).toBeNull();
   });
   test("failed provision previews retry the same reference after paging is complete", async () => {
     const host = fixture();
@@ -310,12 +379,9 @@ describe("MCP decision reader controller", () => {
       paragraph(49),
     ]);
   });
-  test("opening failures retry through the bridge and superseded readers never retry", async () => {
+  test("opening failures retry through the bridge", async () => {
     const host = fixture();
     host.emit({ status: "error", message: "Opening failed" });
-    await host.controller.retry();
-    expect(host.openingRetries()).toBe(1);
-    host.controller.supersede();
     await host.controller.retry();
     expect(host.openingRetries()).toBe(1);
   });

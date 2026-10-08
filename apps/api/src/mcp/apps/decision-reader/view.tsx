@@ -29,7 +29,11 @@ const focusReaderBack = (button: HTMLButtonElement | null) => {
 const anchorsFor = (document: ReaderPager, host: ReaderController) => {
   const anchors = new Map<string, TextAnchor[]>();
   const add = (pieceId: string, anchor: TextAnchor) => {
-    const existing = anchors.get(pieceId) ?? [];
+    let existing = anchors.get(pieceId);
+    if (existing === undefined) {
+      existing = [];
+      anchors.set(pieceId, existing);
+    }
     if (
       existing.some(
         (span) => span.start < anchor.end && anchor.start < span.end,
@@ -38,7 +42,6 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
       return;
     }
     existing.push(anchor);
-    anchors.set(pieceId, existing);
   };
   const linkHost = {
     supportsTools: host.bridge.supportsTools,
@@ -55,7 +58,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
       key: anchor.citationId,
       start: anchor.start,
       end: anchor.end,
-      render: (children: ReactNode) =>
+      render: (children: ReactNode): ReactNode =>
         !host.bridge.supportsTools() && anchor.appUrl === null ? (
           children
         ) : (
@@ -79,7 +82,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
       key: `${anchor.provision.document_id}:${anchor.provision.anchor}:${anchor.start}`,
       start: anchor.start,
       end: anchor.end,
-      render: (children: ReactNode) =>
+      render: (children: ReactNode): ReactNode =>
         !host.bridge.supportsTools() && anchor.appUrl === null ? (
           children
         ) : (
@@ -171,7 +174,7 @@ const McpProvisionPreview = ({
   const previewUrl = preview.appUrl;
   return (
     <aside className="mt-4 space-y-2" lang={preview.language} dir="ltr">
-      {previewUrl !== null && previewUrl !== undefined && (
+      {previewUrl !== null && (
         <Button
           variant="outline"
           onClick={() =>
@@ -283,7 +286,7 @@ export const ReaderView = ({
             className="p-4 sm:p-6"
             ref={(element) => {
               if (element === null || onBack === undefined) {
-                return;
+                return undefined;
               }
               const handleKeyDown = (event: KeyboardEvent) => {
                 if (event.key !== "Escape" || event.defaultPrevented) {
@@ -325,46 +328,49 @@ export const ReaderView = ({
                 </Button>
               </div>
             )}
-            {state.lifecycle === "active" &&
-              state.document?.status === "available" && (
-                <article
-                  data-slot="reader-text-root"
-                  className="reader-body mx-auto max-w-[var(--reader-measure)]"
-                  dir="ltr"
-                  lang={state.document.metadata.language}
-                  ref={(article) => {
-                    if (article === null || resolution?.type !== "found") {
-                      return;
-                    }
-                    const key = `${state.document?.metadata.decisionId}:${resolution.firstAnchorId}`;
-                    if (
-                      landing.current.key === key &&
-                      landing.current.opening === bridgeState.result
-                    ) {
-                      return;
-                    }
-                    const anchor = article.querySelector(
-                      `#${CSS.escape(resolution.firstAnchorId)}`,
-                    );
-                    if (anchor !== null) {
-                      anchor.scrollIntoView({ block: "center" });
-                      landing.current = { opening: bridgeState.result, key };
-                    }
-                  }}
-                >
-                  {state.document.blocks.map((block) => (
-                    <BlockRenderer
-                      key={block.id}
-                      block={block}
-                      activeMatchIndex={-1}
-                      rangesByPieceId={{}}
-                      anchorsByPieceId={anchors}
-                      variant="case-law"
-                      landing={landingIds.has(block.anchorId)}
-                    />
-                  ))}
-                </article>
-              )}
+            {state.document?.status === "available" && (
+              <article
+                data-slot="reader-text-root"
+                className="reader-body mx-auto max-w-[var(--reader-measure)]"
+                dir="ltr"
+                lang={state.document.metadata.language}
+                ref={(article) => {
+                  if (
+                    article === null ||
+                    resolution?.type !== "found" ||
+                    state.document?.status !== "available"
+                  ) {
+                    return;
+                  }
+                  const key = `${state.document.metadata.decisionId}:${resolution.firstAnchorId}`;
+                  if (
+                    landing.current.key === key &&
+                    landing.current.opening === bridgeState.result
+                  ) {
+                    return;
+                  }
+                  const anchor = article.querySelector(
+                    `#${CSS.escape(resolution.firstAnchorId)}`,
+                  );
+                  if (anchor !== null) {
+                    anchor.scrollIntoView({ block: "center" });
+                    landing.current = { opening: bridgeState.result, key };
+                  }
+                }}
+              >
+                {state.document.blocks.map((block) => (
+                  <BlockRenderer
+                    key={block.id}
+                    block={block}
+                    activeMatchIndex={-1}
+                    rangesByPieceId={{}}
+                    anchorsByPieceId={anchors}
+                    variant="case-law"
+                    landing={landingIds.has(block.anchorId)}
+                  />
+                ))}
+              </article>
+            )}
             <McpReaderStatus
               state={state}
               openingStatus={opened?.status}
@@ -372,8 +378,7 @@ export const ReaderView = ({
               unavailable={presentation["caseLaw.viewer.textUnavailable"]}
               loading={messages.loading}
             />
-            {state.lifecycle === "active" &&
-              state.document?.status === "available" &&
+            {state.document?.status === "available" &&
               !state.document.complete &&
               state.requestStatus !== "error" && (
                 <Button

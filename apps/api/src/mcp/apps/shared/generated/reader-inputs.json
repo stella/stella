@@ -128,7 +128,6 @@
     "apps/api/src/mcp/apps/decision-reader/link-actions.ts",
     "apps/api/src/mcp/apps/decision-reader/messages.tsx",
     "apps/api/src/mcp/apps/decision-reader/model.ts",
-    "apps/api/src/mcp/apps/decision-reader/supersession.ts",
     "apps/api/src/mcp/apps/decision-reader/view.tsx",
     "apps/api/src/mcp/apps/manifest.ts",
     "apps/api/src/mcp/apps/resource-uri.ts",

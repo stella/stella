@@ -17,16 +17,12 @@ type ReaderControllerSnapshot = {
   requestStatus: "idle" | "loading" | "error";
   previewStatus: "idle" | "loading" | "error";
   preview: ProvisionPreview | null;
-  lifecycle: "active" | "superseded";
 };
-const createReaderSnapshot = (
-  lifecycle: ReaderControllerSnapshot["lifecycle"] = "active",
-): ReaderControllerSnapshot => ({
+const createReaderSnapshot = (): ReaderControllerSnapshot => ({
   document: null,
   requestStatus: "idle",
   previewStatus: "idle",
   preview: null,
-  lifecycle,
 });
 
 export const createReaderController = (
@@ -59,8 +55,7 @@ export const createReaderController = (
     if (
       document === null ||
       document.complete ||
-      snapshot.requestStatus === "loading" ||
-      snapshot.lifecycle === "superseded"
+      snapshot.requestStatus === "loading"
     ) {
       return;
     }
@@ -75,7 +70,7 @@ export const createReaderController = (
         ...(cursor === null ? {} : { cursor }),
       },
     });
-    if (current !== generation || snapshot.lifecycle === "superseded") {
+    if (current !== generation) {
       return;
     }
     const page =
@@ -109,9 +104,6 @@ export const createReaderController = (
   const loadPreview = async (
     provision: ReaderPager["provisionAnchors"][number]["provision"],
   ) => {
-    if (snapshot.lifecycle === "superseded") {
-      return;
-    }
     lastProvision = provision;
     const current = generation;
     const currentPreview = ++previewGeneration;
@@ -121,11 +113,7 @@ export const createReaderController = (
       name: "preview_cited_provision",
       arguments: { provision },
     });
-    if (
-      current !== generation ||
-      currentPreview !== previewGeneration ||
-      snapshot.lifecycle === "superseded"
-    ) {
+    if (current !== generation || currentPreview !== previewGeneration) {
       return;
     }
     const preview =
@@ -140,9 +128,6 @@ export const createReaderController = (
     publish();
   };
   const retry = async () => {
-    if (snapshot.lifecycle === "superseded") {
-      return;
-    }
     if (snapshot.requestStatus === "error") {
       await loadNext();
       return;
@@ -163,19 +148,15 @@ export const createReaderController = (
   };
   bridge.subscribe(() => {
     const result = bridge.getSnapshot().result;
-    if (result.status === "idle" && snapshot.lifecycle === "active") {
+    if (result.status === "idle") {
       dismiss();
       return;
     }
-    if (result.status === "loading" && snapshot.lifecycle === "active") {
+    if (result.status === "loading") {
       dismiss();
       return;
     }
-    if (
-      result.status !== "ready" ||
-      result.view === received ||
-      snapshot.lifecycle === "superseded"
-    ) {
+    if (result.status !== "ready" || result.view === received) {
       publish();
       return;
     }
@@ -209,12 +190,6 @@ export const createReaderController = (
     },
     loadPreview,
     retry,
-    supersede: () => {
-      generation += 1;
-      lastProvision = undefined;
-      snapshot = createReaderSnapshot("superseded");
-      publish();
-    },
   };
 };
 export type ReaderController = ReturnType<typeof createReaderController>;

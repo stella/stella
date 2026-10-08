@@ -9278,5 +9278,33 @@
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
     "source": "estimated"
+  },
+  "scripts/lib/mcp-reader-ui-guard.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/chat/decision-reader-projections.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/apps/decision-reader/controller.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/apps/decision-reader/embedded-bridge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/apps/decision-reader/link-actions.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/apps/decision-reader/model.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/case-law-decision-link.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }

@@ -404,7 +404,7 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
       !statement.moduleSpecifier.text.startsWith("@stll/decision-reader/") ||
-      statement.importClause?.isTypeOnly
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
     ) {
       continue;
     }
@@ -420,8 +420,7 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
       namespaces.add(bindings.name.text);
     }
   }
-  let rendersReader = false;
-  let rendersShared = false;
+  const rendered = { reader: false, shared: false };
   const visit = (node: ts.Node) => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const name = node.tagName.getText(tree);
@@ -431,8 +430,8 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
         /^(?:\w+\.)?(?:DecisionText|DecisionReader|DocumentAstText|BlockRenderer|InlineContent|DecisionIdentity|CourtName)$/u.test(
           name,
         );
-      rendersReader ||= (readerPath && rendersNative) || readerElement;
-      rendersShared ||=
+      rendered.reader ||= (readerPath && rendersNative) || readerElement;
+      rendered.shared ||=
         imports.has(name) ||
         (ts.isPropertyAccessExpression(node.tagName) &&
           ts.isIdentifier(node.tagName.expression) &&
@@ -443,7 +442,7 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
   visit(tree);
   // The build's metafile guard owns reachability. This source guard owns modules
   // that paint reader UI; data modules and bootstraps delegate that rendering.
-  return rendersReader && !rendersShared;
+  return rendered.reader && !rendered.shared;
 };
 
 test("MCP decision reader entries use the shared rendering package", () => {

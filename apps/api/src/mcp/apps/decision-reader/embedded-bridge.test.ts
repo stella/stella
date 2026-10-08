@@ -67,7 +67,7 @@ const fixture = () => {
         listeners.delete(listener);
       };
     },
-    requestTool: (tool: ToolRequest) => {
+    requestTool: async (tool: ToolRequest) => {
       const call = { request: tool, ...Promise.withResolvers<ToolResponse>() };
       calls.push(call);
       return call.promise;
@@ -197,7 +197,7 @@ describe("embedded MCP decision reader session", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(controller.getSnapshot().document).toBeNull();
-    expect(controller.getSnapshot().lifecycle).toBe("active");
+    expect(controller.getSnapshot().requestStatus).toBe("idle");
     const latest = host.session.call(request);
     host.nextCall().resolve(response(opened));
     await latest;

@@ -84,7 +84,7 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
     },
     detached: createDetached(() => publish({ status: "error", message: null })),
     call,
-    retry: () =>
+    retry: async () =>
       call({ name: "open_case_law_decision", arguments: snapshot.input }),
     requestTool: parent.requestTool,
     requestFullscreen: async () => {

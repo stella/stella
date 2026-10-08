@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import type { FrameLocator, Page } from "@playwright/test";
+import { panic } from "better-result";
 import { readFile } from "node:fs/promises";
 import type * as v from "valibot";
-import { panic } from "better-result";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
@@ -232,6 +232,7 @@ type HostOptions = {
   pages?: ReaderPage[];
   navigation?: "tools" | "links";
   surface?: "reader" | "results";
+  sandbox?: "opaque" | "same-origin";
 };
 const mountReader = async ({
   page,
@@ -242,6 +243,7 @@ const mountReader = async ({
   pages = [FIRST, SECOND],
   navigation = "tools",
   surface = "reader",
+  sandbox = "opaque",
 }: HostOptions) => {
   const bundle = await readFile(
     new URL(
@@ -256,10 +258,14 @@ const mountReader = async ({
       `<head><meta http-equiv="Content-Security-Policy" content="${MCP_APP_SANDBOX_CONTENT_DIRECTIVES.join("; ")}">`,
   );
   const fixtureUrl = "http://localhost/decision-reader-fixture";
+  const sandboxPermissions =
+    sandbox === "same-origin"
+      ? "allow-scripts allow-forms allow-same-origin"
+      : "allow-scripts allow-forms";
   await page.route(fixtureUrl, async (route) =>
     route.fulfill({
       contentType: "text/html",
-      body: '<iframe id="reader" sandbox="allow-scripts allow-forms" style="width:100%;height:650px;border:0"></iframe>',
+      body: `<iframe id="reader" sandbox="${sandboxPermissions}" style="width:100%;height:650px;border:0"></iframe>`,
     }),
   );
   await page.goto(fixtureUrl);
@@ -293,12 +299,15 @@ const mountReader = async ({
         content: [],
         structuredContent: data,
       });
-      window.addEventListener("message", ({ source, data }) => {
-        if (
-          source !== iframe.contentWindow ||
-          typeof data !== "object" ||
-          data === null
-        ) {
+      const isRecord = (value: unknown): value is Record<string, unknown> =>
+        typeof value === "object" && value !== null && !Array.isArray(value);
+      const rejectRequest = (id: unknown, message: string) => {
+        failures.push(message);
+        reply({ jsonrpc: "2.0", id, error: { code: -32_602, message } });
+      };
+      window.addEventListener("message", (event) => {
+        const data: unknown = event.data;
+        if (event.source !== iframe.contentWindow || !isRecord(data)) {
           return;
         }
         const { method, params, id } = data;
@@ -325,6 +334,7 @@ const mountReader = async ({
                   displayMode: "inline",
                   availableDisplayModes: ["inline", "fullscreen"],
                   toolInfo: {
+                    id: "fixture-repeated-request-id",
                     tool: {
                       name:
                         appSurface === "reader"
@@ -364,26 +374,35 @@ const mountReader = async ({
             });
             break;
           case "tools/call": {
-            calls.push({ name: params.name, arguments: params.arguments });
-            if (params.name === "open_case_law_decision") {
+            if (
+              !isRecord(params) ||
+              typeof params["name"] !== "string" ||
+              !isRecord(params["arguments"])
+            ) {
+              rejectRequest(id, "Invalid fixture tool request");
+              return;
+            }
+            const { name, arguments: args } = params;
+            calls.push({ name, arguments: args });
+            if (name === "open_case_law_decision") {
               reply({
                 jsonrpc: "2.0",
                 id,
                 result: toolResult(
-                  params.arguments.decision_id === result.metadata.decisionId
+                  args["decision_id"] === result.metadata.decisionId
                     ? result
                     : citedOpening,
                 ),
               });
               break;
             }
-            if (params.name === "preview_cited_provision") {
+            if (name === "preview_cited_provision") {
               const output = toolResult(provisionPreview);
               toolResponses.push(output);
               reply({ jsonrpc: "2.0", id, result: output });
               break;
             }
-            if (params.name !== "read_case_law_decision_blocks") {
+            if (name !== "read_case_law_decision_blocks") {
               reply({
                 jsonrpc: "2.0",
                 id,
@@ -397,20 +416,27 @@ const mountReader = async ({
               break;
             }
             const index =
-              params.arguments.cursor === undefined
+              args["cursor"] === undefined
                 ? 0
                 : results.findIndex(
                     (entry) =>
                       entry.content.status === "available" &&
-                      entry.content.nextCursor === params.arguments.cursor,
+                      entry.content.nextCursor === args["cursor"],
                   ) + 1;
             const response =
-              params.arguments.decision_id === citedOpening.metadata.decisionId
+              args["decision_id"] === citedOpening.metadata.decisionId
                 ? citedPage
                 : results.at(index);
             if (response === undefined) {
               failures.push("Missing reader page fixture");
-              reply({ jsonrpc: "2.0", id, error: { code: -32_603, message: "Missing reader page fixture" } });
+              reply({
+                jsonrpc: "2.0",
+                id,
+                error: {
+                  code: -32_603,
+                  message: "Missing reader page fixture",
+                },
+              });
               return;
             }
             const output = toolResult(response);
@@ -426,7 +452,11 @@ const mountReader = async ({
             });
             break;
           case "ui/open-link":
-            links.push(params.url);
+            if (!isRecord(params) || typeof params["url"] !== "string") {
+              rejectRequest(id, "Invalid fixture link request");
+              return;
+            }
+            links.push(params["url"]);
             reply({ jsonrpc: "2.0", id, result: {} });
             break;
           default:
@@ -703,6 +733,11 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await expect(app.locator("#para90")).toContainText(
       "Reader-only paragraph 90.",
     );
+    await expect(app.locator("#linked-paragraph")).toHaveCount(0);
+    await expect(app.locator("aside")).toHaveCount(0);
+    await expect(
+      app.getByText("Exact cited provision wording.", { exact: true }),
+    ).toHaveCount(0);
     const recorded = await history(page);
     expect(recorded.calls).toContainEqual({
       name: "open_case_law_decision",
@@ -939,5 +974,93 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       `${metadata.appUrl}#par=48-49`,
     ]);
     await expect(page.locator("iframe")).toHaveCount(1);
+  });
+}
+
+for (const host of ["ChatGPT", "Claude"] as const) {
+  test(`${host} reader openings in separate host pages remain independent without conversation identity`, async ({
+    page,
+  }) => {
+    const first = await mountReader({ page, host, sandbox: "same-origin" });
+    await expect(first.locator("#para1")).toContainText(
+      "Reader-only paragraph 1.",
+    );
+    expect(await first.locator("html").evaluate(() => window.origin)).toBe(
+      "http://localhost",
+    );
+    await first.locator("html").evaluate((element) => {
+      const channel = new BroadcastChannel("stella-fixture-shared-origin");
+      channel.addEventListener(
+        "message",
+        (event) => {
+          const data: unknown = event.data;
+          if (data !== "fixture-delivered") {
+            return;
+          }
+          element.dataset["fixtureChannel"] = data;
+          channel.close();
+        },
+        { once: true },
+      );
+    });
+    const secondPage = await page.context().newPage();
+    const second = await mountReader({
+      page: secondPage,
+      host,
+      sandbox: "same-origin",
+      pages: LINK_PAGES,
+    });
+    await expect(second.locator("#linked-paragraph")).toContainText(linkedText);
+    expect(await second.locator("html").evaluate(() => window.origin)).toBe(
+      "http://localhost",
+    );
+    await second.locator("html").evaluate(() => {
+      const channel = new BroadcastChannel("stella-fixture-shared-origin");
+      const send = channel.postMessage.bind(channel);
+      send("fixture-delivered");
+      channel.close();
+    });
+    await expect(first.locator("html")).toHaveAttribute(
+      "data-fixture-channel",
+      "fixture-delivered",
+    );
+    await expect(first.locator("#para1")).toContainText(
+      "Reader-only paragraph 1.",
+    );
+    await loadReferencePages(second);
+    await second
+      .getByRole("button", { name: "cited provision", exact: true })
+      .click();
+    await expect(second.locator("aside")).toContainText(
+      "Exact cited provision wording.",
+    );
+    await second
+      .getByRole("button", { name: "Cited decision", exact: true })
+      .click();
+    await expect(second.locator("#para90")).toContainText(
+      "Reader-only paragraph 90.",
+    );
+    await expect(second.locator("#linked-paragraph")).toHaveCount(0);
+    await expect(second.locator("aside")).toHaveCount(0);
+    await expect(first.locator("#para1")).toContainText(
+      "Reader-only paragraph 1.",
+    );
+    await first.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(first.locator("#para48")).toContainText(
+      "Reader-only paragraph 48.",
+    );
+    await expect(first.locator("#para1")).toContainText(
+      "Reader-only paragraph 1.",
+    );
+    await expect(second.locator("#para90")).toContainText(
+      "Reader-only paragraph 90.",
+    );
+    expect(
+      (await history(page)).calls.map(({ arguments: args }) => args["cursor"]),
+    ).toEqual([undefined, "fixture-page-2"]);
+    expect((await history(secondPage)).calls).toContainEqual({
+      name: "open_case_law_decision",
+      arguments: { decision_id: citedDecisionId },
+    });
   });
 }
