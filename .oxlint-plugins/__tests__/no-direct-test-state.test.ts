@@ -78,6 +78,37 @@ describe(RULE, () => {
     ).toEqual([]);
   });
 
+  test("rejects setup registered before the fixture, including aliased hooks", async () => {
+    expect(
+      await lint(
+        'import { beforeEach as setup } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\nsetup(() => state.setEnv("A", "setup"));\nconst state = createTestState({ file: import.meta.path, config: {} });',
+      ),
+    ).toEqual([3]);
+    expect(
+      await lint(
+        'import { test } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\ntest.each([1])("early", () => {});\nconst state = createTestState({ file: import.meta.path, config: {} });',
+      ),
+    ).toEqual([3]);
+  });
+
+  test("requires file registration scope and fixture-owned beforeAll setup", async () => {
+    expect(
+      await lint(
+        'import { describe } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\ndescribe("nested", () => {\n  createTestState({ file: import.meta.path, config: {} });\n});',
+      ),
+    ).toEqual([3, 4]);
+    expect(
+      await lint(
+        'import { beforeAll } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\nconst state = createTestState({ file: import.meta.path, config: {} });\nbeforeAll(() => state.setEnv("A", "setup"));',
+      ),
+    ).toEqual([4]);
+    expect(
+      await lint(
+        'import { beforeEach, afterEach, describe } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\nconst state = createTestState({ file: import.meta.path, config: {} });\nbeforeEach(() => state.setEnv("A", "setup"));\nafterEach(() => state.setEnv("A", "teardown"));\ndescribe("nested", () => { state.beforeAll(() => state.setEnv("A", "file")); });',
+      ),
+    ).toEqual([]);
+  });
+
   test("the planted file remains rejected with its suppressions removed", async () => {
     const fixture = readFileSync(
       path.join(

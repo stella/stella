@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, afterEach, beforeEach } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach } from "bun:test";
 
 const activeFiles = new Set<string>();
 
@@ -67,11 +67,12 @@ export const createTestState = <Config extends object>({
   };
 
   beforeEach(() => {
+    // A later teardown hook can write after our afterEach has already run.
+    restore(testRestores);
     phase = "test";
   });
   afterEach(() => {
     restore(testRestores);
-    phase = "file";
   });
   afterAll(() => {
     restore(testRestores);
@@ -80,6 +81,17 @@ export const createTestState = <Config extends object>({
   });
 
   return {
+    beforeAll: (setup: () => void | Promise<void>) => {
+      beforeAll(async () => {
+        restore(testRestores);
+        phase = "file";
+        try {
+          await setup();
+        } finally {
+          phase = "test";
+        }
+      });
+    },
     setEnv,
     setEnvIfAbsent: (key: string, value: string) => {
       if (process.env[key] === undefined) {

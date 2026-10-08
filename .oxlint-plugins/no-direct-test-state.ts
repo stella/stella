@@ -140,6 +140,62 @@ const createStateResolver = (context: ScopeContext & FilenameContext) => {
   return { isGlobal, isState, variableOf };
 };
 
+const testRegistration = (
+  context: ScopeContext & FilenameContext,
+  input: unknown,
+) => {
+  let callee = unwrapExpression(input);
+  while (callee?.type === "MemberExpression") {
+    if (resolveImport(context, callee)?.moduleId === "bun:test") {
+      break;
+    }
+    callee = unwrapExpression(callee.object);
+  }
+  const binding = resolveImport(context, callee);
+  if (binding?.moduleId !== "bun:test") {
+    return null;
+  }
+  return [
+    "beforeAll",
+    "beforeEach",
+    "afterEach",
+    "afterAll",
+    "test",
+    "it",
+    "describe",
+  ].includes(binding.imported)
+    ? binding.imported
+    : null;
+};
+
+const isReflectiveWrite = (owner: string, method: string | null) => {
+  if (method === null) {
+    return false;
+  }
+  switch (owner) {
+    case "Object":
+      return [
+        "assign",
+        "defineProperty",
+        "defineProperties",
+        "setPrototypeOf",
+        "freeze",
+        "seal",
+        "preventExtensions",
+      ].includes(method);
+    case "Reflect":
+      return [
+        "set",
+        "deleteProperty",
+        "defineProperty",
+        "setPrototypeOf",
+        "preventExtensions",
+      ].includes(method);
+    default:
+      return false;
+  }
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-direct-test-state" },
   rules: {
@@ -153,6 +209,10 @@ export default eslintCompatPlugin({
             "{{file}} now has {{count}} state mutations (baseline {{baseline}}). Shrink scripts/test-state-baseline.json in this change.",
           concurrent:
             "Files using createTestState must run serial tests; concurrent tests share the environment and validated configuration.",
+          registration:
+            "Register createTestState at the test file's top level before any test, describe or lifecycle hook so its cleanup runs before setup hooks.",
+          fileSetup:
+            "Use the fixture's beforeAll method for file-scoped state setup; ordinary beforeAll hooks cannot declare the fixture's restoration scope.",
         },
       },
       createOnce(context) {
@@ -161,6 +221,9 @@ export default eslintCompatPlugin({
         let mutations: ESTree.Node[] = [];
         let hasFixture = false;
         let concurrent: ESTree.Node[] = [];
+        let earlyRegistrations: ESTree.Node[] = [];
+        let fileSetup: ESTree.Node[] = [];
+        let nestedFixtures: ESTree.Node[] = [];
 
         const { isGlobal, isState, variableOf } = createStateResolver(context);
 
@@ -194,6 +257,9 @@ export default eslintCompatPlugin({
             mutations = [];
             hasFixture = false;
             concurrent = [];
+            earlyRegistrations = [];
+            fileSetup = [];
+            nestedFixtures = [];
           },
           AssignmentExpression(node) {
             if (mutates(node.left)) {
@@ -212,11 +278,26 @@ export default eslintCompatPlugin({
           },
           CallExpression(node) {
             const imported = resolveImport(context, node.callee);
+            const registration = testRegistration(context, node.callee);
+            if (registration !== null) {
+              if (!hasFixture) {
+                earlyRegistrations.push(node);
+              }
+              if (registration === "beforeAll") {
+                fileSetup.push(node);
+              }
+            }
             if (
               imported?.moduleId === FIXTURE_MODULE &&
               imported.imported === "createTestState"
             ) {
               hasFixture = true;
+              const parent = node.parent;
+              const statement =
+                parent?.type === "VariableDeclarator" ? parent.parent : parent;
+              if (statement?.parent?.type !== "Program") {
+                nestedFixtures.push(node);
+              }
             }
             let callee = unwrapExpression(node.callee);
             const seen = new Set<Variable>();
@@ -236,21 +317,10 @@ export default eslintCompatPlugin({
               return;
             }
             const method = memberPropertyName(callee);
-            const reflectiveWrite =
-              (callee.object.name === "Object" &&
-                (method === "assign" ||
-                  method === "defineProperty" ||
-                  method === "defineProperties" ||
-                  method === "setPrototypeOf" ||
-                  method === "freeze" ||
-                  method === "seal" ||
-                  method === "preventExtensions")) ||
-              (callee.object.name === "Reflect" &&
-                (method === "set" ||
-                  method === "deleteProperty" ||
-                  method === "defineProperty" ||
-                  method === "setPrototypeOf" ||
-                  method === "preventExtensions"));
+            const reflectiveWrite = isReflectiveWrite(
+              callee.object.name,
+              method,
+            );
             if (reflectiveWrite && isState(node.arguments.at(0))) {
               mutations.push(node);
             }
@@ -285,6 +355,18 @@ export default eslintCompatPlugin({
               context.report({ node: mutation, messageId: "mutation" });
             }
             if (hasFixture) {
+              for (const registration of [
+                ...earlyRegistrations,
+                ...nestedFixtures,
+              ]) {
+                context.report({
+                  node: registration,
+                  messageId: "registration",
+                });
+              }
+              for (const setup of fileSetup) {
+                context.report({ node: setup, messageId: "fileSetup" });
+              }
               for (const member of concurrent) {
                 context.report({ node: member, messageId: "concurrent" });
               }

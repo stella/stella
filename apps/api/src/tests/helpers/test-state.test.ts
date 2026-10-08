@@ -19,7 +19,7 @@ const runLifecycleFixture = (source: string | readonly string[]) => {
       const file = path.join(directory, `lifecycle-${index}.test.ts`);
       writeFileSync(
         file,
-        `import { afterAll, afterEach, expect, test } from "bun:test";
+        `import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createTestState } from ${JSON.stringify(helper)};
 import { shared } from "./shared-state.ts";
 const existingKey = ${JSON.stringify(existingKey)};
@@ -269,4 +269,89 @@ test("second file registers hooks even though the helper module is cached", () =
   expect(child.output).toContain("SECOND_TEST_CLEANUP_VERIFIED");
   expect(child.output).toContain("SECOND_FILE_CLEANUP_VERIFIED");
   expect(child.output).toContain("2 pass");
+});
+
+test("restoring fixtures clear writes from later teardown hooks before the next setup", () => {
+  const child = runLifecycleFixture(`
+const config = { value: "original-config" };
+const state = createTestState({ file: import.meta.path, config });
+state.setEnv(existingKey, "file-env");
+state.setConfig("value", "file-config");
+let completed = 0;
+beforeEach(() => {
+  expect(config.value).toBe("file-config");
+  expect(process.env[existingKey]).toBe("file-env");
+  expect(process.env[absentKey]).toBeUndefined();
+  state.setConfig("value", "setup-config");
+  state.setEnv(existingKey, "setup-env");
+});
+afterEach(() => {
+  state.setConfig("value", "late-teardown");
+  state.setEnv(existingKey, "late-teardown");
+  state.setEnv(absentKey, "late-created");
+  completed += 1;
+});
+afterAll(() => {
+  expect(completed).toBe(3);
+  expect(config.value).toBe("original-config");
+  expect(process.env[existingKey]).toBe("original-env");
+  expect(process.env[absentKey]).toBeUndefined();
+  console.log("HOOK_ORDER_CLEANUP_VERIFIED");
+});
+for (const name of ["first", "second", "third"]) {
+  test(name, () => {
+    expect(config.value).toBe("setup-config");
+    expect(process.env[existingKey]).toBe("setup-env");
+    state.setConfig("value", "test-config");
+  });
+}
+`);
+  expect(child.exitCode, child.output).toBe(0);
+  expect(child.output).toContain("HOOK_ORDER_CLEANUP_VERIFIED");
+});
+
+test("restoring fixtures scope nested suite setup and teardown writes", () => {
+  const child = runLifecycleFixture(`
+const config = { value: "original-config" };
+const state = createTestState({ file: import.meta.path, config });
+state.setConfig("value", "file-config");
+state.setEnv(existingKey, "file-env");
+afterEach(() => state.setEnv(absentKey, "outer-late-teardown"));
+test("preceding suite", () => {
+  state.setConfig("value", "preceding-test");
+});
+describe("nested suite", () => {
+  state.beforeAll(() => {
+    expect(process.env[absentKey]).toBeUndefined();
+    state.setConfig("value", "suite-config");
+    state.setEnv(existingKey, "suite-env");
+  });
+  beforeEach(() => {
+    expect(config.value).toBe("suite-config");
+    expect(process.env[existingKey]).toBe("suite-env");
+    expect(process.env[absentKey]).toBeUndefined();
+    state.setConfig("value", "nested-setup");
+    state.setEnv(existingKey, "nested-setup");
+  });
+  afterEach(() => {
+    state.setConfig("value", "nested-teardown");
+    state.setEnv(existingKey, "nested-teardown");
+  });
+  for (const name of ["first nested", "second nested"]) {
+    test(name, () => {
+      expect(config.value).toBe("nested-setup");
+      expect(process.env[existingKey]).toBe("nested-setup");
+      state.setConfig("value", "nested-test");
+    });
+  }
+});
+afterAll(() => {
+  expect(config.value).toBe("original-config");
+  expect(process.env[existingKey]).toBe("original-env");
+  expect(process.env[absentKey]).toBeUndefined();
+  console.log("NESTED_HOOK_CLEANUP_VERIFIED");
+});
+`);
+  expect(child.exitCode, child.output).toBe(0);
+  expect(child.output).toContain("NESTED_HOOK_CLEANUP_VERIFIED");
 });
