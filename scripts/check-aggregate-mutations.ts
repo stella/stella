@@ -8,12 +8,14 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { BASELINE_PATHS } from "./baseline-paths";
+
 const ROOT = path.resolve(import.meta.dir, "..");
 const API = "apps/api/src/";
 const SERVER = `${API}server.ts`;
 const REGISTRY = `${API}lib/db/aggregate-lock.ts`;
 const OWNER = `${API}lib/db/aggregate-mutation-declaration.ts`;
-const BASELINE = "scripts/aggregate-mutations-baseline.json";
+const BASELINE = BASELINE_PATHS.aggregateMutations;
 const MUTATIONS = new Set(["post", "put", "patch", "delete", "all"]);
 const baselineSchema = v.array(
   v.object({

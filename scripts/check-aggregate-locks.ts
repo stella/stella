@@ -10,11 +10,11 @@ import {
   aggregateLockBaselineProblems,
   aggregateLockSites,
 } from "../.oxlint-plugins/aggregate-lock-sites.ts";
+import { BASELINE_PATHS } from "./baseline-paths";
 
 export { aggregateLockSourceIncluded } from "../.oxlint-plugins/aggregate-lock-sites.ts";
 
-export const AGGREGATE_LOCK_BASELINE_PATH =
-  "scripts/aggregate-lock-baseline.json";
+export const AGGREGATE_LOCK_BASELINE_PATH = BASELINE_PATHS.aggregateLocks;
 const baselineSchema = v.array(
   v.object({
     file: v.string(),
