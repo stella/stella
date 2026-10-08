@@ -326,6 +326,10 @@ describe("nested suite", () => {
     state.setConfig("value", "suite-config");
     state.setEnv(existingKey, "suite-env");
   });
+  state.beforeAll(() => {
+    state.setConfig("value", "suite-config");
+    state.setEnv(existingKey, "suite-env");
+  });
   beforeEach(() => {
     expect(config.value).toBe("suite-config");
     expect(process.env[existingKey]).toBe("suite-env");
@@ -345,6 +349,14 @@ describe("nested suite", () => {
     });
   }
 });
+describe("following sibling suite", () => {
+  test("retains file defaults after the nested suite ends", () => {
+    expect(config.value).toBe("file-config");
+    expect(process.env[existingKey]).toBe("file-env");
+    expect(process.env[absentKey]).toBeUndefined();
+    console.log("SIBLING_DEFAULTS_VERIFIED");
+  });
+});
 afterAll(() => {
   expect(config.value).toBe("original-config");
   expect(process.env[existingKey]).toBe("original-env");
@@ -354,4 +366,52 @@ afterAll(() => {
 `);
   expect(child.exitCode, child.output).toBe(0);
   expect(child.output).toContain("NESTED_HOOK_CLEANUP_VERIFIED");
+  expect(child.output).toContain("SIBLING_DEFAULTS_VERIFIED");
+});
+
+test("closed fixtures reject final teardown writes before another file runs", () => {
+  const child = runLifecycleFixture([
+    `
+const config = shared.config;
+const state = createTestState({ file: import.meta.path, config });
+state.setConfig("value", "file-config");
+state.setEnv(existingKey, "file-env");
+state.beforeAll(() => {
+  state.setConfig("value", "suite-config");
+  state.setEnv(existingKey, "suite-env");
+});
+test("top-level suite defaults", () => {
+  expect(config.value).toBe("suite-config");
+  expect(process.env[existingKey]).toBe("suite-env");
+});
+afterAll(() => {
+  const mutations = [
+    () => state.setEnv(existingKey, "late-env"),
+    () => state.setConfig("value", "late-config"),
+    () => state.deleteEnv(existingKey),
+    () => state.deleteConfig("value"),
+    () => state.patchConfig({ value: "late-patch" }),
+    () => state.patchConfig({}),
+    () => state.setEnvIfAbsent(existingKey, "late-default"),
+  ];
+  for (const mutate of mutations) {
+    expect(mutate).toThrow("is closed. Move the mutation into a test/beforeEach.");
+  }
+  expect(config.value).toBe("original-config");
+  expect(process.env[existingKey]).toBe("original-env");
+  console.log("CLOSED_FIXTURE_VERIFIED");
+});
+`,
+    `
+test("next file sees the originals", () => {
+  expect(shared.config.value).toBe("original-config");
+  expect(process.env[existingKey]).toBe("original-env");
+  expect(process.env[absentKey]).toBeUndefined();
+  console.log("NEXT_FILE_ORIGINALS_VERIFIED");
+});
+`,
+  ]);
+  expect(child.exitCode, child.output).toBe(0);
+  expect(child.output).toContain("CLOSED_FIXTURE_VERIFIED");
+  expect(child.output).toContain("NEXT_FILE_ORIGINALS_VERIFIED");
 });

@@ -23,10 +23,36 @@ export const createTestState = <Config extends object>({
   activeFiles.add(file);
   const fileRestores = new Map<PropertyKey, () => void>();
   const testRestores = new Map<PropertyKey, () => void>();
-  let phase: "file" | "test" = "file";
+  const suiteRestores = new Set<Map<PropertyKey, () => void>>();
+  let phase:
+    | { type: "file" }
+    | { type: "test" }
+    | { type: "suite"; restores: Map<PropertyKey, () => void> }
+    | { type: "closed" } = { type: "file" };
+
+  const assertOpen = () => {
+    if (phase.type === "closed") {
+      panic(
+        `Test state fixture for ${file} is closed. Move the mutation into a test/beforeEach.`,
+      );
+    }
+  };
 
   const capture = (key: PropertyKey, restore: () => void) => {
-    const restores = phase === "file" ? fileRestores : testRestores;
+    const restores = (() => {
+      switch (phase.type) {
+        case "file":
+          return fileRestores;
+        case "test":
+          return testRestores;
+        case "suite":
+          return phase.restores;
+        case "closed":
+          return panic(
+            `Test state fixture for ${file} is closed. Move the mutation into a test/beforeEach.`,
+          );
+      }
+    })();
     if (!restores.has(key)) {
       restores.set(key, restore);
     }
@@ -69,31 +95,55 @@ export const createTestState = <Config extends object>({
   beforeEach(() => {
     // A later teardown hook can write after our afterEach has already run.
     restore(testRestores);
-    phase = "test";
+    phase = { type: "test" };
   });
   afterEach(() => {
     restore(testRestores);
   });
   afterAll(() => {
+    phase = { type: "closed" };
     restore(testRestores);
+    for (const restores of Array.from(suiteRestores).toReversed()) {
+      restore(restores);
+    }
+    suiteRestores.clear();
     restore(fileRestores);
     activeFiles.delete(file);
   });
 
   return {
     beforeAll: (setup: () => void | Promise<void>) => {
+      assertOpen();
+      const restores = new Map<PropertyKey, () => void>();
       beforeAll(async () => {
+        assertOpen();
         restore(testRestores);
-        phase = "file";
+        suiteRestores.add(restores);
+        phase = { type: "suite", restores };
         try {
           await setup();
         } finally {
-          phase = "test";
+          phase = { type: "test" };
+        }
+      });
+      afterAll(() => {
+        if (phase.type === "closed" || !suiteRestores.has(restores)) {
+          return;
+        }
+        restore(testRestores);
+        // Several setup hooks in one suite must unwind in reverse write order.
+        for (const active of Array.from(suiteRestores).toReversed()) {
+          restore(active);
+          suiteRestores.delete(active);
+          if (active === restores) {
+            break;
+          }
         }
       });
     },
     setEnv,
     setEnvIfAbsent: (key: string, value: string) => {
+      assertOpen();
       if (process.env[key] === undefined) {
         setEnv(key, value);
       }
@@ -115,6 +165,7 @@ export const createTestState = <Config extends object>({
       }
     },
     patchConfig: (values: Partial<Config>) => {
+      assertOpen();
       for (const key of Reflect.ownKeys(values)) {
         captureConfig(key);
         if (!Reflect.set(config, key, Reflect.get(values, key))) {
