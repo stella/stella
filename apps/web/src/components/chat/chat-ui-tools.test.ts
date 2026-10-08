@@ -7,6 +7,7 @@ import {
 
 import {
   consumeDocumentDeletionToolCalls,
+  consumePlaybookSaveToolCalls,
   getChatAssistantTurnError,
   getChatToolTitleKey,
   getAwaitedAssistantMessageId,
@@ -37,8 +38,57 @@ import type {
   ChatPart,
   DocumentDeletionMessage,
   PersistedChatMessage,
+  PlaybookSaveMessage,
 } from "@/components/chat/chat-ui-tools";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+
+describe("playbook save consumption", () => {
+  test("a reverse completion refreshes caches without following the older call", () => {
+    const handledToolCallIds = new Set<string>();
+    const saves = (olderState: "complete" | "input-complete") =>
+      [
+        {
+          id: "assistant-saves",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-a",
+              state: olderState,
+              output: { playbookId: "playbook-a" },
+            },
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-b",
+              state: "complete",
+              output: { playbookId: "playbook-b" },
+            },
+          ],
+        },
+      ] satisfies PlaybookSaveMessage[];
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("input-complete"),
+      }),
+    ).toEqual({ playbookId: "playbook-b" });
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toEqual({ playbookId: null });
+    expect(handledToolCallIds).toEqual(new Set(["save-a", "save-b"]));
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("assistant turn outcomes", () => {
   test("reloads every stored refusal with its canonical recovery actions", () => {

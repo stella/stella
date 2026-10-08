@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Neuloženo",
-      "failedTitle": "Vaše změna nebyla uložena",
-      "saved": "Uloženo",
-      "saving": "Ukládání…"
+      "failedTitle": "Vaše změna nebyla uložena"
     },
     "sourceMediumTooltip": "Médium zdroje — neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
@@ -1881,6 +1879,8 @@
     "saveAndLeave": "Uložit a odejít",
     "saveAsPdf": "Uložit jako PDF",
     "saveChanges": "Uložit změny",
+    "saved": "Uloženo",
+    "saving": "Ukládání…",
     "scopeThisPage": "(tato stránka)",
     "scrollToBottom": "Posunout dolů",
     "scrollToTop": "Posunout nahoru",
@@ -3573,6 +3573,11 @@
       "askContentLabel": "Typ odpovědi",
       "askQuestionLabel": "Otázka",
       "askQuestionPlaceholder": "Co se má z každého dokumentu vyčíst? Ponechte prázdné pro ruční zadání.",
+      "autosave": {
+        "failed": "Nepodařilo se uložit",
+        "nameMissing": "Neuloženo: zadejte název",
+        "positionsNeedAttention": "Neuloženo: {count, plural, one {# pozice vyžaduje} few {# pozice vyžadují} other {# pozic vyžaduje}} pozornost"
+      },
       "check": "Použít přesné pravidlo místo AI",
       "checkHint": "Pro měřitelné podmínky, například: splatnost ≤ 30 dnů.",
       "checkKind": {
@@ -3602,6 +3607,7 @@
       "deletePlaybook": "Smazat playbook",
       "deletePosition": "Smazat pozici",
       "deleted": "Playbook smazán",
+      "deletedElsewhere": "Tento playbook byl smazán.",
       "derivedAutomatically": "Otázka a formát odpovědi se vygenerují z této pozice. Není třeba nic nastavovat.",
       "derivedQuestion": "Otázka pro získání odpovědi",
       "derivedType": "Formát odpovědi",
@@ -3654,10 +3660,12 @@
       },
       "noPositions": "Zatím žádné pozice. Přidejte první.",
       "noSettledPosition": "Bez ustálené pozice",
+      "openInPane": "Otevřít playbook",
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
       "positionOfTotal": "Pozice {index} z {total}",
+      "positionRemoved": "Pozice odstraněna",
       "positions": "Pozice",
       "recent": "Nedávno použité",
       "recommended": "Doporučené výchozí playbooky",

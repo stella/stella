@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Non enregistré",
-      "failedTitle": "Votre modification n’a pas été enregistrée",
-      "saved": "Enregistré",
-      "saving": "Enregistrement…"
+      "failedTitle": "Votre modification n’a pas été enregistrée"
     },
     "sourceMediumTooltip": "Support de la source — un descripteur neutre. Il n’abaisse pas la confiance à lui seul.",
     "states": {
@@ -1881,6 +1879,8 @@
     "saveAndLeave": "Enregistrer et quitter",
     "saveAsPdf": "Enregistrer en PDF",
     "saveChanges": "Enregistrer les modifications",
+    "saved": "Enregistré",
+    "saving": "Enregistrement…",
     "scopeThisPage": "(cette page)",
     "scrollToBottom": "Aller en bas",
     "scrollToTop": "Retour en haut",
@@ -3573,6 +3573,11 @@
       "askContentLabel": "Type de réponse",
       "askQuestionLabel": "Question",
       "askQuestionPlaceholder": "Que devons-nous lire dans chaque document ? Laissez vide pour une saisie manuelle.",
+      "autosave": {
+        "failed": "Échec de l’enregistrement",
+        "nameMissing": "Non enregistré : ajoutez un nom",
+        "positionsNeedAttention": "Non enregistré : {count, plural, one {# critère nécessite} other {# critères nécessitent}} votre attention"
+      },
       "check": "Utiliser une règle exacte plutôt que l’IA",
       "checkHint": "Pour des conditions mesurables, par exemple : délai de paiement ≤ 30 jours.",
       "checkKind": {
@@ -3602,6 +3607,7 @@
       "deletePlaybook": "Supprimer le playbook",
       "deletePosition": "Supprimer le critère",
       "deleted": "Playbook supprimé",
+      "deletedElsewhere": "Ce playbook a été supprimé.",
       "derivedAutomatically": "La question d’extraction et le format de réponse sont générés à partir de ce critère. Aucun réglage n’est nécessaire.",
       "derivedQuestion": "Question d’extraction",
       "derivedType": "Format de réponse",
@@ -3654,10 +3660,12 @@
       },
       "noPositions": "Aucun critère pour le moment. Ajoutez le premier.",
       "noSettledPosition": "Aucun critère arrêté",
+      "openInPane": "Ouvrir le playbook",
       "optionPlaceholder": "Valeur de l'option",
       "optionsLabel": "Options",
       "outline": "Plan",
       "positionOfTotal": "Critère {index} sur {total}",
+      "positionRemoved": "Critère supprimé",
       "positions": "Critères",
       "recent": "Utilisés récemment",
       "recommended": "Modèles recommandés",
