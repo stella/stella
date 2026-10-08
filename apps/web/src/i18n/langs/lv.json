@@ -3867,6 +3867,16 @@
       "textOnly": "Tikai teksts"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Pievienot avotu",
+      "documentRequired": "Izvēlieties dokumentu.",
+      "invalidPage": "Ievadiet veselu lapas numuru, kas nav mazāks par 1.",
+      "page": "PDF lapa (neobligāti)",
+      "quote": "Citētais fragments (neobligāti)",
+      "quoteTooLong": "Izmantojiet ne vairāk kā {limit} rakstzīmju."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdown avotteksts"
   },

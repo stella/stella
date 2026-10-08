@@ -3867,6 +3867,16 @@
       "textOnly": "Pouze text"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Přidat zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadejte celé číslo stránky alespoň 1.",
+      "page": "Stránka PDF (volitelné)",
+      "quote": "Citovaný úryvek (volitelné)",
+      "quoteTooLong": "Zadejte nejvýše {limit} znaků."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Zdroj Markdownu"
   },

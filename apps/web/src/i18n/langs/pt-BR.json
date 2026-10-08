@@ -3867,6 +3867,16 @@
       "textOnly": "Somente texto"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Adicionar fonte",
+      "documentRequired": "Selecione um documento.",
+      "invalidPage": "Insira um número inteiro de página igual ou maior que 1.",
+      "page": "Página do PDF (opcional)",
+      "quote": "Trecho citado (opcional)",
+      "quoteTooLong": "Use no máximo {limit} caracteres."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Código-fonte Markdown"
   },

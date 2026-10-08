@@ -3867,6 +3867,16 @@
       "textOnly": "Ainult tekst"
     }
   },
+  "lists": {
+    "sources": {
+      "add": "Lisa allikas",
+      "documentRequired": "Vali dokument.",
+      "invalidPage": "Sisesta täisarvuline leheküljenumber, mis on vähemalt 1.",
+      "page": "PDF-i lehekülg (valikuline)",
+      "quote": "Tsiteeritud lõik (valikuline)",
+      "quoteTooLong": "Kasuta kuni {limit} tähemärki."
+    }
+  },
   "markdownEditor": {
     "rawLabel": "Markdowni lähtekood"
   },

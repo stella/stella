@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
+
 import {
   entities,
   entityVersions,
@@ -32,7 +34,9 @@ const bodySchema = t.Object({
       pageNumber: t.Integer({ minimum: 1 }),
     }),
   ]),
-  quote: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+  quote: t.Optional(
+    t.Nullable(t.String({ maxLength: LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH })),
+  ),
 });
 
 const config = {

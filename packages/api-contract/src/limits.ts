@@ -109,3 +109,6 @@ export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
 
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;
+
+/** Max quoted characters when attaching a document source to a list item. */
+export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;
