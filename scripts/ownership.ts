@@ -16,7 +16,10 @@ import { fileURLToPath } from "node:url";
 
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
-import { formattedLikeRepository } from "./generated-artifacts.ts";
+import {
+  formattedArtifactsLikeRepository,
+  formattedLikeRepository,
+} from "./generated-artifacts.ts";
 import { loadOwnershipDeclarations } from "./ownership-loader.ts";
 import type {
   AllowedFile,
@@ -274,23 +277,15 @@ const main = async (argv: readonly string[]): Promise<number> => {
     return 1;
   }
 
-  const artifacts = [
-    {
-      file: DOC_PATH,
-      contents: await formattedLikeRepository(DOC_INTRO, "md"),
-    },
-  ];
-  for (const entry of OWNERSHIP) {
-    artifacts.push({
-      file: `docs/module-ownership/${entry.id}.md`,
-      contents: await formattedLikeRepository(
-        `# ${entry.capability}\n\nGenerated from \`scripts/ownership/${entry.id}.ts\`. See [Module ownership](../module-ownership.md).\n\n${renderOwnershipTable([entry])}`,
-        "md",
-      ),
-    });
-  }
+  const artifacts = await formattedArtifactsLikeRepository([
+    { path: DOC_PATH, contents: DOC_INTRO },
+    ...OWNERSHIP.map((entry) => ({
+      path: `docs/module-ownership/${entry.id}.md`,
+      contents: `# ${entry.capability}\n\nGenerated from \`scripts/ownership/${entry.id}.ts\`. See [Module ownership](../module-ownership.md).\n\n${renderOwnershipTable([entry])}`,
+    })),
+  ]);
   const docDirectory = path.join(REPO_ROOT, "docs/module-ownership");
-  const expected = new Set(artifacts.map(({ file }) => file));
+  const expected = new Set(artifacts.map(({ path: file }) => file));
   const obsolete = existsSync(docDirectory)
     ? readdirSync(docDirectory)
         .map((file) => `docs/module-ownership/${file}`)
@@ -302,7 +297,7 @@ const main = async (argv: readonly string[]): Promise<number> => {
     for (const file of obsolete) {
       rmSync(path.join(REPO_ROOT, file));
     }
-    for (const { file, contents } of artifacts) {
+    for (const { path: file, contents } of artifacts) {
       writeFileSync(path.join(REPO_ROOT, file), contents);
     }
     console.log(
@@ -320,7 +315,7 @@ const main = async (argv: readonly string[]): Promise<number> => {
       repoRoot: REPO_ROOT,
     }),
   ];
-  for (const { file, contents } of artifacts) {
+  for (const { path: file, contents } of artifacts) {
     const absolute = path.join(REPO_ROOT, file);
     if (!existsSync(absolute) || readFileSync(absolute, "utf-8") !== contents) {
       problems.push(

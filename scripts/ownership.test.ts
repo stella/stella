@@ -96,9 +96,9 @@ describe("ownership file loading", () => {
     });
   });
 
-  test("loads the same registry under Node's extension-aware resolver", () => {
+  test("loads the same registry under the CI lint runtime", () => {
     const output = run(repoRoot, [
-      "node",
+      process.execPath,
       "--input-type=module",
       "-e",
       'const { OWNERSHIP } = await import("./scripts/ownership.ts"); console.log(JSON.stringify(OWNERSHIP));',
