@@ -8,7 +8,7 @@ const DOCUMENT_ROW_DATA =
 const ROW_TAG =
   /^(?:TableRow|TableCell|li|CommandItem|PublicLawRow|PublicLawTable)$/u;
 const DOCUMENT_INPUT =
-  /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|CitingDecisionRow|ResolvedCitedStatute|DecisionRowData)\b/u;
+  /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|CitingDecisionRow|ResolvedCitedStatute|DecisionRowData|StatuteRowData)\b/u;
 const ROW_IDENTITY =
   /\.(?:caseNumber|courtAbbreviation|statuteTitle|decisionId)\b|\bstatute\.title\b/u;
 
@@ -16,6 +16,7 @@ type Renderer = {
   path: string;
   name: string;
   references: Set<string>;
+  rowReferences: Set<string>;
   hasRows: boolean;
   carriesDocumentKind: boolean;
 };
@@ -172,9 +173,23 @@ const isDocumentRenderer = ({
   if (!hasJsx) {
     return false;
   }
-  const typedDocumentInput = node.parameters.some((parameter) =>
-    DOCUMENT_INPUT.test(parameter.getText(file)),
-  );
+  const typedDocumentInput = node.parameters.some((parameter) => {
+    if (DOCUMENT_INPUT.test(parameter.getText(file))) {
+      return true;
+    }
+    const inputType = parameter.type;
+    if (inputType === undefined || !ts.isTypeReferenceNode(inputType)) {
+      return false;
+    }
+    const inputName = inputType.typeName.getText(file);
+    return file.statements.some(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        statement.name.text === inputName &&
+        DOCUMENT_INPUT.test(statement.type.getText(file)) &&
+        /\[\]|\b(?:ReadonlyArray|Array)</u.test(statement.type.getText(file)),
+    );
+  });
   // Maps of language menus, legal text ASTs and charts are not document rows.
   // A row projects an identity value and has a list/table/command slot.
   return (
@@ -216,11 +231,14 @@ const documentIdentityResult = (
   for (const [id, renderer] of renderers) {
     if (
       renderer.hasRows &&
-      reachesRenderer({
-        id,
-        renderers,
-        matches: (_id, dependency) => dependency?.carriesDocumentKind === true,
-      })
+      [...renderer.rowReferences].some((dependencyId) =>
+        reachesRenderer({
+          id: dependencyId,
+          renderers,
+          matches: (_id, dependency) =>
+            dependency?.carriesDocumentKind === true,
+        }),
+      )
     ) {
       roots.add(id);
     }
@@ -238,6 +256,38 @@ const documentIdentityResult = (
         }),
     ),
   };
+};
+
+const collectSourceRenderers = (
+  file: ts.SourceFile,
+  collect: (name: string, node: ts.FunctionLikeDeclaration) => void,
+) => {
+  for (const statement of file.statements) {
+    if (ts.isFunctionDeclaration(statement)) {
+      collect(statement.name?.text ?? "default", statement);
+    }
+    if (ts.isExportAssignment(statement)) {
+      collectInitializer({
+        name: "default",
+        expression: statement.expression,
+        collect,
+      });
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer !== undefined
+        ) {
+          collectInitializer({
+            name: declaration.name.text,
+            expression: declaration.initializer,
+            collect,
+          });
+        }
+      }
+    }
+  }
 };
 
 /** Discover document rows and registered rails, then follow their rendered output. */
@@ -259,6 +309,7 @@ export const checkDocumentIdentitySources = (
     const collect = (name: string, node: ts.FunctionLikeDeclaration) => {
       const id = `${filename}#${name}`;
       const references = new Set<string>();
+      const rowReferences = new Set<string>();
       const bindings = new Map<string, ts.Expression>();
       let hasRows = false;
       let rowProjectsIdentity = false;
@@ -270,12 +321,20 @@ export const checkDocumentIdentitySources = (
       }
       gatherBindings(body, bindings);
       const visitedBindings = new Set<string>();
-      const visit = (child: ts.Node) => {
+      const visitedRowBindings = new Set<string>();
+      const visit = (child: ts.Node, rowContext = false) => {
+        const inRow =
+          rowContext ||
+          (ts.isJsxElement(child) &&
+            ROW_TAG.test(child.openingElement.tagName.getText(file))) ||
+          (ts.isJsxSelfClosingElement(child) &&
+            ROW_TAG.test(child.tagName.getText(file)));
         if (ts.isIdentifier(child)) {
           const initializer = bindings.get(child.text);
-          if (initializer !== undefined && !visitedBindings.has(child.text)) {
-            visitedBindings.add(child.text);
-            visit(initializer);
+          const visited = inRow ? visitedRowBindings : visitedBindings;
+          if (initializer !== undefined && !visited.has(child.text)) {
+            visited.add(child.text);
+            visit(initializer, inRow);
           }
         }
         if (
@@ -307,9 +366,16 @@ export const checkDocumentIdentitySources = (
               rowProjectsIdentity = true;
             }
           }
+          if (inRow) {
+            rowReferences.add(reference(tag));
+          }
         }
         if (ts.isCallExpression(child)) {
-          references.add(reference(child.expression.getText(file)));
+          const dependency = reference(child.expression.getText(file));
+          references.add(dependency);
+          if (inRow) {
+            rowReferences.add(dependency);
+          }
         }
         if (
           ts.isBinaryExpression(child) &&
@@ -323,10 +389,10 @@ export const checkDocumentIdentitySources = (
           ts.isConditionalExpression(child) &&
           child.condition.kind === ts.SyntaxKind.FalseKeyword
         ) {
-          visit(child.whenFalse);
+          visit(child.whenFalse, inRow);
           return;
         }
-        ts.forEachChild(child, visit);
+        ts.forEachChild(child, (descendant) => visit(descendant, inRow));
       };
       const returned = (child: ts.Node) => {
         if (child !== body && ts.isFunctionLike(child)) {
@@ -367,6 +433,7 @@ export const checkDocumentIdentitySources = (
         path: filename,
         name,
         references,
+        rowReferences,
         hasRows,
         carriesDocumentKind:
           /\.(?:kind|type|documentKind)\b/u.test(node.getText(file)) &&
@@ -386,31 +453,8 @@ export const checkDocumentIdentitySources = (
         roots.add(id);
       }
     };
+    collectSourceRenderers(file, collect);
     for (const statement of file.statements) {
-      if (ts.isFunctionDeclaration(statement)) {
-        collect(statement.name?.text ?? "default", statement);
-      }
-      if (ts.isExportAssignment(statement)) {
-        collectInitializer({
-          name: "default",
-          expression: statement.expression,
-          collect,
-        });
-      }
-      if (ts.isVariableStatement(statement)) {
-        for (const declaration of statement.declarationList.declarations) {
-          if (
-            ts.isIdentifier(declaration.name) &&
-            declaration.initializer !== undefined
-          ) {
-            collectInitializer({
-              name: declaration.name.text,
-              expression: declaration.initializer,
-              collect,
-            });
-          }
-        }
-      }
       if (
         !ts.isExpressionStatement(statement) ||
         !ts.isCallExpression(statement.expression)

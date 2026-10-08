@@ -61,7 +61,9 @@ for (const locale of ["en", "ar"] as const) {
       expect(bounds.glyphs.end).toBeLessThanOrEqual(bounds.slot.end);
     }
     await narrow.locator('[data-slot="tooltip-trigger"]').hover();
-    await expect(page.getByRole("tooltip")).toHaveText(
+    const tooltip = page.locator('[data-slot="tooltip-popup"]');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(
       locale === "ar"
         ? "172/2026 Sb., قانون السجلات العامة"
         : "172/2026 Sb., zákon o veřejných listinách",

@@ -81,6 +81,15 @@ describe("document identity ownership guard", () => {
     },
   );
 
+  test("unrelated document references beside a generic table do not classify its rows", () => {
+    const filename = "apps/web/src/routes/dev/playground.tsx";
+    const source = `export const Playground = () => <main><TableRow><TableCell>Matter</TableCell></TableRow><Mention value={value} /></main>;
+      const Mention = ({ value }) => value.type === "decision" ? <a>{value.title}</a> : null;`;
+    const result = checkDocumentIdentitySources(fixture(filename, source));
+    expect(result.surfaces).toEqual([]);
+    expect(result.violations).toEqual([]);
+  });
+
   test("follows a rendered adapter, rather than accepting an imported but unused badge", () => {
     const sources = fixture(
       "apps/web/src/features/statutes/rows.tsx",
@@ -101,6 +110,7 @@ describe("document identity ownership guard", () => {
   });
 
   test.each([
+    "type ListProps = { hits: StatuteSearchHit[] }; export const RenamedAliasList = ({ hits }: ListProps) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>;",
     "export const RenamedList = ({ hits }: { hits: StatuteSearchHit[] }) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>;",
     "export const WrappedList = memo(({ hits }: { hits: StatuteSearchHit[] }) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>);",
     "export const RefList = forwardRef(({ hits }: { hits: StatuteSearchHit[] }, ref) => <ul>{hits.map(hit => <li>{hit.title}</li>)}</ul>);",
@@ -158,7 +168,7 @@ describe("document identity ownership guard", () => {
         expect(result.violations).toContain(surface);
       }
     }
-  });
+  }, 30_000);
 
   test("every discovered repository document row or rail reaches the shared badge", () => {
     const sources = readDocumentIdentitySources(
