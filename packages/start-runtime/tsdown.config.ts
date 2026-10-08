@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/runtime.ts"],
+  entry: ["src/runtime.ts", "src/local-module-loader.ts"],
   deps: {
     neverBundle: ["bun", "node:path", "node:url"],
   },

@@ -703,6 +703,10 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/case-law/analysis/generate.read-budget.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/analysis/prompts/prompt-registry.test.ts": {
     "seconds": 1,
     "source": "estimated"
@@ -4239,6 +4243,10 @@
     "seconds": 0.641086,
     "source": "estimated"
   },
+  "src/lib/auth/auth-refusal-log.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/auth-response-cookies.test.ts": {
     "seconds": 0.673137,
     "source": "estimated"
@@ -6954,6 +6962,10 @@
   "src/lib/object-writer-cleanup.db.test.ts": {
     "seconds": 5.4,
     "source": "measured"
+  },
+  "src/lib/observability/event-loop-delay.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/lib/observability/failure-evidence.test.ts": {
     "seconds": 0.16359,
