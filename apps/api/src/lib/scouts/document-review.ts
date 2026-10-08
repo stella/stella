@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import {
   SCOUT_KEY,
@@ -17,6 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   REVIEW_FINDINGS_SHOWN_MAX,
   REVIEW_SIGNAL_CONFIDENCE,
@@ -65,6 +66,11 @@ export const emitDocumentReviewSignal = async ({
   if (!run) {
     return "absent";
   }
+  await lockFeatureRecoveryAdmission({
+    tx,
+    organizationId: run.organizationId,
+    featureId: "signals",
+  });
   if (
     !(await isBackgroundFeatureEnabled({
       tx,
@@ -171,8 +177,13 @@ export const maybeEmitDocumentReviewSignal = async (
   if (!source) {
     return;
   }
+  await lockFeatureRecoveryAdmission({
+    tx: args.tx,
+    organizationId: source.organizationId,
+    featureId: "signals",
+  });
   // audit: skip — derived emission intent commits with the source review completion.
-  await args.tx
+  const recorded = await args.tx
     .insert(pendingScoutEmissions)
     .values({
       organizationId: source.organizationId,
@@ -180,9 +191,16 @@ export const maybeEmitDocumentReviewSignal = async (
       sourceKind: "document-review",
       sourceId: args.runId,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({
+      nextAttemptAt: sql<string>`${pendingScoutEmissions.nextAttemptAt}::text`,
+    });
   const outcome = await emitDocumentReviewSignal(args);
   if (outcome === "paused") {
+    return;
+  }
+  const ownReceipt = recorded.at(0);
+  if (!ownReceipt) {
     return;
   }
   // audit: skip — derived intent settled atomically with its audited signal.
@@ -193,6 +211,7 @@ export const maybeEmitDocumentReviewSignal = async (
         eq(pendingScoutEmissions.organizationId, source.organizationId),
         eq(pendingScoutEmissions.sourceKind, "document-review"),
         eq(pendingScoutEmissions.sourceId, args.runId),
+        sql`${pendingScoutEmissions.nextAttemptAt} = ${ownReceipt.nextAttemptAt}::timestamptz`,
       ),
     );
 };

@@ -6,6 +6,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+} from "@/api/lib/flows/review-gate-task";
 
 const readVersionByIdParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -16,6 +20,7 @@ type ReadVersionByIdHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
+  userId: SafeId<"user">;
   versionId: SafeId<"entityVersion">;
 };
 
@@ -23,8 +28,21 @@ const readVersionByIdHandler = async function* ({
   safeDb,
   workspaceId,
   entityId,
+  userId,
   versionId,
 }: ReadVersionByIdHandlerProps) {
+  const admission = yield* Result.await(
+    safeDb(
+      async (tx) =>
+        await admitTaskFlowAccess(tx, {
+          workspaceId,
+          taskEntityId: entityId,
+          userId,
+        }),
+    ),
+  );
+  yield* admission;
+
   // Validate entity exists in workspace
   const entity = yield* Result.await(
     safeDb((tx) =>
@@ -50,9 +68,17 @@ const readVersionByIdHandler = async function* ({
   // landing between the two reads would still return the withdrawn version's
   // field content. Tying the fields to the same live-version row closes it —
   // either the live version and its fields come back together, or neither does.
-  const versionRow = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entityVersions.findFirst({
+  const read = yield* Result.await(
+    safeDb(async (tx) => {
+      const currentAdmission = await admitTaskFlowAccess(tx, {
+        workspaceId,
+        taskEntityId: entityId,
+        userId,
+      });
+      if (currentAdmission.isErr()) {
+        return currentAdmission;
+      }
+      const version = await tx.query.entityVersions.findFirst({
         where: {
           id: { eq: versionId },
           entityId: { eq: entityId },
@@ -76,9 +102,11 @@ const readVersionByIdHandler = async function* ({
             },
           },
         },
-      }),
-    ),
+      });
+      return Result.ok(version);
+    }),
   );
+  const versionRow = yield* read;
 
   if (!versionRow) {
     return Result.err(
@@ -103,6 +131,7 @@ const config = {
     "found. Use entities.get for the current version.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: readVersionByIdParamsSchema,
@@ -110,11 +139,12 @@ const config = {
 
 const readVersionById = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params }) {
+  async function* ({ safeDb, workspaceId, params, user }) {
     return yield* readVersionByIdHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
+      userId: user.id,
       versionId: params.versionId,
     });
   },

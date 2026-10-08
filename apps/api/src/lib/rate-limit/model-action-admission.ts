@@ -45,6 +45,8 @@ type CreateModelActionAdmitterOptions = {
   actionKind: PeriodActionKind;
   /** `independent` for work that outlives the caller's own admission. */
   scope?: "inherit" | "independent";
+  /** Accept feature effects and reserve their period under the caller's authoritative lock. */
+  beforeReserve?: (reservePeriod: () => Promise<void>) => Promise<void>;
   admit?: typeof withActionAdmission;
 };
 
@@ -55,24 +57,37 @@ export const createModelActionAdmitter =
     organizationStateDb,
     actionKind,
     scope,
+    beforeReserve,
     admit = withActionAdmission,
   }: CreateModelActionAdmitterOptions): ModelActionAdmitter =>
-  async (run) =>
-    await admit({
+  async (run) => {
+    const periodIdentity = { actionKind, logicalPhaseId: Bun.randomUUIDv7() };
+    return await admit({
       organizationId,
       userId,
       organizationStateDb,
       ...(scope === undefined ? {} : { scope }),
+      ...(beforeReserve === undefined
+        ? {}
+        : { periodReservation: "on-acceptance" as const }),
       // No client idempotency key: each admitted run is its own action.
-      periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
-      run: async (signal) =>
-        await admitModelDispatch({
+      periodIdentity,
+      run: async (signal, control) => {
+        await beforeReserve?.(async () => {
+          const reserved = await control.reservePeriod(periodIdentity);
+          if (Result.isError(reserved)) {
+            throw reserved.error;
+          }
+        });
+        return await admitModelDispatch({
           organizationId,
           actionKind,
           signal,
           run: async (admission) => await run({ signal, admission }),
-        }),
+        });
+      },
     });
+  };
 
 type DetachedModelActionOptions<TStarted> = {
   /** Runs admitted before the caller resumes; its value answers the caller. */

@@ -4,7 +4,12 @@ import { getColumns } from "drizzle-orm";
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
-import { entities, featureEnrolments } from "@/api/db/schema";
+import {
+  entities,
+  featureEnrolments,
+  flowRunSteps,
+  type workspaces,
+} from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =
@@ -30,6 +35,11 @@ type FeatureAccessMockOptions = {
 type ScopedDbMockOptions = {
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
+  flowTaskGates?: {
+    runId: typeof flowRunSteps.$inferSelect.runId;
+    status: typeof flowRunSteps.$inferSelect.status;
+    organizationId: typeof workspaces.$inferSelect.organizationId;
+  }[];
 };
 
 // Query fixtures provide the rows matching their select boundary. Keep the
@@ -63,6 +73,19 @@ const fixtureSelect =
       typeof selection === "object" && selection !== null
         ? Object.values(selection)
         : [];
+    // Linked ownership is an explicit fixture boundary; ordinary resource
+    // selects must never accidentally stand in for persisted flow pointers.
+    if (columns.includes(flowRunSteps.runId)) {
+      const query = createSelectQueryMock(options?.flowTaskGates ?? []);
+      return {
+        from: (table: unknown) => {
+          if (table !== flowRunSteps) {
+            return panic("Flow ownership fixture must read flow run steps");
+          }
+          return query.from();
+        },
+      };
+    }
     // Feature admission is infrastructure shared by every handler fixture.
     // Use schema columns, so a resource select with similar keys still delegates.
     if (
@@ -84,13 +107,8 @@ const fixtureSelect =
         },
       };
     }
-    if (
-      options?.featureAccess !== undefined &&
-      columns.some(
-        (column) => column === user.email || column === user.emailVerified,
-      )
-    ) {
-      const { identity } = options.featureAccess;
+    if (columns.includes(user.email) && columns.includes(user.emailVerified)) {
+      const identity = options?.featureAccess?.identity ?? null;
       const query = createSelectQueryMock(identity === null ? [] : [identity]);
       return {
         from: (table: unknown) => {

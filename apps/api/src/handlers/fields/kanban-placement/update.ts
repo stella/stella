@@ -100,6 +100,14 @@ export const createUpdateKanbanPlacement = ({
 
       yield* Result.await(
         abortableTx(safeDb, async (tx) => {
+          const currentAdmission = await admitTaskFlowAccess(tx, {
+            workspaceId,
+            taskEntityId: body.entityId,
+            userId: user.id,
+          });
+          if (currentAdmission.isErr()) {
+            throw currentAdmission.error;
+          }
           const txSafeDb = transactionSafeDb(tx);
 
           if (status !== undefined) {

@@ -41,6 +41,7 @@ describe("search provider workspace scoping", () => {
     await pgFtsProvider.search({
       query: "closing memo",
       organizationId,
+      userId: toSafeId("reader_1"),
       workspaceId,
       limit: 10,
     });
@@ -67,6 +68,7 @@ describe("search provider workspace scoping", () => {
     await pgFtsProvider.searchContent({
       query: "closing memo",
       organizationId,
+      userId: toSafeId("reader_1"),
       workspaceId,
       limit: 10,
     });
@@ -84,6 +86,7 @@ describe("search provider workspace scoping", () => {
     await pgFtsProvider.search({
       query: "closing memo",
       organizationId,
+      userId: toSafeId("reader_1"),
       workspaceIds: [workspaceId, workspaceIdB],
       limit: 10,
     });
@@ -102,6 +105,7 @@ describe("search provider workspace scoping", () => {
     await pgFtsProvider.search({
       query: "closing memo",
       organizationId,
+      userId: toSafeId("reader_1"),
       workspaceIds: [workspaceId, workspaceIdB],
       workspaceId,
       limit: 10,
@@ -122,6 +126,7 @@ describe("search provider workspace scoping", () => {
     await pgFtsProvider.search({
       query: "closing memo",
       organizationId,
+      userId: toSafeId("reader_1"),
       workspaceIds: [],
       limit: 10,
     });
@@ -140,6 +145,7 @@ describe("search provider workspace scoping", () => {
     await pgFtsProvider.search({
       query: "closing memo",
       organizationId,
+      userId: toSafeId("reader_1"),
       workspaceId,
       limit: 10,
     });

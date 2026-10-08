@@ -99,6 +99,8 @@ type CreateEntityFromBufferInput = {
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /** Authorize the effect before acquiring entity resource locks. */
+  beforeCreate?: ((tx: Transaction) => Promise<void>) | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -176,6 +178,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  beforeCreate,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
@@ -365,6 +368,7 @@ export const createEntityFromBuffer = async ({
     const transactionState = { durableReferencePrepared: false };
     try {
       await scopedDb(async (tx) => {
+        await beforeCreate?.(tx);
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         const workspaceStatus = await lockWorkspaceForEntityCreate(

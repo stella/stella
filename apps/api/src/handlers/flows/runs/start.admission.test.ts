@@ -53,6 +53,19 @@ describe("manual flow start admission response", () => {
         async (run) =>
           await run(
             asTestRaw({
+              execute: async () => undefined,
+              select: (projection: Record<string, unknown>) => {
+                const chain = {
+                  from: () => chain,
+                  innerJoin: () => chain,
+                  where: () => chain,
+                  limit: async () =>
+                    "email" in projection
+                      ? [{ email: "flow@example.test", emailVerified: true }]
+                      : [{ featureId: "flows", organizationId, userId }],
+                };
+                return chain;
+              },
               query: { flowDefinitions: { findFirst: async () => definition } },
               insert: () => ({
                 values: async () => {

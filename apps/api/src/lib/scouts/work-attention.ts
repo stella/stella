@@ -479,6 +479,7 @@ export const runWorkAttentionScout = async ({
     const result = await runScout({
       db: scopedDb,
       organizationId: batch.organizationId,
+      userId,
       scoutKey: SCOUT_KEY.WORK_ATTENTION,
       observe: () => batch.signals,
       screen: async (tx, proposed) => {

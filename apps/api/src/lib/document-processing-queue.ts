@@ -43,7 +43,6 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
@@ -51,7 +50,6 @@ import {
 } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_PROCESSING_QUEUE_NAME,
-  enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
@@ -122,7 +120,6 @@ import {
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
-import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/scouts/document-deadline-recovery";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
@@ -712,8 +709,6 @@ const completeDocumentProcessingRun = async ({
   const scoutRequested = documentScoutsEnabled(
     envDocumentProcessingWorker.FEATURE_INBOX_DOCUMENT_SCOUTS,
   );
-  const shouldDispatchDeadlineScout =
-    scoutRequested && isDeploymentFeatureEnabled("FEATURE_SIGNALS");
   const completed = await database
     .update(documentProcessingRuns)
     .set({
@@ -742,20 +737,8 @@ const completeDocumentProcessingRun = async ({
   if (!completed.at(0)) {
     return false;
   }
-  if (shouldDispatchDeadlineScout) {
-    const enqueued = await Result.tryPromise(async () => {
-      await enqueueDocumentDeadlineScout({
-        sourceRunId: run.id,
-      });
-    });
-    if (Result.isError(enqueued)) {
-      captureError(enqueued.error, { runId: run.id });
-      logger.error("document_processing.deadline_scout_enqueue_failed", {
-        "error.type": errorTag(enqueued.error),
-        runId: run.id,
-      });
-    }
-  }
+  // The API scheduler owns feature admission and dispatch. Completion records
+  // durable pending work even while that feature is unavailable.
   broadcastWorkspaceResourceUpdated(
     run.workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: run.entityId }),
@@ -1725,7 +1708,6 @@ export type DocumentProcessingReconciliationDependencies = {
   broadcastWorkspaceResourceUpdated: typeof broadcastWorkspaceResourceUpdated;
   database: typeof rootDb;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
-  enqueueDocumentDeadlineScout: typeof enqueueDocumentDeadlineScout;
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
   /** Epoch milliseconds, for the repair sweep's rest between passes. */
   now: () => number;
@@ -2595,7 +2577,6 @@ const handleDocumentProcessingFailure = ({
 };
 
 const RECONCILIATION_PHASE = {
-  DEADLINE_SCOUT: "deadline-scout",
   DELIVERY: "delivery",
   REINDEX: "reindex",
   REPAIR: "repair",
@@ -2620,7 +2601,6 @@ const RECONCILIATION_PHASE_NAMES = Object.values(RECONCILIATION_PHASE);
 
 const DEFAULT_RECONCILIATION_DEPENDENCIES = {
   broadcastWorkspaceResourceUpdated,
-  enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   indexEntity: async (entityId: SafeId<"entity">) =>
     await getSearchMaintenance().indexEntity(entityId),
@@ -2641,8 +2621,6 @@ const createReconciliationPhaseRunners = (
   dependencies: DocumentProcessingReconciliationDependencies,
 ) =>
   ({
-    [RECONCILIATION_PHASE.DEADLINE_SCOUT]: async () =>
-      await recoverDocumentDeadlineScoutDispatches(dependencies),
     [RECONCILIATION_PHASE.DELIVERY]: async () =>
       await dispatchScheduledDocumentProcessingRetries(dependencies),
     [RECONCILIATION_PHASE.REINDEX]: async () =>
@@ -2679,7 +2657,6 @@ const createReconciliationPhaseRunners = (
  * so that phase reports it in its own `hasMore` instead.
  */
 export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
-  [RECONCILIATION_PHASE.DEADLINE_SCOUT]: [],
   [RECONCILIATION_PHASE.DELIVERY]: [],
   [RECONCILIATION_PHASE.REINDEX]: [],
   [RECONCILIATION_PHASE.REPAIR]: [
@@ -2708,7 +2685,6 @@ export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
  * check against both the declared names and the edges above.
  */
 const RECONCILIATION_PHASE_ORDER = [
-  RECONCILIATION_PHASE.DEADLINE_SCOUT,
   RECONCILIATION_PHASE.REPAIR,
   RECONCILIATION_PHASE.RETRY,
   RECONCILIATION_PHASE.STALE_LEASE,
@@ -2798,7 +2774,6 @@ export const runDocumentProcessingReconciliationPhases = async ({
     hasMore: false,
   });
   const results: ReconciliationResults = {
-    [RECONCILIATION_PHASE.DEADLINE_SCOUT]: drained(),
     [RECONCILIATION_PHASE.DELIVERY]: drained(),
     [RECONCILIATION_PHASE.REINDEX]: drained(),
     [RECONCILIATION_PHASE.REPAIR]: drained(),
@@ -2880,9 +2855,6 @@ const reconcileDocumentProcessing = async ({
         RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].count > 0)
       ) {
         logger.info("document_processing.reconciled", {
-          deadlineScoutDispatchedCount: String(
-            results[RECONCILIATION_PHASE.DEADLINE_SCOUT].count,
-          ),
           deliveredCount: String(results[RECONCILIATION_PHASE.DELIVERY].count),
           recoveredCount: String(
             results[RECONCILIATION_PHASE.STALE_LEASE].count,

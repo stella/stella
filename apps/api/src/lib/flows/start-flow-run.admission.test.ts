@@ -52,6 +52,19 @@ describe("flow kickoff acceptance", () => {
       const safeDb = safeDbFromScoped(async (run) => {
         const result = await run(
           asTestRaw({
+            execute: async () => undefined,
+            select: (projection: Record<string, unknown>) => {
+              const chain = {
+                from: () => chain,
+                innerJoin: () => chain,
+                where: () => chain,
+                limit: async () =>
+                  "email" in projection
+                    ? [{ email: "flow@example.test", emailVerified: true }]
+                    : [{ featureId: "flows", organizationId, userId }],
+              };
+              return chain;
+            },
             query: { flowDefinitions: { findFirst: async () => definition } },
             insert: () => ({
               values: async () => {

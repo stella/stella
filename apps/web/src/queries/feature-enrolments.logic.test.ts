@@ -56,7 +56,9 @@ describe("feature enrollment cache reconciliation", () => {
     }).queryKey;
     for (const queryKey of derivedKeys) {
       cachePrivatePayload(queryClient, queryKey);
-      expect(queryClient.getQueryData(queryKey)).toBeDefined();
+      expect(
+        queryClient.getQueryCache().find({ queryKey, exact: true })?.state.data,
+      ).toBeDefined();
       expect(
         queryClient.getQueryCache().find({ queryKey, exact: true })?.isActive(),
       ).toBe(false);
@@ -67,20 +69,29 @@ describe("feature enrollment cache reconciliation", () => {
     await resetFeatureEnrolmentCache({ queryClient, featureId, ...CALLER });
 
     for (const queryKey of derivedKeys) {
-      expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+      expect(
+        queryClient.getQueryCache().find({ queryKey, exact: true })?.state.data,
+      ).toBeUndefined();
       expect(
         queryClient.getQueryCache().find({ queryKey, exact: true }),
       ).toBeUndefined();
     }
     expect(queryClient.getQueryCache().getAll()).toHaveLength(2);
-    expect(queryClient.getQueryData(otherCaller)).toBeDefined();
-    expect(queryClient.getQueryData(["unrelated-public-data"])).toBe("keep");
+    expect(
+      queryClient.getQueryCache().find({ queryKey: otherCaller, exact: true })
+        ?.state.data,
+    ).toBeDefined();
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: ["unrelated-public-data"], exact: true })?.state.data,
+    ).toBe("keep");
     queryClient.clear();
   };
-  test("flows access changes clear all cached work projections", () =>
-    assertWorkProjectionReset("flows"));
-  test("signals access changes clear all cached work projections", () =>
-    assertWorkProjectionReset("signals"));
+  test("flows access changes clear all cached work projections", async () =>
+    await assertWorkProjectionReset("flows"));
+  test("signals access changes clear all cached work projections", async () =>
+    await assertWorkProjectionReset("signals"));
 
   test("an open task clears linked review data even when its refresh fails", async () => {
     const queryClient = new QueryClient({
@@ -92,10 +103,10 @@ describe("feature enrollment cache reconciliation", () => {
     queryClient.setQueryData(queryKey, "linked review before opt-out");
     const observer = new QueryObserver(queryClient, {
       queryKey,
-      queryFn: () =>
-        access === "granted"
+      queryFn: async () =>
+        await (access === "granted"
           ? previousRead.promise
-          : Promise.reject(new Error("refresh unavailable")),
+          : Promise.reject(new Error("refresh unavailable"))),
     });
     const unsubscribe = observer.subscribe(() => undefined);
     expect(observer.getCurrentResult().data).toBe(
@@ -115,7 +126,9 @@ describe("feature enrollment cache reconciliation", () => {
 
     expect(observer.getCurrentResult().data).toBeUndefined();
     expect(observer.getCurrentResult().status).toBe("error");
-    expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+    expect(
+      queryClient.getQueryCache().find({ queryKey, exact: true })?.state.data,
+    ).toBeUndefined();
     unsubscribe();
     queryClient.clear();
   });

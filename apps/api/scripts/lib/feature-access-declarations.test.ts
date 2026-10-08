@@ -278,6 +278,44 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       ),
     ).toHaveLength(1);
   });
+  test("dispatch feature ids that share a conditional table name remain required metadata", () => {
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/conditional.ts",
+        'export const fixture = p.pgTable("fixture", {});',
+      ],
+      [
+        "apps/api/src/dispatch/registry.ts",
+        'export const CAPABILITY_DISPATCH = { run: { featureId: "fixture", load: () => import("../routes/feature/run") } };',
+      ],
+    ]);
+    const ownership = {
+      ...registry.fixture.ownership,
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/conditional.ts": ["fixture"],
+      },
+    };
+    const options = {
+      registry: { fixture: { ...registry.fixture, ownership } },
+      sources,
+      endpoints: [],
+    };
+    expect(validateFeatureAccessDeclarations(options)).toEqual([]);
+    sources.set(
+      "apps/api/src/routes/ordinary.ts",
+      "export const read = () => sql`select * from fixture`;",
+    );
+    expect(
+      validateFeatureAccessDeclarations({
+        ...options,
+        endpoints: [{ file: "apps/api/src/routes/ordinary.ts", config: {} }],
+      }),
+    ).toContainEqual({
+      file: "apps/api/src/routes/ordinary.ts",
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
   test("named schema barrel imports require only the selected table owner", () => {
     expect(check('import { ordinaryRows } from "@/api/db/schema";')).toEqual(
       [],

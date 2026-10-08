@@ -11,7 +11,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import {
   entities,
   featureEnrolments,
@@ -19,6 +19,7 @@ import {
   flowRunSteps,
   notifications,
   workObligations,
+  workspaceMembers,
 } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
@@ -44,6 +45,7 @@ import {
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -676,9 +678,26 @@ describe("notifications follow matter access", () => {
 });
 
 test("revoking flows hides retained notifications and linked work until re-grant", async () => {
-  const actor = { userId: ids.userA1, organizationId: ids.orgA };
+  const userId = mintAuthProviderId<"user">();
+  await testDb.insert(user).values({
+    id: userId,
+    name: "Flow recipient",
+    email: `${userId}@example.test`,
+    emailVerified: true,
+  });
+  await testDb.insert(member).values({
+    id: Bun.randomUUIDv7(),
+    organizationId: ids.orgA,
+    userId,
+    role: "member",
+    createdAt: new Date(),
+  });
+  await testDb
+    .insert(workspaceMembers)
+    .values({ workspaceId: ids.wsA1, userId });
+  const actor = { userId, organizationId: ids.orgA };
   const identity = await testDb.query.user.findFirst({
-    where: { id: { eq: ids.userA1 } },
+    where: { id: { eq: userId } },
     columns: { emailVerified: true },
   });
   if (identity === undefined) {
@@ -696,13 +715,13 @@ test("revoking flows hides retained notifications and linked work until re-grant
   seeded.push(...hiddenIds);
   const grantWhere = and(
     eq(featureEnrolments.organizationId, ids.orgA),
-    eq(featureEnrolments.userId, ids.userA1),
+    eq(featureEnrolments.userId, userId),
     eq(featureEnrolments.featureId, "flows"),
   );
   await testDb
     .update(user)
     .set({ emailVerified: true })
-    .where(eq(user.id, ids.userA1));
+    .where(eq(user.id, userId));
   try {
     await testDb.insert(entities).values({
       id: taskId,
@@ -710,16 +729,16 @@ test("revoking flows hides retained notifications and linked work until re-grant
       kind: "task",
       name: "Flow review",
       status: "open",
-      createdBy: ids.userA1,
+      createdBy: userId,
     });
     await testDb.insert(workObligations).values({
       entityId: taskId,
       workspaceId: ids.wsA1,
-      ownerUserId: ids.userA1,
+      ownerUserId: userId,
       status: "active",
       acknowledgedAt: new Date(),
-      acknowledgedByUserId: ids.userA1,
-      createdByUserId: ids.userA1,
+      acknowledgedByUserId: userId,
+      createdByUserId: userId,
     });
     await testDb.insert(flowRuns).values({
       id: runId,
@@ -734,7 +753,7 @@ test("revoking flows hides retained notifications and linked work until re-grant
           },
         ],
       },
-      triggerSource: { type: "manual", userId: ids.userA1 },
+      triggerSource: { type: "manual", userId },
       status: "awaiting_review",
       currentStepIndex: 0,
       startedAt: new Date(),
@@ -841,6 +860,6 @@ test("revoking flows hides retained notifications and linked work until re-grant
     await testDb
       .update(user)
       .set({ emailVerified: identity.emailVerified })
-      .where(eq(user.id, ids.userA1));
+      .where(eq(user.id, userId));
   }
 });

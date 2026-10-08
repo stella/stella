@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { searchDocumentsAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
@@ -70,7 +71,13 @@ const search = async (
 ): Promise<SearchResult> => {
   assertAuthorizedSearchScope(query);
 
-  const { organizationId, limit } = query;
+  const { organizationId, userId, limit } = query;
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
+  });
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
   const selectedWorkspaceIds =
@@ -131,6 +138,7 @@ const search = async (
       ${kindFilter}
       ${cursorFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     ORDER BY score DESC, sd.entity_id DESC
     LIMIT ${limit + 1}
@@ -145,6 +153,7 @@ const search = async (
       ${workspaceSelectionFilter}
       ${kindFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
   `;
 
@@ -159,6 +168,7 @@ const search = async (
     WHERE ${orgFilter}
       ${workspaceSelectionFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
     ORDER BY count DESC
@@ -177,6 +187,7 @@ const search = async (
       ${workspaceAccessFilter}
       ${kindFilter}
       ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.workspace_id, w.name
     ORDER BY count DESC
@@ -233,7 +244,13 @@ const searchContent = async (
   query: ContentSearchQuery,
   database: SearchDatabase,
 ): Promise<ContentSearchResult> => {
-  const { organizationId, workspaceId, limit } = query;
+  const { organizationId, userId, workspaceId, limit } = query;
+  const flowVisibility = flowOwnedEntityVisibilitySql({
+    organizationId,
+    userId,
+    entityId: sql`sd.entity_id`,
+    workspaceId: sql`sd.workspace_id`,
+  });
   const tsQuery = buildSearchTsQuery(query.query);
   const singleWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds: [workspaceId],
@@ -259,6 +276,7 @@ const searchContent = async (
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
         ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
         AND sd.tsv @@ ${tsQuery}
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
@@ -271,6 +289,7 @@ const searchContent = async (
       WHERE sd.organization_id = ${organizationId}
         ${singleWorkspaceFilter}
         ${currentVersionProjectionFilter}
+        AND ${flowVisibility}
         AND sd.tsv @@ ${tsQuery}
     `),
   ]);

@@ -54,6 +54,14 @@ type WorkspaceConnectionAuthorizer = (
   lookup: WorkspaceConnectionAuthorizationLookup,
 ) => Promise<ReadonlySet<SafeId<"user">>>;
 
+type WorkspaceEventDeliveryAuthorizer = (lookup: {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userIds: readonly SafeId<"user">[];
+  event: WorkspaceRealtimeEvent;
+  deliver: (userIds: ReadonlySet<SafeId<"user">>) => void;
+}) => Promise<void>;
+
 /**
  * Whether one user still holds an active membership in the organization their
  * user-channel connection was opened for. The user channel is its own routing
@@ -69,6 +77,8 @@ type UserConnectionAuthorizer = (lookup: {
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
 const workspaceDeliveryTails = new Map<SafeId<"workspace">, Promise<void>>();
 let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
+let authorizeWorkspaceEventDelivery: WorkspaceEventDeliveryAuthorizer | null =
+  null;
 
 /**
  * One user-channel stream. It carries the organization it was opened for so a
@@ -491,8 +501,7 @@ const broadcastLocal = async (
   }
   const authorizedUserIds = reauthorized.value;
 
-  const chunk = formatSSE(event);
-
+  const recipients = new Map<SafeId<"organization">, Set<SafeId<"user">>>();
   for (const conn of targets) {
     if (!set.has(conn)) {
       continue;
@@ -501,8 +510,40 @@ const broadcastLocal = async (
       closeConnection(set, conn);
       continue;
     }
-    enqueueOrDrop({ chunk, connection: conn, set });
+    const users = recipients.get(conn.organizationId);
+    if (users) {
+      users.add(conn.userId);
+    } else {
+      recipients.set(conn.organizationId, new Set([conn.userId]));
+    }
   }
+
+  const deliveryAuthorizer =
+    authorizeWorkspaceEventDelivery ??
+    panic("Workspace SSE event authorizer is missing");
+  const chunk = formatSSE(event);
+  await Promise.all(
+    [...recipients].map(
+      async ([organizationId, users]) =>
+        await deliveryAuthorizer({
+          organizationId,
+          workspaceId,
+          userIds: [...users],
+          event,
+          deliver: (admittedUserIds) => {
+            for (const conn of targets) {
+              if (
+                set.has(conn) &&
+                conn.organizationId === organizationId &&
+                admittedUserIds.has(conn.userId)
+              ) {
+                enqueueOrDrop({ chunk, connection: conn, set });
+              }
+            }
+          },
+        }),
+    ),
+  );
 
   if (set.size === 0 && connections.get(workspaceId) === set) {
     connections.delete(workspaceId);
@@ -1029,6 +1070,7 @@ type CreateSseRedisClient = () => SseRedisClient;
 export type SseConnectionAuthorizers = {
   user: UserConnectionAuthorizer;
   workspace: WorkspaceConnectionAuthorizer;
+  workspaceEvent: WorkspaceEventDeliveryAuthorizer;
 };
 
 type StartSseDependencies = {
@@ -1311,6 +1353,7 @@ export const startSse = (
   dependencies: StartSseDependencies = {},
 ): void => {
   authorizeWorkspaceConnections = authorizers.workspace;
+  authorizeWorkspaceEventDelivery = authorizers.workspaceEvent;
   authorizeUserConnection = authorizers.user;
   if (activeLifecycle) {
     return;

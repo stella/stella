@@ -22,9 +22,13 @@ import {
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
 
-export type SelfServeFeatureId = Parameters<
-  (typeof api)["organization-settings"]["feature-enrolments"]
->[0]["featureId"];
+export type SelfServeFeatureId = NonNullable<
+  Awaited<
+    ReturnType<
+      (typeof api)["organization-settings"]["feature-enrolments"]["get"]
+    >
+  >["data"]
+>["features"][number]["featureId"];
 
 export type FeatureEnrolmentsCaller = {
   userId: string;
@@ -72,12 +76,12 @@ export const resetFeatureEnrolmentCache = async ({
   const keys = [...projections, ...featureKeys[featureId]];
 
   await Promise.all(
-    keys.map((queryKey) => queryClient.cancelQueries({ queryKey })),
+    keys.map(async (queryKey) => await queryClient.cancelQueries({ queryKey })),
   );
   // Invalidation keeps the old payload if a refresh fails. Reset it first,
   // notifying active observers, so revoked metadata cannot remain on screen.
   await Promise.all(
-    keys.map((queryKey) => queryClient.resetQueries({ queryKey })),
+    keys.map(async (queryKey) => await queryClient.resetQueries({ queryKey })),
   );
   for (const queryKey of keys) {
     queryClient.removeQueries({ queryKey, type: "inactive" });

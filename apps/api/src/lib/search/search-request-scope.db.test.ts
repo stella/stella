@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -7,7 +7,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
+
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -15,6 +17,9 @@ import {
   entities,
   entityVersions,
   fields,
+  featureEnrolments,
+  flowRuns,
+  flowRunSteps,
   properties,
   searchDocuments,
   workspaceMembers,
@@ -22,6 +27,8 @@ import {
   workspaceSearchDocuments,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
+import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { searchGlobal, searchGlobalFacet } from "@/api/lib/search/index-global";
@@ -32,11 +39,13 @@ import type {
 import { createPgFtsSearchReader } from "@/api/lib/search/pg-fts-provider";
 import { readSearchPreview } from "@/api/lib/search/preview";
 import type { FacetBucket, GlobalSearchHit } from "@/api/lib/search/types";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -180,6 +189,7 @@ const facetQuery = (
   search: "",
   query: "",
   organizationId,
+  userId: viewer,
   accessibleWorkspaceIds: [openMatter, secondMatter],
   selectedWorkspaceIds: [],
   types: ["document"],
@@ -325,6 +335,161 @@ afterAll(async () => {
 });
 
 describe("search reads follow the request scope", () => {
+  test("retained review tasks stay hidden across current reads, search, facets and previews before pagination", async () => {
+    const previous = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    const runId = createSafeId<"flowRun">();
+    const ordinary = createSafeId<"entity">();
+    const hidden = Array.from({ length: 32 }, () => createSafeId<"entity">());
+    const hiddenId = hidden.at(0) ?? panic("Missing planted review task");
+    const taskIds = [ordinary, ...hidden];
+    const scopedDb = requestScope(viewer);
+    try {
+      await testDb.insert(entities).values(
+        taskIds.map((id) => ({
+          id,
+          workspaceId: openMatter,
+          kind: "task",
+          name:
+            id === ordinary ? "Flowboundary ordinary" : "Flowboundary review",
+          lastEditedBy: id === ordinary ? viewer : colleague,
+        })),
+      );
+      const versions = taskIds.map((entityId) => ({
+        id: createSafeId<"entityVersion">(),
+        entityId,
+        workspaceId: openMatter,
+      }));
+      await testDb.insert(entityVersions).values(versions);
+      for (const version of versions) {
+        // db-await-in-loop: each planted entity receives its own current-version pointer.
+        await testDb
+          .update(entities)
+          .set({ currentVersionId: version.id })
+          .where(eq(entities.id, version.entityId));
+      }
+      await testDb.insert(flowRuns).values({
+        id: runId,
+        workspaceId: openMatter,
+        definitionSnapshot: { name: "Review boundary", steps: [] },
+        triggerSource: { type: "manual", userId: viewer },
+        status: "awaiting_review",
+      });
+      await testDb.insert(flowRunSteps).values(
+        hidden.map((reviewTaskEntityId, index) => ({
+          id: createSafeId<"flowRunStep">(),
+          runId,
+          workspaceId: openMatter,
+          index,
+          kind: "review-gate",
+          status: "awaiting_review",
+          reviewTaskEntityId,
+        })),
+      );
+      await testDb.insert(searchDocuments).values(
+        taskIds.map((entityId) => ({
+          entityId,
+          organizationId,
+          workspaceId: openMatter,
+          kind: "task",
+          title:
+            entityId === ordinary
+              ? "Flowboundary ordinary"
+              : "Flowboundary review",
+          searchableText: "flowboundary",
+          tsv: sql`to_tsvector('simple', 'flowboundary')`,
+          updatedAt: new Date(
+            entityId === ordinary
+              ? "2029-01-01T00:00:00Z"
+              : "2030-01-01T00:00:00Z",
+          ),
+        })),
+      );
+      const query = documentQuery({
+        query: "flowboundary",
+        types: ["task"],
+        limit: 1,
+      });
+      const page = await search(scopedDb, query);
+      expect(page.hits.map((hit) => hit.id)).toEqual([`entity:${ordinary}`]);
+      expect(page.totalCount).toBe(1);
+      expect(page.nextCursor).toBeNull();
+      const facets = await searchGlobalFacet(
+        facetQuery("editor", { query: "flowboundary", types: ["task"] }),
+        scopedDb,
+      );
+      expect(bucketValues(facets.buckets)).toEqual([viewer]);
+      const native = await createPgFtsSearchReader(scopedDb).search({
+        query: "flowboundary",
+        organizationId,
+        userId: viewer,
+        workspaceId: openMatter,
+        kinds: ["task"],
+        limit: 1,
+      });
+      expect(native.hits.map((hit) => hit.entityId)).toEqual([ordinary]);
+      expect(native.totalCount).toBe(1);
+      const preview = await readSearchPreview(
+        {
+          query: "",
+          resultId: hiddenId,
+          type: "task",
+          organizationId,
+          userId: viewer,
+          accessibleWorkspaceIds: [openMatter],
+        },
+        scopedDb,
+      );
+      expect(preview).toBeNull();
+      const get = await Result.gen(() =>
+        readEntityByIdHandler({
+          safeDb: toSafeDbMock(scopedDb),
+          workspaceId: openMatter,
+          userId: viewer,
+          entityId: hiddenId,
+        }),
+      );
+      expect(get.isErr()).toBe(true);
+      if (get.isErr()) {
+        expect(get.error).toMatchObject({ status: 404 });
+      }
+      await testDb
+        .update(user)
+        .set({ emailVerified: true })
+        .where(eq(user.id, viewer));
+      await testDb
+        .insert(featureEnrolments)
+        .values({ organizationId, userId: viewer, featureId: "flows" });
+      const granted = await search(
+        scopedDb,
+        documentQuery({ query: "flowboundary", types: ["task"], limit: 50 }),
+      );
+      expect(granted.totalCount).toBe(taskIds.length);
+      expect(granted.hits).toHaveLength(taskIds.length);
+      const grantedGet = await Result.gen(() =>
+        readEntityByIdHandler({
+          safeDb: toSafeDbMock(scopedDb),
+          workspaceId: openMatter,
+          userId: viewer,
+          entityId: hiddenId,
+        }),
+      );
+      expect(grantedGet.isOk()).toBe(true);
+    } finally {
+      await testDb
+        .delete(featureEnrolments)
+        .where(eq(featureEnrolments.userId, viewer));
+      await testDb
+        .update(user)
+        .set({ emailVerified: false })
+        .where(eq(user.id, viewer));
+      await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+      await testDb.delete(entities).where(inArray(entities.id, taskIds));
+      env.FEATURE_FLOWS = previous;
+      restore();
+    }
+  });
   test("search results show an editor profile only where the caller may see it", async () => {
     const [scoped, owner] = await Promise.all([
       search(requestScope(viewer), documentQuery()),
@@ -444,6 +609,7 @@ describe("search reads follow the request scope", () => {
       createPgFtsSearchReader(scopedDb).search({
         query: "memo",
         organizationId,
+        userId: viewer,
         workspaceIds: widened,
         limit: 50,
       }),
@@ -479,6 +645,7 @@ describe("search reads follow the request scope", () => {
       createPgFtsSearchReader(scopedDb).searchContent({
         query: "memo",
         organizationId,
+        userId: viewer,
         workspaceId: openMatter,
         limit: 50,
       }),
@@ -512,6 +679,7 @@ describe("search reads follow the request scope", () => {
         createPgFtsSearchReader(requestScope(newcomer)).search({
           query: "memo",
           organizationId,
+          userId: newcomer,
           workspaceIds: [openMatter],
           limit: 50,
         }),

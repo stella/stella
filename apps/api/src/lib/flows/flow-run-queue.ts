@@ -33,7 +33,8 @@ const FLOW_STEP_JOB_BACKOFF_MS = 5000;
 export const FLOW_STEP_JOB_OPTIONS = {
   // Paused admission completes the queue attempt; the durable run must be re-enqueueable on regrant.
   removeOnComplete: true,
-  removeOnFail: 500,
+  // SQL owns recovery; a failed queue row must not block its deterministic replacement.
+  removeOnFail: true,
   attempts: FLOW_STEP_JOB_ATTEMPTS,
   backoff: { type: "exponential", delay: FLOW_STEP_JOB_BACKOFF_MS },
 } as const satisfies JobsOptions;

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   SIGNALS_FEATURE_ID,
@@ -24,4 +25,20 @@ export const lockFeatureRecoveryAdmission = async ({
   await tx.execute(sql`SELECT pg_advisory_xact_lock(
     ${FEATURE_RECOVERY_LOCK_NAMESPACE}, hashtext(${`${featureId}:${organizationId}`})
   )`);
+};
+
+/** Refuse an inverted wait when cleanup already holds membership or resource rows. */
+export const tryLockFeatureRecoveryAdmission = async ({
+  tx,
+  organizationId,
+  featureId,
+}: Omit<LockFeatureRecoveryAdmissionOptions, "tx"> & {
+  tx: Pick<Transaction, "select">;
+}): Promise<boolean> => {
+  const rows = await tx.select({
+    locked: sql<boolean>`pg_try_advisory_xact_lock(
+      ${FEATURE_RECOVERY_LOCK_NAMESPACE}, hashtext(${`${featureId}:${organizationId}`})
+    )`,
+  });
+  return rows.at(0)?.locked === true;
 };

@@ -59,6 +59,7 @@ import updateWorkObligation from "@/api/handlers/work-obligations/update";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import {
@@ -182,11 +183,22 @@ const createEntity: typeof createEntityFromBuffer = async (input) =>
 const TEST_FLOW_MODEL_ADMISSION =
   testModelAdmission(mintAuthProviderId<"organization">());
 
+const originalClaims = new Map<string, TimestampCasToken>();
+const claimKey = ({
+  runId,
+  stepIndex,
+}: Parameters<typeof executeFlowStep>[0]) => `${runId}:${stepIndex}`;
+const recordClaim =
+  (job: Parameters<typeof executeFlowStep>[0]) =>
+  (claimedStartedAt: TimestampCasToken) =>
+    originalClaims.set(claimKey(job), claimedStartedAt);
+
 const executeFlowStepWithTestModel = async (
   job: Parameters<typeof executeFlowStep>[0],
   signal: AbortSignal,
 ) =>
   await executeFlowStep(job, signal, {
+    onClaim: recordClaim(job),
     generateTextForRole: generateTextForTest,
     admission: TEST_FLOW_MODEL_ADMISSION,
     database: flowDatabase,
@@ -1604,6 +1616,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       await testDb.insert(user).values({
         id: reviewer,
         name: "Departing reviewer",
+        emailVerified: true,
         email: `${reviewer}@example.test`,
       });
       await testDb.insert(member).values({
@@ -1616,6 +1629,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       await testDb
         .insert(workspaceMembers)
         .values({ workspaceId, userId: reviewer });
+      await testDb
+        .insert(featureEnrolments)
+        .values({ organizationId, userId: reviewer, featureId: "flows" });
       const definitionId = createSafeId<"flowDefinition">();
       await testDb.insert(flowDefinitions).values({
         id: definitionId,
@@ -1988,6 +2004,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         const model = instanceWireErrorModel(cassette.model);
         const failure = await Result.tryPromise(async () =>
           executeFlowStep(job, new AbortController().signal, {
+            onClaim: recordClaim(job),
             admission: testModelAdmission(organizationId),
             database: flowDatabase,
             makeScopedDb,
@@ -2026,6 +2043,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         }
         expect(error.kind).toBe(cassette.expect.errorKind);
         await failFlowRunFromWorker(job, error, {
+          claimedStartedAt: originalClaims.get(claimKey(job)),
           database:
             asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
               testDb,
@@ -2127,6 +2145,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     // ...and the final-attempt handler records the failure.
     const broadcasts: string[] = [];
     await failFlowRunFromWorker(job, stepError, {
+      claimedStartedAt: originalClaims.get(claimKey(job)),
       database:
         asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
           testDb,
@@ -2160,6 +2179,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
 
     // A redelivered final-attempt event finds the run terminal and does nothing.
     await failFlowRunFromWorker(job, stepError, {
+      claimedStartedAt: originalClaims.get(claimKey(job)),
       database:
         asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
           testDb,
@@ -2229,4 +2249,106 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     expect(step).toEqual({ status: "failed", error: "Flow step failed" });
     expect(JSON.stringify({ run, step })).not.toContain(SENTINEL_FOREIGN_TEXT);
   });
+
+  test.each(["completion", "failure"] as const)(
+    "stale %s cannot replace a newer step claim",
+    async (settlement) => {
+      const definitionId = createSafeId<"flowDefinition">();
+      await testDb.insert(flowDefinitions).values({
+        id: definitionId,
+        organizationId,
+        name: "Claim fence",
+        steps: [AI_STEP],
+        trigger: MANUAL_TRIGGER,
+        enabled: true,
+        createdByUserId: userId,
+      });
+      const safeDb = asTestRaw<SafeDb>(
+        createSafeDb(testDb, [workspaceId], organizationId, userId),
+      );
+      const started = await startFlowRun({
+        safeDb,
+        organizationId,
+        workspaceId,
+        definitionId,
+        triggerSource: { type: "manual", userId },
+        inputEntityIds: [],
+        enqueueStep: enqueueFlowStepMock,
+      });
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const job = { runId: started.value.runId, stepIndex: 0 };
+      const entered = Promise.withResolvers<undefined>();
+      const release = Promise.withResolvers<undefined>();
+      let originalClaim: TimestampCasToken | undefined;
+      const oldAttempt = executeFlowStep(job, new AbortController().signal, {
+        admission: testModelAdmission(organizationId),
+        database: flowDatabase,
+        makeScopedDb,
+        makeSafeDb,
+        enqueueStep: enqueueFlowStepMock,
+        broadcastUpdate,
+        loadAIConfig: async () => Result.ok(null),
+        onClaim: (claim) => {
+          originalClaim = claim;
+        },
+        generateTextForRole: async () => {
+          entered.resolve(undefined);
+          await release.promise;
+          return "Old output";
+        },
+      });
+      try {
+        await entered.promise;
+        if (originalClaim === undefined) {
+          throw new TypeError("Expected original claim");
+        }
+        const newerClaim = new Date(
+          Temporal.Now.instant().epochMilliseconds + 1,
+        );
+        await testDb
+          .update(flowRunSteps)
+          .set({ startedAt: newerClaim })
+          .where(eq(flowRunSteps.runId, job.runId));
+        const before = await testDb.query.flowRunSteps.findFirst({
+          where: { runId: { eq: job.runId }, index: { eq: 0 } },
+        });
+        if (settlement === "failure") {
+          expect(
+            await failFlowRunFromWorker(
+              job,
+              new FlowStepError({ message: "Old failure" }),
+              {
+                database:
+                  asTestRaw<
+                    Parameters<typeof failFlowRunFromWorker>[2]["database"]
+                  >(testDb),
+                makeScopedDb,
+                broadcastUpdate,
+                claimedStartedAt: originalClaim,
+              },
+            ),
+          ).toEqual({ status: "stale" });
+        }
+        release.resolve(undefined);
+        expect(await oldAttempt).toEqual({ status: "stale" });
+        expect(
+          await testDb.query.flowRunSteps.findFirst({
+            where: { runId: { eq: job.runId }, index: { eq: 0 } },
+          }),
+        ).toEqual(before);
+        expect(
+          (
+            await testDb.query.flowRuns.findFirst({
+              where: { id: { eq: job.runId } },
+            })
+          )?.status,
+        ).toBe("running");
+      } finally {
+        release.resolve(undefined);
+        await oldAttempt;
+      }
+    },
+  );
 });

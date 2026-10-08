@@ -14,6 +14,8 @@ import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
+  entities,
+  flowUploadTriggerIntents,
   featureEnrolments,
   flowDefinitions,
   flowRuns,
@@ -23,6 +25,8 @@ import {
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
@@ -69,6 +73,8 @@ describe("startAutomatedFlowRun authorization gate", () => {
   const unauthorizedWorkspaceId = createSafeId<"workspace">();
   const definitionId = createSafeId<"flowDefinition">();
   const entityId = createSafeId<"entity">();
+  const retryAt = new Date();
+  let uploadTriggerClaimToken: TimestampCasToken | undefined;
 
   beforeAll(async () => {
     await testDb.insert(organization).values({
@@ -123,6 +129,25 @@ describe("startAutomatedFlowRun authorization gate", () => {
       enabled: true,
       createdByUserId: authorId,
     });
+    await testDb.insert(entities).values({
+      id: entityId,
+      workspaceId: authorizedWorkspaceId,
+      name: "upload.pdf",
+    });
+    const receipt = await testDb
+      .insert(flowUploadTriggerIntents)
+      .values({
+        organizationId,
+        workspaceId: authorizedWorkspaceId,
+        definitionId,
+        entityId,
+        fileExtension: "pdf",
+        retryAt,
+      })
+      .returning({
+        token: timestampCasToken(flowUploadTriggerIntents.retryAt),
+      });
+    uploadTriggerClaimToken = receipt.at(0)?.token;
   });
 
   afterAll(async () => {
@@ -143,6 +168,7 @@ describe("startAutomatedFlowRun authorization gate", () => {
         workspaceId,
         createdByUserId: authorId,
         triggerSource: { type: "file-upload", entityId },
+        uploadTriggerClaimToken,
         inputEntityIds: [entityId],
         logContext: { definitionId, workspaceId, trigger: "file-upload" },
       },

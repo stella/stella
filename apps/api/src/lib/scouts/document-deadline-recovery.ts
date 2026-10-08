@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, asc, eq, inArray, lt, not, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, asc, eq, inArray, lt, not, or, sql } from "drizzle-orm";
 
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -13,6 +13,12 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
   defineScopedTransitions,
   transitionScopedCount,
@@ -101,18 +107,24 @@ export const resumeDocumentDeadlineScoutsAfterGrant = async ({
   });
 };
 
+export type DeadlineScoutClaimSettlement =
+  | { status: "settled" }
+  | { status: "stale_claim" };
+
 type PauseDocumentDeadlineScoutOptions = {
   database: Pick<typeof rootDb, "select" | "transaction">;
   sourceRunId: SafeId<"documentProcessingRun">;
-  from: "pending" | "running";
-};
+} & (
+  | { from: "pending" }
+  | { from: "running"; claimedAtToken: TimestampCasToken }
+);
 
 /** The same lock as grant insertion closes check-then-park and regrant ordering races. */
 export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
   database,
   sourceRunId,
-  from,
-}: PauseDocumentDeadlineScoutOptions): Promise<void> => {
+  ...claim
+}: PauseDocumentDeadlineScoutOptions): Promise<DeadlineScoutClaimSettlement> => {
   const source = (
     await database
       .select({ organizationId: documentProcessingRuns.organizationId })
@@ -121,9 +133,9 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
       .limit(1)
   ).at(0);
   if (!source) {
-    return;
+    return { status: "stale_claim" };
   }
-  await database.transaction(async (tx) => {
+  return await database.transaction(async (tx) => {
     await lockFeatureRecoveryAdmission({
       tx,
       organizationId: source.organizationId,
@@ -132,7 +144,7 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
     const metadata = {
       deadlineScoutClaimedAt: null,
       deadlineScoutSkippedUntil: null,
-      deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${from === "running" ? 1 : 0}, 0)`,
+      deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${claim.from === "running" ? 1 : 0}, 0)`,
       deadlineScoutErrorCode: "feature_not_granted",
       updatedAt: new Date(),
     };
@@ -140,26 +152,30 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
       ? await transitionScopedCount({
           tx,
           spec: DEADLINE_DISPATCH_RECOVERY,
-          where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), not(deadlineMatterAdmission()))}`,
-          options: { from: [from], to: "awaiting_grant", set: metadata },
+          where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), claim.from === "running" ? timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken) : undefined, not(deadlineMatterAdmission()))}`,
+          options: { from: [claim.from], to: "awaiting_grant", set: metadata },
           recordTransitionAuditEvent: (_tx, count) => {
             logger.info("scout.document_deadlines.grant_paused", { count });
           },
         })
       : 0;
-    if (parked !== 0 || from === "pending") {
-      return;
+    if (parked !== 0) {
+      return { status: "settled" };
+    }
+    if (claim.from === "pending") {
+      return { status: "stale_claim" };
     }
     // A grant that committed before the lock keeps the rejected observation retryable under a new actor.
-    await transitionScopedCount({
+    const retried = await transitionScopedCount({
       tx,
       spec: DEADLINE_DISPATCH_RECOVERY,
-      where: sql`${eq(documentProcessingRuns.id, sourceRunId)}`,
+      where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken))}`,
       options: { from: ["running"], to: "pending", set: metadata },
       recordTransitionAuditEvent: (_tx, count) => {
         logger.info("scout.document_deadlines.admission_retry", { count });
       },
     });
+    return { status: retried === 0 ? "stale_claim" : "settled" };
   });
 };
 
@@ -194,23 +210,27 @@ const reconcileDeadlineAdmission = async ({
           to: "pending",
           set: { deadlineScoutErrorCode: null, updatedAt: new Date() },
         } as const);
-  const candidates = await database
-    .select({
-      id: documentProcessingRuns.id,
-      organizationId: documentProcessingRuns.organizationId,
-    })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.deadlineScoutStatus, sourceStatus),
-        admission,
-      ),
+  const candidates = (
+    await readCursorPage(
+      database
+        .select({
+          id: documentProcessingRuns.id,
+          organizationId: documentProcessingRuns.organizationId,
+        })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.deadlineScoutStatus, sourceStatus),
+            admission,
+          ),
+        )
+        .orderBy(
+          asc(documentProcessingRuns.updatedAt),
+          asc(documentProcessingRuns.id),
+        ),
+      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
     )
-    .orderBy(
-      asc(documentProcessingRuns.updatedAt),
-      asc(documentProcessingRuns.id),
-    )
-    .limit(RECONCILE_BATCH_SIZE);
+  ).items;
   const organizations = new Map<
     SafeId<"organization">,
     SafeId<"documentProcessingRun">[]
@@ -282,95 +302,132 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   const staleBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
   );
-  const staleDispatches = await database
-    .select({ id: documentProcessingRuns.id })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-        lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
-      ),
+  const staleDispatches = (
+    await readCursorPage(
+      database
+        .select({
+          id: documentProcessingRuns.id,
+          claimedAtToken: timestampCasToken(
+            documentProcessingRuns.deadlineScoutClaimedAt,
+          ),
+        })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+            lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
+          ),
+        )
+        .orderBy(
+          asc(documentProcessingRuns.deadlineScoutClaimedAt),
+          asc(documentProcessingRuns.id),
+        ),
+      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
     )
-    .orderBy(
-      asc(documentProcessingRuns.deadlineScoutClaimedAt),
-      asc(documentProcessingRuns.id),
-    )
-    .limit(RECONCILE_BATCH_SIZE);
+  ).items;
   // Match the expired claim and state again: overlapping sweeps must not
   // retire a fresh claim acquired after selection. A stale update then matches
   // nothing, preserving settlement and preventing a completed scan's replay.
   const reclaimedDispatchCount =
     staleDispatches.length === 0
       ? 0
-      : await transitionScopedCount({
-          tx: database,
-          spec: DEADLINE_DISPATCH_RECOVERY,
-          where: sql`${and(
-            inArray(
-              documentProcessingRuns.id,
-              staleDispatches.map(({ id }) => id),
-            ),
-            eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-            lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
-          )}`,
-          options: {
-            from: ["running"],
-            to: "pending",
-            set: {
-              deadlineScoutClaimedAt: null,
-              deadlineScoutErrorCode: "worker_lease_expired",
-              updatedAt: new Date(),
-            },
-          },
-          recordTransitionAuditEvent: (_tx, count) => {
-            logger.info("scout.document_deadlines.dispatches_reclaimed", {
-              count,
-            });
-          },
-        });
+      : await database.transaction(
+          async (tx) =>
+            await transitionScopedCount({
+              tx,
+              spec: DEADLINE_DISPATCH_RECOVERY,
+              where: sql`${and(
+                or(
+                  ...staleDispatches.map(({ id, claimedAtToken }) =>
+                    and(
+                      eq(documentProcessingRuns.id, id),
+                      timestampMatchesCasToken(
+                        documentProcessingRuns.deadlineScoutClaimedAt,
+                        claimedAtToken ??
+                          panic("Expired deadline claim has no token"),
+                      ),
+                    ),
+                  ),
+                ),
+                eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+                lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
+              )}`,
+              options: {
+                from: ["running"],
+                to: "pending",
+                set: {
+                  deadlineScoutClaimedAt: null,
+                  deadlineScoutErrorCode: "worker_lease_expired",
+                  updatedAt: new Date(),
+                },
+              },
+              recordTransitionAuditEvent: (_tx, count) => {
+                logger.info("scout.document_deadlines.dispatches_reclaimed", {
+                  count,
+                });
+              },
+            }),
+        );
 
-  const staleCensusRuns = await database
-    .select({ id: scoutRuns.id })
-    .from(scoutRuns)
-    .where(
-      and(
-        eq(scoutRuns.scoutKey, SCOUT_KEY.DOCUMENT_DEADLINES),
-        eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
-        lt(scoutRuns.startedAt, staleBefore),
-      ),
+  const staleCensusRuns = (
+    await readCursorPage(
+      database
+        .select({
+          id: scoutRuns.id,
+          startedAtToken: timestampCasToken(scoutRuns.startedAt),
+        })
+        .from(scoutRuns)
+        .where(
+          and(
+            eq(scoutRuns.scoutKey, SCOUT_KEY.DOCUMENT_DEADLINES),
+            eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+            lt(scoutRuns.startedAt, staleBefore),
+          ),
+        )
+        .orderBy(asc(scoutRuns.startedAt), asc(scoutRuns.id)),
+      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
     )
-    .orderBy(asc(scoutRuns.startedAt), asc(scoutRuns.id))
-    .limit(RECONCILE_BATCH_SIZE);
+  ).items;
   // Same compare-and-set, so a census run that restarted between the select
   // and this update is not retired out from under its worker.
   const failedCensusCount =
     staleCensusRuns.length === 0
       ? 0
-      : await transitionScopedCount({
-          tx: database,
-          spec: DEADLINE_CENSUS_RECOVERY,
-          where: sql`${and(
-            inArray(
-              scoutRuns.id,
-              staleCensusRuns.map(({ id }) => id),
-            ),
-            eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
-            lt(scoutRuns.startedAt, staleBefore),
-          )}`,
-          options: {
-            from: ["running"],
-            to: "failed",
-            set: {
-              error: "worker_lease_expired",
-              finishedAt: new Date(),
-            },
-          },
-          recordTransitionAuditEvent: (_tx, count) => {
-            logger.info("scout.document_deadlines.census_runs_expired", {
-              count,
-            });
-          },
-        });
+      : await database.transaction(
+          async (tx) =>
+            await transitionScopedCount({
+              tx,
+              spec: DEADLINE_CENSUS_RECOVERY,
+              where: sql`${and(
+                or(
+                  ...staleCensusRuns.map(({ id, startedAtToken }) =>
+                    and(
+                      eq(scoutRuns.id, id),
+                      timestampMatchesCasToken(
+                        scoutRuns.startedAt,
+                        startedAtToken,
+                      ),
+                    ),
+                  ),
+                ),
+                eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+                lt(scoutRuns.startedAt, staleBefore),
+              )}`,
+              options: {
+                from: ["running"],
+                to: "failed",
+                set: {
+                  error: "worker_lease_expired",
+                  finishedAt: new Date(),
+                },
+              },
+              recordTransitionAuditEvent: (_tx, count) => {
+                logger.info("scout.document_deadlines.census_runs_expired", {
+                  count,
+                });
+              },
+            }),
+        );
 
   const parked = await reconcileDeadlineAdmission({
     database,
@@ -382,21 +439,25 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
     direction: "resume",
   });
 
-  const pending = await database
-    .select({ sourceRunId: documentProcessingRuns.id })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
-        deadlineMatterAdmission(),
-        deadlineScoutDue(new Date()),
-      ),
+  const pending = (
+    await readCursorPage(
+      database
+        .select({ sourceRunId: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+            deadlineMatterAdmission(),
+            deadlineScoutDue(new Date()),
+          ),
+        )
+        .orderBy(
+          asc(documentProcessingRuns.updatedAt),
+          asc(documentProcessingRuns.id),
+        ),
+      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
     )
-    .orderBy(
-      asc(documentProcessingRuns.updatedAt),
-      asc(documentProcessingRuns.id),
-    )
-    .limit(RECONCILE_BATCH_SIZE);
+  ).items;
 
   const results = await mapWithConcurrency({
     items: pending,

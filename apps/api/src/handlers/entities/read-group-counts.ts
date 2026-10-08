@@ -24,6 +24,7 @@ import {
   buildFindConditions,
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -71,7 +72,7 @@ type GroupCountRow = { value: string | null; count: number };
 
 const readGroupCounts = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, session, user }) {
     // Same base set the table/window query scopes to: this workspace, only
     // entities with a live current version, plus the view's compiled filters
     // and the same find condition, compiled by the same builder. Matching this
@@ -79,6 +80,12 @@ const readGroupCounts = createSafeHandler(
     // table actually renders.
     const baseConditions = and(
       eq(entities.workspaceId, workspaceId),
+      flowOwnedEntityVisibilitySql({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        entityId: sql`${entities.id}`,
+        workspaceId: sql`${entities.workspaceId}`,
+      }),
       isNotNull(entities.currentVersionId),
       ...buildFilterConditions(arrayOrEmpty(body.filters)),
       ...buildFindConditions({

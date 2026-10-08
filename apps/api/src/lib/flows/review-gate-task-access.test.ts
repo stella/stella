@@ -12,10 +12,7 @@ import {
 import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import {
-  createScopedDbMock,
-  createSelectQueryMock,
-} from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
@@ -32,21 +29,17 @@ describe("linked task flow admission", () => {
           env.FEATURE_FLOWS = deploymentEnabled;
           try {
             const database = createScopedDbMock(
+              {},
               {
-                select: () =>
-                  createSelectQueryMock(
-                    linked
-                      ? [
-                          {
-                            runId: createSafeId<"flowRun">(),
-                            status: "awaiting_review",
-                            organizationId,
-                          },
-                        ]
-                      : [],
-                  ),
-              },
-              {
+                flowTaskGates: linked
+                  ? [
+                      {
+                        runId: createSafeId<"flowRun">(),
+                        status: "awaiting_review",
+                        organizationId,
+                      },
+                    ]
+                  : [],
                 featureAccess: {
                   identity: {
                     email: "reader@example.test",

@@ -30,6 +30,7 @@ import {
   entityVersions,
   expenses,
   extractedContent,
+  featureEnrolments,
   fields,
   fileChatThreads,
   invoices,
@@ -288,21 +289,25 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.userA1,
       name: "User A1",
       email: `${ids.userA1}@test.local`,
+      emailVerified: true,
     },
     {
       id: ids.userA2,
       name: "User A2",
       email: `${ids.userA2}@test.local`,
+      emailVerified: true,
     },
     {
       id: ids.userB1,
       name: "User B1",
       email: `${ids.userB1}@test.local`,
+      emailVerified: true,
     },
     {
       id: ids.userAdmin,
       name: "Admin",
       email: `${ids.userAdmin}@test.local`,
+      emailVerified: true,
     },
   ]);
 
@@ -385,6 +390,19 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       displayName: "Contact B2",
     },
   ]);
+
+  // Shared actors exercise the admitted surfaces; opt-out fixtures use isolated principals.
+  await db.insert(featureEnrolments).values(
+    [
+      { organizationId: ids.orgA, userId: ids.userA1 },
+      { organizationId: ids.orgA, userId: ids.userA2 },
+      { organizationId: ids.orgA, userId: ids.userAdmin },
+      { organizationId: ids.orgB, userId: ids.userA1 },
+      { organizationId: ids.orgB, userId: ids.userB1 },
+    ].flatMap((principal) =>
+      ["signals", "flows"].map((featureId) => ({ ...principal, featureId })),
+    ),
+  );
 
   await db.insert(workspaces).values([
     {

@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
@@ -80,6 +81,11 @@ export const admitTaskFlowAccess = async (
   if (gate === undefined) {
     return Result.ok(undefined);
   }
+  await lockFeatureRecoveryAdmission({
+    tx,
+    organizationId: gate.organizationId,
+    featureId: "flows",
+  });
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
     return Result.err(new HandlerError({ status: 404, message: "Not found" }));
   }

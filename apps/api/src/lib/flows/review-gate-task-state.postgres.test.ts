@@ -7,6 +7,7 @@ import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
+  featureEnrolments,
   entityVersions,
   fields,
   flowRunSteps,
@@ -20,6 +21,7 @@ import updateKanbanPlacement from "@/api/handlers/fields/kanban-placement/update
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -239,6 +241,61 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("review task entry serialization (postgres)", () => {
+    test("revoking flow admission refuses a linked review metadata edit without changing the task", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const f = await flowReviewGateFixture(db, {
+          intermediate: false,
+          governed: true,
+        });
+        try {
+          const before = await db.query.entities.findFirst({
+            where: { id: { eq: f.taskEntityId } },
+          });
+          await db.transaction(async (tx) => {
+            await lockFeatureRecoveryAdmission({
+              tx,
+              organizationId: f.organizationId,
+              featureId: "flows",
+            });
+            await tx
+              .delete(featureEnrolments)
+              .where(
+                and(
+                  eq(featureEnrolments.organizationId, f.organizationId),
+                  eq(featureEnrolments.userId, f.userId),
+                  eq(featureEnrolments.featureId, "flows"),
+                ),
+              );
+          });
+          const changed = await Result.gen(() =>
+            updateTaskHandler({
+              safeDb: f.safeDb(db),
+              workspaceId: f.workspaceId,
+              userId: f.userId,
+              recordAuditEvent: f.recordAuditEvent,
+              body: { taskId: f.taskEntityId, name: "Changed after revoke" },
+              features: { governedWorkflow: true, legalLists: false },
+            }),
+          );
+          expect(changed.isErr()).toBe(true);
+          if (changed.isErr()) {
+            expect(changed.error).toMatchObject({
+              status: 404,
+              message: "Not found",
+            });
+          }
+          expect(
+            await db.query.entities.findFirst({
+              where: { id: { eq: f.taskEntityId } },
+            }),
+          ).toEqual(before);
+        } finally {
+          await f.cleanup();
+        }
+      });
+    });
+
     test.each([...cases, ...preheldCases])(
       "$entry taskFirst=$taskFirst run=$action workspaceLockOwner=$workspaceLockOwner",
       async ({ entry, taskFirst, action, workspaceLockOwner }) => {

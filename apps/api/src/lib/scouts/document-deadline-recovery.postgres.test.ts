@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableColumns, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -16,11 +16,13 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -28,7 +30,10 @@ import {
   recoverDocumentDeadlineScoutDispatches,
   resumeDocumentDeadlineScoutsAfterGrant,
 } from "./document-deadline-recovery";
-import { runDocumentDeadlineScout } from "./document-deadlines";
+import {
+  runDocumentDeadlineScout,
+  validateDocumentDeadlineScoutClaim,
+} from "./document-deadlines";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
@@ -178,6 +183,149 @@ const fixture = async (db: GatedTestDb) =>
   });
 
 describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
+  test("effect validation waits for admission before source locks and rejects a replacement claim", async () => {
+    const previousFlag = env.FEATURE_SIGNALS;
+    env.FEATURE_SIGNALS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const holder = openClient({ max: 1 });
+          const contender = openClient({ max: 1 });
+          const observer = openClient({ max: 1 });
+          const f = await fixture(holder.db);
+          const source = f.sources.at(100) ?? panic("Missing admitted source");
+          const originalClaimedAt = new Date(Date.now() - 60_000);
+          const replacementClaimedAt = new Date();
+          await holder.db
+            .update(documentProcessingRuns)
+            .set({
+              deadlineScoutStatus: "running",
+              deadlineScoutClaimedAt: originalClaimedAt,
+              deadlineScoutAttemptCount: 2,
+            })
+            .where(eq(documentProcessingRuns.id, source.runId));
+          const claimed =
+            (
+              await holder.db
+                .select({
+                  ...getTableColumns(documentProcessingRuns),
+                  deadlineScoutClaimedAtToken: timestampCasToken(
+                    documentProcessingRuns.deadlineScoutClaimedAt,
+                  ),
+                })
+                .from(documentProcessingRuns)
+                .where(eq(documentProcessingRuns.id, source.runId))
+            ).at(0) ?? panic("Missing original claim");
+          await holder.db.insert(featureEnrolments).values({
+            organizationId: f.organizationId,
+            userId: f.pausedUserId,
+            featureId: "signals",
+          });
+          const claimedAtToken =
+            claimed.deadlineScoutClaimedAtToken ??
+            panic("Missing original deadline claim token");
+          // A live grant elsewhere in this organization cannot authorize this private matter.
+          expect(
+            await holder.db.transaction(
+              async (tx) =>
+                await validateDocumentDeadlineScoutClaim({
+                  tx: asTestRaw<Transaction>(tx),
+                  actorUserId: f.pausedUserId,
+                  run: {
+                    ...claimed,
+                    deadlineScoutClaimedAtToken: claimedAtToken,
+                  },
+                }),
+            ),
+          ).toBe("not-granted");
+          const sessionPid = async (db: GatedTestDb) => {
+            const pid = Number(
+              (await db.execute(sql`SELECT pg_backend_pid() AS pid`)).at(0)?.[
+                "pid"
+              ],
+            );
+            if (!Number.isSafeInteger(pid)) {
+              return panic("Missing database session identity");
+            }
+            return pid;
+          };
+          const holdingPid = await sessionPid(holder.db);
+          const waitingPid = await sessionPid(contender.db);
+          const ready = Promise.withResolvers<undefined>();
+          const release = Promise.withResolvers<undefined>();
+          const writer = holder.db.transaction(async (tx) => {
+            await lockFeatureRecoveryAdmission({
+              tx,
+              organizationId: f.organizationId,
+              featureId: "signals",
+            });
+            await tx
+              .update(documentProcessingRuns)
+              .set({
+                deadlineScoutClaimedAt: replacementClaimedAt,
+                deadlineScoutAttemptCount: 3,
+              })
+              .where(eq(documentProcessingRuns.id, source.runId));
+            ready.resolve(undefined);
+            await release.promise;
+          });
+          let validation: Promise<unknown> | undefined;
+          try {
+            await Promise.race([ready.promise, writer]);
+            validation = contender.db.transaction(
+              async (tx) =>
+                await validateDocumentDeadlineScoutClaim({
+                  tx: asTestRaw<Transaction>(tx),
+                  actorUserId: f.admittedUserId,
+                  run: {
+                    ...claimed,
+                    deadlineScoutClaimedAtToken: claimedAtToken,
+                  },
+                }),
+            );
+            await waitForBlockedPid(observer.sql, { waitingPid, holdingPid });
+            const waiting = await observer.db.execute(
+              sql`SELECT query FROM pg_stat_activity WHERE pid = ${waitingPid}`,
+            );
+            expect(waiting.at(0)?.["query"]).toMatch(/pg_advisory_xact_lock/u);
+            release.resolve(undefined);
+            expect(await validation).toBe("stale_claim");
+            await writer;
+            expect(
+              (
+                await holder.db
+                  .select({
+                    status: documentProcessingRuns.deadlineScoutStatus,
+                    claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+                    attempts: documentProcessingRuns.deadlineScoutAttemptCount,
+                  })
+                  .from(documentProcessingRuns)
+                  .where(eq(documentProcessingRuns.id, source.runId))
+              ).at(0),
+            ).toEqual({
+              status: "running",
+              claimedAt: replacementClaimedAt,
+              attempts: 3,
+            });
+          } finally {
+            release.resolve(undefined);
+            await Promise.allSettled(
+              validation ? [writer, validation] : [writer],
+            );
+            await holder.db
+              .delete(organization)
+              .where(eq(organization.id, f.organizationId));
+            await holder.db.delete(user).where(eq(user.id, f.admittedUserId));
+            await holder.db.delete(user).where(eq(user.id, f.pausedUserId));
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_SIGNALS = previousFlag;
+    }
+  });
+
   for (const grantDelivery of ["immediate", "postcommit-crash"] as const) {
     test(`a hundred paused sources do not block admitted source 101; ${grantDelivery} regrant resumes`, async () => {
       const previousFlag = env.FEATURE_SIGNALS;

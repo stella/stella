@@ -88,8 +88,8 @@ export const useFeatureEnrolment = (featureId: SelfServeFeatureId) => {
       }
       notifyUserError(error, t("errors.actionFailed"));
     },
-    onSuccess: () =>
-      resetFeatureEnrolmentCache({
+    onSuccess: async () =>
+      await resetFeatureEnrolmentCache({
         queryClient,
         featureId,
         userId: user.id,

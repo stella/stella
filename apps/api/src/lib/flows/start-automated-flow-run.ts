@@ -6,6 +6,7 @@ import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
@@ -58,6 +59,8 @@ export type StartAutomatedFlowRunArgs = {
     { type: "schedule" | "file-upload" }
   >;
   inputEntityIds: SafeId<"entity">[];
+  uploadTriggerClaimToken?: TimestampCasToken | undefined;
+  schedulerClaim?: InsertAutomatedFlowRunWithinCapInput["schedulerClaim"];
   /** Optional BullMQ delay for step 0 (file-upload defers past extraction). */
   enqueueDelayMs?: number;
   /** String-only structured-log context (definitionId, workspaceId, ...). */
@@ -125,6 +128,7 @@ export const automatedFlowRunDependencies = (
 });
 
 export type StartAutomatedFlowRunOutcome =
+  | { status: "stale" }
   | { status: "paused" }
   | { status: "retry" }
   | { status: "skipped"; reason: FlowUploadTriggerSkipReason }
@@ -139,6 +143,8 @@ const classifyAutomatedInsertion = (
   logContext: Record<string, string>,
 ): AutomatedInsertionDisposition => {
   switch (result.outcome) {
+    case "stale":
+      return { status: "stopped", outcome: { status: "stale" } };
     case "paused":
       logger.info("flow.automated_run_skipped", {
         ...logContext,
@@ -179,6 +185,8 @@ export const startAutomatedFlowRun = async (
     createdByUserId,
     triggerSource,
     inputEntityIds,
+    uploadTriggerClaimToken,
+    schedulerClaim,
     enqueueDelayMs,
     logContext,
   }: StartAutomatedFlowRunArgs,
@@ -296,6 +304,8 @@ export const startAutomatedFlowRun = async (
           userId: brandPersistedUserId(createdByUserId),
           definitionId,
           rows,
+          uploadTriggerClaimToken,
+          schedulerClaim,
           ...(reservePeriod && { reservePeriod }),
         }),
       catch: (cause) => cause,

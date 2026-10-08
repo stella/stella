@@ -299,6 +299,12 @@ export const FEATURE_REGISTRY = {
       dispatchModules: [
         {
           type: "admitted",
+          module: "apps/api/src/auth.ts",
+          admission: "deliverFlowRunWorkspaceEvent",
+          specifier: "@/api/lib/flows/flow-run-events",
+        },
+        {
+          type: "admitted",
           module: "apps/api/src/lib/flows/resume-after-grant.ts",
           admission: "isBackgroundFeatureEnabled",
           specifier: "@/api/lib/feature-access/background",

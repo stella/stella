@@ -354,6 +354,7 @@ export const pendingScoutEmissions = p.pgTable(
   },
   (table) => [
     p.primaryKey({
+      name: "pending_scout_emissions_identity_pk",
       columns: [table.organizationId, table.sourceKind, table.sourceId],
     }),
     p

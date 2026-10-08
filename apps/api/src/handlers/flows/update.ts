@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { flowDefinitions } from "@/api/db/schema";
 import {
   flowDefinitionBodySchema,
@@ -11,6 +12,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
 import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
@@ -34,7 +36,7 @@ const config = {
 
 const updateFlowDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent, user }) {
     const organizationId = session.activeOrganizationId;
 
     const input = yield* Result.await(
@@ -42,7 +44,12 @@ const updateFlowDefinition = createSafeRootHandler(
     );
 
     const updated = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        await requireFlowEffectAdmission({
+          tx,
+          organizationId,
+          userId: user.id,
+        });
         const existing = await tx.query.flowDefinitions.findFirst({
           where: {
             id: { eq: params.flowId },

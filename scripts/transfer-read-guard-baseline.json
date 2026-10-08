@@ -1170,13 +1170,6 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "function": "module/recoverDocumentDeadlineScoutDispatches",
-    "kind": "constant-limit",
-    "count": 3,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
     "function": "module/recoverFailedOcrSearchIndexes",
     "kind": "constant-limit",
     "count": 1,
@@ -1325,13 +1318,6 @@
   {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
     "function": "module/readRunProgress",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts",
-    "function": "module/maybeStartUploadTriggeredFlows",
     "kind": "constant-limit",
     "count": 1,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
@@ -1503,55 +1489,6 @@
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "function": "module/cancelMemberDesktopSessions",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "function": "module/cancelMemberFlowRuns",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "function": "module/clearMemberContactAssignments",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "function": "module/clearMemberObligationOwners",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "function": "module/clearMemberTaskAssignments",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "function": "module/clearMemberTimeEntryApprovals",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "function": "module/closeMemberExchanges",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Batch drain: each page reads memberRemovalCleanupBatchSize rows and the loop runs until the counted owned rows are processed, so the limit is a page size, not a result cap."
   },
   {
     "file": "apps/api/src/lib/memory/compaction-transcript.ts",

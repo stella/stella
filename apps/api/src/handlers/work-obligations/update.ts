@@ -229,6 +229,17 @@ const updateWorkObligation = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        const currentAdmission = await admitTaskFlowAccess(tx, {
+          workspaceId,
+          taskEntityId: params.entityId,
+          userId: user.id,
+        });
+        if (currentAdmission.isErr()) {
+          return {
+            status: "feature_refused" as const,
+            error: currentAdmission.error,
+          };
+        }
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
         // Membership removal locks workspace-member rows before obligations.
@@ -543,6 +554,8 @@ const updateWorkObligation = createSafeHandler(
     );
 
     switch (result.status) {
+      case "feature_refused":
+        return Result.err(result.error);
       case "updated":
       case "unchanged":
         return Result.ok({ success: true });

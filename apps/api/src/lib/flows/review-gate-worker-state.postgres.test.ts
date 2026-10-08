@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
@@ -114,9 +115,19 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
     taskFeatures: { governedWorkflow: true, legalLists: false },
   } satisfies Parameters<typeof executeFlowStep>[2];
   const job = { runId: f.runId, stepIndex: 0 };
+  const originalStep = (
+    await db
+      .select({ token: timestampCasToken(flowRunSteps.startedAt) })
+      .from(flowRunSteps)
+      .where(and(eq(flowRunSteps.runId, f.runId), eq(flowRunSteps.index, 0)))
+      .limit(1)
+  ).at(0);
   const running =
     phase === "fail"
-      ? failFlowRunFromWorker(job, new Error("Worker stopped"), dependencies)
+      ? failFlowRunFromWorker(job, new Error("Worker stopped"), {
+          ...dependencies,
+          claimedStartedAt: originalStep?.token ?? undefined,
+        })
       : executeFlowStep(job, new AbortController().signal, dependencies);
   await Promise.race([
     reached.promise,

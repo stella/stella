@@ -1,18 +1,22 @@
 import { panic } from "better-result";
-import { and, asc, eq, lte, not, or, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, lte, not, or, sql } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
+import type { Transaction } from "@/api/db/root";
 import {
   flowDefinitions,
   flowUploadTriggerIntents,
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
-  defineScopedTransitions,
-  transitionScopedCount,
-} from "@/api/lib/db/transitions";
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -24,6 +28,7 @@ import type {
   StartAutomatedFlowRunArgs,
   StartAutomatedFlowRunOutcome,
 } from "@/api/lib/flows/start-automated-flow-run";
+import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
 import { logger as recoveryLogger } from "@/api/lib/observability/logger";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -41,8 +46,12 @@ type UploadTriggerCandidate = {
   workspaceStatus: string;
 };
 
+type SelectedUploadTriggerCandidate = UploadTriggerCandidate & {
+  originalRetryAt: TimestampCasToken;
+};
+
 type DispatchUploadFlowTriggerOptions = {
-  candidate: UploadTriggerCandidate;
+  candidate: UploadTriggerCandidate & { claimToken: TimestampCasToken };
   start: (
     input: StartAutomatedFlowRunArgs,
   ) => Promise<StartAutomatedFlowRunOutcome>;
@@ -50,7 +59,7 @@ type DispatchUploadFlowTriggerOptions = {
 
 /** The run transaction rechecks the current trigger against the durable receipt. */
 export const dispatchUploadFlowTrigger = async ({
-  candidate: { intent, definition, workspaceStatus },
+  candidate: { intent, definition, workspaceStatus, claimToken },
   start,
 }: DispatchUploadFlowTriggerOptions): Promise<StartAutomatedFlowRunOutcome> => {
   if (workspaceStatus !== "active") {
@@ -58,6 +67,7 @@ export const dispatchUploadFlowTrigger = async ({
   }
   return await start({
     definitionId: intent.definitionId,
+    uploadTriggerClaimToken: claimToken,
     organizationId: intent.organizationId,
     workspaceId: intent.workspaceId,
     createdByUserId: definition.createdByUserId,
@@ -80,6 +90,155 @@ type RecoverUploadFlowTriggerOptions = {
   start?: DispatchUploadFlowTriggerOptions["start"];
 };
 
+type ClaimUploadTriggerCandidatesOptions = {
+  database: SchedulerDb;
+  now: Date;
+  selected: SelectedUploadTriggerCandidate[];
+};
+
+const claimUploadTriggerCandidates = async ({
+  database,
+  now,
+  selected,
+}: ClaimUploadTriggerCandidatesOptions) => {
+  const groups = new Map<
+    SafeId<"organization">,
+    SelectedUploadTriggerCandidate[]
+  >();
+  for (const candidate of selected) {
+    const group = groups.get(candidate.intent.organizationId) ?? [];
+    group.push(candidate);
+    groups.set(candidate.intent.organizationId, group);
+  }
+  const pages = await mapWithConcurrency({
+    items: [...groups],
+    limit: 4,
+    operation: async ([organizationId, rows]) =>
+      await database.transaction(async (tx) => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId,
+          featureId: "flows",
+        });
+        if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+          return [];
+        }
+        const retryAt = new Date(now.getTime() + UPLOAD_TRIGGER_RETRY_MS);
+        // audit: skip — tokenized claim bookkeeping; accepted runs own their audit trail.
+        const claimed = await tx
+          .update(flowUploadTriggerIntents)
+          .set({ retryAt })
+          .where(
+            and(
+              eq(flowUploadTriggerIntents.organizationId, organizationId),
+              eq(flowUploadTriggerIntents.status, "pending"),
+              uploadTriggerActorExists(),
+              or(
+                ...rows.map(({ intent, originalRetryAt }) =>
+                  and(
+                    eq(
+                      flowUploadTriggerIntents.definitionId,
+                      intent.definitionId,
+                    ),
+                    eq(flowUploadTriggerIntents.entityId, intent.entityId),
+                    timestampMatchesCasToken(
+                      flowUploadTriggerIntents.retryAt,
+                      originalRetryAt,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+          .returning({
+            ...getTableColumns(flowUploadTriggerIntents),
+            claimToken: timestampCasToken(flowUploadTriggerIntents.retryAt),
+          });
+        return claimed.flatMap((intent) => {
+          const candidate = rows.find(
+            (row) =>
+              row.intent.definitionId === intent.definitionId &&
+              row.intent.entityId === intent.entityId,
+          );
+          return candidate === undefined
+            ? panic("Claimed upload receipt was not selected")
+            : [{ ...candidate, intent, claimToken: intent.claimToken }];
+        });
+      }),
+  });
+  return pages.flat();
+};
+
+type SettleUploadTriggerClaimOptions = {
+  database: SchedulerDb;
+  intent: UploadTriggerIntent;
+  claimToken: TimestampCasToken;
+};
+
+const settleUploadTriggerClaim = async ({
+  database,
+  intent,
+  claimToken,
+}: SettleUploadTriggerClaimOptions): Promise<"settled" | "paused" | "stale"> =>
+  await database.transaction(async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: intent.organizationId,
+      featureId: "flows",
+    });
+    if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+      return "paused";
+    }
+    const current = (
+      await tx
+        .select({
+          status: flowUploadTriggerIntents.status,
+          admitted: uploadTriggerActorExists(),
+        })
+        .from(flowUploadTriggerIntents)
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
+            eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
+            eq(flowUploadTriggerIntents.entityId, intent.entityId),
+            timestampMatchesCasToken(
+              flowUploadTriggerIntents.retryAt,
+              claimToken,
+            ),
+          ),
+        )
+        .limit(1)
+        .for("update")
+    ).at(0);
+    if (current === undefined || current.status !== "pending") {
+      return "stale";
+    }
+    if (
+      current.admitted !== true ||
+      !isDeploymentFeatureEnabled("FEATURE_FLOWS")
+    ) {
+      return "paused";
+    }
+    // audit: skip — settle only the admitted delivery token after its durable run.
+    const removed = await tx
+      .delete(flowUploadTriggerIntents)
+      .where(
+        and(
+          eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
+          eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
+          eq(flowUploadTriggerIntents.entityId, intent.entityId),
+          eq(flowUploadTriggerIntents.status, "pending"),
+          timestampMatchesCasToken(
+            flowUploadTriggerIntents.retryAt,
+            claimToken,
+          ),
+          uploadTriggerActorExists(),
+        ),
+      )
+      .returning({ entityId: flowUploadTriggerIntents.entityId });
+    return removed.length === 0 ? "stale" : "settled";
+  });
+
 /** Owner-level sweep; ordinary upload writes persist receipts through workspace RLS. */
 export const recoverUploadFlowTriggerIntents = async ({
   database,
@@ -89,77 +248,79 @@ export const recoverUploadFlowTriggerIntents = async ({
   start,
 }: RecoverUploadFlowTriggerOptions) => {
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
-    return { settled: 0, paused: 0, retry: 0, skipped: 0 };
+    return { settled: 0, paused: 0, retry: 0, skipped: 0, stale: 0 };
   }
-  await reconcileUploadTriggerGrantState({ database, now });
-  const candidates = await database.transaction(async (tx) => {
-    const selected = await tx
-      .select({
-        intent: flowUploadTriggerIntents,
-        definition: {
-          createdByUserId: flowDefinitions.createdByUserId,
-        },
-        workspaceStatus: workspaces.status,
-      })
-      .from(flowUploadTriggerIntents)
-      .innerJoin(
-        flowDefinitions,
-        and(
-          eq(flowDefinitions.id, flowUploadTriggerIntents.definitionId),
-          eq(
-            flowDefinitions.organizationId,
-            flowUploadTriggerIntents.organizationId,
-          ),
-        ),
-      )
-      .innerJoin(
-        workspaces,
-        and(
-          eq(workspaces.id, flowUploadTriggerIntents.workspaceId),
-          eq(
-            workspaces.organizationId,
-            flowUploadTriggerIntents.organizationId,
-          ),
-        ),
-      )
-      .where(
-        and(
-          eq(flowUploadTriggerIntents.status, "pending"),
-          uploadTriggerActorExists(),
-          lte(flowUploadTriggerIntents.retryAt, sql`${now}::timestamptz`),
-          entityId === undefined
-            ? undefined
-            : eq(flowUploadTriggerIntents.entityId, entityId),
-        ),
-      )
-      .orderBy(
-        asc(flowUploadTriggerIntents.retryAt),
-        asc(flowUploadTriggerIntents.definitionId),
-        asc(flowUploadTriggerIntents.entityId),
-      )
-      .limit(UPLOAD_TRIGGER_BATCH_SIZE)
-      .for("update", { of: flowUploadTriggerIntents, skipLocked: true });
-    if (selected.length === 0) {
-      return [];
-    }
-    // audit: skip — claim derived dispatch receipts; run creation owns its audit trail.
-    await tx
-      .update(flowUploadTriggerIntents)
-      .set({ retryAt: new Date(now.getTime() + UPLOAD_TRIGGER_RETRY_MS) })
-      .where(
-        or(
-          ...selected.map(({ intent }) =>
-            and(
-              eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
-              eq(flowUploadTriggerIntents.entityId, intent.entityId),
+  if (entityId === undefined) {
+    await reconcileUploadTriggerGrantState({ database, now });
+  }
+  const selected = (
+    await readCursorPage(
+      database
+        .select({
+          intent: flowUploadTriggerIntents,
+          originalRetryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
+          definition: {
+            createdByUserId: flowDefinitions.createdByUserId,
+          },
+          workspaceStatus: workspaces.status,
+        })
+        .from(flowUploadTriggerIntents)
+        .innerJoin(
+          flowDefinitions,
+          and(
+            eq(flowDefinitions.id, flowUploadTriggerIntents.definitionId),
+            eq(
+              flowDefinitions.organizationId,
+              flowUploadTriggerIntents.organizationId,
             ),
           ),
+        )
+        .innerJoin(
+          workspaces,
+          and(
+            eq(workspaces.id, flowUploadTriggerIntents.workspaceId),
+            eq(
+              workspaces.organizationId,
+              flowUploadTriggerIntents.organizationId,
+            ),
+          ),
+        )
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.status, "pending"),
+            eq(workspaces.status, "active"),
+            uploadTriggerActorExists(),
+            lte(flowUploadTriggerIntents.retryAt, sql`${now}::timestamptz`),
+            entityId === undefined
+              ? undefined
+              : eq(flowUploadTriggerIntents.entityId, entityId),
+          ),
+        )
+        .orderBy(
+          asc(flowUploadTriggerIntents.retryAt),
+          asc(flowUploadTriggerIntents.definitionId),
+          asc(flowUploadTriggerIntents.entityId),
         ),
-      );
-    return selected;
+      {
+        limit: UPLOAD_TRIGGER_BATCH_SIZE,
+        cursorForItem: (row) => row.intent.entityId,
+      },
+    )
+  ).items;
+
+  const candidates = await claimUploadTriggerCandidates({
+    database,
+    now,
+    selected,
   });
   const dependencies = automatedFlowRunDependencies(database);
-  const outcomes = { settled: 0, paused: 0, retry: 0, skipped: 0 };
+  const outcomes = {
+    settled: 0,
+    paused: 0,
+    retry: 0,
+    skipped: 0,
+    stale: selected.length - candidates.length,
+  };
   for (const candidate of candidates) {
     if (signal?.aborted) {
       break;
@@ -174,21 +335,25 @@ export const recoverUploadFlowTriggerIntents = async ({
       case "skipped":
         outcomes.skipped += 1;
         break;
-      case "settled":
-        outcomes.settled += 1;
-        // audit: skip — settle a derived receipt after a durable run or terminal skip.
-        await database
-          .delete(flowUploadTriggerIntents)
-          .where(
-            and(
-              eq(
-                flowUploadTriggerIntents.definitionId,
-                candidate.intent.definitionId,
-              ),
-              eq(flowUploadTriggerIntents.entityId, candidate.intent.entityId),
-            ),
-          );
+      case "stale":
+        outcomes.stale += 1;
         break;
+      case "settled": {
+        // db-await-in-loop: settle one claimed receipt under its organization admission lock.
+        const settled = await settleUploadTriggerClaim({
+          database,
+          intent: candidate.intent,
+          claimToken: candidate.claimToken,
+        });
+        if (settled === "stale") {
+          outcomes.stale += 1;
+        } else if (settled === "paused") {
+          outcomes.paused += 1;
+        } else {
+          outcomes.settled += 1;
+        }
+        break;
+      }
       case "paused":
         outcomes.paused += 1;
         break;
@@ -221,19 +386,6 @@ export const recoverUploadFlowTriggers: SchedulerTask = async ({
   logger.info("scheduler.upload_flow_triggers_recovered", outcomes);
 };
 
-const UPLOAD_TRIGGER_GRANT_TRANSITIONS = defineScopedTransitions({
-  table: flowUploadTriggerIntents,
-  key: "entityId",
-  scope: ["definitionId"],
-  stateColumn: "status",
-  edges: {
-    pending: ["awaiting_grant"],
-    awaiting_grant: ["pending"],
-    skipped: [],
-  },
-  initial: [],
-});
-
 const uploadTriggerActorExists = (userId?: SafeId<"user">) => sql`EXISTS (
   SELECT 1 FROM ${flowDefinitions}
   WHERE ${flowDefinitions.id} = ${flowUploadTriggerIntents.definitionId}
@@ -245,7 +397,7 @@ const uploadTriggerActorExists = (userId?: SafeId<"user">) => sql`EXISTS (
 )`;
 
 type ResumeUploadTriggersAfterGrantOptions = {
-  tx: Pick<SchedulerDb, "select" | "execute">;
+  tx: Pick<Transaction, "select" | "execute" | "rollback">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   now: Date;
@@ -259,7 +411,7 @@ export const resumeUploadTriggersAfterGrant = async ({
 }: ResumeUploadTriggersAfterGrantOptions): Promise<void> => {
   await transitionScopedCount({
     tx,
-    spec: UPLOAD_TRIGGER_GRANT_TRANSITIONS,
+    spec: UPLOAD_TRIGGER_TRANSITIONS,
     where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), eq(flowUploadTriggerIntents.status, "awaiting_grant"), uploadTriggerActorExists(userId))}`,
     options: {
       from: ["awaiting_grant"],
@@ -281,34 +433,54 @@ const reconcileUploadTriggerGrantState = async ({
   now,
 }: ReconcileUploadTriggerGrantStateOptions) => {
   // Grant repair has its own budget; an older ungranted prefix cannot consume it.
-  const resumed = await database
-    .select()
-    .from(flowUploadTriggerIntents)
-    .where(
-      and(
-        eq(flowUploadTriggerIntents.status, "awaiting_grant"),
-        uploadTriggerActorExists(),
-      ),
+  const resumed = (
+    await readCursorPage(
+      database
+        .select({
+          ...getTableColumns(flowUploadTriggerIntents),
+          retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
+        })
+        .from(flowUploadTriggerIntents)
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.status, "awaiting_grant"),
+            uploadTriggerActorExists(),
+          ),
+        )
+        .orderBy(
+          asc(flowUploadTriggerIntents.retryAt),
+          asc(flowUploadTriggerIntents.entityId),
+        ),
+      {
+        limit: UPLOAD_TRIGGER_BATCH_SIZE,
+        cursorForItem: (row) => row.entityId,
+      },
     )
-    .orderBy(
-      asc(flowUploadTriggerIntents.retryAt),
-      asc(flowUploadTriggerIntents.entityId),
+  ).items;
+  const blocked = (
+    await readCursorPage(
+      database
+        .select({
+          ...getTableColumns(flowUploadTriggerIntents),
+          retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
+        })
+        .from(flowUploadTriggerIntents)
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.status, "pending"),
+            not(uploadTriggerActorExists()),
+          ),
+        )
+        .orderBy(
+          asc(flowUploadTriggerIntents.retryAt),
+          asc(flowUploadTriggerIntents.entityId),
+        ),
+      {
+        limit: UPLOAD_TRIGGER_BATCH_SIZE,
+        cursorForItem: (row) => row.entityId,
+      },
     )
-    .limit(UPLOAD_TRIGGER_BATCH_SIZE);
-  const blocked = await database
-    .select()
-    .from(flowUploadTriggerIntents)
-    .where(
-      and(
-        eq(flowUploadTriggerIntents.status, "pending"),
-        not(uploadTriggerActorExists()),
-      ),
-    )
-    .orderBy(
-      asc(flowUploadTriggerIntents.retryAt),
-      asc(flowUploadTriggerIntents.entityId),
-    )
-    .limit(UPLOAD_TRIGGER_BATCH_SIZE);
+  ).items;
   const candidates = [...resumed, ...blocked];
   const groups = new Map<SafeId<"organization">, typeof candidates>();
   for (const candidate of candidates) {
@@ -329,17 +501,24 @@ const reconcileUploadTriggerGrantState = async ({
           organizationId,
           featureId: "flows",
         });
+        if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+          return;
+        }
         const identities = or(
           ...rows.map((row) =>
             and(
               eq(flowUploadTriggerIntents.entityId, row.entityId),
               eq(flowUploadTriggerIntents.definitionId, row.definitionId),
+              timestampMatchesCasToken(
+                flowUploadTriggerIntents.retryAt,
+                row.retryAt,
+              ),
             ),
           ),
         );
         await transitionScopedCount({
           tx,
-          spec: UPLOAD_TRIGGER_GRANT_TRANSITIONS,
+          spec: UPLOAD_TRIGGER_TRANSITIONS,
           where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identities, not(uploadTriggerActorExists()))}`,
           options: { from: ["pending"], to: "awaiting_grant" },
           recordTransitionAuditEvent: (_tx, count) =>
@@ -349,7 +528,7 @@ const reconcileUploadTriggerGrantState = async ({
         });
         await transitionScopedCount({
           tx,
-          spec: UPLOAD_TRIGGER_GRANT_TRANSITIONS,
+          spec: UPLOAD_TRIGGER_TRANSITIONS,
           where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identities, uploadTriggerActorExists())}`,
           options: {
             from: ["awaiting_grant"],

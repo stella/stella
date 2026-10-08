@@ -13,7 +13,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -27,6 +27,8 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
@@ -119,6 +121,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     runId: SafeId<"flowRun"> = createSafeId<"flowRun">(),
     triggerSource: FlowTriggerSource = FILE_UPLOAD_SOURCE,
   ) => {
+    let uploadTriggerClaimToken: TimestampCasToken | undefined;
     if (triggerSource.type === "file-upload") {
       const entityId = brandPersistedEntityId(triggerSource.entityId);
       await testDb
@@ -139,6 +142,21 @@ describe("insertAutomatedFlowRunWithinCap", () => {
           fileExtension: "pdf",
         })
         .onConflictDoNothing();
+      const receipt = (
+        await testDb
+          .select({
+            token: timestampCasToken(flowUploadTriggerIntents.retryAt),
+          })
+          .from(flowUploadTriggerIntents)
+          .where(
+            and(
+              eq(flowUploadTriggerIntents.definitionId, definitionId),
+              eq(flowUploadTriggerIntents.entityId, entityId),
+            ),
+          )
+          .limit(1)
+      ).at(0);
+      uploadTriggerClaimToken = receipt?.token;
     }
     const rows = buildFlowRunRows({
       runId,
@@ -153,6 +171,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       organizationId,
       userId,
       rows,
+      uploadTriggerClaimToken,
       database: capDatabase,
       ...(reservePeriod && { reservePeriod }),
     });
@@ -212,6 +231,15 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     const { runId, result } = await attemptStart(definitionId);
 
     expect(result.outcome).toBe("capped");
+    const parked = await testDb.query.flowUploadTriggerIntents.findFirst({
+      where: {
+        definitionId: { eq: definitionId },
+        entityId: { eq: brandPersistedEntityId(FILE_UPLOAD_SOURCE.entityId) },
+      },
+    });
+    const nextDay = new Date();
+    nextDay.setUTCHours(24, 0, 0, 0);
+    expect(parked?.retryAt).toEqual(nextDay);
     if (result.outcome === "capped") {
       expect(result.dailyRunCount).toBe(CAP);
     }
@@ -403,5 +431,73 @@ describe("insertAutomatedFlowRunWithinCap", () => {
         .from(flowRunSteps)
         .where(eq(flowRunSteps.runId, replay.runId)),
     ).toHaveLength(0);
+  });
+
+  test("stale upload claim cannot insert or reserve after another claimant advances retryAt", async () => {
+    const definitionId = await createDefinition();
+    await attemptStart(definitionId);
+    const entityId = brandPersistedEntityId(FILE_UPLOAD_SOURCE.entityId);
+    const receipt = (
+      await testDb
+        .select({
+          retryAt: flowUploadTriggerIntents.retryAt,
+          token: timestampCasToken(flowUploadTriggerIntents.retryAt),
+        })
+        .from(flowUploadTriggerIntents)
+        .where(
+          and(
+            eq(flowUploadTriggerIntents.definitionId, definitionId),
+            eq(flowUploadTriggerIntents.entityId, entityId),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (receipt === undefined) {
+      throw new TypeError("Expected upload receipt");
+    }
+    const newerRetryAt = new Date(receipt.retryAt.getTime() + 1);
+    await testDb
+      .update(flowUploadTriggerIntents)
+      .set({ retryAt: newerRetryAt })
+      .where(eq(flowUploadTriggerIntents.definitionId, definitionId));
+    let reservations = 0;
+    const rows = buildFlowRunRows({
+      runId: createSafeId<"flowRun">(),
+      workspaceId,
+      definitionId,
+      definition: { name: "Claim fence", steps: [AI_STEP] },
+      triggerSource: FILE_UPLOAD_SOURCE,
+      inputEntityIds: [],
+    });
+    expect(
+      await insertAutomatedFlowRunWithinCap({
+        organizationId,
+        userId,
+        definitionId,
+        rows,
+        uploadTriggerClaimToken: receipt.token,
+        database: capDatabase,
+        reservePeriod: async () => {
+          reservations += 1;
+        },
+      }),
+    ).toEqual({ outcome: "stale" });
+    expect(reservations).toBe(0);
+    expect(await countRunsForDefinition(definitionId)).toBe(1);
+    expect(
+      await testDb.query.flowRuns.findFirst({
+        where: { id: { eq: rows.run.id } },
+      }),
+    ).toBeUndefined();
+    expect(
+      (
+        await testDb.query.flowUploadTriggerIntents.findFirst({
+          where: {
+            definitionId: { eq: definitionId },
+            entityId: { eq: entityId },
+          },
+        })
+      )?.retryAt,
+    ).toEqual(newerRetryAt);
   });
 });

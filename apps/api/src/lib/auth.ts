@@ -165,6 +165,7 @@ import {
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { deliverFlowRunWorkspaceEvent } from "@/api/lib/flows/flow-run-events";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
@@ -2583,7 +2584,7 @@ export const resolveWorkspaceRealtimeAudience = async (
 };
 
 /**
- * The event stream's connection authorizers, both on the owner connection for
+ * The event stream's authorizers use the owner connection for
  * the reasons given on each resolver.
  */
 export const realtimeAuthorizers = {
@@ -2592,6 +2593,12 @@ export const realtimeAuthorizers = {
   ) => await resolveUserRealtimeAuthorization(lookup, rootDb),
   workspace: async (lookup: WorkspaceRealtimeAudienceLookup) =>
     await resolveWorkspaceRealtimeAudience(lookup, rootDb),
+  workspaceEvent: async (
+    lookup: Omit<
+      Parameters<typeof deliverFlowRunWorkspaceEvent>[0],
+      "database"
+    >,
+  ) => await deliverFlowRunWorkspaceEvent({ ...lookup, database: rootDb }),
 };
 
 /**

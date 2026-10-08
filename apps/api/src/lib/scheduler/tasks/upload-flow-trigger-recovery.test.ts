@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
@@ -9,6 +10,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { StartAutomatedFlowRunArgs } from "@/api/lib/flows/start-automated-flow-run";
 import { recordUploadTriggeredFlowIntents } from "@/api/lib/flows/upload-trigger-recording";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
@@ -95,6 +97,20 @@ const recover = async ({
     start,
   });
 
+const assertClaimToken = async (input: StartAutomatedFlowRunArgs) => {
+  const entityId =
+    input.inputEntityIds.at(0) ??
+    panic("Upload claim fixture is missing its entity");
+  const row = (
+    await database
+      .select({ token: timestampCasToken(flowUploadTriggerIntents.retryAt) })
+      .from(flowUploadTriggerIntents)
+      .where(eq(flowUploadTriggerIntents.entityId, entityId))
+  ).at(0);
+  expect(row).toBeDefined();
+  expect(input.uploadTriggerClaimToken).toBe(row?.token);
+};
+
 describe("durable upload-trigger recovery", () => {
   for (const status of ["paused", "retry"] as const) {
     test(`${status} retains the receipt and re-grant or retry settles the same upload`, async () => {
@@ -104,6 +120,7 @@ describe("durable upload-trigger recovery", () => {
         entityId,
         now: NOW,
         start: async (input) => {
+          await assertClaimToken(input);
           starts.push(input);
           return { status };
         },
@@ -111,6 +128,7 @@ describe("durable upload-trigger recovery", () => {
       expect(skipped).toEqual({
         settled: 0,
         skipped: 0,
+        stale: 0,
         paused: status === "paused" ? 1 : 0,
         retry: status === "retry" ? 1 : 0,
       });
@@ -121,6 +139,7 @@ describe("durable upload-trigger recovery", () => {
         entityId,
         now: NOW,
         start: async (input) => {
+          await assertClaimToken(input);
           starts.push(input);
           return { status: "settled" };
         },
@@ -130,6 +149,7 @@ describe("durable upload-trigger recovery", () => {
         entityId,
         now: RETRY,
         start: async (input) => {
+          await assertClaimToken(input);
           starts.push(input);
           return { status: "settled" };
         },
@@ -140,7 +160,13 @@ describe("durable upload-trigger recovery", () => {
         type: "file-upload",
         entityId,
       });
-      expect(starts.at(1)).toEqual(starts.at(0));
+      expect(starts.at(1)?.uploadTriggerClaimToken).not.toBe(
+        starts.at(0)?.uploadTriggerClaimToken,
+      );
+      expect(starts.at(1)).toEqual({
+        ...starts.at(0),
+        uploadTriggerClaimToken: starts.at(1)?.uploadTriggerClaimToken,
+      });
       expect(await receiptsFor(entityId)).toHaveLength(0);
     });
   }

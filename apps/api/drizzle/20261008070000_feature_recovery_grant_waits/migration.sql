@@ -22,9 +22,6 @@ BEGIN
 END
 $$;
 --> statement-breakpoint
-ALTER TABLE "pending_scout_emissions"
-  VALIDATE CONSTRAINT "pending_scout_emissions_status_check";
---> statement-breakpoint
 
 -- stella-migration-safety: reviewed drop-constraint - Replaces only the receipt lifecycle check with a wider grant-wait state in the same transaction; existing pending and skipped rows remain valid.
 ALTER TABLE "flow_upload_trigger_intents"
@@ -33,9 +30,6 @@ ALTER TABLE "flow_upload_trigger_intents"
     (status IN ('pending', 'awaiting_grant') AND skip_reason IS NULL) OR
     (status = 'skipped' AND skip_reason IS NOT NULL AND skip_reason IN ('definition_disabled', 'trigger_no_longer_matches'))
   ) NOT VALID;
---> statement-breakpoint
-ALTER TABLE "flow_upload_trigger_intents"
-  VALIDATE CONSTRAINT "flow_upload_trigger_intents_settlement_check";
 --> statement-breakpoint
 
 -- stella-migration-safety: reviewed drop-constraint - Widens the deadline lifecycle to an unclaimed feature refusal; replaces both checks atomically and preserves every existing state.
@@ -53,10 +47,6 @@ ALTER TABLE "document_processing_runs"
     OR (deadline_scout_status = 'failed' AND deadline_scout_claimed_at IS NULL AND deadline_scout_error_code IS NOT NULL)
   ) NOT VALID;
 --> statement-breakpoint
-ALTER TABLE "document_processing_runs"
-  VALIDATE CONSTRAINT "document_processing_runs_deadline_scout_status_values_check",
-  VALIDATE CONSTRAINT "document_processing_runs_deadline_scout_lifecycle_check";
---> statement-breakpoint
 
 -- Build grant-wakeup indexes and replace the retry index without blocking receipt writes.
 -- squawk-ignore transaction-nesting
@@ -65,6 +55,19 @@ COMMIT;
 SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = 0;
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- Validation runs outside the DDL transaction so the scan does not retain DDL locks.
+ALTER TABLE "pending_scout_emissions"
+  VALIDATE CONSTRAINT "pending_scout_emissions_status_check";
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- Validation runs outside the DDL transaction so the scan does not retain DDL locks.
+ALTER TABLE "flow_upload_trigger_intents"
+  VALIDATE CONSTRAINT "flow_upload_trigger_intents_settlement_check";
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- Validation runs outside the DDL transaction so the scan does not retain DDL locks.
+ALTER TABLE "document_processing_runs"
+  VALIDATE CONSTRAINT "document_processing_runs_deadline_scout_status_values_check",
+  VALIDATE CONSTRAINT "document_processing_runs_deadline_scout_lifecycle_check";
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "pending_scout_emissions_next_attempt_idx";
 --> statement-breakpoint

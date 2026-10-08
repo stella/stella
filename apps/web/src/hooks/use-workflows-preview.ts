@@ -6,7 +6,7 @@ import {
 } from "@/hooks/use-navigation-feature";
 import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
 
-export const isWorkflowsPreviewEnabled = async (
+export const workflowsRouteAvailable = async (
   queryClient: QueryClient,
   caller: WorkspaceNavigationCaller,
 ): Promise<boolean> =>
@@ -14,5 +14,3 @@ export const isWorkflowsPreviewEnabled = async (
 
 export const useWorkflowsPreviewEnabled = (): boolean =>
   useNavigationFeatureEnabled("flows");
-
-export const workflowsRouteAvailable = isWorkflowsPreviewEnabled;

@@ -1122,6 +1122,20 @@ type ModuleUse = readonly [featureId: string, type: Requirement];
  * and owned table names. Pure per module, so one validation run computes
  * each module once instead of once per endpoint that reaches it.
  */
+const isFeatureIdentityMetadata = (
+  node: ts.StringLiteralLike,
+  registry: FeatureRegistry,
+): boolean => {
+  const parent = node.parent;
+  return (
+    ts.isPropertyAssignment(parent) &&
+    (ts.isIdentifier(parent.name) || ts.isStringLiteral(parent.name)) &&
+    parent.name.text === "featureId" &&
+    parent.initializer === node &&
+    Object.hasOwn(registry, node.text)
+  );
+};
+
 const collectModuleUses = (
   ast: ts.SourceFile,
   registry: FeatureRegistry,
@@ -1132,6 +1146,10 @@ const collectModuleUses = (
     // Module addresses are inspected by the dependency graph, never as SQL table names.
     if (ts.isStringLiteralLike(node)) {
       const parent = node.parent;
+      if (isFeatureIdentityMetadata(node, registry)) {
+        return;
+      }
+
       if (
         (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) &&
         parent.moduleSpecifier === node

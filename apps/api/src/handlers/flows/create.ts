@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import { flowDefinitions } from "@/api/db/schema";
 import { flowDefinitionBodySchema } from "@/api/handlers/flows/schema";
 import { parseAndValidateFlowDefinition } from "@/api/handlers/flows/validate-definition";
@@ -9,6 +10,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
 import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -39,24 +41,24 @@ const createFlowDefinition = createSafeRootHandler(
       parseAndValidateFlowDefinition({ safeDb, organizationId, body }),
     );
 
-    const existingCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(
-          flowDefinitions,
-          eq(flowDefinitions.organizationId, organizationId),
-        ),
-      ),
-    );
-    if (existingCount >= LIMITS.flowDefinitionsCount) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Flow limit reached" }),
-      );
-    }
-
     const flowId = createSafeId<"flowDefinition">();
 
     const inserted = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        await requireFlowEffectAdmission({
+          tx,
+          organizationId,
+          userId: user.id,
+        });
+        const existingCount = await tx.$count(
+          flowDefinitions,
+          eq(flowDefinitions.organizationId, organizationId),
+        );
+        if (existingCount >= LIMITS.flowDefinitionsCount) {
+          abortTransaction(
+            new HandlerError({ status: 400, message: "Flow limit reached" }),
+          );
+        }
         const [row] = await tx
           .insert(flowDefinitions)
           .values({

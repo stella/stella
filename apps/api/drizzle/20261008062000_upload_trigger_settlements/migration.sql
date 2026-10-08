@@ -22,9 +22,6 @@ BEGIN
 END
 $$;
 --> statement-breakpoint
-ALTER TABLE "flow_upload_trigger_intents"
-  VALIDATE CONSTRAINT "flow_upload_trigger_intents_settlement_check";
---> statement-breakpoint
 -- Retained terminal receipts must not enlarge the pending recovery scan.
 -- squawk-ignore transaction-nesting
 COMMIT;
@@ -32,6 +29,10 @@ COMMIT;
 SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = 0;
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- Validation runs outside the DDL transaction so the scan does not retain DDL locks.
+ALTER TABLE "flow_upload_trigger_intents"
+  VALIDATE CONSTRAINT "flow_upload_trigger_intents_settlement_check";
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "flow_upload_trigger_intents_retry_idx";
 --> statement-breakpoint

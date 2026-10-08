@@ -8,6 +8,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
@@ -62,12 +63,14 @@ type AdmittedFlowStepOptions = {
   job: Job<FlowStepJobData>;
   signal: AbortSignal;
   database: BullMqWorkerContext["db"];
+  onClaim: (claimedStartedAt: TimestampCasToken) => void;
 };
 
 const executeAdmittedFlowStep = async ({
   job,
   signal,
   database,
+  onClaim,
 }: AdmittedFlowStepOptions): Promise<FlowStepExecutionOutcome> => {
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
     logger.info("flow.work_skipped", { reason: "deployment_disabled" });
@@ -90,6 +93,7 @@ const executeAdmittedFlowStep = async ({
     return await executeFlowStep(job.data, signal, {
       admission: null,
       database,
+      onClaim,
     });
   }
   if (
@@ -116,6 +120,7 @@ const executeAdmittedFlowStep = async ({
       await executeFlowStep(job.data, executionSignal, {
         admission,
         database,
+        onClaim,
       }),
   });
 };
@@ -130,6 +135,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
     storeClass: "durable-coordination",
   });
 
+  const claims = new WeakMap<Job<FlowStepJobData>, TimestampCasToken>();
   const worker = new BullMqWorker<FlowStepJobData>(
     FLOW_RUN_QUEUE_NAME,
     async (job) => {
@@ -146,6 +152,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
           job,
           signal: controller.signal,
           database: db,
+          onClaim: (claimedStartedAt) => claims.set(job, claimedStartedAt),
         });
         // Surface a late abort so BullMQ marks the attempt failed rather than
         // completed if the signal fired after the last awaited call.
@@ -153,9 +160,12 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
         switch (outcome.status) {
           case "paused":
             logger.info("flow.step_paused", { runId: job.data.runId });
-            return outcome;
+            return;
           case "completed":
-            return outcome;
+            return;
+          case "stale":
+            logger.info("flow.step_stale", { runId: job.data.runId });
+            return;
           default:
             outcome satisfies never;
             return panic("Unknown flow step execution outcome");
@@ -192,14 +202,15 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
       return;
     }
 
-    failFlowRunFromWorker(job.data, error, { database: db }).catch(
-      (finalizeError: unknown) => {
-        captureError(finalizeError, {
-          runId: job.data.runId,
-          stepIndex: String(job.data.stepIndex),
-        });
-      },
-    );
+    failFlowRunFromWorker(job.data, error, {
+      database: db,
+      claimedStartedAt: claims.get(job),
+    }).catch((finalizeError: unknown) => {
+      captureError(finalizeError, {
+        runId: job.data.runId,
+        stepIndex: String(job.data.stepIndex),
+      });
+    });
   });
 
   worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));

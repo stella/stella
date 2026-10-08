@@ -82,6 +82,13 @@ const enqueueSource = await Bun.file(
   new URL("document-processing-enqueue.ts", import.meta.url),
 ).text();
 
+const deadlineSchedulerSource = await Bun.file(
+  new URL(
+    "scheduler/tasks/document-deadline-scout-recovery.ts",
+    import.meta.url,
+  ),
+).text();
+
 // Phase names and order only; no phase is run, so no connection is needed.
 const DOCUMENT_PROCESSING_RECONCILIATION_PHASES =
   createWorkerReconciliationPhases(asTestRaw({}));
@@ -136,7 +143,7 @@ const source = {
 };
 
 describe("document scout dispatch isolation", () => {
-  test("persists pending scout work with source completion before dispatch", () => {
+  test("persists pending scout work with source completion independently of feature dispatch", () => {
     const completionStart = queueSource.indexOf(
       "const completeDocumentProcessingRun",
     );
@@ -146,16 +153,12 @@ describe("document scout dispatch isolation", () => {
     );
     const completionSource = queueSource.slice(completionStart, completionEnd);
     const durableHandoff = completionSource.indexOf(
-      "deadlineScoutStatus: shouldDispatchDeadlineScout",
+      'deadlineScoutStatus: scoutRequested ? "pending" : "not_requested"',
     );
     const succeededTransition = completionSource.indexOf('status: "succeeded"');
     const completedGuard = completionSource.indexOf(
       "if (!completed.at(0))",
       succeededTransition,
-    );
-    const scoutDispatch = completionSource.indexOf(
-      "await enqueueDocumentDeadlineScout",
-      completedGuard,
     );
 
     expect(completionStart).toBeGreaterThan(-1);
@@ -164,9 +167,11 @@ describe("document scout dispatch isolation", () => {
     expect(succeededTransition).toBeGreaterThan(-1);
     expect(succeededTransition).toBeGreaterThan(durableHandoff);
     expect(completedGuard).toBeGreaterThan(succeededTransition);
-    expect(scoutDispatch).toBeGreaterThan(completedGuard);
-    expect(completionSource).toContain(
-      'logger.error("document_processing.deadline_scout_enqueue_failed"',
+    expect(completionSource).not.toContain("isDeploymentFeatureEnabled");
+    expect(completionSource).not.toContain("enqueueDocumentDeadlineScout");
+    expect(queueSource).not.toContain("recoverDocumentDeadlineScoutDispatches");
+    expect(deadlineSchedulerSource).toContain(
+      "await recoverDocumentDeadlineScoutDispatches",
     );
   });
 });
@@ -414,13 +419,6 @@ describe("reconciliation fault isolation", () => {
     const results = await runDocumentProcessingReconciliationPhases({
       phases: [
         {
-          name: "deadline-scout",
-          run: async () => {
-            calls.push("deadline-scout");
-            return { count: 0, hasMore: false };
-          },
-        },
-        {
           name: "delivery",
           run: async () => {
             calls.push("delivery");
@@ -462,7 +460,6 @@ describe("reconciliation fault isolation", () => {
     });
 
     expect(calls).toEqual([
-      "deadline-scout",
       "delivery",
       "repair",
       "reindex",
@@ -471,7 +468,6 @@ describe("reconciliation fault isolation", () => {
     ]);
     expect(failures).toEqual([{ error: repairError, phase: "repair" }]);
     expect(results).toEqual({
-      "deadline-scout": { count: 0, hasMore: false },
       delivery: { count: 5, hasMore: false },
       reindex: { count: 2, hasMore: false },
       repair: { count: 0, hasMore: true },
@@ -1361,7 +1357,6 @@ describe("reconciliationLeftWorkBehind", () => {
     // declared but never wired in reports nothing and would be read as
     // drained; a phase run but not declared has nowhere to report.
     expect(declared).toEqual([
-      "deadline-scout",
       "delivery",
       "reindex",
       "repair",
@@ -1543,7 +1538,6 @@ describe("repair sweep rest", () => {
           return query;
         },
       }),
-      enqueueDocumentDeadlineScout: async () => undefined,
       enqueueDocumentProcessingRun: async () => undefined,
       indexEntity: async () => undefined,
       now: () => clock,
@@ -2012,7 +2006,7 @@ describe("reconcile phase failure grading", () => {
     expect(isTransientPgConnectionError(pgRefused)).toBe(true);
 
     handleDocumentProcessingReconcilePhaseFailure(redisDropped, "delivery");
-    handleDocumentProcessingReconcilePhaseFailure(pgRefused, "deadline-scout");
+    handleDocumentProcessingReconcilePhaseFailure(pgRefused, "delivery");
 
     expect(analytics.exceptions()).toEqual([]);
     expect(logs.at("ERROR")).toEqual([]);
@@ -2023,7 +2017,7 @@ describe("reconcile phase failure grading", () => {
       },
       {
         message: "document_processing.reconcile_phase_disrupted",
-        attributes: { phase: "deadline-scout" },
+        attributes: { phase: "delivery" },
       },
     ]);
   });

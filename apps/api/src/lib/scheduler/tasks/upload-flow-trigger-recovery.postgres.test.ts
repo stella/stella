@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -18,6 +18,8 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   automatedFlowRunDependencies,
@@ -45,6 +47,43 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
 const NOW = new Date("2030-01-01T12:00:00.000Z");
 const LATER = new Date("2030-01-01T12:10:00.000Z");
+
+type ReceiptRaceDatabaseOptions = {
+  database: GatedTestDb;
+  beforeTransaction: (ordinal: number) => Promise<void>;
+  rollbackFirst?: boolean;
+};
+
+const receiptRaceDatabase = ({
+  database,
+  beforeTransaction,
+  rollbackFirst,
+}: ReceiptRaceDatabaseOptions) => {
+  let ordinal = 0;
+  return asTestRaw<SchedulerDb>({
+    select: database.select.bind(database),
+    query: database.query,
+    transaction: async (
+      operation: Parameters<SchedulerDb["transaction"]>[0],
+    ) => {
+      ordinal += 1;
+      const current = ordinal;
+      await beforeTransaction(current);
+      return await database.transaction(async (tx) => {
+        const value = await operation(
+          asTestRaw<Parameters<typeof operation>[0]>(tx),
+        );
+        if (rollbackFirst && current === 1) {
+          throw new HandlerError({
+            status: 500,
+            message: "Synthetic receipt effect rollback",
+          });
+        }
+        return value;
+      });
+    },
+  });
+};
 const TRIGGER_CHANGES = [
   "manual",
   "workspace",
@@ -200,6 +239,583 @@ const changeTrigger = async ({
 };
 
 describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
+  test("inactive receipt prefixes do not consume dispatch budget and scoped uploads avoid foreign reconciliation", async () => {
+    const previous = env.FEATURE_FLOWS;
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    env.FEATURE_FLOWS = true;
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const { db } = openClient();
+          const fixture = await uploadFixture(db);
+          const foreign = await uploadFixture(db);
+          try {
+            await db
+              .delete(featureEnrolments)
+              .where(
+                eq(featureEnrolments.organizationId, foreign.organizationId),
+              );
+            await db
+              .update(workspaces)
+              .set({ status: "archived" })
+              .where(eq(workspaces.id, fixture.otherWorkspaceId));
+            await db.insert(workspaceMembers).values({
+              workspaceId: fixture.otherWorkspaceId,
+              userId: fixture.userId,
+            });
+            const prefix = Array.from({ length: 32 }, () =>
+              createSafeId<"entity">(),
+            );
+            await db.insert(entities).values(
+              prefix.map((id) => ({
+                id,
+                workspaceId: fixture.otherWorkspaceId,
+                name: "parked.pdf",
+              })),
+            );
+            await db.insert(flowUploadTriggerIntents).values(
+              prefix.map((entityId) => ({
+                entityId,
+                definitionId: fixture.definitionId,
+                organizationId: fixture.organizationId,
+                workspaceId: fixture.otherWorkspaceId,
+                fileExtension: "pdf",
+                retryAt: new Date(NOW.getTime() - 60_000),
+              })),
+            );
+            const started: string[] = [];
+            const scoped = await recoverUploadFlowTriggerIntents({
+              database: asTestRaw<SchedulerDb>(db),
+              entityId: fixture.entityId,
+              now: NOW,
+              start: async ({ definitionId }) => {
+                started.push(definitionId);
+                return { status: "settled" };
+              },
+            });
+            expect(scoped.settled).toBe(1);
+            expect(
+              (
+                await db
+                  .select()
+                  .from(flowUploadTriggerIntents)
+                  .where(
+                    eq(flowUploadTriggerIntents.entityId, foreign.entityId),
+                  )
+              ).at(0)?.status,
+            ).toBe("pending");
+            await db.insert(flowUploadTriggerIntents).values({
+              definitionId: fixture.definitionId,
+              entityId: fixture.entityId,
+              organizationId: fixture.organizationId,
+              workspaceId: fixture.workspaceId,
+              fileExtension: "pdf",
+              retryAt: NOW,
+            });
+            const global = await recoverUploadFlowTriggerIntents({
+              database: asTestRaw<SchedulerDb>(db),
+              now: NOW,
+              start: async ({ definitionId }) => {
+                started.push(definitionId);
+                return { status: "settled" };
+              },
+            });
+            expect(global.settled).toBe(1);
+            expect(started).toEqual([
+              fixture.definitionId,
+              fixture.definitionId,
+            ]);
+            expect(
+              await db.$count(
+                flowUploadTriggerIntents,
+                eq(
+                  flowUploadTriggerIntents.workspaceId,
+                  fixture.otherWorkspaceId,
+                ),
+              ),
+            ).toBe(32);
+          } finally {
+            await db
+              .delete(organization)
+              .where(eq(organization.id, fixture.organizationId));
+            await db.delete(user).where(eq(user.id, fixture.userId));
+            await db
+              .delete(organization)
+              .where(eq(organization.id, foreign.organizationId));
+            await db.delete(user).where(eq(user.id, foreign.userId));
+          }
+        },
+      );
+    } finally {
+      env.FEATURE_FLOWS = previous;
+      restore();
+    }
+  });
+  for (const featureId of ["signals", "flows"] as const) {
+    for (const state of ["pending", "awaiting_grant"] as const) {
+      test(`${featureId}/${state}: SQL microsecond receipt tokens survive selection and settle`, async () => {
+        const previousSignals = env.FEATURE_SIGNALS;
+        const previousFlows = env.FEATURE_FLOWS;
+        const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
+        const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+        env.FEATURE_SIGNALS = true;
+        env.FEATURE_FLOWS = true;
+        env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+        try {
+          await withGatedTestClients(
+            databaseUrl ?? panic("Missing PostgreSQL test URL"),
+            async ({ openClient }) => {
+              const { db } = openClient();
+              const fixture = await uploadFixture(db);
+              const sourceId = createSafeId<"documentReviewRun">();
+              const token = sql`${NOW}::timestamptz - interval '1 second' + interval '123 microseconds'`;
+              try {
+                if (featureId === "flows") {
+                  await db
+                    .update(flowUploadTriggerIntents)
+                    .set({ retryAt: token, status: state })
+                    .where(
+                      eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                    );
+                  const before = (
+                    await db
+                      .select({
+                        token: sql<string>`${flowUploadTriggerIntents.retryAt}::text`,
+                      })
+                      .from(flowUploadTriggerIntents)
+                      .where(
+                        eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                      )
+                  ).at(0);
+                  expect(before?.token).toContain(".000123");
+                  let dispatched = 0;
+                  const outcome = await recoverUploadFlowTriggerIntents({
+                    database: asTestRaw<SchedulerDb>(db),
+                    now: NOW,
+                    start: async () => {
+                      dispatched += 1;
+                      return { status: "settled" };
+                    },
+                  });
+                  expect(dispatched).toBe(1);
+                  expect(outcome.settled).toBe(1);
+                  expect(
+                    await db.$count(
+                      flowUploadTriggerIntents,
+                      eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                    ),
+                  ).toBe(0);
+                } else {
+                  // Missing sources are terminal, so this reaches receipt claim and dequeue without emission.
+                  await db.insert(pendingScoutEmissions).values({
+                    organizationId: fixture.organizationId,
+                    workspaceId: fixture.workspaceId,
+                    sourceKind: "document-review",
+                    sourceId,
+                    status: state,
+                    nextAttemptAt: token,
+                  });
+                  const before = (
+                    await db
+                      .select({
+                        token: sql<string>`${pendingScoutEmissions.nextAttemptAt}::text`,
+                      })
+                      .from(pendingScoutEmissions)
+                      .where(eq(pendingScoutEmissions.sourceId, sourceId))
+                  ).at(0);
+                  expect(before?.token).toContain(".000123");
+                  await recoverScoutEmission(
+                    asTestRaw<SchedulerTaskContext>({
+                      db: asTestRaw<SchedulerDb>(db),
+                      dueAt: DueSlot.of({ nextRunAt: NOW, lockedAt: NOW }),
+                      logger,
+                      signal: new AbortController().signal,
+                    }),
+                  );
+                  expect(
+                    await db.$count(
+                      pendingScoutEmissions,
+                      eq(pendingScoutEmissions.sourceId, sourceId),
+                    ),
+                  ).toBe(0);
+                }
+              } finally {
+                await db
+                  .delete(organization)
+                  .where(eq(organization.id, fixture.organizationId));
+                await db.delete(user).where(eq(user.id, fixture.userId));
+              }
+            },
+          );
+        } finally {
+          env.FEATURE_SIGNALS = previousSignals;
+          env.FEATURE_FLOWS = previousFlows;
+          env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousScouts;
+          restore();
+        }
+      });
+    }
+  }
+  for (const featureId of ["signals", "flows"] as const) {
+    for (const state of ["pending", "awaiting_grant"] as const) {
+      test(`${featureId}/${state}: grant reconciliation preserves a newer selected token`, async () => {
+        const previousSignals = env.FEATURE_SIGNALS;
+        const previousFlows = env.FEATURE_FLOWS;
+        const restoreMode = setRuntimeModeForTesting({
+          mode: RUNTIME_MODE.strict,
+        });
+        env.FEATURE_SIGNALS = true;
+        env.FEATURE_FLOWS = true;
+        try {
+          await withGatedTestClients(
+            databaseUrl ?? panic("Missing PostgreSQL test URL"),
+            async ({ openClient }) => {
+              const reader = openClient();
+              const writer = openClient();
+              const fixture = await uploadFixture(reader.db);
+              try {
+                if (featureId === "flows") {
+                  await reader.db
+                    .update(flowUploadTriggerIntents)
+                    .set({ status: state })
+                    .where(
+                      eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                    );
+                  if (state === "pending") {
+                    await reader.db
+                      .delete(featureEnrolments)
+                      .where(
+                        eq(
+                          featureEnrolments.organizationId,
+                          fixture.organizationId,
+                        ),
+                      );
+                  }
+                } else {
+                  await reader.db.insert(pendingScoutEmissions).values({
+                    organizationId: fixture.organizationId,
+                    workspaceId: fixture.workspaceId,
+                    sourceId: fixture.entityId,
+                    status: state,
+                    nextAttemptAt: NOW,
+                    sourceKind:
+                      state === "awaiting_grant"
+                        ? "document-review"
+                        : "infosoud-hearing",
+                  });
+                }
+                let barriers = 0;
+                const database = receiptRaceDatabase({
+                  database: reader.db,
+                  beforeTransaction: async (ordinal) => {
+                    if (ordinal !== 1) {
+                      return;
+                    }
+                    barriers += 1;
+                    await writer.db.transaction(async (tx) => {
+                      await lockFeatureRecoveryAdmission({
+                        tx,
+                        organizationId: fixture.organizationId,
+                        featureId,
+                      });
+                      if (featureId === "flows") {
+                        await tx
+                          .update(flowUploadTriggerIntents)
+                          .set({ retryAt: LATER })
+                          .where(
+                            eq(
+                              flowUploadTriggerIntents.entityId,
+                              fixture.entityId,
+                            ),
+                          );
+                      } else {
+                        await tx
+                          .update(pendingScoutEmissions)
+                          .set({ nextAttemptAt: LATER })
+                          .where(
+                            eq(
+                              pendingScoutEmissions.sourceId,
+                              fixture.entityId,
+                            ),
+                          );
+                      }
+                    });
+                  },
+                });
+                if (featureId === "flows") {
+                  await recoverUploadFlowTriggerIntents({
+                    database,
+                    now: NOW,
+                    start: async () =>
+                      panic("Stale reconciliation dispatched a source"),
+                  });
+                  expect(
+                    (
+                      await reader.db
+                        .select()
+                        .from(flowUploadTriggerIntents)
+                        .where(
+                          eq(
+                            flowUploadTriggerIntents.entityId,
+                            fixture.entityId,
+                          ),
+                        )
+                    ).at(0),
+                  ).toMatchObject({ status: state, retryAt: LATER });
+                } else {
+                  await recoverScoutEmission(
+                    asTestRaw<SchedulerTaskContext>({
+                      db: database,
+                      dueAt: DueSlot.of({ nextRunAt: NOW, lockedAt: NOW }),
+                      logger,
+                      signal: new AbortController().signal,
+                    }),
+                  );
+                  expect(
+                    (
+                      await reader.db
+                        .select()
+                        .from(pendingScoutEmissions)
+                        .where(
+                          eq(pendingScoutEmissions.sourceId, fixture.entityId),
+                        )
+                    ).at(0),
+                  ).toMatchObject({ status: state, nextAttemptAt: LATER });
+                }
+                expect(barriers).toBe(1);
+              } finally {
+                await reader.db
+                  .delete(organization)
+                  .where(eq(organization.id, fixture.organizationId));
+                await reader.db.delete(user).where(eq(user.id, fixture.userId));
+              }
+            },
+          );
+        } finally {
+          env.FEATURE_SIGNALS = previousSignals;
+          env.FEATURE_FLOWS = previousFlows;
+          restoreMode();
+        }
+      });
+    }
+  }
+
+  for (const race of [
+    "claim-replaced",
+    "settlement-replaced",
+    "settlement-revoked",
+  ] as const) {
+    test(`${race}: upload recovery preserves the winning receipt without stale effects`, async () => {
+      const previous = env.FEATURE_FLOWS;
+      const restoreMode = setRuntimeModeForTesting({
+        mode: RUNTIME_MODE.strict,
+      });
+      env.FEATURE_FLOWS = true;
+      try {
+        await withGatedTestClients(
+          databaseUrl ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const reader = openClient();
+            const writer = openClient();
+            const fixture = await uploadFixture(reader.db);
+            const mutate = async () =>
+              await writer.db.transaction(async (tx) => {
+                await lockFeatureRecoveryAdmission({
+                  tx,
+                  organizationId: fixture.organizationId,
+                  featureId: "flows",
+                });
+                if (race === "settlement-revoked") {
+                  await tx
+                    .delete(featureEnrolments)
+                    .where(
+                      eq(
+                        featureEnrolments.organizationId,
+                        fixture.organizationId,
+                      ),
+                    );
+                } else {
+                  await tx
+                    .update(flowUploadTriggerIntents)
+                    .set({ retryAt: LATER })
+                    .where(
+                      eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                    );
+                }
+              });
+            let starts = 0;
+            try {
+              const outcomes = await recoverUploadFlowTriggerIntents({
+                database: receiptRaceDatabase({
+                  database: reader.db,
+                  beforeTransaction: async (ordinal) => {
+                    if (race === "claim-replaced" && ordinal === 1) {
+                      await mutate();
+                    }
+                  },
+                }),
+                now: NOW,
+                entityId: fixture.entityId,
+                start: async ({ uploadTriggerClaimToken }) => {
+                  starts += 1;
+                  const current = (
+                    await reader.db
+                      .select({
+                        token: timestampCasToken(
+                          flowUploadTriggerIntents.retryAt,
+                        ),
+                      })
+                      .from(flowUploadTriggerIntents)
+                      .where(
+                        eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                      )
+                  ).at(0);
+                  expect(uploadTriggerClaimToken).toBe(current?.token);
+                  await mutate();
+                  return { status: "settled" };
+                },
+              });
+              const receipt = (
+                await reader.db
+                  .select()
+                  .from(flowUploadTriggerIntents)
+                  .where(
+                    eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                  )
+              ).at(0);
+              expect(receipt?.status).toBe("pending");
+              expect(receipt?.retryAt).toEqual(
+                race === "settlement-revoked"
+                  ? new Date(NOW.getTime() + 5 * 60_000)
+                  : LATER,
+              );
+              expect(starts).toBe(race === "claim-replaced" ? 0 : 1);
+              expect(outcomes.settled).toBe(0);
+              expect(outcomes.stale).toBe(
+                race === "settlement-revoked" ? 0 : 1,
+              );
+              expect(outcomes.paused).toBe(
+                race === "settlement-revoked" ? 1 : 0,
+              );
+            } finally {
+              await reader.db
+                .delete(organization)
+                .where(eq(organization.id, fixture.organizationId));
+              await reader.db.delete(user).where(eq(user.id, fixture.userId));
+            }
+          },
+        );
+      } finally {
+        env.FEATURE_FLOWS = previous;
+        restoreMode();
+      }
+    });
+  }
+
+  for (const race of [
+    "claim-replaced",
+    "grant-revoked",
+    "rollback-replaced",
+  ] as const) {
+    test(`${race}: scout recovery cannot overwrite a newer receipt or emit after revocation`, async () => {
+      const previous = env.FEATURE_SIGNALS;
+      const restoreMode = setRuntimeModeForTesting({
+        mode: RUNTIME_MODE.strict,
+      });
+      env.FEATURE_SIGNALS = true;
+      try {
+        await withGatedTestClients(
+          databaseUrl ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const reader = openClient();
+            const writer = openClient();
+            const fixture = await uploadFixture(reader.db);
+            try {
+              await reader.db.insert(featureEnrolments).values({
+                organizationId: fixture.organizationId,
+                userId: fixture.userId,
+                featureId: "signals",
+              });
+              await reader.db.insert(pendingScoutEmissions).values({
+                organizationId: fixture.organizationId,
+                workspaceId: fixture.workspaceId,
+                sourceKind: "infosoud-hearing",
+                sourceId: fixture.entityId,
+                nextAttemptAt: NOW,
+              });
+              const database = receiptRaceDatabase({
+                database: reader.db,
+                rollbackFirst: race === "rollback-replaced",
+                beforeTransaction: async (ordinal) => {
+                  if (ordinal !== (race === "rollback-replaced" ? 2 : 1)) {
+                    return;
+                  }
+                  await writer.db.transaction(async (tx) => {
+                    await lockFeatureRecoveryAdmission({
+                      tx,
+                      organizationId: fixture.organizationId,
+                      featureId: "signals",
+                    });
+                    if (race === "grant-revoked") {
+                      await tx
+                        .delete(featureEnrolments)
+                        .where(
+                          and(
+                            eq(
+                              featureEnrolments.organizationId,
+                              fixture.organizationId,
+                            ),
+                            eq(featureEnrolments.featureId, "signals"),
+                          ),
+                        );
+                    } else {
+                      await tx
+                        .update(pendingScoutEmissions)
+                        .set({ nextAttemptAt: LATER })
+                        .where(
+                          eq(pendingScoutEmissions.sourceId, fixture.entityId),
+                        );
+                    }
+                  });
+                },
+              });
+              await recoverScoutEmission(
+                asTestRaw<SchedulerTaskContext>({
+                  db: database,
+                  dueAt: DueSlot.of({ nextRunAt: NOW, lockedAt: NOW }),
+                  logger,
+                  signal: new AbortController().signal,
+                }),
+              );
+              const receipt = (
+                await reader.db
+                  .select()
+                  .from(pendingScoutEmissions)
+                  .where(eq(pendingScoutEmissions.sourceId, fixture.entityId))
+              ).at(0);
+              expect(receipt).toMatchObject({
+                status: "pending",
+                lastError: null,
+              });
+              expect(receipt?.nextAttemptAt).toEqual(
+                race === "grant-revoked" ? NOW : LATER,
+              );
+            } finally {
+              await reader.db
+                .delete(organization)
+                .where(eq(organization.id, fixture.organizationId));
+              await reader.db.delete(user).where(eq(user.id, fixture.userId));
+            }
+          },
+        );
+      } finally {
+        env.FEATURE_SIGNALS = previous;
+        restoreMode();
+      }
+    });
+  }
+
   test("a grant revoked after preflight pauses insertion without spending and regrant converges", async () => {
     const previousFlag = env.FEATURE_FLOWS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
@@ -261,10 +877,20 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 reservations += 1;
               }),
           } satisfies Parameters<typeof startAutomatedFlowRun>[1];
+          const original =
+            (
+              await reader.db
+                .select({
+                  token: timestampCasToken(flowUploadTriggerIntents.retryAt),
+                })
+                .from(flowUploadTriggerIntents)
+                .where(eq(flowUploadTriggerIntents.entityId, fixture.entityId))
+            ).at(0) ?? panic("Missing direct-start receipt");
           const start = async () =>
             await startAutomatedFlowRun(
               {
                 definitionId: fixture.definitionId,
+                uploadTriggerClaimToken: original.token,
                 organizationId: fixture.organizationId,
                 workspaceId: fixture.workspaceId,
                 createdByUserId: fixture.userId,
@@ -396,7 +1022,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               await recoverUploadFlowTriggerIntents({
                 database: asTestRaw<SchedulerDb>(db),
                 now: NOW,
-                entityId,
+                ...(entityId === undefined ? {} : { entityId }),
                 start: async ({ definitionId }) => {
                   started.push(definitionId);
                   return { status: "settled" };
@@ -614,7 +1240,9 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 .where(eq(flowUploadTriggerIntents.entityId, f.entityId));
               if (change === "unchanged") {
                 expect(runs).toHaveLength(1);
-                expect(enqueued).toEqual([runs.at(0)?.id]);
+                const insertedRun =
+                  runs.at(0) ?? panic("Missing replay fixture run");
+                expect(enqueued).toEqual([insertedRun.id]);
                 expect(receipts).toEqual([]);
                 // Recreate a still-pending receipt as if the process died after run commit and before settlement.
                 await first.db.insert(flowUploadTriggerIntents).values({

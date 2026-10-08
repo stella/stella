@@ -37,6 +37,20 @@ beforeAll(async () => {
     slug: `background-${organizationId}`,
     createdAt: new Date(),
   });
+  const ownerId = mintAuthProviderId<"user">();
+  await db.insert(user).values({
+    id: ownerId,
+    name: "Fixture owner",
+    email: `${ownerId}@example.test`,
+    emailVerified: true,
+  });
+  await db.insert(member).values({
+    id: Bun.randomUUIDv7(),
+    organizationId,
+    userId: ownerId,
+    role: "owner",
+    createdAt: new Date(),
+  });
   await db.insert(user).values({
     id: userId,
     name: "Scout member",

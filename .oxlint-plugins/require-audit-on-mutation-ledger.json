@@ -994,14 +994,6 @@
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
-    "id": "apps/api/src/lib/flows/automated-run-cap.ts::insertAutomatedFlowRunWithinCap",
-    "writes": {
-      "insert:flowRunSteps": 1,
-      "insert:flowRuns": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
     "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
     "writes": {
       "update:flowRunSteps": 1,
@@ -1676,13 +1668,6 @@
   },
   {
     "id": "apps/api/src/lib/scouts/document-deadlines.ts::claimRun",
-    "writes": {
-      "update:documentProcessingRuns": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scouts/document-deadlines.ts::settleRun",
     "writes": {
       "update:documentProcessingRuns": 1
     },

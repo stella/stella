@@ -76,7 +76,7 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import {
   brandPersistedEntityId,
   brandPersistedSignalId,
@@ -871,13 +871,12 @@ const queryEntitiesGenerator = async function* ({
     ...previewableConditions,
     ...extraConditions,
   ];
-  const reviewVisibility = yield* Result.await(
-    flowReviewTaskVisibilityCondition({
-      safeDb,
-      organizationId: currentOrganizationId,
-      userId: currentUserId,
-    }),
-  );
+  const reviewVisibility = flowOwnedEntityVisibilitySql({
+    organizationId: currentOrganizationId,
+    userId: currentUserId,
+    entityId: sql`${entities.id}`,
+    workspaceId: sql`${entities.workspaceId}`,
+  });
   const entityAccess = and(
     workspaceCondition,
     reviewVisibility,

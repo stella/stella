@@ -1,11 +1,13 @@
 import { Result, TaggedError } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireFlowEffectAdmission } from "@/api/lib/flows/effect-admission";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type {
   FlowDefinitionSnapshot,
@@ -206,23 +208,51 @@ export const startFlowRun = async ({
       triggerSource.type === "manual"
         ? triggerSource.userId
         : definition.createdByUserId;
-    const createAndEnqueue = async (signal?: AbortSignal) =>
+    const createAndEnqueue = async (
+      signal?: AbortSignal,
+      reservePeriod?: () => Promise<void>,
+    ) =>
       await Result.gen(async function* () {
-        const rows = buildFlowRunRows({
-          runId,
-          workspaceId,
-          definitionId,
-          definition,
-          triggerSource,
-          inputEntityIds,
-        });
-
         signal?.throwIfAborted();
         yield* Result.await(
-          safeDb(async (tx) => {
-            await tx.insert(flowRuns).values(rows.run);
-            await tx.insert(flowRunSteps).values(rows.steps);
-          }),
+          abortableTx(safeDb, async (tx) => {
+            await requireFlowEffectAdmission({
+              tx,
+              organizationId,
+              userId: actorId,
+            });
+            const currentDefinition = await tx.query.flowDefinitions.findFirst({
+              where: {
+                id: { eq: definitionId },
+                organizationId: { eq: organizationId },
+              },
+              columns: { id: true, name: true, steps: true, enabled: true },
+            });
+            if (!currentDefinition?.enabled) {
+              abortTransaction(
+                new HandlerError({ status: 404, message: "Not found" }),
+              );
+            }
+            const admittedRows = buildFlowRunRows({
+              runId,
+              workspaceId,
+              definitionId,
+              definition: currentDefinition,
+              triggerSource,
+              inputEntityIds,
+            });
+            await tx.insert(flowRuns).values(admittedRows.run);
+            await tx.insert(flowRunSteps).values(admittedRows.steps);
+            await reservePeriod?.();
+          }).mapError((error) =>
+            HandlerError.is(error)
+              ? new FlowRunStartError({
+                  reason: "admission-refused",
+                  message: error.message,
+                  cause: error,
+                })
+              : error,
+          ),
         );
 
         // Enqueue after the rows commit. A failure here leaves the run `pending`;
@@ -273,6 +303,7 @@ export const startFlowRun = async ({
               ),
             actionKind: QUEUED_ACTION_KIND.flow,
             logicalPhaseId: runId,
+            periodReservation: "on-acceptance",
             run: createAndEnqueue,
           }),
         catch: (cause) =>

@@ -449,7 +449,10 @@ for (const feature of [
       );
       const taskKey = taskKeys.detail("matter-a", "ordinary-task");
       queryClient.setQueryData(taskKey, { linkedReview: "private review" });
-      expect(queryClient.getQueryData(taskKey)).toBeDefined();
+      expect(
+        queryClient.getQueryCache().find({ queryKey: taskKey, exact: true })
+          ?.state.data,
+      ).toEqual({ linkedReview: "private review" });
       fireEvent.click(checkbox);
       await waitFor(() =>
         expect(view.getByTestId(`${feature.id}-offer`).textContent).toBe(
@@ -457,7 +460,10 @@ for (const feature of [
         ),
       );
       expect(await feature.routeEnabled(queryClient, CALLER)).toBe(false);
-      expect(queryClient.getQueryData(taskKey)).toBeUndefined();
+      expect(
+        queryClient.getQueryCache().find({ queryKey: taskKey, exact: true })
+          ?.state.data,
+      ).toBeUndefined();
       expectNoDeploymentFeaturesRequest(paths);
     });
   });

@@ -15,7 +15,7 @@ CREATE TABLE "pending_scout_emissions" (
   "next_attempt_at" timestamptz DEFAULT now() NOT NULL,
   "last_error" varchar(128),
   "created_at" timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT "pending_scout_emissions_organization_id_source_kind_source_id_pk" PRIMARY KEY ("organization_id", "source_kind", "source_id"),
+  CONSTRAINT "pending_scout_emissions_identity_pk" PRIMARY KEY ("organization_id", "source_kind", "source_id"),
   CONSTRAINT "pending_scout_emissions_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE CASCADE,
   CONSTRAINT "pending_scout_emissions_source_kind_check" CHECK (source_kind IN ('document-review', 'infosoud-hearing'))
 );

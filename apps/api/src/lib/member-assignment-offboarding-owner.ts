@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 
@@ -41,10 +41,16 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { tryLockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import {
+  FLOWS_FEATURE_ID,
+  SIGNALS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -73,6 +79,95 @@ const removalBusy = () =>
     retryable: true,
     message: "Other work is in progress. Please try again shortly.",
   });
+
+/** Membership cleanup must serialize with recovery without waiting on its inverse lock order. */
+const tryLockMemberFeatureAdmission = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  for (const featureId of [FLOWS_FEATURE_ID, SIGNALS_FEATURE_ID]) {
+    // db-await-in-loop: take the two admission locks in canonical feature order without waiting.
+    if (
+      !(await tryLockFeatureRecoveryAdmission({
+        tx,
+        organizationId,
+        featureId,
+      }))
+    ) {
+      abortTransaction(removalBusy());
+    }
+  }
+};
+
+const tryLockAccountFeatureAdmission = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  let afterId: SafeId<"organization"> | undefined;
+  for (;;) {
+    // db-await-in-loop: keyset-page every departing membership, without dropping organizations at a cap.
+    const page = await readCursorPage(
+      tx
+        .select({ organizationId: member.organizationId })
+        .from(member)
+        .where(
+          and(
+            eq(member.userId, userId),
+            afterId === undefined
+              ? undefined
+              : gt(member.organizationId, afterId),
+          ),
+        )
+        .orderBy(member.organizationId),
+      {
+        limit: LIMITS.memberRemovalCleanupBatchSize,
+        cursorForItem: (row) => row.organizationId,
+      },
+    );
+    for (const { organizationId } of page.items) {
+      // db-await-in-loop: nonblocking admission locks follow ascending organization and feature order.
+      await tryLockMemberFeatureAdmission(tx, organizationId);
+    }
+    if (page.nextCursor === null) {
+      return;
+    }
+    afterId = page.items.at(-1)?.organizationId;
+    if (afterId === undefined) {
+      panic("Membership page has a cursor without a row");
+    }
+  }
+};
+
+const lockScopeFeatureAdmission = async ({
+  tx,
+  scope,
+  userId,
+}: ClearMemberAssignmentsOptions): Promise<void> => {
+  switch (scope.type) {
+    case "workspace": {
+      const row = (
+        await tx
+          .select({ organizationId: workspaces.organizationId })
+          .from(workspaces)
+          .where(eq(workspaces.id, scope.workspaceId))
+          .limit(1)
+      ).at(0);
+      if (row) {
+        await tryLockMemberFeatureAdmission(tx, row.organizationId);
+      }
+      return;
+    }
+    case "organization":
+      await tryLockMemberFeatureAdmission(tx, scope.organizationId);
+      return;
+    case "account":
+      await tryLockAccountFeatureAdmission(tx, userId);
+      return;
+    default:
+      scope satisfies never;
+      return panic("Unhandled member cleanup scope");
+  }
+};
 
 /** Existing account deletion holds organization membership first; never wait on its inverse. */
 export const tryLockMemberCleanupWorkspace = async (
@@ -149,18 +244,29 @@ const clearMemberObligationOwners = async ({
       remaining -= LIMITS.memberRemovalCleanupBatchSize
     ) {
       // db-await-in-loop: drain mutable ownership in bounded audited batches.
-      const owned = await tx
-        .select({
-          entityId: workObligations.entityId,
-          workspaceId: workObligations.workspaceId,
-          status: workObligations.status,
-        })
-        .from(workObligations)
-        .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
-        .where(ownershipScope)
-        .orderBy(workObligations.workspaceId, workObligations.entityId)
-        .limit(LIMITS.memberRemovalCleanupBatchSize)
-        .for("update", { of: workObligations });
+      const owned = (
+        await readCursorPage(
+          tx
+            .select({
+              entityId: workObligations.entityId,
+              workspaceId: workObligations.workspaceId,
+              status: workObligations.status,
+            })
+            .from(workObligations)
+            .innerJoin(
+              workspaces,
+              eq(workspaces.id, workObligations.workspaceId),
+            )
+            .where(ownershipScope)
+            .orderBy(workObligations.workspaceId, workObligations.entityId)
+
+            .for("update", { of: workObligations }),
+          {
+            limit: LIMITS.memberRemovalCleanupBatchSize,
+            cursorForItem: (row) => row.entityId,
+          },
+        )
+      ).items;
       if (owned.length === 0) {
         break;
       }
@@ -290,19 +396,26 @@ const clearMemberTaskAssignments = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // db-await-in-loop: drain assignment rows in bounded audited batches.
-    const assigned = await tx
-      .select({
-        entityId: taskAssignees.entityId,
-        role: taskAssignees.role,
-        workspaceId: taskAssignees.workspaceId,
-        organizationId: workspaces.organizationId,
-      })
-      .from(taskAssignees)
-      .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
-      .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
-      .where(assignmentScope)
-      .orderBy(taskAssignees.entityId)
-      .limit(LIMITS.memberRemovalCleanupBatchSize);
+    const assigned = (
+      await readCursorPage(
+        tx
+          .select({
+            entityId: taskAssignees.entityId,
+            role: taskAssignees.role,
+            workspaceId: taskAssignees.workspaceId,
+            organizationId: workspaces.organizationId,
+          })
+          .from(taskAssignees)
+          .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
+          .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
+          .where(assignmentScope)
+          .orderBy(taskAssignees.entityId),
+        {
+          limit: LIMITS.memberRemovalCleanupBatchSize,
+          cursorForItem: (row) => row.entityId,
+        },
+      )
+    ).items;
     if (assigned.length === 0) {
       break;
     }
@@ -491,18 +604,29 @@ const closeMemberExchanges = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // db-await-in-loop: lock a bounded signing session page after the matter prefix.
-    const signing = await tx
-      .select({
-        id: pdfSigningSessions.id,
-        workspaceId: pdfSigningSessions.workspaceId,
-        organizationId: workspaces.organizationId,
-      })
-      .from(pdfSigningSessions)
-      .innerJoin(workspaces, eq(workspaces.id, pdfSigningSessions.workspaceId))
-      .where(signingScope)
-      .orderBy(pdfSigningSessions.id)
-      .limit(LIMITS.memberRemovalCleanupBatchSize)
-      .for("update", { of: pdfSigningSessions });
+    const signing = (
+      await readCursorPage(
+        tx
+          .select({
+            id: pdfSigningSessions.id,
+            workspaceId: pdfSigningSessions.workspaceId,
+            organizationId: workspaces.organizationId,
+          })
+          .from(pdfSigningSessions)
+          .innerJoin(
+            workspaces,
+            eq(workspaces.id, pdfSigningSessions.workspaceId),
+          )
+          .where(signingScope)
+          .orderBy(pdfSigningSessions.id)
+
+          .for("update", { of: pdfSigningSessions }),
+        {
+          limit: LIMITS.memberRemovalCleanupBatchSize,
+          cursorForItem: (row) => row.id,
+        },
+      )
+    ).items;
     if (signing.length === 0) {
       break;
     }
@@ -571,18 +695,26 @@ const clearMemberContactAssignments = async ({
     const contactResult = await Result.tryPromise({
       try: async () =>
         // db-await-in-loop: drain attorney references in bounded audited batches.
-        await tx
-          .select({
-            id: contacts.id,
-            organizationId: contacts.organizationId,
-            originatingAttorneyId: contacts.originatingAttorneyId,
-            responsibleAttorneyId: contacts.responsibleAttorneyId,
-          })
-          .from(contacts)
-          .where(attorneyScope)
-          .orderBy(contacts.id)
-          .limit(LIMITS.memberRemovalCleanupBatchSize)
-          .for("no key update", { noWait: true }),
+        (
+          await readCursorPage(
+            tx
+              .select({
+                id: contacts.id,
+                organizationId: contacts.organizationId,
+                originatingAttorneyId: contacts.originatingAttorneyId,
+                responsibleAttorneyId: contacts.responsibleAttorneyId,
+              })
+              .from(contacts)
+              .where(attorneyScope)
+              .orderBy(contacts.id)
+
+              .for("no key update", { noWait: true }),
+            {
+              limit: LIMITS.memberRemovalCleanupBatchSize,
+              cursorForItem: (row) => row.id,
+            },
+          )
+        ).items,
       catch: (error) => error,
     });
     if (Result.isError(contactResult)) {
@@ -694,17 +826,25 @@ const clearMemberTimeEntryApprovals = async ({
     const pending = await Result.tryPromise({
       try: async () =>
         // db-await-in-loop: drain pending approvals in bounded audited batches.
-        await tx
-          .select({
-            id: timeEntries.id,
-            organizationId: timeEntries.organizationId,
-            workspaceId: timeEntries.workspaceId,
-          })
-          .from(timeEntries)
-          .where(approvalScope)
-          .orderBy(timeEntries.id)
-          .limit(LIMITS.memberRemovalCleanupBatchSize)
-          .for("update", { noWait: true }),
+        (
+          await readCursorPage(
+            tx
+              .select({
+                id: timeEntries.id,
+                organizationId: timeEntries.organizationId,
+                workspaceId: timeEntries.workspaceId,
+              })
+              .from(timeEntries)
+              .where(approvalScope)
+              .orderBy(timeEntries.id)
+
+              .for("update", { noWait: true }),
+            {
+              limit: LIMITS.memberRemovalCleanupBatchSize,
+              cursorForItem: (row) => row.id,
+            },
+          )
+        ).items,
       catch: (error) => error,
     });
     if (Result.isError(pending)) {
@@ -767,6 +907,7 @@ export const clearMemberAssignments = async (
       }),
     );
   }
+  await lockScopeFeatureAdmission(options);
   await clearMemberObligationOwners(options);
   await clearMemberTaskAssignments(options);
   await clearMemberTimeEntryApprovals(options);
@@ -1012,6 +1153,7 @@ export const tryLockAccountMemberCleanup = async ({
     .from(member)
     .where(eq(member.userId, userId))
     .for("update");
+  await tryLockAccountFeatureAdmission(tx, userId);
   for (const id of await selectMemberCleanupWorkspaceIds({
     tx,
     userId,
@@ -1096,18 +1238,29 @@ const cancelMemberFlowRuns = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // db-await-in-loop: cancel bounded run batches while holding the workspace prefix.
-    const runs = await tx
-      .select({
-        id: flowRuns.id,
-        workspaceId: flowRuns.workspaceId,
-        status: flowRuns.status,
-      })
-      .from(flowRuns)
-      .leftJoin(flowDefinitions, eq(flowDefinitions.id, flowRuns.definitionId))
-      .where(runScope)
-      .orderBy(flowRuns.id)
-      .limit(LIMITS.memberRemovalCleanupBatchSize)
-      .for("update", { of: flowRuns });
+    const runs = (
+      await readCursorPage(
+        tx
+          .select({
+            id: flowRuns.id,
+            workspaceId: flowRuns.workspaceId,
+            status: flowRuns.status,
+          })
+          .from(flowRuns)
+          .leftJoin(
+            flowDefinitions,
+            eq(flowDefinitions.id, flowRuns.definitionId),
+          )
+          .where(runScope)
+          .orderBy(flowRuns.id)
+
+          .for("update", { of: flowRuns }),
+        {
+          limit: LIMITS.memberRemovalCleanupBatchSize,
+          cursorForItem: (row) => row.id,
+        },
+      )
+    ).items;
     if (runs.length === 0) {
       break;
     }
@@ -1311,16 +1464,24 @@ const cancelMemberDesktopSessions = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // db-await-in-loop: lock a bounded desktop session page after assignment cleanup.
-    const sessions = await tx
-      .select({
-        id: desktopEditSessions.id,
-        workspaceId: desktopEditSessions.workspaceId,
-      })
-      .from(desktopEditSessions)
-      .where(desktopScope)
-      .orderBy(desktopEditSessions.id)
-      .limit(LIMITS.memberRemovalCleanupBatchSize)
-      .for("update");
+    const sessions = (
+      await readCursorPage(
+        tx
+          .select({
+            id: desktopEditSessions.id,
+            workspaceId: desktopEditSessions.workspaceId,
+          })
+          .from(desktopEditSessions)
+          .where(desktopScope)
+          .orderBy(desktopEditSessions.id)
+
+          .for("update"),
+        {
+          limit: LIMITS.memberRemovalCleanupBatchSize,
+          cursorForItem: (row) => row.id,
+        },
+      )
+    ).items;
     if (sessions.length === 0) {
       break;
     }
@@ -1371,6 +1532,7 @@ export const removeOrganizationMemberInTransaction = async (
     reassignTo,
   }: Omit<RemoveOrganizationMemberOptions, "tx">,
 ): Promise<void> => {
+  await tryLockMemberFeatureAdmission(tx, organizationId);
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,

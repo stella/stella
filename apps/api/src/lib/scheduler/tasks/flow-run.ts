@@ -54,6 +54,20 @@ const startScheduledFlowRun: StartScheduledFlowRun = async (input, db) =>
 
 const SLOT_SETTLEMENT_REASON = { NOT_DUE: "retained_slot_not_due" } as const;
 
+// The scheduler mints a unique lockedBy token for every lease acquisition.
+const originalScheduleClaim = (job: SchedulerJob) => ({
+  jobId: job.id,
+  lockedBy: job.lockedBy ?? panic("Scheduled flow requires a scheduler lease"),
+});
+
+const originalScheduleClaimWhere = (job: SchedulerJob) => {
+  const claim = originalScheduleClaim(job);
+  return and(
+    eq(schedulerJobs.id, claim.jobId),
+    eq(schedulerJobs.lockedBy, claim.lockedBy),
+  );
+};
+
 type PersistScheduleSlotOptions = {
   db: SchedulerDb;
   job: SchedulerJob;
@@ -67,8 +81,6 @@ const persistScheduleSlot = async ({
   definitionId,
   settlement,
 }: PersistScheduleSlotOptions) => {
-  const leaseToken =
-    job.lockedBy ?? panic("Scheduled flow requires a scheduler lease");
   const payload =
     settlement.status === "retained"
       ? {
@@ -81,11 +93,11 @@ const persistScheduleSlot = async ({
   const changed = await db
     .update(schedulerJobs)
     .set({ payload })
-    .where(
-      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, leaseToken)),
-    )
+    .where(originalScheduleClaimWhere(job))
     .returning({ id: schedulerJobs.id });
-  return changed.length !== 0;
+  return changed.length === 0
+    ? ({ status: "stale" } as const)
+    : ({ status: "persisted" } as const);
 };
 
 /**
@@ -122,9 +134,7 @@ export const createScheduledFlowTask =
       // the orphaned scheduler row so it stops firing.
       // audit: skip — scheduler bookkeeping for a definition that no longer
       // exists; no user-owned record changes.
-      await db
-        .delete(schedulerJobs)
-        .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
+      await db.delete(schedulerJobs).where(originalScheduleClaimWhere(job));
       logger.info("flow.schedule_definition_missing", { definitionId });
       return;
     }
@@ -157,12 +167,14 @@ export const createScheduledFlowTask =
       !isScheduledFlowDue(trigger.schedule, originalSlot)
     ) {
       if (
-        !(await persistScheduleSlot({
-          db,
-          job,
-          definitionId,
-          settlement: { status: "settled" },
-        }))
+        (
+          await persistScheduleSlot({
+            db,
+            job,
+            definitionId,
+            settlement: { status: "settled" },
+          })
+        ).status === "stale"
       ) {
         return;
       }
@@ -183,12 +195,14 @@ export const createScheduledFlowTask =
 
     const retrySlot = async () => {
       if (
-        !(await persistScheduleSlot({
-          db,
-          job,
-          definitionId,
-          settlement: { status: "retained", dueSlot: originalSlot },
-        }))
+        (
+          await persistScheduleSlot({
+            db,
+            job,
+            definitionId,
+            settlement: { status: "retained", dueSlot: originalSlot },
+          })
+        ).status === "stale"
       ) {
         return;
       }
@@ -249,10 +263,15 @@ export const createScheduledFlowTask =
           dueSlot: originalSlot.toDate().toISOString(),
         },
         inputEntityIds: [],
+        schedulerClaim: originalScheduleClaim(job),
         logContext: { definitionId, workspaceId, trigger: "schedule" },
       },
       db,
     );
+    if (outcome.status === "stale") {
+      logger.info("flow.schedule_stale", { definitionId });
+      return;
+    }
     if (outcome.status === "paused" || outcome.status === "retry") {
       await retrySlot();
       return;

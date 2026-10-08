@@ -6,6 +6,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  admitTaskFlowAccess,
+} from "@/api/lib/flows/review-gate-task";
 
 const readFieldFileParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -17,6 +21,7 @@ type ReadFieldFileHandlerProps = {
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
+  userId: SafeId<"user">;
 };
 
 // Resolve a single field's file metadata by id, for the document viewer to
@@ -28,10 +33,19 @@ const readFieldFileHandler = async function* ({
   workspaceId,
   entityId,
   fieldId,
+  userId,
 }: ReadFieldFileHandlerProps) {
-  const field = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.fields.findFirst({
+  const read = yield* Result.await(
+    safeDb(async (tx) => {
+      const admission = await admitTaskFlowAccess(tx, {
+        workspaceId,
+        taskEntityId: entityId,
+        userId,
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+      const field = await tx.query.fields.findFirst({
         where: {
           id: { eq: fieldId },
           workspaceId: { eq: workspaceId },
@@ -47,9 +61,11 @@ const readFieldFileHandler = async function* ({
           // withdrawn version's field file can never be resolved here.
           entityVersion: { columns: { entityId: true, deletedAt: true } },
         },
-      }),
-    ),
+      });
+      return Result.ok(field);
+    }),
   );
+  const field = yield* read;
 
   if (!field) {
     return Result.err(
@@ -96,6 +112,7 @@ const readFieldFileHandler = async function* ({
 const config = {
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   params: readFieldFileParamsSchema,
@@ -103,12 +120,13 @@ const config = {
 
 const readFieldFile = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params }) {
+  async function* ({ safeDb, workspaceId, params, user }) {
     return yield* readFieldFileHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
       fieldId: params.fieldId,
+      userId: user.id,
     });
   },
 );

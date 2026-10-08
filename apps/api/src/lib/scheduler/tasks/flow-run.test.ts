@@ -141,6 +141,7 @@ describe("scheduled flow due day", () => {
     schedule: Schedule,
     nextRunAt: Date,
     wallClock: Date,
+    beforeTask?: (job: SchedulerJob) => Promise<void>,
   ) => {
     const persisted = await testDb.query.schedulerJobs.findFirst({
       where: { id: { eq: flowScheduleJobId(definitionId) } },
@@ -162,7 +163,7 @@ describe("scheduled flow due day", () => {
       lastError: null,
       lockedAt: wallClock,
       lockedUntil: null,
-      lockedBy: "test-lease",
+      lockedBy: `test-lease#${Bun.randomUUIDv7()}`,
       createdAt: nextRunAt,
       updatedAt: nextRunAt,
     };
@@ -171,9 +172,10 @@ describe("scheduled flow due day", () => {
       .values(job)
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { nextRunAt, lockedAt: wallClock, lockedBy: "test-lease" },
+        set: { nextRunAt, lockedAt: wallClock, lockedBy: job.lockedBy },
       });
-    let continuationAt: Date | null = null;
+    await beforeTask?.(job);
+    const continuation: { at: Date | null } = { at: null };
     setSystemTime(wallClock);
     await task({
       db: asTestRaw<SchedulerDb>(testDb),
@@ -183,12 +185,12 @@ describe("scheduled flow due day", () => {
       payload: job.payload,
       runId: createSafeId<"schedulerJobRun">(),
       scheduleContinuation: (next) => {
-        continuationAt = next;
+        continuation.at = next;
       },
       signal: new AbortController().signal,
     });
     return {
-      continuationAt,
+      continuationAt: continuation.at,
       payload: (
         await testDb.query.schedulerJobs.findFirst({
           where: { id: { eq: job.id } },
@@ -503,5 +505,31 @@ describe("scheduled flow due day", () => {
       new Date("2026-08-02T00:20:00.000Z"),
     );
     expect(started.filter((id) => id === definitionId)).toHaveLength(1);
+  });
+
+  test("a stale orphan tick cannot delete the replacement scheduler lease", async () => {
+    const schedule = { frequency: "daily", hourUtc: 23 } as const;
+    const definitionId = await createDefinition(schedule);
+    await testDb
+      .delete(flowDefinitions)
+      .where(eq(flowDefinitions.id, definitionId));
+    const replacementLease = `test-lease#${Bun.randomUUIDv7()}`;
+    await runTick(
+      definitionId,
+      schedule,
+      MONDAY_SLOT,
+      TUESDAY_AFTER_MIDNIGHT,
+      async (job) => {
+        await testDb
+          .update(schedulerJobs)
+          .set({ lockedBy: replacementLease })
+          .where(eq(schedulerJobs.id, job.id));
+      },
+    );
+    const winner = await testDb.query.schedulerJobs.findFirst({
+      where: { id: { eq: flowScheduleJobId(definitionId) } },
+    });
+    expect(winner?.lockedBy).toBe(replacementLease);
+    expect(started).not.toContain(definitionId);
   });
 });

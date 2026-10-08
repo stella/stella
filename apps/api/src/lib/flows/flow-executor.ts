@@ -3,6 +3,7 @@ import {
   and,
   asc,
   eq,
+  getTableColumns,
   inArray,
   lt,
   TransactionRollbackError,
@@ -10,7 +11,7 @@ import {
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { drainFanOut } from "@stll/concurrency";
-import { todayFor } from "@stll/time";
+import { Temporal, todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -39,15 +40,23 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
+import {
+  isFlowEffectAdmitted,
+  requireFlowEffectAdmission,
+} from "@/api/lib/flows/effect-admission";
 import {
   flowRunCompletedNotification,
   resolveActorUserId,
@@ -82,7 +91,6 @@ import {
   createNotificationsInTransaction,
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
-import type { NotificationPing } from "@/api/lib/notifications";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -151,7 +159,11 @@ type HandleFlowStepStartOptions = {
   startedPayload:
     | null
     | { type: "paused" }
-    | { type: "started"; payload: FlowRunUpdatePayload };
+    | {
+        type: "started";
+        payload: FlowRunUpdatePayload;
+        claimedStartedAt: TimestampCasToken;
+      };
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"flowRun">;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
@@ -162,7 +174,9 @@ const handleFlowStepStart = ({
   workspaceId,
   runId,
   broadcastUpdate,
-}: HandleFlowStepStartOptions): FlowStepExecutionOutcome | undefined => {
+}: HandleFlowStepStartOptions):
+  | FlowStepExecutionOutcome
+  | { status: "started"; claimedStartedAt: TimestampCasToken } => {
   if (startedPayload === null) {
     return { status: "completed" };
   }
@@ -172,7 +186,10 @@ const handleFlowStepStart = ({
       return { status: "paused" };
     case "started":
       broadcastUpdate(workspaceId, startedPayload.payload);
-      return undefined;
+      return {
+        status: "started",
+        claimedStartedAt: startedPayload.claimedStartedAt,
+      };
     default:
       startedPayload satisfies never;
       return panic("Unknown flow step admission state");
@@ -187,7 +204,30 @@ const handleFlowStepStart = ({
  */
 export type FlowStepExecutionOutcome =
   | { status: "completed" }
-  | { status: "paused" };
+  | { status: "paused" }
+  | { status: "stale" };
+
+type ExecuteFlowStepDependencies = {
+  /**
+   * The step job's admission. Null only when the worker found no tenant or
+   * actor for the run, which the scope check below refuses before any step.
+   */
+  admission: ModelDispatchAdmission | null;
+  onClaim?: (claimedStartedAt: TimestampCasToken) => void;
+  /** The worker's connection, for the run, step and scope reads. */
+  database: Pick<typeof rootDb, "query">;
+  /** External model-dispatch boundary; supplied by focused integration tests. */
+  generateTextForRole?: typeof generateTanStackTextForRole | undefined;
+  makeScopedDb?: typeof createRootScopedDb | undefined;
+  makeSafeDb?: typeof createRootSafeDb | undefined;
+  enqueueStep?: typeof enqueueFlowStep | undefined;
+  broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
+  createEntity?: typeof createEntityFromBuffer | undefined;
+  loadAIConfig?: typeof loadOrgAIConfig | undefined;
+  /** Which task features the deployment enables; tests pin it. */
+  taskFeatures?: TaskDeploymentFeatures | undefined;
+  flushSearchRepairs?: typeof flushEntitySearchRepairs | undefined;
+};
 
 export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
@@ -204,26 +244,8 @@ export const executeFlowStep = async (
     loadAIConfig = loadOrgAIConfig,
     taskFeatures = deployedTaskFeatures(),
     flushSearchRepairs = flushEntitySearchRepairs,
-  }: {
-    /**
-     * The step job's admission. Null only when the worker found no tenant or
-     * actor for the run, which the scope check below refuses before any step.
-     */
-    admission: ModelDispatchAdmission | null;
-    /** The worker's connection, for the run, step and scope reads. */
-    database: Pick<typeof rootDb, "query">;
-    /** External model-dispatch boundary; supplied by focused integration tests. */
-    generateTextForRole?: typeof generateTanStackTextForRole | undefined;
-    makeScopedDb?: typeof createRootScopedDb | undefined;
-    makeSafeDb?: typeof createRootSafeDb | undefined;
-    enqueueStep?: typeof enqueueFlowStep | undefined;
-    broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
-    createEntity?: typeof createEntityFromBuffer | undefined;
-    loadAIConfig?: typeof loadOrgAIConfig | undefined;
-    /** Which task features the deployment enables; tests pin it. */
-    taskFeatures?: TaskDeploymentFeatures | undefined;
-    flushSearchRepairs?: typeof flushEntitySearchRepairs | undefined;
-  },
+    onClaim,
+  }: ExecuteFlowStepDependencies,
 ): Promise<FlowStepExecutionOutcome> => {
   const runId = brandPersistedFlowRunId(rawRunId);
   const run = await loadRun(runId, database);
@@ -272,16 +294,10 @@ export const executeFlowStep = async (
   const startedPayload = await scopedDb(async (tx) => {
     // Serialize the step boundary with grant/revoke, including an absent
     // enrolment row. Preflight admission alone can go stale before this write.
-    await lockFeatureRecoveryAdmission({
-      tx,
-      organizationId: scope.organizationId,
-      featureId: "flows",
-    });
-    const admitted = await isBackgroundFeatureEnabled({
+    const admitted = await isFlowEffectAdmitted({
       tx,
       organizationId: scope.organizationId,
       userId: actorUserId,
-      featureId: "flows",
     });
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
@@ -315,18 +331,28 @@ export const executeFlowStep = async (
     if (!admitted) {
       return { type: "paused" } as const;
     }
-    await tx
+    const startedAt = new Date(
+      Math.max(
+        Temporal.Now.instant().epochMilliseconds,
+        (current.step?.startedAt?.getTime() ?? 0) + 1,
+      ),
+    );
+    const claimed = await tx
       .update(flowRunSteps)
-      .set({ status: "running", startedAt: new Date() })
+      .set({ status: "running", startedAt })
       .where(
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
-      );
+      )
+      .returning({ token: timestampCasToken(flowRunSteps.startedAt) });
+    const claimedStartedAt =
+      claimed.at(0)?.token ?? panic("Flow start claim missing");
     await tx
       .update(flowRuns)
       .set({ status: "running" })
       .where(eq(flowRuns.id, runId));
     return {
       type: "started",
+      claimedStartedAt,
       payload: await readRunProgress(tx, runId),
     } as const;
   });
@@ -336,13 +362,15 @@ export const executeFlowStep = async (
     runId,
     broadcastUpdate,
   });
-  if (startOutcome !== undefined) {
+  if (startOutcome.status !== "started") {
     return startOutcome;
   }
-
+  const { claimedStartedAt } = startOutcome;
+  onClaim?.(claimedStartedAt);
   switch (stepDef.kind) {
     case "review-gate":
-      await pauseAtReviewGate({
+      return await pauseAtReviewGate({
+        claimedStartedAt,
         run,
         stepIndex,
         stepDef,
@@ -353,7 +381,6 @@ export const executeFlowStep = async (
         taskFeatures,
         flushSearchRepairs,
       });
-      return { status: "completed" };
     case "ai": {
       const output = await runAiStep({
         admission:
@@ -374,7 +401,8 @@ export const executeFlowStep = async (
         generateTextForRole,
         loadAIConfig,
       });
-      await completeStepAndAdvance({
+      return await completeStepAndAdvance({
+        claimedStartedAt,
         runId,
         stepIndex,
         stepCount: run.definitionSnapshot.steps.length,
@@ -387,10 +415,10 @@ export const executeFlowStep = async (
         broadcastUpdate,
         enqueueStep,
       });
-      return { status: "completed" };
     }
     case "create-document": {
-      await runCreateDocumentStep({
+      return await runCreateDocumentStep({
+        claimedStartedAt,
         stepDef,
         stepIndex,
         run,
@@ -401,7 +429,6 @@ export const executeFlowStep = async (
         broadcastUpdate,
         enqueueStep,
       });
-      return { status: "completed" };
     }
     default:
       return panic("unhandled flow step kind");
@@ -848,6 +875,7 @@ const settleReviewTask = async ({
 };
 
 type RunCreateDocumentArgs = {
+  claimedStartedAt: TimestampCasToken;
   stepDef: Extract<FlowStep, { kind: "create-document" }>;
   stepIndex: number;
   run: LoadedRun;
@@ -860,6 +888,7 @@ type RunCreateDocumentArgs = {
 };
 
 const runCreateDocumentStep = async ({
+  claimedStartedAt,
   stepDef,
   stepIndex,
   run,
@@ -869,7 +898,7 @@ const runCreateDocumentStep = async ({
   createEntity,
   broadcastUpdate,
   enqueueStep,
-}: RunCreateDocumentArgs): Promise<void> => {
+}: RunCreateDocumentArgs): Promise<FlowStepExecutionOutcome> => {
   const priorMarkdown = await scopedDb(
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
@@ -896,6 +925,7 @@ const runCreateDocumentStep = async ({
     result: Awaited<ReturnType<typeof completeStepInTransaction>> | undefined;
   } = { result: undefined };
   const completionArgs = {
+    claimedStartedAt,
     runId: run.id,
     stepIndex,
     stepCount: run.definitionSnapshot.steps.length,
@@ -907,6 +937,7 @@ const runCreateDocumentStep = async ({
     broadcastUpdate,
     enqueueStep,
   };
+  let admissionPaused = false;
   const created = await Result.tryPromise({
     try: async () =>
       await createEntity({
@@ -924,6 +955,18 @@ const runCreateDocumentStep = async ({
         fileName: `${stepDef.documentTitle}.docx`,
         mimeType: DOCX_MIME_TYPE,
         encryption: serverBuiltFileEncryption(),
+        beforeCreate: async (tx) => {
+          if (
+            !(await isFlowEffectAdmitted({
+              tx,
+              organizationId,
+              userId: actorUserId,
+            }))
+          ) {
+            admissionPaused = true;
+            tx.rollback();
+          }
+        },
         afterCreate: async (tx, document) => {
           // The entity creator holds the workspace cap lock before this run lock.
           // Keep the artifact and its owning step in the same commit: cancellation
@@ -932,7 +975,10 @@ const runCreateDocumentStep = async ({
             ...completionArgs,
             output: { kind: "create-document", entityId: document.entityId },
           });
-          if (completion.result === null) {
+          if (
+            completion.result === null ||
+            completion.result.status === "stale"
+          ) {
             tx.rollback();
           }
         },
@@ -940,11 +986,19 @@ const runCreateDocumentStep = async ({
     catch: (cause) => cause,
   });
   if (
-    completion.result === null &&
+    (admissionPaused ||
+      completion.result === null ||
+      completion.result?.status === "stale") &&
     created.isErr() &&
     created.error instanceof TransactionRollbackError
   ) {
-    return;
+    if (admissionPaused) {
+      return { status: "paused" };
+    }
+    if (completion.result?.status === "stale") {
+      return completion.result;
+    }
+    return { status: "completed" };
   }
   unwrapOrFlowStepError(
     Result.flatten(created),
@@ -954,11 +1008,13 @@ const runCreateDocumentStep = async ({
     panic("Created flow document without its owning step completion");
   }
   await publishCompletedStep(completionArgs, completion.result);
+  return { status: "completed" };
 };
 
 // ── Shared transition writers ───────────────────────────
 
 type CompleteStepArgs = {
+  claimedStartedAt: TimestampCasToken;
   runId: SafeId<"flowRun">;
   stepIndex: number;
   stepCount: number;
@@ -975,6 +1031,7 @@ type CompleteStepArgs = {
 const completeStepInTransaction = async (
   tx: Transaction,
   {
+    claimedStartedAt,
     runId,
     stepIndex,
     stepCount,
@@ -985,10 +1042,22 @@ const completeStepInTransaction = async (
     flowName,
   }: CompleteStepArgs,
 ) => {
+  await lockFeatureRecoveryAdmission({
+    tx,
+    organizationId,
+    featureId: "flows",
+  });
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
 
   const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+  if (
+    current?.run.currentStepIndex === stepIndex &&
+    current.step !== undefined &&
+    current.step.startedAtToken !== claimedStartedAt
+  ) {
+    return { status: "stale" } as const;
+  }
   if (
     current === undefined ||
     isTerminalFlowRunStatus(current.run.status) ||
@@ -1001,7 +1070,11 @@ const completeStepInTransaction = async (
     .update(flowRunSteps)
     .set({ status: "completed", output, finishedAt: now })
     .where(
-      and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
+      and(
+        eq(flowRunSteps.runId, runId),
+        eq(flowRunSteps.index, stepIndex),
+        timestampMatchesCasToken(flowRunSteps.startedAt, claimedStartedAt),
+      ),
     );
 
   if (advance.kind !== "finish") {
@@ -1009,7 +1082,11 @@ const completeStepInTransaction = async (
       .update(flowRuns)
       .set({ status: "running", currentStepIndex: advance.nextStepIndex })
       .where(eq(flowRuns.id, runId));
-    return { payload: await readRunProgress(tx, runId), pings: [] };
+    return {
+      status: "completed",
+      payload: await readRunProgress(tx, runId),
+      pings: [],
+    } as const;
   }
 
   await tx
@@ -1031,7 +1108,11 @@ const completeStepInTransaction = async (
     ],
     tx,
   );
-  return { payload: await readRunProgress(tx, runId), pings: runPings };
+  return {
+    status: "completed",
+    payload: await readRunProgress(tx, runId),
+    pings: runPings,
+  } as const;
 };
 
 const publishCompletedStep = async (
@@ -1047,7 +1128,7 @@ const publishCompletedStep = async (
 ): Promise<void> => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
 
-  if (completed === null) {
+  if (completed === null || completed.status === "stale") {
     return;
   }
   const { payload, pings } = completed;
@@ -1061,11 +1142,12 @@ const publishCompletedStep = async (
 
 const completeStepAndAdvance = async (
   args: CompleteStepArgs,
-): Promise<void> => {
+): Promise<FlowStepExecutionOutcome> => {
   const completed = await args.scopedDb(
     async (tx) => await completeStepInTransaction(tx, args),
   );
   await publishCompletedStep(args, completed);
+  return completed?.status === "stale" ? completed : { status: "completed" };
 };
 
 /**
@@ -1150,6 +1232,7 @@ const raiseReviewTask = async ({
  * and settling either side settles the other.
  */
 const pauseAtReviewGate = async ({
+  claimedStartedAt,
   run,
   stepIndex,
   stepDef,
@@ -1160,6 +1243,7 @@ const pauseAtReviewGate = async ({
   taskFeatures,
   flushSearchRepairs,
 }: {
+  claimedStartedAt: TimestampCasToken;
   run: LoadedRun;
   stepIndex: number;
   stepDef: Extract<FlowStep, { kind: "review-gate" }>;
@@ -1169,7 +1253,7 @@ const pauseAtReviewGate = async ({
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   taskFeatures: TaskDeploymentFeatures;
   flushSearchRepairs: typeof flushEntitySearchRepairs;
-}): Promise<void> => {
+}): Promise<FlowStepExecutionOutcome> => {
   const runId = run.id;
   const workspaceId = run.workspaceId;
   const flowName = run.definitionSnapshot.name;
@@ -1180,8 +1264,20 @@ const pauseAtReviewGate = async ({
   });
   const features = taskFeatures;
   const paused = await scopedDb(async (tx) => {
+    if (
+      !(await isFlowEffectAdmitted({ tx, organizationId, userId: actorUserId }))
+    ) {
+      return { status: "paused" } as const;
+    }
     await lockWorkspacesForEntityCap(tx, [workspaceId]);
     const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+    if (
+      current?.run.currentStepIndex === stepIndex &&
+      current.step !== undefined &&
+      current.step.startedAtToken !== claimedStartedAt
+    ) {
+      return { status: "stale" } as const;
+    }
     if (
       current === undefined ||
       isTerminalFlowRunStatus(current.run.status) ||
@@ -1213,7 +1309,11 @@ const pauseAtReviewGate = async ({
       .update(flowRunSteps)
       .set({ status: "awaiting_review", reviewTaskEntityId })
       .where(
-        and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
+        and(
+          eq(flowRunSteps.runId, runId),
+          eq(flowRunSteps.index, stepIndex),
+          timestampMatchesCasToken(flowRunSteps.startedAt, claimedStartedAt),
+        ),
       );
     await tx
       .update(flowRuns)
@@ -1235,18 +1335,23 @@ const pauseAtReviewGate = async ({
       tx,
     );
     return {
+      status: "completed",
       payload: await readRunProgress(tx, runId),
       pings: gatePings,
       taskEntityId: reviewTaskEntityId,
-    };
+    } as const;
   });
   if (paused === null) {
-    return;
+    return { status: "completed" };
+  }
+  if (paused.status !== "completed") {
+    return paused;
   }
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
   flushSearchRepairs([taskEntityId]).catch(captureError);
+  return { status: "completed" };
 };
 
 const readRunProgress = async (
@@ -1294,30 +1399,32 @@ export const failFlowRunFromWorker = async (
   error: unknown,
   {
     database,
+    claimedStartedAt,
     makeScopedDb = createRootScopedDb,
     broadcastUpdate = broadcastFlowRunUpdate,
   }: {
     /** The worker's connection: the run and scope reads, and the write when the run has no actor left. */
     database: Pick<typeof rootDb, "query" | "transaction">;
+    claimedStartedAt?: TimestampCasToken | undefined;
     makeScopedDb?: typeof createRootScopedDb | undefined;
     broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
   },
-): Promise<void> => {
+): Promise<FlowStepExecutionOutcome> => {
   const runId = brandPersistedFlowRunId(rawRunId);
   const run = await loadRun(runId, database);
   if (!run || isTerminalFlowRunStatus(run.status)) {
-    return;
+    return { status: "completed" };
   }
   const scope = await resolveRunScope(run, database);
   const message = applicationErrorMessage(error, FLOW_STEP_FAILED_MESSAGE);
   const now = new Date();
 
-  const writeFailure = async (
-    tx: Transaction,
-  ): Promise<{
-    payload: FlowRunUpdatePayload;
-    pings: NotificationPing[];
-  } | null> => {
+  const writeFailure = async (tx: Transaction) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: scope.organizationId,
+      featureId: "flows",
+    });
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
       runId,
@@ -1331,11 +1438,27 @@ export const failFlowRunFromWorker = async (
     ) {
       return null;
     }
+    if (
+      claimedStartedAt === undefined
+        ? current.step?.status !== "pending"
+        : current.step?.startedAtToken !== claimedStartedAt
+    ) {
+      return { status: "stale" } as const;
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "failed", error: message, finishedAt: now })
       .where(
-        and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
+        and(
+          eq(flowRunSteps.runId, runId),
+          eq(flowRunSteps.index, stepIndex),
+          claimedStartedAt === undefined
+            ? eq(flowRunSteps.status, "pending")
+            : timestampMatchesCasToken(
+                flowRunSteps.startedAt,
+                claimedStartedAt,
+              ),
+        ),
       );
     await tx
       .update(flowRuns)
@@ -1360,7 +1483,11 @@ export const failFlowRunFromWorker = async (
             ],
             tx,
           );
-    return { payload: await readRunProgress(tx, runId), pings };
+    return {
+      status: "completed",
+      payload: await readRunProgress(tx, runId),
+      pings,
+    } as const;
   };
 
   // A null actor (automated run whose author was deleted) has no RLS-scoped
@@ -1375,11 +1502,15 @@ export const failFlowRunFromWorker = async (
           workspaceIds: [run.workspaceId],
         })(writeFailure);
   if (failed === null) {
-    return;
+    return { status: "completed" };
+  }
+  if (failed.status === "stale") {
+    return failed;
   }
   const { payload, pings } = failed;
   broadcastUpdate(run.workspaceId, payload);
   pingNotificationRecipients(pings);
+  return { status: "completed" };
 };
 
 // ── Request-time services (handler side) ────────────────
@@ -1448,7 +1579,10 @@ const lockRunAndCurrentStep = async (
     return undefined;
   }
   const steps = await tx
-    .select()
+    .select({
+      ...getTableColumns(flowRunSteps),
+      startedAtToken: timestampCasToken(flowRunSteps.startedAt),
+    })
     .from(flowRunSteps)
     .where(
       and(
@@ -1499,6 +1633,7 @@ export const resolveFlowReviewGate = async (
   await Result.gen(async function* () {
     const result = yield* Result.await(
       resultTx(safeDb, async (tx) => {
+        await requireFlowEffectAdmission({ tx, organizationId, userId });
         const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
         if (current === undefined) {
           return Result.err(
@@ -1724,6 +1859,20 @@ export const cancelFlowRun = async ({
     const now = new Date();
     const payload = yield* Result.await(
       resultTx(safeDb, async (tx) => {
+        const workspace = await tx.query.workspaces.findFirst({
+          where: { id: { eq: workspaceId } },
+          columns: { organizationId: true },
+        });
+        if (workspace === undefined) {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Flow run not found" }),
+          );
+        }
+        await requireFlowEffectAdmission({
+          tx,
+          organizationId: workspace.organizationId,
+          userId,
+        });
         const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
         if (current === undefined) {
           return Result.err(

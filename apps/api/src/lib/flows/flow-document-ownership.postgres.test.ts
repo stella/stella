@@ -1,8 +1,13 @@
 import { type InferOk, panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { entities, flowRuns, flowRunSteps } from "@/api/db/schema";
+import {
+  entities,
+  featureEnrolments,
+  flowRuns,
+  flowRunSteps,
+} from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -11,6 +16,7 @@ import type {
 } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { executeFlowStep, FlowStepError } from "@/api/lib/flows/flow-executor";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
@@ -30,6 +36,7 @@ if (!databaseUrl || !enabled) {
       "document",
       "duplicate",
       "cleanup-failure",
+      "revoke",
     ] as const) {
       test(`${winner} wins: artifacts and persisted outputs converge atomically`, async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
@@ -101,6 +108,7 @@ if (!databaseUrl || !enabled) {
             const createEntity: typeof createEntityFromBuffer = async ({
               scopedDb,
               workspaceId,
+              beforeCreate,
               afterCreate,
               fileName,
             }) => {
@@ -122,6 +130,7 @@ if (!databaseUrl || !enabled) {
               const written = await Result.tryPromise({
                 try: async () =>
                   await scopedDb(async (tx) => {
+                    await beforeCreate?.(tx);
                     await lockWorkspacesForEntityCap(tx, [workspaceId]);
                     await tx.insert(entities).values({
                       id: result.entityId,
@@ -179,6 +188,24 @@ if (!databaseUrl || !enabled) {
               );
               expect(cancelled.isOk()).toBe(true);
             }
+            if (winner === "revoke") {
+              await cancellation.db.transaction(async (tx) => {
+                await lockFeatureRecoveryAdmission({
+                  tx,
+                  organizationId: f.organizationId,
+                  featureId: "flows",
+                });
+                await tx
+                  .delete(featureEnrolments)
+                  .where(
+                    and(
+                      eq(featureEnrolments.organizationId, f.organizationId),
+                      eq(featureEnrolments.userId, f.userId),
+                      eq(featureEnrolments.featureId, "flows"),
+                    ),
+                  );
+              });
+            }
             release.resolve(undefined);
             if (winner === "cleanup-failure") {
               const failure = await running.then(
@@ -189,6 +216,8 @@ if (!databaseUrl || !enabled) {
               expect(failure).toMatchObject({
                 cause: cleanupFailure,
               });
+            } else if (winner === "revoke") {
+              expect(await running).toEqual({ status: "paused" });
             } else {
               await Promise.all(launched);
             }
@@ -214,7 +243,12 @@ if (!databaseUrl || !enabled) {
               where: { id: { in: attemptedIds } },
               limit: 2,
             });
-            if (winner === "cancel" || winner === "cleanup-failure") {
+            if (winner === "revoke") {
+              expect(state.run?.status).toBe("running");
+              expect(state.steps.at(1)?.status).toBe("running");
+              expect(output).toBeNull();
+              expect(saved).toHaveLength(0);
+            } else if (winner === "cancel" || winner === "cleanup-failure") {
               expect(state.run?.status).toBe("cancelled");
               expect(state.steps.at(1)?.status).toBe("skipped");
               expect(output).toBeNull();
@@ -232,8 +266,20 @@ if (!databaseUrl || !enabled) {
                 entityId: document.id,
               });
             }
-            await start(worker);
-            expect(creations).toBe(winner === "duplicate" ? 2 : 1);
+            if (winner === "revoke") {
+              await db.insert(featureEnrolments).values({
+                organizationId: f.organizationId,
+                userId: f.userId,
+                featureId: "flows",
+              });
+              expect(await start(worker)).toEqual({ status: "completed" });
+              expect((await f.read()).run?.status).toBe("completed");
+            } else {
+              await start(worker);
+            }
+            expect(creations).toBe(
+              winner === "duplicate" || winner === "revoke" ? 2 : 1,
+            );
           } finally {
             release.resolve(undefined);
             await Promise.allSettled(launched);

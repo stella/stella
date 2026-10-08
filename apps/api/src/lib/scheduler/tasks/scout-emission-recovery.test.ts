@@ -183,7 +183,10 @@ const seedReview = async () => {
         definitionId: null,
         versionId: null,
         provenance: "ephemeral",
-        definitionSnapshot: { name: "Recovery playbook", positions: {} },
+        definitionSnapshot: {
+          name: "Recovery playbook",
+          positions: { version: 3, items: [] },
+        },
       },
       references: [],
       perspective: { type: "neutral" },

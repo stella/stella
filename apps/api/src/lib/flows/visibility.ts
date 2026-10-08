@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, notInArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import {
   NOTIFICATION_ENTITY_TYPE,
@@ -15,6 +16,36 @@ import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context
 import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
+
+type FlowOwnedEntityVisibilitySqlOptions = {
+  organizationId: SafeId<"organization">;
+  userId: string;
+  entityId: SQL;
+  workspaceId: SQL;
+};
+
+/** Correlated live admission keeps hidden review tasks out of reads and facets. */
+export const flowOwnedEntityVisibilitySql = ({
+  organizationId,
+  userId,
+  entityId,
+  workspaceId,
+}: FlowOwnedEntityVisibilitySqlOptions) => sql`NOT EXISTS (
+  SELECT 1 FROM ${flowRunSteps}
+  WHERE ${flowRunSteps.workspaceId} = ${workspaceId}
+    AND ${flowRunSteps.reviewTaskEntityId} = ${entityId}
+    AND NOT (${
+      isDeploymentFeatureEnabled("FEATURE_FLOWS")
+        ? backgroundFeatureActorExists({
+            organizationId,
+            workspaceId,
+            featureId: "flows",
+            userId,
+          })
+        : sql`false`
+    })
+)`;
 
 type FlowReviewTaskVisibilityOptions = {
   safeDb: SafeDb;
