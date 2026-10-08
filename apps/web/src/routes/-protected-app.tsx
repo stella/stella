@@ -40,9 +40,10 @@ import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-re
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
+import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
+import { AppSidebar } from "@/components/app-sidebar";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { AppSidebar } from "@/components/app-sidebar";
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
@@ -72,6 +73,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -305,6 +307,7 @@ export const ProtectedAppFrame = ({
             <AIAvailabilityProvider>
               <ChatEditorProvider>
                 <GlobalChatMentionRegistration />
+                <PlaybookPaneLeaveConfirmation />
                 <DragAndDropLiveRegion />
                 <WorkspaceFrame
                   composition="host-responsive"
