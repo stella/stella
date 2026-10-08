@@ -1392,6 +1392,7 @@ const reviewEnvelopeCode = (body: unknown): string => {
       "invalid_scope",
       "invalid_grant",
       "access_denied",
+      "account_access_unavailable",
       "INVALID_EMAIL_OR_PASSWORD",
       "TOO_MANY_REQUESTS",
     ].includes(code)
