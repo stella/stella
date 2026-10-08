@@ -86,6 +86,7 @@ import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -275,7 +276,15 @@ export const ChatThreadMessages = ({
       key={message.id}
       data-chat-message-id={message.id}
     >
-      <MessageContent>
+      <MessageContent
+        className={cn(
+          message.parts.some(
+            (part) =>
+              part.type === "ui-resource" &&
+              uiResourceRenderer(part.resource.mimeType) === "generated-visual",
+          ) && "w-full",
+        )}
+      >
         {message.role === "assistant" ? (
           <>
             <AssistantMessageParts

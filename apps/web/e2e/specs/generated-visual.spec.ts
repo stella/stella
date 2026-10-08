@@ -116,6 +116,25 @@ test("generated view is live inline, reloads, and acts only on user gestures", a
   const guest = page
     .frameLocator(`iframe[title="${title}"]`)
     .frameLocator("iframe");
+  await expect
+    .poll(
+      () =>
+        outer.evaluate((element) => {
+          const section = element.closest("section");
+          const message = element.closest("[data-chat-message-id]");
+          if (section === null || message === null) {
+            return false;
+          }
+          return (
+            Math.abs(
+              section.getBoundingClientRect().width -
+                message.getBoundingClientRect().width,
+            ) <= 1
+          );
+        }),
+      { message: "generated view fills the chat content column" },
+    )
+    .toBe(true);
   // Text in the view can be selected without activating anything.
   await guest.locator("#note").click({ clickCount: 3 });
   expect(

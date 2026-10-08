@@ -124,6 +124,25 @@ const captureVisualDesign = async ({
     expect(positioned, "generated view has a host scroll viewport").toBe(true);
   };
   const prepareCapture = async () => {
+    await expect
+      .poll(
+        () =>
+          outer.evaluate((element) => {
+            const section = element.closest("section");
+            const message = element.closest("[data-chat-message-id]");
+            if (section === null || message === null) {
+              return false;
+            }
+            return (
+              Math.abs(
+                section.getBoundingClientRect().width -
+                  message.getBoundingClientRect().width,
+              ) <= 1
+            );
+          }),
+        { message: "generated view fills the chat content column" },
+      )
+      .toBe(true);
     await guest.locator("html").evaluate(async () => {
       await document.fonts.ready;
     });
