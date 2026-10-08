@@ -97,6 +97,9 @@ describe("aggregate lock confinement", () => {
       'sql.raw("FOR NO KEY UPDATE")',
       'tx.execute("SELECT id FROM items FOR SHARE")',
       'const clause = lock ? " FOR UPDATE" : ""',
+      'const tail = "WHERE id = $1 FOR UPDATE"',
+      'const tail = "where id = $1 for update"',
+      'const tail = "ORDER BY id FOR NO KEY UPDATE"',
     ]) {
       expect(aggregateLockSites(file, source)).toHaveLength(1);
     }

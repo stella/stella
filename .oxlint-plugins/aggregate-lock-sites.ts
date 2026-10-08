@@ -52,16 +52,18 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
         /^\s+\S/u.test(text.slice(match.index + match[0].length))
       );
     }
-    // Outside a known SQL context, a row-lock clause counts when it opens the
-    // literal (a clause fragment such as " FOR UPDATE") or follows a
-    // SELECT ... FROM in the same statement; prose such as "metadata for
-    // update notifications" is not a lock.
+    // Outside a known SQL context, lower-case row-lock wording with no SQL
+    // before it is prose ("metadata for update notifications"). Upper-case
+    // clauses, and clauses after any SQL keyword or token (WHERE id = $1 FOR
+    // UPDATE, a leading " FOR UPDATE" fragment), still count.
     const before = masked.slice(start, match.index);
     if (
       /^FOR\s/iu.test(match[0]) &&
       context === "unknown" &&
-      before.trim().length > 0 &&
-      !/\bSELECT\b[\s\S]*\bFROM\b/iu.test(before)
+      match[0] !== match[0].toUpperCase() &&
+      !/\b(?:SELECT|FROM|WHERE|JOIN|ORDER\s+BY|GROUP\s+BY|LIMIT|OFFSET|RETURNING|AND|OR)\b|[=()$]|::/u.test(
+        before,
+      )
     ) {
       return false;
     }
