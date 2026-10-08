@@ -1578,6 +1578,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
+    "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -4942,6 +4943,12 @@ const config = defineConfig({
       ],
       rules: {
         "no-vacuous-throw-assertion/no-vacuous-throw-assertion": "error",
+      },
+    },
+    {
+      files: ["**/*.test.{ts,tsx,js,jsx,mjs,cjs,mts,cts}", "**/*.spec.{ts,tsx,js,jsx,mjs,cjs,mts,cts}"],
+      rules: {
+        "no-direct-test-state/no-direct-test-state": "error",
       },
     },
     {

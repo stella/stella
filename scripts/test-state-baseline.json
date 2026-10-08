@@ -1,0 +1,757 @@
+{
+  "apps/api/scripts/record-provider-cassettes.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/agent-auth/metadata.test.ts": {
+    "count": 3,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/db/feature-enrolments.postgres.test.ts": {
+    "count": 3,
+    "owner": "database",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/db/list-verification-rls.db.test.ts": {
+    "count": 2,
+    "owner": "database",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/agent-auth/id-jag.test.ts": {
+    "count": 6,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/agent-auth/identity.test.ts": {
+    "count": 3,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/agent-auth/routes.test.ts": {
+    "count": 3,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/case-law/ingestion/background-replay.postgres.test.ts": {
+    "count": 9,
+    "owner": "case-law",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/chat-sandbox-plan.test.ts": {
+    "count": 2,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/fork/create.integration.test.ts": {
+    "count": 6,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/provider-request-cache.integration.test.ts": {
+    "count": 5,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/provider-request-roles.integration.test.ts": {
+    "count": 5,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/provider-request-schemas.integration.test.ts": {
+    "count": 5,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/provider-wire-replay.integration.test.ts": {
+    "count": 5,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/stored-parts-send-mode.integration.test.ts": {
+    "count": 5,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/tools/chat-account-access.test.ts": {
+    "count": 2,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/tools/registry-adapter/registry-projection-contract.test.ts": {
+    "count": 4,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/tools/spawn-subagents-tool.test.ts": {
+    "count": 54,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/turn-outcome.integration.test.ts": {
+    "count": 5,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/chat/upload-files.test.ts": {
+    "count": 2,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/entities/checkpoint-folio-collab-room.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/entities/create-from-buffer.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/entities/upload-cleanup.test.ts": {
+    "count": 2,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/flows/runs/start.admission.test.ts": {
+    "count": 8,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/hosted-usage-webhook/configured-access.postgres.test.ts": {
+    "count": 28,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/hosted-usage-webhook/contract.postgres.test.ts": {
+    "count": 10,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/hosted-usage-webhook/receive.test.ts": {
+    "count": 6,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/legislation/public-routes.test.ts": {
+    "count": 2,
+    "owner": "case-law",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/legislation/search-index.db.test.ts": {
+    "count": 4,
+    "owner": "case-law",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/lists/verification-routes.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/lists/verifications/create.db.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/lists/verifications/get.db.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/organization-settings/ai-availability/get.test.ts": {
+    "count": 6,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/organization-settings/read.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/public-knowledge/routes.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/sanctions/public-routes.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/search/ai.test.ts": {
+    "count": 11,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/template-packs/routes.test.ts": {
+    "count": 2,
+    "owner": "workflow",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/tenant-cache-control.test.ts": {
+    "count": 6,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/time-billing-feature-access.test.ts": {
+    "count": 4,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/usage/create-hosted-setup.postgres.test.ts": {
+    "count": 8,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/usage/routes.test.ts": {
+    "count": 2,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/views/access.db.test.ts": {
+    "count": 5,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/handlers/workspaces/duplicate.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/agent-client-credential-storage.postgres.test.ts": {
+    "count": 3,
+    "owner": "database",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/agent-client-credential-storage.test.ts": {
+    "count": 3,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/agent-client-credentials.postgres.test.ts": {
+    "count": 2,
+    "owner": "database",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/agent-client-credentials.test.ts": {
+    "count": 3,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/ai-config-crypto.test.ts": {
+    "count": 7,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/ai-provider-probe.test.ts": {
+    "count": 8,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/analytics/tanstack-ai.test.ts": {
+    "count": 9,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/api-handlers-admission.test.ts": {
+    "count": 8,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/api-handlers-list-verification.test.ts": {
+    "count": 24,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/api-handlers.test.ts": {
+    "count": 24,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/audit-log-details.test.ts": {
+    "count": 5,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/auth/demo-account-catalog-policy.test.ts": {
+    "count": 2,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/auth/review-account-inert.test.ts": {
+    "count": 6,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/auth/review-account-policy.test.ts": {
+    "count": 6,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/business-registries/dispatch.test.ts": {
+    "count": 18,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/chat-model-selection.test.ts": {
+    "count": 13,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/chat/managed-provider-checks.test.ts": {
+    "count": 13,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/chat/openrouter-credential-inference.test.ts": {
+    "count": 14,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/chat/openrouter-credential.test.ts": {
+    "count": 12,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/chat/provider-data-policy.test.ts": {
+    "count": 31,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/dates.test.ts": {
+    "count": 3,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/demo-account-handlers.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/document-processing-readiness.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/docx/ai-field-generator.test.ts": {
+    "count": 10,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/email/correspondence/create.integration.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/email/inbound/message.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/files/organization-file-usage-reconcile.db.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/files/organization-file-usage.db.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/flows/flow-run-worker.integration.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/flows/review-gate-task-state.postgres.test.ts": {
+    "count": 4,
+    "owner": "database",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/flows/start-flow-run.admission.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/folio-collab-rooms.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/health/readiness.test.ts": {
+    "count": 1,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/hosted-usage-provider/client.test.ts": {
+    "count": 2,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/hosted-usage-provider/replay.postgres.test.ts": {
+    "count": 12,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/lists/verification/engine.test.ts": {
+    "count": 3,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/lists/verification/run-queue.db.test.ts": {
+    "count": 15,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/lists/verification/run-worker-inputs.integration.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/oauth-cli-client-document.db.test.ts": {
+    "count": 1,
+    "owner": "security",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/rate-limit/action-background-admission.test.ts": {
+    "count": 2,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/rate-limit/execution-admission.test.ts": {
+    "count": 2,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/rate-limit/mcp-read-fence.test.ts": {
+    "count": 2,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/rate-limit/public-corpus-concurrency.test.ts": {
+    "count": 4,
+    "owner": "case-law",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/rate-limit/public-corpus-rate-limits.test.ts": {
+    "count": 18,
+    "owner": "case-law",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/rate-limit/public-corpus-search-budget.test.ts": {
+    "count": 2,
+    "owner": "case-law",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/rate-limit/queued-action-admission.test.ts": {
+    "count": 4,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/redis-outage.test.ts": {
+    "count": 1,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/runtime-worker-path.test.ts": {
+    "count": 8,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/scheduler/tasks/memory-extractor.integration.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/search/index-entity.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/search/index-global.test.ts": {
+    "count": 3,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/stella-openrouter-text-adapter.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/tanstack-ai-provider-wire.test.ts": {
+    "count": 5,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/templates/create-template.test.ts": {
+    "count": 2,
+    "owner": "workflow",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/uploads/entity-create.test.ts": {
+    "count": 2,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/usage/member-capacity.db.test.ts": {
+    "count": 5,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/usage/organization-access-state.db.test.ts": {
+    "count": 6,
+    "owner": "pricing",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/version.test.ts": {
+    "count": 7,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/workflow-start-claim.test.ts": {
+    "count": 2,
+    "owner": "workflow",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/lib/workflow/decisions/decision-model.test.ts": {
+    "count": 9,
+    "owner": "ai",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/capability-tools.test.ts": {
+    "count": 6,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/compat-corpus.test.ts": {
+    "count": 2,
+    "owner": "case-law",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/context-account-policy.test.ts": {
+    "count": 12,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/instructions.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/read-fence.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/research-admin-tools.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/resources.test.ts": {
+    "count": 5,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/review-account-exposure.test.ts": {
+    "count": 6,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/search-index-unavailable.test.ts": {
+    "count": 2,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/server.test.ts": {
+    "count": 6,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/surface-tool-mentions.test.ts": {
+    "count": 3,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/tool-utils.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/tools.test.ts": {
+    "count": 6,
+    "owner": "guards",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/mcp/write-tool-authority.test.ts": {
+    "count": 2,
+    "owner": "security",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/scripts/decision-analysis.ast.test.ts": {
+    "count": 3,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/scripts/eu-completion-tick.postgres.test.ts": {
+    "count": 18,
+    "owner": "database",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/scripts/eu-completion-tick.test.ts": {
+    "count": 15,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/scripts/replay-tick.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/tests/security/case-law-public-route-invariants.test.ts": {
+    "count": 2,
+    "owner": "case-law",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/api/src/tests/security/case-law-research-permissions.test.ts": {
+    "count": 6,
+    "owner": "case-law",
+    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/ask-user-card.test.tsx": {
+    "count": 3,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/chat-answer-footer.dom.test.tsx": {
+    "count": 3,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/chat-encrypted-refusal.dom.test.tsx": {
+    "count": 3,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/chat-mock-model-badge.test.tsx": {
+    "count": 1,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/chat-query-state.test.tsx": {
+    "count": 1,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/chat-rich-message-part.test.ts": {
+    "count": 1,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/chat-thread-messages.test.tsx": {
+    "count": 3,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/composer-query-consumption.dom.test.tsx": {
+    "count": 3,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/legal-citation-link.dom.test.tsx": {
+    "count": 3,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/chat/tool-approval-card.test.ts": {
+    "count": 1,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/components/references/reference-chip.test.tsx": {
+    "count": 3,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/lib/deterministic-date.test.ts": {
+    "count": 3,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/lib/files/document-reference-queries.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/lib/organization/ai-config-queries.test.ts": {
+    "count": 1,
+    "owner": "ai",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/lib/search.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/lib/workspaces/mutations.test.ts": {
+    "count": 3,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/lib/workspaces/mutations/views.logic.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-document-loader.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "apps/web/vite.config.test.ts": {
+    "count": 5,
+    "owner": "web",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "packages/property-testing/src/assert-property.test.ts": {
+    "count": 21,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "packages/property-testing/src/index.test.ts": {
+    "count": 6,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "packages/scripts/src/prepared-generated-sources.test.ts": {
+    "count": 10,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "packages/time/src/dates.property.test.ts": {
+    "count": 4,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  },
+  "packages/time/src/dates.test.ts": {
+    "count": 8,
+    "owner": "guards",
+    "reason": "Existing environment setup and restoration; migrate through createTestState."
+  }
+}
