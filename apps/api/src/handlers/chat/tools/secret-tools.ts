@@ -22,6 +22,7 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import type { SafeId } from "@/api/lib/branded-types";
 import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { callWithChatSecret } from "@/api/lib/mcp-upstream/chat-secret";
+import type { ChatSecretOutboundFetch } from "@/api/lib/mcp-upstream/chat-secret";
 
 const useSecretInputSchema = v.strictObject({
   secretRef: v.pipe(v.string(), v.uuid()),
@@ -48,6 +49,7 @@ type SecretToolsContext = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   threadId: SafeId<"chatThread">;
+  outboundFetch?: ChatSecretOutboundFetch | undefined;
 };
 
 export const createSecretTools = ({
@@ -55,6 +57,7 @@ export const createSecretTools = ({
   organizationId,
   userId,
   threadId,
+  outboundFetch,
 }: SecretToolsContext) => ({
   [REQUEST_SECRET_TOOL_NAME]: toolDefinition({
     name: REQUEST_SECRET_TOOL_NAME,
@@ -149,6 +152,7 @@ export const createSecretTools = ({
       allowedTools: connector.allowedTools,
       permit: grantThirdPartyOutboundPermit(),
       operation: { toolName, arguments: args },
+      outboundFetch,
     });
     if (called.isErr()) {
       return {

@@ -6,7 +6,21 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createBearerMcpClient } from "@/api/lib/mcp-upstream/connections";
 import { decryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import type { EncryptedSecret } from "@/api/lib/mcp-upstream/crypto";
-import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
+import {
+  safeOutboundFetchStream,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
+
+/** The outbound request owner; tests substitute an in-process upstream. */
+export type ChatSecretOutboundFetch = {
+  safeOutboundFetchStream: typeof safeOutboundFetchStream;
+  validateOutboundFetchTarget: typeof validateOutboundFetchTarget;
+};
+
+const DEFAULT_OUTBOUND_FETCH: ChatSecretOutboundFetch = {
+  safeOutboundFetchStream,
+  validateOutboundFetchTarget,
+};
 
 type CallWithChatSecretOptions = {
   encrypted: EncryptedSecret;
@@ -17,6 +31,7 @@ type CallWithChatSecretOptions = {
   allowedTools: string[] | null;
   permit: ThirdPartyOutboundPermit;
   operation: { toolName: string; arguments: Record<string, unknown> };
+  outboundFetch?: ChatSecretOutboundFetch | undefined;
 };
 
 export const callWithChatSecret = async ({
@@ -28,8 +43,9 @@ export const callWithChatSecret = async ({
   allowedTools,
   permit,
   operation,
+  outboundFetch = DEFAULT_OUTBOUND_FETCH,
 }: CallWithChatSecretOptions): Promise<Result<void, HandlerError>> => {
-  const target = await validateOutboundFetchTarget(url);
+  const target = await outboundFetch.validateOutboundFetchTarget(url);
   if (target.isErr()) {
     return Result.err(
       new HandlerError({
@@ -46,7 +62,12 @@ export const callWithChatSecret = async ({
       userId,
       purpose: "mcp_static_token",
     });
-    const client = await createBearerMcpClient({ url, credential, permit });
+    const client = await createBearerMcpClient({
+      url,
+      credential,
+      permit,
+      safeFetch: outboundFetch.safeOutboundFetchStream,
+    });
     try {
       const tools = await client.tools({
         callToolTimeoutMs: 30_000,

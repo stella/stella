@@ -9206,5 +9206,9 @@
   "src/handlers/chat/chat-secret-retry.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/handlers/chat/secret-permissions.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
