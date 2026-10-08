@@ -58,3 +58,24 @@ REVOKE ALL PRIVILEGES ON TABLE "case_law_source_arrivals" FROM stella;--> statem
 GRANT SELECT ("source_id", "added_last_week", "counted_at")
   ON TABLE "case_law_source_arrivals"
   TO "stella_public_law_reader";
+--> statement-breakpoint
+
+CREATE TABLE "legislation_facet_refreshes" (
+  "singleton" boolean PRIMARY KEY DEFAULT true NOT NULL,
+  "refreshed_at" timestamp with time zone NOT NULL,
+  CONSTRAINT "legislation_facet_refreshes_singleton" CHECK ("singleton")
+);--> statement-breakpoint
+
+ALTER TABLE "legislation_facet_refreshes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "legislation_facet_refreshes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "legislation_facet_refresh_owner_access" ON "legislation_facet_refreshes"
+  AS PERMISSIVE FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass));--> statement-breakpoint
+-- The marker holds a timestamp and nothing about any source.
+CREATE POLICY "public_law_reader_access" ON "legislation_facet_refreshes"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (true);--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "legislation_facet_refreshes" FROM stella;--> statement-breakpoint
+GRANT SELECT ("singleton", "refreshed_at")
+  ON TABLE "legislation_facet_refreshes"
+  TO "stella_public_law_reader";

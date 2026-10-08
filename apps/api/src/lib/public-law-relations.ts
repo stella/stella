@@ -36,6 +36,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
   legislationFacetCounts: "legislation_facet_counts",
+  legislationFacetRefreshes: "legislation_facet_refreshes",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
@@ -290,6 +291,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     source_id: "required",
     added_last_week: "required",
     counted_at: "required",
+  },
+  legislation_facet_refreshes: {
+    singleton: "required",
+    refreshed_at: "required",
   },
   legislation_facet_counts: {
     country: "required",

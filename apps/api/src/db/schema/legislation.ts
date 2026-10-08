@@ -621,6 +621,30 @@ export const legislationFacetCounts = p.pgTable(
 );
 
 /**
+ * When the statute facet snapshot last completed: one row, no source data.
+ * Its presence, not the visibility of any bucket, is what tells a reader the
+ * snapshot exists, so a source the reader may not see never sends it back to
+ * the live aggregation.
+ */
+export const legislationFacetRefreshes = p.pgTable(
+  "legislation_facet_refreshes",
+  {
+    singleton: p.boolean().primaryKey().default(true),
+    refreshedAt: timestamptz("refreshed_at").notNull(),
+  },
+  (t) => [
+    p.check("legislation_facet_refreshes_singleton", sql`${t.singleton}`),
+    p.pgPolicy("legislation_facet_refresh_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass)`,
+    }),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
  * Works whose versions changed, one row per affected `(country, eli)`. Filled
  * only by triggers on `legislation_documents`: every insert and delete, and
  * every update that advances `payload_revision`. A queue, not a watermark;

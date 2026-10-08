@@ -8,6 +8,7 @@ import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-pub
 import {
   legislationDocuments,
   legislationFacetCounts,
+  legislationFacetRefreshes,
   legislationSources,
 } from "@/api/db/schema";
 import {
@@ -103,9 +104,11 @@ export const readLegislationFacets = async (
   country: string,
 ): Promise<LegislationFacets> =>
   await legislationDb(async (tx) => {
+    // The refresh marker, not the buckets: a reader that can see no bucket
+    // (every source withheld) still has a snapshot, and its answer is empty.
     const refreshed = await tx
-      .select({ country: legislationFacetCounts.country })
-      .from(legislationFacetCounts)
+      .select({ refreshedAt: legislationFacetRefreshes.refreshedAt })
+      .from(legislationFacetRefreshes)
       .limit(1);
     const documentType =
       refreshed.length === 0

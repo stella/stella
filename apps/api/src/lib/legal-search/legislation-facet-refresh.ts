@@ -2,7 +2,11 @@ import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
-import { legislationDocuments, legislationFacetCounts } from "@/api/db/schema";
+import {
+  legislationDocuments,
+  legislationFacetCounts,
+  legislationFacetRefreshes,
+} from "@/api/db/schema";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/handlers/legislation/list";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { publishedLegislationCountryFor } from "@/api/lib/legal-search/legislation-redistribution";
@@ -52,6 +56,16 @@ export const refreshLegislationFacetCounts = async (
       SELECT country, source_id, document_type, works
       FROM (${legislationFacetRefreshQuery(tx)}) AS counted
     `);
+
+    // Committed with the buckets: from here on the snapshot is the answer,
+    // even when a reader can see none of its rows.
+    await tx
+      .insert(legislationFacetRefreshes)
+      .values({ singleton: true, refreshedAt: sql`now()` })
+      .onConflictDoUpdate({
+        target: legislationFacetRefreshes.singleton,
+        set: { refreshedAt: sql`now()` },
+      });
 
     const [summary] = await tx
       .select({ buckets: sql<number>`count(*)::int` })

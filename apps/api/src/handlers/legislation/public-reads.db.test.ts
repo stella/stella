@@ -16,6 +16,7 @@ import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
   legislationDocuments,
   legislationFacetCounts,
+  legislationFacetRefreshes,
   legislationSources,
 } from "@/api/db/schema";
 import {
@@ -23,6 +24,7 @@ import {
   resolveStatuteWorkVersion,
 } from "@/api/handlers/legislation/by-eli";
 import {
+  buildLegislationFacetsQuery,
   readLegislationFacets,
   readLegislationFacetsHandler,
 } from "@/api/handlers/legislation/facets";
@@ -76,6 +78,8 @@ const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
 
 const openSourceId = createSafeId<"legislationSource">();
 const closedSourceId = createSafeId<"legislationSource">();
+const lateSourceId = createSafeId<"legislationSource">();
+const lateAct = createSafeId<"legislationDocument">();
 
 const civilCodeSuperseded = createSafeId<"legislationDocument">();
 const civilCodeOpenOlder = createSafeId<"legislationDocument">();
@@ -1245,13 +1249,53 @@ describe("statute facets", () => {
       expect(await readLegislationFacets(legislationDb, "CZE")).toEqual({
         documentType: [],
       });
+
+      // Every stored bucket is now invisible to the reader, and that is still
+      // a refreshed snapshot, not a fresh install: the live aggregation must
+      // not run. A publishable act added after the refresh is what the live
+      // count would report and the snapshot cannot, so its absence proves it.
+      await owner.insert(legislationSources).values({
+        id: lateSourceId,
+        adapterKey: "statutes-late",
+        name: "Source added after the refresh",
+      });
+      await owner.insert(legislationDocuments).values(
+        seedDocument({
+          id: lateAct,
+          documentType: "decree",
+          sourceId: lateSourceId,
+          eli: "CZ/2026/901",
+          title: "Act Added After The Refresh",
+          versionValidFrom: "2001-01-01",
+          versionValidTo: null,
+        }),
+      );
+      expect(
+        (
+          await ownerDb(
+            async (tx) => await buildLegislationFacetsQuery(tx, "CZE"),
+          )
+        ).map(({ value }) => value),
+      ).toContain("decree");
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual({
+        documentType: [],
+      });
     } finally {
+      await owner
+        .delete(legislationDocuments)
+        .where(eq(legislationDocuments.id, lateAct));
+      await owner
+        .delete(legislationSources)
+        .where(eq(legislationSources.id, lateSourceId));
       await owner
         .update(legislationSources)
         .set({ descriptor: null })
         .where(eq(legislationSources.id, openSourceId));
       await owner.delete(legislationFacetCounts).where(sql`true`);
+      await owner.delete(legislationFacetRefreshes).where(sql`true`);
     }
+    // With no refresh on record the live aggregation answers again.
+    expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
   });
 
   test("each kind of act offered lists exactly as many works as it counts", async () => {

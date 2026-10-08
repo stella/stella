@@ -15,9 +15,8 @@ import {
  *
  * The request never counts a week of arrivals itself: the window is a heap
  * walk of every decision a source received in it, which during a bulk ingest
- * is far more than a public read on a two-connection pool may hold a
- * connection for. It reads one stored integer per source instead, a primary
- * key lookup. Source policy is enforced by the reader's row policy on the
+ * takes seconds and holds up every public read queued behind it. It reads one
+ * stored integer per source instead, a primary key lookup. Source policy is enforced by the reader's row policy on the
  * snapshot, so a withheld source has no row to return.
  *
  * A count older than `SOURCE_ARRIVALS_FRESHNESS_MS` describes a different
