@@ -5,16 +5,21 @@ import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  legislationDocuments,
+  legislationFacetCounts,
+  legislationSources,
+} from "@/api/db/schema";
 import {
   LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT,
   projectLegislationFacets,
 } from "@/api/handlers/legislation/catalog-response";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/handlers/legislation/list";
-import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
-import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  publishedLegislationDocument,
+  publishedLegislationProjectionFor,
+} from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -28,7 +33,7 @@ import { logger } from "@/api/lib/observability/logger";
 /**
  * What a statute listing can be narrowed by, for one jurisdiction: the kinds
  * of act the corpus holds and how many Works carry each. Whole-jurisdiction
- * and slow-moving, so it is cached like the shelf.
+ * and slow-moving, so it is read from a snapshot the scheduler refreshes.
  */
 
 export const legislationFacetsQuerySchema = t.Object({
@@ -49,27 +54,70 @@ class LegislationFacetsError extends TaggedError("LegislationFacetsError")<{
   cause?: unknown;
 }> {}
 
-const FACETS_CACHE_TTL_MS = 5 * 60 * 1000;
-const FACETS_CACHE_MAX_ENTRIES = 16;
+/**
+ * The facets as the hourly snapshot (`legislation_facet_counts`) states them:
+ * a sum over a few rows per source, so the request never walks the corpus.
+ * Source policy and jurisdiction admission are applied here, at read time, so
+ * a revoked source stops counting at once rather than at the next refresh.
+ */
+export const legislationFacetSnapshotQuery = (
+  tx: LegislationReadTransaction,
+  country: string,
+) =>
+  tx
+    .select({
+      value: legislationFacetCounts.documentType,
+      count: sql<number>`sum(${legislationFacetCounts.works})::integer`,
+    })
+    .from(legislationFacetCounts)
+    .innerJoin(
+      legislationSources,
+      eq(legislationSources.id, legislationFacetCounts.sourceId),
+    )
+    .where(
+      and(
+        publishedLegislationProjectionFor(legislationFacetCounts.country),
+        eq(legislationFacetCounts.country, country),
+      ),
+    )
+    .groupBy(legislationFacetCounts.documentType)
+    .orderBy(
+      sql`sum(${legislationFacetCounts.works}) DESC`,
+      legislationFacetCounts.documentType,
+    )
+    .limit(LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT);
 
 /**
  * Each Work is counted by the row the listing shows for it today
  * (`isLatestOpenedVersionOfWorkAt`), so a bucket's count is the length of the
  * list narrowed to it: a Work that only opens in the future is not offered,
  * and a Work whose kind changed between wordings counts once, under the kind
- * it is listed as. The read is a scan of the jurisdiction, which the cache
- * below pays once per window.
+ * it is listed as.
+ *
+ * The answer comes from the snapshot the scheduler refreshes every hour. Only
+ * a database that has never been refreshed (a fresh install, a fixture) pays
+ * the live aggregation, which counts the same thing straight from the corpus.
  */
 export const readLegislationFacets = async (
   legislationDb: LegislationReadDb,
   country: string,
 ): Promise<LegislationFacets> =>
   await legislationDb(async (tx) => {
-    const documentType = await buildLegislationFacetsQuery(tx, country);
+    const refreshed = await tx
+      .select({ country: legislationFacetCounts.country })
+      .from(legislationFacetCounts)
+      .limit(1);
+    const documentType =
+      refreshed.length === 0
+        ? await buildLegislationFacetsQuery(tx, country)
+        : await legislationFacetSnapshotQuery(tx, country);
     return { documentType };
   });
 
-/** Builds the bounded production aggregation used by the legislation facets. */
+/**
+ * The live aggregation: a scan of the jurisdiction. Served only before the
+ * first snapshot refresh; the refresh counts the same rows per source.
+ */
 export const buildLegislationFacetsQuery = (
   tx: LegislationReadTransaction,
   country: string,
@@ -96,30 +144,6 @@ export const buildLegislationFacetsQuery = (
     .orderBy(sql`count(*) DESC`, legislationDocuments.documentType)
     .limit(LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT);
 
-type LegislationFacetsLoad = {
-  legislationDb: LegislationReadDb;
-  country: string;
-  excludedSourceIds: readonly string[];
-};
-
-const legislationFacets = createTtlResultCache({
-  load: async ({ legislationDb, country }: LegislationFacetsLoad) =>
-    await Result.tryPromise({
-      try: async () => await readLegislationFacets(legislationDb, country),
-      catch: (cause) =>
-        new LegislationFacetsError({
-          message: "Legislation facets could not be read",
-          cause,
-        }),
-    }),
-  // Source policy is an input to the answer, so a revocation changes the key
-  // instead of waiting out the window; sorted because the set has no order.
-  key: ({ country, excludedSourceIds }: LegislationFacetsLoad) =>
-    `${country}:${excludedSourceIds.toSorted().join(",")}`,
-  ttlMs: FACETS_CACHE_TTL_MS,
-  maxEntries: FACETS_CACHE_MAX_ENTRIES,
-});
-
 const NO_FACETS: LegislationFacets = { documentType: [] };
 
 export const readLegislationFacetsHandler = async (
@@ -138,18 +162,14 @@ export const readLegislationFacetsHandler = async (
 
   // The facets narrow a listing that works without them, so an unreadable
   // corpus degrades to no options, as the shelf does, and is logged.
-  const excludedSourceIds = await readNonRedistributableLegislationSourceIds();
-  if (Result.isError(excludedSourceIds)) {
-    logger.warn("legislation.facets.unavailable", {
-      "error.type": errorTag(excludedSourceIds.error),
-    });
-    return NO_FACETS;
-  }
-
-  const result = await legislationFacets({
-    legislationDb,
-    country: countryRead.country,
-    excludedSourceIds: excludedSourceIds.value,
+  const result = await Result.tryPromise({
+    try: async () =>
+      await readLegislationFacets(legislationDb, countryRead.country),
+    catch: (cause) =>
+      new LegislationFacetsError({
+        message: "Legislation facets could not be read",
+        cause,
+      }),
   });
   if (Result.isError(result)) {
     logger.warn("legislation.facets.unavailable", {

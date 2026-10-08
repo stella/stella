@@ -22,6 +22,15 @@ export const publishedLegislationDocument = sql`(
 )`;
 
 /**
+ * The same pair for a projection joined to `legislation_sources` that carries
+ * its own country column, such as a refreshed per-source count.
+ */
+export const publishedLegislationProjectionFor = (country: SQLWrapper) => sql`(
+  ${redistributableLegislationSource}
+  AND ${publishedLegislationCountryFor(country)}
+)`;
+
+/**
  * The same policy, correlated to `legislation_documents`, for a read that
  * addresses a version by id instead of joining its source. A public read of a
  * version applies one of the two forms; neither carries a policy of its own.

@@ -15,6 +15,7 @@ import { foldToAscii } from "@stll/text-normalize";
 import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
   legislationDocuments,
+  legislationFacetCounts,
   legislationSources,
 } from "@/api/db/schema";
 import {
@@ -40,6 +41,7 @@ import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions"
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { PAGINATION_CURSOR_MAX_CHARS } from "@/api/lib/custom-schema";
+import { refreshLegislationFacetCounts } from "@/api/lib/legal-search/legislation-facet-refresh";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -1196,6 +1198,60 @@ describe("statute facets", () => {
         { value: "code", count: 1 },
       ],
     });
+  });
+
+  test("the refreshed snapshot answers exactly what the live aggregate answers", async () => {
+    if (client === undefined) {
+      throw new Error("the fixture database is not open");
+    }
+    const owner = drizzle({ client });
+    const live = await readLegislationFacets(legislationDb, "CZE");
+    try {
+      // SAFETY: the PGlite handle implements the root select and transaction
+      // surface the scheduled refresh uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
+      const refreshDb = owner as unknown as Parameters<
+        typeof refreshLegislationFacetCounts
+      >[0];
+      const { buckets } = await refreshLegislationFacetCounts(refreshDb);
+      expect(buckets).toBeGreaterThan(0);
+
+      // The owner counts the withheld source too; the public read drops it.
+      const stored = await owner
+        .select({ sourceId: legislationFacetCounts.sourceId })
+        .from(legislationFacetCounts);
+      expect(stored.map(({ sourceId }) => sourceId)).toContain(closedSourceId);
+
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
+      // A refresh replaces the snapshot rather than adding to it.
+      expect(await refreshLegislationFacetCounts(refreshDb)).toEqual({
+        buckets,
+      });
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
+
+      // Policy is read live: revoking the open source empties the answer at
+      // once, before any refresh runs.
+      await owner
+        .update(legislationSources)
+        .set({
+          descriptor: {
+            license: "restricted",
+            attribution: "Publisher",
+            allowsRedistribution: false,
+            allowsDerivedAi: false,
+          },
+        })
+        .where(eq(legislationSources.id, openSourceId));
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual({
+        documentType: [],
+      });
+    } finally {
+      await owner
+        .update(legislationSources)
+        .set({ descriptor: null })
+        .where(eq(legislationSources.id, openSourceId));
+      await owner.delete(legislationFacetCounts).where(sql`true`);
+    }
   });
 
   test("each kind of act offered lists exactly as many works as it counts", async () => {

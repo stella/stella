@@ -1,63 +1,39 @@
-import { sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 
-import { DAY_IN_MS } from "@stll/time";
-
-import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import { caseLawSourceArrivals } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
-import { executedRows } from "@/api/lib/db/executed-rows";
+import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 
 /**
- * What became public for each source in the last seven days.
+ * What became public for each source in the last seven days, as the
+ * scheduler last counted it (`lib/case-law/source-arrivals-refresh.ts`).
  *
- * This is the only read the coverage page makes against the decisions table,
- * and it is bounded by a week of one source's arrivals rather than by the
- * corpus: `case_law_decisions_source_generation_cursor_idx` leads with
- * `source_id` and then `created_at`, so the window is an index range the
- * planner enters at its lower bound. How much a source holds in total is not
- * asked here at all — that figure is counted on the ingestion connection and
- * read back as an integer (`ingestion/source-totals.ts`), because counting it
- * per request would put a walk of the whole range on a two-connection pool.
+ * The request never counts a week of arrivals itself: the window is a heap
+ * walk of every decision a source received in it, which during a bulk ingest
+ * is far more than a public read on a two-connection pool may hold a
+ * connection for. It reads one stored integer per source instead, a primary
+ * key lookup. Source policy is enforced by the reader's row policy on the
+ * snapshot, so a withheld source has no row to return.
  *
- * The window carries `publishedCaseLawDecisionSqlFor` like every other public
- * read: "what arrived" is a claim about the corpus a reader can actually see,
- * so an identity the publisher listed but never served is not in it.
+ * A count older than `SOURCE_ARRIVALS_FRESHNESS_MS` describes a different
+ * week, so it is not returned: the source reads as unknown, never as a stale
+ * number presented as this week's.
  */
-
-const WEEK_IN_MS = 7 * DAY_IN_MS;
-
-/**
- * How long the window read may run.
- *
- * The same bound `status-courts.ts` puts on its per-court probes, and for the
- * same reason: warm this is an index range and runs in milliseconds, so a
- * value this far above that is what turns a cold or missing index into a fast,
- * visible degradation instead of a public page stalled on a shared pool.
- */
-const ARRIVALS_STATEMENT_TIMEOUT_MS = 3000;
 
 export type CaseLawSourceArrivals = {
-  /** Decisions published for the source in the last seven days. */
+  /** Decisions published for the source in the seven days before the count. */
   addedLastWeek: number;
 };
 
 type ArrivalsRead = {
   sourceIds: readonly SafeId<"caseLawSource">[];
-  /** The instant the window is measured back from. */
+  /** The instant the freshness of each stored count is judged against. */
   now: Date;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const toCount = (value: unknown): number => {
-  const count = Number(value);
-  return Number.isFinite(count) ? count : 0;
 };
 
 export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
@@ -69,41 +45,35 @@ export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
     if (sourceIds.length === 0) {
       return new Map();
     }
-    const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
-    const published = sql.raw(publishedCaseLawDecisionSqlFor("d"));
-
-    const result: unknown = await withSharedStatementTimeout(
-      tx,
-      ARRIVALS_STATEMENT_TIMEOUT_MS,
-      async () =>
-        await tx.execute(sql`
-      SELECT
-        named.source_id AS source_id,
-        recent.added_last_week AS added_last_week
-      FROM jsonb_array_elements_text(${JSON.stringify([...sourceIds])}::text::jsonb)
-        WITH ORDINALITY AS named(source_id, ordinality)
-      LEFT JOIN LATERAL (
-        SELECT count(*) AS added_last_week
-        FROM case_law_decisions d
-        WHERE d.source_id = named.source_id::uuid
-          AND d.created_at >= ${sinceWeek}::timestamptz
-          AND ${published}
-      ) recent ON true
-      ORDER BY named.ordinality
-    `),
-    );
-
-    const rows = executedRows(result).filter(isRecord);
+    const rows = await caseLawArrivalsSnapshotQuery(tx, { now, sourceIds });
     return new Map(
-      rows.flatMap((row) => {
-        const sourceId = row["source_id"];
-        if (typeof sourceId !== "string") {
-          return [];
-        }
-        return [
-          [sourceId, { addedLastWeek: toCount(row["added_last_week"]) }],
-        ] as const;
-      }),
+      rows.map(
+        (row) =>
+          [String(row.sourceId), { addedLastWeek: row.addedLastWeek }] as const,
+      ),
     );
   },
 );
+
+/** The snapshot read itself, also registered with the query-plan guard. */
+export const caseLawArrivalsSnapshotQuery = (
+  tx: Pick<CaseLawPublicReadTransaction, "select">,
+  { now, sourceIds }: ArrivalsRead,
+) =>
+  tx
+    .select({
+      sourceId: caseLawSourceArrivals.sourceId,
+      addedLastWeek: caseLawSourceArrivals.addedLastWeek,
+    })
+    .from(caseLawSourceArrivals)
+    .where(
+      and(
+        inArray(caseLawSourceArrivals.sourceId, [...sourceIds]),
+        // A freshness cutoff, not a stored-row boundary: millisecond
+        // precision is all the window means.
+        sql`${caseLawSourceArrivals.countedAt} >= ${new Date(
+          now.getTime() - SOURCE_ARRIVALS_FRESHNESS_MS,
+        ).toISOString()}::timestamptz`,
+      ),
+    )
+    .limit(sourceIds.length);
