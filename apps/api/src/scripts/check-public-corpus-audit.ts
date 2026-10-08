@@ -4,7 +4,6 @@ import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { schema } from "@/api/lib/db/public-corpus-audit/schema-catalog";
 import {
   CORPUS_ATTESTATION_PATH,
   CORPUS_REPOSITORY_ROOT,
@@ -16,6 +15,7 @@ import {
   corpusDigest,
   verifyCorpusMigrations,
 } from "@/api/lib/db/public-corpus-audit/migration-verification";
+import { schema } from "@/api/lib/db/public-corpus-audit/schema-catalog";
 import { verifyPublicCorpusSchema } from "@/api/lib/db/public-corpus-audit/schema-verification";
 
 const mode = process.argv.at(2);

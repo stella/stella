@@ -9178,5 +9178,17 @@
   "src/db/account-issuer-leftover-check-migration.db.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/tests/security/public-corpus-attestation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/public-corpus-bookkeeping.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/public-corpus-bookkeeping.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
