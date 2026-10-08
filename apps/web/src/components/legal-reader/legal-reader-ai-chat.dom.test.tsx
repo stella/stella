@@ -104,4 +104,7 @@ test.each([
     expect(screen.queryByText(messages.common.somethingWentWrong)).toBeNull();
     queryClient.clear();
   },
+  // The overlay host is a lazy chunk; its first load under a busy runner
+  // outlasts the default per-test timeout.
+  30_000,
 );

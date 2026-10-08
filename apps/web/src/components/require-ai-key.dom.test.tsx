@@ -33,7 +33,7 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { AIAvailabilityProvider, AIUnavailableDialogTrigger } =
+const { AIAvailabilityProvider, AIUnavailableDialogTrigger, useAIKeyGate } =
   await import("./require-ai-key");
 
 afterEach(() => {
@@ -119,11 +119,18 @@ test.each([
   },
 );
 
-test("a provider under another provider reuses its gate and dialog", async () => {
+test("a provider under another provider reuses the outer gate", async () => {
   configStatus = 200;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  // The gate's value changes as the availability read resolves, so only the
+  // latest value each surface saw is compared.
+  const gates = new Map<"inner" | "outer", unknown>();
+  const CaptureGate = ({ at }: { at: "inner" | "outer" }) => {
+    gates.set(at, useAIKeyGate());
+    return null;
+  };
   render(
     <QueryClientProvider client={queryClient}>
       <AuthenticatedUserProvider
@@ -141,8 +148,9 @@ test("a provider under another provider reuses its gate and dialog", async () =>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
             <AIAvailabilityProvider>
+              <CaptureGate at="outer" />
               <AIAvailabilityProvider>
-                <AIUnavailableDialogTrigger />
+                <CaptureGate at="inner" />
               </AIAvailabilityProvider>
             </AIAvailabilityProvider>
           </FormattingProvider>
@@ -150,10 +158,10 @@ test("a provider under another provider reuses its gate and dialog", async () =>
       </AuthenticatedUserProvider>
     </QueryClientProvider>,
   );
-  await screen.findByRole("heading", { name: "Connect AI provider" });
   await settle();
-  expect(
-    screen.getAllByRole("heading", { name: "Connect AI provider" }),
-  ).toHaveLength(1);
+  // A second provider would hand the inner surface its own gate, and with it
+  // a second dialog the outer surfaces cannot see or close.
+  expect(gates.get("outer")).toBeDefined();
+  expect(gates.get("inner")).toBe(gates.get("outer"));
   queryClient.clear();
 });
