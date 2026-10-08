@@ -4,11 +4,35 @@ import { createRoot } from "react-dom/client";
 import { panic } from "better-result";
 
 import { DatePickerPopover } from "../date-picker-popover";
+import { DateRangeFilter } from "../date-range-filter";
 import { Field, FieldLabel } from "../field";
 
 const noop = () => undefined;
 
+const RangeFixture = ({ noFuture }: { noFuture: boolean }) => {
+  const [from, setFrom] = useState<string | null>("2026-03-05");
+  const [to, setTo] = useState<string | null>("2026-03-10");
+  return (
+    <section aria-label={noFuture ? "Past range" : "Any range"}>
+      <DateRangeFilter
+        from={from}
+        to={to}
+        fromLabel="From"
+        toLabel="To"
+        onFromChange={setFrom}
+        onToChange={setTo}
+        noFuture={noFuture}
+        locale="en-US"
+        outOfRangeLabel="Choose a date within the allowed range."
+      />
+      <output aria-label="From value">{from ?? "empty"}</output>
+      <output aria-label="To value">{to ?? "empty"}</output>
+    </section>
+  );
+};
+
 const DatePickerFixture = () => {
+  const [single, setSingle] = useState<string | null>("2026-03-05");
   const [dateTime, setDateTime] = useState<string | null>("2026-03-05T09:15");
 
   useEffect(() => {
@@ -20,6 +44,15 @@ const DatePickerFixture = () => {
 
   return (
     <main className="grid gap-4">
+      <RangeFixture noFuture />
+      <RangeFixture noFuture={false} />
+      <DatePickerPopover
+        id="single-apply"
+        value={single}
+        onChange={setSingle}
+        locale="en-US"
+      />
+      <output aria-label="Single value">{single ?? "empty"}</output>
       <Field>
         <FieldLabel id="field-label">Date</FieldLabel>
         <DatePickerPopover

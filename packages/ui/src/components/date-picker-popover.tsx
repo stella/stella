@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "../icons";
@@ -38,6 +38,7 @@ import {
   type PickerTimeOption,
 } from "./date-picker-popover.logic";
 import { DirectionalIcon } from "./directional-icon";
+import { Input } from "./input";
 import { Popover, PopoverPopup, PopoverTrigger } from "./popover";
 import {
   Select,
@@ -130,12 +131,8 @@ const subscribeToLocalDate = (onStoreChange: () => void) => {
   };
 };
 
-const useHydrationSafeToday = (): string =>
-  useSyncExternalStore(
-    subscribeToLocalDate,
-    getLocalToday,
-    () => HYDRATION_DATE,
-  );
+const useHydrationSafeToday = (getToday: () => string): string =>
+  useSyncExternalStore(subscribeToLocalDate, getToday, () => HYDRATION_DATE);
 
 const useHydrationSafeBrowserLocale = (): string =>
   useSyncExternalStore(
@@ -506,6 +503,16 @@ type DatePickerPopoverProps = {
   placeholderLabel?: string;
   clearLabel?: string;
   defaultOpen?: boolean;
+  open?: boolean;
+  triggerRef?: React.Ref<HTMLButtonElement> | undefined;
+  /** Keep the trigger focused when opening a following range bound. */
+  focusTriggerOnOpen?: boolean;
+  /** Enables direct date entry, with host-localized validation. */
+  dateInputLabel?: string;
+  outOfRangeLabel?: string;
+  noFuture?: boolean;
+  /** Host-owned calendar date; defaults to the browser timezone. */
+  getToday?: () => string;
   onOpenChange?: (open: boolean) => void;
   /** Label for the "go to today" button. Auto-localized from the locale when omitted. */
   todayLabel?: string;
@@ -522,8 +529,8 @@ type DatePickerPopoverProps = {
   /** Label of the time input in `date-time` mode. */
   timeLabel?: string;
   /** Inclusive `YYYY-MM-DD` bounds; in `date-time` mode they bound the day. */
-  minDate?: string;
-  maxDate?: string;
+  minDate?: string | undefined;
+  maxDate?: string | undefined;
   isDateDisabled?: (date: string) => boolean;
   layer?: OverlayLayer;
 };
@@ -551,6 +558,11 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     placeholderLabel,
     clearLabel = "Clear date",
     defaultOpen = false,
+    open: controlledOpen,
+    triggerRef,
+    focusTriggerOnOpen = false,
+    dateInputLabel,
+    outOfRangeLabel,
     onOpenChange,
     todayLabel: todayLabelProp,
     overdueLabel,
@@ -819,7 +831,11 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
   })();
 
   return (
-    <Popover defaultOpen={defaultOpen} onOpenChange={handleOpenChange}>
+    <Popover
+      defaultOpen={defaultOpen}
+      open={controlledOpen}
+      onOpenChange={handleOpenChange}
+    >
       <PopoverTrigger
         disabled={disabled}
         render={
@@ -834,6 +850,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
               className,
             )}
             id={id}
+            ref={triggerRef}
             type="button"
           />
         }
@@ -850,10 +867,13 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
         )}
       </PopoverTrigger>
       <PopoverPopup
-        initialFocus={() =>
-          gridRef.current?.querySelector<HTMLButtonElement>(
-            `[data-date="${value || today}"]`,
-          ) ?? gridRef.current
+        initialFocus={
+          focusTriggerOnOpen
+            ? false
+            : () =>
+                gridRef.current?.querySelector<HTMLButtonElement>(
+                  `[data-date="${value || today}"]`,
+                ) ?? gridRef.current
         }
         // The entry scale would shrink the day cells below their touch and
         // compact sizes while the popup opens.
@@ -954,6 +974,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
                           selectDay(day.date);
                         }
                       }}
+                      onFocus={() => setFocusedDate(day.date)}
                       role="gridcell"
                       tabIndex={isFocused ? 0 : -1}
                       type="button"
@@ -1000,6 +1021,16 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
             />
           )}
 
+          <TypedDateField
+            key={value}
+            mode={selection.mode}
+            label={dateInputLabel}
+            value={value}
+            isDayDisabled={isDayDisabled}
+            errorLabel={outOfRangeLabel}
+            onChange={onChange}
+          />
+
           {/* Bottom row: today + clear */}
           <div className="mt-1 flex items-center gap-1 border-t pt-1">
             <Button
@@ -1036,10 +1067,21 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
 
 const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const browserLocale = useHydrationSafeBrowserLocale();
-  const today = useHydrationSafeToday();
+  const today = useHydrationSafeToday(props.getToday ?? getLocalToday);
   const locale = props.locale ?? browserLocale;
 
-  return <DatePickerPopoverContent {...props} locale={locale} today={today} />;
+  const maxDate =
+    props.noFuture && (!props.maxDate || props.maxDate > today)
+      ? today
+      : props.maxDate;
+  return (
+    <DatePickerPopoverContent
+      {...props}
+      maxDate={maxDate}
+      locale={locale}
+      today={today}
+    />
+  );
 };
 
 export { DatePickerPopover };
@@ -1342,6 +1384,71 @@ const YearGrid = ({
           })}
         </div>
       ))}
+    </div>
+  );
+};
+
+type TypedDateFieldProps = {
+  mode: DatePickerMode;
+  label: string | undefined;
+  value: string;
+  isDayDisabled: (date: string) => boolean;
+  errorLabel: string | undefined;
+  onChange: (date: string | null) => void;
+};
+
+const TypedDateField = ({
+  mode,
+  label,
+  value,
+  isDayDisabled,
+  errorLabel = "Choose a date within the allowed range.",
+  onChange,
+}: TypedDateFieldProps) => {
+  const id = useId();
+  const [draft, setDraft] = useState(value);
+  const parsed = Result.try(() => Temporal.PlainDate.from(draft));
+  const invalid =
+    draft !== "" &&
+    (parsed.isErr() ||
+      parsed.value.toString() !== draft ||
+      isDayDisabled(draft));
+  if (!label || mode !== DATE_PICKER_MODE.date) {
+    return null;
+  }
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs">
+        {label}
+      </label>
+      <Input
+        id={id}
+        value={draft}
+        placeholder="YYYY-MM-DD"
+        dir="ltr"
+        aria-invalid={invalid}
+        aria-describedby={invalid ? `${id}-error` : undefined}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onBlur={() => {
+          if (!invalid && draft !== value) {
+            onChange(draft || null);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") {
+            return;
+          }
+          event.preventDefault();
+          if (!invalid) {
+            onChange(draft || null);
+          }
+        }}
+      />
+      {invalid && (
+        <p id={`${id}-error`} role="alert" className="text-destructive text-xs">
+          {errorLabel}
+        </p>
+      )}
     </div>
   );
 };

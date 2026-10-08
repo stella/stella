@@ -1697,6 +1697,7 @@
       "nextDecade": "Década siguiente",
       "nextMonth": "Mes siguiente",
       "nextYear": "Año siguiente",
+      "outOfRange": "Seleccione una fecha dentro del intervalo permitido.",
       "previousDecade": "Década anterior",
       "previousMonth": "Mes anterior",
       "previousYear": "Año anterior",

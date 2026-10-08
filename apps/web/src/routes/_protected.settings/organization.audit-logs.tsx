@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -299,31 +299,15 @@ function AuditLogsPage() {
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-muted-foreground text-xs font-medium"
-                  htmlFor="from-input"
-                >
-                  {t("settings.organization.auditLogsFrom")}
-                </label>
-                <DatePickerPopover
-                  value={filterFrom}
-                  onChange={(date) => handleFilterChange(setFilterFrom, date)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-muted-foreground text-xs font-medium"
-                  htmlFor="to-input"
-                >
-                  {t("settings.organization.auditLogsTo")}
-                </label>
-                <DatePickerPopover
-                  value={filterTo}
-                  onChange={(date) => handleFilterChange(setFilterTo, date)}
-                />
-              </div>
+              <DateRangeFilter
+                className="md:col-span-2"
+                from={filterFrom}
+                to={filterTo}
+                fromLabel={t("settings.organization.auditLogsFrom")}
+                toLabel={t("settings.organization.auditLogsTo")}
+                onFromChange={(date) => handleFilterChange(setFilterFrom, date)}
+                onToChange={(date) => handleFilterChange(setFilterTo, date)}
+              />
             </div>
 
             <div className="overflow-x-auto rounded-md border">

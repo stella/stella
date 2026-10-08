@@ -6,7 +6,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import {
   FACET_SECTION_LIMIT,
   facetSectionView,
@@ -191,50 +191,21 @@ const DateSection = ({
           {t("common.showAll")}
         </ShowAllButton>
       )}
-      <div className="mt-2 flex flex-col gap-1.5">
-        <DateBound
-          label={t("search.dateFrom")}
-          onChange={(from) => onDateRangeChange({ ...dateRange, from })}
-          value={dateRange.from ?? null}
-          {...(dateRange.to === undefined ? {} : { maxDate: dateRange.to })}
-        />
-        <DateBound
-          label={t("search.dateTo")}
-          onChange={(to) => onDateRangeChange({ ...dateRange, to })}
-          value={dateRange.to ?? null}
-          {...(dateRange.from === undefined ? {} : { minDate: dateRange.from })}
-        />
-      </div>
+      <DateRangeFilter
+        className="mt-2"
+        from={dateRange.from ?? null}
+        to={dateRange.to ?? null}
+        noFuture
+        onFromChange={(from) =>
+          onDateRangeChange({ ...dateRange, from: from ?? undefined })
+        }
+        onToChange={(to) =>
+          onDateRangeChange({ ...dateRange, to: to ?? undefined })
+        }
+      />
     </section>
   );
 };
-
-/** One end of the range: the app's own calendar, labelled as this end. */
-const DateBound = ({
-  label,
-  maxDate,
-  minDate,
-  onChange,
-  value,
-}: {
-  label: string;
-  maxDate?: string;
-  minDate?: string;
-  onChange: (value: string | undefined) => void;
-  value: string | null;
-}) => (
-  <label className="flex flex-col gap-1">
-    <span className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
-      {label}
-    </span>
-    <DatePickerPopover
-      onChange={(next) => onChange(next ?? undefined)}
-      value={value}
-      {...(maxDate === undefined ? {} : { maxDate })}
-      {...(minDate === undefined ? {} : { minDate })}
-    />
-  </label>
-);
 
 const CourtTierSection = ({
   courts,

@@ -1,9 +1,13 @@
 import { useTranslations } from "use-intl";
 
+import { Temporal, todayFor } from "@stll/time";
 import { DatePickerPopover as UIDatePickerPopover } from "@stll/ui/date-picker-popover";
 import type { DatePickerPopoverProps } from "@stll/ui/date-picker-popover";
 
 import { useLocale } from "@/i18n/formatting-context";
+
+export const getPickerToday = () =>
+  todayFor(Temporal.Now.timeZoneId()).toString();
 
 const DatePickerPopover = ({
   clearLabel,
@@ -26,6 +30,8 @@ const DatePickerPopover = ({
   return (
     <UIDatePickerPopover
       {...props}
+      getToday={getPickerToday}
+      outOfRangeLabel={t("common.datePicker.outOfRange")}
       clearLabel={clearLabel ?? t("common.clearDate")}
       dialogLabel={dialogLabel ?? t("common.datePicker.label")}
       locale={locale ?? appLocale}

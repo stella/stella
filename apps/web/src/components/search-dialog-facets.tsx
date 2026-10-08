@@ -10,7 +10,7 @@ import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { Input } from "@stll/ui/input";
 import { MenuSection } from "@stll/ui/menu-section";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { rememberSelectedFacetLabels } from "@/components/search-dialog.logic";
 import {
@@ -129,31 +129,15 @@ export const TimeFacetGroup = ({
         </span>
       </Button>
       {isCustom && (
-        <div className="space-y-1 px-2">
-          <div>
-            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
-              {t("search.dateFrom")}
-            </p>
-            <DatePickerPopover
-              layer="search-child"
-              locale={locale}
-              onChange={handleFromChange}
-              value={customFromValue}
-              {...(customToValue !== null && { maxDate: customToValue })}
-            />
-          </div>
-          <div>
-            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
-              {t("search.dateTo")}
-            </p>
-            <DatePickerPopover
-              layer="search-child"
-              locale={locale}
-              onChange={handleToChange}
-              value={customToValue}
-              {...(customFromValue !== null && { minDate: customFromValue })}
-            />
-          </div>
+        <div className="px-2">
+          <DateRangeFilter
+            from={customFromValue}
+            to={customToValue}
+            layer="search-child"
+            locale={locale}
+            onFromChange={handleFromChange}
+            onToChange={handleToChange}
+          />
         </div>
       )}
     </MenuSection>

@@ -1,4 +1,4 @@
-import { useId, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 
 import { DirectionProvider } from "@base-ui/react/direction-provider";
@@ -12,9 +12,10 @@ import {
 
 import { normalizeStringList } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { Temporal, todayFor } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { CourtBadge } from "@stll/ui/court-badge";
-import { DatePickerPopover } from "@stll/ui/date-picker-popover";
+import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { Field, FieldLabel } from "@stll/ui/field";
 import {
   CaseLawIcon,
@@ -289,8 +290,6 @@ const SearchControls = ({
 }: SearchControlsProps) => {
   const t = useTranslations();
   const locale = useLocale();
-  const fromId = useId();
-  const toId = useId();
   const initialQueries = normalizeStringList(input["queries"], {
     split: "never",
   });
@@ -327,6 +326,7 @@ const SearchControls = ({
     nextYearLabel: t("nextYear"),
     previousDecadeLabel: t("previousDecade"),
     nextDecadeLabel: t("nextDecade"),
+    outOfRangeLabel: t("outOfRange"),
   };
   return (
     <form
@@ -472,32 +472,19 @@ const SearchControls = ({
             </SelectPopup>
           </Select>
         </Field>
-        <Field className="gap-1.5">
-          <FieldLabel id={fromId} className="text-muted-foreground text-xs">
-            {t("from")}
-          </FieldLabel>
-          <DatePickerPopover
-            {...dateLabels}
-            variant="field"
-            value={from === "" ? null : from}
-            onChange={(value) => setFrom(value ?? "")}
-            labelledBy={fromId}
-            className="w-full"
-          />
-        </Field>
-        <Field className="gap-1.5">
-          <FieldLabel id={toId} className="text-muted-foreground text-xs">
-            {t("to")}
-          </FieldLabel>
-          <DatePickerPopover
-            {...dateLabels}
-            variant="field"
-            value={to === "" ? null : to}
-            onChange={(value) => setTo(value ?? "")}
-            labelledBy={toId}
-            className="w-full"
-          />
-        </Field>
+        <DateRangeFilter
+          {...dateLabels}
+          className="col-span-2 grid grid-cols-2 gap-2"
+          variant="field"
+          noFuture
+          getToday={() => todayFor(Temporal.Now.timeZoneId()).toString()}
+          from={from || null}
+          to={to || null}
+          fromLabel={t("from")}
+          toLabel={t("to")}
+          onFromChange={(value) => setFrom(value ?? "")}
+          onToChange={(value) => setTo(value ?? "")}
+        />
         <Button type="submit" variant="outline" className="max-sm:col-span-2">
           {t("filter")}
         </Button>

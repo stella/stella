@@ -1700,6 +1700,7 @@ type Messages = {
       "nextDecade": "Next decade";
       "nextMonth": "Next month";
       "nextYear": "Next year";
+      "outOfRange": "Choose a date within the allowed range.";
       "previousDecade": "Previous decade";
       "previousMonth": "Previous month";
       "previousYear": "Previous year";

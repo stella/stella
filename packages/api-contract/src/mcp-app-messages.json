@@ -39,7 +39,8 @@
     "openInStella": "فتح في stella",
     "openOriginalSource": "فتح المصدر الأصلي",
     "from": "من",
-    "to": "إلى"
+    "to": "إلى",
+    "outOfRange": "اختر تاريخًا ضمن النطاق المسموح به."
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -81,7 +82,8 @@
     "openInStella": "Otevřít ve stelle",
     "openOriginalSource": "Otevřít originál",
     "from": "Od",
-    "to": "Do"
+    "to": "Do",
+    "outOfRange": "Vyberte datum v povoleném rozmezí."
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -123,7 +125,8 @@
     "openInStella": "In stella öffnen",
     "openOriginalSource": "Originalquelle öffnen",
     "from": "Von",
-    "to": "Bis"
+    "to": "Bis",
+    "outOfRange": "Wählen Sie ein Datum im zulässigen Bereich."
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -165,7 +168,8 @@
     "openInStella": "Open in stella",
     "openOriginalSource": "Open original source",
     "from": "From",
-    "to": "To"
+    "to": "To",
+    "outOfRange": "Choose a date within the allowed range."
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -207,7 +211,8 @@
     "openInStella": "Ava stellas",
     "openOriginalSource": "Ava algallikas",
     "from": "Alates",
-    "to": "Kuni"
+    "to": "Kuni",
+    "outOfRange": "Valige kuupäev lubatud vahemikust."
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -249,7 +254,8 @@
     "openInStella": "Ouvrir dans stella",
     "openOriginalSource": "Ouvrir la source d’origine",
     "from": "Du",
-    "to": "Au"
+    "to": "Au",
+    "outOfRange": "Choisissez une date dans la période autorisée."
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -291,7 +297,8 @@
     "openInStella": "Megnyitás a Stellában",
     "openOriginalSource": "Eredeti forrás megnyitása",
     "from": "Mettől",
-    "to": "Meddig"
+    "to": "Meddig",
+    "outOfRange": "Válasszon dátumot az engedélyezett tartományból."
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -333,7 +340,8 @@
     "openInStella": "Atvērt lietotnē stella",
     "openOriginalSource": "Atvērt sākotnējo avotu",
     "from": "No",
-    "to": "Līdz"
+    "to": "Līdz",
+    "outOfRange": "Izvēlieties datumu atļautajā diapazonā."
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -375,7 +383,8 @@
     "openInStella": "Atverti programoje stella",
     "openOriginalSource": "Atverti pirminį šaltinį",
     "from": "Nuo",
-    "to": "Iki"
+    "to": "Iki",
+    "outOfRange": "Pasirinkite datą leistiname intervale."
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -417,7 +426,8 @@
     "openInStella": "Otwórz w stelli",
     "openOriginalSource": "Otwórz źródło oryginalne",
     "from": "Od",
-    "to": "Do"
+    "to": "Do",
+    "outOfRange": "Wybierz datę z dozwolonego zakresu."
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -459,7 +469,8 @@
     "openInStella": "Abrir no stella",
     "openOriginalSource": "Abrir fonte original",
     "from": "De",
-    "to": "Para"
+    "to": "Para",
+    "outOfRange": "Selecione uma data dentro do intervalo permitido."
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -501,7 +512,8 @@
     "openInStella": "Otvoriť v stelle",
     "openOriginalSource": "Otvoriť originál",
     "from": "Od",
-    "to": "Do"
+    "to": "Do",
+    "outOfRange": "Vyberte dátum v povolenom rozsahu."
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -543,6 +555,7 @@
     "openInStella": "Abrir en stella",
     "openOriginalSource": "Abrir fuente original",
     "from": "Desde",
-    "to": "Hasta"
+    "to": "Hasta",
+    "outOfRange": "Seleccione una fecha dentro del intervalo permitido."
   }
 }
