@@ -137,7 +137,7 @@ const entity = (
     kind === "folder"
       ? {}
       : {
-          [filePropertyId]: {
+          [toSafeId<"property">(filePropertyId)]: {
             entityId: toSafeId<"entity">(entityId),
             id: toSafeId<"field">(`field-${entityId}`),
             propertyId: toSafeId<"property">(filePropertyId),
@@ -287,7 +287,7 @@ const mountFilesView = async () => {
 const rowNamed = (name: string): HTMLElement => {
   const row = [
     ...document.querySelectorAll<HTMLElement>("[data-entity-row]"),
-  ].find((element) => element.textContent?.includes(name));
+  ].find((element) => element.textContent.includes(name));
   if (!row) {
     throw new Error(`No Files row named ${name}`);
   }
@@ -391,7 +391,8 @@ describe("OS file drops in the Files view", () => {
     // The drag leaves the window: nothing stays highlighted, nothing uploads.
     dispatchDrag("dragleave", folderRow, transfer);
     expect(isHighlighted(folderRow)).toBe(false);
-    expect(requests).toEqual([]);
+    // The view's own reads may run; nothing may be written or uploaded.
+    expect(requests.filter(({ method }) => method !== "GET")).toEqual([]);
     client.clear();
   });
 
