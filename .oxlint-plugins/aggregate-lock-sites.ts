@@ -312,7 +312,7 @@ export type AggregateLockRekey = {
   file: string;
   from: string;
   to: string;
-  fromFile?: string;
+  fromFile?: string | undefined;
   reason: string;
 };
 type AggregateLockBaselineOptions = {
