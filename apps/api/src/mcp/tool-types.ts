@@ -324,6 +324,7 @@ export type McpCliDiscriminatorSubcommand = {
 };
 
 export type McpCliToolAnnotation = {
+  feature?: DeploymentFeatureFlag;
   featureId?: FeatureId;
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];

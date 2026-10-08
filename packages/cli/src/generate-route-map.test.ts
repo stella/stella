@@ -85,6 +85,51 @@ const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
+  test("preserves deployment ownership on every discriminator leaf", () => {
+    const organization =
+      TOOL_ANNOTATIONS["manage_organization"] ??
+      expect.unreachable("Missing organization CLI metadata");
+    const annotated = {
+      ...TOOL_ANNOTATIONS,
+      manage_organization: {
+        ...organization,
+        feature: "FEATURE_EXAMPLE",
+      },
+    };
+    const generated = generateRouteMap(snapshotListings, annotated);
+    const leaves = leafEntries(generated).filter(
+      ({ spec }) => spec.toolName === "manage_organization",
+    );
+    const discriminator =
+      organization.discriminator ??
+      expect.unreachable("Missing organization CLI discriminator");
+    const expectedPaths = Object.values(discriminator.subcommands).map(
+      ({ command }) => [...organization.command, command].join(" "),
+    );
+    expect(expectedPaths.length).toBeGreaterThan(0);
+    expect(leaves.map(({ path }) => path.join(" ")).toSorted()).toEqual(
+      expectedPaths.toSorted(),
+    );
+    for (const { spec } of leaves) {
+      expect(spec.feature).toBe(annotated.manage_organization.feature);
+    }
+  });
+
+  test("preserves deployment ownership supplied by a registry listing", () => {
+    const listing = {
+      name: "read_example",
+      description: "Read example",
+      inputSchema: { type: "object", properties: {} },
+      feature: "FEATURE_EXAMPLE",
+    } satisfies RegistryToolListing;
+    const generated = generateRouteMap([listing], {
+      read_example: { command: ["example", "read"] },
+    });
+    expect(findLeaf(generated, ["example", "read"])?.feature).toBe(
+      listing.feature,
+    );
+  });
+
   test("excludes compat and host adapters from the command tree", () => {
     const paths = leafPaths(tree);
     expect(paths).not.toContain("search");
