@@ -1,0 +1,7 @@
+# Reading translation provider availability on demand
+
+Generated from `scripts/ownership/deepl-availability.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                 | Owner                                                   | Enforcement                                                  | Summary                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `deepl-availability` — Reading translation provider availability on demand | `apps/web/src/components/translate-document-dialog.tsx` | import `deepLAvailabilityOptions` from `@/lib/deepl/queries` | The translation dialog starts availability reads only while open. Its shared query factory requires an explicit open state, keys the cache by organization, and lets an in-flight read complete across toolbar remounts. |
