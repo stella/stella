@@ -1654,7 +1654,7 @@ jobs:
         env:
           STELLA_VERIFY: prepare
         run: |
-          for app in . apps/api apps/web; do
+          for app in apps/api apps/web; do
             [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
           done
       - name: Produce generated sources

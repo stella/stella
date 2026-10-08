@@ -54,7 +54,7 @@ export const withCheckAdmission = ({
 };
 
 export type HostConfig = {
-  localGate: string[];
+  localGate: string[] | null;
   remote: string[];
   installer: string[];
 };
@@ -81,7 +81,7 @@ export const hostConfig = (): HostConfig => {
     path.join(homedir(), ".config/stella/verify.json");
   if (!existsSync(file)) {
     return {
-      localGate: ["load-admit", "--"],
+      localGate: Bun.which("load-admit") === null ? null : ["load-admit", "--"],
       remote: ["remote-check"],
       installer: ["serial-install"],
     };
@@ -113,12 +113,16 @@ export const admitLocal = ({
   config,
   repo,
   command,
-}: AdmitLocalOptions): number =>
-  Bun.spawnSync([...config.localGate, ...command], {
+}: AdmitLocalOptions): number => {
+  if (config.localGate === null) {
+    return 0;
+  }
+  return Bun.spawnSync([...config.localGate, ...command], {
     cwd: repo,
     stdout: "inherit",
     stderr: "inherit",
   }).exitCode;
+};
 
 export const probeRemote = (config: HostConfig, repo: string): number =>
   Bun.spawnSync([...config.remote, "--probe"], {

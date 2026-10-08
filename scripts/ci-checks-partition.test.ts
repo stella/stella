@@ -1413,13 +1413,12 @@ test("CI coverage accepts the real local-verification projection", () => {
   if (current === undefined || base === undefined) {
     panic("CLI contract check is missing from CI coverage");
   }
-  const env = v.parse(v.record(v.string(), v.unknown()), current["env"]);
+  const step = v.parse(v.record(v.string(), v.unknown()), current);
+  const env = v.parse(v.record(v.string(), v.unknown()), step["env"]);
   expect(env["STELLA_VERIFY"]).toBe("check");
   expect(env["CHECK_BASE_REF"]).toBe(LOCAL_CHECK_BASE_REF);
   expect(env["BASE_REF"]).toBe(LOCAL_BASE_REF);
-  expect(current["run"]).toBe(
-    `${CLI_CONTRACT_COMMAND} --base "$CHECK_BASE_REF"`,
-  );
+  expect(step["run"]).toBe(`${CLI_CONTRACT_COMMAND} --base "$CHECK_BASE_REF"`);
   expectCoverage({ current: [current], base: [base], removed: [] });
 });
 

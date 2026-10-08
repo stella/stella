@@ -2,11 +2,13 @@ import { expect, test } from "bun:test";
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -632,3 +634,201 @@ printf '%s\\0' "$@" > "$ADMISSION_RECEIPT"
     rmSync(fixture, { recursive: true, force: true });
   }
 });
+
+for (const ci of [undefined, "true"]) {
+  for (const entry of ["verify", "autofix"] as const) {
+    for (const gate of [
+      "absent",
+      "available",
+      "configured-missing",
+      "configured-usage",
+    ] as const) {
+      test(`local entry ${entry} handles gate=${gate} with CI=${ci}`, () => {
+        const fixture = realpathSync(
+          mkdtempSync(path.join(tmpdir(), "verify-local-entry-")),
+        );
+        try {
+          mkdirSync(path.join(fixture, "scripts"));
+          mkdirSync(path.join(fixture, ".github/workflows"), {
+            recursive: true,
+          });
+          const home = path.join(fixture, "home");
+          const bin = path.join(fixture, "bin");
+          mkdirSync(path.join(home, ".config/stella"), { recursive: true });
+          mkdirSync(bin);
+          for (const name of ["bash", "git", "dirname"]) {
+            const executable = Bun.which(name);
+            if (executable === null) {
+              throw new TypeError(`Fixture needs ${name}`);
+            }
+            symlinkSync(executable, path.join(bin, name));
+          }
+          symlinkSync(process.execPath, path.join(bin, "bun"));
+          for (const file of [
+            "verify.ts",
+            "verify-admission.ts",
+            "verify-workflow.ts",
+            "verify-error.ts",
+            "workflow-steps.ts",
+            "verify.sh",
+            "autofix-local.sh",
+          ]) {
+            copyFileSync(
+              path.join(root, "scripts", file),
+              path.join(fixture, "scripts", file),
+            );
+          }
+          for (const mode of ["verify", "autofix"] as const) {
+            writeFileSync(
+              path.join(
+                fixture,
+                `.github/workflows/${mode === "verify" ? "ci" : "autofix"}.yml`,
+              ),
+              `jobs:\n  fixture:\n    steps:\n      - name: Execute\n        env: { ${mode === "verify" ? "STELLA_VERIFY: check" : 'STELLA_LOCAL_AUTOFIX: "true"'} }\n        run: printf '${mode} executed' > ${mode}-receipt\n`,
+            );
+          }
+          mkdirSync(path.join(fixture, "packages/scripts/src"), {
+            recursive: true,
+          });
+          for (const file of [
+            "scripts/autofix-plan.ts",
+            "scripts/generated-files.ts",
+            "packages/scripts/src/generated-files.ts",
+          ]) {
+            copyFileSync(path.join(root, file), path.join(fixture, file));
+          }
+          const git = (args: string[]) => {
+            const result = Bun.spawnSync(["git", ...args], {
+              cwd: fixture,
+              stdout: "pipe",
+              stderr: "pipe",
+            });
+            expect(result.exitCode, result.stderr.toString()).toBe(0);
+          };
+          git(["init", "-q"]);
+          git([
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "fixture",
+          ]);
+          const config = path.join(home, ".config/stella/verify.json");
+          if (gate === "available") {
+            writeFileSync(
+              path.join(bin, "load-admit"),
+              "#!/bin/sh\nprintf admitted > gate-receipt\n",
+            );
+            chmodSync(path.join(bin, "load-admit"), 0o755);
+          }
+          if (gate === "configured-missing" || gate === "configured-usage") {
+            writeFileSync(
+              config,
+              JSON.stringify({
+                localGate:
+                  gate === "configured-missing"
+                    ? [path.join(bin, "missing-gate")]
+                    : [path.join(bin, "bash"), "-c", "exit 64"],
+              }),
+            );
+          }
+          const result = Bun.spawnSync(
+            [
+              path.join(bin, "bash"),
+              `scripts/${entry === "verify" ? "verify.sh" : "autofix-local.sh"}`,
+              "--base",
+              "HEAD",
+            ],
+            {
+              cwd: fixture,
+              env: {
+                ...process.env,
+                HOME: home,
+                PATH: bin,
+                CI: ci,
+                STELLA_VERIFY_CONFIG: undefined,
+                REMOTE_CHECK: undefined,
+              },
+              stdout: "pipe",
+              stderr: "pipe",
+            },
+          );
+          const refused =
+            gate === "configured-missing" || gate === "configured-usage";
+          const expectedStatus = {
+            absent: 0,
+            available: 0,
+            "configured-missing": 2,
+            "configured-usage": 64,
+          };
+          expect(result.exitCode, result.stderr.toString()).toBe(
+            expectedStatus[gate],
+          );
+          expect(existsSync(path.join(fixture, `${entry}-receipt`))).toBe(
+            !refused,
+          );
+          if (!refused) {
+            expect(
+              readFileSync(path.join(fixture, `${entry}-receipt`), "utf-8"),
+            ).toBe(`${entry} executed`);
+          }
+          if (gate === "available") {
+            expect(
+              readFileSync(path.join(fixture, "gate-receipt"), "utf-8"),
+            ).toBe("admitted");
+          }
+          if (gate === "configured-missing") {
+            expect(result.stderr.toString()).toContain("missing-gate");
+          }
+        } finally {
+          rmSync(fixture, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+}
+
+test.each([false, true])(
+  "CI environment preparation uses shipped templates and preserves existing files=%s",
+  (existing) => {
+    const fixture = mkdtempSync(path.join(tmpdir(), "verify-env-"));
+    try {
+      const step = readVerifyWorkflow({ root, mode: "verify" }).find(
+        ({ name }) => name === "Prepare local check environment",
+      );
+      if (step === undefined) {
+        throw new TypeError("Environment preparation is missing");
+      }
+      for (const app of ["apps/api", "apps/web"]) {
+        expect(existsSync(path.join(root, app, ".env.example"))).toBe(true);
+        mkdirSync(path.join(fixture, app), { recursive: true });
+        writeFileSync(path.join(fixture, app, ".env.example"), "template");
+        if (existing) {
+          writeFileSync(path.join(fixture, app, ".env"), "existing");
+        }
+      }
+      const result = Bun.spawnSync(
+        ["bash", "-euo", "pipefail", "-c", step.run],
+        {
+          cwd: fixture,
+          env: { ...process.env, CI: "true" },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      for (const app of ["apps/api", "apps/web"]) {
+        expect(readFileSync(path.join(fixture, app, ".env"), "utf-8")).toBe(
+          existing ? "existing" : "template",
+        );
+      }
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  },
+);

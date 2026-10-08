@@ -15,8 +15,10 @@ const checkStep = {
   run: "bun scripts/check-contract.ts",
   env: { STELLA_VERIFY: "check" },
 };
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 const asRecord = (value: unknown): Record<string, unknown> => {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Expected workflow fixture object");
   }
   return value;
