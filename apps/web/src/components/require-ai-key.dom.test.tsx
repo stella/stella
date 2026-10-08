@@ -118,3 +118,42 @@ test.each([
     queryClient.clear();
   },
 );
+
+test("a provider under another provider reuses its gate and dialog", async () => {
+  configStatus = 200;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: "org-1",
+          email: "member@example.test",
+          id: "user-1",
+          image: null,
+          name: "Member",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <AIAvailabilityProvider>
+              <AIAvailabilityProvider>
+                <AIUnavailableDialogTrigger />
+              </AIAvailabilityProvider>
+            </AIAvailabilityProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>,
+  );
+  await screen.findByRole("heading", { name: "Connect AI provider" });
+  await settle();
+  expect(
+    screen.getAllByRole("heading", { name: "Connect AI provider" }),
+  ).toHaveLength(1);
+  queryClient.clear();
+});
