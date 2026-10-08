@@ -78,11 +78,11 @@ const metadataOf = ({ decision }: ReaderSource) => ({
     slug: decision.slug,
   }),
 });
-const readSource = (
+const readSource = async (
   context: McpRequestContext,
   options: Parameters<typeof readDecisionReaderSource>[0],
 ) =>
-  Result.tryPromise(
+  await Result.tryPromise(
     async () =>
       await (
         context.testDependencies?.readDecisionReaderSource ?? defaultReadSource
@@ -211,10 +211,13 @@ export const createReaderBlocksTool =
       !source.decision.source.allowsDerivedAi &&
       withheldTextPolicy === "metadata-only"
     ) {
-      return toolDataResult({ status: "withheld", metadata, withheldReason });
+      return toolDataResult({
+        metadata,
+        content: { status: "withheld", withheldReason },
+      });
     }
     if (source.ast === null) {
-      return toolDataResult({ status: "unavailable", metadata });
+      return toolDataResult({ metadata, content: { status: "unavailable" } });
     }
     const page = packReaderSourcePage({ ast: source.ast, source, position });
     switch (page.status) {
@@ -234,15 +237,17 @@ export const createReaderBlocksTool =
         return panic("Unknown reader page status");
     }
     const payload = {
-      status: "available",
       metadata,
-      phase: page.phase,
-      items: page.items,
-      blockFragments: page.blockFragments,
-      citationAnchors: page.citationAnchors,
-      provisionAnchors: page.provisionAnchors,
-      nextCursor: page.nextCursor,
-      limit: READER_PAGE_MAX_CHARS,
+      content: {
+        status: "available",
+        phase: page.phase,
+        items: page.items,
+        blockFragments: page.blockFragments,
+        citationAnchors: page.citationAnchors,
+        provisionAnchors: page.provisionAnchors,
+        nextCursor: page.nextCursor,
+        limit: READER_PAGE_MAX_CHARS,
+      },
     } as const;
     if (JSON.stringify(payload).length > READER_PAGE_MAX_CHARS) {
       return tooLarge();
@@ -294,30 +299,29 @@ const common = {
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
   scope: "stella:read",
-  annotations: {
-    title: "Decision reader",
-    readOnlyHint: true,
-    destructiveHint: false,
-    openWorldHint: false,
-  },
 } as const;
-export const DECISION_READER_TOOL_DEFINITIONS = [
+const readOnlyAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+} as const;
+const DECISION_READER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     ...common,
     name: "open_case_law_decision",
+    annotations: { ...readOnlyAnnotations, title: "Open case-law decision" },
     description:
       "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
     inputSchema: openDecisionArgs,
-    jsonSchemaProjectionWaiver: {
-      ignoreActions: ["check", "transform"],
-      reason:
-        "The shared paragraph string parser enforces safe numbers, range order and the 500-number span; JSON Schema projects its string grammar.",
-    },
     _meta: { ui: { visibility: ["model", "app"] } },
   }),
   defineValibotMcpTool({
     ...common,
     name: "read_case_law_decision_blocks",
+    annotations: {
+      ...readOnlyAnnotations,
+      title: "Read case-law decision blocks",
+    },
     description: `Widget-only decision AST and precomputed anchor streams, at most ${READER_PAGE_MAX_CHARS} JSON characters per page. Concatenate blockFragments.json by blockId/offset and parse when totalChars is reached. Follow nextCursor until null; anchor-only pages complete the decision's links.`,
     inputSchema: readDecisionBlocksArgs,
     _meta: { ui: { visibility: ["app"] } },
@@ -325,6 +329,7 @@ export const DECISION_READER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     ...common,
     name: "preview_cited_provision",
+    annotations: { ...readOnlyAnnotations, title: "Preview cited provision" },
     description:
       "Widget-only preview of the exact consolidated provision supplied by a decision anchor.",
     inputSchema: previewProvisionArgs,

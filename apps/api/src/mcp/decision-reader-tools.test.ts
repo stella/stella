@@ -23,7 +23,9 @@ import {
   createReaderBlocksTool,
   DECISION_READER_TOOL_SET,
 } from "./decision-reader-tools";
+import { decodeReaderCursor } from "./decision-reader.logic";
 import type { ReaderSource } from "./decision-reader.logic";
+import type { McpToolHandler, McpToolResponse } from "./tool-types";
 
 const id = "af6c7d89-41ab-42ba-814e-b657703584eb";
 const otherId = "af6c7d89-41ab-42ba-814e-b657703584ec";
@@ -101,9 +103,39 @@ const contextWith = (
   testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
 ) => asTestRaw<McpRequestContext>({ testDependencies });
 
-const open = DECISION_READER_TOOL_SET.handlers.open_case_law_decision;
-const blocks = DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks;
-const preview = DECISION_READER_TOOL_SET.handlers.preview_cited_provision;
+type HandlerInput = Parameters<McpToolHandler>[0];
+
+// Registry handlers erase their data type; parsing through the published
+// output schema restores it and asserts the contract on every call.
+const typedCall =
+  <TSchema extends v.GenericSchema>(
+    handler: (
+      input: HandlerInput,
+    ) => McpToolResponse | Promise<McpToolResponse>,
+    output: TSchema,
+  ) =>
+  async (input: HandlerInput) => {
+    const response = await handler(input);
+    if ("egress" in response) {
+      throw new Error("Decision reader tools return data, not egress plans");
+    }
+    return response.status === "success"
+      ? { status: "success" as const, data: v.parse(output, response.data) }
+      : response;
+  };
+
+const open = typedCall(
+  DECISION_READER_TOOL_SET.handlers.open_case_law_decision,
+  openDecisionOutput,
+);
+const blocks = typedCall(
+  DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks,
+  blocksDecisionOutput,
+);
+const preview = typedCall(
+  DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
+  provisionPreviewOutput,
+);
 
 describe("decision reader tool contracts", () => {
   test("anchor page offsets reset across reference cursors and phase transitions", async () => {
@@ -155,7 +187,10 @@ describe("decision reader tool contracts", () => {
         args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
         context,
       });
-      if (result.status !== "success" || result.data.status !== "available") {
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
         throw new Error("Expected a bounded anchor page");
       }
       expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
@@ -163,20 +198,22 @@ describe("decision reader tool contracts", () => {
       );
       expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
       citations.push(
-        ...result.data.citationAnchors.map((anchor) => anchor.citationId),
+        ...result.data.content.citationAnchors.map(
+          (anchor) => anchor.citationId,
+        ),
       );
       provisions.push(
-        ...result.data.provisionAnchors.map(
+        ...result.data.content.provisionAnchors.map(
           (anchor) => anchor.provision.anchor,
         ),
       );
-      if (result.data.nextCursor === null) {
+      if (result.data.content.nextCursor === null) {
         completed = true;
         break;
       }
-      expect(cursors.has(result.data.nextCursor)).toBe(false);
-      cursors.add(result.data.nextCursor);
-      cursor = result.data.nextCursor;
+      expect(cursors.has(result.data.content.nextCursor)).toBe(false);
+      cursors.add(result.data.content.nextCursor);
+      cursor = result.data.content.nextCursor;
     }
     expect(completed).toBe(true);
     expect(citations).toEqual(
@@ -268,28 +305,33 @@ describe("decision reader tool contracts", () => {
         context,
       });
       expect(result.status).toBe("success");
-      if (result.status !== "success" || result.data.status !== "available") {
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
         throw new Error("Expected an available block page");
       }
       expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
       expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
         READER_PAGE_MAX_CHARS,
       );
-      ids.push(...result.data.items.map((block) => block.id));
+      ids.push(...result.data.content.items.map((block) => block.id));
       citationIds.push(
-        ...result.data.citationAnchors.map((anchor) => anchor.citationId),
+        ...result.data.content.citationAnchors.map(
+          (anchor) => anchor.citationId,
+        ),
       );
       provisionIds.push(
-        ...result.data.provisionAnchors.map(
+        ...result.data.content.provisionAnchors.map(
           (anchor) => anchor.provision.document_id,
         ),
       );
-      if (result.data.nextCursor === null) {
+      if (result.data.content.nextCursor === null) {
         break;
       }
-      expect(cursors.has(result.data.nextCursor)).toBe(false);
-      cursors.add(result.data.nextCursor);
-      cursor = result.data.nextCursor;
+      expect(cursors.has(result.data.content.nextCursor)).toBe(false);
+      cursors.add(result.data.content.nextCursor);
+      cursor = result.data.content.nextCursor;
     }
     expect(ids).toEqual(source.ast.blocks.map((block) => block.id));
     expect(new Set(ids).size).toBe(80);
@@ -319,15 +361,18 @@ describe("decision reader tool contracts", () => {
         args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
         context,
       });
-      if (result.status !== "success" || result.data.status !== "available") {
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
         throw new Error("Expected the fragment page");
       }
       expect(v.safeParse(blocksDecisionOutput, result.data).success).toBe(true);
       expect(JSON.stringify(result.data).length).toBeLessThanOrEqual(
         READER_PAGE_MAX_CHARS,
       );
-      read.push(...result.data.items);
-      for (const fragment of result.data.blockFragments) {
+      read.push(...result.data.content.items);
+      for (const fragment of result.data.content.blockFragments) {
         expect(fragment.blockId).toBe(large.id);
         expect(fragment.offset).toBe(fragmentText.length);
         fragmentText += fragment.json;
@@ -336,10 +381,10 @@ describe("decision reader tool contracts", () => {
           fragmentText = "";
         }
       }
-      if (result.data.nextCursor === null) {
+      if (result.data.content.nextCursor === null) {
         break;
       }
-      cursor = result.data.nextCursor;
+      cursor = result.data.content.nextCursor;
     }
     expect(fragmentText).toBe("");
     expect(read).toEqual(ast.blocks);
@@ -353,13 +398,13 @@ describe("decision reader tool contracts", () => {
     const first = await blocks({ args: { decision_id: id }, context });
     if (
       first.status !== "success" ||
-      first.data.status !== "available" ||
-      first.data.nextCursor === null
+      first.data.content.status !== "available" ||
+      first.data.content.nextCursor === null
     ) {
       throw new Error("Expected a cursor for the multi-page fixture");
     }
     const cross = await blocks({
-      args: { decision_id: otherId, cursor: first.data.nextCursor },
+      args: { decision_id: otherId, cursor: first.data.content.nextCursor },
       context,
     });
     expect(cross.status).toBe("error");
@@ -368,13 +413,71 @@ describe("decision reader tool contracts", () => {
     }
     source = sourceOf(astOf(21));
     const changed = await blocks({
-      args: { decision_id: id, cursor: first.data.nextCursor },
+      args: { decision_id: id, cursor: first.data.content.nextCursor },
       context,
     });
     expect(changed.status).toBe("error");
     if (changed.status === "error" && changed.error.type === "structured") {
       expect(changed.error.code).toBe("conflict");
     }
+  });
+  test("an anchor batch revision between pages of one batch is a typed conflict", async () => {
+    const citationsOf = (target: string) =>
+      Array.from({ length: 80 }, (_, index) => ({
+        pieceId: `piece-${"x".repeat(800)}`,
+        start: 0,
+        end: 8,
+        citationId: `citation-${index}`,
+        decisionId: target,
+      }));
+    let citationAnchors = citationsOf(otherId);
+    const source = sourceOf(astOf(1));
+    const context = contextWith({
+      readDecisionReaderSource: async ({ phase }) => ({
+        ...source,
+        citationAnchors: phase === "citations" ? citationAnchors : [],
+        provisionAnchors: [],
+        referenceNextCursor: null,
+      }),
+    });
+    let cursor: string | undefined;
+    let midBatch: string | null = null;
+    for (let page = 0; page < 10 && midBatch === null; page += 1) {
+      const result = await blocks({
+        args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
+        context,
+      });
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available" ||
+        result.data.content.nextCursor === null
+      ) {
+        throw new Error("Expected a continuation inside the citation batch");
+      }
+      cursor = result.data.content.nextCursor;
+      const position = decodeReaderCursor(cursor);
+      if (position?.phase === "citations" && position.offset > 0) {
+        midBatch = cursor;
+      }
+    }
+    if (midBatch === null) {
+      throw new Error("Expected the citation batch to span several pages");
+    }
+    const unchanged = await blocks({
+      args: { decision_id: id, cursor: midBatch },
+      context,
+    });
+    expect(unchanged.status).toBe("success");
+
+    citationAnchors = citationsOf(id);
+    const revised = await blocks({
+      args: { decision_id: id, cursor: midBatch },
+      context,
+    });
+    expect(revised).toMatchObject({
+      status: "error",
+      error: { type: "structured", code: "conflict" },
+    });
   });
   test("both withheld policies are explicit and opening never includes withheld text", async () => {
     expect(READER_WITHHELD_TEXT_POLICY).toBe("metadata-only");
@@ -386,7 +489,10 @@ describe("decision reader tool contracts", () => {
         return source;
       },
     });
-    const withheld = await createReaderBlocksTool("metadata-only")({
+    const withheld = await typedCall(
+      createReaderBlocksTool("metadata-only"),
+      blocksDecisionOutput,
+    )({
       args: { decision_id: id },
       context,
     });
@@ -394,20 +500,26 @@ describe("decision reader tool contracts", () => {
     if (withheld.status !== "success") {
       throw new Error("Expected withheld metadata");
     }
-    expect(withheld.data.status).toBe("withheld");
+    expect(withheld.data.content.status).toBe("withheld");
     expect(JSON.stringify(withheld.data)).not.toContain("Paragraph 48");
-    expect(withheld.data).not.toHaveProperty("items");
-    expect(withheld.data).not.toHaveProperty("citationAnchors");
+    expect(withheld.data.content).not.toHaveProperty("items");
+    expect(withheld.data.content).not.toHaveProperty("citationAnchors");
     expect(v.safeParse(blocksDecisionOutput, withheld.data).success).toBe(true);
-    const shown = await createReaderBlocksTool("show-to-user")({
+    const shown = await typedCall(
+      createReaderBlocksTool("show-to-user"),
+      blocksDecisionOutput,
+    )({
       args: { decision_id: id },
       context,
     });
     expect(shown.status).toBe("success");
-    if (shown.status !== "success" || shown.data.status !== "available") {
+    if (
+      shown.status !== "success" ||
+      shown.data.content.status !== "available"
+    ) {
       throw new Error("Expected human-only blocks");
     }
-    expect(shown.data.items.length).toBeGreaterThan(0);
+    expect(shown.data.content.items.length).toBeGreaterThan(0);
     const model = await open({
       args: { decision_id: id, paragraphs: "48" },
       context,

@@ -23,11 +23,8 @@ export const openDecisionArgs = nullAsAbsent(
       "Decision ID returned by search_case_law or lookup_case_law.",
     ),
     paragraphs: v.optional(
-      v.pipe(
-        decisionParagraphRangeSchema,
-        v.description(
-          "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
-        ),
+      decisionParagraphRangeSchema(
+        "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
       ),
     ),
   }),
@@ -45,27 +42,36 @@ export const readDecisionBlocksArgs = nullAsAbsent(
 );
 export const previewProvisionArgs = nullAsAbsent(
   v.strictObject({
-    provision: v.strictObject({
-      document_id: uuidInputSchema(
-        "The consolidated legislation document ID supplied by a provision anchor.",
-      ),
-      anchor: v.pipe(
-        v.string(),
-        v.minLength(LIMITS.decisionReaderProvisionAnchorMinChars),
-        v.maxLength(LIMITS.decisionReaderProvisionAnchorMaxChars),
-      ),
-      cited_anchor: v.optional(
-        v.pipe(
+    provision: v.pipe(
+      v.strictObject({
+        document_id: uuidInputSchema(
+          "The consolidated legislation document ID supplied by a provision anchor.",
+        ),
+        anchor: v.pipe(
           v.string(),
           v.minLength(LIMITS.decisionReaderProvisionAnchorMinChars),
           v.maxLength(LIMITS.decisionReaderProvisionAnchorMaxChars),
+          v.description("Provision heading anchor supplied by the anchor."),
         ),
+        cited_anchor: v.optional(
+          v.pipe(
+            v.string(),
+            v.minLength(LIMITS.decisionReaderProvisionAnchorMinChars),
+            v.maxLength(LIMITS.decisionReaderProvisionAnchorMaxChars),
+            v.description(
+              "Exact cited provision anchor supplied by the anchor, when it differs from anchor.",
+            ),
+          ),
+        ),
+      }),
+      v.description(
+        "The provision object from a decision provision anchor, passed unchanged.",
       ),
-    }),
+    ),
   }),
 );
 
-export const readerMetadataSchema = v.strictObject({
+const readerMetadataSchema = v.strictObject({
   decisionId: v.string(),
   caseNumber: v.string(),
   court: v.string(),
@@ -74,16 +80,16 @@ export const readerMetadataSchema = v.strictObject({
   ecli: v.nullable(v.string()),
   appUrl: v.nullable(v.string()),
 });
-export const withheldReasonSchema = v.strictObject({
+const withheldReasonSchema = v.strictObject({
   code: v.literal("source_licence"),
   message: v.string(),
 });
-export const readerOutlineSchema = v.strictObject({
+const readerOutlineSchema = v.strictObject({
   anchorId: v.string(),
   title: v.string(),
   level: v.number(),
 });
-export const readerWindowSchema = v.strictObject({
+const readerWindowSchema = v.strictObject({
   anchorId: v.string(),
   number: v.nullable(v.number()),
   text: v.string(),
@@ -106,47 +112,47 @@ export const openDecisionOutput = v.variant("status", [
     metadata: readerMetadataSchema,
   }),
 ]);
-export const citationAnchorSchema = v.strictObject({
+const citationAnchorSchema = v.strictObject({
   pieceId: v.string(),
   start: v.number(),
   end: v.number(),
   citationId: v.string(),
   decisionId: v.string(),
 });
-export const provisionAnchorSchema = v.strictObject({
+const provisionAnchorSchema = v.strictObject({
   pieceId: v.string(),
   start: v.number(),
   end: v.number(),
   provision: previewProvisionArgs.advertisedSchema.entries.provision,
 });
-export const blockFragmentSchema = v.strictObject({
+const blockFragmentSchema = v.strictObject({
   blockId: v.string(),
   offset: v.number(),
   totalChars: v.number(),
   json: v.string(),
 });
-export const blocksDecisionOutput = v.variant("status", [
-  v.strictObject({
-    status: v.literal("available"),
-    metadata: readerMetadataSchema,
-    phase: v.picklist(["blocks", "citations", "provisions"]),
-    items: v.array(blockSchema),
-    blockFragments: v.array(blockFragmentSchema),
-    citationAnchors: v.array(citationAnchorSchema),
-    provisionAnchors: v.array(provisionAnchorSchema),
-    nextCursor: v.nullable(v.string()),
-    limit: v.literal(READER_PAGE_MAX_CHARS),
-  }),
-  v.strictObject({
-    status: v.literal("withheld"),
-    metadata: readerMetadataSchema,
-    withheldReason: withheldReasonSchema,
-  }),
-  v.strictObject({
-    status: v.literal("unavailable"),
-    metadata: readerMetadataSchema,
-  }),
-]);
+// Metadata is shared by every outcome, so it is published once beside the
+// outcome union rather than inside each branch.
+export const blocksDecisionOutput = v.strictObject({
+  metadata: readerMetadataSchema,
+  content: v.variant("status", [
+    v.strictObject({
+      status: v.literal("available"),
+      phase: v.picklist(["blocks", "citations", "provisions"]),
+      items: v.array(blockSchema),
+      blockFragments: v.array(blockFragmentSchema),
+      citationAnchors: v.array(citationAnchorSchema),
+      provisionAnchors: v.array(provisionAnchorSchema),
+      nextCursor: v.nullable(v.string()),
+      limit: v.literal(READER_PAGE_MAX_CHARS),
+    }),
+    v.strictObject({
+      status: v.literal("withheld"),
+      withheldReason: withheldReasonSchema,
+    }),
+    v.strictObject({ status: v.literal("unavailable") }),
+  ]),
+});
 const previewHeading = v.strictObject({
   anchorId: v.string(),
   level: v.number(),

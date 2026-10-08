@@ -639,6 +639,16 @@ const paragraphNoteSchema = v.variant("type", [
   }),
 ]);
 
+const paragraphNumberFinite = v.finite();
+
+/**
+ * Actions JSON Schema cannot express. A JSON number is always finite, so a
+ * converter publishes the plain number and the action still runs at runtime.
+ */
+export const DOCUMENT_AST_RUNTIME_ONLY_ACTIONS = [
+  paragraphNumberFinite,
+] as const;
+
 const paragraphEntries = {
   id: v.string(),
   anchorId: v.string(),
@@ -646,7 +656,7 @@ const paragraphEntries = {
   role: v.optional(v.picklist(PARAGRAPH_ROLES)),
   note: v.optional(paragraphNoteSchema),
   listDepth: v.optional(v.picklist([1, 2, 3, 4])),
-  number: v.optional(v.pipe(v.number(), v.finite())),
+  number: v.optional(v.pipe(v.number(), paragraphNumberFinite)),
   inlines: inlineArraySchema,
 };
 

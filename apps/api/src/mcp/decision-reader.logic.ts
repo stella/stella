@@ -36,6 +36,12 @@ const cursorSchema = v.strictObject({
     v.minValue(LIMITS.decisionReaderCursorOffsetMin),
   ),
   referenceCursor: v.nullable(v.string()),
+  /**
+   * Digest of the anchor batch an anchor-phase offset indexes into. Anchors
+   * change independently of the AST, so a continuation inside one batch must
+   * see the same batch; null when the offset starts a batch.
+   */
+  batchDigest: v.nullable(v.string()),
 });
 export type ReaderCursor = v.InferOutput<typeof cursorSchema>;
 export const decodeReaderCursor = (cursor: string): ReaderCursor | null => {
@@ -50,6 +56,11 @@ export const encodeReaderCursor = (cursor: ReaderCursor) =>
   encodePaginationCursor([cursor]);
 export const readerVersion = (blocks: readonly Block[]) =>
   sha256Base64Url(JSON.stringify(blocks));
+
+const anchorBatchDigest = (anchors: readonly unknown[]) =>
+  sha256Base64Url(JSON.stringify(anchors));
+
+const DEFAULT_WINDOW_BLOCKS = 3;
 
 type SelectReaderWindowOptions = {
   ast: DocumentAst;
@@ -67,9 +78,10 @@ export const selectReaderWindow = ({
     return { status: "not_found" as const, missing: resolved.missing };
   }
   const byAnchor = new Map(ast.blocks.map((block) => [block.anchorId, block]));
+  const nonEmpty = ast.blocks.filter((block) => block.plainText.length > 0);
   const selected =
     resolved === null
-      ? ast.blocks.filter((block) => block.plainText.length > 0).slice(0, 3)
+      ? nonEmpty.slice(0, DEFAULT_WINDOW_BLOCKS)
       : resolved.anchorIds.map(
           (anchorId) =>
             byAnchor.get(anchorId) ??
@@ -82,8 +94,9 @@ export const selectReaderWindow = ({
   ) {
     return { status: "too_large" as const };
   }
-  let remaining = READER_OPEN_TEXT_CHARS;
-  let truncated = false;
+  let remaining: number = READER_OPEN_TEXT_CHARS;
+  // The default window also omits whole blocks past its first few.
+  let truncated = resolved === null && nonEmpty.length > selected.length;
   const window = selected.flatMap((block) => {
     if (remaining === 0) {
       truncated = true;
@@ -160,7 +173,7 @@ type PackReaderBlocksOptions = {
   offset: number;
   blockOffset: number;
 };
-export const packReaderBlocks = ({
+const packReaderBlocks = ({
   blocks,
   offset,
   blockOffset,
@@ -285,12 +298,14 @@ type NextReaderCursorOptions = {
   nextOffset: number | null;
   nextBlockOffset: number;
   referenceNextCursor: string | null;
+  batchDigest: string | null;
 };
 const nextReaderCursor = ({
   current,
   nextOffset,
   nextBlockOffset,
   referenceNextCursor,
+  batchDigest,
 }: NextReaderCursorOptions): ReaderCursor | null => {
   if (nextOffset !== null) {
     return {
@@ -300,6 +315,7 @@ const nextReaderCursor = ({
       offset: nextOffset,
       blockOffset: nextBlockOffset,
       referenceCursor: current.referenceCursor,
+      batchDigest,
     };
   }
   if (current.phase !== "blocks" && referenceNextCursor !== null) {
@@ -310,6 +326,7 @@ const nextReaderCursor = ({
       offset: 0,
       blockOffset: 0,
       referenceCursor: referenceNextCursor,
+      batchDigest: null,
     };
   }
   if (current.phase === "provisions") {
@@ -322,7 +339,26 @@ const nextReaderCursor = ({
     offset: 0,
     blockOffset: 0,
     referenceCursor: null,
+    batchDigest: null,
   };
+};
+
+/** Blocks are bound by the cursor version; anchor batches by their digest. */
+const anchorBatchDigestOf = (
+  source: ReaderSource,
+  phase: ReaderCursor["phase"],
+): string | null => {
+  switch (phase) {
+    case "blocks":
+      return null;
+    case "citations":
+      return anchorBatchDigest(source.citationAnchors);
+    case "provisions":
+      return anchorBatchDigest(source.provisionAnchors);
+    default:
+      phase satisfies never;
+      return panic("Unknown reader phase");
+  }
 };
 
 type PackReaderSourcePageOptions = {
@@ -348,9 +384,14 @@ export const packReaderSourcePage = ({
       offset: 0,
       blockOffset: 0,
       referenceCursor: null,
+      batchDigest: null,
     } as const);
   if (current.phase !== "blocks" && current.blockOffset !== 0) {
     return { status: "invalid_offset" as const };
+  }
+  const batchDigest = anchorBatchDigestOf(source, current.phase);
+  if (current.offset > 0 && current.batchDigest !== batchDigest) {
+    return { status: "conflict" as const };
   }
   const packed = readerPhasePage({
     ast,
@@ -367,6 +408,7 @@ export const packReaderSourcePage = ({
     nextOffset: packed.nextOffset,
     nextBlockOffset: packed.nextBlockOffset,
     referenceNextCursor: source.referenceNextCursor,
+    batchDigest,
   });
   return {
     status: "packed" as const,
