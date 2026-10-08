@@ -1,11 +1,13 @@
-import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
-import { createAuthMiddleware, isAPIError } from "better-auth/api";
-
-import { emitSocialSignInOutcome } from "@/api/lib/observability/request-metrics";
 import type { SocialSignInOutcome } from "@/api/lib/observability/request-metrics";
+import { isRecord } from "@/api/lib/type-guards";
 
-const CALLBACK_PATH_PREFIX = "/callback/";
 const KNOWN_PROVIDERS = new Set(["google", "microsoft"]);
+
+/** The provider dimension: a known provider id, otherwise `other`. */
+export const socialSignInProvider = (provider: unknown): string =>
+  typeof provider === "string" && KNOWN_PROVIDERS.has(provider)
+    ? provider
+    : "other";
 
 /**
  * Reads the outcome from the redirect the callback answers with. Better Auth
@@ -18,12 +20,14 @@ export const classifySocialCallback = (
   returned: unknown,
   errorUrl: string,
 ): SocialSignInOutcome => {
-  if (!isAPIError(returned)) {
+  // Better Auth's redirect is an APIError: a numeric `statusCode` and the
+  // response `headers` carrying `location`.
+  if (!isRecord(returned)) {
     return "failed";
   }
-  const headers: unknown = returned.headers;
+  const headers = returned["headers"];
   const location = headers instanceof Headers ? headers.get("location") : null;
-  if (returned.statusCode !== 302 || location === null) {
+  if (returned["statusCode"] !== 302 || location === null) {
     return "failed";
   }
   const target = URL.parse(location, errorUrl);
@@ -45,29 +49,3 @@ export const classifySocialCallback = (
       return "failed";
   }
 };
-
-export const socialSignInOutcomePlugin = {
-  id: "stella-social-sign-in-outcome",
-  hooks: {
-    after: [
-      {
-        matcher: (ctx: HookEndpointContext) =>
-          ctx.path?.startsWith(CALLBACK_PATH_PREFIX) ?? false,
-        handler: createAuthMiddleware(async (ctx) => {
-          const provider: unknown = ctx.params?.["id"];
-          emitSocialSignInOutcome(
-            classifySocialCallback(
-              ctx.context.returned,
-              ctx.context.options.onAPIError?.errorURL ??
-                `${ctx.context.baseURL}/error`,
-            ),
-            typeof provider === "string" && KNOWN_PROVIDERS.has(provider)
-              ? provider
-              : "other",
-          );
-          await Promise.resolve();
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
