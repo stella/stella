@@ -263,6 +263,10 @@
     "seconds": 6.4,
     "source": "measured"
   },
+  "src/db/case-law-citation-review-provenance-migration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/db/case-law-citation-reviews-migration.test.ts": {
     "seconds": 4.6,
     "source": "measured"
@@ -277,6 +281,10 @@
   },
   "src/db/case-law-replay-rls.db.test.ts": {
     "seconds": 1.753123,
+    "source": "estimated"
+  },
+  "src/db/case-law-source-lease-purpose-migration.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/db/chat-matter-document-tool-rename.db.test.ts": {
@@ -797,6 +805,10 @@
   },
   "src/handlers/case-law/decisions/document-on-demand.test.ts": {
     "seconds": 6.156543,
+    "source": "estimated"
+  },
+  "src/handlers/case-law/decisions/document-ownership-route.db.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/handlers/case-law/decisions/document-state.test.ts": {
@@ -1727,6 +1739,10 @@
     "seconds": 0.154141,
     "source": "estimated"
   },
+  "src/handlers/case-law/polarity/consts.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/handlers/case-law/polarity/context.test.ts": {
     "seconds": 0.446202,
     "source": "estimated"
@@ -1841,10 +1857,6 @@
   },
   "src/handlers/chat/attempt-answer.test.ts": {
     "seconds": 0.460327,
-    "source": "estimated"
-  },
-  "src/handlers/chat/chat-execution-admission.test.ts": {
-    "seconds": 0.463732,
     "source": "estimated"
   },
   "src/handlers/chat/chat-message-parts.test.ts": {
@@ -6347,6 +6359,14 @@
     "seconds": 0.078638,
     "source": "estimated"
   },
+  "src/lib/legal-search/deferred-document-ownership-contract.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/legal-search/deferred-document-source-ownership.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/legal-search/document-stage-observation.test.ts": {
     "seconds": 3.71102,
     "source": "estimated"
@@ -7079,12 +7099,24 @@
     "seconds": 0.154125,
     "source": "estimated"
   },
+  "src/lib/rate-limit/execution-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/rate-limit/mcp-read-fence.test.ts": {
     "seconds": 0.730715,
     "source": "estimated"
   },
   "src/lib/rate-limit/mcp-read-fence.valkey.test.ts": {
     "seconds": 0.0948,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-action-admission.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/rate-limit/model-dispatch-admission.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/lib/rate-limit/organization-action-admission.test.ts": {
@@ -8639,6 +8671,14 @@
     "seconds": 0.566837,
     "source": "estimated"
   },
+  "src/scripts/corpus-generation.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/scripts/corpus-generation.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/scripts/corpus-index-query-diff-client.test.ts": {
     "seconds": 0.12729,
     "source": "estimated"
@@ -9125,6 +9165,38 @@
   },
   "src/tests/test-path-filters.test.ts": {
     "seconds": 0.2855,
+    "source": "estimated"
+  },
+  "src/scripts/review-account.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/document-processing-workspace-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/search/projection-repair-lock-order.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/db/account-issuer-leftover-check-migration.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-lock.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/db/aggregate-mutation-declaration.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/security/aggregate-mutations.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   }
 }

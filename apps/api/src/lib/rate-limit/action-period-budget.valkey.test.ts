@@ -4,13 +4,13 @@ import { describe, expect, test } from "bun:test";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
 import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import {
   createAdmissionRedis,
   type AdmissionRedisClient,
 } from "@/api/lib/admission-redis";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
 import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
@@ -302,7 +302,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           "new-turn",
           "refused-turn",
         ].entries()) {
-          const phase = await startChatExecutionAdmission({
+          const phase = await startExecutionAdmission({
             mode: "concurrency-only",
             actionKind: "chat.send",
             enabled: true,
@@ -366,7 +366,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               },
             },
           });
-        const phase = await startChatExecutionAdmission({
+        const phase = await startExecutionAdmission({
           organizationId,
           userId,
           enabled: true,
@@ -384,7 +384,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           expect(
             Result.isOk(await phase.value.reservePeriod(firstMessageIdentity)),
           ).toBe(true);
-          const title = await startChatExecutionAdmission({
+          const title = await startExecutionAdmission({
             organizationId,
             userId,
             enabled: true,
@@ -706,7 +706,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         let trigger: (() => void) | undefined;
         let endMs = 0;
         let budgetKey: string | undefined;
-        const result = await startChatExecutionAdmission({
+        const result = await startExecutionAdmission({
           organizationId,
           userId,
           enabled: true,

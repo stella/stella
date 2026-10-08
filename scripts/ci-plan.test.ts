@@ -26,7 +26,6 @@ import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" wit
 import { selectApiTestImpact } from "./api-test-impact";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
-import { requiresAvtPostgres } from "./ci-avt-postgres";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   markdownReaders,
@@ -176,11 +175,6 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
 // process, each answer comes from the same function the CLI prints; a bun
 // call the selector adds without an entry here fails the plan.
 const SELECTOR_BUN_CLIS = {
-  "scripts/ci-avt-postgres.ts": {
-    variable: "SERVED_AVT_POSTGRES",
-    flag: "",
-    output: (files: readonly string[]) => String(requiresAvtPostgres(files)),
-  },
   "scripts/ci-package-scope.ts": {
     variable: "SERVED_LANDING_BUILD",
     flag: "--landing-build",
@@ -1227,12 +1221,10 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
       ),
     ].map((match) => match[1]);
     const scope = jobScopes[job];
-    expect(new Set(selectedBy), job).toEqual(
-      new Set([
-        ...(scope === null ? [] : [scope]),
-        ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
-      ]),
-    );
+    expect(selectedBy, job).toEqual([
+      ...(scope === null ? [] : [scope]),
+      ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
+    ]);
   }
 });
 
@@ -2809,7 +2801,7 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     ciJobs["ci-plan"],
   );
   expect(plan.outputs["service_suites_required"]).toBe(
-    `\${{ github.event_name == 'pull_request' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}`,
+    `\${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}`,
   );
   expect(jobScopes["service-suites"]).toBe("service_suites_required");
   expect(ciJobs).not.toHaveProperty("collab-redis");
@@ -3453,7 +3445,7 @@ test("an unreadable PR diff requires route smoke while manual and queue runs ret
     rmSync(directory, { recursive: true, force: true });
   }
 });
-test("verification paths select only scoped Postgres suites on pull requests", () => {
+test("service-suite scopes remain planned while pull requests skip execution", () => {
   const scope = "service_suites_pr_required";
   const condition = jobIf(ciJobs["service-suites"]);
   expect(condition).toContain("needs.ci-plan.outputs.suite_depth == 'fast'");
@@ -3463,43 +3455,27 @@ test("verification paths select only scoped Postgres suites on pull requests", (
     v.object({ outputs: v.record(v.string(), v.string()) }),
     ciJobs["ci-plan"],
   );
-  expect(plan.outputs[scope]).toContain(
-    `steps.changed-files.outputs.${scope} == 'true'`,
+  expect(plan.outputs[scope]).toBe(
+    `\${{ steps.changed-files.outputs.${scope} }}`,
   );
   const cases = [
-    ...[
-      "apps/api/src/lib/lists/verification/run-queue.ts",
-      "apps/api/src/handlers/lists/verifications/create.ts",
-      "apps/api/src/handlers/lists/verification-routes.ts",
-      "apps/api/src/handlers/lists/routes.ts",
-      "apps/api/src/lib/api-handlers-list-verification.ts",
-      "apps/api/drizzle/20260925220000_legal_list_verifications/migration.sql",
-      "apps/api/src/handlers/lists/items/sources/verification/update.ts",
-      "apps/api/src/db/schema/lists-verification.ts",
-      "apps/api/src/db/list-verification-rls.db.test.ts",
-      "apps/api/src/lib/views/avt-layout.db.test.ts",
-      "apps/api/src/lib/scheduler/tasks/list-verification-run-reconcile.ts",
-      "apps/web/src/features/avt/avt-view.tsx",
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lists/source-verification-action.tsx",
-    ].map((file) => ({ file, required: true })),
-    { file: "apps/api/src/db/schema/new.ts", required: false },
-    { file: "apps/api/drizzle/123_new.sql", required: false },
-    { file: "apps/api/src/lib/scheduler/new.ts", required: false },
+    { file: "apps/api/src/db/schema/new.ts", required: true },
+    { file: "apps/api/drizzle/123_new.sql", required: true },
+    { file: "apps/api/src/lib/scheduler/new.ts", required: true },
     {
       file: "apps/api/src/handlers/legislation/new-backfill.ts",
-      required: false,
+      required: true,
     },
     { file: "apps/api/scripts/run-postgres-tests.ts", required: true },
-    { file: "apps/api/scripts/avt-postgres-tests.ts", required: true },
-    { file: "apps/api/src/tests/setup-env.ts", required: false },
+    { file: "apps/api/src/tests/setup-env.ts", required: true },
     {
       file: "apps/api/src/lib/scheduler/runner.postgres.test.ts",
-      required: false,
+      required: true,
     },
-    { file: "apps/collab/src/server.test.ts", required: false },
+    { file: "apps/collab/src/server.test.ts", required: true },
     {
       file: "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts",
-      required: false,
+      required: true,
     },
     { file: "docs/guide.md", required: false },
     { file: "apps/web/src/new.tsx", required: false },
@@ -3510,49 +3486,46 @@ test("verification paths select only scoped Postgres suites on pull requests", (
     cases.map(({ file, required }) => ({
       file,
       files: [file],
-      outputs: [
-        scope,
-        "postgres_suites_required",
-        "corpus_suites_required",
-        "valkey_suites_required",
-        "collaboration_suite_required",
-      ],
+      outputs: [scope],
       required,
     })),
   ).map(({ item: { file, required }, plan: values }) => ({
     file,
     required,
     selected: values.at(0) === "true",
-    suiteScopes: values.slice(1),
   }));
-  for (const { file, required, selected, suiteScopes } of planned) {
+  for (const { file, required, selected } of planned) {
     expect(selected, file).toBe(required);
-    expect(suiteScopes, file).toEqual([
-      String(required),
-      "false",
-      "false",
-      "false",
-    ]);
   }
   // Evaluate the actual job condition with planner outputs at both depths.
-  for (const { file, selected } of planned) {
-    for (const suiteDepth of ["fast", "full"]) {
-      expect(
-        evaluate(condition, {
-          values: {
-            "github.event_name": EVENT.pullRequest,
-            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
-            "needs.ci-plan.outputs.run_required": "true",
-            "needs.ci-plan.outputs.trusted": "true",
-            "needs.ci-plan.outputs.suite_depth": suiteDepth,
-            "needs.ci-plan.outputs.service_suites_required": "true",
-            "needs.ci-plan.outputs.service_suites_pr_required":
-              String(selected),
-          },
-        }),
-        file,
-      ).toBe(selected);
-    }
+  const conditions = planned.flatMap(({ file, selected }) =>
+    ["fast", "full"].map((suiteDepth) => ({
+      label: `${file} ${suiteDepth}`,
+      executable: condition
+        .replaceAll("needs.ci-plan.outputs.service_suites_required", "'true'")
+        .replaceAll(
+          `needs.ci-plan.outputs.${scope}`,
+          () => `'${String(selected)}'`,
+        )
+        .replaceAll(
+          "needs.ci-plan.outputs.suite_depth",
+          () => `'${suiteDepth}'`,
+        )
+        .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+        .replaceAll("github.event_name", "'pull_request'"),
+      exitCode: 1,
+    })),
+  );
+  for (const { item, exitCode } of runBashBatch(
+    conditions,
+    ({ executable }) => ({
+      flags: [],
+      script: `[[ ${executable} ]]`,
+      args: [],
+      env: { PATH: Bun.env["PATH"] ?? "" },
+    }),
+  )) {
+    expect(exitCode, item.label).toBe(item.exitCode);
   }
   expectResultGates(
     planned.flatMap(({ file, selected }) =>
@@ -3563,92 +3536,11 @@ test("verification paths select only scoped Postgres suites on pull requests", (
           results: { "service-suites": result },
           unplannedScopes: selected ? [] : [scope],
         },
-        exitCode:
-          result === "success" || (result === "skipped" && !selected) ? 0 : 1,
+        exitCode: result === "success" || result === "skipped" ? 0 : 1,
       })),
     ),
   );
 }, 30_000);
-
-test("verification service planning and admission preserve the trust verdict", () => {
-  const { outputs } = v.parse(
-    v.object({ outputs: v.record(v.string(), v.string()) }),
-    ciJobs["ci-plan"],
-  );
-  const file = "apps/api/src/lib/lists/verification/run-queue.ts";
-  const changedScope = v.parse(
-    v.picklist(["true", "false"]),
-    runSelector([file], ["service_suites_pr_required"]).at(0),
-  );
-  expect(changedScope).toBe("true");
-  const step = jobSteps(ciJobs["ci-plan"]).find(
-    ({ name }) => name === "Check changed file scope",
-  );
-  const cases = (["true", "false"] as const).flatMap((trusted) =>
-    [SUITE_DEPTH.fast, SUITE_DEPTH.full].map((depth) => {
-      const values = {
-        "github.event_name": EVENT.pullRequest,
-        "steps.completed-depth.outputs.run_required": "true",
-        "steps.check.outputs.trusted": trusted,
-        // Even a populated path scope cannot require an ineligible job.
-        "steps.changed-files.outputs.service_suites_pr_required": changedScope,
-      };
-      expect(evaluate(step?.if ?? "", { values })).toBe(trusted === "true");
-      const planned = v.parse(
-        v.picklist(["true", "false"]),
-        evaluate(outputs["service_suites_pr_required"] ?? "", { values }),
-      );
-      expect(planned).toBe(trusted);
-      const fullPlanned = v.parse(
-        v.boolean(),
-        evaluate(outputs["service_suites_required"] ?? "", { values }),
-      )
-        ? "true"
-        : "false";
-      expect(fullPlanned).toBe(trusted);
-      expect(
-        evaluate(jobIf(ciJobs["service-suites"]), {
-          values: {
-            "github.event_name": EVENT.pullRequest,
-            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
-            "needs.ci-plan.outputs.trusted": trusted,
-            "needs.ci-plan.outputs.run_required": "true",
-            "needs.ci-plan.outputs.suite_depth": depth,
-            "needs.ci-plan.outputs.service_suites_pr_required": planned,
-            "needs.ci-plan.outputs.service_suites_required": fullPlanned,
-          },
-        }),
-      ).toBe(trusted === "true");
-      return { trusted, depth, planned, fullPlanned };
-    }),
-  );
-  for (const { item, exitCode, stdout } of evaluateResults(
-    cases.flatMap((plannedCase) =>
-      ["success", "failure", "skipped"].map((result) => ({
-        ...plannedCase,
-        result,
-      })),
-    ),
-    ({ trusted, depth, planned, fullPlanned, result }) => ({
-      event: EVENT.pullRequest,
-      suiteDepth: depth,
-      trusted,
-      results: { "service-suites": result },
-      plannedOutputs: {
-        service_suites_pr_required: planned,
-        service_suites_required: fullPlanned,
-      },
-    }),
-  )) {
-    expect(exitCode).toBe(
-      item.trusted === "true" && item.result === "success" ? 0 : 1,
-    );
-    if (item.trusted === "false") {
-      expect(stdout).toContain("failed the trust check");
-      expect(stdout).not.toContain("planned, skipped");
-    }
-  }
-});
 
 // The one selector run that spawns the real detector CLIs: it proves the
 // wiring the in-process plans above stand in for. Each case starts three bun
@@ -3661,14 +3553,15 @@ test("the selector plans the same with its detector CLIs spawned as served in pr
     ciJobs["ci-plan"],
   );
   const outputs = Object.entries(plan.outputs).flatMap(([name, value]) =>
-    value.includes("steps.changed-files.outputs.") ? [name] : [],
+    /^\$\{\{ steps\.changed-files\.outputs\.\w+ \}\}$/u.test(value)
+      ? [name]
+      : [],
   );
   expect(outputs).toContain("service_suites_pr_required");
   expect(outputs).toContain("dependency_malware_required");
   expect(outputs).toContain("route_smoke_required");
   const cases = [
     { files: ["apps/api/src/server.ts"], outputs },
-    { files: ["apps/api/src/lib/lists/verification/run-queue.ts"], outputs },
     { files: ["apps/api/src/db/schema/new.ts", "bun.lock"], outputs },
     { files: ["apps/web/src/routes/index.tsx"], outputs },
     { files: ["docs/guide.md", "packages/time/src/index.ts"], outputs },
@@ -3843,31 +3736,6 @@ test("image scopes remain planned while pull requests skip execution", () => {
   }
 }, 30_000);
 
-test("verification pull requests pass their scope to the production Postgres runner", () => {
-  const step = jobSteps(ciJobs["service-suites"]).find(
-    ({ name }) => name === "Run Postgres-gated API suites",
-  );
-  expect(step?.run).toBeDefined();
-  const outcomes = runBashBatch(["pull_request", "merge_group"], (event) => ({
-    flags: ["-eu"],
-    script: `bun() { printf '%s\\n' "$@"; }\n${step?.run ?? ""}`,
-    args: [],
-    env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: event },
-  }));
-  for (const { item: event, exitCode, stdout } of outcomes) {
-    expect(exitCode, event).toBe(0);
-    const args = stdout.trim().split("\n");
-    expect(args.slice(0, 2)).toEqual(["run", "test:postgres"]);
-    if (event === "pull_request") {
-      expect(args.slice(2)).toEqual(["--avt"]);
-    } else {
-      expect(args.slice(2)).toEqual([
-        "--test-name-pattern=^(?!.*sanctions monitoring full-volume)",
-      ]);
-    }
-  }
-});
-
 test("each folded service step follows its own dependency scope at PR depth", () => {
   const scopes = [
     "postgres_suites_required",
@@ -3879,9 +3747,9 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     ["packages/time/src/index.ts"],
     [...scopes, "collab_redis_required", "service_suites_pr_required"],
   );
-  expect(timePlan.at(3)).toBe("false");
+  expect(timePlan.at(3)).toBe("true");
   expect(timePlan.at(4)).toBe("false");
-  expect(timePlan.at(5)).toBe("false");
+  expect(timePlan.at(5)).toBe("true");
   const collaboration = jobSteps(ciJobs["service-suites"]).find(
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
@@ -3908,7 +3776,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
           (_, scope: string) => `'${String(values[scope])}'`,
         )} ]]`,
     ]).exitCode;
-  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(1);
+  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(0);
   for (const [name, scope] of [
     ["Run Postgres-gated API suites", "postgres_suites_required"],
     ["Start corpus engine", "corpus_suites_required"],
@@ -3929,18 +3797,18 @@ test("each folded service step follows its own dependency scope at PR depth", ()
       );
     }
   }
-  expect(
-    runSelector(
-      ["apps/collab/src/server.ts"],
-      scopes,
-      "full",
-      "false",
-      "merge_group",
-    ),
-  ).toEqual(["true", "true", "true", "true"]);
-  expect(
-    runSelector(["docs/guide.md"], scopes, "full", "false", "merge_group"),
-  ).toEqual(["false", "false", "false", "false"]);
+  expect(runSelector(["apps/collab/src/server.ts"], scopes, "full")).toEqual([
+    "true",
+    "true",
+    "true",
+    "true",
+  ]);
+  expect(runSelector(["docs/guide.md"], scopes, "full")).toEqual([
+    "false",
+    "false",
+    "false",
+    "false",
+  ]);
 });
 
 test("an empty full-depth diff preserves the original API service-suite selection", () => {
@@ -4022,13 +3890,15 @@ const queueOnlyJobs = Object.fromEntries(
   Object.entries(eventPolicies.jobs)
     .filter(
       ([key, policy]) =>
-        policy === "queue" &&
+        (policy === "queue" || key === "ci.yml/service-suites") &&
         key.startsWith("ci.yml/") &&
         gatedJobs.includes(key.slice("ci.yml/".length)),
     )
     .map(([key]) => [
       key.slice("ci.yml/".length),
-      "queue-only because its declared event policy certifies the merged tree",
+      key === "ci.yml/service-suites"
+        ? "Postgres PR switch is off by default"
+        : "queue-only because its declared event policy certifies the merged tree",
     ]),
 );
 
@@ -4069,6 +3939,8 @@ const runsAtDepth = (
         "needs.ci-plan.outputs.suite_depth": depth,
         "needs.ci-plan.outputs.queue_depth": selectedQueueDepth,
         "vars.QUEUE_BROWSER_SUITES": queueBrowserSuites,
+        "vars.CI_POSTGRES_PR_SELECTION": "off",
+        "needs.ci-plan.outputs.postgres_pr_required": "false",
         "needs.ci-plan.outputs.ci_browser_required": browserPlanOutput({
           event,
           depth,
@@ -4790,7 +4662,7 @@ test("API planning only loads dependencies after installation and emits install-
     (step) => step.name === "Select affected API test files",
   );
   expect(select?.if).toBe(
-    "steps.completed-depth.outputs.run_required != 'false' && (steps.api-test-deps.outcome == 'success')",
+    "steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'pull_request' && steps.api-test-deps.outcome == 'success'",
   );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
@@ -4845,6 +4717,180 @@ test("API planning only loads dependencies after installation and emits install-
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("Postgres plans are visible on PRs while execution requires explicit opt-in", () => {
+  const steps = jobSteps(ciJobs["ci-plan"]);
+  const planner = steps.find(
+    (step) => step.name === "Select affected Postgres test files",
+  );
+  const runner = jobSteps(ciJobs["service-suites"]).find(
+    (step) => step.name === "Run Postgres-gated API suites",
+  );
+  const runnerSelection =
+    runner?.env?.["CI_POSTGRES_TEST_SELECTION"] ??
+    panic("Missing Postgres selection wiring");
+  const jobCondition = jobIf(ciJobs["service-suites"]);
+  for (const mode of ["selected", "all", "none"] as const) {
+    const selection = JSON.stringify(
+      mode === "selected"
+        ? { mode, files: ["src/synthetic.db.test.ts"] }
+        : { mode },
+    );
+    for (const event of [
+      EVENT.mergeGroup,
+      EVENT.workflowDispatch,
+      EVENT.pullRequest,
+    ]) {
+      for (const prSwitch of ["", "off", "on"]) {
+        const enabled = event === EVENT.pullRequest && prSwitch === "on";
+        const values = {
+          "github.event_name": event,
+          "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
+          "steps.completed-depth.outputs.run_required": "true",
+          "steps.api-test-deps.outcome": "success",
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.queue_depth": "full",
+          "needs.ci-plan.outputs.service_suites_required": "true",
+          "needs.ci-plan.outputs.service_suites_pr_required": "true",
+          "needs.ci-plan.outputs.postgres_suites_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.suite_depth":
+            event === EVENT.pullRequest ? "fast" : "full",
+          "needs.ci-plan.outputs.postgres_pr_required": String(enabled),
+          "needs.ci-plan.outputs.postgres_test_selection": selection,
+        };
+        expect(evaluate(planner?.if ?? "false", { values })).toBe(
+          event === EVENT.mergeGroup || event === EVENT.pullRequest,
+        );
+        expect(evaluate(jobCondition, { values })).toBe(
+          event !== EVENT.pullRequest || enabled,
+        );
+        expect(evaluate(runner?.if ?? "false", { values })).toBe(true);
+        expect(evaluate(runnerSelection, { values })).toBe(
+          event === EVENT.mergeGroup || enabled ? selection : '{"mode":"all"}',
+        );
+        expect(
+          evaluate(runnerSelection, {
+            values: {
+              ...values,
+              "needs.ci-plan.outputs.postgres_test_selection": "",
+            },
+          }),
+        ).toBe('{"mode":"all"}');
+      }
+    }
+  }
+  expect(planner?.run).toContain('postgres_test_selection={"mode":"all"}');
+  for (const result of ["success", "skipped", "failure"]) {
+    expect(
+      evaluateResult({
+        event: EVENT.pullRequest,
+        results: { "service-suites": result },
+        plannedOutputs: { postgres_pr_required: "true" },
+      }),
+    ).toBe(result === "success" ? 0 : 1);
+  }
+});
+
+test("Postgres planning generates ignored runtime inputs and widens when any stage fails", () => {
+  const planner = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Select affected Postgres test files",
+  );
+  const commands = [
+    "--cwd=packages/cli run codegen:runtime",
+    "--cwd=apps/api run generate:capability-runtime",
+    "scripts/ci-postgres-test-plan.ts",
+  ];
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "postgres-runtime-plan-"),
+  );
+  try {
+    for (const failedCommand of ["", ...commands]) {
+      const output = nodePath.join(directory, "output");
+      const trace = nodePath.join(directory, "trace");
+      writeFileSync(output, "");
+      writeFileSync(trace, "");
+      const result = Bun.spawnSync({
+        cmd: [
+          "bash",
+          "-e",
+          "-c",
+          `timeout() { shift 2; "$@"; }
+bun() {
+  printf '%s\\n' "$*" >> "$TRACE"
+  if [[ "$*" == "$FAILED_COMMAND" ]]; then return 1; fi
+  if [[ "$*" == scripts/ci-postgres-test-plan.ts ]]; then
+    printf '%s\\n' 'postgres_test_selection={"mode":"selected","files":["src/db.test.ts"]}' >> "$GITHUB_OUTPUT"
+  fi
+}
+${planner?.run ?? panic("Missing Postgres planner")}`,
+        ],
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          TRACE: trace,
+          FAILED_COMMAND: failedCommand,
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const invoked = readFileSync(trace, "utf-8").trim().split("\n");
+      expect(invoked).toEqual(
+        failedCommand === ""
+          ? commands
+          : commands.slice(0, commands.indexOf(failedCommand) + 1),
+      );
+      expect(readFileSync(output, "utf-8")).toContain(
+        failedCommand === "" ? '"mode":"selected"' : '"mode":"all"',
+      );
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("full Postgres failures trigger selector replay only on main-heavy", () => {
+  const steps = jobSteps(ciJobs["service-suites"]);
+  const runner = steps.find(
+    (step) => step.name === "Run Postgres-gated API suites",
+  );
+  const missCheck = steps.find(
+    (step) => step.name === "Check full Postgres failures for selector misses",
+  );
+  expect(runner?.run).toContain("--reporter=junit");
+  expect(runner?.run).toContain("postgres-tests.xml");
+  expect(missCheck?.env?.["POSTGRES_JUNIT_FILE"]).toContain(
+    "postgres-tests.xml",
+  );
+  expect(missCheck?.run).toContain("bun scripts/ci-postgres-selector-miss.ts");
+  for (const heavyOnly of [false, true]) {
+    for (const outcome of ["success", "failure", "skipped"]) {
+      for (const cancelled of [false, true]) {
+        expect(
+          evaluate(missCheck?.if ?? "false", {
+            values: {
+              "inputs.heavy_only": heavyOnly,
+              "steps.postgres-tests.outcome": outcome,
+            },
+            status: { always: true, success: false, failure: true, cancelled },
+          }),
+        ).toBe(heavyOnly && outcome === "failure" && !cancelled);
+      }
+    }
+  }
+  const summary = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Summarize Postgres test selection",
+  );
+  expect(summary?.run).toContain("GITHUB_STEP_SUMMARY");
+  expect(summary?.run).toContain('"full"');
+  expect(summary?.env?.["SELECTION"]).toContain(
+    "steps.postgres-test-plan.outputs.postgres_test_selection",
+  );
+  expect(summary?.env?.["REASON"]).toContain(
+    "steps.postgres-test-plan.outputs.postgres_selection_reason",
+  );
 });
 
 type BrowserPlanOptions = {
@@ -5097,5 +5143,36 @@ test("desktop browser detector failures and malformed output cannot skip the PR 
   )) {
     expect(exitCode, stderr).toBe(0);
     expect(stdout).toBe(item.expected);
+  }
+});
+
+test("Postgres PR required checks follow trust, run eligibility and the general opt-in", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const trusted of ["true", "false"]) {
+    for (const runRequired of ["true", "false"]) {
+      for (const prSwitch of ["on", "off", ""]) {
+        for (const scope of ["true", "false"]) {
+          const enabled =
+            trusted === "true" &&
+            runRequired === "true" &&
+            prSwitch === "on" &&
+            scope === "true";
+          expect(
+            evaluate(plan.outputs["postgres_pr_required"] ?? "", {
+              values: {
+                "github.event_name": EVENT.pullRequest,
+                "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
+                "steps.completed-depth.outputs.run_required": runRequired,
+                "steps.check.outputs.trusted": trusted,
+                "steps.changed-files.outputs.service_suites_pr_required": scope,
+              },
+            }),
+          ).toBe(enabled);
+        }
+      }
+    }
   }
 });

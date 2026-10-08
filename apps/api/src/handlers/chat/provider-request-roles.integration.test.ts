@@ -46,6 +46,7 @@ import {
 } from "@/api/tests/helpers/agent-skill-db";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   CACHING_SETTINGS,
   endpointKey,
@@ -313,6 +314,7 @@ const ROLE_REQUESTS = {
       await generateThreadRecapText({
         messages: chatMessagesOf(TRANSCRIPT),
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         promptCachingEnabled: run.caching,
@@ -351,6 +353,7 @@ const ROLE_REQUESTS = {
         boundary: boundaryOf(run),
         messages: chatMessagesOf(TRANSCRIPT),
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         preserveTokens: 1,
@@ -372,6 +375,7 @@ const ROLE_REQUESTS = {
           role: index % 2 === 0 ? "user" : "assistant",
         })),
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         preserveTokens: 1,
@@ -392,6 +396,7 @@ const ROLE_REQUESTS = {
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         preserveTokens: 1,
         reasoningEffort: effortOf(run.effort),
         safeDb: safeDbOf(),
@@ -420,6 +425,7 @@ const ROLE_REQUESTS = {
           workspaceId: null,
         },
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         role: "fast",

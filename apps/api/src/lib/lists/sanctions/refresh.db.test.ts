@@ -16,6 +16,7 @@ import {
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import {
   refreshSanctionsSource,
@@ -29,6 +30,7 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 const CONTENT_HASH = "a".repeat(64);
 const SOURCE_URL =
   "https://mzv.gov.cz/file/1/Vnitrostatni_sankcni_seznam_2026_07_23.csv";
+const permit = grantThirdPartyOutboundPermit();
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -98,6 +100,7 @@ test(
       });
     };
     const options = {
+      permit,
       db: scopedDb,
       source: "cz" as const,
       signal: new AbortController().signal,
@@ -142,6 +145,7 @@ test(
       .where(eq(sanctionsSources.id, "cz"));
     const parsed = list("2026-07-24", 0);
     const options = {
+      permit,
       db: scopedDb,
       source: "cz" as const,
       signal: new AbortController().signal,
@@ -179,6 +183,7 @@ test(
   "reports access denial without replacing the last good edition",
   async () => {
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -252,6 +257,7 @@ test(
     let markerReads = 0;
     let downloads = 0;
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -306,6 +312,7 @@ test(
       })
       .returning({ id: sanctionsEditions.id });
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -368,6 +375,7 @@ test(
       contentHash: payload.contentHash,
     });
     const options = {
+      permit,
       db: scopedDb,
       source: "cz" as const,
       signal: new AbortController().signal,
@@ -416,6 +424,7 @@ test(
       panic("Missing historical sanctions edition test fixture");
     }
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -455,6 +464,7 @@ test(
     first.sourceId = "\uE000";
     second.sourceId = "\u{10000}";
     const outcome = await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source: "cz",
       signal: new AbortController().signal,
@@ -541,6 +551,7 @@ const datedRefresh = (
     sequence[Math.min(index, sequence.length - 1)] ?? null;
   const run = async () =>
     await refreshSanctionsSource({
+      permit,
       db: scopedDb,
       source,
       signal: new AbortController().signal,

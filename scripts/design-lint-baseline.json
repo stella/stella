@@ -847,7 +847,7 @@
     "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 4,
     "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts": 2,
     "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts": 2,
-    "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts": 12,
+    "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts": 11,
     "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 1,
     "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts": 3,
     "apps/api/src/lib/legal-search/corpus-index-projection-store.ts": 15,
@@ -1215,7 +1215,6 @@
   "eslint/max-params": {
     ".oxlint-plugins/no-ambient-nondeterminism.ts": 6,
     ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
-    "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts": 1,
@@ -1243,7 +1242,6 @@
   "react/no-children-prop": {
     "apps/web/src/components/chat/chat-rich-message-part.test.ts": 1,
     "apps/web/src/components/inspector/use-file-tab-rename.dom.test.tsx": 2,
-    "apps/web/src/components/workspaces/edit-field-dialog.tsx": 6,
     "apps/web/src/features/workspaces/team-avatars.test.ts": 1,
     "apps/web/src/hooks/use-time-billing-preview.dom.test.tsx": 1,
     "apps/web/src/routes/-protected-app/-components/payment-retry-banner.dom.test.tsx": 2

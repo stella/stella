@@ -241,12 +241,22 @@ RUN bun build \
 # Reviewed citation polarities: stores them and applies them to the current
 # citation rows. Needs the API env (database) and runs inside the API task;
 # reports without writing until `--apply`:
-#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json", "--apply"]
+#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
+#    "--results", "/tmp/results.jsonl", "--apply"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/apply-reviewed-citation-labels.js \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts
+# Corpus generation registry: status, register, and the serving flip, which
+# checks the target's indexes on the search endpoint first. Needs the API env
+# (database, search endpoint); reports without writing until `--apply`:
+#   ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/corpus-generation.js \
+    apps/api/src/scripts/corpus-generation.ts
 # Read-only snippet comparison over the serving corpus index. Reads its query
 # set from a JSON file, so the committed sample ships next to the bundle:
 #   ["bun", "/app/corpus-snippet-compare.js",
@@ -402,6 +412,7 @@ COPY --chown=stella:stella --from=builder /app/repair-publisher-absent-text.js /
 COPY --chown=stella:stella --from=builder /app/repair-cz-ns-court.js /app/repair-cz-ns-court.js
 COPY --chown=stella:stella --from=builder /app/classify-citations.js /app/classify-citations.js
 COPY --chown=stella:stella --from=builder /app/apply-reviewed-citation-labels.js /app/apply-reviewed-citation-labels.js
+COPY --chown=stella:stella --from=builder /app/corpus-generation.js /app/corpus-generation.js
 COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/corpus-snippet-compare.js
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json

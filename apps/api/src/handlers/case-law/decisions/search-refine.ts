@@ -14,7 +14,11 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -36,6 +40,7 @@ const CASE_LAW_REFINE_TIMEOUT_MS = 20_000;
 const REFINE_FAILED_MESSAGE = "Failed to improve search query";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "case-law.search-refine" },
   description:
     "Rewrite a case-law search into the words court decisions of the " +
     "jurisdiction use, in the corpus language: statutory terms for everyday " +
@@ -57,6 +62,7 @@ const config = {
 const refineCaseLawSearch = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -136,6 +142,7 @@ const refineCaseLawSearch = createSafeRootHandler(
         try: async () =>
           await generateTanStackObjectForRole({
             dataClass: "customer",
+            admission: configuredModelAdmission({ modelAdmission }),
             role: "fast",
             serviceTier: "standard",
             orgAIConfig,

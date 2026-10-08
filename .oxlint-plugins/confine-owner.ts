@@ -392,7 +392,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           unownedUse:
-            "`{{id}}` is owned by {{owner}}. Go through the owner, or add this file to that entry's `allowed` list with a reason in scripts/ownership.ts.",
+            "`{{id}}` is owned by {{owner}}. Go through the owner, or add this file to that entry's `allowed` list with a reason in scripts/ownership/<id>.ts.",
         },
         schema: [
           {

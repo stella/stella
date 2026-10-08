@@ -98,7 +98,7 @@ const CODED_SKIP_REASONS: Record<string, ReviewSkipReason> = {
   [LOWER_WEIGHT_SKIP_REASON]: { kind: "lower-weight" },
 };
 
-export const codeSkipReason = (text: string): ReviewSkipReason =>
+const codeSkipReason = (text: string): ReviewSkipReason =>
   CODED_SKIP_REASONS[text.toLocaleLowerCase("und")] ?? { kind: "other", text };
 
 export const proposedPositionSchema = v.strictObject({
@@ -121,14 +121,14 @@ export const proposedPositionSchema = v.strictObject({
   ),
 });
 
-export const skippedTermSchema = v.strictObject({
+const skippedTermSchema = v.strictObject({
   subject: v.pipe(v.string(), v.maxLength(REVIEW_SKIP_SUBJECT_MAX_LENGTH)),
   reason: v.pipe(v.string(), v.maxLength(REVIEW_SKIP_REASON_MAX_LENGTH)),
 });
 
 // No transforms here: the schema is handed to the provider as JSON Schema,
 // which cannot express them. Whitespace is normalized by this module instead.
-export const proposedPartySchema = v.strictObject({
+const proposedPartySchema = v.strictObject({
   role: v.pipe(
     v.string(),
     v.minLength(1),
@@ -155,9 +155,9 @@ export const proposedPositionsSchema = v.strictObject({
   skipped: v.array(skippedTermSchema),
 });
 
-export type ProposedPosition = v.InferOutput<typeof proposedPositionSchema>;
-export type ProposedParty = v.InferOutput<typeof proposedPartySchema>;
-export type ProposedSkippedTerm = v.InferOutput<typeof skippedTermSchema>;
+type ProposedPosition = v.InferOutput<typeof proposedPositionSchema>;
+type ProposedParty = v.InferOutput<typeof proposedPartySchema>;
+type ProposedSkippedTerm = v.InferOutput<typeof skippedTermSchema>;
 export type ProposedPositions = v.InferOutput<typeof proposedPositionsSchema>;
 
 /** Where a prepared reference document came from, so a verified block can be

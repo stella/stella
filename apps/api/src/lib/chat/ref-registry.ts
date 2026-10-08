@@ -382,14 +382,14 @@ export type ChatRefKind = ChatRefTokenKind;
  * absent or empty the registry falls back to the unique ref it already
  * minted for that entity id this turn, and otherwise leaves the value alone.
  */
-export type HydrateRefIdProps = {
+type HydrateRefIdProps = {
   inputState: ChatRefInputState;
   kind: ChatRefKind;
   value: unknown;
   workspaceId?: unknown;
 };
 
-export type ResolveRefIdProps = {
+type ResolveRefIdProps = {
   kind: ChatRefKind;
   value: unknown;
 };

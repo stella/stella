@@ -775,6 +775,31 @@ describe("validationSignal", () => {
  * between is machine noise, so a wide bound separates the two behaviours
  * without flaking when the suite runs in parallel.
  */
+describe("validateAst on deeply nested markup", () => {
+  // Deeper than any recursive tree walk reaches. A wrapper <div> is checked
+  // for content descendants; a <p> has its visible text read.
+  const NESTING = 200_000;
+  const nested = (text: string): string =>
+    `${"<span>".repeat(NESTING)}${text}${"</span>".repeat(NESTING)}`;
+  const DEEP_SHAPES = {
+    "inside a paragraph": `<body><p>${nested("Soud rozhodl takto")}</p></body>`,
+    "inside a wrapper": `<body><div>${nested("Soud rozhodl takto")}</div></body>`,
+  } as const satisfies Record<string, string>;
+
+  for (const [shape, html] of Object.entries(DEEP_SHAPES)) {
+    test(`reads the text ${shape}`, () => {
+      const result = validateAst(html, [
+        makeBlock({ plainText: "Soud rozhodl takto" }),
+      ]);
+
+      expect(result.stats.missingWords).toEqual([]);
+      expect(
+        result.issues.filter((issue) => issue.severity === "error"),
+      ).toEqual([]);
+    });
+  }
+});
+
 describe("validateAst scaling", () => {
   test("a flat many-paragraph document validates in linear-ish time", () => {
     const count = 6000;
@@ -800,4 +825,62 @@ describe("validateAst scaling", () => {
     );
     expect(elapsed).toBeLessThan(20_000);
   });
+
+  /**
+   * Eight times the paragraphs may cost at most sixteen times the time:
+   * linear work measures six to ten, while work that grows with the square
+   * of a node's child count measures twenty and more at these sizes. Each
+   * size keeps its fastest of a few runs, so a scheduling stall on one run
+   * does not read as growth. Covers both wide shapes a source produces: one
+   * wrapper per paragraph directly under the body, and every paragraph
+   * inside a single wrapper.
+   */
+  const SCALING_PARAGRAPHS = 5000;
+  const SCALING_FACTOR = 8;
+  const MAX_GROWTH = 16;
+  const SCALING_RUNS = 2;
+
+  const paragraphText = (index: number): string =>
+    `Odstavec ${index} vyhlášky o seznamu výkonů.`;
+  const paragraphBlocks = (count: number): Block[] =>
+    Array.from({ length: count }, (_, index) =>
+      makeBlock({ plainText: paragraphText(index) }),
+    );
+  const fastestValidation = (html: string, blocks: Block[]): number => {
+    let fastest = Number.POSITIVE_INFINITY;
+    for (let run = 0; run < SCALING_RUNS; run += 1) {
+      const start = performance.now();
+      const result = validateAst(html, blocks);
+      fastest = Math.min(fastest, performance.now() - start);
+      expect(
+        result.issues.filter((issue) => issue.severity === "error"),
+      ).toEqual([]);
+    }
+    return fastest;
+  };
+
+  const WIDE_SHAPES = {
+    "one wrapper per paragraph under the body": (count: number) =>
+      `<html><body>${Array.from(
+        { length: count },
+        (_, index) =>
+          `<div data-fragment="${index}"><p>${paragraphText(index)}</p></div>`,
+      ).join("")}</body></html>`,
+    "every paragraph in one wrapper": (count: number) =>
+      `<html><body><div>${Array.from(
+        { length: count },
+        (_, index) => `<p>${paragraphText(index)}</p>`,
+      ).join("")}</div></body></html>`,
+  } as const satisfies Record<string, (count: number) => string>;
+
+  for (const [shape, build] of Object.entries(WIDE_SHAPES)) {
+    test(`validation time grows linearly with ${shape}`, () => {
+      const small = SCALING_PARAGRAPHS;
+      const large = SCALING_PARAGRAPHS * SCALING_FACTOR;
+      const smallTime = fastestValidation(build(small), paragraphBlocks(small));
+      const largeTime = fastestValidation(build(large), paragraphBlocks(large));
+
+      expect(largeTime / smallTime).toBeLessThan(MAX_GROWTH);
+    });
+  }
 });

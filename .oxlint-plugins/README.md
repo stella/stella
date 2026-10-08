@@ -181,7 +181,7 @@ runtime validation, or integration tests.
 - [`icon-button-requires-tooltip`](./icon-button-requires-tooltip.ts) (`icon-button-requires-tooltip`): requires icon-only buttons to expose an accessible label through the owned tooltip contract.
 - [`no-decorated-search-input`](./no-decorated-search-input.ts) (`no-decorated-search-input`): rejects a second search icon or a leading `ps-`/`pl-` utility beside an `@stll/ui` `Input`/`InputGroupInput` with `type="search"`, which already draws the icon and reserves its space.
 - [`require-in-flow-viewport-popup`](./require-in-flow-viewport-popup.ts) (`require-in-flow-viewport-popup`): requires a Base UI positioner that renders a `Viewport` to size itself and keep its popup in flow through the shared `positioner-sizing` constants, so collision handling measures the real popup on every side.
-- [`no-adhoc-loader`](./no-adhoc-loader.ts) (`no-adhoc-loader`): requires the owned `Loader` primitive for indeterminate loading states instead of ad hoc spinners; a ratchet over the files that still carry one.
+- [`no-adhoc-loader`](./no-adhoc-loader.ts) (`no-adhoc-loader`): requires `Loader`/`LoaderState` for indeterminate loading and `Skeleton` for known content shapes; rejects ad hoc spinners, spin/pulse utilities (including variants), and progress bars without file exemptions.
 - [`no-ad-hoc-find-shortcut`](./no-ad-hoc-find-shortcut.ts) (`no-ad-hoc-find-shortcut`): keeps the find shortcut on its single registry listener, so no surface recognises the press itself and reopens the two-bar bug.
 - [`no-hand-rolled-typed-character`](./no-hand-rolled-typed-character.ts) (`no-hand-rolled-typed-character`): rejects a function that reads `altKey` or the AltGraph state and tests `key` for one typed character; `typedCharacter` (`@stll/ui/typed-character`) decides, since Option types text on macOS layouts and AltGr arrives as Ctrl+Alt on Windows. A function that requires the Mod chord (`metaKey || ctrlKey`) is a shortcut and stays exempt.
 - [`no-ambient-hotkey-format`](./no-ambient-hotkey-format.ts) (`no-ambient-hotkey-format`): keeps platform detection and hotkey display formatting behind the hydration-safe helper so server and client output cannot diverge.
@@ -265,6 +265,8 @@ runtime validation, or integration tests.
 - [`no-static-devtools-import`](./no-static-devtools-import.ts) (`no-static-devtools-import`): prevents development-only modules from entering eager production dependency graphs.
 - [`require-function-replacer`](./require-function-replacer.ts) (`require-function-replacer`): requires function-valued state updates to use an explicit replacer wrapper so they are not invoked as updater callbacks.
 - [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`, `canonical-rule-id`): requires explained suppressions, autofixes rule IDs to their configured spelling, and rejects directives for another lint engine.
+
+- [`confine-aggregate-lock`](./confine-aggregate-lock.ts) (`confine-aggregate-lock`): confines raw aggregate acquisitions and API transaction/savepoint boundaries to the owner and migrations, with an enumerated shrinking legacy baseline.
 
 ## Native and shared rules
 

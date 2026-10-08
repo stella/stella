@@ -88,6 +88,10 @@ jobs:
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
+      postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+      postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
+      # Absent repository switch is OFF; enabling it requires the service job.
+      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
@@ -149,12 +153,8 @@ jobs:
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
       collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
-      service_suites_pr_required: >-
-        ${{ steps.completed-depth.outputs.run_required != 'false'
-        && steps.check.outputs.trusted == 'true'
-        && steps.changed-files.outputs.service_suites_pr_required == 'true'
-        && 'true' || 'false' }}
-      service_suites_required: ${{ github.event_name == 'pull_request' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') }}
+      service_suites_pr_required: ${{ steps.changed-files.outputs.service_suites_pr_required }}
+      service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       route_smoke_required: ${{ steps.changed-files.outputs.route_smoke_required }}
@@ -486,6 +486,7 @@ jobs:
         run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for heavy job planning
+        id: planner-bun
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -561,7 +562,7 @@ jobs:
           echo "required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for dependency scope
-        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        if: steps.planner-bun.outcome == 'skipped' && steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -990,17 +991,6 @@ jobs:
             collaboration_suite_required=$collab_redis_required
           fi
 
-          # PRs exercise verification's Postgres suites through the same
-          # gated runner as full-depth runs; other service suites stay deferred.
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            postgres_suites_required=false
-            corpus_suites_required=false
-            valkey_suites_required=false
-            collaboration_suite_required=false
-            postgres_suites_required=$(bun scripts/ci-avt-postgres.ts "${changed_files[@]}")
-            service_suites_pr_required=$postgres_suites_required
-          fi
-
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
           if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then
@@ -1056,11 +1046,13 @@ jobs:
 
       - name: Install API test planner dependencies
         id: api-test-deps
+        # Both planners retain full coverage when installation is unavailable.
+        continue-on-error: true
         if: >-
           steps.completed-depth.outputs.run_required != 'false'
           && (
           steps.check.outputs.trusted == 'true'
-          && github.event_name == 'pull_request'
+          && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
           && steps.changed-files.outputs.package_checks_required == 'true'
           && steps.changed-files.outputs.api_scope_unknown != 'true'
           )
@@ -1070,7 +1062,7 @@ jobs:
 
       - name: Select affected API test files
         id: api-test-selection
-        if: steps.completed-depth.outputs.run_required != 'false' && (steps.api-test-deps.outcome == 'success')
+        if: steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'pull_request' && steps.api-test-deps.outcome == 'success'
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -1081,6 +1073,39 @@ jobs:
             echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Select affected Postgres test files
+        id: postgres-test-plan
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && steps.api-test-deps.outcome == 'success'
+          && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+        run: |
+          # The graph reads ignored runtime aggregates even after --ignore-scripts.
+          if ! (
+            timeout --kill-after=10s 120s bun --cwd=packages/cli run codegen:runtime &&
+            timeout --kill-after=10s 120s bun --cwd=apps/api run generate:capability-runtime &&
+            timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts
+          ); then
+            echo 'postgres_test_selection={"mode":"all"}' >> "$GITHUB_OUTPUT"
+            echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summarize Postgres test selection
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        env:
+          SELECTION: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+          REASON: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
+        run: |
+          {
+            printf '### Postgres test selection\n\n'
+            printf '%s\n\n' "$REASON"
+            jq -r 'if .mode == "selected" then .files[] | "- " + tojson elif .mode == "all" then "full" else .mode end' <<< "$SELECTION"
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf 'Postgres selection: %s\nReason: %s\n' "$SELECTION" "$REASON"
 
       - name: Derive deferred queue checks
         id: pilot-queue-plan
@@ -2446,11 +2471,8 @@ jobs:
 
       - name: Test release image CI gate
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
         run: bun test --timeout 50000 scripts/ci-plan.test.ts
-
-      - name: Test verification database suite selection
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test --timeout 30000 scripts/ci-avt-postgres.test.ts
 
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2770,11 +2792,23 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
 
+      - name: Outbound transport ownership
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/outbound-transport-ownership.ts --check
+          bun test scripts/outbound-transport-ownership.test.ts
+
       - name: Module ownership invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Invariants the ownership table cannot state itself, such as
         # allowlists kept equal to their source lists.
         run: bun test scripts/ownership.test.ts
+
+      - name: Generated artifact formatting invariants
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # One formatter batch per check keeps the generated docs in step with
+        # their owners without a formatter process per row.
+        run: bun test scripts/generated-artifacts.test.ts
 
       - name: Schema introspection invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3258,6 +3292,14 @@ jobs:
           bun test scripts/merge-bar-freshness.test.ts \
             scripts/merge-bar-arm-guard.test.ts scripts/merge-bar-disarm.test.ts
 
+      - name: Test merge queue jump-reset recovery
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/merge-bar-jump-reset.test.ts \
+            scripts/merge-bar-jump-reset-cli.test.ts \
+            scripts/merge-bar-jump-reset-handoff.test.ts \
+            scripts/merge-bar-jump-reset-requeue.test.ts
+
       # Check migration identity against the branch this run merges into. In a
       # merge group that is main as it stands at merge time.
       - name: Check migration identity against the base branch
@@ -3282,6 +3324,10 @@ jobs:
       - name: Test projection-totality classification
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/check-projection-totality.test.ts
+
+      - name: Test aggregate inventories
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
 
       - name: Office fixture metadata
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4201,6 +4247,11 @@ jobs:
       - name: Projection totality
         run: bun run check:projection-totality
 
+      - name: Aggregate ownership
+        run: |
+          bun run check:aggregate-locks
+          bun run check:aggregate-mutations
+
       - name: Split-button census
         run: |
           bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts
@@ -4292,14 +4343,10 @@ jobs:
   service-suites:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'service-suites'))
-      && needs.ci-plan.outputs.run_required != 'false'
+      needs.ci-plan.outputs.run_required != 'false'
       && (
-      (github.event_name == 'pull_request'
-      && needs.ci-plan.outputs.service_suites_pr_required == 'true'
-      && needs.ci-plan.outputs.trusted == 'true')
-      || github.event_name != 'pull_request' && (
-      (needs.ci-plan.outputs.queue_depth != 'thin' || contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), 'service-suites'))
+      (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (
+      needs.ci-plan.outputs.queue_depth != 'thin'
       && (needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
@@ -4373,19 +4420,30 @@ jobs:
         run: bun run src/db/migrate.ts
 
       - name: Run Postgres-gated API suites
+        id: postgres-tests
         if: needs.ci-plan.outputs.postgres_suites_required == 'true'
         working-directory: apps/api
-        # The full volume benchmark runs in nightly postgres-suites; this job
-        # retains its bounded correctness slice alongside every other suite.
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-          EVENT_NAME: ${{ github.event_name }}
+          CI_POSTGRES_TEST_SELECTION: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+        # The full volume benchmark runs in nightly postgres-suites; this job
+        # retains its bounded correctness slice alongside every other suite.
+        run: bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"
+
+      - name: Check full Postgres failures for selector misses
+        timeout-minutes: 5
+        if: ${{ !cancelled() && inputs.heavy_only == true && steps.postgres-tests.outcome == 'failure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          POSTGRES_JUNIT_FILE: ${{ runner.temp }}/postgres-tests.xml
         run: |
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            bun run test:postgres --avt
+          if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+            git fetch --filter=blob:none --no-tags --unshallow origin main
           else
-            bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)'
+            git fetch --filter=blob:none --no-tags origin main
           fi
+          bun scripts/ci-postgres-selector-miss.ts
 
       - name: Start corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
@@ -7344,13 +7402,16 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests", "service-suites"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
           fi
           if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
             FAST_REQUIRED="$PILOT_FAST_JOBS"
+          fi
+          if [[ "$EVENT" == pull_request ]] && jq -e '.postgres_pr_required == "true"' <<< "$PLAN" >/dev/null; then
+            FAST_REQUIRED=$(jq -cn --argjson required "$FAST_REQUIRED" '$required + ["service-suites"] | unique') || exit 1
           fi
           if [[ "$QUEUE_VALIDATION" == true && "$EVENT" == pull_request && "$PR_ACTION" == enqueued ]] &&
             jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" >/dev/null; then

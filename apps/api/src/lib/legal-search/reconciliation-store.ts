@@ -90,7 +90,7 @@ export const RECONCILIATION_TERMINAL_ATTEMPTS =
  * than a nullable date: "no next attempt" is a disposition the caller has to
  * record, not a missing value it may ignore.
  */
-export type ReconciliationSchedule =
+type ReconciliationSchedule =
   | { type: "parked"; nextAttemptAt: Date }
   | { type: "terminal" };
 
@@ -100,7 +100,7 @@ type ReconciliationScheduleInput = {
   now: Date;
 };
 
-export const reconciliationSchedule = ({
+const reconciliationSchedule = ({
   attempts,
   now,
 }: ReconciliationScheduleInput): ReconciliationSchedule => {

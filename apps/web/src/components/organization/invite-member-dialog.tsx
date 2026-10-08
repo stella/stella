@@ -53,15 +53,6 @@ type InviteMemberDialogProps = {
   showIcon?: boolean;
 };
 
-export const useCanInviteMembers = () => {
-  const { data: currentUserRole } = useQuery({
-    ...roleOptions,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-
-  return currentUserRole ? assignableRoles(currentUserRole).length > 0 : false;
-};
-
 export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
   const { data: currentUserRole } = useQuery({
     ...roleOptions,

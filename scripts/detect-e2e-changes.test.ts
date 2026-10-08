@@ -441,7 +441,7 @@ describe("detect-e2e-changes", () => {
       expect(plan).toContain(collaborationPath);
     }
     expect(plan).toContain(
-      `service_suites_required: ${githubExpression("github.event_name == 'pull_request' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' || github.event_name != 'pull_request' && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true')")}`,
+      `service_suites_required: ${githubExpression("steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true'")}`,
     );
     expect(serviceSuites).toContain(
       "needs.ci-plan.outputs.service_suites_required == 'true'",

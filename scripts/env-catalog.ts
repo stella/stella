@@ -1328,6 +1328,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
   // Durable branch-update receipts and locks can use an operator-selected directory.
   "STELLA_MERGE_BAR_STATE_DIR",
+  // While this file exists, merge-bar refuses every native mutation.
+  "STELLA_MERGE_BAR_STOP_FILE",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1520,6 +1522,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  "CI_POSTGRES_TEST_SELECTION",
+  "POSTGRES_JUNIT_FILE",
   "CHANGED_MARKDOWN",
   "TURBO_HASH",
   "TURBO_SCM_BASE",

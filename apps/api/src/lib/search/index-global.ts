@@ -21,6 +21,7 @@ import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identi
 import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
@@ -471,8 +472,6 @@ const sqlWhen = (condition: boolean, fragment: () => SQL): SQL =>
 const emptyWorkspaceFacetQuery = sql`
   SELECT NULL::uuid AS value, NULL::text AS label WHERE false
 `;
-
-export { contactWorkspaceAccessSql };
 
 const toStringFacetMap = (
   rows: RawRow[],
@@ -1388,7 +1387,7 @@ export const searchGlobal = async (
 // to look up bucket values that the top-N default may have hidden.
 // ---------------------------------------------------------------------------
 
-export type GlobalFacetName = "editor" | "workspace" | "mimeType";
+type GlobalFacetName = "editor" | "workspace" | "mimeType";
 
 export type GlobalFacetSearchQuery = {
   facet: GlobalFacetName;
@@ -1594,7 +1593,7 @@ type SearchDocumentDatabase = Pick<
 
 // Contact and matter projections are rebuilt in batches of at most
 // `REINDEX_BATCH_SIZE` sources. A batch is one read of the sources and their
-// relations, then one transaction of four statements: the projection upsert,
+// relations, then one transaction: parent locks, the projection upsert,
 // the preview-passage delete and insert, and the generation stamp. The work a
 // rebuild does grows with its number of batches, not its number of sources.
 // Every source in a batch shares the batch's preview generation, so each
@@ -1638,7 +1637,7 @@ const writeContactProjections = async (
     return;
   }
 
-  const projections = sources.map((contact) => {
+  const builtProjections = sources.map((contact) => {
     const searchableText = compact([
       contact.prefix,
       contact.firstName,
@@ -1662,9 +1661,20 @@ const writeContactProjections = async (
     };
   });
   const previewGeneration = Bun.randomUUIDv7();
-  const ids = projections.map(({ contact }) => contact.id);
 
   await database.transaction(async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: builtProjections.map(
+        ({ contact }) => contact.organizationId,
+      ),
+    });
+    const projections = builtProjections.filter(({ contact }) =>
+      parents.organizationIds.has(contact.organizationId),
+    );
+    if (projections.length === 0) {
+      return;
+    }
+    const ids = projections.map(({ contact }) => contact.id);
     await tx.execute(sql`
       INSERT INTO contact_search_documents (
         contact_id, organization_id, contact_type,
@@ -1785,7 +1795,7 @@ const writeWorkspaceProjections = async (
     return;
   }
 
-  const projections = sources.map((workspace) => {
+  const builtProjections = sources.map((workspace) => {
     const client = workspace.client;
     const partyText = workspace.workspaceContacts.map(
       ({ role, notes, contact }) =>
@@ -1828,9 +1838,23 @@ const writeWorkspaceProjections = async (
     };
   });
   const previewGeneration = Bun.randomUUIDv7();
-  const ids = projections.map(({ workspace }) => workspace.id);
 
   await database.transaction(async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: builtProjections.map(
+        ({ workspace }) => workspace.organizationId,
+      ),
+      workspaceIds: builtProjections.map(({ workspace }) => workspace.id),
+    });
+    const projections = builtProjections.filter(
+      ({ workspace }) =>
+        parents.organizationIds.has(workspace.organizationId) &&
+        parents.workspaceIds.has(workspace.id),
+    );
+    if (projections.length === 0) {
+      return;
+    }
+    const ids = projections.map(({ workspace }) => workspace.id);
     await tx.execute(sql`
       INSERT INTO workspace_search_documents (
         workspace_id, organization_id,

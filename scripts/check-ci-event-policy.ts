@@ -234,6 +234,25 @@ const checkJobEventPolicy = ({
   if (eventPolicy === "pr-opt-in") {
     const condition =
       typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+    if (key === "ci.yml/service-suites") {
+      if (
+        !condition.includes("vars.CI_POSTGRES_PR_SELECTION == 'on'") ||
+        ["", "off"].some(
+          (value) =>
+            !definitelyFalse(condition, {
+              values: {
+                "github.event_name": "pull_request",
+                "vars.CI_POSTGRES_PR_SELECTION": value,
+              },
+            }),
+        )
+      ) {
+        problems.push(
+          `${key}: Postgres PR suites must require the disabled-by-default switch`,
+        );
+      }
+      return problems;
+    }
     if (
       key !== "ci.yml/fix-tests-on-base" ||
       !condition.includes(

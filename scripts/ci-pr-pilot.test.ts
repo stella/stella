@@ -32,7 +32,7 @@ const source = readFileSync(
   "utf-8",
 );
 const workflow = v.parse(schema, Bun.YAML.parse(source));
-// Frozen normal-profile predicates keep the off contract test independent of Git history.
+// Frozen pre-pilot predicates keep the off contract test independent of Git history.
 const original = v.parse(
   schema,
   JSON.parse(
@@ -160,6 +160,7 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "github.event_name": event,
     "github.event.pull_request.draft": false,
     "inputs.heavy_only": false,
+    "vars.CI_POSTGRES_PR_SELECTION": "",
     "needs.ci-plan.outputs.coverage_profile": profile,
     "needs.ci-plan.outputs.run_required": "true",
     "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(fastJobs(workflow)),
@@ -220,6 +221,18 @@ test("off and unset preserve today's job plan across every event and depth", asy
           }
         }
       }
+    }
+  }
+});
+
+test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const selection of ["", "off", "on"]) {
+      const context = conditionContext(profile, "pull_request", "fast");
+      context.values["vars.CI_POSTGRES_PR_SELECTION"] = selection;
+      expect(
+        evaluate(workflow.jobs["service-suites"]?.if ?? "false", context),
+      ).toBe(selection === "on");
     }
   }
 });

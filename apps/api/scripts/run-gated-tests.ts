@@ -4,6 +4,7 @@ import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
+import { parseGatedTestSelection } from "./gated-test-selection";
 import {
   normalizeAbsoluteTestPatterns,
   partitionRunnerArguments,
@@ -17,9 +18,7 @@ type RunGatedTestsOptions = {
   // them instead of skipping every suite.
   requiredEnv: readonly string[];
   script: GatedTestScript;
-  // An explicitly selected slice may also include ungated database suites.
-  testFiles?: readonly string[];
-  runnerArguments?: readonly string[];
+  selection?: string | undefined;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -60,8 +59,7 @@ export const discoverGatedTestFiles = async ({
 export const runGatedTests = async ({
   requiredEnv,
   script,
-  testFiles: scopedTestFiles,
-  runnerArguments = Bun.argv.slice(2),
+  selection,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -70,34 +68,36 @@ export const runGatedTests = async ({
     return 1;
   }
 
-  const discoveredGatedFiles =
-    scopedTestFiles ??
-    (await discoverGatedTestFiles({
-      apiRoot,
-      gate: runner.gate,
-      testFileGlob: runner.testFileGlob,
-    }));
+  const discoveredGatedFiles = await discoverGatedTestFiles({
+    apiRoot,
+    gate: runner.gate,
+    testFileGlob: runner.testFileGlob,
+  });
+
+  const plan = parseGatedTestSelection(selection, discoveredGatedFiles);
+  if (plan.mode === "none") {
+    console.log(`No affected ${runner.gate} test files.`);
+    return 0;
+  }
+  const plannedFiles =
+    plan.mode === "selected" ? plan.files : discoveredGatedFiles;
 
   const { bunArguments, patterns } = partitionRunnerArguments(
-    runnerArguments.filter((argument) => argument !== "--list-files"),
+    Bun.argv.slice(2),
   );
   const selectedPaths = selectTestPaths(
-    discoveredGatedFiles,
+    plannedFiles,
     normalizeAbsoluteTestPatterns(patterns, apiRoot),
   );
-  const testFiles = discoveredGatedFiles.filter(
+  const testFiles = plannedFiles.filter(
     (testFile) => selectedPaths === null || selectedPaths.has(testFile),
   );
 
   if (testFiles.length === 0) {
-    console.error(`No test files matched the ${script} selection.`);
+    console.error(
+      `No test files declaring ${runner.gate} matched the selection.`,
+    );
     return 1;
-  }
-
-  // Inspect the exact selection without generators or service connections.
-  if (runnerArguments.includes("--list-files")) {
-    console.log(testFiles.join("\n"));
-    return 0;
   }
 
   // The same derived sources the package `test` script generates first: the
@@ -123,7 +123,7 @@ export const runGatedTests = async ({
     }
   }
 
-  console.log(`Running ${String(testFiles.length)} ${script} test files.`);
+  console.log(`Running ${String(testFiles.length)} ${runner.gate} test files.`);
   const testProcess = Bun.spawn({
     cmd: buildApiTestCommand({
       bunExecutable: process.execPath,
