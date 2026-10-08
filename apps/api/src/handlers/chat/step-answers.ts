@@ -91,17 +91,43 @@ const answerIndexInStep = (
 };
 
 /**
- * `parts` with each call the SDK answers only at the end of the message (a
- * denial, most often) answered in its own step instead. The SDK appends those
- * answers after the whole message, so once the message goes on past the
- * call's step a provider sees the call without its answer after it, and a
- * request rebuilt from the thread no longer begins with the request that
- * answered the call. Only the provider request reads this: the stored
- * message keeps its parts. Idempotent; returns `parts` when nothing moves.
+ * Each call answered in its own step, including results reconstructed by a
+ * snapshot and answers synthesized by the SDK (a denial, most often). The
+ * SDK can append either after later steps, so a request rebuilt from the
+ * thread no longer begins with the request that answered the call. Only the
+ * provider request reads this: the stored message keeps its parts.
+ * Idempotent; returns the input when nothing moves.
  */
 export const answerCallsInTheirStep = (
-  parts: readonly ChatPart[],
+  inputParts: readonly ChatPart[],
 ): readonly ChatPart[] => {
+  let parts = inputParts;
+  // SDK snapshots append results after later steps' calls. Provider history
+  // must keep each result with its own step, whether stored or synthesized.
+  for (const result of inputParts) {
+    if (result.type !== "tool-result") {
+      continue;
+    }
+    const callIndex = parts.findIndex(
+      (part) => part.type === "tool-call" && part.id === result.toolCallId,
+    );
+    const call = parts[callIndex];
+    const resultIndex = parts.indexOf(result);
+    if (
+      call?.type !== "tool-call" ||
+      !parts
+        .slice(callIndex + 1, resultIndex)
+        .some(
+          (part) => part.type === "tool-call" && !callOfSameStep(call, part),
+        )
+    ) {
+      continue;
+    }
+    const reordered = [...parts];
+    reordered.splice(resultIndex, 1);
+    reordered.splice(answerIndexInStep(reordered, call, callIndex), 0, result);
+    parts = reordered;
+  }
   const answeredIds = new Set(
     parts.flatMap((part) =>
       part.type === "tool-result" && part.state !== "streaming"

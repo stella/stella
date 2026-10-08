@@ -1,6 +1,8 @@
 import { uiMessageToModelMessages } from "@tanstack/ai";
 import { expect, test } from "bun:test";
 
+import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
+
 import { answerCallsInTheirStep } from "./step-answers";
 import type { ChatPart } from "./types";
 
@@ -41,5 +43,33 @@ for (const approved of [false, true]) {
       parts: [...answered],
     }).find((message) => message.role === "tool");
     expect(projected).toEqual(native);
+  });
+}
+
+for (const outcome of ["success", "denied", "cancelled"] as const) {
+  test(`a stored ${outcome} result stays with its originating step`, () => {
+    const call = (id: string) =>
+      ({
+        type: "tool-call",
+        id,
+        name: "delete_document",
+        arguments: "{}",
+        state: "input-complete",
+        metadata: { [TOOL_CALL_STEP_METADATA_KEY]: id },
+      }) as const satisfies ChatPart;
+    const first = call("call-1");
+    const second = call("call-2");
+    const result = {
+      type: "tool-result",
+      toolCallId: first.id,
+      content: "{}",
+      state: outcome === "success" ? "complete" : "error",
+      ...(outcome === "success" ? {} : { outcome }),
+    } as const satisfies ChatPart;
+    const parts = [first, second, result];
+    const answered = answerCallsInTheirStep(parts);
+    expect(answered).toEqual([first, result, second]);
+    expect(answerCallsInTheirStep(answered)).toBe(answered);
+    expect(parts).toEqual([first, second, result]);
   });
 }
