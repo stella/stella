@@ -469,9 +469,10 @@ async fn recover_rotation(
       }
       if matches!(mode, RecoveryMode::Disconnect) {
         return match transport.send(&account, None).await {
+          // Keep the journal: a timed-out rotation can still commit, so
+          // disconnect revokes the successor too before clearing.
           Ok(reply) => {
             validate_renewal_reply(&account, &reply)?;
-            store.stage(None).await?;
             Ok(account)
           }
           Err(RenewalFailure::Unavailable(message)) => Err(message),
@@ -761,24 +762,43 @@ pub async fn account_disconnect(
     Err(error) => return Err(error),
   };
   if let Some(saved) = &account {
-    match crate::registry::request(
-      crate::registry::RegistryRequestAuth {
-        api_base_url: &saved.api_base_url,
-        credential_key: &saved.credential.key,
-      },
-      serde_json::json!({"type":"revoke"}),
-    )
-    .await
-    {
-      Ok(_) => {}
-      Err(error) if error == crate::registry::not_connected() => {}
-      Err(error) => return Err(error),
-    }
+    let pending = state.lock().await.pending().await?;
+    let mut keys = vec![saved.credential.key.clone()];
+    keys.extend(pending.map(|pending| pending.successor_key));
+    revoke_generations(keys, |key| async move {
+      crate::registry::request(
+        crate::registry::RegistryRequestAuth {
+          api_base_url: &saved.api_base_url,
+          credential_key: &key,
+        },
+        serde_json::json!({"type":"revoke"}),
+      )
+      .await
+      .map(|_| ())
+    })
+    .await?;
   }
   let mut store = state.lock().await;
   store.clear().await?;
   drop(store);
   notify(&app);
+  Ok(())
+}
+
+// Revokes every credential generation that may be live. A rejected key is
+// already dead; any other failure keeps local storage so disconnect can retry.
+async fn revoke_generations<F, Fut>(keys: Vec<String>, revoke: F) -> Result<(), String>
+where
+  F: Fn(String) -> Fut,
+  Fut: std::future::Future<Output = Result<(), String>>,
+{
+  for key in keys {
+    match revoke(key).await {
+      Ok(()) => {}
+      Err(error) if error == crate::registry::not_connected() => {}
+      Err(error) => return Err(error),
+    }
+  }
   Ok(())
 }
 
@@ -2028,7 +2048,54 @@ mod tests {
       store.load().await.unwrap().unwrap().credential.key,
       original.credential.key
     );
-    assert!(store.pending().await.unwrap().is_none());
+    // The journal stays until disconnect has revoked the successor too.
+    assert_eq!(
+      store.pending().await.unwrap().unwrap().successor_key,
+      "stella_dr_successor"
+    );
+  }
+
+  #[tokio::test]
+  async fn disconnect_revokes_a_successor_committed_after_recovery() {
+    let calls = std::sync::Mutex::new(Vec::new());
+    let result = revoke_generations(
+      vec!["stella_dr_original".into(), "stella_dr_successor".into()],
+      |key| {
+        calls.lock().unwrap().push(key.clone());
+        async move {
+          if key == "stella_dr_original" {
+            Err(crate::registry::not_connected())
+          } else {
+            Ok(())
+          }
+        }
+      },
+    )
+    .await;
+    assert!(result.is_ok());
+    assert_eq!(
+      *calls.lock().unwrap(),
+      vec![
+        "stella_dr_original".to_string(),
+        "stella_dr_successor".to_string()
+      ]
+    );
+  }
+
+  #[tokio::test]
+  async fn disconnect_keeps_storage_when_a_successor_revoke_is_unavailable() {
+    let result = revoke_generations(
+      vec!["stella_dr_original".into(), "stella_dr_successor".into()],
+      |key| async move {
+        if key == "stella_dr_successor" {
+          Err("network unavailable".to_string())
+        } else {
+          Ok(())
+        }
+      },
+    )
+    .await;
+    assert_eq!(result.err(), Some("network unavailable".to_string()));
   }
 
   #[tokio::test]
