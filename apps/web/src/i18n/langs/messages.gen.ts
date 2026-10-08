@@ -307,8 +307,6 @@ type Messages = {
     "save": {
       "failed": "Not saved";
       "failedTitle": "Your change was not saved";
-      "saved": "Saved";
-      "saving": "Saving…";
     };
     "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.";
     "states": {
@@ -1891,6 +1889,8 @@ type Messages = {
     "saveAndLeave": "Save and leave";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
+    "saved": "Saved";
+    "saving": "Saving…";
     "scopeThisPage": "(this page)";
     "scrollToBottom": "Scroll to bottom";
     "scrollToTop": "Scroll to top";
@@ -3583,6 +3583,11 @@ type Messages = {
       "askContentLabel": "Answer type";
       "askQuestionLabel": "Question";
       "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
+      "autosave": {
+        "failed": "Could not save";
+        "nameMissing": "Not saved: add a name";
+        "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention";
+      };
       "check": "Use an exact rule instead of AI";
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";
       "checkKind": {
@@ -3612,6 +3617,7 @@ type Messages = {
       "deletePlaybook": "Delete playbook";
       "deletePosition": "Delete position";
       "deleted": "Playbook deleted";
+      "deletedElsewhere": "This playbook has been deleted.";
       "derivedAutomatically": "The extraction question and answer format are generated from this position. No setup is needed.";
       "derivedQuestion": "Extraction question";
       "derivedType": "Answer format";
@@ -3664,10 +3670,12 @@ type Messages = {
       };
       "noPositions": "No positions yet. Add the first one.";
       "noSettledPosition": "No settled position";
+      "openInPane": "Open playbook";
       "optionPlaceholder": "Option value";
       "optionsLabel": "Options";
       "outline": "Outline";
       "positionOfTotal": "Position {index} of {total}";
+      "positionRemoved": "Position removed";
       "positions": "Positions";
       "recent": "Recently used";
       "recommended": "Recommended starters";
