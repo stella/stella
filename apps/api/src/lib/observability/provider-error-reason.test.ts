@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  providerErrorFields,
   providerErrorReason,
   type ProviderErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
@@ -42,5 +43,69 @@ describe("providerErrorReason", () => {
     ]) {
       expect(providerErrorReason(message)).toBe("unrecognized");
     }
+  });
+
+  test("names item_not_found by its first sentence when advice follows it", () => {
+    expect(
+      providerErrorReason(
+        "Item with id 'rs_0a1b' not found. Items are not persisted when `store` is set to false. Try again with `store` set to true, or remove this item from your input.",
+      ),
+    ).toBe("item_not_found");
+  });
+
+  test("a sentence that only starts like item_not_found is unrecognized", () => {
+    expect(
+      providerErrorReason("Item with id 'rs_0a1b' not foundation of the claim"),
+    ).toBe("unrecognized");
+  });
+});
+
+describe("providerErrorFields", () => {
+  test("reads code, param and type from an SDK error body, never its message", () => {
+    const fields = providerErrorFields({
+      status: 400,
+      message: "Please save the contact Jana Novakova.",
+      type: "invalid_request_error",
+      param: "input[3].call_id",
+      code: "invalid_value",
+    });
+
+    expect(fields).toEqual({
+      "error.provider.code": "invalid_value",
+      "error.provider.param": "input[3].call_id",
+      "error.provider.type": "invalid_request_error",
+    });
+    expect(JSON.stringify(fields)).not.toContain("Novakova");
+  });
+
+  test("reads the body nested under `error`", () => {
+    expect(
+      providerErrorFields({
+        error: { type: "invalid_request_error", param: "input", code: null },
+      }),
+    ).toEqual({
+      "error.provider.param": "input",
+      "error.provider.type": "invalid_request_error",
+    });
+  });
+
+  test("logs a value that is not a short token as other", () => {
+    expect(
+      providerErrorFields({
+        type: "invalid_request_error",
+        param: "the contact Jana Novakova",
+        code: "x".repeat(65),
+      }),
+    ).toEqual({
+      "error.provider.code": "other",
+      "error.provider.param": "other",
+      "error.provider.type": "invalid_request_error",
+    });
+  });
+
+  test("has nothing to read from a missing or non-object body", () => {
+    expect(providerErrorFields(undefined)).toEqual({});
+    expect(providerErrorFields("Bad request")).toEqual({});
+    expect(providerErrorFields(["input"])).toEqual({});
   });
 });
