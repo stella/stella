@@ -3,6 +3,7 @@ import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
+import type { Transaction } from "@/api/db/root";
 import {
   entities,
   fields,
@@ -19,6 +20,7 @@ import {
   tSafeId,
   workspaceParams,
 } from "@/api/lib/custom-schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -73,6 +75,44 @@ const decodeCursor = (value: string): ItemCursor | null => {
     return null;
   }
   return { position, id: brandPersistedEntityId(id) };
+};
+
+type ReadListPropertyIdsOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  listId: SafeId<"legalList">;
+};
+
+const readListPropertyIds = async ({
+  tx,
+  workspaceId,
+  listId,
+}: ReadListPropertyIdsOptions) => {
+  const columns = await readBounded(
+    tx
+      .select({ propertyId: legalListColumns.propertyId })
+      .from(legalListColumns)
+      .where(
+        and(
+          eq(legalListColumns.workspaceId, workspaceId),
+          eq(legalListColumns.listId, listId),
+        ),
+      )
+      .orderBy(asc(legalListColumns.position)),
+    LIMITS.legalListColumnsPerList,
+  );
+  switch (columns.type) {
+    case "complete":
+      return columns.rows.map((column) => column.propertyId);
+    case "overflow":
+      return panic("List columns exceed the per-list limit", {
+        listId,
+        cap: columns.cap,
+      });
+    default:
+      columns satisfies never;
+      return panic("Unexpected bounded list column result");
+  }
 };
 
 const readListItems = createSafeHandler(
@@ -149,7 +189,7 @@ const readListItems = createSafeHandler(
           .limit(1)
           .as("first_source");
 
-        const [rows, columns] = await Promise.all([
+        const [rows, propertyIds] = await Promise.all([
           tx
             .select({
               id: entities.id,
@@ -203,20 +243,9 @@ const readListItems = createSafeHandler(
             .where(and(...conditions))
             .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
             .limit(limit + 1),
-          tx
-            .select({ propertyId: legalListColumns.propertyId })
-            .from(legalListColumns)
-            .where(
-              and(
-                eq(legalListColumns.workspaceId, workspaceId),
-                eq(legalListColumns.listId, params.listId),
-              ),
-            )
-            .orderBy(asc(legalListColumns.position))
-            .limit(LIMITS.legalListColumnsPerList),
+          readListPropertyIds({ tx, workspaceId, listId: params.listId }),
         ]);
         const entityIds = rows.map((row) => row.id);
-        const propertyIds = columns.map((column) => column.propertyId);
         if (entityIds.length === 0 || propertyIds.length === 0) {
           return rows.map((row) => Object.assign(row, { customFields: [] }));
         }

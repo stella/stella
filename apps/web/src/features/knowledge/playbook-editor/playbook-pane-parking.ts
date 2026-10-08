@@ -119,7 +119,7 @@ export const useParkedPlaybookPaneSavePending = (
     (tabs) =>
       tabId !== null &&
       tabs[tabId]?.[playbookId] !== undefined &&
-      tabs[tabId]?.[playbookId]?.write !== "settled",
+      tabs[tabId][playbookId].write !== "settled",
   );
 
 type BeginParkedPlaybookPaneSaveArgs = {

@@ -30,6 +30,8 @@ const nativeSetImmediate = setImmediate;
 const putBodies: string[] = [];
 let saveResult: "failed" | "saved" = "failed";
 let deleteRequests = 0;
+let fixtureDetail: PlaybookDetailData | null = null;
+let fixtureReadCount = 0;
 let propertyBackend: PropertyBackend | null = null;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -45,6 +47,14 @@ globalThis.fetch = Object.assign(
         input,
         init,
       });
+    }
+    if (
+      url.pathname.endsWith(`/playbooks/${PLAYBOOK_ID}`) &&
+      method === "GET" &&
+      fixtureDetail !== null
+    ) {
+      fixtureReadCount += 1;
+      return Response.json(fixtureDetail);
     }
     if (
       url.pathname.endsWith(`/playbooks/${PLAYBOOK_ID}`) &&
@@ -66,6 +76,15 @@ globalThis.fetch = Object.assign(
             { data: unknown }
           >["data"]
         >;
+        if (fixtureDetail !== null) {
+          fixtureDetail = {
+            ...fixtureDetail,
+            ...readPropertyBody(body).fields,
+            status: "draft",
+            approvedAt: null,
+            updatedAt: saved.updatedAt,
+          };
+        }
         return Response.json(saved);
       }
       return Response.json({ message: "Save unavailable" }, { status: 503 });
@@ -134,6 +153,7 @@ const detail = (status: PlaybookDetailData["status"]) =>
   }) satisfies PlaybookDetailData;
 
 const mountEditor = async (status: PlaybookDetailData["status"]) => {
+  fixtureDetail = detail(status);
   const tabId = `lifecycle-${status}`;
   const client = new QueryClient({
     defaultOptions: {
@@ -226,6 +246,8 @@ afterEach(async () => {
   putBodies.length = 0;
   saveResult = "failed";
   deleteRequests = 0;
+  fixtureDetail = null;
+  fixtureReadCount = 0;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -262,6 +284,7 @@ test("a failed real editor autosave and failed close-save keep the tab and its d
       phase: "ready",
     }),
   );
+  expect(fixtureReadCount).toBeGreaterThan(0);
   expect(store.getState().tabs.map((tab) => tab.id)).toEqual([tabId]);
   expect(view.getByDisplayValue(draftName)).toBeDefined();
   expect(readParkedPlaybookPane(tabId, PLAYBOOK_ID)).toMatchObject({
@@ -391,6 +414,7 @@ type PropertyBackend = {
   clock: number;
   rows: Map<string, PlaybookDetailData>;
   pending: PropertyRequest[];
+  putCount: number;
   reads: { playbookId: string; fields: LifecycleFields; updatedAt: string }[];
   writes: {
     fields: LifecycleFields;
@@ -470,6 +494,7 @@ const handlePropertyRequest = async ({
     body = await input.clone().text();
   }
   const response = Promise.withResolvers<Response>();
+  backend.putCount += 1;
   backend.pending.push({
     playbookId,
     ...readPropertyBody(body),
@@ -844,7 +869,8 @@ type LifecycleAction =
   | { type: "server-edit"; field: keyof LifecycleFields; value: string }
   | { type: "other-playbook" }
   | { type: "delete" }
-  | { type: "unload" };
+  | { type: "unload" }
+  | { type: "persistent-failure"; intervals: number };
 
 const hideLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
   if (
@@ -1093,6 +1119,13 @@ class LifecycleCommand implements fc.AsyncCommand<
     switch (this.action.type) {
       case "unload":
         return true;
+      case "persistent-failure":
+        return (
+          idle &&
+          model.mode === "open" &&
+          model.saveFailed &&
+          model.pending.length === 0
+        );
       case "refetch":
         return (
           model.mode === "open" ||
@@ -1104,8 +1137,7 @@ class LifecycleCommand implements fc.AsyncCommand<
       case "commit": {
         const pending = model.pending.at(0);
         return (
-          pending !== undefined &&
-          pending.committedVersion === null &&
+          pending?.committedVersion === null &&
           pending.expectedVersion === model.serverVersion
         );
       }
@@ -1163,10 +1195,12 @@ class LifecycleCommand implements fc.AsyncCommand<
     const action = this.action;
     switch (action.type) {
       case "edit":
+        model.saveFailed = false;
         model.draft = { ...model.draft, [action.field]: action.value };
         await editLifecycleField(real, action.field, action.value);
         break;
       case "revert":
+        model.saveFailed = false;
         model.draft = { ...model.baseline };
         await editLifecycleField(real, "name", model.draft.name);
         await editLifecycleField(real, "description", model.draft.description);
@@ -1208,6 +1242,18 @@ class LifecycleCommand implements fc.AsyncCommand<
         break;
       case "unload":
         break;
+      case "persistent-failure": {
+        const attemptsBefore = real.backend.putCount;
+        for (let interval = 0; interval < action.intervals; interval += 1) {
+          await act(async () => {
+            jest.advanceTimersByTime(2100);
+          });
+          await settleLifecycle();
+          expect(real.backend.putCount).toBe(attemptsBefore);
+          expect(real.backend.pending).toHaveLength(0);
+        }
+        break;
+      }
       default: {
         const exhaustive: never = action;
         throw new TypeError(String(exhaustive));
@@ -1220,6 +1266,87 @@ class LifecycleCommand implements fc.AsyncCommand<
     return JSON.stringify(this.action);
   }
 }
+
+test("a failing real editor autosave stays paused after successful verification until explicit Retry", async () => {
+  const backend: PropertyBackend = {
+    clock: 0,
+    rows: new Map([[PLAYBOOK_ID, detail("draft")]]),
+    pending: [],
+    putCount: 0,
+    reads: [],
+    writes: [],
+  };
+  propertyBackend = backend;
+  const mounted = await mountEditor("draft");
+  const real: LifecycleReal = { ...mounted, backend };
+  const failNextRequest = async () => {
+    const request = backend.pending.shift();
+    if (request === undefined) {
+      throw new TypeError("A failed response requires a real pending request");
+    }
+    const readsBefore = backend.reads.length;
+    await act(async () => {
+      request.response.resolve(
+        Response.json({ message: "Save unavailable" }, { status: 503 }),
+      );
+    });
+    await settleLifecycle();
+    expect(backend.reads.length).toBeGreaterThan(readsBefore);
+  };
+  const assertPaused = async (expectedAttempts: number) => {
+    for (let interval = 0; interval < 4; interval += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(2100);
+      });
+      await settleLifecycle();
+      expect(backend.putCount).toBe(expectedAttempts);
+      expect(backend.pending).toHaveLength(0);
+    }
+  };
+  jest.useFakeTimers();
+  try {
+    const draftName = "Recoverable paused autosave";
+    await editLifecycleField(real, "name", draftName);
+    await act(async () => {
+      jest.advanceTimersByTime(2100);
+    });
+    await settleLifecycle();
+    expect(backend.putCount).toBe(1);
+    await failNextRequest();
+    await assertPaused(1);
+    expect(mounted.view.getByDisplayValue(draftName)).toBeDefined();
+    await act(async () => {
+      fireEvent.click(
+        mounted.view.getByRole("button", { name: messages.common.retry }),
+      );
+    });
+    await settleLifecycle();
+    expect(backend.putCount).toBe(2);
+    await failNextRequest();
+    await assertPaused(2);
+    expect(mounted.view.getByDisplayValue(draftName)).toBeDefined();
+  } finally {
+    await act(async () => {
+      mounted.view.unmount();
+    });
+    while (backend.pending.length > 0) {
+      const pending = backend.pending.splice(0);
+      await act(async () => {
+        for (const request of pending) {
+          request.response.resolve(
+            Response.json({ message: "Trial disposed" }, { status: 503 }),
+          );
+        }
+      });
+      await settleLifecycle();
+    }
+    for (const dispose of cleanups.splice(0)) {
+      dispose();
+    }
+    propertyBackend = null;
+    jest.useRealTimers();
+  }
+});
 
 const lifecycleText = fc.stringMatching(/^[a-z][a-z0-9]{0,12}$/u);
 const lifecycleCommandArbitraries = [
@@ -1257,6 +1384,12 @@ const lifecycleCommandArbitraries = [
   fc.constant(new LifecycleCommand({ type: "other-playbook" })),
   fc.constant(new LifecycleCommand({ type: "delete" })),
   fc.constant(new LifecycleCommand({ type: "unload" })),
+  fc
+    .constantFrom(1, 2, 3, 4)
+    .map(
+      (intervals) =>
+        new LifecycleCommand({ type: "persistent-failure", intervals }),
+    ),
 ];
 
 test(
@@ -1273,6 +1406,7 @@ test(
             clock: 0,
             rows: new Map([[PLAYBOOK_ID, detail("approved")]]),
             pending: [],
+            putCount: 0,
             writes: [],
             reads: [],
           };
@@ -1463,6 +1597,10 @@ test(
             await new LifecycleCommand({
               type: "complete",
               result: "failed",
+            }).run(model, real);
+            await new LifecycleCommand({
+              type: "persistent-failure",
+              intervals: 4,
             }).run(model, real);
             await new LifecycleCommand({ type: "close" }).run(model, real);
             await new LifecycleCommand({

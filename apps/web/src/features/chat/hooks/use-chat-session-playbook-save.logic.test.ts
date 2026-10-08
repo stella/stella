@@ -345,7 +345,7 @@ describe("following a reconciled playbook save", () => {
       const refetch = Promise.withResolvers<{ refetched: boolean }>();
       const unsubscribe = new QueryObserver(queryClient, {
         queryKey: DETAIL_KEY,
-        queryFn: () => refetch.promise,
+        queryFn: async () => await refetch.promise,
         staleTime: Infinity,
       }).subscribe(() => undefined);
       const reconciliation = reconcilePlaybookSaveToolCalls({

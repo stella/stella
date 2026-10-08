@@ -310,7 +310,7 @@ const readEditorServer = async ({
         queryKey: options.queryKey,
         exact: true,
       });
-      return await queryClient.fetchQuery({ ...options, staleTime: 0 });
+      return await queryClient.query({ ...options, staleTime: 0 });
     },
     catch: (error) => error,
   });
@@ -765,7 +765,10 @@ const PlaybookEditorForm = ({
     updatedAt,
     initialUnacknowledgedDrafts: initial.unacknowledgedDrafts,
     sendSave: async (args) => await sendSave(args),
-    onFailed: () => setFailedReadCount(detailReadCount()),
+    onFailed: () => {
+      setFailedReadCount(detailReadCount());
+      setSaveRequest("failed");
+    },
   });
   const changedFromBaseline = hasPlaybookDraftChanges({
     baseline,
@@ -901,7 +904,7 @@ const PlaybookEditorForm = ({
   };
 
   const updatePosition = (sourceId: string, next: Position) => {
-    scheduleAutosave();
+    scheduleAutosaveFromEdit();
     editedIdsRef.current.add(sourceId);
     setPositions((prev) =>
       prev.map((p) => (p.sourceId === sourceId ? next : p)),
@@ -920,7 +923,7 @@ const PlaybookEditorForm = ({
   };
 
   const removePosition = (sourceId: string) => {
-    scheduleAutosave();
+    scheduleAutosaveFromEdit();
     const index = positions.findIndex((p) => p.sourceId === sourceId);
     const removed = positions[index];
     setPositions((prev) => prev.filter((p) => p.sourceId !== sourceId));
@@ -935,7 +938,7 @@ const PlaybookEditorForm = ({
         actionProps: {
           children: t("common.undo"),
           onClick: () => {
-            scheduleAutosave();
+            scheduleAutosaveFromEdit();
             setPositions((prev) =>
               prev.some((p) => p.sourceId === sourceId)
                 ? prev
@@ -948,7 +951,7 @@ const PlaybookEditorForm = ({
   };
 
   const addPosition = (mode: "graded" | "extract") => {
-    scheduleAutosave();
+    scheduleAutosaveFromEdit();
     const position =
       mode === "graded" ? newGradedPosition() : newExtractPosition();
     setPositions((prev) => [...prev, position]);
@@ -961,7 +964,7 @@ const PlaybookEditorForm = ({
     if (!original) {
       return;
     }
-    scheduleAutosave();
+    scheduleAutosaveFromEdit();
     const copy = duplicatePosition(original);
     setPositions((prev) => {
       const at = prev.findIndex((p) => p.sourceId === sourceId);
@@ -1007,7 +1010,7 @@ const PlaybookEditorForm = ({
   };
 
   const reorderPosition = (draggedSourceId: string, targetSourceId: string) => {
-    scheduleAutosave();
+    scheduleAutosaveFromEdit();
     setPositions((prev) => {
       const from = prev.findIndex((p) => p.sourceId === draggedSourceId);
       const to = prev.findIndex((p) => p.sourceId === targetSourceId);
@@ -1023,7 +1026,7 @@ const PlaybookEditorForm = ({
   };
 
   const movePosition = (sourceId: string, direction: "up" | "down") => {
-    scheduleAutosave();
+    scheduleAutosaveFromEdit();
     setPositions((prev) => {
       const index = prev.findIndex((p) => p.sourceId === sourceId);
       return moveAdjacent(prev, index, direction) ?? prev;
@@ -1260,8 +1263,9 @@ const PlaybookEditorForm = ({
     }
   };
 
-  const isAutosaveDue = () =>
+  const isAutosaveDue = (origin: "automatic" | "retry") =>
     deletionRef.current === "idle" &&
+    (origin === "retry" || saveRequest !== "failed") &&
     autosaves &&
     (isDirty || hasPendingSave()) &&
     !nameMissing &&
@@ -1269,11 +1273,11 @@ const PlaybookEditorForm = ({
 
   /** Saves the pane's draft. The status line reports it; only a failure
    *  also raises a toast. */
-  const runAutosave = async () => {
-    if (!isAutosaveDue()) {
+  const runAutosave = async (origin: "automatic" | "retry" = "automatic") => {
+    if (!isAutosaveDue(origin)) {
       return;
     }
-    setSaveRequest((current) => (current === "failed" ? current : "in-flight"));
+    setSaveRequest("in-flight");
     const { outcome, isLatest } = await queueSave(draft);
     switch (outcome.type) {
       case "saved":
@@ -1296,6 +1300,11 @@ const PlaybookEditorForm = ({
   const scheduleAutosave = useDebouncedCallback(() => {
     detached(runAutosave(), "playbook-editor.autosave");
   }, AUTOSAVE_DELAY_MS);
+
+  const scheduleAutosaveFromEdit = () => {
+    setSaveRequest((current) => (current === "failed" ? "idle" : current));
+    scheduleAutosave();
+  };
 
   usePlaybookDetailSaveSubscription({
     queryClient,
@@ -1325,10 +1334,11 @@ const PlaybookEditorForm = ({
       queryClient,
       organizationId,
       playbookId,
-      onReadError: (error) =>
+      onReadError: (error) => {
         notifyUserError(undefined, t("common.unexpectedError"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
-        }),
+        });
+      },
     });
   const { leavePane, recordSave, recordFailure } = usePlaybookPaneLifecycle({
     host,
@@ -1535,7 +1545,10 @@ const PlaybookEditorForm = ({
                       invalidPositions: invalidIds.length,
                     }),
                     onRetry: () => {
-                      detached(runAutosave(), "playbook-editor.autosave-retry");
+                      detached(
+                        runAutosave("retry"),
+                        "playbook-editor.autosave-retry",
+                      );
                     },
                     onShowProblems: showProblems,
                   }
@@ -1580,7 +1593,7 @@ const PlaybookEditorForm = ({
                 id={nameId}
                 onChange={(e) => {
                   setName(e.target.value);
-                  scheduleAutosave();
+                  scheduleAutosaveFromEdit();
                 }}
                 ref={nameInputRef}
                 placeholder={t("knowledge.playbooks.namePlaceholder")}
@@ -1595,7 +1608,7 @@ const PlaybookEditorForm = ({
                 id={descriptionId}
                 onChange={(e) => {
                   setDescription(e.target.value);
-                  scheduleAutosave();
+                  scheduleAutosaveFromEdit();
                 }}
                 placeholder={t("knowledge.playbooks.descriptionPlaceholder")}
                 value={description}
@@ -1608,7 +1621,7 @@ const PlaybookEditorForm = ({
                 <Label htmlFor={documentTypeId}>{t("common.type")}</Label>
                 <Select
                   onValueChange={(next) => {
-                    scheduleAutosave();
+                    scheduleAutosaveFromEdit();
                     setDocumentTypeKey(
                       next === null || next === SCOPE_ALL_VALUE ? null : next,
                     );

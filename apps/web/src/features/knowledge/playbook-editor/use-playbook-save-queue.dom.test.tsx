@@ -117,7 +117,7 @@ test("reverting and closing during a save persists the final draft after the res
     <EditorHarness
       outcomes={outcomes}
       requests={requests}
-      sendSave={(args) => {
+      sendSave={async (args) => {
         sent.push(args);
         return sent.length === 1 ? first.promise : Promise.resolve(saved);
       }}
@@ -153,7 +153,7 @@ test("Retry saves after a rejected request and leaves no failed request in the q
     <EditorHarness
       outcomes={outcomes}
       requests={requests}
-      sendSave={(args) => {
+      sendSave={async (args) => {
         sent.push(args);
         return sent.length === 1
           ? Promise.reject(new Error("Connection lost"))
@@ -188,9 +188,9 @@ test("closing a dirty form flushes it without waiting for a debounce", async () 
     <EditorHarness
       outcomes={outcomes}
       requests={requests}
-      sendSave={(args) => {
+      sendSave={async (args) => {
         sent.push(args);
-        return Promise.resolve(saved);
+        return saved;
       }}
     />,
   );

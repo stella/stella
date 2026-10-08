@@ -156,8 +156,7 @@ export const usePlaybookPaneLifecycle = ({
       });
       const current = capture();
       return (
-        current !== null &&
-        current.pane.tabId === tabId &&
+        current?.pane.tabId === tabId &&
         current.pane.playbookId === snapshot.playbookId &&
         !hasPlaybookDraftChanges({
           baseline: createPlaybookBaseline(snapshot.draft),
