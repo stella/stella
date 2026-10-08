@@ -37,6 +37,7 @@ type DesktopRegistryAuthorization = {
   userId: SafeId<"user">;
   keyId: string;
   scopedDb: ScopedDb;
+  memberRole: ReturnType<typeof sessionMemberRole>;
 };
 
 const authorizeDesktopCredential = async (
@@ -106,6 +107,7 @@ const authorizeDesktopCredential = async (
   return Result.ok({
     ...identity,
     keyId: key.id,
+    memberRole: sessionMemberRole(member.value.role),
     scopedDb: createMembershipScopedDb(rlsDb, {
       ...identity,
       serverValidatedWorkspaceIds: [],

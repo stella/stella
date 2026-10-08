@@ -432,6 +432,7 @@ export const insertPreparedInternalTimeEntry = async ({
 };
 
 type CreateTimeEntryHandlerProps = {
+  source?: TimeEntrySource;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -445,6 +446,7 @@ type CreateTimeEntryHandlerProps = {
 // `save_time_entry` MCP tool, so both run the same validation, advisory-lock
 // limit check, and audit event.
 export const createTimeEntryHandler = async function* ({
+  source = TIME_ENTRY_SOURCE.MANUAL,
   safeDb,
   organizationId,
   workspaceId,
@@ -477,7 +479,7 @@ export const createTimeEntryHandler = async function* ({
           organizationId,
           workspaceId,
           userId,
-          source: TIME_ENTRY_SOURCE.MANUAL,
+          source,
           prepared,
           recordAuditEvent,
         }),

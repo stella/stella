@@ -29,6 +29,7 @@ const config = {
         features: t.Object(
           {
             "activity-timeline": decisionSchema,
+            "time-billing": decisionSchema,
           } satisfies Record<DesktopFeatureId, typeof decisionSchema>,
           { additionalProperties: false },
         ),
@@ -73,6 +74,7 @@ export const createDesktopFeatureAccessReadEndpoint = (
     return Result.ok({
       features: {
         "activity-timeline": decide(snapshot, "activity-timeline"),
+        "time-billing": decide(snapshot, "time-billing"),
       } satisfies Record<DesktopFeatureId, unknown>,
     });
   });

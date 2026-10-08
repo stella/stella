@@ -40,6 +40,7 @@ import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
+import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -570,7 +571,8 @@ const api = new Elysia()
     new Elysia()
       .use(pdfSigningSessionsRoute)
       .use(desktopPresenceRoute)
-      .use(desktopFeatureAccessRoute),
+      .use(desktopFeatureAccessRoute)
+      .use(desktopTimeEntriesRoute),
   );
 
 export default api;

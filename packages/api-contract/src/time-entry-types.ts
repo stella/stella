@@ -1,6 +1,8 @@
+import type { TimeEntrySource } from "./billing";
+
 export type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
 
-export type TimeEntrySource = "manual" | "timer" | "suggested";
+export type { TimeEntrySource } from "./billing";
 
 export type TimeEntry = {
   activityCode: string | null;

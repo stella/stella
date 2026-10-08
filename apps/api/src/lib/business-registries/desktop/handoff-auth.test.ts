@@ -9,6 +9,7 @@ import {
 
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { authorizeDesktopHandoff } from "./handoff-auth";
@@ -117,6 +118,7 @@ test("each supported handoff records an account refusal with the existing accoun
 test("supported protocols retain the authenticated account identity without a failure write", async () => {
   const identity = {
     keyId: "desktop-account-key",
+    memberRole: sessionMemberRole("member"),
     organizationId: mintAuthProviderId<"organization">(),
     userId: mintAuthProviderId<"user">(),
     scopedDb: async () =>
