@@ -2,6 +2,7 @@ import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { classifySocialCallback } from "@/api/lib/auth/social-sign-in-outcome";
+import type { SocialSignInOutcome } from "@/api/lib/observability/request-metrics";
 import {
   emitSocialSignInOutcome,
   resetMetricLineSinkForTesting,
@@ -18,7 +19,7 @@ describe("social sign-in outcome", () => {
     resetMetricLineSinkForTesting();
   });
 
-  test.each([
+  test.each<[string, SocialSignInOutcome]>([
     [`${errorUrl}?error=account_not_linked`, "account_not_linked"],
     [`${errorUrl}?error=identity_not_allowed`, "identity_not_allowed"],
     [`${errorUrl}?error=invalid_code`, "failed"],

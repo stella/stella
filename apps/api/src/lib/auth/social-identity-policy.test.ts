@@ -412,11 +412,10 @@ describe("social identity policy", () => {
         },
       });
       const context = await auth.$context;
-      const local = await context.internalAdapter.createUser({
-        email,
-        name: "Account",
-        emailVerified: false,
-      });
+      const local = await context.internalAdapter.createUser(
+        { email, name: "Account", emailVerified: false },
+        { method: "admin" },
+      );
       await context.internalAdapter.linkAccount({
         userId: local.id,
         providerId: "microsoft",
