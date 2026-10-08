@@ -21,7 +21,6 @@ import type {
   CommandBuilderArguments,
   RouteMap,
 } from "@stricli/core";
-import { panic } from "better-result";
 
 import packageJson from "../package.json" with { type: "json" };
 import { determineCommandExitCode } from "./cli-exit-code.js";
@@ -44,13 +43,11 @@ import {
 import { exitCodeEntries } from "./mcp-constants.js";
 import { buildCommonFlags, buildServerFlag } from "./output-flags.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
-import {
-  type CapabilityLeafSpec,
-  type DisabledCommands,
-  type FlagSpec,
-  type LeafCommandSpec,
-  NO_DISABLED_COMMANDS,
-  type RouteNode,
+import type {
+  CapabilityLeafSpec,
+  FlagSpec,
+  LeafCommandSpec,
+  RouteNode,
 } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
 import {
@@ -273,51 +270,9 @@ const fullDescription = ({
   return lines.join("\n");
 };
 
-const DISABLED_PHRASE = "disabled on this server";
-
-/** The suffix a gated-off command's brief carries in --help and tools list. */
-export const DISABLED_MARKER: string = `[${DISABLED_PHRASE}]`;
-
-/** `DisabledCommands` as lookup sets, built once per app. */
-type DisabledLookup = {
-  tools: ReadonlySet<string>;
-  capabilities: ReadonlySet<string>;
-};
-
-/**
- * Whether the server attested a node as gated off: a leaf it named, or a group
- * whose every command it named. The one predicate behind every marker (leaf
- * and group --help briefs, root --help, tools list).
- */
-const isDisabled = (node: RouteNode, disabled: DisabledLookup): boolean => {
-  switch (node.kind) {
-    case "leaf":
-      return disabled.tools.has(node.spec.toolName);
-    case "capability-leaf":
-      return disabled.capabilities.has(node.spec.capabilityId);
-    case "route": {
-      const children = Object.values(node.children);
-      return (
-        children.length > 0 &&
-        children.every((child) => isDisabled(child, disabled))
-      );
-    }
-    default: {
-      node satisfies never;
-      return panic(`Unhandled route node: ${String(node)}`);
-    }
-  }
-};
-
-const withDisabledMarker = (brief: string, marked: boolean): string =>
-  marked ? `${brief} ${DISABLED_MARKER}` : brief;
-
-const buildLeafCommand = (
-  spec: LeafCommandSpec,
-  disabled: boolean,
-): RoutingTarget => {
+const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
   const flags = buildLeafFlags(spec);
-  const brief = withDisabledMarker(leafBrief(spec), disabled);
+  const brief = leafBrief(spec);
   const description = fullDescription({
     brief,
     discriminatorInject: spec.discriminatorInject,
@@ -432,10 +387,9 @@ const buildCapabilityLeafFlags = (
 
 const buildCapabilityLeafCommand = (
   spec: CapabilityLeafSpec,
-  disabled: boolean,
 ): RoutingTarget => {
   const flags = buildCapabilityLeafFlags(spec);
-  const brief = withDisabledMarker(capabilityLeafBrief(spec), disabled);
+  const brief = capabilityLeafBrief(spec);
   const description = fullDescription({
     brief,
     // Help must read the same shape `--input` validates against. The baked
@@ -469,50 +423,30 @@ const buildCapabilityLeafCommand = (
   return buildCommand(typedArgs);
 };
 
-const buildRouteNode = (
-  node: RouteNode,
-  brief: string,
-  disabled: DisabledLookup,
-): RoutingTarget => {
+const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
   if (node.kind === "leaf") {
-    return buildLeafCommand(node.spec, isDisabled(node, disabled));
+    return buildLeafCommand(node.spec);
   }
   if (node.kind === "capability-leaf") {
-    return buildCapabilityLeafCommand(node.spec, isDisabled(node, disabled));
+    return buildCapabilityLeafCommand(node.spec);
   }
   return buildRouteMap({
     docs: { brief },
-    routes: buildGeneratedRoutes(node, disabled),
+    routes: buildGeneratedRoutes(node),
   });
 };
 
-/**
- * A group's brief marks what the server gated off: the plain marker when every
- * command under it is, otherwise the gated-off children by name, so a parent
- * listing (root --help included) shows it without opening the group.
- */
 const routeBrief = ({
   name,
   node,
-  disabled,
 }: {
   name: string;
   node: RouteNode;
-  disabled: DisabledLookup;
 }): string => {
   if (node.kind !== "route") {
     return name;
   }
-  const brief = groupBrief(name, node.children);
-  if (isDisabled(node, disabled)) {
-    return `${brief} ${DISABLED_MARKER}`;
-  }
-  const gatedOff = Object.entries(node.children)
-    .filter(([, child]) => isDisabled(child, disabled))
-    .map(([childName]) => childName);
-  return gatedOff.length === 0
-    ? brief
-    : `${brief} [${DISABLED_PHRASE}: ${gatedOff.join(", ")}]`;
+  return groupBrief(name, node.children);
 };
 
 /**
@@ -521,18 +455,13 @@ const routeBrief = ({
  */
 const buildGeneratedRoutes = (
   node: RouteNode,
-  disabled: DisabledLookup,
 ): Record<string, RoutingTarget> => {
   if (node.kind !== "route") {
     return {};
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(
-      child,
-      routeBrief({ name, node: child, disabled }),
-      disabled,
-    );
+    routes[name] = buildRouteNode(child, routeBrief({ name, node: child }));
   }
   return routes;
 };
@@ -599,28 +528,19 @@ const collectLeafPaths = (
   node: RouteNode,
   path: readonly string[],
   lines: string[],
-  disabled: DisabledLookup,
 ): void => {
   if (node.kind === "leaf") {
-    lines.push(
-      withDisabledMarker(
-        `${path.join(" ")}\t(${node.spec.toolName})`,
-        isDisabled(node, disabled),
-      ),
-    );
+    lines.push(`${path.join(" ")}\t(${node.spec.toolName})`);
     return;
   }
   if (node.kind === "capability-leaf") {
     lines.push(
-      withDisabledMarker(
-        `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
-        isDisabled(node, disabled),
-      ),
+      `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
     );
     return;
   }
   for (const [name, child] of Object.entries(node.children)) {
-    collectLeafPaths(child, [...path, name], lines, disabled);
+    collectLeafPaths(child, [...path, name], lines);
   }
 };
 
@@ -641,10 +561,7 @@ const HELP_FORMATTING = {
   caseStyle: "convert-camel-to-kebab",
 } as const;
 
-const buildRootRoute = (
-  tree: RouteNode,
-  disabled: DisabledLookup,
-): RouteMap<Context> => {
+const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
   const toolsListCommand = buildCommand<
     { readonly server: string | undefined },
     [],
@@ -658,7 +575,7 @@ const buildRootRoute = (
       const lines: string[] = [];
       // Reflect the ACTIVE tree (the cached-listings tree when the server
       // registry has diverged), not the baked-in one.
-      collectLeafPaths(tree, [], lines, disabled);
+      collectLeafPaths(tree, [], lines);
       this.process.stdout.write(`${lines.toSorted().join("\n")}\n`);
     },
     parameters: { flags: buildServerFlag() },
@@ -680,7 +597,7 @@ const buildRootRoute = (
       upload: uploadCommand,
       tools: toolsRoute,
       reference: buildResourceRoutes(generatedResourceTree),
-      ...buildGeneratedRoutes(tree, disabled),
+      ...buildGeneratedRoutes(tree),
     },
   });
 };
@@ -690,15 +607,9 @@ const buildRootRoute = (
  * lives here rather than in `cli.ts` so tests can walk the real route tree the
  * CLI dispatches against instead of a re-wired copy of it.
  */
-export const buildApp = (
-  tree: RouteNode,
-  disabled: DisabledCommands = NO_DISABLED_COMMANDS,
-): Application<Context> =>
+export const buildApp = (tree: RouteNode): Application<Context> =>
   buildApplication(
-    buildRootRoute(tree, {
-      tools: new Set(disabled.tools),
-      capabilities: new Set(disabled.capabilities),
-    }),
+    buildRootRoute(tree),
     {
       name: "stella",
       // A hand-written command's returned `CliCommandError` carries its exit

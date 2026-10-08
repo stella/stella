@@ -164,6 +164,8 @@ export const PREPARE_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
   },
   access: "write",
   accountAccess: "sandbox",
+  nonDestructiveReason:
+    "Creates temporary comparison upload reservations without modifying existing stored documents or versions.",
   permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: FILE_COMPARISON_TRANSPORT.prepareToolName,

@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 // The per-origin XDG registry cache (spec 051 S5.3). One file per server origin
 // under `$XDG_CACHE_HOME/stella/registry/<origin-hash>.json` (`~/.cache/...`
 // fallback). Only deployment omissions and version-nudge metadata persist.
@@ -7,8 +8,6 @@ import { Result } from "better-result";
 // This module is I/O-bounded (reads/writes the cache file); pure helpers
 // (`computeDelta`, `isCacheStale`, `isDeltaEmpty`) are exported for the runtime
 // path and its tests. It stores no secrets: only deployment and version metadata.
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 
@@ -18,6 +17,7 @@ import {
 } from "@stll/stable-stringify";
 
 import type { JsonSchema, RegistryToolListing } from "./route-types.js";
+import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 // Version 5 accepts only deployment metadata; caller listings and credential
 // identities from earlier files cannot participate in command resolution.
@@ -66,7 +66,7 @@ export const cacheDir = (env: CacheEnv): string => {
 
 /** A stable sha256 hex of the server origin, used as the cache filename. */
 export const originHash = (serverOrigin: string): string =>
-  createHash("sha256").update(serverOrigin).digest("hex");
+  hashSha256Hex(serverOrigin);
 
 /** The cache file path for a given origin (one file per origin; spec S5.5 rule 5). */
 export const cachePathFor = (serverOrigin: string, env: CacheEnv): string =>
