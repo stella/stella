@@ -295,13 +295,17 @@ jobs:
       - name: Align Tauri counterparts
         id: tauri
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             scripts/bun-lock-text.ts scripts/check-tauri-package-alignment.ts \
             scripts/fix-tauri-package-alignment.ts scripts/json-text-edit.ts; then
-            mapfile -d '' -t paths < "$RUNNER_TEMP/autofix-changed-paths"
+            paths=()
+            while IFS= read -r -d '' path; do
+              paths+=("$path")
+            done < "$RUNNER_TEMP/autofix-changed-paths"
             required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
             if [[ "$required" == true ]]; then
               bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts

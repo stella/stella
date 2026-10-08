@@ -261,6 +261,7 @@ describe("workflow marker selection", () => {
         EMPTY: "",
         BASE_REF: `\${{ steps.base.outputs.ref }}`,
         BASE_SHA: `\${{ github.event.pull_request.base.sha }}`,
+        HEAD_SHA: `\${{ github.event.pull_request.head.sha }}`,
         EVENT_NAME: `\${{ github.event_name }}`,
         CHECK_BASE_REF: `\${{ steps.base.outputs.ref }}`,
         RATCHET_BASE_REF: `\${{ steps.base.outputs.ref }}`,

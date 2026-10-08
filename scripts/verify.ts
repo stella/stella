@@ -132,6 +132,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
     GENERATOR_IDS: "",
     BASE_REF: options.base.replace(/^origin\//u, ""),
     BASE_SHA: mergeBase,
+    HEAD_SHA: git(["rev-parse", "HEAD"]).trim(),
     CHECK_BASE_REF: options.base,
     RATCHET_BASE_REF: mergeBase,
     MERGE_GROUP_BASE_SHA: "",

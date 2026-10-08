@@ -298,6 +298,9 @@ test("fix mode executes exact autofix workflow blocks", () => {
     ),
   ).toBe(true);
   expect(steps.some(({ run }) => run.includes("oxfmt"))).toBe(true);
+  expect(
+    steps.some(({ run }) => run.includes("fix-tauri-package-alignment.ts")),
+  ).toBe(true);
   expect(parseVerifyArgs(["--fix"])).toMatchObject({ mode: "fix-check" });
 });
 test("preparation and fixer failures abort before subsequent commands", () => {
