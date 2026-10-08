@@ -146,7 +146,7 @@ test("closing a dirty pane keeps the tab when cancelled and closes only after co
   });
   await act(async () => {
     fireEvent.click(
-      view.getByRole("button", { name: messages.common.leaveAndDiscard }),
+      view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
     );
   });
   expect(store.getState().tabs).toHaveLength(0);
@@ -186,7 +186,7 @@ test("a model retarget confirms another playbook while preserving the parked dra
   });
   await act(async () => {
     fireEvent.click(
-      view.getByRole("button", { name: messages.common.leaveAndDiscard }),
+      view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
     );
   });
   expect(store.getState().tabs.at(0)).toMatchObject({
@@ -275,10 +275,10 @@ const assertBulkCloseConfirmation = async ({
   });
   await act(async () => {
     fireEvent.click(
-      view.getByRole("button", { name: messages.common.leaveAndDiscard }),
+      view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
     );
   });
-  expect(store.getState().tabs.map((tab) => tab.id)).toEqual(remainingIds);
+  expect(store.getState().tabs.map((tab) => tab.id)).toEqual([...remainingIds]);
   expect(store.getState().activeId).toBe(remainingIds.at(0) ?? null);
   expect(readParkedPlaybookPane("bulk-dirty", "dirty-playbook")).toBeNull();
   expect(
@@ -342,7 +342,7 @@ test("closeAll obtains fresh confirmation for a dirty tab opened while confirmat
     expect(readParkedPlaybookPane("race-late", "late-playbook")).not.toBeNull();
     await act(async () => {
       fireEvent.click(
-        view.getByRole("button", { name: messages.common.leaveAndDiscard }),
+        view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
       );
     });
     confirmed += 1;

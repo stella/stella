@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createStore } from "zustand/vanilla";
 
 import type {
   PlaybookBaseline,
@@ -120,23 +121,38 @@ type PaneLeaveGuardArgs = {
   shouldConfirm: () => boolean;
 };
 
-const leaveGuards = new Map<string, Map<string, () => boolean>>();
+type PaneLeaveGuards = Record<string, Record<string, () => boolean>>;
+
+const paneLeaveGuards = createStore<PaneLeaveGuards>(() => ({}));
 
 export const registerPlaybookPaneLeaveGuard = ({
   tabId,
   playbookId,
   shouldConfirm,
 }: PaneLeaveGuardArgs) => {
-  const guards = leaveGuards.get(tabId) ?? new Map<string, () => boolean>();
-  guards.set(playbookId, shouldConfirm);
-  leaveGuards.set(tabId, guards);
+  paneLeaveGuards.setState(
+    (current) => ({
+      ...current,
+      [tabId]: { ...current[tabId], [playbookId]: shouldConfirm },
+    }),
+    true,
+  );
   return () => {
-    if (guards.get(playbookId) === shouldConfirm) {
-      guards.delete(playbookId);
-    }
-    if (guards.size === 0 && leaveGuards.get(tabId) === guards) {
-      leaveGuards.delete(tabId);
-    }
+    paneLeaveGuards.setState((current) => {
+      const tab = current[tabId];
+      if (tab?.[playbookId] !== shouldConfirm) {
+        return current;
+      }
+      const remaining = Object.fromEntries(
+        Object.entries(tab).filter(([id]) => id !== playbookId),
+      );
+      if (Object.keys(remaining).length > 0) {
+        return { ...current, [tabId]: remaining };
+      }
+      return Object.fromEntries(
+        Object.entries(current).filter(([id]) => id !== tabId),
+      );
+    }, true);
   };
 };
 
@@ -159,7 +175,7 @@ export const requestPlaybookPaneLeave = ({
   playbookId,
   proceed,
 }: PaneLeaveRequest) => {
-  const liveGuard = leaveGuards.get(tabId)?.get(playbookId);
+  const liveGuard = paneLeaveGuards.getState()[tabId]?.[playbookId];
   const shouldConfirm = liveGuard
     ? liveGuard()
     : (readParkedPlaybookPane(tabId, playbookId)?.requiresLeaveConfirmation ??

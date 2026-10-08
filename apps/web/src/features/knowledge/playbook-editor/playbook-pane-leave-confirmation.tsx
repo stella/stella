@@ -41,7 +41,7 @@ export const PlaybookPaneLeaveConfirmation = () => {
             {t("common.goBackToEditing")}
           </AlertDialogClose>
           <Button onClick={confirmPlaybookPaneLeave}>
-            {t("common.leaveAndDiscard")}
+            {t("clauses.leaveAndDiscard")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogPopup>

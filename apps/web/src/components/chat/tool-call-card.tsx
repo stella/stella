@@ -358,6 +358,16 @@ const readCachedSkillPages = ({
  *  what the call saved. */
 export type ToolCallAction = { label: string; onClick: () => void };
 
+const toolFailureLabelKey = (
+  rawErrorDetails: ReturnType<typeof getToolOutputError>,
+  state: ToolPart["state"],
+) => {
+  if (rawErrorDetails !== undefined) {
+    return "chat.toolCall.failed";
+  }
+  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+};
+
 export const ToolCallCard = ({
   action,
   activeOrganizationId,
@@ -444,12 +454,9 @@ export const ToolCallCard = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  let errorMessage: string | undefined;
-  if (rawErrorDetails !== undefined) {
-    errorMessage = t("chat.toolCall.failed");
-  } else if (part.state === "error") {
-    errorMessage = t("chat.toolCall.interrupted");
-  }
+  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
+  const errorMessage =
+    failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);

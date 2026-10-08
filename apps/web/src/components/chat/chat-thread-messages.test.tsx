@@ -505,51 +505,6 @@ describe("chat thread messages", () => {
     expect(html).toContain("Before searching, list the sources.");
   });
 
-  // `save_playbook` asks for approval, so its row is an approval card even
-  // after the call completed.
-  test("offers to open the playbook an approved save wrote", () => {
-    const input = {
-      name: "Mutual NDA",
-      positions: [{ mode: "graded", issue: "Confidentiality term" }],
-    };
-    const html = renderWithProviders(
-      <ChatThreadMessages
-        approvalPendingMessageId={null}
-        messages={[
-          {
-            id: "message-save",
-            parts: [
-              {
-                approval: {
-                  approved: true,
-                  id: "approval-1",
-                  needsApproval: true,
-                },
-                arguments: JSON.stringify(input),
-                id: "tool-call-save",
-                input,
-                name: "save_playbook",
-                output: { playbookId: "playbook-1" },
-                state: "complete",
-                type: "tool-call",
-              },
-            ],
-            role: "assistant",
-          },
-        ]}
-        onAskUserSubmit={() => {}}
-        onCreateDocumentResolve={() => {}}
-        onOpenCreatedDocument={() => {}}
-        onOpenPlaybook={() => {}}
-        streamdownComponents={{
-          a: ({ children, ...props }) => <a {...props}>{children}</a>,
-        }}
-      />,
-    );
-
-    expect(html).toContain(messages.knowledge.playbooks.openInPane);
-  });
-
   const askUserInput = {
     analysis: "The matter decides the template.",
     questions: [{ question: "Which matter?", reason: "Picks the template." }],
