@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { canonicalModuleId } from "../../../.oxlint-plugins/module-id";
+
 const packageRoot = path.resolve(import.meta.dirname, "../../decision-reader");
 const productionDependencyRoots = new Set([
   "@fontsource-variable/source-serif-4",
@@ -228,17 +230,142 @@ for (const mutation of [
   });
 }
 
-test("web has no second owner for the extracted reader modules", () => {
-  const oldPaths = [
-    "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx",
-    "apps/web/src/features/case-law/components/case-viewer/decision-text.logic.ts",
-    "apps/web/src/components/legal-reader/document-ast-text.tsx",
-    "apps/web/src/components/legal-reader/reader.css",
-    "apps/web/src/components/legal-reader/reader-outline.ts",
-    "apps/web/src/components/legal-reader/use-reader-text-scale.ts",
-  ];
+// Migration tombstones: all web modules removed when the shared reader took ownership.
+const removedReaderPaths = [
+  "apps/web/src/components/legal-reader/annotations/annotation-anchors.test.ts",
+  "apps/web/src/components/legal-reader/annotations/annotation-anchors.tsx",
+  "apps/web/src/components/legal-reader/citation-link.tsx",
+  "apps/web/src/components/legal-reader/document-ast-text.tsx",
+  "apps/web/src/components/legal-reader/query-marks.test.ts",
+  "apps/web/src/components/legal-reader/query-marks.ts",
+  "apps/web/src/components/legal-reader/reader-inset-box.tsx",
+  "apps/web/src/components/legal-reader/reader-landing.ts",
+  "apps/web/src/components/legal-reader/reader-outline.test.ts",
+  "apps/web/src/components/legal-reader/reader-outline.ts",
+  "apps/web/src/components/legal-reader/reader-search.test.ts",
+  "apps/web/src/components/legal-reader/reader-search.ts",
+  "apps/web/src/components/legal-reader/reader-text-scale.logic.ts",
+  "apps/web/src/components/legal-reader/reader.css",
+  "apps/web/src/components/legal-reader/source-link-policy.test.tsx",
+  "apps/web/src/components/legal-reader/source-link-policy.tsx",
+  "apps/web/src/components/legal-reader/use-reader-text-scale.ts",
+  "apps/web/src/features/case-law/citation-anchors.ts",
+  "apps/web/src/features/case-law/components/case-viewer/decision-body-state.logic.ts",
+  "apps/web/src/features/case-law/components/case-viewer/decision-text.logic.ts",
+  "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx",
+  "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx",
+  "apps/web/src/features/case-law/fallback-legal-anchors.test.ts",
+  "apps/web/src/features/case-law/fallback-legal-anchors.ts",
+  "apps/web/src/features/case-law/provision-anchors.test.ts",
+  "apps/web/src/features/case-law/provision-anchors.ts",
+  "apps/web/src/lib/sanitize-href.test.ts",
+  "apps/web/src/lib/sanitize-href.ts",
+] as const;
+const removedReaderModules = new Set(
+  removedReaderPaths.map((file) => canonicalModuleId(file, "")),
+);
+
+const removedReaderImportViolations = (file: string, source: string) => {
+  const specifiers = file.endsWith(".css")
+    ? [
+        ...source
+          .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+          .matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gu),
+      ].map((match) => match[1] ?? "")
+    : moduleSpecifiers(source);
+  return specifiers.filter((specifier) =>
+    removedReaderModules.has(
+      canonicalModuleId(specifier.replace(/[?#].*$/u, ""), file),
+    ),
+  );
+};
+
+test("web has no second owner for any extracted reader module", () => {
   expect(
-    oldPaths.filter((file) => existsSync(path.join(repositoryRoot, file))),
+    removedReaderPaths.filter((file) =>
+      existsSync(path.join(repositoryRoot, file)),
+    ),
+  ).toEqual([]);
+});
+
+test("source imports never reference any removed reader module", () => {
+  const violations: { file: string; specifier: string }[] = [];
+  for (const pattern of [
+    "apps/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}",
+    "packages/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}",
+    "scripts/**/*.{ts,tsx,js,jsx}",
+    ".oxlint-plugins/**/*.{ts,tsx,js,jsx}",
+  ]) {
+    for (const file of new Bun.Glob(pattern).scanSync({
+      cwd: repositoryRoot,
+    })) {
+      for (const specifier of removedReaderImportViolations(
+        file,
+        readFileSync(path.join(repositoryRoot, file), "utf-8"),
+      )) {
+        violations.push({ file, specifier });
+      }
+    }
+  }
+  expect(violations).toEqual([]);
+}, 30_000);
+
+const removedReaderMutationFile =
+  "apps/web/src/features/statutes/components/statute-compare-view.tsx";
+for (const oldPath of removedReaderPaths) {
+  const alias = oldPath.replace("apps/web/src/", "@/");
+  const relative = path.relative(
+    path.dirname(removedReaderMutationFile),
+    oldPath,
+  );
+  const extensionlessAlias = alias.replace(/\.[cm]?[jt]sx?$/u, "");
+  test(`removed reader imports reject every syntax and path spelling: ${oldPath}`, () => {
+    for (const specifier of new Set([
+      alias,
+      extensionlessAlias,
+      relative,
+      `${alias}?raw`,
+    ])) {
+      for (const mutation of [
+        `import "${specifier}";`,
+        `export { value } from "${specifier}";`,
+        `const value = import("${specifier}");`,
+        `const value = require("${specifier}");`,
+        `type Value = import("${specifier}");`,
+        `import value = require("${specifier}");`,
+      ]) {
+        expect(
+          removedReaderImportViolations(removedReaderMutationFile, mutation),
+          mutation,
+        ).toEqual([specifier]);
+      }
+    }
+  });
+}
+
+test("removed reader stylesheet imports reject CSS import forms", () => {
+  expect(
+    Bun.resolveSync(
+      "@stll/decision-reader/reader.css",
+      path.dirname(path.join(repositoryRoot, removedReaderMutationFile)),
+    ),
+  ).toBe(path.join(packageRoot, "src/reader.css"));
+  for (const mutation of [
+    '@import "@/components/legal-reader/reader.css";',
+    '@import url("@/components/legal-reader/reader.css");',
+    "@import url(@/components/legal-reader/reader.css);",
+    '@import "@/components/legal-reader/reader.css?inline";',
+    '@import "../components/legal-reader/reader.css";',
+  ]) {
+    expect(
+      removedReaderImportViolations("apps/web/src/styles/app.css", mutation),
+    ).toHaveLength(1);
+  }
+  expect(
+    removedReaderImportViolations(
+      removedReaderMutationFile,
+      'import "@stll/decision-reader/reader.css";',
+    ),
   ).toEqual([]);
 });
 

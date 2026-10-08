@@ -17,9 +17,8 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
-
 // The move flash is the reader's own `[data-highlight]` animation.
-import "@/components/legal-reader/reader.css";
+import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
 
 import {
