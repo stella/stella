@@ -27,6 +27,7 @@ import {
   getShardConditions,
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import { LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT } from "@/api/handlers/legislation/catalog-response";
 import {
   buildLegislationFacetsQuery,
   legislationFacetSnapshotQuery,
@@ -456,7 +457,12 @@ export const QUERY_PLAN_REGISTRY = [
     id: "legislation.facets",
     class: "aggregate",
     role: "public-law-reader",
-    build: (tx) => legislationFacetSnapshotQuery(tx, "CZE"),
+    build: (tx) =>
+      legislationFacetSnapshotQuery(
+        tx,
+        "CZE",
+        LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT + 1,
+      ),
     seed: "legislation",
     heapFetchMitigation: {
       type: "snapshot",
