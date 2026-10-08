@@ -50,22 +50,29 @@ const captureAdapter = (sink: ModelMessage[][]): AnyTextAdapter => ({
     panic("Structured output is not part of this fixture"),
 });
 
-const thinking = (id: string): ChatPart => ({
-  type: "thinking",
-  content: `think ${id}`,
-  signature: JSON.stringify({ id, encrypted_content: `enc ${id}` }),
-});
+// A stored part keeps the fields the engine streamed onto it, the signature a
+// thinking part carries and the item id on a call, beyond what the declared
+// part type names; the fixtures carry them the same way.
+const thinking = (id: string) => {
+  const part = {
+    type: "thinking" as const,
+    content: `think ${id}`,
+    signature: JSON.stringify({ id, encrypted_content: `enc ${id}` }),
+  };
+  return part;
+};
 
-const declinedCall: ChatPart = {
+const declinedCallPart = {
   metadata: { itemId: "fc_1" },
   approval: { approved: false, id: "approval_call-1", needsApproval: true },
   arguments: '{"name":"X"}',
   id: "call-1",
   input: { name: "X" },
-  name: "save_contact",
-  state: "approval-responded",
-  type: "tool-call",
+  name: "save_contact" as const,
+  state: "approval-responded" as const,
+  type: "tool-call" as const,
 };
+const declinedCall: ChatPart = declinedCallPart;
 
 const SHAPES: Record<string, ChatPart[]> = {
   call: [declinedCall],
