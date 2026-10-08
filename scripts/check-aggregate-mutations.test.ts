@@ -189,7 +189,7 @@ describe("aggregate mutation route coverage", () => {
       `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
     );
     const imports =
-      'import { Result } from "better-result"; import { abortableTx } from "@/api/db/safe-db"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock";';
+      'import { Result } from "better-result"; import { abortableTx } from "@/api/db/safe-db"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock, withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";';
     const acquire =
       'async (tx) => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
     const declare =
@@ -201,6 +201,9 @@ describe("aggregate mutation route coverage", () => {
       `safeDb(${acquire});`,
       `abortableTx(safeDb, ${acquire});`,
       `tx.transaction(${acquire});`,
+      `await tx.transaction(${acquire});`,
+      `withAggregateSavepoint(tx, ${acquire});`,
+      `setTimeout(async () => { await withAggregateSavepoint(tx, ${acquire}); }, 0);`,
       `await safeDb(async (tx) => { setTimeout(${acquire}, 0); });`,
     ]) {
       sources.set(
@@ -212,7 +215,7 @@ describe("aggregate mutation route coverage", () => {
     for (const joined of [
       `await safeDb(${acquire});`,
       `await abortableTx(safeDb, ${acquire});`,
-      `await tx.transaction(${acquire});`,
+      `await withAggregateSavepoint(tx, ${acquire});`,
     ]) {
       sources.set(
         module,
@@ -223,6 +226,7 @@ describe("aggregate mutation route coverage", () => {
     for (const yielded of [
       `safeDb(${acquire})`,
       `abortableTx(safeDb, ${acquire})`,
+      `withAggregateSavepoint(tx, ${acquire})`,
     ]) {
       sources.set(
         module,

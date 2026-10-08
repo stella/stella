@@ -38,14 +38,20 @@ const sqlLocks = (text: string) => {
   const masked = maskSqlLiteralsAndComments(text);
   const matches = [
     ...masked.matchAll(
-      /\bpg_(?:try_)?advisory_(?:xact_)?(?:lock|unlock)(?:_shared|_all)?\s*\(|\bLOCK\s+TABLE\b|\bFOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)\b/giu,
+      /\bpg_(?:try_)?advisory_(?:xact_)?(?:lock|unlock)(?:_shared|_all)?\s*\(|\bLOCK\s+TABLE\b|\bFOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)\b|\bROLLBACK\s+TO(?:\s+SAVEPOINT)?\b|\bRELEASE(?:\s+SAVEPOINT)?\b|\bSAVEPOINT\b/giu,
     ),
   ];
   return matches.filter((match) => {
+    const start = masked.lastIndexOf(";", match.index) + 1;
+    if (/^(?:SAVEPOINT|RELEASE|ROLLBACK)\b/iu.test(match[0])) {
+      return (
+        masked.slice(start, match.index).trim().length === 0 &&
+        /^\s+\S/u.test(text.slice(match.index + match[0].length))
+      );
+    }
     if (!/^FOR\s+UPDATE$/iu.test(match[0])) {
       return true;
     }
-    const start = masked.lastIndexOf(";", match.index) + 1;
     return !/\bCREATE\s+POLICY\b/iu.test(masked.slice(start, match.index));
   });
 };
@@ -147,6 +153,13 @@ export const aggregateLockSites = (
           offset: node.getStart(ast),
         });
       }
+      if (method === "transaction" && file.startsWith("apps/api/")) {
+        add({
+          primitive: "transaction-boundary",
+          text: node.getText(ast),
+          offset: node.getStart(ast),
+        });
+      }
       if (method === "raw" && receiver === "sql") {
         const argument = node.arguments.at(0);
         const text = argument === undefined ? undefined : staticText(argument);
@@ -234,19 +247,24 @@ export const aggregateLockBaseline = (
       existing.count += 1;
       continue;
     }
-    const reason = /pg_(?:try_)?advisory_(?:lock|unlock)/iu.test(site.primitive)
-      ? "Existing session coordination remains with its connection owner."
-      : /entity-cap-lock|lock-for-write|flow-executor|write-file-version/iu.test(
-            site.file,
-          )
-        ? "Existing acquisition sequence; migrate together with its aggregate order."
-        : /document-processing|ocr/iu.test(site.file)
-          ? "Existing document processing coordination; retain until its acquisition order is migrated."
-          : /migration|schema-lane/iu.test(site.file)
-            ? "Existing schema coordination remains with its deployment owner."
-            : /maintenance|load-gate/iu.test(site.file)
-              ? "Existing session coordination remains with its connection owner."
-              : "Existing transaction coordination; migrate this acquisition through the aggregate owner.";
+    const reason =
+      site.primitive === "transaction-boundary"
+        ? "Existing transaction runner or savepoint; migrate nested boundaries through the aggregate owner."
+        : /^(?:savepoint|release|rollback)\b/iu.test(site.primitive)
+          ? "Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
+          : /pg_(?:try_)?advisory_(?:lock|unlock)/iu.test(site.primitive)
+            ? "Existing session coordination remains with its connection owner."
+            : /entity-cap-lock|lock-for-write|flow-executor|write-file-version/iu.test(
+                  site.file,
+                )
+              ? "Existing acquisition sequence; migrate together with its aggregate order."
+              : /document-processing|ocr/iu.test(site.file)
+                ? "Existing document processing coordination; retain until its acquisition order is migrated."
+                : /migration|schema-lane/iu.test(site.file)
+                  ? "Existing schema coordination remains with its deployment owner."
+                  : /maintenance|load-gate/iu.test(site.file)
+                    ? "Existing session coordination remains with its connection owner."
+                    : "Existing transaction coordination; migrate this acquisition through the aggregate owner.";
     rows.set(key, {
       file: site.file,
       fingerprint: site.fingerprint,

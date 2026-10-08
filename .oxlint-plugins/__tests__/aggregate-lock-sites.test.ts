@@ -8,6 +8,57 @@ import {
 
 const file = "apps/api/src/handlers/example.ts";
 describe("aggregate lock confinement", () => {
+  test("rejects raw API transaction boundaries including computed spellings", () => {
+    for (const method of [
+      ".transaction",
+      '["transaction"]',
+      '["trans" + "action"]',
+    ]) {
+      const source = `tx${method}(async (nested) => nested.execute(statement));`;
+      const sites = aggregateLockSites(file, source);
+      expect(sites).toHaveLength(1);
+      expect(sites.at(0)?.primitive).toBe("transaction-boundary");
+      const actual = aggregateLockBaseline(sites);
+      expect(
+        aggregateLockBaselineProblems({ actual, baseline: [] }),
+      ).toContainEqual(expect.stringContaining("Unowned aggregate lock"));
+    }
+    expect(
+      aggregateLockSites(
+        "apps/web/src/example.ts",
+        "storage.transaction(work)",
+      ),
+    ).toEqual([]);
+  });
+  test("enumerates SQL savepoint creation, release and rollback", () => {
+    for (const operation of [
+      "SAVEPOINT example",
+      "RELEASE SAVEPOINT example",
+      "RELEASE example",
+      "ROLLBACK TO SAVEPOINT example",
+      "ROLLBACK TO example",
+    ]) {
+      expect(aggregateLockSites(file, `sql\`${operation}\``)).toHaveLength(1);
+      expect(
+        aggregateLockSites(file, `sql.raw(${JSON.stringify(operation)})`),
+      ).toHaveLength(1);
+    }
+    expect(
+      aggregateLockSites(
+        file,
+        'const message = "Failed to release savepoint example"',
+      ),
+    ).toEqual([]);
+    expect(aggregateLockSites(file, "sql`SELECT 'SAVEPOINT example'`")).toEqual(
+      [],
+    );
+    expect(
+      aggregateLockSites(
+        file,
+        "sql`SAVEPOINT example; RELEASE SAVEPOINT example; ROLLBACK TO example`",
+      ),
+    ).toHaveLength(3);
+  });
   test("enumerates every mode and computed builder spelling", () => {
     for (const mode of [
       "update",

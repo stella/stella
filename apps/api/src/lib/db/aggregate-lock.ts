@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import {
   workspaces,
   entities,
@@ -55,12 +56,149 @@ type AggregateLockOptions = {
 type AggregateLockResult = { status: "locked" } | { status: "missing" };
 
 type HeldLock = { rank: number; key: string };
-type LockHistory =
-  | { status: "idle"; held: Map<string, HeldLock> }
-  | { status: "acquiring"; held: Map<string, HeldLock> };
+type LockHistory = {
+  status: "idle" | "acquiring" | "closed";
+  held: Map<string, HeldLock>;
+  parent: LockHistory | undefined;
+  children: Set<LockHistory>;
+};
 
-// The transaction, rather than a helper callback, owns every acquired lock.
+// Each level records only locks acquired there; ancestors retain their locks
+// until the physical transaction ends, including across savepoint rollback.
 const histories = new WeakMap<object, LockHistory>();
+const lockHistory = (tx: object): LockHistory => {
+  const existing = histories.get(tx);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const history: LockHistory = {
+    status: "idle",
+    held: new Map(),
+    parent: undefined,
+    children: new Set(),
+  };
+  histories.set(tx, history);
+  return history;
+};
+const assertIdleHistory = (history: LockHistory): void => {
+  switch (history.status) {
+    case "idle":
+      return;
+    case "acquiring":
+      return panic(
+        "Await each aggregate lock acquisition before starting another",
+      );
+    case "closed":
+      return panic("Aggregate savepoint transaction is closed");
+    default:
+      history.status satisfies never;
+      return panic("Unknown aggregate transaction state");
+  }
+};
+const assertAggregateLevelAvailable = (history: LockHistory): void => {
+  assertIdleHistory(history);
+  if (history.children.size > 0) {
+    panic(
+      "Await the aggregate savepoint before reusing its parent transaction",
+    );
+  }
+  let child = history;
+  for (
+    let parent = history.parent;
+    parent !== undefined;
+    parent = parent.parent
+  ) {
+    assertIdleHistory(parent);
+    if (parent.children.size !== 1 || !parent.children.has(child)) {
+      panic(
+        "Await the aggregate savepoint before reusing its parent transaction",
+      );
+    }
+    child = parent;
+  }
+};
+const transactionHasAggregateLocks = (history: LockHistory): boolean => {
+  let root = history;
+  while (root.parent !== undefined) {
+    root = root.parent;
+  }
+  const levels = [root];
+  for (const level of levels) {
+    if (level.held.size > 0 || level.status === "acquiring") {
+      return true;
+    }
+    levels.push(...level.children);
+  }
+  return false;
+};
+const completeAcquisition = (history: LockHistory): void => {
+  if (history.status !== "acquiring") {
+    panic("Aggregate lock acquisition outlived its transaction level");
+  }
+  history.status = "idle";
+};
+const assertLockOrder = (history: LockHistory, lock: HeldLock): void => {
+  const held: HeldLock[] = [];
+  for (
+    let level: LockHistory | undefined = history;
+    level !== undefined;
+    level = level.parent
+  ) {
+    held.push(...level.held.values());
+  }
+  if (held.some((previous) => previous.key === lock.key)) {
+    return;
+  }
+  if (
+    held.some(
+      (previous) =>
+        lock.rank < previous.rank ||
+        (lock.rank === previous.rank && lock.key < previous.key),
+    )
+  ) {
+    panic("Aggregate lock rank inversion");
+  }
+};
+
+/** Track the public savepoint callback without inspecting driver internals. */
+export const withAggregateSavepoint = async <T>(
+  tx: Pick<Transaction, "execute" | "transaction">,
+  run: (savepoint: Transaction) => Promise<T>,
+): Promise<T> => {
+  const parent = lockHistory(tx);
+  // Non-locking callers retain the driver's existing savepoint behavior.
+  if (transactionHasAggregateLocks(parent)) {
+    assertAggregateLevelAvailable(parent);
+  }
+  const history: LockHistory = {
+    status: "idle",
+    held: new Map(),
+    parent,
+    children: new Set(),
+  };
+  parent.children.add(history);
+  try {
+    const committed = await tx.transaction(async (savepoint) => {
+      histories.set(savepoint, history);
+      try {
+        const value = await run(savepoint);
+        if (transactionHasAggregateLocks(history)) {
+          assertAggregateLevelAvailable(history);
+        }
+        return { value, held: history.held };
+      } finally {
+        history.status = "closed";
+      }
+    });
+    for (const [key, lock] of committed.held) {
+      parent.held.set(key, lock);
+    }
+    return committed.value;
+  } finally {
+    history.status = "closed";
+    parent.children.delete(history);
+  }
+};
 
 const lockIdentity = (options: AggregateLockOptions): string => {
   switch (options.aggregate) {
@@ -116,25 +254,11 @@ export const withAggregateLock = async (
 ): Promise<AggregateLockResult> => {
   const { tx, aggregate } = options;
   const key = lockIdentity(options);
-  const history = histories.get(tx) ?? {
-    status: "idle",
-    held: new Map<string, HeldLock>(),
-  };
-  if (history.status === "acquiring") {
-    return panic(
-      "Await each aggregate lock acquisition before starting another",
-    );
-  }
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
   const { rank, kind } = AGGREGATE_LOCKS[aggregate];
-  for (const held of history.held.values()) {
-    if (
-      !history.held.has(key) &&
-      (rank < held.rank || (rank === held.rank && key < held.key))
-    ) {
-      return panic("Aggregate lock rank inversion");
-    }
-  }
-  histories.set(tx, { status: "acquiring", held: history.held });
+  assertLockOrder(history, { rank, key });
+  history.status = "acquiring";
   // A failed SQL acquisition aborts the transaction. Retaining its reservation
   // refuses accidental reuse; a retry owns a fresh transaction and history.
   const result = await tx.execute(lockStatement(options));
@@ -142,6 +266,6 @@ export const withAggregateLock = async (
   if (acquired) {
     history.held.set(key, { rank, key });
   }
-  histories.set(tx, { status: "idle", held: history.held });
+  completeAcquisition(history);
   return acquired ? { status: "locked" } : { status: "missing" };
 };

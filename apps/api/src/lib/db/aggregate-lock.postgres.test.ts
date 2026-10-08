@@ -5,12 +5,14 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
+import { withResultSavepoint } from "@/api/db/safe-db";
 import { createSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
-import { withAggregateLock } from "./aggregate-lock";
+import { withAggregateLock, withAggregateSavepoint } from "./aggregate-lock";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -25,14 +27,14 @@ const advisoryCases = () => {
   return [
     {
       name: "contact capacity",
-      acquire: (tx: LockTransaction) =>
-        withAggregateLock({
+      acquire: async (tx: LockTransaction) =>
+        await withAggregateLock({
           aggregate: "contactCapacity",
           id: { organizationId },
           tx,
         }),
-      acquireOther: (tx: LockTransaction) =>
-        withAggregateLock({
+      acquireOther: async (tx: LockTransaction) =>
+        await withAggregateLock({
           aggregate: "contactCapacity",
           id: { organizationId: otherOrganizationId },
           tx,
@@ -48,14 +50,14 @@ const advisoryCases = () => {
     },
     {
       name: "personal catalog",
-      acquire: (tx: LockTransaction) =>
-        withAggregateLock({
+      acquire: async (tx: LockTransaction) =>
+        await withAggregateLock({
           aggregate: "personalCatalog",
           id: { organizationId, userId },
           tx,
         }),
-      acquireOther: (tx: LockTransaction) =>
-        withAggregateLock({
+      acquireOther: async (tx: LockTransaction) =>
+        await withAggregateLock({
           aggregate: "personalCatalog",
           id: { organizationId, userId: otherUserId },
           tx,
@@ -136,6 +138,179 @@ if (!databaseUrl || !enabled) {
               tx,
             }),
           ).toEqual({ status: "locked" });
+        });
+      });
+    });
+
+    test.each([
+      "parent inversion",
+      "ancestor inversion",
+      "rollback",
+      "commit",
+      "closed level",
+      "parent overlap",
+    ] as const)(
+      "savepoint history preserves physical transaction ordering: %s",
+      async (mode) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient();
+          await db.transaction(async (tx) => {
+            await tx.execute(
+              sql`CREATE TEMPORARY TABLE organization (id text PRIMARY KEY) ON COMMIT DROP`,
+            );
+            await tx.execute(
+              sql`CREATE TEMPORARY TABLE workspaces (id uuid PRIMARY KEY, organization_id text NOT NULL) ON COMMIT DROP`,
+            );
+            const organizationId = mintAuthProviderId<"organization">();
+            const workspaceId = createSafeId<"workspace">();
+            await tx.execute(
+              sql`INSERT INTO organization (id) VALUES (${organizationId})`,
+            );
+            await tx.execute(
+              sql`INSERT INTO workspaces (id, organization_id) VALUES (${workspaceId}::uuid, ${organizationId})`,
+            );
+            const lower = {
+              aggregate: "organization",
+              id: organizationId,
+            } as const;
+            const higher = {
+              aggregate: "workspace",
+              id: { id: workspaceId, organizationId },
+            } as const;
+            switch (mode) {
+              case "parent inversion":
+              case "ancestor inversion": {
+                await withAggregateLock({ ...higher, tx });
+                const refusal = await rejectionOf(
+                  withAggregateSavepoint(tx, async (child) =>
+                    mode === "parent inversion"
+                      ? await withAggregateLock({ ...lower, tx: child })
+                      : await withAggregateSavepoint(
+                          child,
+                          async (grandchild) =>
+                            await withAggregateLock({
+                              ...lower,
+                              tx: grandchild,
+                            }),
+                        ),
+                  ),
+                );
+                expect(refusal).toMatchObject({
+                  message: "Aggregate lock rank inversion",
+                });
+                expect(await withAggregateLock({ ...higher, tx })).toEqual({
+                  status: "locked",
+                });
+                expect(
+                  await rejectionOf(withAggregateLock({ ...lower, tx })),
+                ).toMatchObject({ message: "Aggregate lock rank inversion" });
+                return;
+              }
+              case "rollback": {
+                const refusal = await rejectionOf(
+                  withAggregateSavepoint(tx, async (child) => {
+                    expect(
+                      await withAggregateLock({ ...higher, tx: child }),
+                    ).toEqual({ status: "locked" });
+                    child.rollback();
+                  }),
+                );
+                expect(refusal).toBeInstanceOf(TransactionRollbackError);
+                expect(await withAggregateLock({ ...lower, tx })).toEqual({
+                  status: "locked",
+                });
+                return;
+              }
+              case "commit": {
+                expect(
+                  await withAggregateSavepoint(
+                    tx,
+                    async (child) =>
+                      await withAggregateLock({ ...higher, tx: child }),
+                  ),
+                ).toEqual({ status: "locked" });
+                expect(
+                  await rejectionOf(withAggregateLock({ ...lower, tx })),
+                ).toMatchObject({ message: "Aggregate lock rank inversion" });
+                return;
+              }
+              case "closed level": {
+                const child = await withAggregateSavepoint(
+                  tx,
+                  async (savepoint) => savepoint,
+                );
+                expect(
+                  await rejectionOf(withAggregateLock({ ...lower, tx: child })),
+                ).toMatchObject({
+                  message: "Aggregate savepoint transaction is closed",
+                });
+                return;
+              }
+              case "parent overlap": {
+                await withAggregateSavepoint(tx, async (child) => {
+                  expect(
+                    await rejectionOf(withAggregateLock({ ...lower, tx })),
+                  ).toMatchObject({
+                    message:
+                      "Await the aggregate savepoint before reusing its parent transaction",
+                  });
+                  expect(
+                    await withAggregateLock({ ...lower, tx: child }),
+                  ).toEqual({ status: "locked" });
+                });
+                return;
+              }
+              default:
+                mode satisfies never;
+                panic("Unknown savepoint fixture mode");
+            }
+          });
+        });
+      },
+    );
+
+    test("non-locking typed savepoints preserve success, refusal and nested rollback", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`CREATE TEMPORARY TABLE savepoint_no_locks (id integer PRIMARY KEY) ON COMMIT DROP`,
+          );
+          const refusal = new HandlerError({
+            status: 400,
+            message: "Fixture refused",
+          });
+          const success = await withResultSavepoint(tx, async (child) => {
+            await child.execute(sql`INSERT INTO savepoint_no_locks VALUES (1)`);
+            const rejected = await withResultSavepoint(
+              child,
+              async (nested) => {
+                await nested.execute(
+                  sql`INSERT INTO savepoint_no_locks VALUES (2)`,
+                );
+                return Result.err(refusal);
+              },
+            );
+            expect(rejected.isErr()).toBe(true);
+            if (rejected.isErr()) {
+              expect(rejected.error).toBe(refusal);
+            }
+            return Result.ok("committed");
+          });
+          expect(success).toEqual(Result.ok("committed"));
+          const rejected = await withResultSavepoint(tx, async (child) => {
+            await child.execute(sql`INSERT INTO savepoint_no_locks VALUES (3)`);
+            return Result.err(refusal);
+          });
+          expect(rejected.isErr()).toBe(true);
+          if (rejected.isErr()) {
+            expect(rejected.error).toBe(refusal);
+          }
+          await tx.execute(sql`INSERT INTO savepoint_no_locks VALUES (4)`);
+          const rows = await tx.execute(
+            sql`SELECT id FROM savepoint_no_locks ORDER BY id`,
+          );
+          expect(rows.map((row) => row["id"])).toEqual([1, 4]);
         });
       });
     });

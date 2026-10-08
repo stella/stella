@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -134,11 +134,22 @@ if (import.meta.main) {
       .trim()
       .split("\n")
       .filter(aggregateLockSourceIncluded);
+    const existing = existsSync(AGGREGATE_LOCK_BASELINE_PATH)
+      ? parseAggregateLockBaseline(
+          readFileSync(AGGREGATE_LOCK_BASELINE_PATH, "utf-8"),
+        )
+      : [];
+    const reasons = new Map(
+      existing.map((row) => [`${row.file}:${row.fingerprint}`, row.reason]),
+    );
     const rows = aggregateLockBaseline(
       files.flatMap((file) =>
         aggregateLockSites(file, readFileSync(file, "utf-8")),
       ),
-    );
+    ).map((row) => ({
+      ...row,
+      reason: reasons.get(`${row.file}:${row.fingerprint}`) ?? row.reason,
+    }));
     const problems = aggregateLockBaselineProblems({
       actual: rows,
       baseline: rows,

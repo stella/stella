@@ -773,14 +773,6 @@ const isJoinedTransactionCallback = ({
     return false;
   }
   const expression = call.expression;
-  if (ts.isPropertyAccessExpression(expression)) {
-    return (
-      ts.isIdentifier(expression.expression) &&
-      expression.expression.text === "tx" &&
-      expression.name.text === "transaction" &&
-      call.arguments.at(0) === callback
-    );
-  }
   if (!ts.isIdentifier(expression)) {
     return false;
   }
@@ -810,8 +802,10 @@ const isJoinedTransactionCallback = ({
     access,
   });
   return (
-    reference?.module === `${API}db/safe-db.ts` &&
-    reference.exported === "abortableTx" &&
+    ((reference?.module === `${API}db/safe-db.ts` &&
+      reference.exported === "abortableTx") ||
+      (reference?.module === REGISTRY &&
+        reference.exported === "withAggregateSavepoint")) &&
     call.arguments.at(1) === callback
   );
 };
