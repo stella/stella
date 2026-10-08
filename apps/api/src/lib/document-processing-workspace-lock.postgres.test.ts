@@ -754,7 +754,9 @@ if (!databaseUrl || !runPostgresTests) {
                     );
                   expect(rows).toEqual([
                     {
-                      id: path === "native-repair" ? rows.at(0)?.id : run.id,
+                      // The native repair mints its run id; the others reuse run.id.
+                      id:
+                        path === "native-repair" ? expect.any(String) : run.id,
                       status: path === "native-repair" ? "queued" : "running",
                       kind:
                         path === "native-repair" ? "native-extraction" : "ocr",
@@ -769,7 +771,7 @@ if (!databaseUrl || !runPostgresTests) {
                     },
                   ]);
                   if (path === "native-repair") {
-                    expect(result).toEqual(rows.map(({ id }) => id));
+                    expect<unknown>(result).toEqual(rows.map(({ id }) => id));
                   }
                   if (path === "dispatch") {
                     expect(result).toEqual(
