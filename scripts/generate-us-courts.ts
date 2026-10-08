@@ -33,10 +33,11 @@
  */
 
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
+
+import { createSha256 } from "@stll/sha256/node";
 
 import {
   isUsCourtRegion,
@@ -69,6 +70,7 @@ import {
   formattedLikeRepository,
   writeOrCheckArtifacts,
 } from "./generated-artifacts";
+import { hashGeneratedSource } from "./generated-source-hash";
 
 /** Bumped when the rendering or the resolution rules change. */
 const GENERATOR_VERSION = 3;
@@ -453,9 +455,9 @@ type RejectedEntry = UsRejectedCourtRow;
 type DirectoryEntry = UsCourtDirectoryRow;
 
 /** The partition a court id falls in; see `US_COURT_PARTITION_KEY_PREFIX`. */
-const usCourtPartitionOf = (courtId: string): UsCourtPartition => {
-  const digest = createHash("sha256")
-    .update(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`, "utf-8")
+export const usCourtPartitionOf = (courtId: string): UsCourtPartition => {
+  const digest = createSha256()
+    .update(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`)
     .digest();
   return usCourtPartitionLabel((digest[0] ?? 0) % US_COURT_PARTITION_COUNT);
 };
@@ -984,8 +986,7 @@ export const buildUsCourtDirectory = ({
 
 // -- Rendering ---------------------------------------------------------------
 
-const sha256 = (data: string | Uint8Array): string =>
-  createHash("sha256").update(data).digest("hex");
+const sha256 = hashGeneratedSource;
 
 const literal = (value: string | boolean | null): string =>
   typeof value === "string" ? JSON.stringify(value) : String(value);

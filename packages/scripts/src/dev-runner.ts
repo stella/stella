@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -15,6 +14,7 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
@@ -254,10 +254,7 @@ const legacyDockerProjectName = (infraOffset: number) =>
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 const worktreeProjectHash = (worktreePath: string) =>
-  createHash("sha256")
-    .update(worktreePath)
-    .digest("hex")
-    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+  hashSha256Hex(worktreePath).slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
 
 export const dockerProjectName = ({
   infraOffset,

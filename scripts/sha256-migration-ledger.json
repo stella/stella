@@ -1,25 +1,5 @@
 [
   {
-    "id": ".oxlint-plugins/__fixtures__/no-ambient-nondeterminism.fixture.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": ".oxlint-plugins/no-swallowed-item-error.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/api-contract/src/sk-court-succession.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/api-contract/src/us-courts-generator.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/api-contract/src/us-courts.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
     "id": "packages/cli/src/auth/pkce.ts",
     "reason": "migrates in a follow-up"
   },
@@ -37,102 +17,6 @@
   },
   {
     "id": "packages/cli/src/upload-document.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/legal-ast/src/projection-digest.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/legal-atlas/src/provision-key.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/property-testing/src/failure-fingerprint.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/sanctions/src/test-fixtures/monitoring-corpus.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/scripts/src/agent-session.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/scripts/src/auth-md-spec-drift.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/scripts/src/dev-runner.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/scripts/src/prepared-generated-sources.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/template-packs/scripts/generate-manifest.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "packages/template-packs/src/catalogue.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/cargo-deny-install.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-duplicate-raster-assets.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-marketing-recordings.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-migration-order.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-migration-order.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/check-migration-safety.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/ci-completed-depth.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/detect-security-workflow-changes.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/generate-snowball-stemmers.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/generate-us-courts.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/osv-scanner-install.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/product-media.test.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/product-media.ts",
-    "reason": "migrates in a follow-up"
-  },
-  {
-    "id": "scripts/safe-chain-install.test.ts",
     "reason": "migrates in a follow-up"
   }
 ]

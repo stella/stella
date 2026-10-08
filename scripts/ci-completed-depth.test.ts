@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
+
+import { createSha256 } from "@stll/sha256/node";
 
 import { pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
@@ -56,7 +57,7 @@ const pr = {
   base: { sha: "b".repeat(40) },
   labels,
 };
-const scope = createHash("sha256")
+const scope = createSha256()
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
 const marker = (depth: string, profile = "normal-v1") =>
@@ -115,7 +116,12 @@ const decide = async ({
       if (name !== "node:crypto") {
         throw new Error("Unexpected module");
       }
-      return { createHash };
+      return {
+        createHash: (algorithm: string) => {
+          expect(algorithm).toBe("sha256");
+          return createSha256();
+        },
+      };
     },
     process: {
       env: {
