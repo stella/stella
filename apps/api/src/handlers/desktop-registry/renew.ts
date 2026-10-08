@@ -14,6 +14,7 @@ import {
   probeDesktopCredential,
   renewDesktopCredential,
 } from "@/api/lib/business-registries/desktop/renewal";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type DesktopRenewalResponse = {
@@ -21,7 +22,7 @@ type DesktopRenewalResponse = {
   identity: DesktopAccountIdentity;
 };
 
-export default createSafePublicHandler(
+const renewDesktopAccount = createSafePublicHandler(
   {
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
@@ -94,3 +95,13 @@ export default createSafePublicHandler(
     });
   },
 );
+
+// The renewal owner takes desktopMembership then desktopCredential through
+// the aggregate lock owner inside its own transaction; this route holds none.
+declareAggregateMutation(renewDesktopAccount.handler, {
+  type: "independent",
+  reason:
+    "Delegates to the desktop renewal owner, which locks membership and credential through the aggregate lock owner.",
+});
+
+export default renewDesktopAccount;

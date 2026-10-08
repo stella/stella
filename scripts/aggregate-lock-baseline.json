@@ -2436,12 +2436,6 @@
     "reason": "builder-for in apps/api/src/lib/buffer-intent-reconciliation.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/business-registries/desktop/revocation.ts",
-    "fingerprint": "cdec41795d2fe020f815095765024a62f5acbdbccffbefccf7eb4f45c00208a4",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/business-registries/desktop/revocation.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/case-law/maintenance-lane.ts",
     "fingerprint": "055cac1fb1cc155061a279e3f761531eebf27628de03fdaa0f77b143b0b24766",
     "count": 1,

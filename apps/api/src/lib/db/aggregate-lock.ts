@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import { apikey, member, organization } from "@/api/db/auth-schema";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   workspaces,
   entities,
@@ -17,6 +17,8 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 /** Ranks order physical fences; catalog names sharing a key share one entry. */
 export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
+  desktopMembership: { rank: 10, kind: "row" },
+  desktopCredential: { rank: 20, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
@@ -30,6 +32,11 @@ export type AggregateName = keyof typeof AGGREGATE_LOCKS;
 
 type AggregateIdentities = {
   organization: SafeId<"organization">;
+  desktopMembership: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  desktopCredential: { id: string; userId: SafeId<"user"> };
   workspace: {
     id: SafeId<"workspace">;
     organizationId: SafeId<"organization">;
@@ -204,6 +211,13 @@ const lockIdentity = (options: AggregateLockOptions): string => {
   switch (options.aggregate) {
     case "organization":
       return JSON.stringify([options.aggregate, options.id]);
+    case "desktopMembership":
+      return JSON.stringify([
+        options.aggregate,
+        options.id.organizationId,
+        options.id.userId,
+      ]);
+    case "desktopCredential":
     case "workspace":
     case "run":
     case "currentStep":
@@ -228,6 +242,10 @@ const lockStatement = (options: AggregateLockOptions) => {
   switch (options.aggregate) {
     case "organization":
       return sql`SELECT ${organization.id} FROM ${organization} WHERE ${organization.id} = ${options.id} FOR UPDATE`;
+    case "desktopMembership":
+      return sql`SELECT ${member.id} FROM ${member} WHERE ${member.userId} = ${options.id.userId} AND ${member.organizationId} = ${options.id.organizationId} FOR UPDATE`;
+    case "desktopCredential":
+      return sql`SELECT ${apikey.id} FROM ${apikey} WHERE ${apikey.id} = ${options.id.id} AND ${apikey.referenceId} = ${options.id.userId} FOR UPDATE`;
     case "workspace":
       return sql`SELECT ${workspaces.id} FROM ${workspaces} WHERE ${workspaces.id} = ${options.id.id} AND ${workspaces.organizationId} = ${options.id.organizationId} FOR UPDATE`;
     case "run":
@@ -247,6 +265,12 @@ const lockStatement = (options: AggregateLockOptions) => {
       return panic("Unknown aggregate lock statement");
   }
 };
+
+/** Opens a root transaction whose aggregate history starts empty. */
+export const withAggregateTransaction = async <T>(
+  db: Pick<typeof rootDb, "transaction">,
+  run: (tx: Transaction) => Promise<T>,
+): Promise<T> => await db.transaction(run);
 
 /** Joins the caller's transaction; reads and decisions follow the awaited fence. */
 export const withAggregateLock = async (

@@ -19,6 +19,14 @@ const fences = () => {
   const workspaceId = createSafeId<"workspace">();
   return {
     organization: { aggregate: "organization", id: organizationId },
+    desktopMembership: {
+      aggregate: "desktopMembership",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    desktopCredential: {
+      aggregate: "desktopCredential",
+      id: { id: "desktop-credential", userId: mintAuthProviderId<"user">() },
+    },
     workspace: {
       aggregate: "workspace",
       id: { id: workspaceId, organizationId },

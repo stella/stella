@@ -9,6 +9,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;
@@ -30,7 +31,7 @@ export const revokeDesktopRegistryCredential = async ({
   expectedKeyHash,
   db = rootDb,
 }: RevokeDesktopRegistryCredentialOptions) =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const revoked = await tx
       .update(apikey)
       .set({

@@ -17,6 +17,10 @@ import {
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
+import {
+  withAggregateLock,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
@@ -61,7 +65,15 @@ export const renewDesktopCredential = async ({
   const successorHash = await defaultKeyHasher(successorKey);
   const outcome = await Result.tryPromise({
     try: async () =>
-      await db.transaction(async (tx) => {
+      await withAggregateTransaction(db, async (tx) => {
+        const membershipLock = await withAggregateLock({
+          aggregate: "desktopMembership",
+          id: { organizationId, userId },
+          tx,
+        });
+        if (membershipLock.status === "missing") {
+          return Result.err(rejected());
+        }
         const [membership] = await tx
           .select({ role: member.role })
           .from(member)
@@ -70,8 +82,7 @@ export const renewDesktopCredential = async ({
               eq(member.userId, userId),
               eq(member.organizationId, organizationId),
             ),
-          )
-          .for("update");
+          );
         if (
           !membership ||
           !isMemberRole(membership.role) ||
@@ -80,6 +91,14 @@ export const renewDesktopCredential = async ({
             DESKTOP_ACCOUNT_PERMISSION,
           )
         ) {
+          return Result.err(rejected());
+        }
+        const keyLock = await withAggregateLock({
+          aggregate: "desktopCredential",
+          id: { id: keyId, userId },
+          tx,
+        });
+        if (keyLock.status === "missing") {
           return Result.err(rejected());
         }
         const [key] = await tx
@@ -96,8 +115,7 @@ export const renewDesktopCredential = async ({
               eq(apikey.referenceId, userId),
               desktopRegistryKeyOrganizationScope(organizationId),
             ),
-          )
-          .for("update");
+          );
         const usedAt =
           now ?? new Date(Temporal.Now.instant().epochMilliseconds);
         const metadata = parseDesktopRegistryMetadata(key?.metadata);
@@ -184,7 +202,15 @@ export const probeDesktopCredential = async ({
   const hash = await defaultKeyHasher(currentKey);
   const queried = await Result.tryPromise({
     try: async () =>
-      await db.transaction(async (tx) => {
+      await withAggregateTransaction(db, async (tx) => {
+        const keyLock = await withAggregateLock({
+          aggregate: "desktopCredential",
+          id: { id: keyId, userId },
+          tx,
+        });
+        if (keyLock.status === "missing") {
+          return Result.err(rejected());
+        }
         const [key] = await tx
           .select({ expiresAt: apikey.expiresAt, metadata: apikey.metadata })
           .from(apikey)
@@ -197,8 +223,7 @@ export const probeDesktopCredential = async ({
               desktopRegistryKeyOrganizationScope(organizationId),
             ),
           )
-          .limit(1)
-          .for("update");
+          .limit(1);
         const metadata = parseDesktopRegistryMetadata(key?.metadata);
         const checkedAt =
           now ?? new Date(Temporal.Now.instant().epochMilliseconds);
