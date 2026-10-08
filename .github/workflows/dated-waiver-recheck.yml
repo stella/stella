@@ -38,7 +38,11 @@ jobs:
 
       - name: Check review window
         id: due
-        run: echo "due=$(bun scripts/dated-waivers.ts --due)" >> "$GITHUB_OUTPUT"
+        # A separate assignment keeps an inventory failure fatal; inside echo
+        # it would read as "nothing due" and skip publication silently.
+        run: |
+          due="$(bun scripts/dated-waivers.ts --due)"
+          echo "due=$due" >> "$GITHUB_OUTPUT"
 
       - name: Mint app token
         if: steps.due.outputs.due == 'true'

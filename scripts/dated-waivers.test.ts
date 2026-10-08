@@ -1,6 +1,9 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   DOC_SOURCE_EXCLUSIONS,
@@ -276,5 +279,65 @@ describe("dated waiver inventory", () => {
       ...trackedPolicyFiles().filter((file) => file.endsWith("bunfig.toml")),
     ]);
     expect(uncoveredExpirySources(sources, covered)).toEqual([]);
+  });
+});
+
+const dueStepWorkflowSchema = v.object({
+  jobs: v.object({
+    recheck: v.object({
+      steps: v.array(
+        v.object({ id: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+  }),
+});
+
+describe("review window step", () => {
+  const dueStep = (): string => {
+    const workflow = v.parse(
+      dueStepWorkflowSchema,
+      Bun.YAML.parse(
+        readFileSync(
+          new URL(
+            "../.github/workflows/dated-waiver-recheck.yml",
+            import.meta.url,
+          ),
+          "utf-8",
+        ),
+      ),
+    );
+    return (
+      workflow.jobs.recheck.steps.find((step) => step.id === "due")?.run ??
+      panic("dated-waiver-recheck.yml has no due step")
+    );
+  };
+  // GitHub runs `run` scripts with `bash -e`; the inventory command is
+  // replaced so the step's own shell handling is what is under test.
+  const runStep = (command: string) => {
+    const output = path.join(
+      mkdtempSync(path.join(tmpdir(), "dated-waiver-due-")),
+      "output",
+    );
+    writeFileSync(output, "");
+    const script = dueStep().replace(
+      "bun scripts/dated-waivers.ts --due",
+      () => command,
+    );
+    const result = Bun.spawnSync(["bash", "-e", "-c", script], {
+      env: { ...process.env, GITHUB_OUTPUT: output },
+    });
+    return { exitCode: result.exitCode, output: readFileSync(output, "utf-8") };
+  };
+
+  test("an inventory failure fails the step instead of reporting no work", () => {
+    expect(dueStep()).toContain("bun scripts/dated-waivers.ts --due");
+    expect(runStep("false").exitCode).not.toBe(0);
+  });
+
+  test("a due inventory is written to the step output", () => {
+    expect(runStep("echo true")).toEqual({
+      exitCode: 0,
+      output: "due=true\n",
+    });
   });
 });
