@@ -70,7 +70,7 @@ describe("consent client identity", () => {
       expect(markup).not.toContain("Verified app by");
       // The tile shows the claimed initial, never a product mark.
       expect(markup).not.toContain('data-slot="verified-client-mark"');
-      expect(markup).toContain(`>${Array.from(claimed).at(0)}</div>`);
+      expect(markup).toContain(`>${claimed.slice(0, 1)}</div>`);
     }
   });
 
