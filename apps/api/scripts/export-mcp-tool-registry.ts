@@ -185,10 +185,7 @@ const submissionTools = Object.fromEntries(
       readOnlyJustification =
         "Deletes or writes off the selected record in the user’s private stella workspace.";
     }
-    if (
-      tool.name === "upload_document_version" ||
-      tool.name === "open_document_version_upload"
-    ) {
+    if (tool.name === "upload_document_version") {
       readOnlyJustification =
         "Starts or completes a private document-version upload in the user’s stella workspace.";
     }
