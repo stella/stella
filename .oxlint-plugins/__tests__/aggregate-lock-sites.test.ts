@@ -86,6 +86,7 @@ describe("aggregate lock confinement", () => {
       "Fetches release metadata for update notifications.",
       "Waits for share links to expire",
       "Polls for key share rotation",
+      "Checks the table for update.",
     ]) {
       expect(
         aggregateLockSites(file, `const message = ${JSON.stringify(message)}`),
@@ -104,6 +105,9 @@ describe("aggregate lock confinement", () => {
       'const tail = "ORDER BY id FOR NO KEY UPDATE"',
       'const query = "select id from items for update"',
       'const query = "table items for update"',
+      'const tail = "fetch first 1 row only for update"',
+      'const tail = "limit 1 for update skip locked"',
+      'const tail = "for no key update of items nowait"',
       'const query = "TABLE items FOR SHARE"',
       'const tail = "order by id for share"',
     ]) {

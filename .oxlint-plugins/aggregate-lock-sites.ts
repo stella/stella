@@ -52,21 +52,19 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
         /^\s+\S/u.test(text.slice(match.index + match[0].length))
       );
     }
-    // Outside a known SQL context, lower-case row-lock wording with no SQL
-    // keyword (any case) or SQL token before it is prose ("metadata for
-    // update notifications"). Upper-case clauses and clauses after SQL
-    // ("select id from items for update", "WHERE id = $1 FOR UPDATE") and
-    // clauses that open the literal (" for update" fragments, any case) still
-    // count; prose that happens to use "from" or "where" first errs toward
-    // counting.
-    const before = masked.slice(start, match.index);
+    // Outside a known SQL context, decide by what FOLLOWS the clause. In valid
+    // SQL a row-lock clause is followed only by the end of the text, `;`, `)`,
+    // `,`, a placeholder, `OF <table>`, NOWAIT, SKIP LOCKED, LIMIT, OFFSET,
+    // FETCH or another locking clause. Lower-case wording followed by anything
+    // else is prose ("metadata for update notifications"); a real clause
+    // followed by such a word would not parse. Upper-case clauses always count.
+    const after = masked.slice(match.index + match[0].length).trimStart();
     if (
       /^FOR\s/iu.test(match[0]) &&
       context === "unknown" &&
       match[0] !== match[0].toUpperCase() &&
-      before.trim().length > 0 &&
-      !/\b(?:SELECT|TABLE|FROM|WHERE|JOIN|ORDER\s+BY|GROUP\s+BY|LIMIT|OFFSET|RETURNING)\b|[=()$]|::/iu.test(
-        before,
+      !/^(?:$|[;),$]|\$\{|(?:OF|NOWAIT|SKIP|LIMIT|OFFSET|FETCH|FOR)\b)/iu.test(
+        after,
       )
     ) {
       return false;
