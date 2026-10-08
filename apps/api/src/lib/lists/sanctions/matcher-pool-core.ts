@@ -452,7 +452,9 @@ export const createSanctionsMatcherPoolCore = ({
               worker,
               signal: controller.signal,
               request,
-              fail,
+              fail: (cause, error) => {
+                fail(cause, error);
+              },
             });
             if (
               response.status !== "screened" &&
