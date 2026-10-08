@@ -35,6 +35,7 @@ import {
 } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import {
   Select,
   SelectItem,
@@ -648,7 +649,11 @@ function ProfilePageBody() {
               )}
               {dialogStep === "loading" && (
                 <div className="flex justify-center py-4">
-                  <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+                  <Loader
+                    className="size-6"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 </div>
               )}
               {dialogStep === "pendingTasksError" && (

@@ -5346,7 +5346,6 @@ type Messages = {
       "noLanguagesFound": "No languages found";
       "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";
       "outputLabel": "Translation type";
-      "progress": "Translation progress";
       "progressCount": "{completed} of {total} completed";
       "providerUnavailable": "The translation service is unavailable. Try again later or contact your administrator.";
       "runFailed": "The translation could not be completed.";

@@ -17,10 +17,10 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  Loader2Icon,
   AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
@@ -154,7 +154,7 @@ export const OutdatedChanges = ({
           variant="muted"
         >
           {summary.status === "loading" ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           ) : (
             <AiActionIcon className="size-3.5" />
           )}

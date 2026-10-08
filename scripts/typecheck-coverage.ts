@@ -598,6 +598,13 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
       }
       directory = path.posix.dirname(directory);
     }
+    // Lint-rule fixtures are invalid on purpose; the ones no project includes
+    // are skipped, as the coverage check exempts them. A fixture a project
+    // does include (a declaration file) is type-checked like any source.
+    if (coveringProject === undefined && isExempt(file)) {
+      console.log(`Autofix types skipped (exempt fixture): ${file}`);
+      continue;
+    }
     if (coveringProject === undefined) {
       panic(
         `Autofix source is covered by no candidate project: ${file}. Candidates tried: ${tried.join(", ")}`,
