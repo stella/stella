@@ -271,11 +271,20 @@ export const createDurableChatTransport = <
             case "preparing":
               return undefined;
             case "running":
+              if (state.runId !== runId) {
+                // A replacement run has its own cursor and needs a fresh transcript.
+                return terminalChatResponse({
+                  runId,
+                  onTranscript,
+                  onReconnectChange,
+                });
+              }
               break;
             default:
               return panic(state satisfies never);
           }
           const target = new URL(joinUrl());
+          target.searchParams.set("runId", runId);
           // Translate the SDK delivery offset to the run-log cursor query.
           target.searchParams.set(
             "lastEventId",

@@ -50,10 +50,12 @@ const response = (from: number, cut: number | undefined) => {
 const setup = (cut?: number) => {
   let calls = 0;
   let probes = 0;
+  const joinedRunIds: (string | null)[] = [];
   const fetchClient = Object.assign(
-    async (_input: RequestInfo | URL, init?: RequestInit) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       calls += 1;
       if (init?.method === "GET") {
+        joinedRunIds.push(new URL(String(input)).searchParams.get("runId"));
         const last = new Headers(init.headers).get("Last-Event-ID");
         return response(last === null ? 0 : Number(last) + 1, undefined);
       }
@@ -80,7 +82,7 @@ const setup = (cut?: number) => {
     wait: async () => undefined,
     random: () => 0,
   });
-  return { transport, calls: () => calls, probes: () => probes };
+  return { transport, calls: () => calls, probes: () => probes, joinedRunIds };
 };
 const collect = async (stream: AsyncIterable<unknown>) => {
   const chunks: unknown[] = [];
@@ -109,7 +111,87 @@ describe("durable chat transport", () => {
       expect(actual).toEqual(expected);
       expect(interrupted.calls()).toBe(2);
       expect(interrupted.probes()).toBe(1);
+      expect(interrupted.joinedRunIds).toEqual([RUN_ID]);
     }
+  });
+  test("a changed run reloads the transcript before rejoining from the beginning", async () => {
+    const nextRunId = "run-next";
+    let currentRunId = RUN_ID;
+    let reloads = 0;
+    let posts = 0;
+    const joins: URL[] = [];
+    const cursors: (string | null)[] = [];
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method !== "GET") {
+            posts += 1;
+            currentRunId = nextRunId;
+            // Deliver a nonzero cursor before the old run disconnects.
+            return response(0, 4);
+          }
+          joins.push(new URL(String(input)));
+          cursors.push(new Headers(init.headers).get("Last-Event-ID"));
+          return new Response(
+            [
+              { type: "RUN_STARTED", runId: nextRunId, threadId: THREAD_ID },
+              { type: "RUN_FINISHED", runId: nextRunId, threadId: THREAD_ID },
+            ]
+              .map(
+                (event, index) =>
+                  `id: ${index}\ndata: ${JSON.stringify(event)}\n\n`,
+              )
+              .join(""),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        },
+        { preconnect: () => undefined },
+      ),
+      probe: async () => ({
+        type: "running",
+        turnId: "turn-rejoin",
+        runId: currentRunId,
+      }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => {
+        reloads += 1;
+      },
+      onError: (error) => {
+        throw error;
+      },
+      wait: async () => undefined,
+      random: () => 0,
+    });
+    const previous = await collect(
+      transport.connection.connect([], {}, undefined, {
+        runId: RUN_ID,
+        threadId: THREAD_ID,
+      }),
+    );
+    expect(previous.slice(0, 4)).toEqual(events.slice(0, 4));
+    expect(previous.at(-1)).toMatchObject({
+      type: "RUN_FINISHED",
+      runId: RUN_ID,
+    });
+    expect(reloads).toBe(1);
+    expect(joins).toEqual([]);
+    const restored = await transport.persistence.getItem(THREAD_ID);
+    expect(restored?.resume?.resumeState.runId).toBe(nextRunId);
+    const resumed = await collect(transport.connection.joinRun(nextRunId));
+    expect(resumed.at(-1)).toMatchObject({
+      type: "RUN_FINISHED",
+      runId: nextRunId,
+    });
+    expect(joins).toHaveLength(1);
+    expect(joins.at(0)?.searchParams.get("runId")).toBe(nextRunId);
+    expect(joins.at(0)?.searchParams.get("lastEventId")).toBe("-1");
+    expect(cursors).toEqual([null]);
+    expect(posts).toBe(1);
   });
   test("chat rejoin preserves events at generated disconnect boundaries", async () => {
     await assertProperty(
