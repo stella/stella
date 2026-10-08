@@ -89,7 +89,7 @@ const waiver = (expiresAt: string): DatedWaiver => ({
 });
 
 describe("dated waiver inventory", () => {
-  test("enumerates each owner kind with source anchors and preserves full-day expiries", () => {
+  test("enumerates each owner kind with source anchors and owner-written deadlines", () => {
     const entries = inventory();
     expect(entries.map(({ kind }) => kind)).toEqual([
       "release-age-exclusion",
@@ -107,10 +107,10 @@ describe("dated waiver inventory", () => {
     });
     expect(
       entries.find(({ kind }) => kind === "dependency-audit")?.expiresAt,
-    ).toBe("2026-10-04T00:00:00.000Z");
+    ).toBe("2026-10-03");
     expect(
       entries.find(({ kind }) => kind === "suppression-waiver")?.expiresAt,
-    ).toBe("2026-10-05T00:00:00.000Z");
+    ).toBe("2026-10-04");
     expect(entries.find(({ kind }) => kind === "no-llms-txt")).toEqual({
       source: DOC_SOURCE_FILE,
       line: 2,
@@ -122,6 +122,25 @@ describe("dated waiver inventory", () => {
     expect(
       entries.find(({ kind }) => kind === "release-age-exception")?.line,
     ).toBe(1);
+  });
+
+  test("date-only deadlines hold through the owner-written UTC day", () => {
+    const acceptance = inventory().filter(
+      ({ kind }) => kind === "dependency-audit",
+    );
+    expect(acceptance).toHaveLength(1);
+    expect(
+      dueWaivers(acceptance, new Date("2026-10-03T23:59:59.999Z"), 0),
+    ).toEqual([]);
+    expect(
+      dueWaivers(acceptance, new Date("2026-10-04T00:00:00.000Z"), 0),
+    ).toEqual(acceptance);
+    expect(
+      dueWaivers(acceptance, new Date("2026-09-29T00:00:00.000Z")),
+    ).toEqual(acceptance);
+    expect(
+      dueWaivers(acceptance, new Date("2026-09-28T23:59:59.999Z")),
+    ).toEqual([]);
   });
 
   test("all committed documentation entries are inventoried from their typed owner", async () => {

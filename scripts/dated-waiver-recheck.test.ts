@@ -18,7 +18,7 @@ import {
   renderRecheckBody,
   type RecheckPr,
 } from "./dated-waiver-recheck";
-import type { DatedWaiver } from "./dated-waivers";
+import { collectWaivers, type DatedWaiver } from "./dated-waivers";
 
 const entry = {
   dependency: "example",
@@ -171,6 +171,25 @@ describe("documentation rechecks", () => {
     expect(Object.keys(after.sources).toSorted()).toEqual(["example", "other"]);
   });
 
+  test("date-only audit deadlines render the owner-written day", () => {
+    const acceptance = collectWaivers({
+      read: (file) =>
+        file === "scripts/dependency-audit-baseline.json"
+          ? '{"id":"GHSA-fixture","expiresOn":"2026-10-03"}'
+          : '{"waivers":[]}',
+      docs: [],
+      audit: [
+        { id: "GHSA-fixture", package: "fixture", expiresOn: "2026-10-03" },
+      ],
+      bunfigs: [],
+      releaseAgeSources: {},
+    });
+    const body = renderRecheckBody(acceptance, []);
+    expect(acceptance).toHaveLength(1);
+    expect(body).toContain("expires 2026-10-03:");
+    expect(body).not.toContain("expires 2026-10-04");
+  });
+
   test("every due kind renders an unchecked review item with its original expiry and instruction", () => {
     const kinds = [
       "no-llms-txt",
@@ -280,6 +299,7 @@ describe("one recheck PR", () => {
     expect(
       await rejectionOf(
         publishRecheck({
+          baseSha: "base-sha",
           body: "checklist",
           files: { [CHECKLIST_FILE]: "checklist" },
           repo: "stella/stella",
@@ -314,6 +334,101 @@ describe("one recheck PR", () => {
       message: expect.stringContaining("Multiple open dated-waiver"),
     });
     expect(writes).toBe(0);
+  });
+
+  test("publication retains the checkout base when main advances its documentation registry", async () => {
+    const checkoutSha = "checkout-sha";
+    const generatedRegistry = applyDocRechecks(source, [
+      {
+        status: "renewed",
+        dependency: "example",
+        checkedAt: "2026-09-29T00:00:00.000Z",
+        expiresAt: "2026-10-29T00:00:00.000Z",
+      },
+    ]);
+    const files = {
+      [CHECKLIST_FILE]: "checklist",
+      ".claude/mcp/doc-sources.ts": generatedRegistry,
+    };
+    // Main advances after this proposal's files have been generated.
+    const latestMain = {
+      sha: "advanced-main-sha",
+      registry: source.replace(
+        "DOC_SOURCES = {}",
+        'DOC_SOURCES = { Added: { dependencies: ["added"], url: "https://new.example/llms.txt" } }',
+      ),
+    };
+    expect(latestMain.registry).not.toBe(source);
+    const calls: { args: readonly string[]; input: unknown }[] = [];
+    const request = async (
+      args: readonly string[],
+      input?: unknown,
+    ): Promise<unknown> => {
+      calls.push({ args, input });
+      const endpoint = args.at(0);
+      if (endpoint === "repos/stella/stella/git/ref/heads/main") {
+        return { object: { sha: latestMain.sha } };
+      }
+      if (endpoint === "repos/stella/stella/pulls" && args.includes("GET")) {
+        return [];
+      }
+      if (endpoint?.includes("/git/matching-refs/")) {
+        return [];
+      }
+      if (endpoint === "repos/stella/stella/git/refs") {
+        return {};
+      }
+      if (endpoint === "graphql") {
+        expect(input).toMatchObject({
+          variables: {
+            input: {
+              expectedHeadOid: checkoutSha,
+              fileChanges: {
+                additions: [
+                  {
+                    path: CHECKLIST_FILE,
+                    contents: Buffer.from("checklist").toString("base64"),
+                  },
+                  {
+                    path: ".claude/mcp/doc-sources.ts",
+                    contents: Buffer.from(generatedRegistry).toString("base64"),
+                  },
+                ],
+              },
+            },
+          },
+        });
+        return {
+          data: { createCommitOnBranch: { commit: { oid: "signed-sha" } } },
+        };
+      }
+      if (endpoint?.includes("/git/refs/heads/")) {
+        return null;
+      }
+      if (endpoint === "repos/stella/stella/pulls" && args.includes("POST")) {
+        return { number: 42 };
+      }
+      throw new TypeError(`Unexpected GitHub call: ${args.join(" ")}`);
+    };
+    expect(
+      await publishRecheck({
+        baseSha: checkoutSha,
+        body: "checklist",
+        files,
+        repo: "stella/stella",
+        request,
+      }),
+    ).toBe(42);
+    expect(
+      calls.find(({ args }) => args.at(0) === "repos/stella/stella/git/refs")
+        ?.input,
+    ).toEqual({ ref: `refs/heads/${RECHECK_BRANCH}-next`, sha: checkoutSha });
+    expect(
+      calls.some(
+        ({ args }) => args.at(0) === "repos/stella/stella/git/ref/heads/main",
+      ),
+    ).toBe(false);
+    expect(latestMain.registry).toContain('dependencies: ["added"]');
   });
 
   test("signed GitHub publishing creates one draft PR and makes no writes on an identical rerun", async () => {
@@ -381,6 +496,7 @@ describe("one recheck PR", () => {
     };
     expect(
       await publishRecheck({
+        baseSha: "base-sha",
         body: "checklist",
         files,
         repo: "stella/stella",
@@ -411,6 +527,7 @@ describe("one recheck PR", () => {
     calls.length = 0;
     expect(
       await publishRecheck({
+        baseSha: "base-sha",
         body: "checklist",
         files,
         repo: "stella/stella",

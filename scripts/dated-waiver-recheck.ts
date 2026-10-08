@@ -309,12 +309,14 @@ const prNumber = (value: unknown): number => {
 // The two branch refs are reserved for this workflow. Build a proposal before
 // swapping the PR head; moving an open PR straight to main would close it.
 type PublishRecheckOptions = {
+  baseSha: string;
   body: string;
   files: Readonly<Record<string, string>>;
   repo: string | undefined;
   request: typeof gh;
 };
 export const publishRecheck = async ({
+  baseSha,
   body,
   files,
   repo,
@@ -421,9 +423,9 @@ export const publishRecheck = async ({
       return reconcileRecheckPr({ body, github });
     }
   }
-  const base = textField(
-    record(record(await request([`${api}/git/ref/heads/main`])).object).sha,
-  );
+  // File contents were generated from this checkout, so the commit must share
+  // its base even when main advances while documentation requests are running.
+  const base = baseSha;
   const buildBranch = `${RECHECK_BRANCH}-next`;
   await setRef(buildBranch, base);
   const commit = record(
@@ -459,6 +461,11 @@ export const publishRecheck = async ({
 };
 
 const main = async (): Promise<void> => {
+  const checkout = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: root });
+  if (checkout.exitCode !== 0) {
+    panic("Cannot resolve dated-waiver proposal checkout");
+  }
+  const baseSha = checkout.stdout.toString().trim();
   const now = new Date();
   const entries = await loadWaivers();
   if (dueWaivers(entries, now).length === 0) {
@@ -500,7 +507,7 @@ const main = async (): Promise<void> => {
   const files = { [CHECKLIST_FILE]: body, [DOC_SOURCE_FILE]: updated };
   if (process.argv.includes("--publish")) {
     console.log(
-      `Dated-waiver recheck PR #${await publishRecheck({ body, files, repo: process.env.GITHUB_REPOSITORY, request: gh })}`,
+      `Dated-waiver recheck PR #${await publishRecheck({ baseSha, body, files, repo: process.env.GITHUB_REPOSITORY, request: gh })}`,
     );
   } else {
     for (const [file, contents] of Object.entries(files)) {

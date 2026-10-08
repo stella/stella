@@ -43,6 +43,7 @@ export type DatedWaiver = {
   line: number;
   id: string;
   kind: keyof typeof RECHECK_INSTRUCTIONS;
+  // Preserve the owner-written deadline; normalize only for evaluation.
   expiresAt: string;
   checkedAt?: string;
 };
@@ -87,7 +88,7 @@ export const collectWaivers = ({
     line: sourceLine(read(DOC_SOURCE_FILE), entry.dependency),
     id: entry.dependency,
     kind: "no-llms-txt",
-    expiresAt: expiryInstant(entry.expiresAt),
+    expiresAt: entry.expiresAt,
     checkedAt: entry.checkedAt,
   }));
   for (const source of bunfigs) {
@@ -102,7 +103,7 @@ export const collectWaivers = ({
         line: sourceLine(contents, entry.name),
         id: entry.name,
         kind: "release-age-exclusion",
-        expiresAt: expiryInstant(entry.expiresAt),
+        expiresAt: entry.expiresAt,
       });
     }
   }
@@ -116,7 +117,7 @@ export const collectWaivers = ({
       line: sourceLine(read(auditSource), entry.id),
       id: entry.id,
       kind: "dependency-audit",
-      expiresAt: expiryInstant(entry.expiresOn),
+      expiresAt: entry.expiresOn,
     });
   }
   const suppressionSource = "scripts/suppression-waivers.json";
@@ -133,7 +134,7 @@ export const collectWaivers = ({
       line: sourceLine(read(suppressionSource), entry.id),
       id: entry.id,
       kind: "suppression-waiver",
-      expiresAt: expiryInstant(entry.expires),
+      expiresAt: entry.expires,
     });
   }
   const exceptions = readReleaseAgeExceptions(releaseAgeSources);
@@ -147,9 +148,12 @@ export const collectWaivers = ({
       kind: "release-age-exception",
     });
   }
+  for (const entry of entries) {
+    expiryInstant(entry.expiresAt);
+  }
   return entries.toSorted(
     (a, b) =>
-      compareCodeUnit(a.expiresAt, b.expiresAt) ||
+      compareCodeUnit(expiryInstant(a.expiresAt), expiryInstant(b.expiresAt)) ||
       compareCodeUnit(`${a.source}:${a.id}`, `${b.source}:${b.id}`),
   );
 };
@@ -160,7 +164,9 @@ export const dueWaivers = (
   days = WARNING_DAYS,
 ): DatedWaiver[] =>
   entries.filter(
-    (entry) => Date.parse(entry.expiresAt) <= now.getTime() + days * DAY_MS,
+    (entry) =>
+      Date.parse(expiryInstant(entry.expiresAt)) <=
+      now.getTime() + days * DAY_MS,
   );
 
 const escapeCommand = (value: string): string =>
