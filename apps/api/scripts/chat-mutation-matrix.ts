@@ -217,13 +217,20 @@ const withMutatedFile = async <T>(
 };
 
 /**
+ * The `-t` filter for exactly one scenario test, inside a describe block or
+ * at the top level of its file.
+ */
+export const scenarioTestPattern = (test: string): string =>
+  `^(?:.* )?${escapeRegExp(test)}$`;
+
+/**
  * The command that runs one scenario test: the api package's runner, or the
  * web app's for a web scenario.
  */
 const scenarioCommand = (
   scenario: Entry["scenario"],
 ): { command: string[]; cwd: string } => {
-  const pattern = `^.* ${escapeRegExp(scenario.test)}$`;
+  const pattern = scenarioTestPattern(scenario.test);
   return scenario.file.startsWith(WEB_PREFIX)
     ? {
         command: [
