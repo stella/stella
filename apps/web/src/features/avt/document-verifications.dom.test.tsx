@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 
@@ -39,7 +41,7 @@ const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
   ),
 );
 
-const { cleanup, fireEvent, render, screen, waitFor, within } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -143,6 +145,10 @@ afterEach(() => {
   setTranslator(createTranslator({ locale: "en", messages: english }));
 });
 afterAll(async () => {
+  // Let React's scheduled passive work finish before the DOM goes away.
+  await act(async () => {
+    await sleep(50);
+  });
   notice.mockRestore();
   fetchBoundary.mockRestore();
   await GlobalRegistrator.unregister();
@@ -187,7 +193,9 @@ test("cancelling a size confirmation abandons it and a fresh attempt needs confi
       name: messages.common.cancel,
     }),
   );
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  // Polled assertions compare booleans: a failing matcher on a DOM node
+  // pretty-prints the whole document and stalls the event loop.
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
   expect(requests).toHaveLength(1);
   expect(opened).toEqual([]);
   fireEvent.click(screen.getByRole("button", { name: messages.common.verify }));

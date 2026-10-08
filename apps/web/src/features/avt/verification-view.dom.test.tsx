@@ -328,10 +328,13 @@ test("single review reduces the attention queue while bulk acceptance only settl
   fireEvent.click(
     screen.getByRole("button", { name: "Accept 3 routine claims" }),
   );
+  // Polled assertions compare booleans: a failing matcher on a DOM node
+  // pretty-prints the whole document and stalls the event loop.
   await waitFor(() =>
     expect(
-      screen.queryByRole("button", { name: /^Accept .*routine claim/u }),
-    ).toBeNull(),
+      screen.queryByRole("button", { name: /^Accept .*routine claim/u }) ===
+        null,
+    ).toBe(true),
   );
   await waitFor(() => expect(requests).toHaveLength(2));
   expect(requests.at(1)?.body).toEqual({
