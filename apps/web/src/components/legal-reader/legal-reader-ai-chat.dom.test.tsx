@@ -28,6 +28,10 @@ globalThis.fetch = Object.assign(
       availabilityReads += 1;
       return Response.json({ available: true });
     }
+    // A reader opening its chat for the first time has no thread yet.
+    if (/\/chat\/threads\/[^/]+\/messages$/u.test(url.pathname)) {
+      return Response.json({ message: "Not found" }, { status: 404 });
+    }
     return Response.json({});
   },
   { preconnect: originalFetch.preconnect },
