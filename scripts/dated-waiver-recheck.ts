@@ -50,7 +50,7 @@ export const recheckDoc = async ({
       detail: "No llms.txt URL recorded; recheck canonical documentation.",
     };
   }
-  const response = await Result.tryPromise(() => probe(url));
+  const response = await Result.tryPromise(async () => probe(url));
   if (Result.isError(response)) {
     return {
       status: "manual",
@@ -546,7 +546,7 @@ const main = async (): Promise<void> => {
       await recheckDoc({
         entry,
         now,
-        probe: (url) => {
+        probe: async (url) => {
           let pending = probes.get(url);
           if (!pending) {
             pending = fetch(url, { signal: AbortSignal.timeout(15_000) }).then(
