@@ -530,7 +530,7 @@ export const validateDocumentDeadlineScoutClaim = async ({
     ),
   });
   if (claimed.status === "busy") {
-    throw claimed.error;
+    panic("Blocking aggregate acquisition returned busy");
   }
   if (claimed.rows.length === 0) {
     return "stale_claim" as const;

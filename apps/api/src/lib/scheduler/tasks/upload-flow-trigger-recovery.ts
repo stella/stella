@@ -216,7 +216,7 @@ const settleUploadTriggerClaim = async ({
       ),
     });
     if (acquired.status === "busy") {
-      throw acquired.error;
+      panic("Blocking aggregate acquisition returned busy");
     }
     const current = acquired.rows.at(0);
     if (current === undefined || current.status !== "pending") {

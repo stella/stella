@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { ScoutKey } from "@stll/api-contract/signals";
@@ -130,7 +130,7 @@ export const runScout = async ({
         where: claim,
       });
       if (owned.status === "busy") {
-        throw owned.error;
+        panic("Blocking aggregate acquisition returned busy");
       }
       if (!owned.rows.at(0)) {
         observationAccepted = false;
