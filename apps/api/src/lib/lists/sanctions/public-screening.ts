@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import { createDetached } from "@stll/errors";
 import { DEFAULT_CUTOFF } from "@stll/sanctions";
-import type { SanctionsSource } from "@stll/sanctions";
+import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import { logger } from "@/api/lib/observability/logger";
 
@@ -85,6 +85,79 @@ const warmFailure = (
   return outcome.value.isErr() ? outcome.value.error : null;
 };
 
+type EditionRead = {
+  editionId: string;
+  controller: AbortController;
+  settled: Promise<Result<SanctionsEntry[], unknown>>;
+};
+
+/**
+ * At most one database read per list, even one the warmup stopped waiting
+ * for: a retry waits on it again rather than starting a second.
+ */
+const createEditionReads = ({
+  loadEntries,
+  clock,
+}: Pick<Required<PublicScreeningOptions>, "loadEntries" | "clock">) => {
+  const reads = new Map<SanctionsSource, EditionRead>();
+
+  const startRead = (
+    db: SanctionsReadDb,
+    source: SanctionsSource,
+    edition: SanctionsActiveEdition,
+  ): EditionRead => {
+    const controller = new AbortController();
+    const read: EditionRead = {
+      editionId: edition.id,
+      controller,
+      settled: Result.tryPromise(
+        async () =>
+          await loadEntries({ db, edition, signal: controller.signal }),
+      ).finally(() => {
+        if (reads.get(source) === read) {
+          reads.delete(source);
+        }
+      }),
+    };
+    reads.set(source, read);
+    return read;
+  };
+
+  /** One stall window: the read's result, or "stalled" when it outlasts it. */
+  const awaitRead = async (read: EditionRead) => {
+    const stalled = Promise.withResolvers<"stalled">();
+    const cancelStall = clock.schedule(() => {
+      read.controller.abort();
+      stalled.resolve("stalled");
+    }, SANCTIONS_WARM_READ_STALL_MS);
+    return await Promise.race([read.settled, stalled.promise]).finally(
+      cancelStall,
+    );
+  };
+
+  return async (
+    db: SanctionsReadDb,
+    source: SanctionsSource,
+    edition: SanctionsActiveEdition,
+  ) => {
+    const previous = reads.get(source);
+    // An older edition's read still runs: it must settle before another starts.
+    if (
+      previous !== undefined &&
+      previous.editionId !== edition.id &&
+      (await awaitRead(previous)) === "stalled"
+    ) {
+      return "stalled";
+    }
+    const current = reads.get(source);
+    return await awaitRead(
+      current?.editionId === edition.id
+        ? current
+        : startRead(db, source, edition),
+    );
+  };
+};
+
 /**
  * Loads editions into the matcher one at a time in the background, apart from
  * request deadlines: a slow edition finishes, and each loaded one stays loaded
@@ -106,6 +179,7 @@ const createEditionWarmer = ({
   const detached = createDetached((error) => {
     reportFailure({ stage: "public-warmup", reason: "operation", error });
   });
+  const readEdition = createEditionReads({ loadEntries, clock });
 
   // The read runs outside any lease: loaded lists keep screening meanwhile.
   // Only the transfer and index hold the matcher.
@@ -115,18 +189,7 @@ const createEditionWarmer = ({
     { edition }: WarmTarget,
   ): Promise<MatcherWorkOutcome<Result<void, WarmFailure>>> => {
     const startedAt = now();
-    const read = new AbortController();
-    const stalled = Promise.withResolvers<"stalled">();
-    const cancelStall = clock.schedule(() => {
-      read.abort();
-      stalled.resolve("stalled");
-    }, SANCTIONS_WARM_READ_STALL_MS);
-    const loaded = await Promise.race([
-      Result.tryPromise(
-        async () => await loadEntries({ db, edition, signal: read.signal }),
-      ),
-      stalled.promise,
-    ]).finally(cancelStall);
+    const loaded = await readEdition(db, source, edition);
     if (loaded === "stalled") {
       return {
         status: "completed",

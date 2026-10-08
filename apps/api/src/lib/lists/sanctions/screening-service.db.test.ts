@@ -988,14 +988,15 @@ test("loaded lists keep screening while another edition reloads behind a held re
   }
 });
 
-test("a read that never settles is cancelled and the editions behind it still load", async () => {
+test("a stalled read that ignores cancellation is never repeated and the editions behind it still load", async () => {
   const clock = createMatcherTestClock();
   const pool = createSanctionsMatcherPool({ clock });
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const stalling: SanctionsSource = "us-sdn";
-  const stalled = Promise.withResolvers<undefined>();
+  const started = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
   const signals: AbortSignal[] = [];
-  let attempts = 0;
+  const reads = { started: 0, outstanding: 0, peak: 0 };
   const publicScreen = createPublicSanctionsScreening({
     pool,
     clock,
@@ -1003,23 +1004,29 @@ test("a read that never settles is cancelled and the editions behind it still lo
       reports.push(report);
     },
     loadEntries: async (options) => {
-      if (options.edition.id === editionIds.get(stalling)) {
-        attempts += 1;
-        if (attempts === 1) {
-          signals.push(options.signal ?? panic("A warmup read needs a signal"));
-          stalled.resolve(undefined);
-          // Never settles: only the stall limit moves the warmup on.
-          return await new Promise<never>(() => {});
-        }
+      if (options.edition.id !== editionIds.get(stalling)) {
+        return await loadEditionEntries(options);
       }
-      return await loadEditionEntries(options);
+      reads.started += 1;
+      reads.outstanding += 1;
+      reads.peak = Math.max(reads.peak, reads.outstanding);
+      signals.push(options.signal ?? panic("A warmup read needs a signal"));
+      started.resolve(undefined);
+      // Ignores its abort signal, like a driver call already on the wire.
+      await release.promise;
+      const entries = await loadEditionEntries({
+        ...options,
+        signal: undefined,
+      });
+      reads.outstanding -= 1;
+      return entries;
     },
   });
   const ask = async () =>
     (await publicScreen(publicProps("A Completely Distant Name"))).unwrap();
   try {
     await ask();
-    await stalled.promise;
+    await started.promise;
     const behind = sanctionsSourceIds().slice(
       sanctionsSourceIds().indexOf(stalling) + 1,
     );
@@ -1038,17 +1045,35 @@ test("a read that never settles is cancelled and the editions behind it still lo
       ),
       [stalling]: "load-failed",
     });
+    // Retries wait on the same unfinished read instead of starting another.
+    for (const wait of [
+      SANCTIONS_WARM_RETRY_MS.initial,
+      SANCTIONS_WARM_RETRY_MS.initial * 2,
+    ]) {
+      clock.advance(wait);
+      expect(reasonsBySource((await ask()).lists)[stalling]).toBe("warming");
+      clock.advance(SANCTIONS_WARM_READ_STALL_MS);
+      await publicScreen.warmupSettled();
+    }
+    expect(reads).toEqual({ started: 1, outstanding: 1, peak: 1 });
     expect(
       reports.map(({ stage, reason, source }) => ({ stage, reason, source })),
-    ).toEqual([
-      { stage: "public-warmup", reason: "read-stalled", source: stalling },
-    ]);
-    clock.advance(SANCTIONS_WARM_RETRY_MS.initial);
+    ).toEqual(
+      Array.from({ length: 3 }, () => ({
+        stage: "public-warmup",
+        reason: "read-stalled",
+        source: stalling,
+      })),
+    );
+    // When the read finally lands, the next attempt uses it.
+    release.resolve(undefined);
+    clock.advance(SANCTIONS_WARM_RETRY_MS.initial * 4);
     await ask();
     await publicScreen.warmupSettled();
     expect((await ask()).status).toBe("clear");
-    expect(attempts).toBe(2);
+    expect(reads).toEqual({ started: 1, outstanding: 0, peak: 1 });
   } finally {
+    release.resolve(undefined);
     await pool.close();
   }
 });
