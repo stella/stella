@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -143,6 +143,42 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         ).status,
       ).toBe(200);
       expect(await countRefreshRows(client.clientId)).toBe(3);
+    });
+    test("rejects a retry after the reuse window and ends the refresh family", async () => {
+      const { client, grant } = await fixture();
+      const rotation = await refreshOAuthGrant({
+        client,
+        refreshToken: grant.refreshToken,
+      });
+      expect(rotation.status).toBe(200);
+      const successor = v.parse(tokenSchema, await rotation.json());
+      expect(await countRefreshRows(client.clientId)).toBe(2);
+      const expired = await rootDb
+        .update(oauthRefreshToken)
+        .set({ rotationReplayExpiresAt: new Date(Date.now() - 1000) })
+        .where(
+          and(
+            eq(oauthRefreshToken.clientId, client.clientId),
+            isNotNull(oauthRefreshToken.rotatedAt),
+          ),
+        )
+        .returning({ id: oauthRefreshToken.id });
+      expect(expired).toHaveLength(1);
+      const retry = await refreshOAuthGrant({
+        client,
+        refreshToken: grant.refreshToken,
+      });
+      expect(retry.status).toBe(400);
+      expect(await retry.json()).toMatchObject({ error: "invalid_grant" });
+      expect(await countRefreshRows(client.clientId)).toBe(0);
+      expect(
+        (
+          await refreshOAuthGrant({
+            client,
+            refreshToken: successor.refresh_token,
+          })
+        ).status,
+      ).toBe(400);
     });
     // Both requests read the unrotated row before the conditional update.
     test("rejects the losing concurrent update and preserves the winning rotation", async () => {
