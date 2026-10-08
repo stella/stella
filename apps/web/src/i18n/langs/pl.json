@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Nie zapisano",
-      "failedTitle": "Twoja zmiana nie została zapisana",
-      "saved": "Zapisano",
-      "saving": "Zapisywanie…"
+      "failedTitle": "Twoja zmiana nie została zapisana"
     },
     "sourceMediumTooltip": "Nośnik źródła — neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
@@ -1884,6 +1882,8 @@
     "saveAndLeave": "Zapisz i wyjdź",
     "saveAsPdf": "Zapisz jako PDF",
     "saveChanges": "Zapisz zmiany",
+    "saved": "Zapisano",
+    "saving": "Zapisywanie…",
     "scopeThisPage": "(ta strona)",
     "scrollToBottom": "Przewiń na dół",
     "scrollToTop": "Przewiń do góry",
@@ -3577,6 +3577,11 @@
       "askContentLabel": "Typ odpowiedzi",
       "askQuestionLabel": "Treść pytania",
       "askQuestionPlaceholder": "Co odczytać z każdego dokumentu? Pozostaw puste, aby wprowadzić ręcznie.",
+      "autosave": {
+        "failed": "Nie udało się zapisać",
+        "nameMissing": "Nie zapisano: podaj nazwę",
+        "positionsNeedAttention": "Nie zapisano: {count, plural, one {# stanowisko wymaga} few {# stanowiska wymagają} many {# stanowisk wymaga} other {# stanowiska wymaga}} uwagi"
+      },
       "check": "Użyj dokładnej reguły zamiast AI",
       "checkHint": "Do mierzalnych warunków, na przykład: termin płatności ≤ 30 dni.",
       "checkKind": {
@@ -3606,6 +3611,7 @@
       "deletePlaybook": "Usuń playbook",
       "deletePosition": "Usuń stanowisko",
       "deleted": "Playbook usunięty",
+      "deletedElsewhere": "Ten playbook został usunięty.",
       "derivedAutomatically": "Pytanie wyodrębniające i format odpowiedzi są generowane na podstawie tej pozycji. Nie trzeba nic konfigurować.",
       "derivedQuestion": "Pytanie wyodrębniające",
       "derivedType": "Format odpowiedzi",
@@ -3658,10 +3664,12 @@
       },
       "noPositions": "Brak stanowisk. Dodaj pierwsze.",
       "noSettledPosition": "Brak ustalonego stanowiska",
+      "openInPane": "Otwórz playbook",
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",
       "outline": "Spis treści",
       "positionOfTotal": "Stanowisko {index} z {total}",
+      "positionRemoved": "Stanowisko usunięte",
       "positions": "Stanowiska",
       "recent": "Ostatnio używane",
       "recommended": "Polecane szablony",

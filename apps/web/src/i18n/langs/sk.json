@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Neuložené",
-      "failedTitle": "Vaša zmena sa neuložila",
-      "saved": "Uložené",
-      "saving": "Ukladanie…"
+      "failedTitle": "Vaša zmena sa neuložila"
     },
     "sourceMediumTooltip": "Médium zdroja — neutrálny opis. Samo osebe neznižuje mieru istoty.",
     "states": {
@@ -1884,6 +1882,8 @@
     "saveAndLeave": "Uložiť a odísť",
     "saveAsPdf": "Uložiť ako PDF",
     "saveChanges": "Uložiť zmeny",
+    "saved": "Uložené",
+    "saving": "Ukladanie…",
     "scopeThisPage": "(táto stránka)",
     "scrollToBottom": "Posunúť nadol",
     "scrollToTop": "Posunúť nahor",
@@ -3577,6 +3577,11 @@
       "askContentLabel": "Typ odpovede",
       "askQuestionLabel": "Znenie otázky",
       "askQuestionPlaceholder": "Čo sa má z každého dokumentu vyčítať? Ponechajte prázdne pre ručné zadanie.",
+      "autosave": {
+        "failed": "Nepodarilo sa uložiť",
+        "nameMissing": "Neuložené: zadajte názov",
+        "positionsNeedAttention": "Neuložené: {count, plural, one {# pozícia vyžaduje} few {# pozície vyžadujú} other {# pozícií vyžaduje}} pozornosť"
+      },
       "check": "Použiť presné pravidlo namiesto AI",
       "checkHint": "Pre merateľné podmienky, napríklad: splatnosť ≤ 30 dní.",
       "checkKind": {
@@ -3606,6 +3611,7 @@
       "deletePlaybook": "Odstrániť playbook",
       "deletePosition": "Odstrániť pozíciu",
       "deleted": "Playbook odstránený",
+      "deletedElsewhere": "Tento playbook bol odstránený.",
       "derivedAutomatically": "Otázka a formát odpovede sa vygenerujú z tejto pozície. Netreba nič nastavovať.",
       "derivedQuestion": "Otázka na získanie odpovede",
       "derivedType": "Formát odpovede",
@@ -3658,10 +3664,12 @@
       },
       "noPositions": "Zatiaľ žiadne pozície. Pridajte prvú.",
       "noSettledPosition": "Žiadna ustálená pozícia",
+      "openInPane": "Otvoriť playbook",
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
       "positionOfTotal": "Pozícia {index} z {total}",
+      "positionRemoved": "Pozícia odstránená",
       "positions": "Pozície",
       "recent": "Nedávno použité",
       "recommended": "Odporúčané úvodné playbooky",

@@ -4303,6 +4303,10 @@
     "seconds": 0.541877,
     "source": "estimated"
   },
+  "src/lib/auth/social-sign-in-outcome.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/auth/third-party-outbound-permit.test.ts": {
     "seconds": 1.007646,
     "source": "estimated"
