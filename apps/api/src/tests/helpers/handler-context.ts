@@ -16,7 +16,11 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabaseTransaction } from "@/api/tests/security/test-utils";
 
-/** Assert that this path must not record audit events. */
+/**
+ * Assert that this path must not record audit events. The recorder panics, but
+ * inside `safeDb(tx => ...)` the panic surfaces as the transaction's database
+ * error, so a NO_AUDIT test must not treat a generic database error as success.
+ */
 export const NO_AUDIT = { type: "no_audit" } as const;
 /** Assert that this path must not access this database collaborator. */
 export const NO_DB = { type: "no_db" } as const;
@@ -133,8 +137,9 @@ export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   return asTestRaw<TContext>({
     ...base,
     ...fields,
-    safeDb: typeof safeDb === "function" ? safeDb : unconfiguredDb,
-    scopedDb: typeof scopedDb === "function" ? scopedDb : unconfiguredDb,
+    // Only the sentinel is replaced; any supplied double passes through as is.
+    safeDb: safeDb === NO_DB ? unconfiguredDb : safeDb,
+    scopedDb: scopedDb === NO_DB ? unconfiguredDb : scopedDb,
     recordAuditEvent,
     createAuditRecorder: createAuditRecorder ?? (() => recordAuditEvent),
     // Merge identity details and replace authority as one value.
