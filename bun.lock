@@ -391,7 +391,6 @@
         "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.1.0",
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
-        "@fontsource-variable/source-serif-4": "^5.3.0",
         "@hocuspocus/provider": "^4.7.0",
         "@libpdf/core": "catalog:",
         "@mcp-ui/client": "catalog:",
@@ -833,12 +832,14 @@
       "name": "@stll/decision-reader",
       "version": "0.0.0",
       "dependencies": {
+        "@fontsource-variable/source-serif-4": "^5.3.0",
         "@stll/api-contract": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/ui": "workspace:*",
         "better-result": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -847,7 +848,6 @@
         "bun-types": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "react": ">=19",
