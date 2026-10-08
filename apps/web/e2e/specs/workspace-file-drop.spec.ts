@@ -129,9 +129,11 @@ test.describe("workspace file drop", () => {
       { dragOperationsMask: 1, files: [DOCX_PATH], items: [] },
     );
 
+    // The pending upload row and the saved row can briefly coexist; waiting for
+    // exactly one also fails if the drop created the file twice.
     await expect(
       shellContent.getByRole("button", { name: /^simple\.docx\b/u }),
-    ).toBeVisible({ timeout: 60_000 });
+    ).toHaveCount(1, { timeout: 60_000 });
   });
   test("a native file dropped on a folder row uploads into that folder", async ({
     page,
@@ -171,8 +173,10 @@ test.describe("workspace file drop", () => {
 
     await folderLabel.dblclick();
     await expect(
-      page.getByRole("button", { name: /^simple\.docx\b/u }),
-    ).toBeVisible({ timeout: 60_000 });
+      page
+        .locator('[data-slot="workspace-shell-content"]')
+        .getByRole("button", { name: /^simple\.docx\b/u }),
+    ).toHaveCount(1, { timeout: 60_000 });
   });
 
   test("the keyboard upload inside a folder still targets that folder", async ({
