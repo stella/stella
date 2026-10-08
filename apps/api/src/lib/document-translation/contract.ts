@@ -63,16 +63,14 @@ export const DOCUMENT_TRANSLATION_UNIT_STATUSES = [
   "translated",
   "failed",
 ] as const;
-export type DocumentTranslationUnitStatus =
-  (typeof DOCUMENT_TRANSLATION_UNIT_STATUSES)[number];
 
-export type DocxSegmentApplication = {
+type DocxSegmentApplication = {
   type: "docxSegment";
   segmentId: string;
   taggedSourceText: string;
 };
 
-export type BilingualRowApplication = {
+type BilingualRowApplication = {
   type: "bilingualRow";
   rowId: string;
   kind: "paragraph" | "heading" | "listItem" | "table";

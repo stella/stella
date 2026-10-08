@@ -35,6 +35,7 @@ import {
 } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import {
   Select,
   SelectItem,
@@ -70,6 +71,7 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
+import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -581,6 +583,8 @@ function ProfilePageBody() {
 
       <LocalePreferences />
 
+      <ChatNotificationsCard />
+
       <TwoFactorCard />
 
       <SessionsCard />
@@ -645,7 +649,11 @@ function ProfilePageBody() {
               )}
               {dialogStep === "loading" && (
                 <div className="flex justify-center py-4">
-                  <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+                  <Loader
+                    className="size-6"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 </div>
               )}
               {dialogStep === "pendingTasksError" && (

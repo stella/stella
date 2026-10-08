@@ -134,7 +134,7 @@ export const persistManualOcrRun = async ({
         ),
       )
       .limit(1)
-      .for("update");
+      .for("no key update");
     if (!workspaceRows.at(0)) {
       return null;
     }

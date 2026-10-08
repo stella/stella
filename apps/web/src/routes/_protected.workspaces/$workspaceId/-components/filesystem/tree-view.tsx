@@ -7,11 +7,7 @@ import {
   useState,
 } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-  monitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -21,7 +17,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -74,11 +69,14 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getFileSizeDisplay } from "@/lib/file-size";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import type {
   WorkspaceEntity,
   WorkspaceProperty,
@@ -118,6 +116,8 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
+
+import { useColumnWidths } from "./use-column-widths";
 
 const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;
@@ -227,8 +227,6 @@ const resolveExtraColumns = (
 
 const NAME_COL_ID = "__name__";
 const DEFAULT_EXTRA_WIDTH_PX = 128;
-const MIN_COL_WIDTH_PX = 80;
-const MAX_COL_WIDTH_PX = 800;
 
 const buildGridTemplate = (
   extraColumns: ExtraColumn[],
@@ -241,55 +239,6 @@ const buildGridTemplate = (
     .map((col) => `${widths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}px`)
     .join(" ");
   return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 2rem`;
-};
-
-type ColumnWidthsApi = {
-  widths: Record<string, number>;
-  setWidth: (id: string, width: number) => void;
-};
-
-// Top-level shape only: each value is checked for finite-number below, so
-// one non-numeric entry drops just that column rather than the whole map.
-const ColumnWidthsRecordSchema = v.record(v.string(), v.unknown());
-
-const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
-  const [widths, setWidths] = useState<Record<string, number>>(() => {
-    if (typeof window === "undefined") {
-      return {};
-    }
-    const raw = window.localStorage.getItem(storageKey);
-    const parsed = readStoredJson(raw, ColumnWidthsRecordSchema);
-    if (!parsed) {
-      return {};
-    }
-    const result: Record<string, number> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === "number" && Number.isFinite(value)) {
-        result[key] = value;
-      }
-    }
-    return result;
-  });
-
-  const setWidth = useCallback(
-    (id: string, width: number) => {
-      const clamped = Math.max(
-        MIN_COL_WIDTH_PX,
-        Math.min(MAX_COL_WIDTH_PX, Math.round(width)),
-      );
-      setWidths((prev) => {
-        if (prev[id] === clamped) {
-          return prev;
-        }
-        const next = { ...prev, [id]: clamped };
-        writeStoredJson(window.localStorage, storageKey, next);
-        return next;
-      });
-    },
-    [storageKey],
-  );
-
-  return { widths, setWidth };
 };
 
 // -- Component --
@@ -837,7 +786,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }
 
   return (
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
     <div
       className="flex h-full flex-1 flex-col overflow-hidden p-2"
       onClick={(e) => {
@@ -888,7 +837,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           if (isEditingCrumb) {
                             return (
                               <InlineEdit
-                                inputClassName="h-5 w-40 text-xs"
                                 onCancel={() => setEditingEntityId(null)}
                                 onChange={setBreadcrumbEditValue}
                                 onCommit={() => {
@@ -909,7 +857,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           if (isLast) {
                             return (
                               <button
-                                className="text-xs font-medium"
+                                className="text-xs font-medium whitespace-pre"
                                 onClick={() => {
                                   detached(
                                     navigateToFolder(),
@@ -1649,7 +1597,6 @@ export const FilesystemRow = ({
       {isEditing ? (
         <InlineEdit
           className="max-w-full min-w-0"
-          inputClassName="min-w-48 [field-sizing:content]"
           onCancel={cancelEditing}
           onChange={setEditValue}
           onCommit={commitRename}
@@ -1662,7 +1609,11 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText as="span" className="truncate" title={name}>
+          <BidiText
+            as="span"
+            className="overflow-hidden text-ellipsis whitespace-pre"
+            title={name}
+          >
             {name}
           </BidiText>
           {folderStatistics && formattedFolderSize && (

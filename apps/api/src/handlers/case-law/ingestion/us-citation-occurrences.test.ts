@@ -3,6 +3,13 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { parseUsReporterReference } from "@stll/api-contract/us-reporter-citation";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  Inline,
+  ParagraphBlock,
+} from "@stll/legal-ast/document-ast";
 import type { InlineCitationPinPart } from "@stll/legal-ast/inline";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
@@ -20,13 +27,6 @@ import {
   US_CITATION_OCCURRENCE_LIMIT,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import { plainTextOf } from "@/api/lib/case-law/document-ast";
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-  ParagraphBlock,
-} from "@/api/lib/case-law/document-ast";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
 const config = (numRuns: number) =>

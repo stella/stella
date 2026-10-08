@@ -29,7 +29,7 @@ export type FieldAuditResource =
       entityVersionId: ReturnType<typeof brandPersistedEntityVersionId>;
     };
 
-export const matterActivityFilterKey = ({
+const matterActivityFilterKey = ({
   action,
   actorId,
   category,

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
 import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state";
 import { resolveOrganizationActionBudget } from "@/api/lib/usage/organization-action-budget";
 
@@ -19,13 +23,19 @@ const active = {
   periodEndsAt: END,
   serviceActionsPerPeriod: PROFILE,
 } as const satisfies ConfiguredAccess;
-const budget = (configuredAccess: ConfiguredAccess, now: Date) =>
-  resolveOrganizationActionBudget({
-    state: {
+const accessAt = (configuredAccess: ConfiguredAccess, now: Date) =>
+  resolveOrganizationAccess({
+    snapshot: {
       state: CONFIGURED_ACCESS_STATE,
       configuredAccess,
+      original: undefined,
     },
     now,
+    freeTier: FREE_TIER_OFF,
+  });
+const budget = (configuredAccess: ConfiguredAccess, now: Date) =>
+  resolveOrganizationActionBudget({
+    access: accessAt(configuredAccess, now),
     periodMs: 23_000,
     evaluationActions: 7,
     selfManagedActions: 19,
@@ -36,15 +46,7 @@ const expectAccess = (
   now: Date,
   enabled: boolean,
 ) => {
-  expect(
-    allowsInstanceModels(
-      {
-        state: CONFIGURED_ACCESS_STATE,
-        configuredAccess: access,
-      },
-      now,
-    ),
-  ).toBe(enabled);
+  expect(allowsInstanceModels(accessAt(access, now))).toBe(enabled);
   const resolved = budget(access, now);
   expect(resolved.status).toBe(enabled ? "resolved" : "not_enabled");
   if (resolved.status === "resolved") {
@@ -214,6 +216,7 @@ describe("configured access boundaries", () => {
     expect(budget(renewed, END)).toEqual({
       status: "resolved",
       policy: { periodMs: 23_000, limit: renewedProfile },
+      scope: { type: "per_kind" },
       serviceDeadlineMs: renewedEnd.getTime(),
     });
     expectAccess(renewed, renewedEnd, false);

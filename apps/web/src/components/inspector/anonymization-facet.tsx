@@ -37,13 +37,8 @@ import {
   Trash2Icon as Trash2,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuPortal,
-  MenuTrigger,
-} from "@stll/ui/menu";
+import { MenuItem, MenuPopup } from "@stll/ui/menu";
+import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -54,6 +49,7 @@ import {
   useAnonymizationPipelineStatus,
   useInspectorAnonymizationStore,
 } from "@/components/inspector/inspector-anonymization-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -67,6 +63,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -208,6 +205,8 @@ export const AnonymizationFacet = ({
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
+  const termsQueryView = useQueryView(termsQuery);
+  useQueryViewError(termsQueryView);
   const createMutation = useMutation({
     mutationFn: async (vars: {
       workspaceId: string;
@@ -398,12 +397,17 @@ export const AnonymizationFacet = ({
   const allEntries = termsQuery.data?.entries;
   const matchSnapshot = useAnonymizationMatches(activeFieldId);
   const pipelineStatus = useAnonymizationPipelineStatus(activeFieldId);
-  const matchesReady = pipelineStatus === "ready";
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: activeFieldId !== null,
   });
+  const allowlistQueryView = useQueryView(allowlistQuery);
+  useQueryViewError(allowlistQueryView);
   const allowlistEntries = allowlistQuery.data?.entries;
+  const matchesReady =
+    pipelineStatus === "ready" &&
+    termsQuery.status === "success" &&
+    allowlistQuery.status === "success";
   const createAllowlistMutation = useMutation({
     mutationFn: async (vars: {
       workspaceId: string;
@@ -680,6 +684,10 @@ export const AnonymizationFacet = ({
       ref={containerRef}
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
     >
+      <QueryViewFeedback view={termsQueryView} />
+      {activeFieldId !== null && (
+        <QueryViewFeedback view={allowlistQueryView} />
+      )}
       <h3 className="text-foreground text-sm font-medium">
         {t("inspector.anonymization.title")}
       </h3>
@@ -713,9 +721,23 @@ export const AnonymizationFacet = ({
           aria-label={t("common.retry")}
           className="w-full justify-start"
           onClick={() => {
-            useInspectorAnonymizationStore
-              .getState()
-              .retryAnonymizationPipeline(activeFieldId);
+            detached(
+              Promise.all([
+                termsQuery.refetch(),
+                allowlistQuery.refetch(),
+              ]).then(([terms, allowlist]) => {
+                if (
+                  terms.status !== "success" ||
+                  allowlist.status !== "success"
+                ) {
+                  return undefined;
+                }
+                return useInspectorAnonymizationStore
+                  .getState()
+                  .retryAnonymizationPipeline(activeFieldId);
+              }),
+              "anonymization.retry-policy",
+            );
           }}
           size="sm"
           variant="outline"
@@ -991,79 +1013,64 @@ export const AnonymizationFacet = ({
                               <RotateCcw className="size-3.5" />
                             </Button>
                           ) : (
-                            <>
-                              <Button
-                                aria-label={t(
-                                  "inspector.anonymization.ignoreAction",
-                                )}
-                                disabled={createAllowlistMutation.isPending}
-                                onClick={() => {
-                                  createAllowlistMutation.mutate({
-                                    workspaceId,
-                                    entityId,
-                                    canonical: row.canonical,
-                                    label,
-                                    scope: "document",
-                                  });
-                                }}
-                                size="icon"
-                                title={t(
-                                  "inspector.anonymization.ignoreAction",
-                                )}
-                                variant="ghost"
-                              >
-                                <EyeOff className="size-3.5" />
-                              </Button>
-                              <Menu>
-                                <MenuTrigger
-                                  render={
-                                    <Button
-                                      aria-label={t(
-                                        "inspector.anonymization.ignoreScopeMenuAriaLabel",
-                                      )}
-                                      size="icon"
-                                      variant="ghost"
-                                    >
-                                      <ChevronDown className="size-3.5" />
-                                    </Button>
-                                  }
-                                />
-                                <MenuPortal>
-                                  <MenuPopup>
-                                    <MenuItem
-                                      onClick={() => {
-                                        createAllowlistMutation.mutate({
-                                          workspaceId,
-                                          entityId,
-                                          canonical: row.canonical,
-                                          label,
-                                          scope: "document",
-                                        });
-                                      }}
-                                    >
-                                      {t(
-                                        "inspector.anonymization.ignoreScopeDocument",
-                                      )}
-                                    </MenuItem>
-                                    <MenuItem
-                                      onClick={() => {
-                                        createAllowlistMutation.mutate({
-                                          workspaceId,
-                                          entityId,
-                                          canonical: row.canonical,
-                                          label,
-                                          scope: "workspace",
-                                        });
-                                      }}
-                                    >
-                                      {t(
-                                        "inspector.anonymization.ignoreScopeAlways",
-                                      )}
-                                    </MenuItem>
-                                  </MenuPopup>
-                                </MenuPortal>
-                              </Menu>
-                            </>
+                            <SplitButton
+                              menuDisabled={createAllowlistMutation.isPending}
+                              menuLabel={t(
+                                "inspector.anonymization.ignoreScopeMenuAriaLabel",
+                              )}
+                              onPrimaryClick={() => {
+                                createAllowlistMutation.mutate({
+                                  workspaceId,
+                                  entityId,
+                                  canonical: row.canonical,
+                                  label,
+                                  scope: "document",
+                                });
+                              }}
+                              primaryDisabled={
+                                createAllowlistMutation.isPending
+                              }
+                              primaryLabel={t(
+                                "inspector.anonymization.ignoreAction",
+                              )}
+                              size="sm"
+                              menu={
+                                <MenuPopup>
+                                  <MenuItem
+                                    onClick={() => {
+                                      createAllowlistMutation.mutate({
+                                        workspaceId,
+                                        entityId,
+                                        canonical: row.canonical,
+                                        label,
+                                        scope: "document",
+                                      });
+                                    }}
+                                  >
+                                    {t(
+                                      "inspector.anonymization.ignoreScopeDocument",
+                                    )}
+                                  </MenuItem>
+                                  <MenuItem
+                                    onClick={() => {
+                                      createAllowlistMutation.mutate({
+                                        workspaceId,
+                                        entityId,
+                                        canonical: row.canonical,
+                                        label,
+                                        scope: "workspace",
+                                      });
+                                    }}
+                                  >
+                                    {t(
+                                      "inspector.anonymization.ignoreScopeAlways",
+                                    )}
+                                  </MenuItem>
+                                </MenuPopup>
+                              }
+                            >
+                              <EyeOff aria-hidden="true" className="size-3.5" />
+                            </SplitButton>
                           )}
                         </div>
                       </li>

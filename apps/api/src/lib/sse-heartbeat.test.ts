@@ -154,6 +154,7 @@ describe("SSE heartbeat", () => {
 });
 
 const API_SOURCE = nodePath.join(import.meta.dirname, "..");
+const CANARY_SCRIPT = nodePath.join(API_SOURCE, "scripts/mcp-canary.ts");
 const HEARTBEAT_MODULE = nodePath.join(API_SOURCE, "lib/sse.ts");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.tsx?$/u;
@@ -191,9 +192,21 @@ const buildsEventStreamResponse = (source: string): boolean =>
     RESPONSE_CONSTRUCTION_PATTERN.test(source));
 
 describe("every event stream is served through the heartbeat", () => {
-  const sources = listSourceFiles(API_SOURCE).filter(
+  const previouslyCovered = listSourceFiles(API_SOURCE).filter(
     (path) => path !== HEARTBEAT_MODULE,
   );
+  // The canary consumes SSE; its loopback responses are not event streams.
+  const sources = previouslyCovered.filter((path) => path !== CANARY_SCRIPT);
+
+  test("excludes only the canary and preserves the previous source inventory", () => {
+    expect(
+      buildsEventStreamResponse(readFileSync(CANARY_SCRIPT, "utf-8")),
+    ).toBe(true);
+    expect(sources).not.toContain(CANARY_SCRIPT);
+    expect(new Set([...sources, CANARY_SCRIPT])).toEqual(
+      new Set(previouslyCovered),
+    );
+  });
 
   test("the heartbeat module is the only place that names the media type in a response", () => {
     const offenders = sources.filter((path) =>

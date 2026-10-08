@@ -18,6 +18,7 @@ import {
   agentInputNormalizationMetadata,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
@@ -72,6 +73,7 @@ import type {
 } from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -246,6 +248,22 @@ const makeDocxBytes = async () => {
     bytes.byteOffset + bytes.byteLength,
   );
 };
+
+const COURT_YEAR_FIXTURE = {
+  buckets: [
+    {
+      court: "Nejvyšší soud",
+      courtName: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      tier: "supreme",
+      year: 2024,
+      count: 1,
+      citationSum: null,
+      treatment: null,
+    },
+  ],
+  truncated: false,
+} as const satisfies CaseLawCourtYear;
 
 const ORGANIZATION_ID = toSafeId<"organization">("org_1");
 
@@ -2343,6 +2361,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: COURT_YEAR_FIXTURE,
         court: [
           {
             tierLabel: "supreme",
@@ -2455,6 +2474,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
+        courtYear: COURT_YEAR_FIXTURE,
         court: [
           {
             tierLabel: "supreme",
@@ -2547,6 +2567,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: null,
         court: [],
         // A bucket field the output contract does not declare.
         year: [{ count: 1, label: null, value: "2024", undeclared: true }],
@@ -2599,6 +2620,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: null,
         court: [],
         // A declared bucket field with the wrong type.
         year: [{ count: "one", label: null, value: "2024" }],
@@ -2648,6 +2670,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
+        courtYear: null,
         court: [],
         year: [],
         decisionType: [],
@@ -2699,6 +2722,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
+        courtYear: null,
         court: [],
         year: [],
         decisionType: [],
@@ -2790,6 +2814,7 @@ describe("OpenAI-compatible MCP tools", () => {
       candidates?: { court: string }[];
       caseNumber?: string;
       court?: string;
+      courtAbbreviation?: string | null;
       decisionDate?: string | null;
       decisionId?: string;
       ecli?: string | null;
@@ -2806,6 +2831,7 @@ describe("OpenAI-compatible MCP tools", () => {
     caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     country: "CZE",
     court,
+    courtAbbreviation: courtAbbreviation({ country: "CZE", court }) ?? null,
     decisionDate: "2020-05-01",
     ecli: null,
     id: toSafeId<"caseLawDecision">(decisionId),
@@ -2848,6 +2874,7 @@ describe("OpenAI-compatible MCP tools", () => {
       url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
       caseNumber: CZ_DOCKET,
       court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
       decisionDate: "2020-05-01",
       decisionId: DECISION_ID,
       ecli: CZ_ECLI,
@@ -3193,11 +3220,58 @@ describe("OpenAI-compatible MCP tools", () => {
     total: { type: string };
   };
 
+  test("search and lookup project the same canonical court abbreviation for one decision", async () => {
+    const row = {
+      ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+      ecli: CZ_ECLI,
+    };
+    lookupDecisionsByIdentityMock.mockResolvedValue([row]);
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: [
+        {
+          ...createCaseLawHit(DECISION_ID, "Public decision"),
+          caseNumber: CZ_DOCKET,
+          ecli: CZ_ECLI,
+          decisionDate: row.decisionDate,
+          courtAbbreviation: row.courtAbbreviation,
+        },
+      ],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "Public decision",
+      warnings: [],
+    });
+    const identity = (await lookup([CZ_ECLI])).items.at(0);
+    expect(identity).toMatchObject({
+      status: "found",
+      decisionId: DECISION_ID,
+      courtAbbreviation: "NS",
+    });
+    const search = parseToolPayload(
+      await handleMcpToolCall({
+        args: { country: "CZE", queries: ["Public decision"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      }),
+    );
+    expect(search).toMatchObject({
+      results: [
+        {
+          decisionId: DECISION_ID,
+          courtAbbreviation: identity?.courtAbbreviation,
+        },
+      ],
+    });
+  });
+
   test("search_case_law merges several phrasings by best rank", async () => {
     searchDecisionsHandlerMock.mockImplementation(
       async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
+          courtYear: null,
           court: [],
           year: [
             {
@@ -3260,6 +3334,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(payload.results.at(0)?.snippet).toBe("c from second");
     // Facets describe the first phrasing; overlapping counts are not summed.
     expect(payload.facets).toEqual({
+      courtYear: null,
       court: [],
       year: [{ value: "2024", count: 3, label: null }],
       decisionType: [],
@@ -3294,6 +3369,7 @@ describe("OpenAI-compatible MCP tools", () => {
       async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
+          courtYear: null,
           court: [],
           year: [],
           decisionType: [],
@@ -3317,6 +3393,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(result.isError).not.toBe(true);
     const payload = asTestRaw<MergedSearchPage>(parseToolPayload(result));
     expect(payload.facets).toEqual({
+      courtYear: null,
       court: [],
       year: [],
       decisionType: [],
@@ -3633,6 +3710,7 @@ describe("OpenAI-compatible MCP tools", () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: {
+            courtYear: null,
             court: [],
             year: [],
             decisionType: [],
@@ -5124,6 +5202,7 @@ describe("OpenAI-compatible MCP tools", () => {
       searchDecisionsHandlerMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
+          courtYear: null,
           court: [
             {
               tierLabel: "supreme",

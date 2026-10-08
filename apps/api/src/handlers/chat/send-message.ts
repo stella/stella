@@ -20,6 +20,7 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
   type ActiveFileModelBinding,
@@ -29,8 +30,6 @@ import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
-import type { ChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import {
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
@@ -211,6 +210,8 @@ import type {
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -225,6 +226,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
@@ -273,6 +275,9 @@ import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -281,6 +286,7 @@ import {
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -479,7 +485,7 @@ type ClaimedChatTurnOwnership =
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
-  startAdmission?: typeof startChatExecutionAdmission;
+  startAdmission?: typeof startExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
@@ -586,7 +592,7 @@ const CHAT_SEND_ACTION_KIND = "chat.send";
  */
 export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
-  private admission: ChatExecutionAdmission | undefined;
+  private admission: ExecutionAdmission | undefined;
   private checkpoint: PersistableChatMessage | undefined;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
   /** Ends this process's record of the claim; a no-op once ended. */
@@ -662,9 +668,9 @@ export class ChatSendLifecycle {
   }: {
     organizationId: SafeId<"organization">;
     checkpoint: PersistableChatMessage | undefined;
-  }): Promise<Result<void, HandlerError>> {
+  }): Promise<Result<ModelDispatchAdmission, HandlerError>> {
     const acquired = await (
-      this.options.startAdmission ?? startChatExecutionAdmission
+      this.options.startAdmission ?? startExecutionAdmission
     )({
       organizationId,
       userId: this.options.userId,
@@ -676,7 +682,7 @@ export class ChatSendLifecycle {
     }
     this.admission = acquired.value;
     this.checkpoint = checkpoint;
-    return Result.ok(undefined);
+    return Result.ok(acquired.value.modelAdmission);
   }
 
   async reserveExecutionPeriod(
@@ -1115,6 +1121,27 @@ const prepareDispatch = async ({
 type ThreadValidationState = InferOk<
   Awaited<ReturnType<typeof readThreadValidationState>>
 >;
+
+type CreateTurnVisualOriginOptions = {
+  incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
+  persistedMessage: ThreadValidationState["persistedMessage"];
+};
+
+const createTurnVisualOrigin = ({
+  incomingMessage,
+  persistedMessage,
+}: CreateTurnVisualOriginOptions) =>
+  createVisualResourceOrigin({
+    persistedParts:
+      incomingMessage.role === "assistant" &&
+      persistedMessage?.role === "assistant"
+        ? chatMessageFromPersisted({
+            content: persistedMessage.content,
+            id: incomingMessage.id,
+            role: persistedMessage.role,
+          }).parts
+        : [],
+  });
 
 type AcceptIncomingTurnOptions = {
   accessibleSet: ReadonlySet<string>;
@@ -2005,7 +2032,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
-  startAdmission?: typeof startChatExecutionAdmission;
+  startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
@@ -2346,13 +2373,13 @@ export const createSendMessage = (
           await dependencies.loadExternalMcpTools({
             nullUnionStrategy: externalMcpNullUnionStrategy,
             organizationId: session.activeOrganizationId,
+            permit: grantThirdPartyOutboundPermit(),
             safeDb,
             userId: user.id,
           }),
       );
       const lifecycle = new ChatSendLifecycle({
-        startAdmission:
-          dependencies.startAdmission ?? startChatExecutionAdmission,
+        startAdmission: dependencies.startAdmission ?? startExecutionAdmission,
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
@@ -2442,7 +2469,7 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessageResult.value;
 
-        yield* Result.await(
+        const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
             organizationId: session.activeOrganizationId,
             checkpoint:
@@ -2596,6 +2623,7 @@ export const createSendMessage = (
         const messagesForContextResult =
           await dependencies.compactMessagesForContext({
             abortSignal: createMeteredAIAbortSignal(),
+            admission: modelAdmission,
             boundary: thirdPartyBoundary,
             chatModelOverride,
             messages: messagesForContextInput,
@@ -2657,7 +2685,27 @@ export const createSendMessage = (
         // catalog and connector tools, which are known only later. Skill
         // availability is decided over the same inputs before the catalog
         // reaches the prompt, so an offered skill always has its tools.
+        const visualOrigin = createTurnVisualOrigin({
+          incomingMessage: body.message,
+          persistedMessage: validationThreadState.persistedMessage,
+        });
+        const visualTools = {
+          origin: visualOrigin,
+          preview: async (document: string) =>
+            previewVisual({
+              document,
+              functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,
+            }),
+          store: createVisualStore({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            userId: user.id,
+            workspaceId,
+          }),
+        };
         const chatToolContext = {
+          visualTools,
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -2829,6 +2877,7 @@ export const createSendMessage = (
         // mounts no watcher to resolve them.
         const chatTools = getChatTools({
           ...chatToolContext,
+          modelAdmission,
           externalTools: externalMcpTools?.tools ?? {},
           skillMetadata: chatContext.skillMetadata,
           activeSkillContext: chatContext.activeSkillContext,
@@ -3114,6 +3163,8 @@ export const createSendMessage = (
                 };
 
                 const outcome = await dependencies.streamResponse({
+                  modelAdmission,
+                  visualOrigin,
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),

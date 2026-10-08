@@ -112,11 +112,7 @@ export const ProposalMenu = ({
   );
 };
 
-export const ProposalStatusBadge = ({
-  status,
-}: {
-  status: SkillProposalStatus;
-}) => {
+const ProposalStatusBadge = ({ status }: { status: SkillProposalStatus }) => {
   const t = useTranslations();
 
   return (

@@ -181,13 +181,20 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const provisionAnchors = useDecisionProvisionAnchors({
-    blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
+    court: decision.court,
+    caseNumber: decision.caseNumber,
+    surface: "full-reader",
+    blocks: visibleDecisionBlocks(
+      ast,
+      decision.caseNumberType,
+      decision.fulltext,
+    ),
     country: decision.country,
     decisionId,
     decisionDate: decision.decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast, decision.caseNumberType),
+    visibleDecisionBlocks(ast, decision.caseNumberType, decision.fulltext),
     decision.decisionDate,
   );
 
@@ -496,6 +503,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         >
           <LegalReaderAIChat
             activeLegal={activeLegalFromReaderTarget(annotationTarget)}
+            aiMode={props.aiMode}
             className="h-full"
           >
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
@@ -622,6 +630,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   data-slot="reader-document-column"
                 >
                   <DecisionText
+                    surface="full-reader"
                     aiHeadnotes={aiHeadnotes}
                     annotationAnchors={annotations.anchors}
                     citationAnchors={citationAnchors}

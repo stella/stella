@@ -44,6 +44,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import {
   guideAnchor,
@@ -85,7 +86,7 @@ import {
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
 import type {
   FresherDetail,
@@ -514,9 +515,13 @@ const PlaybookEditorForm = ({
       positions,
     }),
   );
-  const { data: documentTypesData } = useQuery(
-    documentTypesOptions(organizationId),
-  );
+  const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
+  const documentTypesDataView = useQueryView(documentTypesDataQuery);
+  useQueryViewError(documentTypesDataView);
+  const documentTypesData =
+    documentTypesDataView.type === "items"
+      ? documentTypesDataView.items
+      : undefined;
   const documentTypes = documentTypesData ? documentTypesData.items : [];
 
   const setNavOpen = usePlaybookNavStore((s) => s.setOpen);
@@ -1101,6 +1106,7 @@ const PlaybookEditorForm = ({
               />
             </div>
 
+            <QueryViewFeedback view={documentTypesDataView} />
             {documentTypes.length > 0 && (
               <div className="grid gap-1.5">
                 <Label htmlFor="playbook-document-type">

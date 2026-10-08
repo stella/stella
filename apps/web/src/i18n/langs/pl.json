@@ -145,6 +145,7 @@
       "useBackupCode": "Użyj zamiast tego kodu zapasowego"
     },
     "useDifferentEmail": "Użyj innego adresu e-mail",
+    "usePassword": "Użyj hasła",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "Wybierz listę",
+      "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
@@ -1052,6 +1054,7 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
+    "activateGeneratedView": "Pracuj z tym widokiem",
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
@@ -1197,6 +1200,8 @@
     "forkedFromUnavailable": "Utworzono na podstawie czatu, który nie jest już dostępny",
     "forkedThread": "Z innego czatu",
     "forkingThread": "Tworzenie nowego czatu…",
+    "generatedView": "Wygenerowany widok",
+    "generatedViewDrill": "Wyszukaj orzeczenia z filtrem sądu {court} i rokiem {year}.",
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
@@ -1328,6 +1333,7 @@
     "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj ponownie za minutę albo skontaktuj się z administratorem obszaru roboczego.",
     "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
     "sendPrompt": "Wyślij wiadomość",
+    "sendQueuedMessageNow": "Wyślij teraz",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
     "skills": {
       "scope": {
@@ -1475,6 +1481,14 @@
       "sourceCode": "Kod źródłowy",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Odpowiedź na czacie w stelli nie została ukończona.",
+      "failedTitle": "Odpowiedź nie powiodła się",
+      "needsInputBody": "Czat czeka na Twoje zatwierdzenie lub odpowiedź.",
+      "needsInputTitle": "stella potrzebuje Twojej reakcji",
+      "replyReadyBody": "stella skończyła odpowiadać na czacie.",
+      "replyReadyTitle": "Odpowiedź gotowa"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
@@ -1690,6 +1704,7 @@
     "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} many {# elementów usunięto} other {# elementów usunięto}}",
     "description": "Opis",
     "details": "Szczegóły",
+    "detailsHiddenFeatureUnavailable": "Szczegóły ukryte: funkcja nie jest włączona",
     "disconnect": "Rozłącz",
     "dismiss": "Odrzuć",
     "displayName": "Nazwa wyświetlana",
@@ -1825,6 +1840,8 @@
     "notes": "Notatki",
     "open": "Otwórz",
     "openInNewTab": "Otwórz w nowej karcie",
+    "openInStella": "Otwórz w stelli",
+    "openOriginalSource": "Otwórz źródło oryginalne",
     "options": "Opcje",
     "or": "Lub",
     "organization": "Organizacja",
@@ -2356,6 +2373,7 @@
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
+      "fileSecurityRejected": "Plik został odrzucony przez kontrolę bezpieczeństwa. Usuń oznaczoną zawartość i prześlij oczyszczoną kopię.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
@@ -4372,6 +4390,11 @@
       "betaInbox": "Skrzynka i powiadomienia",
       "betaInboxDescription": "Pokaż skrzynkę i dzwonek powiadomień",
       "betaTimeBillingDescription": "Pokaż śledzenie czasu, faktury i wydatki",
+      "chatNotifications": "Powiadomienia z czatu",
+      "chatNotificationsBlocked": "Powiadomienia stelli są zablokowane w tej przeglądarce. Zezwól na nie w ustawieniach witryny w przeglądarce.",
+      "chatNotificationsDescription": "Otrzymuj powiadomienie z tej przeglądarki, gdy odpowiedź na czacie zakończy się, a stella działa w tle.",
+      "chatNotificationsToggle": "Powiadamiaj mnie, gdy odpowiedź jest gotowa lub wymaga mojej reakcji",
+      "chatNotificationsUnsupported": "Ta przeglądarka nie obsługuje powiadomień.",
       "confirmDelete": "Potwierdź usunięcie konta",
       "dangerZone": "Strefa zagrożenia",
       "dangerZoneDescription": "Trwale usuń dostęp do konta i prywatne dane konta.",
@@ -4741,6 +4764,7 @@
     },
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
+    "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Brzmienie obowiązuje od {date}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
@@ -5322,7 +5346,6 @@
       "noLanguagesFound": "Nie znaleziono języków",
       "notConfigured": "DeepL nie jest skonfigurowany dla tej organizacji. Aby włączyć tłumaczenie, dodaj klucz API DeepL w ustawieniach organizacji.",
       "outputLabel": "Typ tłumaczenia",
-      "progress": "Postęp tłumaczenia",
       "progressCount": "Ukończono {completed} z {total}",
       "providerUnavailable": "Usługa tłumaczenia jest niedostępna. Spróbuj ponownie później lub skontaktuj się z administratorem.",
       "runFailed": "Nie udało się ukończyć tłumaczenia.",
@@ -5454,14 +5477,8 @@
     "exportToCsv": "Eksportuj do CSV",
     "fields": {
       "calculating": "Obliczanie...",
-      "currencyLabel": "Waluta (opcjonalnie)",
-      "currencyPlaceholder": "np. USD, EUR",
-      "editFieldValue": "Edytuj wartość pola",
       "errored": "Błąd",
-      "fieldValueLabel": "Wartość pola",
-      "fieldValuePlaceholder": "Wprowadź wartość pola",
       "formatNotSupported": "Format nie jest obsługiwany",
-      "numberPlaceholder": "Wprowadź liczbę",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości"
     },

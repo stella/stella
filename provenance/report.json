@@ -8,7 +8,7 @@
       "ecosystems": ["javascript"],
       "sbom": "projects/root/sbom.cdx.json",
       "notice": "projects/root/THIRD-PARTY-NOTICES.txt",
-      "dependencies_with_licenses": 173
+      "dependencies_with_licenses": 181
     },
     {
       "id": "desktop-tauri",
@@ -16,7 +16,7 @@
       "ecosystems": ["rust"],
       "sbom": "projects/desktop-tauri/sbom.cdx.json",
       "notice": "projects/desktop-tauri/THIRD-PARTY-NOTICES.txt",
-      "dependencies_with_licenses": 683
+      "dependencies_with_licenses": 685
     }
   ],
   "containers": []

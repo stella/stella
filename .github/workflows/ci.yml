@@ -2,7 +2,17 @@ name: CI Checks
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    types:
+      [
+        opened,
+        synchronize,
+        reopened,
+        ready_for_review,
+        labeled,
+        unlabeled,
+        auto_merge_enabled,
+        enqueued,
+      ]
   # The merge queue builds main plus queued pull requests and merges only if this
   # workflow reports `ci-result` success on that commit, so release-boundary
   # checks must include merge_group and validate the tree that will land.
@@ -78,10 +88,24 @@ jobs:
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
+      postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+      postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
+      # Absent repository switch is OFF; enabling it requires the service job.
+      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
       # Builds, images, browsers and services certify the merge group.
+      run_required: ${{ steps.completed-depth.outputs.run_required }}
+      completion_marker: ${{ steps.completed-depth.outputs.marker }}
+      completed_run_id: ${{ steps.completed-depth.outputs.completed_run_id }}
+      queue_validation: ${{ steps.completed-depth.outputs.queue_validation }}
+      coverage_profile: ${{ steps.pilot.outputs.coverage_profile }}
+      pilot_fast_jobs: ${{ steps.pilot-plan.outputs.fast_jobs }}
+      queue_required_jobs: >-
+        ${{ github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'
+        && steps.completed-depth.outputs.normal_completion != 'complete'
+        && steps.pilot-queue-plan.outputs.queue_jobs || '[]' }}
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
       thin_jobs: ${{ steps.heavy-plan.outputs.thin_jobs }}
@@ -101,6 +125,19 @@ jobs:
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
+      desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
+      # The job and result gate consume the same event/depth decision.
+      ci_browser_required: >-
+        ${{ steps.completed-depth.outputs.run_required != 'false'
+        && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        && steps.changed-files.outputs.package_checks_required == 'true'
+        && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
+        || (github.event_name != 'pull_request' && steps.depth.outputs.queue_depth != 'thin'
+        && steps.depth.outputs.suite_depth == 'full')
+        || (github.event_name == 'merge_group'
+        && steps.completed-depth.outputs.normal_completion != 'complete'
+        && contains(fromJSON(steps.pilot-queue-plan.outputs.queue_jobs || '[]'), 'ci-browser')))
+        && 'true' || 'false' }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
@@ -110,6 +147,8 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
+      docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
       postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
@@ -126,6 +165,93 @@ jobs:
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
+      - name: Resolve PR coverage pilot
+        id: pilot
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_PR_DEPTH_PILOT: ${{ vars.CI_PR_DEPTH_PILOT }}
+        with:
+          retries: 0
+          script: |
+            core.setOutput("coverage_profile", "normal-v1");
+            if (process.env.CI_PR_DEPTH_PILOT !== "on" || context.eventName !== "pull_request") return;
+            // Uncertified pilot evidence keeps complete PR coverage.
+            core.setOutput("coverage_profile", "normal-v1");
+            if (!["opened", "synchronize"].includes(context.payload.action)) return;
+            const name = "ci-pr-depth-pilot-v1";
+            try {
+              const { data } = await github.rest.actions.listArtifactsForRepo({
+                ...context.repo, name, per_page: 100, request: { timeout: 10000 },
+              });
+              if (!Array.isArray(data.artifacts)) return;
+              const artifact = data.artifacts.filter((item) => item?.name === name
+                && item.expired === false && Date.parse(item.expires_at) > Date.now()
+                && Number.isSafeInteger(item.workflow_run?.id))
+                .sort((a, b) => b.id - a.id)[0];
+              if (!artifact) return;
+              await new Promise(resolve => setTimeout(resolve, 1100));
+              const { data: run } = await github.rest.actions.getWorkflowRun({
+                ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
+              });
+              if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
+                  || !["schedule", "workflow_dispatch"].includes(run.event)
+                  || run.head_branch !== context.payload.repository.default_branch
+                  || run.head_sha !== artifact.workflow_run.head_sha
+                  || run.status !== "completed" || run.conclusion !== "success") return;
+              await new Promise(resolve => setTimeout(resolve, 1100));
+              const { data: zip } = await github.rest.actions.downloadArtifact({
+                ...context.repo, artifact_id: artifact.id, archive_format: "zip",
+                request: { timeout: 10000 },
+              });
+              const fs = require("node:fs");
+              const path = require("node:path");
+              const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "ci-pilot-"));
+              let report;
+              try {
+                const filename = path.join(directory, "report.zip");
+                fs.writeFileSync(filename, Buffer.from(zip));
+                const text = require("node:child_process").execFileSync("unzip",
+                  ["-p", filename, "ci-pr-pilot.json"], { maxBuffer: 65536, timeout: 5000 });
+                report = JSON.parse(text.toString());
+              } finally {
+                fs.rmSync(directory, { recursive: true, force: true });
+              }
+              const start = Date.parse(report.startedAt);
+              const generated = Date.parse(report.generatedAt);
+              const now = Date.now();
+              if (report.profile !== "pilot-v1" || report.complete !== true
+                  || report.stopped !== false || !Number.isFinite(start)
+                  || !Number.isFinite(generated) || start > generated || generated > now
+                  || now - generated > 36 * 60 * 60 * 1000
+                  || now - start >= 7 * 24 * 60 * 60 * 1000
+                  || !Number.isFinite(report.baselineArmToMergeP50Minutes)
+                  || report.baselineArmToMergeP50Minutes < 0
+                  || (report.armToMergeP50Minutes !== null
+                    && (!Number.isFinite(report.armToMergeP50Minutes)
+                      || report.armToMergeP50Minutes < 0
+                      || report.armToMergeP50Minutes > report.baselineArmToMergeP50Minutes + 20))) return;
+              core.setOutput("coverage_profile", "pilot-fast-v1");
+            } catch {
+              core.info("Pilot metrics unavailable; retaining complete PR coverage.");
+            }
+
+      - name: Fetch GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Resolve suite depth
         id: depth
         env:
@@ -184,6 +310,102 @@ jobs:
               ;;
           esac
 
+      - name: Check completed suite depth
+        id: completed-depth
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
+          COVERAGE_PROFILE: ${{ steps.pilot.outputs.coverage_profile }}
+          QUEUE_DEPTH: ${{ steps.depth.outputs.queue_depth }}
+        with:
+          retries: 0
+          script: |
+            core.setOutput("run_required", "true");
+            if (context.eventName === "pull_request" && context.payload.action === "enqueued") {
+              core.setOutput("run_required", "false");
+              core.setOutput("queue_validation", "true");
+              return;
+            }
+            const queue = context.eventName === "merge_group" && process.env.QUEUE_DEPTH === "thin";
+            if (queue) core.setOutput("normal_completion", "required");
+            let pr = context.payload.pull_request;
+            const depth = queue ? "fast" : process.env.SUITE_DEPTH;
+            if (queue) {
+              const match = /^refs\/heads\/gh-readonly-queue\/[^/]+\/pr-([0-9]+)-[a-f0-9]{40}$/.exec(context.payload.merge_group?.head_ref || "");
+              if (!match || !/^[a-f0-9]{40}$/.test(context.payload.merge_group?.head_sha || "")) return;
+              try {
+                const { data } = await github.rest.pulls.get({
+                  ...context.repo, pull_number: Number(match[1]), request: { timeout: 10000 },
+                });
+                if (data.number !== Number(match[1])) return;
+                pr = data;
+              } catch {
+                core.info("Queued PR evidence unavailable; requiring deferred checks.");
+                return;
+              }
+            }
+            if ((!queue && context.eventName !== "pull_request") || !pr
+                || !["fast", "full"].includes(depth)
+                || typeof pr.title !== "string"
+                || (pr.body != null && typeof pr.body !== "string")
+                || !Array.isArray(pr.labels)
+                || !Number.isSafeInteger(pr.number)
+                || !Number.isSafeInteger(pr.head?.repo?.id)
+                || !/^[a-f0-9]{40}$/.test(pr.head?.sha || "")
+                || !/^[a-f0-9]{40}$/.test(pr.base?.sha || "")) return;
+            const proof = Array.isArray(pr.labels)
+              && pr.labels.some((label) => label.name === "prove-fix");
+            const scope = require("node:crypto").createHash("sha256")
+              .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
+            const profile = queue ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
+            const marker = `ci-completed-v4-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+            if (!queue) core.setOutput("marker", marker);
+            if (!queue && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
+            try {
+              if (queue) {
+                const { data: comparison } = await github.rest.repos.compareCommits({
+                  ...context.repo, base: pr.head.sha, head: context.payload.merge_group.head_sha,
+                  request: { timeout: 10000 },
+                });
+                if (!["ahead", "identical"].includes(comparison.status)
+                    || comparison.merge_base_commit?.sha !== pr.head.sha) return;
+              }
+              const { data } = await github.rest.actions.listArtifactsForRepo({
+                ...context.repo, name: marker, per_page: 100,
+                request: { timeout: 10000 },
+              });
+              if (!Array.isArray(data.artifacts)) return;
+              const completed = data.artifacts.find((artifact) =>
+                typeof artifact?.name === "string"
+                && artifact.name === marker
+                && artifact.expired === false
+                && Date.parse(artifact.expires_at) > Date.now()
+                && artifact.workflow_run?.head_sha === pr.head.sha
+                && artifact.workflow_run?.head_repository_id === pr.head.repo.id
+                && Number.isSafeInteger(artifact.workflow_run?.id)
+                && artifact.workflow_run.id > 0
+                && artifact.workflow_run.id !== context.runId);
+              if (!completed) return;
+              const sourceId = completed.workflow_run.id;
+              const { data: sourceRun } = await github.rest.actions.getWorkflowRun({
+                ...context.repo, run_id: sourceId,
+                request: { timeout: 10000 },
+              });
+              if (sourceRun.id !== sourceId || sourceRun.head_sha !== pr.head.sha
+                  || sourceRun.event !== "pull_request"
+                  || sourceRun.path !== ".github/workflows/ci.yml"
+                  || sourceRun.status !== "completed"
+                  || sourceRun.conclusion !== "success") return;
+              if (queue) {
+                core.setOutput("normal_completion", "complete");
+                return;
+              }
+              core.setOutput("completed_run_id", String(sourceId));
+              core.setOutput("run_required", "false");
+            } catch {
+              core.info("Completed-depth evidence unavailable; running CI.");
+            }
+
       - name: Check if PR is trusted
         id: check
         env:
@@ -222,14 +444,14 @@ jobs:
           fi
           queued_number="${BASH_REMATCH[1]}"
           read -r queued_head_repo queued_head_sha < <(
-            gh api "repos/$BASE_REPO/pulls/$queued_number" --jq '.head.repo.full_name + " " + .head.sha'
+            bash "$GH_RETRY_SCRIPT" api "repos/$BASE_REPO/pulls/$queued_number" --jq '.head.repo.full_name + " " + .head.sha'
           )
           if [[ "$queued_head_repo" == "$BASE_REPO" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           passed_runs=$(
-            gh api "repos/$BASE_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=$queued_head_sha" \
+            bash "$GH_RETRY_SCRIPT" api "repos/$BASE_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=$queued_head_sha" \
               --jq '.total_count'
           )
           if [[ "${passed_runs:-0}" -gt 0 ]]; then
@@ -242,8 +464,11 @@ jobs:
 
       - name: Checkout
         if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (
           steps.check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch'
+          )
         # Full history for merge-base diffs, but blobless: commits and trees
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
@@ -257,11 +482,12 @@ jobs:
 
       - name: Resolve browser image
         id: browser-image
-        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for heavy job planning
-        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
+        id: planner-bun
+        if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -269,7 +495,7 @@ jobs:
 
       - name: Install heavy planner dependencies
         timeout-minutes: 3
-        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
+        if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
@@ -287,7 +513,7 @@ jobs:
       # older main commit that predates this planner.
       - name: Derive heavy jobs
         id: heavy-plan
-        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
+        if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
@@ -297,7 +523,7 @@ jobs:
 
       - name: Plan release marketing screenshots
         id: marketing-release
-        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -336,7 +562,7 @@ jobs:
           echo "required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for dependency scope
-        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.planner-bun.outcome == 'skipped' && steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -344,8 +570,11 @@ jobs:
 
       - name: Check changed file scope
         if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (
           steps.check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch'
+          )
         id: changed-files
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -385,8 +614,11 @@ jobs:
               e2e_production_required=true
             fi
             release_typecheck_required=false
-            if [[ "${HEAVY_ONLY:-false}" == true ]] && ! git diff --quiet HEAD^ HEAD -- VERSION; then
-              release_typecheck_required=true
+            if [[ "${HEAVY_ONLY:-false}" == true ]]; then
+              # Exercise release compiler memory and timing before VERSION changes.
+              if [[ "$EVENT_NAME" == schedule ]] || ! git diff --quiet HEAD^ HEAD -- VERSION; then
+                release_typecheck_required=true
+              fi
             fi
             route_smoke_required=false
             if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "merge_group" || "${HEAVY_ONLY:-false}" == true ]]; then
@@ -407,6 +639,7 @@ jobs:
               echo "service_suites_pr_required=true"
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
+              echo "desktop_browser_required=true"
               echo "e2e_core_required=true"
               echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
@@ -420,6 +653,8 @@ jobs:
               echo "mobile_build_required=true"
               echo "model_catalog_drift_required=true"
               echo "package_checks_required=true"
+              echo "docs_checks_required=false"
+              echo 'docs_changed_files=[]'
               echo "published_exports_required=true"
               echo "release_typecheck_required=$release_typecheck_required"
               echo "route_tree_required=true"
@@ -451,6 +686,7 @@ jobs:
               echo "service_suites_pr_required=false"
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
+              echo "desktop_browser_required=false"
               echo "e2e_core_required=false"
               echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
@@ -464,6 +700,8 @@ jobs:
               echo "mobile_build_required=false"
               echo "model_catalog_drift_required=false"
               echo "package_checks_required=true"
+              echo "docs_checks_required=false"
+              echo 'docs_changed_files=[]'
               echo "published_exports_required=false"
               echo "release_typecheck_required=false"
               echo "route_smoke_required=false"
@@ -480,17 +718,26 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
+          # Path scopes for the build/smoke jobs, computed here so a job whose
+          # scope did not change is skipped entirely instead of scheduling a
+          # runner just to decide it has nothing to do.
           package_checks_required=true
-          if [[ "$EVENT_NAME" == pull_request ]]; then
+          if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
             package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${changed_files[@]}") || package_scope=true
             if [[ "$package_scope" == false ]]; then
               package_checks_required=false
             fi
           fi
 
-          # Path scopes for the build/smoke jobs, computed here so a job whose
-          # scope did not change is skipped entirely instead of scheduling a
-          # runner just to decide it has nothing to do.
+          docs_checks_required=false
+          docs_changed_files='[]'
+          if [[ "$package_checks_required" == false ]]; then
+            docs_changed_files=$(printf '%s\0' "${changed_files[@]}" | jq -Rsc 'split("\u0000")[:-1] | map(select(test("\\.mdx?$")))')
+            if [[ "$docs_changed_files" != '[]' ]]; then
+              docs_checks_required=true
+            fi
+          fi
+
           # A crashed detector cannot certify a plan. Reject its exit status
           # or malformed output before any empty scope can skip a suite.
           if ! service_suite_scopes=$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}"); then
@@ -506,6 +753,13 @@ jobs:
           service_suites_pr_required=false
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
+          fi
+          desktop_browser_required=$(bun scripts/ci-package-scope.ts --desktop-browser "${changed_files[@]}") || desktop_browser_required=true
+          if [[ "$desktop_browser_required" != false ]]; then
+            desktop_browser_required=true
+          fi
+          if [[ "$package_checks_required" == false ]]; then
+            desktop_browser_required=false
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
@@ -759,6 +1013,7 @@ jobs:
             echo "service_suites_pr_required=$service_suites_pr_required"
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
+            echo "desktop_browser_required=$desktop_browser_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
@@ -772,6 +1027,8 @@ jobs:
             echo "mobile_build_required=$mobile_build_required"
             echo "model_catalog_drift_required=$model_catalog_drift_required"
             echo "package_checks_required=$package_checks_required"
+            echo "docs_checks_required=$docs_checks_required"
+            echo "docs_changed_files=$docs_changed_files"
             echo "published_exports_required=$published_exports_required"
             echo "release_typecheck_required=$release_typecheck_required"
             echo "route_smoke_required=$route_smoke_required"
@@ -789,18 +1046,23 @@ jobs:
 
       - name: Install API test planner dependencies
         id: api-test-deps
+        # Both planners retain full coverage when installation is unavailable.
+        continue-on-error: true
         if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (
           steps.check.outputs.trusted == 'true'
-          && github.event_name == 'pull_request'
+          && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
           && steps.changed-files.outputs.package_checks_required == 'true'
           && steps.changed-files.outputs.api_scope_unknown != 'true'
+          )
         run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Select affected API test files
         id: api-test-selection
-        if: steps.api-test-deps.outcome == 'success'
+        if: steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'pull_request' && steps.api-test-deps.outcome == 'success'
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -812,8 +1074,51 @@ jobs:
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Select affected Postgres test files
+        id: postgres-test-plan
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && steps.api-test-deps.outcome == 'success'
+          && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+        run: |
+          # The graph reads ignored runtime aggregates even after --ignore-scripts.
+          if ! (
+            timeout --kill-after=10s 120s bun --cwd=packages/cli run codegen:runtime &&
+            timeout --kill-after=10s 120s bun --cwd=apps/api run generate:capability-runtime &&
+            timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts
+          ); then
+            echo 'postgres_test_selection={"mode":"all"}' >> "$GITHUB_OUTPUT"
+            echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summarize Postgres test selection
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        env:
+          SELECTION: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
+          REASON: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
+        run: |
+          {
+            printf '### Postgres test selection\n\n'
+            printf '%s\n\n' "$REASON"
+            jq -r 'if .mode == "selected" then .files[] | "- " + tojson elif .mode == "all" then "full" else .mode end' <<< "$SELECTION"
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf 'Postgres selection: %s\nReason: %s\n' "$SELECTION" "$REASON"
+
+      - name: Derive deferred queue checks
+        id: pilot-queue-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'
+        run: bun scripts/ci-pr-pilot-plan.ts .github/workflows/ci.yml queue >> "$GITHUB_OUTPUT"
+
+      - name: Derive pilot fast prerequisites
+        id: pilot-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.pilot.outputs.coverage_profile == 'pilot-fast-v1'
+        run: bun scripts/ci-pr-pilot-plan.ts .github/workflows/ci.yml >> "$GITHUB_OUTPUT"
+
       - name: Plan API test files and shards
-        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         id: api-tests
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -895,6 +1200,8 @@ jobs:
     name: Sandbox Docker and image dependency checks
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
@@ -903,6 +1210,7 @@ jobs:
       && (needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
+      )
       )
       )
     runs-on: ubuntu-24.04
@@ -1155,10 +1463,16 @@ jobs:
   parser-version-guard:
     needs: ci-plan
     if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && (
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
-        needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch'
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+      )
+      )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1241,8 +1555,14 @@ jobs:
   ci-generated-sources:
     needs: ci-plan
     if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && (
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.package_checks_required == 'true'
+      )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1320,13 +1640,99 @@ jobs:
               run_id: context.runId,
             });
 
+  ci-checks-docs:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
+      inputs.heavy_only != true
+      && needs.ci-plan.outputs.trusted == 'true'
+      && needs.ci-plan.outputs.docs_checks_required == 'true'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: "package.json"
+          save: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install dependencies
+        id: install
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Check changed Markdown consumers
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun scripts/ci-package-scope.ts --run-markdown-checks
+        env:
+          CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
+      - name: Cancel failed merge-group run
+        if: failure() && github.event_name == 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            let diagnostic;
+            let evidenceTimer;
+            try {
+              const jobs = await Promise.race([
+                github.paginate(
+                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+                  {
+                    ...context.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    per_page: 100,
+                    request: { timeout: 10000 },
+                  },
+                ),
+                new Promise((_, reject) => {
+                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
+                }),
+              ]);
+              const failures = jobs.flatMap((job) => (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
+            } catch {
+              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
+            } finally {
+              clearTimeout(evidenceTimer);
+            }
+            core.error(diagnostic);
+            try {
+              core.summary.addRaw(`${diagnostic}\n`);
+              await core.summary.write();
+            } catch {
+              core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            await github.rest.actions.cancelWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            });
+
   ci-checks-generated:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
+      )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # Include uncached API generation and its two-pass determinism check.
@@ -1401,7 +1807,12 @@ jobs:
         # change cannot silently ship stale CLI, web approval, or skill behavior.
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
+          set -euo pipefail
           bun scripts/ci-generated-sources.ts prepare
+          # Regeneration guards intentionally modify inputs and report their diff.
+          # Validate the artifact first, then use ordinary generation in this leg.
+          unset CI_GENERATED_SOURCES_MANIFEST
+          echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"
           (cd packages/cli && bun run codegen)
           (cd packages/cli && bun run codegen:runtime)
           git diff --exit-code -- \
@@ -1417,14 +1828,14 @@ jobs:
             packages/api-contract/src/mcp-chat-tool-policy.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
-      - name: MCP App bundle guard
+      - name: MCP App bundle and shared assets guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The API serves the committed single-file bundle, not the TypeScript
         # source. Regenerate it and fail on any diff so source tests and the
         # production resource cannot silently exercise different app code.
         run: |
           (cd apps/api && bun run build:mcp-apps)
-          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
+          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt" "apps/api/src/mcp/apps/shared/generated/*"
 
       - name: Visual sandbox document tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -1532,10 +1943,14 @@ jobs:
   ci-checks-policy:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
+      )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # 25m, matching code-quality.
@@ -1676,6 +2091,16 @@ jobs:
           bun apps/api/scripts/deployment-feature-guard.ts --self-test
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
+      - name: GitHub API command ownership
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
+          bun scripts/check-gh-retry.ts
+
+      - name: SHA-256 migration ledger
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
+
       - name: Custom lint rule coverage
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
@@ -1798,10 +2223,14 @@ jobs:
   ci-checks-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
+      )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # 25m, matching code-quality.
@@ -1890,7 +2319,7 @@ jobs:
       - name: Changeset present for published package changes
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@167fb396c6c0f4e07296ad2cd72e6ef15367c776 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -1998,6 +2427,53 @@ jobs:
           git checkout -- apps/web/e2e/network-baseline.json
           rm -f apps/web/e2e/.network-baseline-*
 
+      - name: Prepare environment
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Content delivery declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The guard follows handler imports into the gitignored capability
+        # runtime modules, so generate them first instead of skipping them.
+        run: |
+          bun scripts/ci-generated-sources.ts prepare
+          bun apps/api/scripts/content-delivery-guard.ts --self-test
+          bun apps/api/scripts/content-delivery-guard.ts
+
+      # Three measured long checks use isolated temporary fixtures. Keep one
+      # of the four runner CPUs available for the foreground checks.
+      - name: Test capability shard merge and package parity
+        id: capability_parity
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 153.3 s; 400 s allows about 2.5x contention headroom.
+        run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
+
+      # Root script tests belong to no workspace package, so no scoped test
+      # run reaches them. Other steps call some by path; this runs every
+      # other one, so a new test cannot miss CI by missing a step.
+      - name: Test remaining repository scripts
+        id: remaining_scripts
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
+        run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
+
+      - name: Test release image CI gate
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
+        run: bun test --timeout 50000 scripts/ci-plan.test.ts
+
       - name: Workspace hygiene
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Restored from the bun postinstall lifecycle, which is bypassed
@@ -2065,20 +2541,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run check:railway-template
 
-      - name: Prepare environment
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # `cp`, not `mv`: renaming the tracked .env.example dirties the
-        # working tree in apps/api and apps/web, and `turbo --affected`
-        # counts working-tree changes — so every PR (even web-only ones)
-        # ran the api AND web test suites concurrently and could OOM the
-        # runner (exit 137). The copy leaves the tree clean; .env is
-        # gitignored and invisible to affected-detection.
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
-
       - name: Check i18n sync
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run i18n:check
@@ -2144,7 +2606,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: bun scripts/sql-perf-suppressions.ts
 
-      - name: Release marketing staleness warning
+      - name: Release marketing provenance warning
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -2153,8 +2615,8 @@ jobs:
             echo "VERSION unchanged; fresh release recordings not required."
             exit 0
           fi
-          if ! bun run marketing:stale --strict; then
-            echo "::warning::Stale marketing recordings for this release (see step log). Re-record with \`bun run marketing:reshoot\`."
+          if ! bun run marketing:provenance --strict; then
+            echo "::warning::Changed marketing recording provenance for this release (see step log). Re-record with \`bun run marketing:reshoot\`."
           fi
 
       - name: Rust format
@@ -2330,11 +2792,23 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
 
+      - name: Outbound transport ownership
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/outbound-transport-ownership.ts --check
+          bun test scripts/outbound-transport-ownership.test.ts
+
       - name: Module ownership invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Invariants the ownership table cannot state itself, such as
         # allowlists kept equal to their source lists.
         run: bun test scripts/ownership.test.ts
+
+      - name: Generated artifact formatting invariants
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # One formatter batch per check keeps the generated docs in step with
+        # their owners without a formatter process per row.
+        run: bun test scripts/generated-artifacts.test.ts
 
       - name: Schema introspection invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2360,14 +2834,6 @@ jobs:
         # packages/ui/src/styles/theme.css, so a token change that skips the
         # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
         run: bun scripts/design-tokens-doc.ts --check
-
-      - name: Generated files manifest guard
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # Guard A registers tracked generated files; Guard B checks the
-        # manifest entries with offline checks against committed outputs.
-        run: |
-          bun scripts/generated-files-guard.ts --guard-a
-          bun scripts/generated-files-guard.ts --guard-b
 
       - name: Suppression waiver ledger
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2426,6 +2892,32 @@ jobs:
           bun run --cwd packages/scripts test ../../scripts/transfer-read-guard.test.ts
           bun scripts/transfer-read-guard.ts
 
+      # Join both long checks before reusing their background slots.
+      - name: Wait for capability and repository checks
+        wait: [capability_parity, remaining_scripts]
+
+      # The api test runner only globs `src/**`, so the tests beside the api
+      # scripts (seed guards, AI provider canary, MCP coverage) need an
+      # explicit invocation to run in CI, like the scripts tests above. The
+      # glob keeps a new scripts test from landing unrun. Gated on workspace
+      # checks so it is skipped on workflow-only PRs where dependencies are
+      # not installed.
+      - name: Test api scripts
+        id: api_scripts
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 4.57 s; 12 s allows about 2.5x contention headroom.
+        run: >-
+          bun test --timeout 12000 --preload ./apps/api/src/tests/setup-env.ts
+          apps/api/scripts/*.test.ts
+
+      - name: Test CLI runtime package parity
+        id: cli_runtime_parity
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
+        run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
         # These fetch models.dev and OpenRouter and byte-compare the
@@ -2479,15 +2971,6 @@ jobs:
         run: |
           bun apps/api/scripts/mcp-coverage-guard.ts --self-test
           bun apps/api/scripts/mcp-coverage-guard.ts
-
-      - name: Content delivery declarations
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # The guard follows handler imports into the gitignored capability
-        # runtime modules, so generate them first instead of skipping them.
-        run: |
-          bun scripts/ci-generated-sources.ts prepare
-          bun apps/api/scripts/content-delivery-guard.ts --self-test
-          bun apps/api/scripts/content-delivery-guard.ts
 
       - name: MCP surface baseline self-test
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2562,6 +3045,11 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/stage-web-runtime.test.ts
 
+      - name: Check Docker source closure
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        timeout-minutes: 1
+        run: timeout 30s bun test scripts/docker-source-closure.test.ts
+
       # The same transformation decides what every published tarball exports.
       # Its unit coverage is what keeps a malformed source map — a wildcard, a
       # conditions object, a target outside src, a missing root — out of a
@@ -2599,9 +3087,32 @@ jobs:
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
 
-      - name: Test release image CI gate
+      # Join this pair before starting the remaining background checks.
+      - name: Wait for API scripts and CLI runtime checks
+        wait: [api_scripts, cli_runtime_parity]
+
+      - name: Generated files manifest guard
+        id: generated_manifest
+        background: true
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/ci-plan.test.ts
+        # Guard A registers tracked generated files; Guard B checks the
+        # manifest entries with offline checks against committed outputs.
+        run: |
+          bun scripts/generated-files-guard.ts --guard-a
+          bun scripts/generated-files-guard.ts --guard-b
+
+      - name: Playwright config scope
+        id: playwright_scope
+        background: true
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Lists every Playwright config from its package. A spec that does not
+        # load, or a project that collects another package's specs, fails here
+        # on the pull request instead of failing every e2e shard in the queue.
+        # The fixture tests run first so a broken guard cannot pass silently.
+        # Pilot fixture tests stayed below 1 ms; retain the 5 s default explicitly.
+        run: |
+          bun test --timeout 5000 scripts/check-playwright-config-scope.test.ts
+          bun run check:playwright-config-scope
 
       - name: Test documentation and landing CI scope
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2631,6 +3142,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/check-test-retries.ts
 
+      - name: Keep tests off history walks
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-test-history-walks.test.ts
+
       - name: Test dependency malware scanners
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/osv-scanner-install.test.ts scripts/scan-dependency-malware.test.ts scripts/report-dependency-malware-failure.test.ts
@@ -2638,18 +3153,6 @@ jobs:
       - name: Test maintenance release preparation
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/prepare-maintenance-release.property.test.ts
-
-      # The api test runner only globs `src/**`, so the tests beside the api
-      # scripts (seed guards, AI provider canary, MCP coverage) need an
-      # explicit invocation to run in CI, like the scripts tests above. The
-      # glob keeps a new scripts test from landing unrun. Gated on workspace
-      # checks so it is skipped on workflow-only PRs where dependencies are
-      # not installed.
-      - name: Test api scripts
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: >-
-          bun test --preload ./apps/api/src/tests/setup-env.ts
-          apps/api/scripts/*.test.ts
 
       - name: Test API and CLI contract invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2688,6 +3191,19 @@ jobs:
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
 
+      - name: Test main network recording selection
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/network-baseline-selection.test.ts
+
+      - name: Test autofix decision boundaries
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/check-autofix-test-durations.test.ts scripts/autofix-protected-paths.test.ts
+
+      # The fixture executes the installed linter and native compiler.
+      - name: Test type-aware autofix
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/autofix-type-aware.test.ts
+
       - name: Test install-free CI commands
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/install-free-ci.test.ts
@@ -2705,14 +3221,6 @@ jobs:
       - name: Test CLI release coupling gate
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/check-cli-release-coupling.test.ts
-
-      - name: Test CLI runtime package parity
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
-
-      - name: Test capability shard merge and package parity
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
       - name: Test CLI contract changeset guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2745,6 +3253,16 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/pull-base-images.test.sh
 
+      - name: Verify runner tool availability
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: |
+          bun scripts/check-ci-runner-tools.ts . stella/stella
+          bun test scripts/check-ci-runner-tools.test.ts
+
+      - name: Test preview scope tool availability
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/visual-preview-scope.test.ts
+
       # Both guards decide whether a change may reach a live database or the
       # default branch, and both fail open if their comparison logic breaks:
       # a migration identity check that always returns null passes every PR,
@@ -2758,6 +3276,10 @@ jobs:
           bun scripts/check-ci-event-policy.ts
           bun test scripts/check-ci-event-policy.test.ts
 
+      - name: Test public document fetch
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/fetch-public-documents.test.ts
+
       - name: Test migration identity and merge gate logic
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
@@ -2769,6 +3291,14 @@ jobs:
         run: |
           bun test scripts/merge-bar-freshness.test.ts \
             scripts/merge-bar-arm-guard.test.ts scripts/merge-bar-disarm.test.ts
+
+      - name: Test merge queue jump-reset recovery
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/merge-bar-jump-reset.test.ts \
+            scripts/merge-bar-jump-reset-cli.test.ts \
+            scripts/merge-bar-jump-reset-handoff.test.ts \
+            scripts/merge-bar-jump-reset-requeue.test.ts
 
       # Check migration identity against the branch this run merges into. In a
       # merge group that is main as it stands at merge time.
@@ -2795,18 +3325,15 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/check-projection-totality.test.ts
 
+      - name: Test aggregate inventories
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
+
       - name: Office fixture metadata
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun run check:office-fixture-metadata
           bun --filter @stll/docx-utils test:office-fixture-metadata
-
-      # Root script tests belong to no workspace package, so no scoped test
-      # run reaches them. The steps above call some by path; this runs every
-      # other one, so a new test cannot miss CI by missing a step.
-      - name: Test remaining repository scripts
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun scripts/run-unlisted-script-tests.ts
 
       # Fail PRs that change the desktop bridge surface without
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
@@ -2814,6 +3341,10 @@ jobs:
       - name: Bridge-version guard
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request') }}
         run: bash scripts/check-bridge-version.sh
+
+      # Surface background failures before failure-triggered cancellation.
+      - name: Wait for independent repository checks
+        wait-all:
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
@@ -2866,11 +3397,15 @@ jobs:
   ci-tests:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       (github.event_name != 'merge_group'
        || needs.ci-plan.outputs.queue_depth != 'thin')
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
+      )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
     # 25m per shard, the budget the serial job carried for the whole suite. It
@@ -3111,19 +3646,14 @@ jobs:
   ci-browser:
     needs: ci-plan
     if: >-
-      github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && ((needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.suite_depth == 'full'
-      )
-      )
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
+      && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        suite: [desktop, ui]
+        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       options: --init --ipc=host
@@ -3143,8 +3673,14 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           submodules: true
 
+      - name: Check desktop browser test scope
+        id: desktop-browser-tests
+        env:
+          REQUIRED: ${{ needs.ci-plan.outputs.desktop_browser_required }}
+        run: echo "required=$REQUIRED" >> "$GITHUB_OUTPUT"
+
       - name: Check UI browser test scope
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
         id: ui-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -3181,7 +3717,7 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Check extension browser test scope
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
         id: extension-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -3204,7 +3740,7 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         env:
           NPM_TOKEN: ""
         # The Playwright image has npm but no unzip. Install Bun's native
@@ -3222,20 +3758,20 @@ jobs:
 
       # setup-bun reuses the matching ~/.bun/bin/bun above, avoiding unzip.
       - name: Restore Bun install cache
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Turbo remote cache
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
 
       - name: Install dependencies
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -3243,7 +3779,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         # `cp`, not `mv`: renaming the tracked .env.example would dirty the
         # working tree in apps/api and apps/web. .env is gitignored.
         run: |
@@ -3253,7 +3789,7 @@ jobs:
           cp .env.example .env
 
       - name: Install UI browser test runtime
-        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
           # The pinned image includes both desktop engines and screenshot fonts.
@@ -3268,7 +3804,7 @@ jobs:
         run: bun --filter @stll/ui test:browser
 
       - name: Test desktop browser interactions
-        if: matrix.suite == 'desktop' && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
         run: |
@@ -3276,7 +3812,7 @@ jobs:
           bun run test:browser
 
       - name: Upload desktop browser failures
-        if: matrix.suite == 'desktop' && failure() && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'desktop' && failure() && steps.desktop-browser-tests.outputs.required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-browser-failures
@@ -3353,11 +3889,14 @@ jobs:
   code-quality-api:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.package_checks_required == 'true'
         && (needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch')
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -3480,11 +4019,14 @@ jobs:
   code-quality-web:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.package_checks_required == 'true'
         && (needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch')
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -3607,11 +4149,14 @@ jobs:
   code-quality-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.package_checks_required == 'true'
         && (needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch')
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -3702,6 +4247,16 @@ jobs:
       - name: Projection totality
         run: bun run check:projection-totality
 
+      - name: Aggregate ownership
+        run: |
+          bun run check:aggregate-locks
+          bun run check:aggregate-mutations
+
+      - name: Split-button census
+        run: |
+          bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts
+          bun run check:split-buttons
+
       - name: Database awaits in loops
         # Type-aware N+1 guard over the API source and scripts: an awaited
         # database call, a call handed a database handle, or a helper that
@@ -3788,7 +4343,9 @@ jobs:
   service-suites:
     needs: ci-plan
     if: >-
-      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
+      (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && (needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
@@ -3796,6 +4353,7 @@ jobs:
       && (needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -3862,13 +4420,30 @@ jobs:
         run: bun run src/db/migrate.ts
 
       - name: Run Postgres-gated API suites
+        id: postgres-tests
         if: needs.ci-plan.outputs.postgres_suites_required == 'true'
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          CI_POSTGRES_TEST_SELECTION: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
-        run: bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)'
+        run: bun run test:postgres --test-name-pattern='^(?!.*sanctions monitoring full-volume)' --reporter=junit --reporter-outfile="$RUNNER_TEMP/postgres-tests.xml"
+
+      - name: Check full Postgres failures for selector misses
+        timeout-minutes: 5
+        if: ${{ !cancelled() && inputs.heavy_only == true && steps.postgres-tests.outcome == 'failure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          POSTGRES_JUNIT_FILE: ${{ runner.temp }}/postgres-tests.xml
+        run: |
+          if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+            git fetch --filter=blob:none --no-tags --unshallow origin main
+          else
+            git fetch --filter=blob:none --no-tags origin main
+          fi
+          bun scripts/ci-postgres-selector-miss.ts
 
       - name: Start corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
@@ -3985,12 +4560,15 @@ jobs:
     # parity. See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -4128,6 +4706,8 @@ jobs:
   release-typecheck:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((github.event_name == 'pull_request'
@@ -4137,8 +4717,9 @@ jobs:
       && needs.ci-plan.outputs.trusted == 'true'
       )
       )
+      )
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     permissions:
       contents: read
       actions: write
@@ -4160,7 +4741,8 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Full release typecheck
-        run: bun run typecheck && bun run typecheck:repo
+        # Avoid overlapping compiler heaps for tasks that compile API sources.
+        run: bun run typecheck --concurrency=1 && bun run typecheck:repo
         env:
           TURBO_FORCE: "true"
 
@@ -4214,10 +4796,15 @@ jobs:
   fix-tests-on-base:
     needs: ci-plan
     if: >-
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'fix-tests-on-base')) && (
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name == 'pull_request'
       && contains(github.event.pull_request.labels.*.name, 'prove-fix')
       && needs.ci-plan.outputs.fix_tests_on_base_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
+      )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -4227,6 +4814,23 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Fetch GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -4260,7 +4864,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           body_file="$RUNNER_TEMP/pull-request-body.md"
-          gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' > "$body_file"
+          bash "$GH_RETRY_SCRIPT" api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' > "$body_file"
           # The checkout is the test merge: its first parent is the base.
           bun scripts/fix-tests-on-base.ts --base HEAD^1 --title "$PR_TITLE" --body-file "$body_file"
 
@@ -4278,11 +4882,14 @@ jobs:
   typecheck-baseline:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       inputs.heavy_only != true
       && (
         needs.ci-plan.outputs.package_checks_required == 'true'
         && (needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch')
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -4458,12 +5065,15 @@ jobs:
   web-build:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       inputs.heavy_only != true
       && (
         (needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch')
         && needs.ci-plan.outputs.web_build_required == 'true'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -4565,6 +5175,7 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -4621,11 +5232,14 @@ jobs:
   web-image-smoke:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -4739,12 +5353,15 @@ jobs:
   mobile-build:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.mobile_build_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -4829,11 +5446,14 @@ jobs:
   landing-build:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.landing_build_required == 'true'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -4917,10 +5537,13 @@ jobs:
   heavy-web-build:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && (needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.heavy_web_build_required == 'true'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -4955,15 +5578,20 @@ jobs:
 
   route-smoke:
     needs: [ci-plan, web-build, heavy-web-build]
+    # A thin merge group still runs the browser suites when the change needs
+    # them; QUEUE_BROWSER_SUITES=off turns that off without a commit.
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.route_smoke_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
       && (github.event_name == 'merge_group' || inputs.heavy_only == true)
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -5101,15 +5729,19 @@ jobs:
 
   e2e-production-shard:
     needs: [ci-plan, web-build, heavy-web-build]
+    # Admitted to thin merge groups like route-smoke (see there).
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_production_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -5194,6 +5826,17 @@ jobs:
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --grep-invert='route-smoke'
           --shard=${{ matrix.shard }}/2
+
+      # API-owned browser checks (visual sandbox) need the API from this stack
+      # but no web app; one shard runs them.
+      - name: Run API browser checks
+        if: >-
+          !cancelled()
+          && steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard == 1
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
         if: >-
@@ -5301,12 +5944,15 @@ jobs:
   stack-redaction-browsers:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -5398,12 +6044,15 @@ jobs:
   e2e-vite-canary:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -5637,12 +6286,15 @@ jobs:
   e2e-landing:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -5786,6 +6438,8 @@ jobs:
     # declare the producer so artifact consumers start only after it succeeds.
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && (always()
@@ -5795,6 +6449,7 @@ jobs:
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
       && (needs.ci-plan.outputs.web_build_required != 'true'
           || (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success'))
+      )
       )
       )
     uses: ./.github/workflows/marketing-screenshots.yml
@@ -5872,11 +6527,14 @@ jobs:
   e2e-report:
     needs: [ci-plan, e2e-production-shard, e2e-vite-canary]
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       !cancelled()
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && (needs.e2e-production-shard.result == 'failure'
           || needs.e2e-vite-canary.result == 'failure')
+      )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -5971,11 +6629,14 @@ jobs:
     name: API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.api_image_smoke_required == 'true'
+      )
       )
       )
     strategy:
@@ -6123,6 +6784,8 @@ jobs:
   legal-atlas-image:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
@@ -6131,6 +6794,7 @@ jobs:
       && (needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.legal_atlas_image_pr_required == 'true'))
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -6225,11 +6889,14 @@ jobs:
   windows-scripts:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.windows_scripts_required == 'true'
+      )
       )
       )
     runs-on: windows-latest
@@ -6336,11 +7003,14 @@ jobs:
     name: Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
       github.event_name != 'pull_request' && (
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
+      )
       )
       )
     strategy:
@@ -6510,8 +7180,13 @@ jobs:
   dependency-malware:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.queue_depth != 'thin'
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'dependency-malware')) && (
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
+      (needs.ci-plan.outputs.queue_depth != 'thin' || contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), 'dependency-malware'))
       && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true')
+      )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -6601,6 +7276,7 @@ jobs:
         dependency-malware,
         docker-checks,
         parser-version-guard,
+        ci-checks-docs,
         ci-checks-generated,
         ci-checks-policy,
         ci-checks-rest,
@@ -6638,6 +7314,23 @@ jobs:
       # A skipped plan passes only while the pull request is still a draft.
       pull-requests: read
     steps:
+      - name: Fetch GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
@@ -6649,12 +7342,19 @@ jobs:
           # in `needs`.
           NEEDS: ${{ toJSON(needs) }}
           PLAN: ${{ toJSON(needs.ci-plan.outputs) }}
+          RUN_REQUIRED: ${{ needs.ci-plan.outputs.run_required }}
+          COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
+          QUEUE_VALIDATION: ${{ needs.ci-plan.outputs.queue_validation }}
+          PR_ACTION: ${{ github.event.action }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
+          COVERAGE_PROFILE: ${{ needs.ci-plan.outputs.coverage_profile }}
+          PILOT_FAST_JOBS: ${{ needs.ci-plan.outputs.pilot_fast_jobs }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           HEAVY_JOBS: ${{ needs.ci-plan.outputs.heavy_jobs || '[]' }}
           QUEUE_DEPTH: ${{ needs.ci-plan.outputs.queue_depth || 'full' }}
           THIN_JOBS: ${{ needs.ci-plan.outputs.thin_jobs || '[]' }}
+          QUEUE_REQUIRED_JOBS: ${{ needs.ci-plan.outputs.queue_required_jobs || '[]' }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           # The ci-plan output each job's `if:` selects it by; null for a job
           # that always runs at full depth. scripts/ci-plan.test.ts binds each
@@ -6663,12 +7363,13 @@ jobs:
             {
             "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
-            "ci-browser": null,
-            "ci-generated-sources": null,
-            "ci-checks-generated": null,
-            "ci-checks-policy": null,
-            "ci-checks-rest": null,
-            "ci-tests": null,
+            "ci-browser": "ci_browser_required",
+            "ci-generated-sources": "package_checks_required",
+            "ci-checks-docs": "docs_checks_required",
+            "ci-checks-generated": "package_checks_required",
+            "ci-checks-policy": "package_checks_required",
+            "ci-checks-rest": "package_checks_required",
+            "ci-tests": "package_checks_required",
             "code-quality-api": "package_checks_required",
             "code-quality-web": "package_checks_required",
             "code-quality-rest": "package_checks_required",
@@ -6684,7 +7385,7 @@ jobs:
             "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
-            "parser-version-guard": null,
+            "parser-version-guard": "package_checks_required",
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
@@ -6701,12 +7402,26 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-generated-sources", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "parser-version-guard", "typecheck-baseline", "ci-tests"]
         run: |
+          if [[ "$QUEUE_DEPTH" == thin ]]; then
+            THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
+          fi
+          if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
+            FAST_REQUIRED="$PILOT_FAST_JOBS"
+          fi
+          if [[ "$EVENT" == pull_request ]] && jq -e '.postgres_pr_required == "true"' <<< "$PLAN" >/dev/null; then
+            FAST_REQUIRED=$(jq -cn --argjson required "$FAST_REQUIRED" '$required + ["service-suites"] | unique') || exit 1
+          fi
+          if [[ "$QUEUE_VALIDATION" == true && "$EVENT" == pull_request && "$PR_ACTION" == enqueued ]] &&
+            jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" >/dev/null; then
+            echo "Queued tree validation belongs to merge_group."
+            exit 0
+          fi
           # Read cancellation evidence before any early aggregation exit.
           cancelled_jobs=""
           if jq -e 'any(.[]; .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
-            cancelled_jobs=$(gh api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
+            cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
               echo "::error::Cancelled CI job failed-step lookup was unavailable."
               exit 1
             }
@@ -6739,10 +7454,10 @@ jobs:
           # job timed out. Every API lookup fails closed.
           cancelled_dependencies_were_superseded() {
             local current workflow created runs urls url annotations
-            current=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
+            current=$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
             workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
             created=$(jq -er '.created_at | select(type == "string" and length > 0) | @uri' <<< "$current") || return 1
-            runs=$(gh api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
+            runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/$workflow/runs?event=$EVENT&created=%3E%3D$created&per_page=100") || return 1
             jq -e --argjson current "$current" --arg event "$EVENT" --arg pr "$PR_NUMBER" '
               any(.[].workflow_runs[];
                 .workflow_id == $current.workflow_id and .name == $current.name and .event == $event
@@ -6760,7 +7475,7 @@ jobs:
             while IFS= read -r url; do
               [[ -n "$url" ]] || continue
               [[ "$url" == "https://api.github.com/repos/$REPO/check-runs/"* ]] || return 1
-              annotations=$(gh api --paginate --slurp "$url/annotations?per_page=100") || return 1
+              annotations=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "$url/annotations?per_page=100") || return 1
               jq -e '
                 flatten
                 | any(.[]; (.message // "") | contains("has exceeded the maximum execution time")) | not
@@ -6776,7 +7491,7 @@ jobs:
           if [[ "$PLAN_RESULT" == "skipped" ]]; then
             draft=""
             if [[ "$EVENT" == "pull_request" ]]; then
-              draft="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .draft)"
+              draft="$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/pulls/$PR_NUMBER" --jq .draft)"
             fi
             if [[ "$draft" == "true" ]]; then
               echo "CI plan skipped for a draft pull request. Passing."
@@ -6814,6 +7529,14 @@ jobs:
           if [[ "$QUEUE_DEPTH" == thin ]] && ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' <<< "$THIN_JOBS" > /dev/null; then
             echo "::error::Thin queue has no derived required job set."
             exit 1
+          fi
+          if [[ "${RUN_REQUIRED:-true}" == false ]]; then
+            if [[ "$EVENT" != pull_request || ! "$COMPLETED_RUN_ID" =~ ^[1-9][0-9]*$ ]] || ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then
+              echo "::error::Invalid completed-depth reuse or unexpected dependency outcome."
+              exit 1
+            fi
+            echo "CI validation already completed for this head, base and depth."
+            exit 0
           fi
           case "$SUITE_DEPTH" in
             full)
@@ -6904,6 +7627,23 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           STELLA_MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
         run: bash scripts/check-main-merge-hold.sh
+
+      # Only an actual validated PR run publishes evidence; reuse never renews it.
+      - name: Record completed suite depth
+        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != ''
+        env:
+          MARKER_PATH: ${{ runner.temp }}/ci-completed-depth.txt
+        run: printf 'validated\n' > "$MARKER_PATH"
+
+      - name: Publish completed suite depth
+        if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.ci-plan.outputs.completion_marker }}
+          overwrite: true
+          path: ${{ runner.temp }}/ci-completed-depth.txt
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Cancel failed merge-group run
         if: failure() && github.event_name == 'merge_group'

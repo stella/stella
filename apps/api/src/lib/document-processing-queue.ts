@@ -119,6 +119,7 @@ import {
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
+import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
@@ -528,9 +529,9 @@ const persistOcrProjection = async ({
       )
       .limit(1)
       .for("update");
-    // Keep every OCR path on entity -> workspace -> run. Version replacement,
-    // workspace sealing, manual requests, and projection persistence can then
-    // contend without forming a lock cycle.
+    // NO KEY UPDATE serializes workspace status changes while remaining
+    // compatible with parent KEY SHARE locks held by projection writers.
+    // OCR does not need to exclude foreign-key child inserts.
     const workspaceRows = await tx
       .select({ status: workspaces.status })
       .from(workspaces)
@@ -541,7 +542,7 @@ const persistOcrProjection = async ({
         ),
       )
       .limit(1)
-      .for("update");
+      .for("no key update");
     const ownedClaims = await tx
       .update(documentProcessingRuns)
       .set({ claimedAt: new Date(), updatedAt: new Date() })
@@ -719,6 +720,7 @@ const completeDocumentProcessingRun = async ({
       deadlineScoutAttemptCount: 0,
       deadlineScoutClaimedAt: null,
       deadlineScoutErrorCode: null,
+      deadlineScoutSkippedUntil: null,
       deadlineScoutStatus: shouldDispatchDeadlineScout
         ? "pending"
         : "not_requested",
@@ -888,7 +890,7 @@ export const processDocumentProcessingRun = async (
     }
 
     // This row lock is the dispatch fence. Workspace archive/delete obtains
-    // the same lock before transitioning away from active and refuses to
+    // a conflicting lock before transitioning away from active and refuses to
     // seal while a run is `running`, so a worker cannot begin OCR after the
     // workspace has become unavailable.
     const workspaceRows = await tx
@@ -901,7 +903,7 @@ export const processDocumentProcessingRun = async (
         ),
       )
       .limit(1)
-      .for("update");
+      .for("no key update");
     const workspace = workspaceRows.at(0);
     const workspaceDispatch = classifyOcrWorkspaceDispatch({
       requestSource: runContext.requestSource,
@@ -1859,7 +1861,12 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   const pending = await database
     .select({ sourceRunId: documentProcessingRuns.id })
     .from(documentProcessingRuns)
-    .where(eq(documentProcessingRuns.deadlineScoutStatus, "pending"))
+    .where(
+      and(
+        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+        deadlineScoutDue(new Date()),
+      ),
+    )
     .orderBy(
       asc(documentProcessingRuns.updatedAt),
       asc(documentProcessingRuns.id),

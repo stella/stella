@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -12,6 +12,8 @@ import {
   avtViewAccessStatus,
 } from "@/api/lib/auth/feature-access/view-eligibility";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -92,9 +94,11 @@ const createViewTemplate = createSafeHandler(
 
     const insertResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}), hashtext(${user.id}))`,
-        );
+        await withAggregateLock({
+          aggregate: "personalCatalog",
+          id: { organizationId: session.activeOrganizationId, userId: user.id },
+          tx,
+        });
 
         const existingCount = await tx.$count(
           workspaceViewTemplates,
@@ -202,5 +206,10 @@ const createViewTemplate = createSafeHandler(
     return Result.ok({ id: insertResult.id });
   },
 );
+
+declareAggregateMutation(createViewTemplate.handler, {
+  type: "aggregate",
+  aggregates: ["personalCatalog"],
+});
 
 export default createViewTemplate;

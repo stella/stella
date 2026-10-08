@@ -148,6 +148,7 @@ type Messages = {
       "useBackupCode": "Use a backup code instead";
     };
     "useDifferentEmail": "Use a different email";
+    "usePassword": "Use a password instead";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";
   };
   "avt": {
@@ -351,6 +352,7 @@ type Messages = {
     };
     "view": {
       "chooseList": "Choose a list";
+      "createList": "Create a list";
       "evidenceList": "Facts from";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
@@ -1055,6 +1057,7 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "activateGeneratedView": "Interact with this view";
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -1200,6 +1203,8 @@ type Messages = {
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
     "forkingThread": "Creating a new chat…";
+    "generatedView": "Generated view";
+    "generatedViewDrill": "Search decisions with court filter {court} and year {year}.";
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
@@ -1331,6 +1336,7 @@ type Messages = {
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.";
     "sendPrompt": "Send message";
+    "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {
       "scope": {
@@ -1478,6 +1484,14 @@ type Messages = {
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
+    };
+    "turnNotification": {
+      "failedBody": "A chat reply in stella did not finish.";
+      "failedTitle": "Reply failed";
+      "needsInputBody": "A chat is waiting for your approval or answer.";
+      "needsInputTitle": "stella needs your input";
+      "replyReadyBody": "stella finished answering in your chat.";
+      "replyReadyTitle": "Reply ready";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -1693,6 +1707,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";
@@ -1828,6 +1843,8 @@ type Messages = {
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
+    "openInStella": "Open in stella";
+    "openOriginalSource": "Open original source";
     "options": "Options";
     "or": "Or";
     "organization": "Organization";
@@ -2359,6 +2376,7 @@ type Messages = {
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
+      "fileSecurityRejected": "The file was rejected by a security check. Remove the flagged content and upload a cleaned copy.";
       "forbidden": "You do not have permission to do this.";
       "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.";
       "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.";
@@ -4375,6 +4393,11 @@ type Messages = {
       "betaInbox": "Inbox & notifications";
       "betaInboxDescription": "Show the Inbox and the notification bell";
       "betaTimeBillingDescription": "Show time tracking, invoices, and expenses";
+      "chatNotifications": "Chat notifications";
+      "chatNotificationsBlocked": "Notifications are blocked for stella in this browser. Allow them in the browser’s site settings.";
+      "chatNotificationsDescription": "Get a notification from this browser when a chat reply finishes while stella is in the background.";
+      "chatNotificationsToggle": "Notify me when a reply is ready or needs my input";
+      "chatNotificationsUnsupported": "This browser does not support notifications.";
       "confirmDelete": "Confirm delete account";
       "dangerZone": "Danger zone";
       "dangerZoneDescription": "Permanently delete your account access and private account data.";
@@ -4744,6 +4767,7 @@ type Messages = {
     };
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
+    "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}";
     "wordingValidFrom": "Wording in force since {date}";
     "wordingVersionUnknown": "Wording version date unavailable";
   };
@@ -5325,7 +5349,6 @@ type Messages = {
       "noLanguagesFound": "No languages found";
       "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";
       "outputLabel": "Translation type";
-      "progress": "Translation progress";
       "progressCount": "{completed} of {total} completed";
       "providerUnavailable": "The translation service is unavailable. Try again later or contact your administrator.";
       "runFailed": "The translation could not be completed.";
@@ -5457,14 +5480,8 @@ type Messages = {
     "exportToCsv": "Export to CSV";
     "fields": {
       "calculating": "Calculating...";
-      "currencyLabel": "Currency (optional)";
-      "currencyPlaceholder": "e.g. USD, EUR";
-      "editFieldValue": "Edit field value";
       "errored": "Errored";
-      "fieldValueLabel": "Field value";
-      "fieldValuePlaceholder": "Enter field value";
       "formatNotSupported": "Format not supported";
-      "numberPlaceholder": "Enter number";
       "selectAValue": "Select a value";
       "selectValues": "Select values";
     };

@@ -17,7 +17,7 @@ import {
 } from "@/api/lib/delete-account";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export const deleteAccountVerifyBody = t.Object({
+const deleteAccountVerifyBody = t.Object({
   code: t.String({ minLength: 6, maxLength: 6 }),
   reassignments: t.Optional(
     t.Array(
@@ -30,7 +30,7 @@ export const deleteAccountVerifyBody = t.Object({
 });
 
 const config = {
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "account_lifecycle" },
   body: deleteAccountVerifyBody,
 } satisfies SessionHandlerConfig;

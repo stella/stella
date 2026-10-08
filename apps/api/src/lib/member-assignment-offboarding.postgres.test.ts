@@ -60,6 +60,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 setDefaultTimeout(60_000);
@@ -1012,7 +1013,7 @@ if (!databaseUrl || !runPostgresTests) {
         await executeFlowStep(
           { runId, stepIndex: 1 },
           new AbortController().signal,
-          { database: db },
+          { admission: testModelAdmission(organizationId), database: db },
         );
         expect(
           await db.$count(entities, eq(entities.workspaceId, workspaceId)),

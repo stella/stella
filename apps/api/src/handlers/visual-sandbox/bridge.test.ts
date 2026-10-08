@@ -28,20 +28,25 @@ describe("visual frame bridge", () => {
   test("pins the first valid parent origin and returns validated guest messages to it", () => {
     const { parentWindow, innerWindow, onRender, onGuestMessage, handle } =
       setup();
-    const render = { type: "render", title: "Timeline", html: "<p>Dates</p>" };
+    const render = {
+      type: "render",
+      data: {},
+      title: "Timeline",
+      html: "<p>Dates</p>",
+    };
     handle({
       source: parentWindow,
       origin: "https://web.example.test",
       data: render,
     });
-    expect(onRender).toHaveBeenCalledWith(render);
+    expect(onRender).toHaveBeenCalledWith({ ...render, links: [] });
     handle({
       source: innerWindow,
       origin: "null",
-      data: { type: "resize", height: 300 },
+      data: { kind: "resize", height: 300 },
     });
     expect(onGuestMessage).toHaveBeenCalledWith(
-      { type: "resize", height: 300 },
+      { kind: "resize", height: 300 },
       "https://web.example.test",
     );
     handle({
@@ -57,7 +62,12 @@ describe("visual frame bridge", () => {
     handle({
       source: parentWindow,
       origin: "https://web.example.test",
-      data: { type: "render", title: "Form", html: '<input type="password">' },
+      data: {
+        type: "render",
+        data: {},
+        title: "Form",
+        html: '<input type="password">',
+      },
     });
     expect(onRender).not.toHaveBeenCalled();
     handle({
@@ -65,14 +75,17 @@ describe("visual frame bridge", () => {
       origin: "https://alternate.example.test",
       data: {
         type: "render",
+        data: {},
         title: "Timeline",
         html: '<p onclick="void 0">Dates</p>',
       },
     });
     expect(onRender).toHaveBeenCalledWith({
       type: "render",
+      data: {},
       title: "Timeline",
       html: "<p>Dates</p>",
+      links: [],
     });
   });
 
@@ -81,30 +94,73 @@ describe("visual frame bridge", () => {
     handle({
       source: parentWindow,
       origin: "https://web.example.test",
-      data: { type: "render", title: "Timeline", html: "<p>Dates</p>" },
+      data: {
+        type: "render",
+        data: {},
+        title: "Timeline",
+        html: "<p>Dates</p>",
+      },
     });
     handle({
       source: innerWindow,
       origin: "null",
-      data: { type: "open-link", url: "https://example.test/decision" },
+      data: { kind: "open-link", url: "https://example.test/decision" },
     });
     expect(onGuestMessage).not.toHaveBeenCalled();
     handle({
       source: innerWindow,
       origin: "null",
-      data: { type: "resize", height: 300 },
+      data: { kind: "resize", height: 300 },
     });
     expect(onGuestMessage).toHaveBeenCalledTimes(1);
+  });
+
+  test("primitive events and unavailable origins do not pin a host", () => {
+    for (const data of [null, undefined, 42, true, "render", []]) {
+      const { parentWindow, onRender, handle } = setup();
+      handle({
+        source: parentWindow,
+        origin: "https://web.example.test",
+        data,
+      });
+      handle({
+        source: parentWindow,
+        origin: "null",
+        data: {
+          type: "render",
+          title: "Timeline",
+          html: "<p>Dates</p>",
+          data: {},
+        },
+      });
+      expect(onRender).not.toHaveBeenCalled();
+      handle({
+        source: parentWindow,
+        origin: "https://alternate.example.test",
+        data: {
+          type: "render",
+          title: "Timeline",
+          html: "<p>Dates</p>",
+          data: {},
+        },
+      });
+      expect(onRender).toHaveBeenCalledTimes(1);
+    }
   });
 
   test("requires matching windows, origins, bounded bytes and strict message shapes", () => {
     const { parentWindow, innerWindow, onRender, onGuestMessage, handle } =
       setup();
-    const render = { type: "render", title: "Timeline", html: "<p>Dates</p>" };
+    const render = {
+      type: "render",
+      data: {},
+      title: "Timeline",
+      html: "<p>Dates</p>",
+    };
     handle({
       source: innerWindow,
       origin: "null",
-      data: { type: "resize", height: 300 },
+      data: { kind: "resize", height: 300 },
     });
     expect(onGuestMessage).not.toHaveBeenCalled();
     for (const event of [
@@ -139,16 +195,16 @@ describe("visual frame bridge", () => {
       data: render,
     });
     for (const event of [
-      { source: {}, origin: "null", data: { type: "resize", height: 300 } },
+      { source: {}, origin: "null", data: { kind: "resize", height: 300 } },
       {
         source: innerWindow,
         origin: "https://api.example.test",
-        data: { type: "resize", height: 300 },
+        data: { kind: "resize", height: 300 },
       },
       {
         source: innerWindow,
         origin: "null",
-        data: { type: "resize", height: 300, title: "Timeline" },
+        data: { kind: "resize", height: 300, title: "Timeline" },
       },
     ]) {
       handle(event);

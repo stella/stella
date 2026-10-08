@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { DecisionCaption } from "@stll/legal-ast/decision-caption";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -17,12 +18,12 @@ import { cn } from "@stll/ui/utils";
 
 import {
   annotationTextAnchors,
-  buildAnnotationAnchors,
   renderLinkAnnotations,
 } from "@/components/legal-reader/annotations/annotation-anchors";
 import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import { ExternalCitationLink } from "@/components/legal-reader/citation-link";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
 import {
   CitedProvisionExpansion,
   CitedProvisionLink,
@@ -63,6 +64,7 @@ import {
   decisionTopMatter,
   editorialSupplementBlocks,
   footnoteParts,
+  resolveDecisionLinkOverlaps,
   topMatterBlocks,
   visibleDecisionBlocks,
   wrappedParagraphRuns,
@@ -78,9 +80,12 @@ import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { dissentingJudges } from "@/features/case-law/decision-judges";
+import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
+import type { ProvisionAnchorSpan } from "@/features/case-law/provision-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
@@ -105,6 +110,7 @@ type Decision = Pick<
 >;
 
 type DecisionTextProps = {
+  surface: DecisionReaderSurface;
   /**
    * The model's headnote and abstract, drawn in the top matter under the
    * court's own. A node rather than the analysis itself: the order the two
@@ -123,6 +129,7 @@ type DecisionTextProps = {
    * headnote instead of inheriting the last reader's fold.
    */
   decisionId: string;
+  isHydrated?: boolean | undefined;
   /**
    * The block the reader was sent to, from a results row or a citation. It
    * keeps a marker while the reader is on it.
@@ -521,21 +528,28 @@ const splitAroundLinks = (
  * decision citation and a provision reference cannot share characters in
  * honest text, so whichever starts first simply wins.
  */
+type DecisionTextAnchorPlacements = {
+  anchorsByPieceId: Record<string, TextAnchor[]>;
+  failures: ProvisionPlacementFailure[];
+  provisionsByAnchorId: Map<string, ReactNode>;
+};
+
 const buildAnchorsByPieceId = ({
   annotations,
   blocks,
   citations,
   textDecisionId,
-  provisions,
+  provisionSpans,
   statutes,
 }: {
   annotations: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
   textDecisionId: string;
-  provisions: readonly DecisionProvisionAnchor[];
+  provisionSpans: Record<string, ProvisionAnchorSpan<CitedProvisionTarget>[]>;
   statutes: readonly DecisionStatuteCitationAnchor[];
-}) => {
+}): DecisionTextAnchorPlacements => {
+  const failures: ProvisionPlacementFailure[] = [];
   const citationSpans = locateCitationSpans({ blocks, citations });
   const presentations = decisionCitationPresentationsById(
     Object.values(citationSpans).flatMap((spans) =>
@@ -545,7 +559,6 @@ const buildAnchorsByPieceId = ({
       })),
     ),
   );
-  const provisionSpans = locateProvisionAnchors({ blocks, provisions });
   const statuteSpans = new Map<string, DecisionStatuteCitationAnchor[]>();
   for (const statute of statutes) {
     const spans = statuteSpans.get(statute.blockId);
@@ -709,9 +722,11 @@ const buildAnchorsByPieceId = ({
     // Links stay interactive, and every mark crossing them is painted inside
     // their text. The mark's remaining pieces continue on either side, so a
     // citation can never cut a white hole through a highlighted passage.
-    const links = dropOverlappingSpans(
+    const disposition = resolveDecisionLinkOverlaps(
       anchors.filter((anchor) => !anchor.key.startsWith("annotation:")),
     );
+    const { links } = disposition;
+    failures.push(...disposition.failures);
     const marks = anchors
       .filter((anchor) => anchor.key.startsWith("annotation:"))
       .flatMap((mark) => splitAroundLinks(mark, links));
@@ -752,7 +767,7 @@ const buildAnchorsByPieceId = ({
       )),
     );
   }
-  return { anchorsByPieceId, provisionsByAnchorId };
+  return { anchorsByPieceId, provisionsByAnchorId, failures };
 };
 
 /**
@@ -963,6 +978,7 @@ export const DecisionText = ({
   citationAnchors = NO_CITATION_ANCHORS,
   decision,
   decisionId,
+  isHydrated,
   landingAnchorId,
   notesByAnchorId,
   expandProvisions = false,
@@ -970,6 +986,7 @@ export const DecisionText = ({
   provisionAnchors = NO_PROVISION_ANCHORS,
   sectionMap,
   statuteCitationAnchors = NO_STATUTE_CITATION_ANCHORS,
+  surface,
 }: DecisionTextProps) => {
   const t = useTranslations();
 
@@ -1001,7 +1018,8 @@ export const DecisionText = ({
   // Inline links come from prefetches that do not block the route, so the
   // server pass and the client's hydration pass may not agree on them. The
   // text hydrates bare and the links are laid over it right after.
-  const hydrated = useHydrated();
+  const environmentHydrated = useHydrated();
+  const hydrated = isHydrated ?? environmentHydrated;
 
   const displayRef = decisionDisplayReference({
     ast,
@@ -1052,13 +1070,28 @@ export const DecisionText = ({
 
   // Inline links for every visible block, wherever it is drawn: the top
   // matter and the document below share one map.
-  const { anchorsByPieceId, provisionsByAnchorId } = buildAnchorsByPieceId({
+  const placementBlocks = visibleDecisionBlocks(
+    ast,
+    decision.caseNumberType,
+    decision.fulltext,
+  );
+  const provisionPlacement = locateProvisionAnchors({
+    blocks: placementBlocks,
+    provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
+  });
+  const textPlacements = buildAnchorsByPieceId({
     annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
-    blocks: visibleBlocks,
+    blocks: placementBlocks,
     textDecisionId: decisionId,
     citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
-    provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
+    provisionSpans: provisionPlacement.anchorsByPieceId,
     statutes: hydrated ? statuteCitationAnchors : NO_STATUTE_CITATION_ANCHORS,
+  });
+  const { anchorsByPieceId, provisionsByAnchorId } = textPlacements;
+  useProvisionPlacementTelemetry({
+    decisionId,
+    failures: [...provisionPlacement.failures, ...textPlacements.failures],
+    surface,
   });
 
   const supplementsByAnchorId = new Map(notesByAnchorId);
@@ -1175,9 +1208,8 @@ export const DecisionText = ({
           />
           <FulltextFallback
             activeMatchIndex={NO_ACTIVE_MATCH}
-            anchorsByPieceId={buildAnnotationAnchors(
-              hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
-            )}
+            anchorsByPieceId={anchorsByPieceId}
+            notesByAnchorId={supplementsByAnchorId}
             rangesByPieceId={NO_SEARCH_RANGES}
             text={decision.fulltext}
           />
@@ -1223,12 +1255,17 @@ export const DecisionText = ({
     );
   })();
 
-  // A note whose paragraph the flow above did not draw — a decision that only
-  // resolved to fulltext, or an anchor the text no longer carries — follows
-  // the text rather than going with its anchor. Counted over the blocks the
-  // page renders, top matter included, so a note on a lifted headnote draws
-  // under it instead of at the end.
-  const drawnAnchorIds = new Set(renderedBlocks.map((block) => block.anchorId));
+  // A note whose paragraph the flow above did not draw (an anchor the text no
+  // longer carries, or a document anchor on a decision that only resolved to
+  // fulltext) follows the text rather than going with its anchor. Counted
+  // over the blocks the page renders, top matter and fulltext paragraphs
+  // included, so a note on a lifted headnote draws under it instead of at the
+  // end.
+  const drawnBlocks =
+    visibleBlocks.length === 0 && decision.fulltext
+      ? [...renderedBlocks, ...placementBlocks]
+      : renderedBlocks;
+  const drawnAnchorIds = new Set(drawnBlocks.map((block) => block.anchorId));
   const trailingNotes =
     notesByAnchorId === undefined
       ? []

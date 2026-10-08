@@ -112,6 +112,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type ChatTabPanelProps = {
@@ -247,6 +248,7 @@ export const ChatTabPanel = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -616,9 +618,12 @@ export const ChatTabPanel = ({
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
-                  onRemoveQueuedMessage={removeQueuedMessage}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
+                  queuedMessageActions={{
+                    remove: removeQueuedMessage,
+                    sendNow: sendQueuedMessageNow,
+                  }}
                   queuedMessages={queuedMessages}
                   showThinkingIndicator
                   streamdownComponents={streamdownComponents}
@@ -721,7 +726,16 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
 
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const t = useTranslations();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const dataQuery = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
   const matterNames = tab.contextMatterIds

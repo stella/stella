@@ -5,6 +5,7 @@ import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadPdfSigningBaseBytes } from "@/api/lib/files/pdf-signing/base-bytes";
 import { inspectSigningCertificate } from "@/api/lib/files/pdf-signing/certificate";
@@ -200,15 +201,17 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
 
     // The keychain builds its chain offline, so intermediates are often
     // missing; the stored chain is the verified, completed one.
+    const permit = grantThirdPartyOutboundPermit();
     const { chain: signerChain } = await completeCertificateChain({
       candidates: chain.filter((entry) => entry !== null),
       certificate,
+      permit,
     });
 
     // Checked before the desktop asks for a PIN: a revoked certificate must
     // never sign, and this is the earliest point its full chain is known.
     const { revoked } = await findRevokedCertificates({
-      provider: createTrackedRevocationProvider(),
+      provider: createTrackedRevocationProvider({ permit }),
       signerChain: [certificate, ...signerChain],
     });
     if (revoked.length > 0) {
@@ -223,7 +226,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
       return Result.err(certificateRevokedError());
     }
 
-    const timestamped = configuredTimestampAuthorities().length > 0;
+    const timestamped = configuredTimestampAuthorities(permit).length > 0;
     const placeholderSize = signaturePlaceholderSize({
       certificate,
       certificateChain: signerChain,

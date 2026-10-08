@@ -17,7 +17,7 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-export type FormexHeading = {
+type FormexHeading = {
   /** Formex nesting depth, clamped to the AST's 1–3 heading levels. */
   level: 1 | 2 | 3;
   text: string;

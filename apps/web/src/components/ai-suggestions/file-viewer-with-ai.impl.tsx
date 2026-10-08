@@ -71,7 +71,7 @@ type ActiveExternal = {
   url: string;
 };
 
-export type ActiveDocumentDraft = {
+type ActiveDocumentDraft = {
   fileName: string;
   originChatMessageId: string;
   originChatThreadId: ChatThreadId;

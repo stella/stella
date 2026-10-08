@@ -38,12 +38,8 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ChevronRightIcon,
-  LoaderIcon,
-  PanelRightIcon,
-  AiActionIcon,
-} from "@stll/ui/icons";
+import { ChevronRightIcon, PanelRightIcon, AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -143,6 +139,10 @@ import {
 } from "@/hooks/use-public-law-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
+import {
+  useOwnerScopedState,
+  useStorageOwner,
+} from "@/lib/account/use-owner-scoped-state";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
@@ -163,6 +163,7 @@ import {
 } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import {
+  isSearchRecentsScopeCurrent,
   readRecentFiles,
   readRecentSearches,
   recordRecentFile,
@@ -178,6 +179,7 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
 
 type SearchSummaryCitation = {
@@ -210,6 +212,30 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
  * separator's reported value until a drag pins an explicit width. */
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
+
+type SearchColumnsStyle = CSSProperties & {
+  "--search-facets-w"?: string;
+  "--search-preview-w"?: string;
+};
+
+type SearchColumnsStyleOptions = {
+  facetsWidth: number | null;
+  previewWidth: number | null;
+};
+
+const getSearchColumnsStyle = ({
+  facetsWidth,
+  previewWidth,
+}: SearchColumnsStyleOptions): SearchColumnsStyle => {
+  const style: SearchColumnsStyle = {};
+  if (facetsWidth !== null) {
+    style["--search-facets-w"] = `${String(facetsWidth)}px`;
+  }
+  if (previewWidth !== null) {
+    style["--search-preview-w"] = `${String(previewWidth)}px`;
+  }
+  return style;
+};
 
 /** A document chosen in pick mode, resolved to the file field the caller can
  *  pin: the hit's own when it names one, else the entity's current file. */
@@ -515,6 +541,14 @@ type SearchDialogProps = {
   mode?: SearchDialogMode;
 };
 
+const emptyRecentSearches = (): RecentSearch[] => [];
+const emptyRecentFiles = (): RecentFile[] => [];
+
+const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
+  open && isSearchRecentsScopeCurrent(scope)
+    ? `${scope.organizationId}:${scope.userId}`
+    : null;
+
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -533,12 +567,14 @@ export const SearchDialog = ({
   const isMobile = useIsMobile();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const [closeActionQueue] = useState(createDialogCloseActionQueue);
+  const owner = useStorageOwner();
   const searchRecentsScope = useMemo(
     (): SearchRecentsScope => ({
+      owner,
       organizationId: user.activeOrganizationId,
       userId: user.id,
     }),
-    [user.activeOrganizationId, user.id],
+    [owner, user.activeOrganizationId, user.id],
   );
   const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
     null,
@@ -586,8 +622,23 @@ export const SearchDialog = ({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [highlightedHitId, setHighlightedHitId] = useState<string | null>(null);
   const [previewEnabled, setPreviewEnabled] = useState(true);
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
-  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const readSearches = useCallback(
+    () => (open ? readRecentSearches(searchRecentsScope) : []),
+    [open, searchRecentsScope],
+  );
+  const readFiles = useCallback(
+    () => (open ? readRecentFiles(searchRecentsScope) : []),
+    [open, searchRecentsScope],
+  );
+  const { value: recentSearches, setValue: setRecentSearches } =
+    useOwnerScopedState({
+      read: readSearches,
+      getDefaultValue: emptyRecentSearches,
+    });
+  const { value: recentFiles, setValue: setRecentFiles } = useOwnerScopedState({
+    read: readFiles,
+    getDefaultValue: emptyRecentFiles,
+  });
   const [recentPreviewFile, setRecentPreviewFile] = useState<RecentFile | null>(
     null,
   );
@@ -803,29 +854,27 @@ export const SearchDialog = ({
   });
   const virtualHits = hitVirtualizer.getVirtualItems();
 
-  // Refresh the recents snapshot from localStorage on the open transition (and
-  // if the scope changes while open). The recents are also locally mutated by
+  // Refresh recents on an open, auth scope, or storage owner transition. The recents are also locally mutated by
   // the result/search handlers below, so this is guarded against the last-seen
   // key rather than read unconditionally: an unguarded render-time read would
   // re-run on every render and clobber those in-session mutations. SearchDialog
   // itself never unmounts (both call sites render it unconditionally and
   // control visibility via `open`), so there is no mount to hang this off of.
-  const recentsSnapshotKey = open
-    ? `${searchRecentsScope.organizationId}:${searchRecentsScope.userId}`
-    : null;
+  const recentsSnapshotKey = getRecentsSnapshotKey(open, searchRecentsScope);
   const [lastRecentsSnapshotKey, setLastRecentsSnapshotKey] = useState<
     string | null
   >(null);
-  if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
+  const [lastRecentsOwner, setLastRecentsOwner] = useState(owner);
+  if (
+    recentsSnapshotKey !== lastRecentsSnapshotKey ||
+    owner !== lastRecentsOwner
+  ) {
+    setLastRecentsOwner(owner);
     setLastRecentsSnapshotKey(recentsSnapshotKey);
     setRegistryExpanded(false);
     setCaseLawExpanded(false);
     setSupplementalPreview({ type: "internal" });
     setRecentPreviewFile(null);
-    if (recentsSnapshotKey) {
-      setRecentSearches(readRecentSearches(searchRecentsScope));
-      setRecentFiles(readRecentFiles(searchRecentsScope));
-    }
   }
 
   const searchFilterParams = {
@@ -869,13 +918,20 @@ export const SearchDialog = ({
   // is only fetched while the dialog is open to keep route loads untouched.
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
-  const { data: aiAvailability } = useQuery({
+  const aiAvailabilityQuery = useQuery({
     ...aiAvailabilityOptions({
       organizationId: searchRecentsScope.organizationId,
     }),
     enabled: open,
   });
-  const canAskAI = canSummarizeSearch && aiAvailability?.available === true;
+  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
+  useQueryViewError(aiAvailabilityView);
+  const aiAvailability =
+    aiAvailabilityView.type === "items" ? aiAvailabilityView.items : undefined;
+  const canAskAI =
+    canSummarizeSearch &&
+    aiAvailabilityQuery.status === "success" &&
+    aiAvailability?.available === true;
 
   const { resolvedActions, executeAction, uploadRequest, closeUpload } =
     useCommandActions(open);
@@ -1035,7 +1091,13 @@ export const SearchDialog = ({
   };
 
   const navigateAfterClose = (navigateToTarget: () => Promise<unknown>) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     closeActionQueue.schedule(() => {
+      if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+        return;
+      }
       detached(
         navigateToTarget().catch((error: unknown) => {
           analytics.captureError(error);
@@ -1087,7 +1149,11 @@ export const SearchDialog = ({
 
   const handleRefineQuery = () => {
     const trimmedQuery = query.trim();
-    if (!trimmedQuery || refineSearchMutation.isPending) {
+    if (
+      !isSearchRecentsScopeCurrent(searchRecentsScope) ||
+      !trimmedQuery ||
+      refineSearchMutation.isPending
+    ) {
       return;
     }
 
@@ -1095,6 +1161,9 @@ export const SearchDialog = ({
       { query: trimmedQuery, locale: apiLocale },
       {
         onSuccess: (refined, variables) => {
+          if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+            return;
+          }
           debouncedSetQuery.cancel();
           setQuery(refined.query);
           setDebouncedQuery(refined.query);
@@ -1112,12 +1181,20 @@ export const SearchDialog = ({
 
   const handleAskAI = () => {
     const trimmedQuery = query.trim();
-    if (!canAskAI || !trimmedQuery || askAIMutation.isPending) {
+    if (
+      !isSearchRecentsScopeCurrent(searchRecentsScope) ||
+      !canAskAI ||
+      !trimmedQuery ||
+      askAIMutation.isPending
+    ) {
       return;
     }
     setRecentSearches(recordRecentSearch(trimmedQuery, searchRecentsScope));
     askAIMutation.mutate(trimmedQuery, {
       onSuccess: (threadId) => {
+        if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+          return;
+        }
         detached(
           invalidateGroupedChatThreads(queryClient),
           "search-dialog.invalidate-grouped-chat-threads",
@@ -1130,6 +1207,9 @@ export const SearchDialog = ({
   };
 
   const applyRecentSearch = (recent: RecentSearch) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     setRecentPreviewFile(null);
     setQuery(recent.query);
     setDebouncedQuery(recent.query);
@@ -1140,6 +1220,9 @@ export const SearchDialog = ({
   // Opens the matter's file tree with the entity's row revealed, or the
   // matter itself for entities the tree does not list.
   const openEntityLocation = async (location: EntityLocation) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     if (location.type === "matter") {
       await navigate({
         to: "/workspaces/$workspaceId",
@@ -1150,7 +1233,12 @@ export const SearchDialog = ({
     await navigateToWorkspaceReveal({
       entityId: location.entityId,
       fallbackFolderId: location.fallbackFolderId,
-      navigate,
+      navigate: async (options) => {
+        if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+          return;
+        }
+        await navigate(options);
+      },
       pathname: router.state.location.pathname,
       queryClient,
       targetWorkspaceId: location.workspaceId,
@@ -1174,6 +1262,9 @@ export const SearchDialog = ({
     workspaceId: string;
   }) => {
     await openEntityLocation(location);
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     await openEntityInInspector(entityId, label, workspaceId);
   };
 
@@ -1210,6 +1301,9 @@ export const SearchDialog = ({
           workspaceId: file.workspaceId,
         }),
       );
+      if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+        return;
+      }
       setRecentFiles(
         recordRecentFile({ ...file, fileFieldId }, searchRecentsScope),
       );
@@ -1225,6 +1319,9 @@ export const SearchDialog = ({
     hit: GlobalSearchHit,
     options?: { locationModifier?: boolean },
   ) => {
+    if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+      return;
+    }
     if (query.trim()) {
       setRecentSearches(recordRecentSearch(query, searchRecentsScope));
     }
@@ -1256,7 +1353,10 @@ export const SearchDialog = ({
             ),
         });
         // A hit whose current file cannot be resolved has nothing to pin.
-        if (fileFieldId === null) {
+        if (
+          fileFieldId === null ||
+          !isSearchRecentsScopeCurrent(searchRecentsScope)
+        ) {
           return;
         }
         mode.onPick({
@@ -1370,6 +1470,9 @@ export const SearchDialog = ({
               }),
             ),
         });
+        if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
+          return;
+        }
         setRecentFiles(
           recordRecentFile(
             {
@@ -1579,16 +1682,7 @@ export const SearchDialog = ({
     );
   };
 
-  const columnsStyle: CSSProperties & {
-    "--search-facets-w"?: string;
-    "--search-preview-w"?: string;
-  } = {};
-  if (facetsWidth !== null) {
-    columnsStyle["--search-facets-w"] = `${String(facetsWidth)}px`;
-  }
-  if (previewWidth !== null) {
-    columnsStyle["--search-preview-w"] = `${String(previewWidth)}px`;
-  }
+  const columnsStyle = getSearchColumnsStyle({ facetsWidth, previewWidth });
 
   const applySavedSearch = (criteria: SavedSearchCriteria) => {
     setSearchScope("all");
@@ -1754,9 +1848,14 @@ export const SearchDialog = ({
                   />
                 </SearchScopeInput>
                 {isFetching && !isFetchingNextPage && (
-                  <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+                  <Loader
+                    className="size-4 shrink-0"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 )}
                 <Button
+                  aria-busy={refineSearchMutation.isPending || undefined}
                   aria-label={t("search.aiRefine")}
                   className="size-8 shrink-0"
                   disabled={!query.trim() || refineSearchMutation.isPending}
@@ -1768,7 +1867,7 @@ export const SearchDialog = ({
                   variant="ghost"
                 >
                   {refineSearchMutation.isPending ? (
-                    <LoaderIcon className="size-4 animate-spin" />
+                    <Loader className="size-4" size="sm" variant="decorative" />
                   ) : (
                     <AiActionIcon className="size-4" />
                   )}
@@ -2309,6 +2408,7 @@ const SearchDialogFooter = ({
         )}
         {canAskAI && mode === "browse" && scope !== "registries" && (
           <Button
+            aria-busy={isAskingAI || undefined}
             aria-keyshortcuts="Tab"
             className="h-auto gap-1.5"
             disabled={isAskingAI}
@@ -2316,7 +2416,9 @@ const SearchDialogFooter = ({
             size="xs"
             variant="muted"
           >
-            {isAskingAI && <LoaderIcon className="size-3 animate-spin" />}
+            {isAskingAI && (
+              <Loader className="size-3" size="sm" variant="decorative" />
+            )}
             <span className="sm:hidden">{t("common.askAI")}</span>
             <span className="hidden sm:inline">
               <SearchFooterHintText translationKey="search.hintAskAI" />
@@ -2569,7 +2671,11 @@ const SearchHitResults = ({
           )}
           {!pagination.isFetchNextPageError &&
             pagination.isFetchingNextPage && (
-              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             )}
           {!pagination.isFetchNextPageError &&
             !pagination.isFetchingNextPage && (

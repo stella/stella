@@ -14,6 +14,7 @@ import { cn } from "@stll/ui/utils";
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
@@ -50,6 +51,7 @@ import { optionalArray } from "@/lib/arrays";
 import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 type LeadingCitationsProps = {
@@ -68,14 +70,16 @@ export const LeadingCitations = ({
   decision,
   decisionId,
 }: LeadingCitationsProps) => {
-  const { data: summary } = useQuery(
-    decisionCitationSummaryOptions(decisionId),
-  );
+  const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
+  const summaryView = useQueryView(summaryQuery);
+  useQueryViewError(summaryView);
+  const summary = summaryView.type === "items" ? summaryView.items : undefined;
   if (summary === undefined) {
-    return null;
+    return <QueryViewFeedback view={summaryView} />;
   }
   return (
     <div className="flex flex-col gap-6">
+      <QueryViewFeedback view={summaryView} />
       {(["incoming", "outgoing"] as const satisfies CitationDirection[]).map(
         (direction) => {
           if (
@@ -146,9 +150,12 @@ const DirectionSection = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const { data: leading } = useQuery(
+  const leadingQuery = useQuery(
     decisionLeadingCitationsOptions(decisionId, direction),
   );
+  const leadingView = useQueryView(leadingQuery);
+  useQueryViewError(leadingView);
+  const leading = leadingView.type === "items" ? leadingView.items : undefined;
   const [showingAll, setShowingAll] = useState(false);
   const total = totalCitations(counts);
   const presentations = decisionCitationPresentationsById(
@@ -162,6 +169,7 @@ const DirectionSection = ({
 
   return (
     <section className="flex flex-col gap-3">
+      <QueryViewFeedback view={leadingView} />
       <div className="flex flex-col gap-1.5">
         <h3 className="text-foreground-strong-muted flex items-baseline gap-1.5 text-xs font-medium">
           {t(DIRECTION_TITLE[direction])}

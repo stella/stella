@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type React from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { flexRender } from "@tanstack/react-table";
 import {
@@ -55,6 +54,7 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
@@ -750,7 +750,6 @@ const FolderCell = ({
       />
       {isEditing ? (
         <InlineEdit
-          inputClassName="w-48"
           onCancel={() => {
             onStopEditing();
             setEditValue(name);
@@ -761,7 +760,7 @@ const FolderCell = ({
         />
       ) : (
         <button
-          className="truncate text-start text-sm"
+          className="overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
           dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();

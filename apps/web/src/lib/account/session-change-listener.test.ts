@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 // The session the server reports; changed by "another tab".
 let signedIn: string | null = "user-a";
 let sessionReads = 0;
@@ -32,7 +34,7 @@ const { installSessionChangeListener } =
   await import("@/lib/account/session-change-listener");
 const { installSessionCacheGuard } = await import("@/lib/session-cache-guard");
 const { installUserScopedStorage } =
-  await import("@/lib/account/user-scoped-storage");
+  await import("@/lib/account/install-user-scoped-storage");
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
@@ -85,9 +87,7 @@ const createTab = async () => {
 };
 
 const settle = async () => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 20);
-  });
+  await sleep(20);
 };
 
 describe("a tab told that the session changed elsewhere", () => {

@@ -145,6 +145,7 @@
       "useBackupCode": "Vietoj to naudoti atsarginį kodą"
     },
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
+    "usePassword": "Naudoti slaptažodį",
     "weSentCodeTo": "Išsiuntėme kodą adresu <email>{emailAddress}</email>"
   },
   "avt": {
@@ -348,6 +349,7 @@
     },
     "view": {
       "chooseList": "Pasirinkti sąrašą",
+      "createList": "Sukurti sąrašą",
       "evidenceList": "Faktai iš",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
@@ -1052,6 +1054,7 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
+    "activateGeneratedView": "Naudoti šį vaizdą",
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -1197,6 +1200,8 @@
     "forkedFromUnavailable": "Sukurta iš pokalbio, kuris nebepasiekiamas",
     "forkedThread": "Iš kito pokalbio",
     "forkingThread": "Kuriamas naujas pokalbis…",
+    "generatedView": "Sugeneruotas vaizdas",
+    "generatedViewDrill": "Ieškok sprendimų pagal teismo filtrą {court} ir metus {year}.",
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
@@ -1328,6 +1333,7 @@
     "sendErrorQuotaExhausted": "DI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
     "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
     "sendPrompt": "Siųsti pranešimą",
+    "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "skills": {
       "scope": {
@@ -1475,6 +1481,14 @@
       "sourceCode": "Pirminis kodas",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",
+      "failedTitle": "Atsakymas nepavyko",
+      "needsInputBody": "Pokalbis laukia jūsų patvirtinimo ar atsakymo.",
+      "needsInputTitle": "stellai reikia jūsų",
+      "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
+      "replyReadyTitle": "Atsakymas paruoštas"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
@@ -1690,6 +1704,7 @@
     "deletedCount": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
     "description": "Aprašymas",
     "details": "Detalės",
+    "detailsHiddenFeatureUnavailable": "Išsami informacija paslėpta: funkcija neįjungta",
     "disconnect": "Atjungti",
     "dismiss": "Atmesti",
     "displayName": "Rodomas vardas",
@@ -1825,6 +1840,8 @@
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
+    "openInStella": "Atverti programoje stella",
+    "openOriginalSource": "Atverti pirminį šaltinį",
     "options": "Parinktys",
     "or": "Arba",
     "organization": "Organizacija",
@@ -2356,6 +2373,7 @@
       "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",
       "encryptedContent": "Užšifruoto dokumento turinio išgauti negalima. Pašalinkite failo slaptažodį ir bandykite dar kartą.",
       "filePropertyTypeImmutable": "Failo savybės tipo keisti negalima. Palikite esamą tipą; kitoms reikšmėms sukurkite pasirinktinę savybę.",
+      "fileSecurityRejected": "Saugumo patikra atmetė failą. Pašalinkite pažymėtą turinį ir įkelkite išvalytą kopiją.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
       "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
@@ -4372,6 +4390,11 @@
       "betaInbox": "Gautieji ir pranešimai",
       "betaInboxDescription": "Rodyti gautuosius ir pranešimų varpelį",
       "betaTimeBillingDescription": "Rodyti laiko stebėjimą, sąskaitas ir išlaidas",
+      "chatNotifications": "Pokalbių pranešimai",
+      "chatNotificationsBlocked": "stellos pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
+      "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
+      "chatNotificationsToggle": "Pranešti, kai atsakymas paruoštas arba laukia mano veiksmo",
+      "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
       "confirmDelete": "Patvirtinti paskyros ištrynimą",
       "dangerZone": "Pavojinga zona",
       "dangerZoneDescription": "Visam laikui ištrinti paskyros prieigą ir privačius paskyros duomenis.",
@@ -4741,6 +4764,7 @@
     },
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}",
+    "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
     "wordingValidFrom": "Redakcija galioja nuo {date}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
@@ -5322,7 +5346,6 @@
       "noLanguagesFound": "Kalbų nerasta",
       "notConfigured": "DeepL nesukonfigūruotas šiai organizacijai. Norėdami įjungti vertimą, organizacijos nustatymuose pridėkite DeepL API raktą.",
       "outputLabel": "Vertimo tipas",
-      "progress": "Vertimo eiga",
       "progressCount": "Atlikta {completed} iš {total}",
       "providerUnavailable": "Vertimo paslauga nepasiekiama. Bandykite vėliau dar kartą arba susisiekite su administratoriumi.",
       "runFailed": "Vertimo nepavyko užbaigti.",
@@ -5454,14 +5477,8 @@
     "exportToCsv": "Eksportuoti į CSV",
     "fields": {
       "calculating": "Skaičiuojama...",
-      "currencyLabel": "Valiuta (neprivaloma)",
-      "currencyPlaceholder": "pvz. USD, EUR",
-      "editFieldValue": "Redaguoti lauko reikšmę",
       "errored": "Klaida",
-      "fieldValueLabel": "Lauko reikšmė",
-      "fieldValuePlaceholder": "Įveskite lauko reikšmę",
       "formatNotSupported": "Formatas nepalaikomas",
-      "numberPlaceholder": "Įveskite skaičių",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes"
     },

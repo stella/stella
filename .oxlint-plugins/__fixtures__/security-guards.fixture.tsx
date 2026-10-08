@@ -120,7 +120,7 @@ export const assignRawFilename = () => {
 };
 
 export const shadowedSanitizer = (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding named like the sanitizer
+  // oxlint-disable-next-line no-shadow -- fixture: a local binding named like the sanitizer
   sanitizeFilename: (value: string) => string,
 ) =>
   // oxlint-disable-next-line security-guards/no-raw-filename-write -- fixture: a parameter named like the sanitizer is not the sanitizer
@@ -157,7 +157,7 @@ export const SafeReaderLink = () => (
   // expect-clean: security-guards/no-unsanitized-href
   <a href={readerHref(item.url, { publisherHosts: [] })}>Open</a>
 );
-// oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding must not satisfy the sanitizer scope guard
+// oxlint-disable-next-line no-shadow -- fixture: a local binding must not satisfy the sanitizer scope guard
 const localReaderHref = (readerHref: (value: string) => string | undefined) => (
   // oxlint-disable-next-line security-guards/no-unsanitized-href -- fixture: a sanitizer name bound to anything but its import is not a sanitizer
   <a href={readerHref(item.url)}>Open</a>
@@ -260,7 +260,7 @@ export const upsertedUser = db
 // oxlint-disable-next-line security-guards/no-unscoped-user-query -- fixture: an insert fed from an unscoped read still reads
 export const insertedFromRead = db.insert(user).values(db.select().from(user));
 
-// oxlint-disable-next-line eslint/no-shadow -- fixture: a shadowed binding must not satisfy the imported-member scope guard
+// oxlint-disable-next-line no-shadow -- fixture: a shadowed binding must not satisfy the imported-member scope guard
 const shadowedMemberReferences = (member: {
   organizationId: string;
   userId: string;

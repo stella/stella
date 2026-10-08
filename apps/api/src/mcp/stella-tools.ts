@@ -81,6 +81,7 @@ import {
   manyRequiredTermsWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
+import { projectCaseLawCourt } from "@/api/lib/chat/case-law-court-projection";
 import {
   LIST_MATTERS_DETAIL_PROJECTION,
   LIST_MATTERS_LIST_PROJECTION,
@@ -218,6 +219,8 @@ import {
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+import { CASE_LAW_RESULTS_RESOURCE_URI } from "./apps/resource-uri";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -1091,6 +1094,12 @@ export const STELLA_TOOL_DEFINITIONS = [
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: {
+      ui: {
+        resourceUri: CASE_LAW_RESULTS_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+    },
     name: SEARCH_CASE_LAW_TOOL,
     scope: "stella:search",
   }),
@@ -1154,6 +1163,12 @@ export const STELLA_TOOL_DEFINITIONS = [
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: {
+      ui: {
+        resourceUri: CASE_LAW_RESULTS_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+    },
     name: LOOKUP_CASE_LAW_TOOL,
     scope: "stella:read",
   }),
@@ -2291,8 +2306,7 @@ const caseLawSearchResult = ({
     citationAuthority: hit.citationAuthority,
     citationCount: hit.citationCount,
     country: hit.country,
-    court: hit.court,
-    courtAbbreviation: hit.courtAbbreviation,
+    ...projectCaseLawCourt(hit),
     decisionDate: hit.decisionDate,
     decisionId: hit.decisionId,
     resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
@@ -3272,7 +3286,7 @@ const decisionIdentityOf = (row: DecisionIdentityRow) => ({
   ...(row.caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
     ? {}
     : { caseNumberType: row.caseNumberType }),
-  court: row.court,
+  ...projectCaseLawCourt(row),
   decisionDate: row.decisionDate,
   decisionId: row.id,
   ecli: row.ecli,

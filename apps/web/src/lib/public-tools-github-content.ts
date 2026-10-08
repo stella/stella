@@ -210,7 +210,7 @@ export const resolveGithubSkillContent = async (
  * timeout, a byte cap, in-flight dedup, and TTL negative caching. Runs
  * server-side during SSR and via RPC on client navigation.
  */
-export const fetchGithubSkillContent = createServerFn({ method: "GET" })
+const fetchGithubSkillContent = createServerFn({ method: "GET" })
   .validator((input: v.InferInput<typeof inputSchema>) =>
     v.parse(inputSchema, input),
   )

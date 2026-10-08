@@ -20,6 +20,20 @@
   // package, not one task's declared inputs.
   "globalDependencies": ["patches/**"],
   "tasks": {
+    "@stll/desktop#test:browser": {
+      "inputs": ["$TURBO_DEFAULT$"]
+    },
+    "@stll/visual-preview#typecheck": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/browser/**"]
+    },
+    "@stll/visual-preview#test:browser": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/browser/visual-preview-composition.spec.ts",
+        "$TURBO_ROOT$/apps/api/src/handlers/visual-sandbox/**",
+        "$TURBO_ROOT$/packages/api-contract/src/visual-sandbox.ts"
+      ]
+    },
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
     "@stll/web#generate:route-tree": {
       "inputs": [
@@ -112,8 +126,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -127,6 +148,9 @@
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/outbound-transport-census.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
@@ -143,8 +167,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -193,7 +224,11 @@
     },
     "@stll/extension#build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/VERSION",
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+      ],
       "outputs": [".output/**"]
     },
     "dev": {
@@ -311,8 +346,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -356,8 +398,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -392,8 +441,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -423,8 +479,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -530,8 +593,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -563,7 +633,10 @@
     // these lists and the tests in sync in both directions.
     "@stll/cli#test": {
       "dependsOn": ["codegen:runtime"],
-      "inputs": ["$TURBO_DEFAULT$"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
+      ]
     },
     "@stll/agent-engine#test": {
       "dependsOn": [],
@@ -635,8 +708,15 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
@@ -687,6 +767,8 @@
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
+        "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
@@ -694,6 +776,8 @@
       "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/ui/src/**",
+        "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/desktop/src/**",

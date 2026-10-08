@@ -10,6 +10,9 @@ import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
 import { SCOPED_NATIVE_EXTRACTION_ENQUEUE } from "@/api/db/schema";
 import {
+  AI_CITATION_REVIEW_ORIGINS,
+  CITATION_REVIEW_ORIGIN,
+  CITATION_REVIEW_ORIGINS,
   POLARITY,
   REVIEWABLE_POLARITIES,
 } from "@/api/handlers/case-law/polarity/consts";
@@ -445,6 +448,28 @@ describe("schema invariants", () => {
       "citation_reviews_polarity_values",
     ).toSorted();
     expect(dbValues).toEqual(REVIEWABLE_POLARITIES.toSorted());
+  });
+
+  test("citation_reviews origin CHECK constraints match CITATION_REVIEW_ORIGINS", () => {
+    expect(
+      extractCheckValues(
+        caseLawCitationReviews,
+        "citation_reviews_origin_values",
+      ).toSorted(),
+    ).toEqual(CITATION_REVIEW_ORIGINS.toSorted());
+    const check = getTableConfig(caseLawCitationReviews).checks.find(
+      (candidate) => candidate.name === "citation_reviews_origin_provenance",
+    );
+    if (check === undefined) {
+      throw new Error("citation_reviews_origin_provenance not found");
+    }
+    // Human branch first, then every model origin: together, every origin.
+    expect(
+      inListGroups(renderCheck(check)).map((group) => group.toSorted()),
+    ).toEqual([
+      [CITATION_REVIEW_ORIGIN.HUMAN_REVIEW],
+      AI_CITATION_REVIEW_ORIGINS.toSorted(),
+    ]);
   });
 
   test("corpus mirror CHECK constraint matches its domain type", () => {

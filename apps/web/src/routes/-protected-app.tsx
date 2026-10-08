@@ -78,6 +78,7 @@ import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { useStorageOwner } from "@/lib/account/use-owner-scoped-state";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
@@ -88,6 +89,7 @@ import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
@@ -199,6 +201,7 @@ export const ProtectedAppFrame = ({
     };
   });
   const analyticsUser = user;
+  const inspectorOwner = useStorageOwner();
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
   const workspaceMatch = useMatch({
@@ -213,9 +216,19 @@ export const ProtectedAppFrame = ({
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const { data: workspaceNavigation } = useChromeQuery(
-    workspacesNavigationOptions(inspectorBroadcastOrganizationId),
+  const workspaceNavigationView = useQueryView(
+    useChromeQuery(
+      workspacesNavigationOptions({
+        organizationId: inspectorBroadcastOrganizationId,
+        userId: inspectorBroadcastUserId,
+      }),
+    ),
   );
+  useQueryViewError(workspaceNavigationView);
+  const workspaceNavigation =
+    workspaceNavigationView.type === "items"
+      ? workspaceNavigationView.items
+      : undefined;
   const activeWorkspace = workspaceNavigation?.workspaces.find(
     ({ id }) => id === activeWorkspaceId,
   );
@@ -233,14 +246,22 @@ export const ProtectedAppFrame = ({
   });
 
   // Restore the authenticated tab scope before any previous scope can paint.
-  useLayoutEffect(
-    () =>
-      initializeInspectorTabBroadcast({
-        organizationId: inspectorBroadcastOrganizationId,
-        userId: inspectorBroadcastUserId,
-      }),
-    [inspectorBroadcastOrganizationId, inspectorBroadcastUserId],
-  );
+  useLayoutEffect(() => {
+    if (
+      inspectorOwner.kind !== "user" ||
+      inspectorOwner.userId !== inspectorBroadcastUserId
+    ) {
+      return undefined;
+    }
+    return initializeInspectorTabBroadcast({
+      organizationId: inspectorBroadcastOrganizationId,
+      userId: inspectorBroadcastUserId,
+    });
+  }, [
+    inspectorBroadcastOrganizationId,
+    inspectorBroadcastUserId,
+    inspectorOwner,
+  ]);
 
   // Mod+J — toggles the inspector pane. With tabs already open it
   // restores or hides the pane regardless of route, so users can
@@ -403,10 +424,15 @@ function ProtectedContent() {
     setChatMenuOpen(false);
   };
 
-  const { data: workspace } = useChromeQuery({
-    ...workspaceOptions(workspaceId ?? ""),
-    enabled: !!workspaceId,
-  });
+  const workspaceView = useQueryView(
+    useChromeQuery({
+      ...workspaceOptions(workspaceId ?? ""),
+      enabled: !!workspaceId,
+    }),
+  );
+  useQueryViewError(workspaceView);
+  const workspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (
     <div
       className="ms-auto flex shrink-0 items-center gap-0.5"

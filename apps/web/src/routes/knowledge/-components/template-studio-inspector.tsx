@@ -21,7 +21,6 @@ import {
   BookmarkIcon,
   BracesIcon,
   CheckCircle2Icon,
-  ChevronDownIcon,
   HashIcon,
   LayoutTemplateIcon,
   PlusIcon,
@@ -34,17 +33,16 @@ import {
 } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import {
-  Menu,
   MenuItem,
   MenuPopup,
   MenuSeparator,
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-  MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { SplitButton } from "@stll/ui/split-button";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -57,6 +55,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   ARRAY_INDEX_KEY_PREFIX,
   TemplateForm,
@@ -88,6 +87,7 @@ import {
   templateRecipesOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { LinkClauseDialog } from "@/routes/knowledge/-components/link-clause-dialog";
 import { parseArrayItemKey } from "@/routes/knowledge/-components/template-array-item-key";
 import { TemplateCheckDialog } from "@/routes/knowledge/-components/template-check-dialog";
@@ -114,7 +114,6 @@ import {
   defaultStudioField,
   useTemplateStudioStore,
   type OutlineNode,
-  type StudioActions,
   type StudioField,
 } from "@/routes/knowledge/-components/template-studio-store";
 import { TemplateVersionsTab } from "@/routes/knowledge/-components/template-versions-tab";
@@ -125,7 +124,7 @@ const STUDIO_FACETS = ["fields", "guidance", "history", "fill"] as const;
 type StudioFacet = (typeof STUDIO_FACETS)[number];
 type TemplateStudioPayload = { templateId: string };
 
-export function TemplateStudioInspectorView({
+function TemplateStudioInspectorView({
   tab,
   onClose,
 }: InspectorViewRenderProps<TemplateStudioPayload>) {
@@ -155,9 +154,13 @@ export function TemplateStudioInspectorView({
   // Languages sit in the tab header (next to the name) so the template's identity
   // reads at a glance; useQuery (not suspense) keeps a cache miss from blocking
   // the whole studio chrome.
-  const { data: detailData } = useQuery(
+  const detailDataQuery = useQuery(
     templateDetailOptions(activeOrganizationId, templateId),
   );
+  const detailDataView = useQueryView(detailDataQuery);
+  useQueryViewError(detailDataView);
+  const detailData =
+    detailDataView.type === "items" ? detailDataView.items : undefined;
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -324,11 +327,14 @@ export function TemplateStudioInspectorView({
  * full check dialog. The check query lives under the templates subtree, so the
  * save handler's `templates.all` invalidation refetches it after every save.
  */
-export const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
+const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
   const format = useFormatter();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data } = useQuery(templateCheckOptions(organizationId, templateId));
+  const dataQuery = useQuery(templateCheckOptions(organizationId, templateId));
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Nothing to show until the first result lands; keeps the row from flashing
   // a placeholder state on cold mount.
@@ -367,7 +373,7 @@ export const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
 };
 
 /** Save lives in the tab's title row; enabled only with unsaved edits. */
-export const StudioSaveAction = () => {
+const StudioSaveAction = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const ui = useTemplateStudioStore((s) => s.ui);
@@ -396,7 +402,7 @@ export const StudioSaveAction = () => {
 // field kind/itemFields, so re-discover the stored DOCX (the same merge the
 // fill endpoint uses) to get the real field shape — `{% for %}` array fields
 // included — rather than reconstructing it from the flat manifest.
-export const TemplateFillFacet = ({
+const TemplateFillFacet = ({
   templateId,
   onEditField,
 }: {
@@ -405,9 +411,13 @@ export const TemplateFillFacet = ({
 }) => {
   const fillSaveTarget = useFillToMatterSaveTarget();
   const facetOrgId = useAuthenticatedUser().activeOrganizationId;
-  const { data: clausePreview } = useQuery({
+  const clausePreviewQuery = useQuery({
     ...templateClausePreviewOptions(facetOrgId, templateId),
   });
+  const clausePreviewView = useQueryView(clausePreviewQuery);
+  useQueryViewError(clausePreviewView);
+  const clausePreview =
+    clausePreviewView.type === "items" ? clausePreviewView.items : undefined;
   // Leaving the facet clears the in-document preview (and drops any pending
   // lookup-preview response so it cannot re-set a stale preview).
   useMountEffect(() => () => {
@@ -417,7 +427,11 @@ export const TemplateFillFacet = ({
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
-  const { data: detailData } = useQuery(detailOptions);
+  const detailDataQuery = useQuery(detailOptions);
+  const detailDataView = useQueryView(detailDataQuery);
+  useQueryViewError(detailDataView);
+  const detailData =
+    detailDataView.type === "items" ? detailDataView.items : undefined;
   const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
   const fillActions = useTemplateStudioStore((s) => s.actions);
   // Persisted so the entered values survive a facet switch (edit a field and
@@ -437,9 +451,14 @@ export const TemplateFillFacet = ({
       ? detailData
       : null;
 
-  const { data: clauseSources, isPending: clauseSourcesPending } = useQuery(
+  const clauseSourcesQuery = useQuery(
     templateClausesOptions(activeOrganizationId, templateId),
   );
+  const { isPending: clauseSourcesPending } = clauseSourcesQuery;
+  const clauseSourcesView = useQueryView(clauseSourcesQuery);
+  useQueryViewError(clauseSourcesView);
+  const clauseSources =
+    clauseSourcesView.type === "items" ? clauseSourcesView.items : undefined;
   const sourceStamp =
     clauseSources && "links" in clauseSources
       ? templateClauseSourceStamp(clauseSources.links)
@@ -447,11 +466,7 @@ export const TemplateFillFacet = ({
 
   const presignedUrl = detail?.presignedUrl;
   const fileName = detail?.fileName;
-  const {
-    data: discovered,
-    isLoading: discovering,
-    isError,
-  } = useQuery(
+  const discoveredQuery = useQuery(
     templateFillDiscoverOptions({
       key: {
         organizationId: activeOrganizationId,
@@ -464,6 +479,20 @@ export const TemplateFillFacet = ({
       },
     }),
   );
+  const { isLoading: discovering } = discoveredQuery;
+  const discoveredView = useQueryView(discoveredQuery);
+  useQueryViewError(discoveredView);
+  const discovered =
+    discoveredView.type === "items" ? discoveredView.items : undefined;
+
+  if (detailDataView.type === "error" || clauseSourcesView.type === "error") {
+    return (
+      <>
+        <QueryViewFeedback view={detailDataView} />
+        <QueryViewFeedback view={clauseSourcesView} />
+      </>
+    );
+  }
 
   if (!detail || discovering || clauseSourcesPending) {
     return (
@@ -473,18 +502,20 @@ export const TemplateFillFacet = ({
     );
   }
 
-  if (isError || !discovered) {
+  if (discoveredView.type === "error" || !discovered) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("templates.loadFailed")}
-        </p>
+        <QueryViewFeedback view={discoveredView} />
       </div>
     );
   }
 
   return (
     <>
+      <QueryViewFeedback view={detailDataView} />
+      <QueryViewFeedback view={clausePreviewView} />
+      <QueryViewFeedback view={clauseSourcesView} />
+      <QueryViewFeedback view={discoveredView} />
       {fillIsDirty ? (
         <div className="border-warning/30 bg-warning/10 mx-4 mt-3 flex items-center justify-between gap-2 rounded-lg border p-2.5">
           <p className="text-warning-foreground text-xs">
@@ -824,7 +855,7 @@ const queueLookupPreviews = (
  *  rendering to insert: the first format as the default (`{{ path }}`), each
  *  later format keyed (`{{ path.key }}`). Single-format lookups and non-lookup
  *  fields insert with one click as `{{ path }}`. */
-export const InsertExistingFieldItem = ({
+const InsertExistingFieldItem = ({
   field,
   onInsert,
 }: {
@@ -872,56 +903,6 @@ export const InsertExistingFieldItem = ({
   );
 };
 
-/** Primary footer action, contextual to the open detail: a placeholder field
- *  inserts its marker, a condition (`#if`) inserts its block, and the overview
- *  creates a new field. */
-export const StudioPrimaryInsertButton = ({
-  actions,
-  selected,
-}: {
-  actions: StudioActions;
-  selected: DirectiveRange | null;
-}) => {
-  const t = useTranslations();
-  if (selected?.kind === "placeholder") {
-    return (
-      <Button
-        className="flex-1 justify-start"
-        onClick={() => actions.insertExistingField(selected.expr)}
-        size="sm"
-        variant="ghost"
-      >
-        <BracesIcon />
-        {t("templates.studio.insertIntoTemplate")}
-      </Button>
-    );
-  }
-  if (selected?.kind === "if") {
-    return (
-      <Button
-        className="flex-1 justify-start"
-        onClick={() => actions.insertExistingCondition(selected.expr)}
-        size="sm"
-        variant="ghost"
-      >
-        <BracesIcon />
-        {t("templates.studio.insertConditionIntoTemplate")}
-      </Button>
-    );
-  }
-  return (
-    <Button
-      className="flex-1 justify-start"
-      onClick={actions.insertField}
-      size="sm"
-      variant="ghost"
-    >
-      <PlusIcon />
-      {t("templates.studio.newField")}
-    </Button>
-  );
-};
-
 /** The effective (document-visible) slot name per link: the LAST recorded step
  *  for each link in the pending-rename replay log wins, superseding the stale
  *  server record. Derive once per render, then look up by link id. */
@@ -939,7 +920,7 @@ const effectiveSlotByLink = (
  *  registers the handlers + UI state in the session store. */
 const MENU_ITEM_PRESS_REASON = "item-press";
 
-export const StudioInsertRow = () => {
+const StudioInsertRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const fields = useTemplateStudioStore((s) => s.fields);
@@ -961,14 +942,22 @@ export const StudioInsertRow = () => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   // Linked clauses feed the Insert > Clause slot submenu so the user picks a
   // real clause instead of typing a slot name into a bare clause marker.
-  const { data: clausesData } = useQuery({
+  const clausesDataQuery = useQuery({
     ...templateClausesOptions(activeOrganizationId, sessionTemplateId ?? ""),
     enabled: sessionTemplateId !== null,
   });
+  const clausesDataView = useQueryView(clausesDataQuery);
+  useQueryViewError(clausesDataView);
+  const clausesData =
+    clausesDataView.type === "items" ? clausesDataView.items : undefined;
   // Saved recipes (org-wide) feed the Insert > Recipes submenu.
-  const { data: recipesData } = useQuery(
+  const recipesDataQuery = useQuery(
     templateRecipesOptions(activeOrganizationId),
   );
+  const recipesDataView = useQueryView(recipesDataQuery);
+  useQueryViewError(recipesDataView);
+  const recipesData =
+    recipesDataView.type === "items" ? recipesDataView.items : undefined;
   // The loop-counter submenu only makes sense inside
   // a `{% for %}` body. `isCaretInLoop` reads the live caret imperatively, so
   // recompute it each time the menu opens rather than reactively.
@@ -1005,6 +994,42 @@ export const StudioInsertRow = () => {
   if (!actions) {
     return null;
   }
+  const primaryAction = (() => {
+    const newFieldAction = {
+      icon: <PlusIcon aria-hidden="true" />,
+      label: t("templates.studio.newField"),
+      onClick: actions.insertField,
+    };
+    if (selected === null) {
+      return newFieldAction;
+    }
+    switch (selected.kind) {
+      case "placeholder":
+        return {
+          icon: <BracesIcon aria-hidden="true" />,
+          label: t("templates.studio.insertIntoTemplate"),
+          onClick: () => actions.insertExistingField(selected.expr),
+        };
+      case "if":
+        return {
+          icon: <BracesIcon aria-hidden="true" />,
+          label: t("templates.studio.insertConditionIntoTemplate"),
+          onClick: () => actions.insertExistingCondition(selected.expr),
+        };
+      case "elif":
+      case "clause":
+      case "for":
+      case "else":
+      case "endif":
+      case "endfor":
+      case "num":
+      case "ref":
+      case "loop":
+        return newFieldAction;
+      default:
+        return assertNever(selected.kind);
+    }
+  })();
   return (
     <div
       className={cn(
@@ -1012,8 +1037,12 @@ export const StudioInsertRow = () => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <StudioPrimaryInsertButton actions={actions} selected={selected} />
-      <Menu
+      <SplitButton
+        className="flex-1 [&>button:first-child]:flex-1 [&>button:first-child]:justify-start"
+        menuLabel={t("templates.studio.insert")}
+        onPrimaryClick={primaryAction.onClick}
+        primaryLabel={primaryAction.label}
+        size="sm"
         onOpenChange={(open, eventDetails) => {
           preserveEditorFocusRef.current =
             !open && eventDetails.reason === MENU_ITEM_PRESS_REASON;
@@ -1021,140 +1050,144 @@ export const StudioInsertRow = () => {
             setCaretInLoop(actions.isCaretInLoop());
           }
         }}
-      >
-        <MenuTrigger
-          aria-label={t("templates.studio.insert")}
-          render={<Button size="icon-sm" variant="ghost" />}
-        >
-          <ChevronDownIcon />
-        </MenuTrigger>
-        <MenuPopup
-          align="end"
-          finalFocus={() => {
-            if (linkClauseDialogLaunchRef.current) {
-              linkClauseDialogLaunchRef.current = false;
+        menu={
+          <MenuPopup
+            align="end"
+            finalFocus={() => {
+              if (linkClauseDialogLaunchRef.current) {
+                linkClauseDialogLaunchRef.current = false;
+                preserveEditorFocusRef.current = false;
+                return false;
+              }
+              if (!preserveEditorFocusRef.current) {
+                return true;
+              }
               preserveEditorFocusRef.current = false;
-              return false;
-            }
-            if (!preserveEditorFocusRef.current) {
-              return true;
-            }
-            preserveEditorFocusRef.current = false;
-            return actions.focusEditor();
-          }}
-        >
-          {fields.length > 0 && (
-            <MenuSub>
-              <MenuSubTrigger>
-                <BracesIcon />
-                {t("templates.fields")}
-              </MenuSubTrigger>
-              <MenuSubPopup>
-                {fields.map((f) => (
-                  <InsertExistingFieldItem
-                    field={f}
-                    key={f.path}
-                    onInsert={actions.insertExistingField}
-                  />
-                ))}
-              </MenuSubPopup>
-            </MenuSub>
-          )}
-          <MenuItem onClick={actions.insertCondition}>
-            <SplitIcon />
-            {t("templates.studio.scopeCondition")}
-          </MenuItem>
-          <MenuItem onClick={actions.insertLoop}>
-            <RepeatIcon />
-            {t("templates.studio.loop")}
-          </MenuItem>
-          {caretInLoop && (
-            <MenuSub>
-              <MenuSubTrigger>
-                <RepeatIcon />
-                {t("templates.studio.loop")}
-              </MenuSubTrigger>
-              <MenuSubPopup>
-                <MenuItem onClick={() => actions.insertText(LOOP_INDEX_MARKER)}>
-                  <HashIcon />
-                  {t("templates.studio.insertItemNumber")}
-                </MenuItem>
-                <MenuItem
-                  onClick={() => actions.insertText(LOOP_LENGTH_MARKER)}
-                >
-                  <SigmaIcon />
-                  {t("templates.studio.insertItemTotal")}
-                </MenuItem>
-              </MenuSubPopup>
-            </MenuSub>
-          )}
-          {recipes.length > 0 && (
-            <MenuSub>
-              <MenuSubTrigger>
-                <BookmarkIcon />
-                {t("templates.studio.recipes")}
-              </MenuSubTrigger>
-              <MenuSubPopup>
-                {recipes.map((recipe) => (
+              return actions.focusEditor();
+            }}
+          >
+            {sessionTemplateId !== null && (
+              <QueryViewFeedback view={clausesDataView} />
+            )}
+            <QueryViewFeedback view={recipesDataView} />
+            {fields.length > 0 && (
+              <MenuSub>
+                <MenuSubTrigger>
+                  <BracesIcon />
+                  {t("templates.fields")}
+                </MenuSubTrigger>
+                <MenuSubPopup>
+                  {fields.map((f) => (
+                    <InsertExistingFieldItem
+                      field={f}
+                      key={f.path}
+                      onInsert={actions.insertExistingField}
+                    />
+                  ))}
+                </MenuSubPopup>
+              </MenuSub>
+            )}
+            <MenuItem onClick={actions.insertCondition}>
+              <SplitIcon />
+              {t("templates.studio.scopeCondition")}
+            </MenuItem>
+            <MenuItem onClick={actions.insertLoop}>
+              <RepeatIcon />
+              {t("templates.studio.loop")}
+            </MenuItem>
+            {caretInLoop && (
+              <MenuSub>
+                <MenuSubTrigger>
+                  <RepeatIcon />
+                  {t("templates.studio.loop")}
+                </MenuSubTrigger>
+                <MenuSubPopup>
                   <MenuItem
-                    key={recipe.id}
-                    onClick={() => actions.insertRecipe(recipe.definition)}
+                    onClick={() => actions.insertText(LOOP_INDEX_MARKER)}
                   >
-                    <span className="min-w-0 truncate">{recipe.name}</span>
+                    <HashIcon />
+                    {t("templates.studio.insertItemNumber")}
                   </MenuItem>
-                ))}
-              </MenuSubPopup>
-            </MenuSub>
-          )}
-          <MenuSub>
-            <MenuSubTrigger>
-              <TextQuoteIcon />
-              {t("templates.studio.scopeClause")}
-            </MenuSubTrigger>
-            <MenuSubPopup>
-              {linkedClauses.map((link) => {
-                // Only links bound to a concrete slot are insertable here: fill
-                // resolution matches links by their persisted slotName, so a
-                // slugified-title fallback for a null-slot link would leave its
-                // clause marker unresolved in the generated document.
-                const slotName = link.slotName;
-                if (slotName === null) {
-                  return null;
-                }
-                return (
                   <MenuItem
-                    dir="auto"
-                    key={link.id}
-                    onClick={() => actions.insertClauseSlot(slotName)}
+                    onClick={() => actions.insertText(LOOP_LENGTH_MARKER)}
                   >
-                    {link.title}
+                    <SigmaIcon />
+                    {t("templates.studio.insertItemTotal")}
                   </MenuItem>
-                );
-              })}
-              {linkedClauses.some((link) => link.slotName !== null) && (
-                <MenuSeparator />
-              )}
-              <MenuItem onClick={actions.insertClause}>
-                {t("templates.studio.emptyClauseSlot")}
-              </MenuItem>
-              {sessionTemplateId !== null && (
-                <>
+                </MenuSubPopup>
+              </MenuSub>
+            )}
+            {recipes.length > 0 && (
+              <MenuSub>
+                <MenuSubTrigger>
+                  <BookmarkIcon />
+                  {t("templates.studio.recipes")}
+                </MenuSubTrigger>
+                <MenuSubPopup>
+                  {recipes.map((recipe) => (
+                    <MenuItem
+                      key={recipe.id}
+                      onClick={() => actions.insertRecipe(recipe.definition)}
+                    >
+                      <span className="min-w-0 truncate">{recipe.name}</span>
+                    </MenuItem>
+                  ))}
+                </MenuSubPopup>
+              </MenuSub>
+            )}
+            <MenuSub>
+              <MenuSubTrigger>
+                <TextQuoteIcon />
+                {t("templates.studio.scopeClause")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                {linkedClauses.map((link) => {
+                  // Only links bound to a concrete slot are insertable here: fill
+                  // resolution matches links by their persisted slotName, so a
+                  // slugified-title fallback for a null-slot link would leave its
+                  // clause marker unresolved in the generated document.
+                  const slotName = link.slotName;
+                  if (slotName === null) {
+                    return null;
+                  }
+                  return (
+                    <MenuItem
+                      dir="auto"
+                      key={link.id}
+                      onClick={() => actions.insertClauseSlot(slotName)}
+                    >
+                      {link.title}
+                    </MenuItem>
+                  );
+                })}
+                {linkedClauses.some((link) => link.slotName !== null) && (
                   <MenuSeparator />
-                  <MenuItem
-                    onClick={() => {
-                      linkClauseDialogLaunchRef.current = true;
-                      setLinkClauseOpen(true);
-                    }}
-                  >
-                    <PlusIcon />
-                    {t("clauses.linkClause")}
-                  </MenuItem>
-                </>
-              )}
-            </MenuSubPopup>
-          </MenuSub>
-        </MenuPopup>
-      </Menu>
+                )}
+                <MenuItem onClick={actions.insertClause}>
+                  {t("templates.studio.emptyClauseSlot")}
+                </MenuItem>
+                {sessionTemplateId !== null && (
+                  <>
+                    <MenuSeparator />
+                    <MenuItem
+                      onClick={() => {
+                        linkClauseDialogLaunchRef.current = true;
+                        setLinkClauseOpen(true);
+                      }}
+                    >
+                      <PlusIcon />
+                      {t("clauses.linkClause")}
+                    </MenuItem>
+                  </>
+                )}
+              </MenuSubPopup>
+            </MenuSub>
+          </MenuPopup>
+        }
+      >
+        {primaryAction.icon}
+        {primaryAction.label}
+      </SplitButton>
       {sessionTemplateId !== null && (
         <LinkClauseDialog
           onLinked={() => {
@@ -1176,7 +1209,7 @@ export const StudioInsertRow = () => {
   );
 };
 
-export const TemplateStudioRailIcon = (
+const TemplateStudioRailIcon = (
   _props: InspectorRailIconProps<TemplateStudioPayload>,
 ) => <LayoutTemplateIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
 
@@ -1201,7 +1234,7 @@ type InspectorProps = {
   onFieldBack?: () => void;
 };
 
-export const Inspector = ({
+const Inspector = ({
   selected,
   fields,
   outline,
@@ -1264,7 +1297,7 @@ export const Inspector = ({
 /** Subtle count strip pinned above the insert row on the template overview:
  *  fields · conditions · clauses. Conditions ARE the template's boolean
  *  fields, so they are derived rather than fetched. */
-export const StudioOverviewSummary = ({
+const StudioOverviewSummary = ({
   fields,
   templateId,
 }: {
@@ -1277,7 +1310,11 @@ export const StudioOverviewSummary = ({
     activeOrganizationId,
     templateId,
   );
-  const { data: clausesData } = useQuery(clausesOptions);
+  const clausesDataQuery = useQuery(clausesOptions);
+  const clausesDataView = useQueryView(clausesDataQuery);
+  useQueryViewError(clausesDataView);
+  const clausesData =
+    clausesDataView.type === "items" ? clausesDataView.items : undefined;
   const links: LinkedClause[] =
     clausesData && "links" in clausesData ? clausesData.links : [];
   const outdated = links.filter((link) => link.isOutdated);
@@ -1367,16 +1404,14 @@ export const ClauseDriftPopover = ({
         </ul>
         <Button
           className="w-full"
-          disabled={syncingAll}
+          loading={syncingAll}
           onClick={() => {
             detached(handleSyncAll(), "template-studio-inspector.sync-all");
           }}
           size="sm"
           variant="outline"
         >
-          <RefreshCwIcon
-            className={cn("size-3.5", syncingAll && "animate-spin")}
-          />
+          <RefreshCwIcon className="size-3.5" />
           {t("clauses.syncAllOutdated")}
         </Button>
       </PopoverPopup>
@@ -1387,16 +1422,15 @@ export const ClauseDriftPopover = ({
 /** "When to use" subtab: free-text guidance that steers agents (and humans)
  *  toward or away from this template. Its own tab because the guidance matters
  *  to agents picking a template, not just to the author drafting one. */
-export const TemplateGuidanceFacet = ({
-  templateId,
-}: {
-  templateId: string;
-}) => {
-  const t = useTranslations();
+const TemplateGuidanceFacet = ({ templateId }: { templateId: string }) => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: detailData } = useQuery(
+  const detailDataQuery = useQuery(
     templateDetailOptions(activeOrganizationId, templateId),
   );
+  const detailDataView = useQueryView(detailDataQuery);
+  useQueryViewError(detailDataView);
+  const detailData =
+    detailDataView.type === "items" ? detailDataView.items : undefined;
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -1404,26 +1438,29 @@ export const TemplateGuidanceFacet = ({
   if (detail === null) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+        <QueryViewFeedback view={detailDataView} />
       </div>
     );
   }
   return (
-    <GuidanceFields
-      key={templateId}
-      languages={detail.languages}
-      organizationId={activeOrganizationId}
-      templateId={templateId}
-      whenNotToUse={detail.whenNotToUse ?? ""}
-      whenToUse={detail.whenToUse ?? ""}
-    />
+    <>
+      <QueryViewFeedback view={detailDataView} />
+      <GuidanceFields
+        key={templateId}
+        languages={detail.languages}
+        organizationId={activeOrganizationId}
+        templateId={templateId}
+        whenNotToUse={detail.whenNotToUse ?? ""}
+        whenToUse={detail.whenToUse ?? ""}
+      />
+    </>
   );
 };
 
 /** Both guidance notes, committed on blur via the template update endpoint
  *  (the same fields the list's guidance dialog writes). Keyed on templateId so
  *  switching templates resets the local drafts. */
-export const GuidanceFields = ({
+const GuidanceFields = ({
   organizationId,
   templateId,
   whenToUse,
@@ -1500,7 +1537,7 @@ const GUIDANCE_RECOMMENDED_LENGTH = 500;
 
 /** One guidance note: label, a height-capped textarea that scrolls internally
  *  once it fills, and a live character count that warns past the soft limit. */
-export const GuidanceNote = ({
+const GuidanceNote = ({
   label,
   value,
   onChange,
