@@ -282,7 +282,7 @@ describe.skipIf(!runPostgresTests)(
               });
               expect(await rejectionOf(insertion)).toMatchObject({
                 message:
-                  'new row violates row-level security policy for table "entities"',
+                  'new row violates row-level security policy "workspace_entity_feature" for table "entities"',
               });
             }
           } finally {

@@ -11,7 +11,9 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   LIST_COLUMN_LIMIT_ERROR_CODE,
@@ -23,6 +25,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 import readList from "../get";
@@ -64,6 +67,11 @@ if (!databaseUrl || !runPostgres) {
         email: `${userId}@example.test`,
         emailVerified: true,
       });
+      const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
+      env.API_FEATURE_ACCESS_GRANTS = organizationFeatureGrants(
+        organizationId,
+        [LEGAL_LISTS_FEATURE_ID],
+      );
       try {
         await db.insert(member).values({
           id: mintAuthProviderIdValue(),
@@ -259,6 +267,7 @@ if (!databaseUrl || !runPostgres) {
           ),
         ).toBe(LIMITS.legalListColumnsPerList + 1);
       } finally {
+        env.API_FEATURE_ACCESS_GRANTS = previousGrants;
         await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
         await db
           .delete(organization)
