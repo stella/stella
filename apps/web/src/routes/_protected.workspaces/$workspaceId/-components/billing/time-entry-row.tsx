@@ -14,7 +14,6 @@ import {
   TrashIcon,
   UndoIcon,
 } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -131,7 +130,10 @@ export const TimeEntryRow = ({
         <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
           {isActive ? (
             <span className="flex items-center gap-1.5">
-              <Loader className="size-1.5" size="sm" variant="decorative" />
+              <span
+                aria-hidden="true"
+                className="bg-success size-1.5 rounded-full"
+              />
               {t("common.running")}
             </span>
           ) : (

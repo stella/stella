@@ -13,13 +13,16 @@ test("rejects spinner icons, animated placeholders and progress bars", async () 
     '  <div role="progressbar" />',
     '  <div className={cn({ "animate-spin": busy })} />',
     '  <div className={cn({ "motion-safe:animate-pulse": busy })} />',
+    '  <span className="size-4 animate-spin!" />',
+    '  <span className="motion-safe:animate-pulse!" />',
+    '  <span className="!animate-spin" />',
     "</>;",
   ].join("\n");
   expect(
     await lintSingleRule("no-adhoc-loader", source, {
       sourcePath: "source.tsx",
     }),
-  ).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+  ).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 });
 
 test("accepts canonical status, decorative, region and skeleton indicators", async () => {
