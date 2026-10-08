@@ -64,28 +64,38 @@ describe("handler contexts require explicit audit collaborators", () => {
     expect(scopedEvents).toEqual([scopedEvent]);
   });
 
-  test("configuring one recorder leaves the other unconfigured", async () => {
-    const directOnly = createTestHandlerContext({
-      recordAuditEvent: auditRecorderDouble(),
-    });
-    const scopedOnly = createTestHandlerContext({
-      createAuditRecorder: () => auditRecorderDouble(),
+  test("a direct recorder also serves the scoped recorder factory", async () => {
+    const events: AuditEvent[] = [];
+    const context = createTestHandlerContext({
+      recordAuditEvent: auditRecorderDouble((recorded) => {
+        events.push(...recorded);
+      }),
     });
 
-    expect(
-      await rejectionOf(
-        (async () =>
-          await directOnly.createAuditRecorder()(transaction(), event))(),
-      ),
-    ).toMatchObject({
-      message: expect.stringContaining(missingRecorderMessage),
+    await context.createAuditRecorder({ workspaceId: null })(
+      transaction(),
+      event,
+    );
+    await context.recordAuditEvent(transaction(), event);
+
+    expect(events).toEqual([event, event]);
+  });
+
+  test("a scoped recorder factory also serves the direct recorder", async () => {
+    const events: AuditEvent[] = [];
+    const context = createTestHandlerContext({
+      createAuditRecorder: () =>
+        auditRecorderDouble((recorded) => {
+          events.push(...recorded);
+        }),
     });
-    expect(
-      await rejectionOf(
-        (async () => await scopedOnly.recordAuditEvent(transaction(), event))(),
-      ),
-    ).toMatchObject({
-      message: expect.stringContaining(missingRecorderMessage),
-    });
+
+    await context.recordAuditEvent(transaction(), event);
+    await context.createAuditRecorder({ workspaceId: null })(
+      transaction(),
+      event,
+    );
+
+    expect(events).toEqual([event, event]);
   });
 });
