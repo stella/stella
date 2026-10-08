@@ -52,7 +52,6 @@ describe("pdf signing poll decisions", () => {
     ).toEqual({
       type: "waiting",
       deadline: NOW + 60_000,
-      handoffDeadline: NOW,
       delayMs: PDF_SIGNING_POLL_INTERVAL_MS,
     });
   });
@@ -72,7 +71,6 @@ describe("pdf signing poll decisions", () => {
     ).toEqual({
       type: "waiting",
       deadline: NOW + 600_000,
-      handoffDeadline: NOW,
       delayMs: PDF_SIGNING_POLL_INTERVAL_MS,
     });
   });
