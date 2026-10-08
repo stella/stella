@@ -76,11 +76,20 @@ describe("Anthropic request configuration", () => {
   });
 
   test("the census rejects a constructor that omits shared client options", () => {
+    const source = readFileSync(
+      new URL("tanstack-ai-models.ts", import.meta.url),
+      "utf-8",
+    );
+    expect(unownedAnthropicTransport("lib/tanstack-ai-models.ts", source)).toBe(
+      false,
+    );
+    const planted = source.replace(
+      "anthropicClientOptions(anthropicWorkspaceId)",
+      "{}",
+    );
+    expect(planted).not.toBe(source);
     expect(
-      unownedAnthropicTransport(
-        "lib/tanstack-ai-models.ts",
-        'import { createAnthropicChat } from "@tanstack/ai-anthropic";',
-      ),
+      unownedAnthropicTransport("lib/tanstack-ai-models.ts", planted),
     ).toBe(true);
   });
 
