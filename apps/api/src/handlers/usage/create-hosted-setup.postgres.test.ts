@@ -28,6 +28,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_POLAR_API_VERSION } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -197,6 +198,7 @@ const startCheckout = async ({
 }: StartCheckoutOptions) =>
   await createHostedSetup.handler(
     createTestHandlerContext<Parameters<typeof createHostedSetup.handler>[0]>({
+      recordAuditEvent: auditRecorderDouble(),
       body: request,
       session: { activeOrganizationId: fixture.organizationId },
       user: { id: fixture.userId },

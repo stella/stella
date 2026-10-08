@@ -1,3 +1,4 @@
+// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -7,6 +8,7 @@ import { Result, panic } from "better-result";
 import * as v from "valibot";
 
 import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -93,7 +95,6 @@ import {
   readPublisherBytes,
   readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -1105,7 +1106,13 @@ export const fetchSkUsListing = async ({
     if (attempt >= 2 || signal?.aborted || !retryable) {
       return { type: "retry_later", error: fetched.error };
     }
-    await pause(backoffMs(attempt));
+    await pause(
+      backoffDelay(attempt, {
+        baseMs: 1000,
+        maxMs: 30_000,
+        jitter: { type: "additive", random: Math.random(), rangeMs: 1000 },
+      }),
+    );
   }
 };
 

@@ -15,6 +15,7 @@ import {
 import { evidenceSourceDocumentName } from "@/features/avt/fact-source.logic";
 import type { EvidenceFact } from "@/features/avt/types";
 import type { LegalListSourceLocator } from "@/lib/api-contract";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type FactSourceProps = {
@@ -55,7 +56,11 @@ export const EvidenceFactSource = ({
   workspaceId,
   source,
 }: EvidenceFactSourceProps) => {
-  const { data: files = [] } = useQuery(workspaceFilesOptions(workspaceId));
+  const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
+  const filesView = useQueryView(filesQuery);
+  useQueryViewError(filesView);
+  const files =
+    (filesView.type === "items" ? filesView.items : undefined) ?? [];
   if (source === undefined) {
     return null;
   }

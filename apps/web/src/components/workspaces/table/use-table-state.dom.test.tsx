@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { ColumnSizingState } from "@tanstack/react-table";
 import { afterAll, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/table" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
 const { QueryClient } = await import("@tanstack/react-query");
@@ -52,9 +54,7 @@ test("pending table widths publish only for the owner that resized them", async 
       queryClient.setQueryData(["session"], { user: { id: "user-b" } });
     });
     await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 150);
-      });
+      await sleep(150);
     });
     expect(published).toEqual([]);
     act(() => {
@@ -72,9 +72,7 @@ test("pending table widths publish only for the owner that resized them", async 
       mounted.result.current.listeners.onColumnSizingChange({ column: 350 }),
     );
     await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 150);
-      });
+      await sleep(150);
     });
     expect(published).toEqual([{ column: 350 }]);
     mounted.unmount();

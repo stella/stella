@@ -1,3 +1,4 @@
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp } from "@/components/inspector/pdf-signing-stamp.logic";
@@ -65,12 +66,6 @@ const readPdfSigningSession = async ({
 
 const nowMs = () => Temporal.Now.instant().epochMilliseconds;
 
-const wait = async (milliseconds: number) => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
-};
-
 /**
  * Poll one signing session until it settles or its window closes. The desktop
  * app owns the whole exchange from here, so the browser only reads status.
@@ -97,6 +92,6 @@ export const watchPdfSigningSession = async ({
     }
 
     deadline = decision.deadline;
-    await wait(decision.delayMs);
+    await sleep(decision.delayMs);
   }
 };

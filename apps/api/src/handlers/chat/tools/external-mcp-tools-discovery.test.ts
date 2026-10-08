@@ -1,6 +1,8 @@
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { loadExternalMcpToolsForUser } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -234,9 +236,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       // otherwise this test could not distinguish "client known" from
       // "client not yet created" at the moment the timeout fires.
       void operation();
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await sleep(0);
       throw new TimeoutError({
         message: `${opts.label} exceeded ${opts.timeoutMs}ms`,
         label: opts.label,

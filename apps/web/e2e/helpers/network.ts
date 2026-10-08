@@ -8,6 +8,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { sleep as ownerSleep } from "@stll/concurrency/sleep";
+
 import { networkBaselineCoverageProblem } from "./smoke-route-coverage";
 
 // Matches apps/web/e2e/playwright.config.ts and helpers/api.ts: the API origin
@@ -98,10 +100,7 @@ export const waitForQuietPeriod = async ({
   minimumObservationMs,
   timeoutMs,
   now = Date.now,
-  sleep = async (durationMs) =>
-    new Promise((resolve) => {
-      setTimeout(resolve, durationMs);
-    }),
+  sleep = ownerSleep,
 }: WaitForQuietPeriodOptions): Promise<"idle" | "timeout"> => {
   const startedAt = now();
   const timeoutAt = startedAt + timeoutMs;

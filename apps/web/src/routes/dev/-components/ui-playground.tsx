@@ -3,6 +3,7 @@ import type * as React from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sleep } from "@stll/concurrency/sleep";
 import {
   Accordion,
   AccordionItem,
@@ -276,9 +277,7 @@ const TABLE_ROWS = [
 const showPromiseToast = () => {
   const toastId = stellaToast.loading("Saving draft");
   detached(
-    new Promise<string>((resolve) => {
-      setTimeout(() => resolve("complete"), 900);
-    })
+    sleep(900)
       .then(() => {
         stellaToast.update(toastId, { title: "Draft saved", type: "success" });
         return undefined;
@@ -1406,9 +1405,7 @@ function DestructiveConfirmDialogPlayground() {
 
   const handleContactConfirm = async () => {
     setContactLoading(true);
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 900);
-    });
+    await sleep(900);
     setContactLoading(false);
     stellaToast.success(
       t("workspaces.deletedItem", { name: CONTACT_CONFIRMATION }),

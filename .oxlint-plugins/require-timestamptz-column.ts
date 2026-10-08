@@ -25,11 +25,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
 import {
-  getImportedName,
   isAstNode,
   isFileIn,
   isIdentifier,
+  memberPropertyName,
+  resolveImportedExpression,
   staticStringValue,
+  unwrapExpression,
 } from "./utils.ts";
 
 const PG_CORE_MODULE = "drizzle-orm/pg-core";
@@ -50,19 +52,6 @@ const isNaiveTimestampLiteral = (node: unknown): boolean => {
   // `" timestamp "` is the same naive type; trim before matching.
   const value = staticStringValue(node)?.trim();
   return value !== undefined && NAIVE_TIMESTAMP_TYPE.test(value);
-};
-
-// Static member name of a call target: `p.timestamp`, `p["timestamp"]`, and
-// `` p[`timestamp`] `` all reach the same pg-core export, so computed string
-// keys must not bypass the rule.
-const staticMemberName = (callee: AstNode): string | null => {
-  if (callee.type !== "MemberExpression") {
-    return null;
-  }
-  if (callee.computed === false) {
-    return isIdentifier(callee.property) ? callee.property.name : null;
-  }
-  return staticStringValue(callee.property);
 };
 
 // `dataType` as an identifier, quoted, or statically computed key:
@@ -146,99 +135,39 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        // Namespace / default bindings for drizzle-orm/pg-core, e.g. the `p`
-        // in `import * as p from "drizzle-orm/pg-core"`. Used to match
-        // `<ns>.timestamp(...)`.
-        const pgCoreNamespaceAliases = new Set<string>();
-        // Local bindings for the named `timestamp` export of pg-core. Used to
-        // match bare `timestamp(...)`. A `timestamptz` imported from
-        // @/api/db/columns never lands here, so the safe helper is not
-        // flagged.
-        const pgCoreTimestampAliases = new Set<string>();
-        // Local bindings for pg-core `customType`, to detect hand-rolled
-        // naive timestamp types outside columns.ts.
-        const customTypeAliases = new Set<string>();
-
         return {
           before() {
-            pgCoreNamespaceAliases.clear();
-            pgCoreTimestampAliases.clear();
-            customTypeAliases.clear();
             return !isFileIn(context, [ALLOWLISTED_FILE]);
           },
-          ImportDeclaration(node) {
-            if (node.source.value !== PG_CORE_MODULE) {
-              return;
-            }
-
-            const specifiers = node.specifiers;
-            if (!Array.isArray(specifiers)) {
-              return;
-            }
-
-            for (const specifier of specifiers) {
-              if (!isAstNode(specifier)) {
-                continue;
-              }
-
-              if (
-                specifier.type === "ImportNamespaceSpecifier" ||
-                specifier.type === "ImportDefaultSpecifier"
-              ) {
-                if (isIdentifier(specifier.local)) {
-                  pgCoreNamespaceAliases.add(specifier.local.name);
-                }
-                continue;
-              }
-
-              const importedName = getImportedName(specifier);
-              if (!isIdentifier(specifier.local)) {
-                continue;
-              }
-              if (importedName === "timestamp") {
-                pgCoreTimestampAliases.add(specifier.local.name);
-              } else if (importedName === "customType") {
-                customTypeAliases.add(specifier.local.name);
-              }
-            }
-          },
-
           CallExpression(node) {
-            const callee = node.callee;
-
-            // Bare `timestamp(...)` where `timestamp` came from pg-core.
-            if (
-              isIdentifier(callee) &&
-              pgCoreTimestampAliases.has(callee.name)
-            ) {
+            let imported = resolveImportedExpression(context, node.callee);
+            if (imported === null) {
+              const callee = unwrapExpression(node.callee);
+              if (callee?.type === "MemberExpression") {
+                const namespace = resolveImportedExpression(
+                  context,
+                  callee.object,
+                );
+                const member = memberPropertyName(callee);
+                // Keep the existing default-member guard, resolving the
+                // default import's identity rather than its local spelling.
+                if (
+                  namespace?.source === PG_CORE_MODULE &&
+                  namespace.imported === "default" &&
+                  member !== null
+                ) {
+                  imported = { source: PG_CORE_MODULE, imported: member };
+                }
+              }
+            }
+            if (imported?.source !== PG_CORE_MODULE) {
+              return;
+            }
+            if (imported.imported === "timestamp") {
               context.report({ node, messageId: "stockTimestampCall" });
               return;
             }
-
-            if (!isAstNode(callee)) {
-              return;
-            }
-
-            // `<ns>.timestamp(...)` (or a computed-key equivalent) where
-            // `<ns>` is a pg-core namespace alias.
-            const namespaceMember =
-              callee.type === "MemberExpression" &&
-              isIdentifier(callee.object) &&
-              pgCoreNamespaceAliases.has(callee.object.name)
-                ? staticMemberName(callee)
-                : null;
-            if (namespaceMember === "timestamp") {
-              context.report({ node, messageId: "stockTimestampCall" });
-              return;
-            }
-
-            // `customType<...>({ dataType: () => "timestamp" })` outside
-            // columns.ts.
-            const bareCustomType =
-              isIdentifier(callee) && customTypeAliases.has(callee.name);
-            const namespacedCustomType = namespaceMember === "customType";
-
-            if (!bareCustomType && !namespacedCustomType) {
+            if (imported.imported !== "customType") {
               return;
             }
 
