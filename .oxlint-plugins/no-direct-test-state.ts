@@ -266,6 +266,16 @@ export default eslintCompatPlugin({
               mutations.push(node);
             }
           },
+          ForOfStatement(node) {
+            if (mutates(node.left)) {
+              mutations.push(node);
+            }
+          },
+          ForInStatement(node) {
+            if (mutates(node.left)) {
+              mutations.push(node);
+            }
+          },
           UpdateExpression(node) {
             if (mutates(node.argument)) {
               mutations.push(node);

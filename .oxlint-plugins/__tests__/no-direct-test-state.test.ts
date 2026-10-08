@@ -25,6 +25,19 @@ describe(RULE, () => {
     ).toEqual([4, 5, 7]);
   });
 
+  test("rejects direct and destructured state targets in both loop forms", async () => {
+    expect(
+      await lint(
+        'import { env } from "@/api/env";\nfor (process.env.A of ["changed"]) {}\nfor (env.AI_PROVIDER in { openai: true }) {}\nfor ([process.env.A] of [["changed"]]) {}\nfor ({ a: env.AI_PROVIDER } of [{ a: "openai" }]) {}\nfor ([process.env.A] in { changed: true }) {}\nfor ({ a: env.AI_PROVIDER } in { changed: true }) {}',
+      ),
+    ).toEqual([2, 3, 4, 5, 6, 7]);
+    expect(
+      await lint(
+        'for (const value of ["changed"]) {}\nfor (const key in { changed: true }) {}',
+      ),
+    ).toEqual([]);
+  });
+
   test("follows process aliases and destructured env bindings", async () => {
     expect(
       await lint(
