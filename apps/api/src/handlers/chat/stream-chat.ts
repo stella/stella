@@ -2253,7 +2253,7 @@ const processPersistenceChunk = ({
       chunks: [...priorRunFinishedChunks, sourceChunk],
     };
   }
-  const chunk =
+  let chunk =
     sourceChunk.type === EventType.RUN_ERROR
       ? normalizeRunErrorChunk(sourceChunk)
       : sourceChunk;
@@ -2286,7 +2286,85 @@ const processPersistenceChunk = ({
         ({ id, role }) => id === responseMessageId && role === "assistant",
       )
     ) {
+      const previous = processor
+        .getMessages()
+        .find(({ id }) => id === responseMessageId);
       processor.processChunk(chunk);
+      const snapshot = processor
+        .getMessages()
+        .find(({ id }) => id === responseMessageId);
+      if (previous !== undefined && snapshot !== undefined) {
+        // Model history cannot reconstruct the streamed transcript's text,
+        // reasoning placement or partial call arguments. Keep that transcript
+        // and reconcile the tool state/results available only in snapshots.
+        const parts = previous.parts.map((part) => {
+          if (part.type !== "tool-call") {
+            return part;
+          }
+          const updated = snapshot.parts.find(
+            (candidate) =>
+              candidate.type === "tool-call" && candidate.id === part.id,
+          );
+          if (updated?.type !== "tool-call") {
+            return part;
+          }
+          return {
+            ...updated,
+            ...part,
+            state: updated.state,
+            ...(updated.output === undefined ? {} : { output: updated.output }),
+          };
+        });
+        for (const part of snapshot.parts) {
+          if (
+            (part.type === "tool-call" &&
+              !parts.some(
+                (existing) =>
+                  existing.type === "tool-call" && existing.id === part.id,
+              )) ||
+            (part.type === "tool-result" &&
+              !parts.some(
+                (existing) =>
+                  existing.type === "tool-result" &&
+                  existing.toolCallId === part.toolCallId,
+              ))
+          ) {
+            parts.push(part);
+          }
+        }
+        chunk = {
+          ...chunk,
+          messages: chunk.messages.flatMap((message, index, messages) => {
+            // These results are now in the assistant's UI parts. Keeping the
+            // wire tool rows would make the SDK append them a second time.
+            if (
+              message.role === "tool" &&
+              parts.some(
+                (part) =>
+                  part.type === "tool-result" &&
+                  part.toolCallId === message.toolCallId,
+              )
+            ) {
+              return [];
+            }
+            if (
+              message.role === "reasoning" &&
+              messages
+                .slice(index + 1)
+                .find((candidate) => candidate.role !== "reasoning")?.id ===
+                responseMessageId
+            ) {
+              return [];
+            }
+            return [
+              message.id === responseMessageId && message.role === "assistant"
+                ? { ...message, parts }
+                : message,
+            ];
+          }),
+        };
+        processor.processChunk(chunk);
+      }
       // Snapshots reset run state; the deferred finish still needs the
       // owning assistant active to capture the complete turn.
       processor.processChunk(assistantMessageStartChunk(responseMessageId));

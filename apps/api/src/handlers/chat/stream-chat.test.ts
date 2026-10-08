@@ -1852,8 +1852,8 @@ describe("native interrupt boundary persistence", () => {
     });
     expect(finish?.responseMessage.parts).toMatchObject([
       { id: "call-1", name: "mcp__external__lookup", state: "complete" },
-      { id: "call-2", name: "create-document", state: "input-complete" },
       { toolCallId: "call-1", type: "tool-result" },
+      { id: "call-2", name: "create-document", state: "input-complete" },
     ]);
     const client = createStreamMessageCapture({
       initialMessages: [],
