@@ -30,6 +30,7 @@ import type {
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
+  consumePlaybookSaveToolCalls,
   getExternalMcpConnectorApprovalGrant,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
@@ -612,6 +613,7 @@ export const useChatSession = ({
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
+  const historicalPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
   // Render-current runtime identity for the stale-response guard below. A fresh
   // runtime means the thread was rehydrated — a thread switch OR a same-thread
   // refetch (sending a message rebuilds the runtime from a newer first page) —
@@ -679,6 +681,12 @@ export const useChatSession = ({
       (message) => !existingIds.has(message.id),
     );
     if (prepend.length > 0) {
+      // Record provenance before publishing the page to the live runtime.
+      // Reconciliation still refreshes caches for these saves.
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
+        messages: prepend,
+      });
       setMessages([...prepend, ...current]);
     }
     olderCursorRef.current = older.olderCursor;
@@ -1182,6 +1190,7 @@ export const useChatSession = ({
     observedPlaybookSaveRuntimesRef.current.add(chat);
     const reconciliation = reconcilePlaybookSaveToolCalls({
       handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
+      historicalToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
       messages,
       organizationId,
       playbookKeys: knowledgeKeys.playbooks,
