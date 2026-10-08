@@ -78,6 +78,8 @@ export const clipboardItemLink = (
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =
   "application/x-stella-clipboard-item-id";
+export const CLIPBOARD_GROUP_DRAG_TYPE =
+  "application/x-stella-clipboard-group-id";
 
 type ClipboardDragData = Record<string | symbol, unknown>;
 
@@ -283,6 +285,17 @@ export const clipboardDraggedItemId = (
   }
   const itemId = data["itemId"];
   return typeof itemId === "string" && itemIds.has(itemId) ? itemId : null;
+};
+
+export const clipboardDraggedGroupId = (
+  data: ClipboardDragData,
+  groupIds: ReadonlySet<string>,
+) => {
+  if (data["type"] !== CLIPBOARD_GROUP_DRAG_TYPE) {
+    return null;
+  }
+  const groupId = data["groupId"];
+  return typeof groupId === "string" && groupIds.has(groupId) ? groupId : null;
 };
 
 /**

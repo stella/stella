@@ -65,6 +65,8 @@
     "./icons": "./src/icons.ts",
     "./input": "./src/components/input.tsx",
     "./inline-rename": "./src/components/inline-rename.tsx",
+    "./inline-reorder": "./src/lib/inline-reorder.ts",
+    "./inline-drop-indicator": "./src/components/inline-drop-indicator.tsx",
     "./input-group": "./src/components/input-group.tsx",
     "./initials": "./src/lib/initials.ts",
     "./input-otp": "./src/components/input-otp.tsx",

@@ -1312,7 +1312,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     // duplicate audit entry) in this compliance context.
     annotations: {
       title: "Set practice jurisdictions",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,

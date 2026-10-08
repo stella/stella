@@ -2261,7 +2261,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save clause",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2365,7 +2365,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save playbook",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2395,7 +2395,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     inputSchema: runPlaybookArgsSchema,
     annotations: {
       title: "Run playbook",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,

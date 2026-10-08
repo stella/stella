@@ -139,9 +139,22 @@ export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   overrides: TestHandlerContextOverrides = {},
 ): TContext => {
   const base = createBaseContext();
+  // One configured recorder serves both entry points: workspace handlers
+  // rebind `recordAuditEvent` from `createAuditRecorder`, so configuring only
+  // one of them must still reach the test's recorder. Only a context with
+  // neither stays unconfigured.
+  const { recordAuditEvent, createAuditRecorder } = overrides;
   return asTestRaw<TContext>({
     ...base,
     ...overrides,
+    recordAuditEvent:
+      recordAuditEvent ??
+      (createAuditRecorder
+        ? createAuditRecorder({ workspaceId: null })
+        : base.recordAuditEvent),
+    createAuditRecorder:
+      createAuditRecorder ??
+      (recordAuditEvent ? () => recordAuditEvent : base.createAuditRecorder),
     // Merge identity details and replace authority as one value.
     memberRole: overrides.memberRole ?? base.memberRole,
     session: { ...base.session, ...overrides.session },

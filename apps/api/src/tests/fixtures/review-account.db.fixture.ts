@@ -18,6 +18,10 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { REVIEW_ACCOUNT_REFUSAL_MESSAGE } =
     await import("@/api/lib/auth/review-account-policy");
   const { readDevOtp } = await import("@/api/lib/dev-otp-store");
+  const { MCP_DEFAULT_RESOURCE_SCOPES } = await import("@stll/api-contract");
+  const { getMcpResourceUrl } = await import("@/api/mcp/constants");
+  const { OAUTH_CONSENT_PAGE_PATH, readOAuthRedirect, registerOAuthClient } =
+    await import("@/api/tests/helpers/oauth-grant");
   const auth = getAuth();
   const context = await auth.$context;
   const config = {
@@ -239,10 +243,42 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     expect((await post("/sign-in/email", { email, password })).status).toBe(
       401,
     );
-    expect(
-      (await post("/sign-in/email", { email, password: rotatedPassword }))
-        .status,
-    ).toBe(200);
+    const rotatedSignIn = await post("/sign-in/email", {
+      email,
+      password: rotatedPassword,
+    });
+    expect(rotatedSignIn.status).toBe(200);
+
+    // The account authorizes an MCP client for its organization: the
+    // provider's organization check must not trip the account's own rules.
+    const client = await registerOAuthClient();
+    const authorizeUrl = new URL(getAuthEndpointUrl("oauth2/authorize"));
+    authorizeUrl.search = new URLSearchParams({
+      client_id: client.clientId,
+      code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+      code_challenge_method: "S256",
+      redirect_uri: "https://connector.example.test/oauth/callback",
+      resource: getMcpResourceUrl(),
+      response_type: "code",
+      scope: MCP_DEFAULT_RESOURCE_SCOPES.join(" "),
+      state: Bun.randomUUIDv7(),
+    }).toString();
+    const authorized = await auth.handler(
+      new Request(authorizeUrl.href, {
+        headers: {
+          accept: "application/json",
+          cookie: rotatedSignIn.headers
+            .getSetCookie()
+            .map((value) => value.split(";").at(0))
+            .join("; "),
+        },
+      }),
+    );
+    expect(authorized.status, await authorized.clone().text()).toBe(200);
+    expect((await readOAuthRedirect(authorized)).pathname).toBe(
+      OAUTH_CONSENT_PAGE_PATH,
+    );
+
     const rotatedAccounts = await context.internalAdapter.findAccounts(
       created.id,
     );

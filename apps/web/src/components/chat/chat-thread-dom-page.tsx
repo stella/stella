@@ -17,6 +17,7 @@ import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { chatThreadOptions } from "@/features/chat/queries";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -180,28 +181,30 @@ export const openChatThreadDomPage = async ({
       <ChatThreadTestRouter>
         <QueryClientProvider client={queryClient}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <AuthenticatedUserProvider
-              user={{
-                activeOrganizationId: organizationId,
-                email: "user@example.com",
-                id: userId,
-                image: null,
-                name: "User",
-                preferredName: null,
-                timezoneId: "UTC",
-                wordEditShortcut: null,
-              }}
-            >
-              <Suspense fallback={<p>{SUSPENDED}</p>}>
-                <ChatThreadDomPage
-                  onSession={(next) => {
-                    session = next;
-                  }}
-                  organizationId={organizationId}
-                  threadId={threadId}
-                />
-              </Suspense>
-            </AuthenticatedUserProvider>
+            <FormattingProvider locale="en" timeZone="UTC">
+              <AuthenticatedUserProvider
+                user={{
+                  activeOrganizationId: organizationId,
+                  email: "user@example.com",
+                  id: userId,
+                  image: null,
+                  name: "User",
+                  preferredName: null,
+                  timezoneId: "UTC",
+                  wordEditShortcut: null,
+                }}
+              >
+                <Suspense fallback={<p>{SUSPENDED}</p>}>
+                  <ChatThreadDomPage
+                    onSession={(next) => {
+                      session = next;
+                    }}
+                    organizationId={organizationId}
+                    threadId={threadId}
+                  />
+                </Suspense>
+              </AuthenticatedUserProvider>
+            </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>
       </ChatThreadTestRouter>
