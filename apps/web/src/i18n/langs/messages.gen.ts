@@ -2389,6 +2389,8 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
+      "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";
     };
     "failedToAcceptInvitation": "Failed to accept invitation";
@@ -5347,7 +5349,6 @@ type Messages = {
       "noLanguagesFound": "No languages found";
       "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";
       "outputLabel": "Translation type";
-      "progress": "Translation progress";
       "progressCount": "{completed} of {total} completed";
       "providerUnavailable": "The translation service is unavailable. Try again later or contact your administrator.";
       "runFailed": "The translation could not be completed.";
@@ -5479,14 +5480,8 @@ type Messages = {
     "exportToCsv": "Export to CSV";
     "fields": {
       "calculating": "Calculating...";
-      "currencyLabel": "Currency (optional)";
-      "currencyPlaceholder": "e.g. USD, EUR";
-      "editFieldValue": "Edit field value";
       "errored": "Errored";
-      "fieldValueLabel": "Field value";
-      "fieldValuePlaceholder": "Enter field value";
       "formatNotSupported": "Format not supported";
-      "numberPlaceholder": "Enter number";
       "selectAValue": "Select a value";
       "selectValues": "Select values";
     };

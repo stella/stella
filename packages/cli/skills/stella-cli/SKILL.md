@@ -93,7 +93,7 @@ requires (request it at `stella auth login --scopes`).
 | annotation | `stella annotation create` | knowledge_write |  |
 | annotation | `stella annotation delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | annotation | `stella annotation list` | read | paginated |
-| annotation | `stella annotation update` | knowledge_write |  |
+| annotation | `stella annotation update` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | audit-log | `stella audit-log list` | admin_read | paginated |
 | capability | `stella capability describe` | read |  |
 | capability | `stella capability invoke` | read |  |
@@ -105,23 +105,23 @@ requires (request it at `stella auth login --scopes`).
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
-| clause | `stella clause save` | knowledge_write |  |
+| clause | `stella clause save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | contact | `stella contact check-counterparty` | read |  |
 | contact | `stella contact delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | contact | `stella contact list` | read | paginated |
 | contact | `stella contact lookup-registry` | read |  |
 | contact | `stella contact read` | read |  |
-| contact | `stella contact save` | matters_write |  |
-| document | `stella document compare` | documents_write |  |
+| contact | `stella contact save` | matters_write | destructive (needs `--yes` off a TTY) |
+| document | `stella document compare` | documents_write | destructive (needs `--yes` off a TTY) |
 | document | `stella document comparison prepare` | documents_write |  |
 | document | `stella document comparison prepare-from-links` | documents_write |  |
 | document | `stella document content` | read | paginated; windowed text |
 | document | `stella document delete` | documents_write | destructive (needs `--yes` off a TTY) |
-| document | `stella document field set` | documents_write |  |
+| document | `stella document field set` | documents_write | destructive (needs `--yes` off a TTY) |
 | document | `stella document list` | read | paginated |
 | document | `stella document properties list` | read | paginated |
 | document | `stella document read` | read |  |
-| document | `stella document save` | documents_write |  |
+| document | `stella document save` | documents_write | destructive (needs `--yes` off a TTY) |
 | feedback | `stella feedback prepare` | feedback |  |
 | feedback | `stella feedback submit` | feedback |  |
 | invoice | `stella invoice list` | read | paginated |
@@ -131,31 +131,31 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation read` | read | paginated; windowed text |
 | legislation | `stella legislation search` | search | paginated |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
-| matter | `stella matter link-contact` | matters_write |  |
+| matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
-| matter | `stella matter save` | matters_write |  |
+| matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization add-member` | admin_write |  |
 | organization | `stella organization remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization set-jurisdictions` | onboarding |  |
+| organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization update-settings` | admin_write |  |
 | playbook | `stella playbook list` | read | paginated |
-| playbook | `stella playbook run` | knowledge_write |  |
-| playbook | `stella playbook save` | knowledge_write |  |
+| playbook | `stella playbook run` | knowledge_write | destructive (needs `--yes` off a TTY) |
+| playbook | `stella playbook save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | rate | `stella rate resolve` | read |  |
 | search | `stella search matters` | search | paginated |
 | task | `stella task delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task list` | read | paginated |
-| task | `stella task save` | matters_write |  |
-| template | `stella template configure-fields` | templates |  |
-| template | `stella template create` | templates |  |
+| task | `stella task save` | matters_write | destructive (needs `--yes` off a TTY) |
+| template | `stella template configure-fields` | templates | destructive (needs `--yes` off a TTY) |
+| template | `stella template create` | templates | destructive (needs `--yes` off a TTY) |
 | template | `stella template fill` | templates |  |
 | template | `stella template list` | templates | paginated |
 | template | `stella template preview-conditions` | templates |  |
-| template | `stella template save-filled new-document` | documents_write + templates |  |
-| template | `stella template save-filled new-version` | documents_write + templates |  |
+| template | `stella template save-filled new-document` | documents_write + templates | destructive (needs `--yes` off a TTY) |
+| template | `stella template save-filled new-version` | documents_write + templates | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry delete` | billing_write | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry list` | read | paginated |
-| time-entry | `stella time-entry save` | billing_write |  |
+| time-entry | `stella time-entry save` | billing_write | destructive (needs `--yes` off a TTY) |
 | usage | `stella usage get` | read |  |
 
 ## Command flags

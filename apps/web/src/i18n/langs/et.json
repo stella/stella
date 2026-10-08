@@ -2386,6 +2386,8 @@
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",
+      "verificationActiveLimitReached": "Teie organisatsioon on jõudnud samaaegsete kontrollide piirmäärani. Oodake, kuni mõni kontroll lõpeb, ja proovige uuesti.",
+      "verificationDailyLimitReached": "Teie organisatsioon on jõudnud kontrollide päevase piirmäärani. Proovige uuesti pärast keskööd (Europe/Prague).",
       "versionConflict": "Keegi teine muutis seda teie muutmise ajal. Laadige praeguse versiooni saamiseks uuesti."
     },
     "failedToAcceptInvitation": "Kutse vastuvõtmine ebaõnnestus",
@@ -5344,7 +5346,6 @@
       "noLanguagesFound": "Keeli ei leitud",
       "notConfigured": "DeepL pole selle organisatsiooni jaoks seadistatud. Tõlkimise lubamiseks lisage organisatsiooni seadetes DeepL-i API-võti.",
       "outputLabel": "Tõlke tüüp",
-      "progress": "Tõlke edenemine",
       "progressCount": "Valmis {completed} / {total}",
       "providerUnavailable": "Tõlketeenus pole saadaval. Proovige hiljem uuesti või võtke ühendust administraatoriga.",
       "runFailed": "Tõlget ei saanud lõpule viia.",
@@ -5476,14 +5477,8 @@
     "exportToCsv": "Ekspordi CSV-sse",
     "fields": {
       "calculating": "Arvutamine...",
-      "currencyLabel": "Valuuta (valikuline)",
-      "currencyPlaceholder": "nt USD, EUR",
-      "editFieldValue": "Muuda välja väärtust",
       "errored": "Viga",
-      "fieldValueLabel": "Välja väärtus",
-      "fieldValuePlaceholder": "Sisestage välja väärtus",
       "formatNotSupported": "Formaat ei ole toetatud",
-      "numberPlaceholder": "Sisestage number",
       "selectAValue": "Valige väärtus",
       "selectValues": "Valige väärtused"
     },

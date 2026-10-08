@@ -1,11 +1,11 @@
 /**
- * API source modules with outbound-capable transports.
+ * Production source modules with outbound-capable transports.
  *
- * Paths are exact repository-relative source files under apps/api. The
- * inventory covers production TypeScript, TSX, and JavaScript sources,
- * including scripts, evals, dev utilities, and browser-delivered MCP app
- * modules; test suites, fixtures, generated assets, and dependencies are
- * outside this inventory. A transport key
+ * The existing API inventory includes operator scripts and client bundles;
+ * additional surfaces are apps/collab/src, apps/web/src and package src roots.
+ * Tests, scripts, e2e and fixtures are excluded from the additional surfaces.
+ * Paths are exact repository-relative TypeScript, TSX and JavaScript sources.
+ * A transport key
  * names the imported runtime module or a platform network primitive. Type
  * only imports are not transport capabilities.
  */
@@ -21,7 +21,10 @@ export type OutboundTransportClass =
   (typeof OUTBOUND_TRANSPORT_CLASSES)[number];
 
 export type OutboundTransportCensusEntry = {
-  path: `apps/api/${string}`;
+  path:
+    | `apps/api/${string}`
+    | `apps/${"collab" | "web"}/src/${string}`
+    | `packages/${string}/src/${string}`;
   class: OutboundTransportClass;
   reason: string;
   transports: readonly string[];
@@ -114,8 +117,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
     class: "package-owned-client",
-    reason: "Provides fixture request helpers for adapter checks.",
-    transports: ["global:fetch", "module:@stll/fetch"],
+    reason: "Stubs fetch with fixture responses for adapter checks.",
+    transports: ["global:fetch"],
   },
   {
     path: "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
@@ -777,6 +780,438 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason: "Reads online index state through Bun SQL connections.",
     transports: ["module:bun"],
+  },
+  {
+    path: "apps/collab/src/server.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Posts collaboration requests to the configured API and uses WebSocket transport for collaboration sessions.",
+    transports: ["global:WebSocket", "global:fetch"],
+  },
+  {
+    path: "apps/web/src/boot-prefetch.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Prefetches authentication state from the configured API with the boot cancellation policy.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Streams review proposals from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/api-version-mismatch-refresh.tsx",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Reads the configured API health response to detect version changes.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/auth/sign-in-panel.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Submits email registration to the configured authentication API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/autocomplete/use-autocomplete-stream.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Streams autocomplete responses from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/chat/message-export-menu.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads chat exports from API-issued storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/company-registry-preview.tsx",
+    class: "package-owned-client",
+    reason:
+      "Uses standalone registry court and legal-form labels; these imports make no requests.",
+    transports: [
+      "module:@stll/business-registries/ares/court-names",
+      "module:@stll/business-registries/ares/legal-forms",
+    ],
+  },
+  {
+    path: "apps/web/src/components/company-specification.tsx",
+    class: "package-owned-client",
+    reason:
+      "Uses standalone registry formatting definitions; these imports make no requests.",
+    transports: ["module:@stll/business-registries/default-formats"],
+  },
+  {
+    path: "apps/web/src/components/dev/autocomplete-playground.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Exercises autocomplete streaming through the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/docx/use-edit-session.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads edit-session documents from API-issued storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/docx/use-folio-collaboration-room.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Sends collaboration requests to the configured API and downloads seed documents.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/inspector/external-reference-panel.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Reads referenced content through the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/inspector/file-download-service.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Downloads matter files through the configured API and its storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/inspector/review-export-menu.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads review exports from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/pdf/peek/peek-pdf-print.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads print-ready PDF bytes from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/search-company-result.logic.ts",
+    class: "package-owned-client",
+    reason:
+      "Uses standalone registry identifier utilities; these imports make no requests.",
+    transports: [
+      "module:@stll/business-registries/krs/number",
+      "module:@stll/business-registries/vies/validation",
+    ],
+  },
+  {
+    path: "apps/web/src/components/selfhost-update-banner.tsx",
+    class: "third-party",
+    reason: "Reads public GitHub release metadata to announce new versions.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/templates/registry-format-config.ts",
+    class: "package-owned-client",
+    reason:
+      "Uses standalone registry formatting and identifier utilities; these imports make no requests.",
+    transports: [
+      "module:@stll/business-registries/ares/court-names",
+      "module:@stll/business-registries/ares/default-format",
+      "module:@stll/business-registries/brreg/identifier-format",
+      "module:@stll/business-registries/default-formats",
+      "module:@stll/business-registries/edgar/identifier-format",
+      "module:@stll/business-registries/orsr/court-names",
+      "module:@stll/business-registries/orsr/default-format",
+      "module:@stll/business-registries/orsr/identifier-format",
+      "module:@stll/business-registries/recherche-entreprises/identifier-format",
+    ],
+  },
+  {
+    path: "apps/web/src/components/workspaces/request-manual-ocr.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Submits manual OCR requests to the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/components/workspaces/row-actions.tsx",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Downloads entity archives and OCR exports from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/case-law/queries/decision-analysis.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads decision analysis responses from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/chat/chat-fetch.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Sends chat requests to the configured API with the chat timeout policy.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
+    class: "third-party",
+    reason: "Reads GitHub commit metadata for a public tool contribution.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/statutes/statute-sitemap.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads public statute sitemap metadata from the configured API.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "apps/web/src/lib/auth-client.ts",
+    class: "vendor-sdk",
+    reason:
+      "Sends authentication requests through Better Auth to the configured API.",
+    transports: [
+      "module:@stll/fetch",
+      "module:better-auth/client/plugins",
+      "module:better-auth/react",
+    ],
+  },
+  {
+    path: "apps/web/src/lib/desktop-bridge.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Reads the desktop bridge through its configured loopback transport.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/dev-otp.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads development OTP responses from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/files/queries.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads and saves email attachments through the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/files/storage-fetch.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Reads file bytes from API-issued storage URLs with purpose-specific errors.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/files/upload-entity-version.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Uploads replacement file versions to API-issued storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/knowledge/queries.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads knowledge documents from API-issued storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/public-law-sitemap.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads public law sitemap shards from the configured API.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "apps/web/src/lib/public-tools-github-content.ts",
+    class: "third-party",
+    reason: "Reads public tool content from validated GitHub URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/user-events-sse.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads user event streams from the configured API.",
+    transports: ["global:EventSource"],
+  },
+  {
+    path: "apps/web/src/lib/workspace-sse.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Reads matter event streams from the configured API.",
+    transports: ["global:EventSource", "module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Uploads new matter files to API-issued storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/lib/workspaces/time-entries-api.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Sends time-entry requests to the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Uploads extraction source documents to API-issued storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads invoice PDFs from API-issued storage URLs.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads matter view exports from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/routes/agent-claim.tsx",
+    class: "operator-configured-infrastructure",
+    reason: "Confirms agent identity claims through the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/routes/knowledge/-components/template-wizard.tsx",
+    class: "package-owned-client",
+    reason:
+      "Uses standalone registry formatting definitions; these imports make no requests.",
+    transports: ["module:@stll/business-registries/default-formats"],
+  },
+  {
+    path: "packages/agent-engine/src/bun-docker/api.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Sends Docker API requests over the configured Unix socket with existing cancellation deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/boe/src/client.ts",
+    class: "package-owned-client",
+    reason:
+      "Published standalone BOE client owns its public-source transport and request deadline.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/business-registries/src/shared/http.ts",
+    class: "package-owned-client",
+    reason:
+      "Published standalone registry clients share this transport, cancellation and request observation owner.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/cli/src/auth/loopback-listener.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI owns the inbound loopback HTTP listener for OAuth callbacks; it makes no outbound requests.",
+    transports: ["module:node:http"],
+  },
+  {
+    path: "packages/cli/src/auth/oauth-client-registration.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI owns OAuth client registration requests to discovered endpoints.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/cli/src/auth/oauth-metadata.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI owns OAuth authorization-server metadata discovery.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/cli/src/auth/token-exchange.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI owns OAuth token exchange and refresh requests to discovered endpoints.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/cli/src/cli-release-channel.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI owns public release-channel metadata reads with an injectable transport.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/cli/src/compatibility.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI owns compatibility discovery against the configured server.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/cli/src/mcp-client.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI owns MCP transport and observes response evidence and action-admission refusals.",
+    transports: ["global:fetch", "module:@modelcontextprotocol/client"],
+  },
+  {
+    path: "packages/cli/src/upload-document.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI uploads document bytes to server-issued storage URLs with its upload deadline.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/fetch/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Shared fetch owner resolves the runtime transport and applies caller-selected header or idle deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/infosoud/src/client.ts",
+    class: "package-owned-client",
+    reason:
+      "Published standalone InfoSoud client owns injected transport, throttling and request deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/permissions/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Uses Better Auth access-control definitions; this import makes no requests.",
+    transports: ["module:better-auth/plugins/access"],
+  },
+  {
+    path: "packages/scripts/src/agent-session.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes and seeds the configured local API for development agent sessions.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/scripts/src/auth-md-spec-drift.ts",
+    class: "third-party",
+    reason:
+      "Reads the public authentication metadata specification for drift checks.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/scripts/src/dev-runner.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes development service endpoints and local TCP ports for the configured stack.",
+    transports: ["global:fetch", "module:node:net"],
+  },
+  {
+    path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",
+    class: "third-party",
+    reason:
+      "Reads public benchmark data with the shared timeout and bounded-response policies.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "packages/scripts/src/model-catalog-snapshot.ts",
+    class: "third-party",
+    reason:
+      "Reads public model catalog snapshots with the shared timeout owner.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "packages/scripts/src/model-catalog-upstream.ts",
+    class: "third-party",
+    reason: "Reads public upstream model metadata for the committed catalog.",
+    transports: ["global:fetch"],
   },
 ] as const satisfies readonly OutboundTransportCensusEntry[];
 

@@ -1,50 +1,27 @@
-/**
- * Pinned-content checker for github-sourced catalogue skills.
- *
- * Nothing else validates the bytes a github skill actually pins: the
- * schema/loader only check the manifest, and the rev-bump automation
- * never fetches the upstream `SKILL.md`. So a pin whose upstream fails
- * the install path (bad frontmatter, an oversized body, too many/large
- * resource files) ships with green CI and only fails at a user's
- * install click. This script closes that gap: for every github entry it
- * fetches the pinned `SKILL.md` and enumerates the pinned directory, and
- * fails per-entry when any install-time limit would be violated.
- *
- * Usage:
- *   bun scripts/check-pinned-content.ts
- *
- * Set GITHUB_TOKEN to raise the GitHub API rate limit (Authorization
- * header on the contents API). Network is required; run in CI or with
- * connectivity, not on the offline verify path.
- */
-import { Result, TaggedError } from "better-result";
+/** Validate committed pinned-content facts offline; --refresh acquires and replaces facts. */
+import { Result } from "better-result";
 
-import {
-  isAllowedResourcePath,
-  normalizeResourcePath,
-  parseSkillFile,
-} from "@stll/skills";
-import type { SkillMetadata } from "@stll/skills";
+import { isAllowedResourcePath, normalizeResourcePath } from "@stll/skills";
 import {
   SKILL_NAME_PATTERN,
   SKILL_PACKAGE_LIMITS,
 } from "@stll/skills/package-limits";
-import { readCappedBytes } from "@stll/skills/streaming";
 
 import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
-import { catalogueLicensesMatch } from "../src/schema";
-import type { CatalogueLicense } from "../src/schema";
+import { catalogueLicensesMatch, type CatalogueLicense } from "../src/schema";
+import {
+  PinnedContentError,
+  assertCompleteGithubContentsListing,
+  readPinnedSnapshot,
+  recordingPinnedSource,
+  writePinnedSnapshot,
+  type FrontmatterFacts,
+  type GithubTarget,
+  type GithubContentItem,
+  type PinnedSource,
+} from "./pinned-content-facts";
 
-/** Expected per-entry failure while fetching upstream content. */
-export class PinnedContentError extends TaggedError("PinnedContentError")<{
-  message: string;
-}> {}
-
-const FETCH_TIMEOUT_MS = 10_000;
-const FETCH_RETRY_DELAYS_MS = [200, 800] as const;
 const SKILL_FILE_NAME = "SKILL.md";
-const GITHUB_CONTENTS_LISTING_LIMIT = 1000;
-
 const RESOURCE_MAX_BYTES = SKILL_PACKAGE_LIMITS.resourceMaxChars * 4;
 const SKILL_RESOURCE_ROOTS: ReadonlySet<string> = new Set([
   "assets",
@@ -55,273 +32,6 @@ const SKILL_RESOURCE_ROOTS: ReadonlySet<string> = new Set([
   "scripts",
   "templates",
 ]);
-const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
-
-type GithubTarget = {
-  directory: string;
-  license: CatalogueLicense;
-  repo: string;
-  rev: string;
-  slug: string;
-};
-
-type GithubContentItem = {
-  path: string;
-  size: number | null;
-  type: string;
-};
-
-type Fetcher = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
-type RetrySleep = (delayMs: number) => Promise<void>;
-
-type FetchWithBoundedRetryOptions<T> = {
-  fetchValue: () => Promise<T>;
-  sleep?: RetrySleep;
-};
-
-const sleep = async (delayMs: number): Promise<void> => {
-  await Bun.sleep(delayMs);
-};
-
-/** Retry rejected transports twice; tagged response failures stay single-pass. */
-export const fetchWithBoundedRetry = async <T>({
-  fetchValue,
-  sleep: wait = sleep,
-}: FetchWithBoundedRetryOptions<T>): Promise<T> => {
-  const attempt = async (retryIndex: number): Promise<T> => {
-    const fetched = await Result.tryPromise({
-      try: fetchValue,
-      catch: (cause) => cause,
-    });
-    if (Result.isOk(fetched)) {
-      return fetched.value;
-    }
-
-    const delayMs = FETCH_RETRY_DELAYS_MS.at(retryIndex);
-    if (fetched.error instanceof PinnedContentError || delayMs === undefined) {
-      throw fetched.error;
-    }
-    await wait(delayMs);
-    return await attempt(retryIndex + 1);
-  };
-
-  return await attempt(0);
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const toContentItems = (payload: unknown): unknown[] => {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-  return isRecord(payload) ? [payload] : [];
-};
-
-const githubHeaders = (accept: string): Record<string, string> => {
-  const headers: Record<string, string> = {
-    Accept: accept,
-    "User-Agent": "stella-catalogue-pinned-check",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-  const token = process.env["GITHUB_TOKEN"];
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  return headers;
-};
-
-const joinRepoPath = (directory: string, relative: string): string =>
-  directory ? `${directory}/${relative}` : relative;
-
-const encodePath = (repoRelativePath: string): string =>
-  repoRelativePath
-    .split("/")
-    .filter((part) => part.length > 0)
-    .map(encodeURIComponent)
-    .join("/");
-
-const rawContentUrl = (
-  target: GithubTarget,
-  repoRelativePath: string,
-): string =>
-  `https://raw.githubusercontent.com/${target.repo}/${target.rev}/${encodePath(repoRelativePath)}`;
-
-const contentsApiUrl = (
-  target: GithubTarget,
-  repoRelativePath: string,
-): string => {
-  const encoded = encodePath(repoRelativePath);
-  const url = new URL(
-    encoded.length > 0
-      ? `https://api.github.com/repos/${target.repo}/contents/${encoded}`
-      : `https://api.github.com/repos/${target.repo}/contents`,
-  );
-  url.searchParams.set("ref", target.rev);
-  return url.toString();
-};
-
-type FetchPinnedTextFileOptions = {
-  allowNotFound?: boolean;
-  fetcher?: Fetcher;
-  label: string;
-  maxBytes: number;
-  repoRelativePath: string;
-  sleep?: RetrySleep;
-  target: GithubTarget;
-};
-
-type PinnedTextFile = {
-  byteLength: number;
-  content: string;
-};
-
-export const fetchPinnedTextFile = async ({
-  allowNotFound = false,
-  fetcher = fetch,
-  label,
-  maxBytes,
-  repoRelativePath,
-  sleep: wait = sleep,
-  target,
-}: FetchPinnedTextFileOptions): Promise<PinnedTextFile | null> => {
-  const fetchValue = async () => {
-    const response = await fetcher(rawContentUrl(target, repoRelativePath), {
-      headers: githubHeaders("text/plain"),
-      redirect: "error",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (response.status === 404 && allowNotFound) {
-      return null;
-    }
-    if (!response.ok) {
-      throw new PinnedContentError({
-        message: `${label} fetch returned HTTP ${response.status}`,
-      });
-    }
-    if (!response.body) {
-      throw new PinnedContentError({
-        message: `${label} response has no body`,
-      });
-    }
-    const declaredLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-      throw new PinnedContentError({
-        message: `${label} is larger than ${maxBytes} bytes`,
-      });
-    }
-    const bytes = await readCappedBytes(response.body, maxBytes);
-    if (bytes === null) {
-      throw new PinnedContentError({
-        message: `${label} is larger than ${maxBytes} bytes`,
-      });
-    }
-    return bytes;
-  };
-  const file = await fetchWithBoundedRetry({
-    fetchValue,
-    sleep: wait,
-  });
-  if (file === null) {
-    return null;
-  }
-  return { byteLength: file.byteLength, content: UTF8_DECODER.decode(file) };
-};
-
-/**
- * Fetch the pinned `SKILL.md` as text. Returns null on a 404 so the
- * caller can report the specific "not found at pinned rev" failure;
- * every other non-2xx response and any redirect throws.
- */
-const fetchSkillFile = async (
-  target: GithubTarget,
-): Promise<PinnedTextFile | null> =>
-  await fetchPinnedTextFile({
-    allowNotFound: true,
-    label: SKILL_FILE_NAME,
-    maxBytes: RESOURCE_MAX_BYTES,
-    repoRelativePath: joinRepoPath(target.directory, SKILL_FILE_NAME),
-    target,
-  });
-
-type FetchDirectoryContentsOptions = {
-  fetcher?: Fetcher;
-  repoRelativePath: string;
-  sleep?: RetrySleep;
-  target: GithubTarget;
-};
-
-export const fetchDirectoryContents = async ({
-  fetcher = fetch,
-  repoRelativePath,
-  sleep: wait = sleep,
-  target,
-}: FetchDirectoryContentsOptions): Promise<GithubContentItem[]> => {
-  const fetchValue = async () => {
-    const response = await fetcher(contentsApiUrl(target, repoRelativePath), {
-      headers: githubHeaders("application/vnd.github+json"),
-      redirect: "error",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    // A missing resource directory is not an error: the skill simply has
-    // no files under that root.
-    if (response.status === 404) {
-      return null;
-    }
-    if (!response.ok) {
-      throw new PinnedContentError({
-        message: `GitHub contents API returned HTTP ${response.status} for ${repoRelativePath || "<root>"}`,
-      });
-    }
-    return await response.text();
-  };
-  const body = await fetchWithBoundedRetry({
-    fetchValue,
-    sleep: wait,
-  });
-  if (body === null) {
-    return [];
-  }
-
-  const payload: unknown = JSON.parse(body);
-  const items = toContentItems(payload);
-  const parsed: GithubContentItem[] = [];
-  for (const item of items) {
-    if (!isRecord(item)) {
-      continue;
-    }
-    const path = item["path"];
-    const size = item["size"];
-    const type = item["type"];
-    if (typeof path === "string" && typeof type === "string") {
-      parsed.push({
-        path,
-        size: typeof size === "number" && Number.isFinite(size) ? size : null,
-        type,
-      });
-    }
-  }
-  assertCompleteGithubContentsListing({
-    itemCount: items.length,
-    repoRelativePath,
-  });
-  return parsed;
-};
-
-export const assertCompleteGithubContentsListing = ({
-  itemCount,
-  repoRelativePath,
-}: {
-  itemCount: number;
-  repoRelativePath: string;
-}): void => {
-  if (itemCount < GITHUB_CONTENTS_LISTING_LIMIT) {
-    return;
-  }
-  throw new PinnedContentError({
-    message: `GitHub contents listing may be truncated at ${GITHUB_CONTENTS_LISTING_LIMIT} entries for ${repoRelativePath || "<root>"}`,
-  });
-};
 
 /** Path of `repoRelativePath` relative to the skill directory, or null. */
 const relativeToSkillRoot = (
@@ -351,44 +61,44 @@ const safeNormalize = (path: string): string | null => {
 type FrontmatterFieldLimit = {
   field: string;
   limit: number;
-  value: string | null | undefined;
+  length: number;
 };
 
 const frontmatterFieldLimitError = (
   slug: string,
-  { field, limit, value }: FrontmatterFieldLimit,
+  { field, limit, length }: FrontmatterFieldLimit,
 ): string | null => {
-  if (!value || value.length <= limit) {
+  if (length <= limit) {
     return null;
   }
-  return `${slug}: frontmatter ${field} is ${value.length} chars, exceeds the ${limit} install limit`;
+  return `${slug}: frontmatter ${field} is ${length} chars, exceeds the ${limit} install limit`;
 };
 
 export const checkFrontmatterLimits = (
   slug: string,
-  metadata: SkillMetadata,
+  metadata: FrontmatterFacts,
 ): string[] => {
   const errors: string[] = [];
   const fields: FrontmatterFieldLimit[] = [
     {
       field: "description",
       limit: SKILL_PACKAGE_LIMITS.descriptionMaxChars,
-      value: metadata.description,
+      length: metadata.descriptionUtf16Length,
     },
     {
       field: "version",
       limit: SKILL_PACKAGE_LIMITS.versionMaxChars,
-      value: metadata.version,
+      length: metadata.versionUtf16Length,
     },
     {
       field: "license",
       limit: SKILL_PACKAGE_LIMITS.licenseMaxChars,
-      value: metadata.license,
+      length: metadata.licenseUtf16Length,
     },
     {
       field: "compatibility",
       limit: SKILL_PACKAGE_LIMITS.compatibilityMaxChars,
-      value: metadata.compatibility,
+      length: metadata.compatibilityUtf16Length,
     },
   ];
   for (const field of fields) {
@@ -398,21 +108,24 @@ export const checkFrontmatterLimits = (
     }
   }
 
-  const entries = Object.entries(metadata.metadata ?? {});
+  const entries = metadata.metadata;
   if (entries.length > SKILL_PACKAGE_LIMITS.metadataEntriesMax) {
     errors.push(
       `${slug}: frontmatter metadata has ${entries.length} entries, exceeds the ${SKILL_PACKAGE_LIMITS.metadataEntriesMax} install limit`,
     );
   }
-  for (const [key, value] of entries) {
-    if (key.length > SKILL_PACKAGE_LIMITS.metadataKeyMaxChars) {
+  for (const [
+    index,
+    { keyUtf16Length, valueUtf16Length },
+  ] of entries.entries()) {
+    if (keyUtf16Length > SKILL_PACKAGE_LIMITS.metadataKeyMaxChars) {
       errors.push(
-        `${slug}: frontmatter metadata key "${key}" is ${key.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataKeyMaxChars} install limit`,
+        `${slug}: frontmatter metadata key #${index} is ${keyUtf16Length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataKeyMaxChars} install limit`,
       );
     }
-    if (value.length > SKILL_PACKAGE_LIMITS.metadataValueMaxChars) {
+    if (valueUtf16Length > SKILL_PACKAGE_LIMITS.metadataValueMaxChars) {
       errors.push(
-        `${slug}: frontmatter metadata value for "${key}" is ${value.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataValueMaxChars} install limit`,
+        `${slug}: frontmatter metadata value for key #${index} is ${valueUtf16Length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataValueMaxChars} install limit`,
       );
     }
   }
@@ -442,20 +155,20 @@ export const pinnedLicenseMismatchError = ({
 };
 
 type ResourceContentLimitInput = {
-  content: string;
+  utf16Length: number;
   path: string;
   slug: string;
 };
 
 export const resourceContentLimitError = ({
-  content,
+  utf16Length,
   path,
   slug,
 }: ResourceContentLimitInput): string | null => {
-  if (content.length <= SKILL_PACKAGE_LIMITS.resourceMaxChars) {
+  if (utf16Length <= SKILL_PACKAGE_LIMITS.resourceMaxChars) {
     return null;
   }
-  return `${slug}: resource ${path} is ${content.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.resourceMaxChars} install limit`;
+  return `${slug}: resource ${path} is ${utf16Length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.resourceMaxChars} install limit`;
 };
 
 type ResourcePathLimitInput = {
@@ -526,11 +239,7 @@ export const archiveSizeLimitError = ({
   return `${slug}: skill package exceeds ${SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes} bytes in total`;
 };
 
-/**
- * Check the pinned `SKILL.md`: fetch it, parse it with the real skill
- * parser (which requires name + description), and enforce the install
- * name pattern and body length. Returns collected error strings.
- */
+/** Enforce install limits on facts produced by the real skill parser. */
 type SkillFileCheckResult = {
   byteLength: number;
   errors: string[];
@@ -538,8 +247,9 @@ type SkillFileCheckResult = {
 
 const checkSkillFile = async (
   target: GithubTarget,
+  source: PinnedSource,
 ): Promise<SkillFileCheckResult> => {
-  const file = await fetchSkillFile(target);
+  const file = await source.skill(target);
   if (file === null) {
     return {
       byteLength: 0,
@@ -547,37 +257,34 @@ const checkSkillFile = async (
     };
   }
 
-  const parsedFile = parseSkillFile(file.content);
-  if (parsedFile.isErr()) {
-    return {
-      byteLength: file.byteLength,
-      errors: [
-        `${target.slug}: SKILL.md frontmatter is invalid (${parsedFile.error.message})`,
-      ],
-    };
-  }
-  const parsed = parsedFile.value;
-
   const errors: string[] = [];
-  if (!SKILL_NAME_PATTERN.test(parsed.metadata.name)) {
+  if (file.byteLength > RESOURCE_MAX_BYTES) {
     errors.push(
-      `${target.slug}: frontmatter name "${parsed.metadata.name}" fails the skill name pattern`,
+      `${target.slug}: SKILL.md exceeds the ${RESOURCE_MAX_BYTES} byte install limit`,
     );
   }
-  if (parsed.body.length > SKILL_PACKAGE_LIMITS.bodyMaxChars) {
+  if (file.frontmatter.descriptionUtf16Length === 0) {
+    errors.push(`${target.slug}: SKILL.md description must be nonempty`);
+  }
+  if (!SKILL_NAME_PATTERN.test(file.frontmatter.name)) {
     errors.push(
-      `${target.slug}: SKILL.md body is ${parsed.body.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.bodyMaxChars} install limit`,
+      `${target.slug}: frontmatter name "${file.frontmatter.name}" fails the skill name pattern`,
+    );
+  }
+  if (file.bodyUtf16Length > SKILL_PACKAGE_LIMITS.bodyMaxChars) {
+    errors.push(
+      `${target.slug}: SKILL.md body is ${file.bodyUtf16Length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.bodyMaxChars} install limit`,
     );
   }
   const licenseError = pinnedLicenseMismatchError({
     catalogueLicense: target.license,
     slug: target.slug,
-    upstreamLicense: parsed.metadata.license,
+    upstreamLicense: file.frontmatter.license,
   });
   if (licenseError) {
     errors.push(licenseError);
   }
-  errors.push(...checkFrontmatterLimits(target.slug, parsed.metadata));
+  errors.push(...checkFrontmatterLimits(target.slug, file.frontmatter));
   return { byteLength: file.byteLength, errors };
 };
 
@@ -589,6 +296,7 @@ const checkSkillFile = async (
 const checkResources = async (
   target: GithubTarget,
   skillFileBytes: number,
+  source: PinnedSource,
 ): Promise<string[]> => {
   const errors: string[] = [];
   const rootPath = target.directory;
@@ -663,19 +371,19 @@ const checkResources = async (
       return processItems(items, index + 1);
     }
 
-    const resource = await fetchPinnedTextFile({
-      label: `resource ${normalized}`,
-      maxBytes: RESOURCE_MAX_BYTES,
-      repoRelativePath: item.path,
-      target,
-    });
+    const resource = await source.resource({ path: item.path, target });
     if (resource === null) {
       throw new PinnedContentError({
         message: `resource ${normalized} disappeared during validation`,
       });
     }
+    if (resource.byteLength > RESOURCE_MAX_BYTES) {
+      errors.push(
+        `${target.slug}: resource ${normalized} exceeds the ${RESOURCE_MAX_BYTES} byte install limit`,
+      );
+    }
     const contentLimitError = resourceContentLimitError({
-      content: resource.content,
+      utf16Length: resource.utf16Length,
       path: normalized,
       slug: target.slug,
     });
@@ -700,11 +408,12 @@ const checkResources = async (
     if (directory === undefined) {
       return;
     }
-    const items = await fetchDirectoryContents({
+    const listing = await source.directory({ directory, target });
+    assertCompleteGithubContentsListing({
+      itemCount: listing.itemCount,
       repoRelativePath: directory,
-      target,
     });
-    const shouldContinue = await processItems(items, 0);
+    const shouldContinue = await processItems(listing.items, 0);
     if (!shouldContinue) {
       return;
     }
@@ -718,7 +427,7 @@ const checkResources = async (
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-const collectGithubTargets = (): GithubTarget[] =>
+export const collectGithubTargets = (): GithubTarget[] =>
   loadCatalogue()
     .filter(isGithubSkillEntry)
     .map((entry) => ({
@@ -729,18 +438,23 @@ const collectGithubTargets = (): GithubTarget[] =>
       slug: entry.slug,
     }));
 
-const run = async (): Promise<string[]> => {
+export const validatePinnedSource = async (
+  source: PinnedSource,
+): Promise<string[]> => {
   const targets = collectGithubTargets();
   const errors: string[] = [];
 
   const checkTarget = async (target: GithubTarget): Promise<void> => {
     try {
-      const skillFile = await checkSkillFile(target);
-      // Skip the resource enumeration when SKILL.md itself is broken:
-      // the entry already fails, and the extra API calls add nothing.
+      const skillFile = await checkSkillFile(target, source);
+      // Resource validation depends on a valid skill file.
       let resourceErrors: string[] = [];
       if (skillFile.errors.length === 0) {
-        resourceErrors = await checkResources(target, skillFile.byteLength);
+        resourceErrors = await checkResources(
+          target,
+          skillFile.byteLength,
+          source,
+        );
       }
       errors.push(...skillFile.errors, ...resourceErrors);
     } catch (error) {
@@ -764,7 +478,34 @@ const run = async (): Promise<string[]> => {
 };
 
 if (import.meta.main) {
-  const errors = await run();
+  const refresh = Bun.argv.includes("--refresh");
+  const result = await Result.tryPromise({
+    try: async () => {
+      if (
+        refresh &&
+        (Bun.argv.includes("--check") || Bun.argv.includes("--from-snapshot"))
+      ) {
+        throw new PinnedContentError({
+          message: "--refresh cannot be combined with offline check modes",
+        });
+      }
+      if (!refresh) {
+        return await validatePinnedSource(
+          await readPinnedSnapshot(collectGithubTargets()),
+        );
+      }
+      const { upstreamPinnedSource } =
+        await import("./pinned-content-upstream");
+      const recording = recordingPinnedSource(upstreamPinnedSource);
+      const errors = await validatePinnedSource(recording.source);
+      if (errors.length === 0) {
+        await writePinnedSnapshot(recording.entries());
+      }
+      return errors;
+    },
+    catch: (error) => error,
+  });
+  const errors = result.isErr() ? [errorMessage(result.error)] : result.value;
   if (errors.length > 0) {
     for (const error of errors) {
       console.error(`✗ ${error}`);

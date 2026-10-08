@@ -18,6 +18,7 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
@@ -60,7 +61,9 @@ const withProviders = (children: ReactNode) => (
               handleDeny: () => {},
             }}
           >
-            <ChatEditorProvider>{children}</ChatEditorProvider>
+            <FormattingProvider locale="en" timeZone="UTC">
+              <ChatEditorProvider>{children}</ChatEditorProvider>
+            </FormattingProvider>
           </ChatApprovalContext>
         </ChatMattersContext>
       </IntlProvider>
@@ -687,7 +690,7 @@ describe("chat thread messages", () => {
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain("animate-pulse");
+      expect(output).not.toContain('data-slot="loader"');
       expect(output).not.toContain("Working with context");
     }
   });

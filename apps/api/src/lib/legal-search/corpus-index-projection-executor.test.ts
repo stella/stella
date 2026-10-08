@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { PayloadBudgetError } from "@/api/lib/compression";
 import {
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
@@ -273,10 +275,10 @@ test("append requests do not depend on how many revisions arrive at once", () =>
         requests.set(tail.indexId, perIndex);
       }
     };
-    for (let start = 0; start < entries.length; start += batchSize) {
+    for (const itemBatch of chunkItems(entries, batchSize)) {
       const advanced = advanceCorpusProjectionAppendTails({
         tails,
-        entries: entries.slice(start, start + batchSize),
+        entries: itemBatch,
         mode: "buffer",
         nowMs: 0,
       });

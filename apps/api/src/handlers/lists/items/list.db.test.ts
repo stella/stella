@@ -30,6 +30,15 @@ import readListItems from "@/api/handlers/lists/items/list";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -246,13 +255,40 @@ const testSafeDb: SafeDb = async (fn) =>
       new DatabaseError({ message: "test transaction failed", cause }),
   });
 
-const listedItems = async () => {
+const listedItems = async (granted = true) => {
+  const organizationGrant = { type: "organization", organizationId } as const;
+  const featureAccessSnapshot = createFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    decisions: new Map(
+      [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID].map(
+        (featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId,
+            organizationId,
+            userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: {
+              [LEGAL_LISTS_FEATURE_ID]: [organizationGrant],
+              ...(granted
+                ? { [LIST_VERIFICATION_FEATURE_ID]: [organizationGrant] }
+                : {}),
+            },
+          }),
+        ],
+      ),
+    ),
+  });
   const result = await readListItems.handler(
     createTestHandlerContext<ReadListItemsCtx>({
       workspaceId,
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
       safeDb: testSafeDb,
+      featureAccessSnapshot,
       params: { workspaceId, listId },
       query: {},
     }),
@@ -327,4 +363,25 @@ test("an item without sources lists none, once per item", async () => {
     bareFactId,
   ]);
   expect(await firstSourceOf(bareFactId)).toBeNull();
+});
+
+test("shared item reads retain ordinary details for ungranted callers", async () => {
+  const granted = await listedItems(true);
+  const hidden = await listedItems(false);
+  expect(hidden.map((item) => item.id)).toEqual(granted.map((item) => item.id));
+  for (const item of hidden) {
+    if (item.factDetails !== null) {
+      expect(item.factDetails).not.toHaveProperty("scoring");
+    }
+    const visible = granted.find((candidate) => candidate.id === item.id);
+    expect(visible).toBeDefined();
+    if (visible?.factDetails === null || visible?.factDetails === undefined) {
+      expect(item.factDetails).toBeNull();
+      continue;
+    }
+    const { scoring, ...ordinary } = visible.factDetails;
+    expect(scoring).toBeDefined();
+    expect(item.factDetails).toEqual(ordinary);
+    expect(item.firstSource).toEqual(visible.firstSource);
+  }
 });

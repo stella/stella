@@ -173,10 +173,9 @@ test("organization settings derive capabilities from the production registry, hi
   );
   expect(result).toMatchObject({
     capabilities: Object.fromEntries(
-      Object.keys(FEATURE_REGISTRY).map((featureId) => [
-        featureId,
-        { status: "hidden" },
-      ]),
+      Object.keys(FEATURE_REGISTRY)
+        .filter((featureId) => featureId !== LIST_VERIFICATION_FEATURE_ID)
+        .map((featureId) => [featureId, { status: "hidden" }]),
     ),
   });
 });
@@ -224,10 +223,9 @@ test("organization settings recompute a supplied snapshot when the user or activ
     );
     expect(result).toMatchObject({
       capabilities: Object.fromEntries(
-        Object.keys(FEATURE_REGISTRY).map((featureId) => [
-          featureId,
-          { status: "hidden" },
-        ]),
+        Object.keys(FEATURE_REGISTRY)
+          .filter((featureId) => featureId !== LIST_VERIFICATION_FEATURE_ID)
+          .map((featureId) => [featureId, { status: "hidden" }]),
       ),
     });
     expect(result).not.toHaveProperty("capabilities.fixture-invitation");
@@ -272,18 +270,27 @@ test("organization settings project the production verification declaration for 
         featureAccessSnapshot: snapshot,
       }),
     );
-    expect(result).toMatchObject({
-      capabilities: {
-        [LIST_VERIFICATION_FEATURE_ID]: {
-          status: granted ? "enabled" : "hidden",
-        },
-      },
-    });
+    if (granted) {
+      expect(result).toMatchObject({
+        capabilities: { [LIST_VERIFICATION_FEATURE_ID]: { status: "enabled" } },
+      });
+    } else {
+      expect(result).not.toHaveProperty(
+        `capabilities.${LIST_VERIFICATION_FEATURE_ID}`,
+      );
+      expect(JSON.stringify(result)).not.toContain(
+        LIST_VERIFICATION_FEATURE_ID,
+      );
+    }
     const capabilities = projectOrganizationSettingsRow(
       null,
       snapshot,
     ).capabilities;
-    expect(Object.keys(capabilities)).toEqual(Object.keys(FEATURE_REGISTRY));
+    expect(Object.keys(capabilities)).toEqual(
+      Object.keys(FEATURE_REGISTRY).filter(
+        (featureId) => granted || featureId !== LIST_VERIFICATION_FEATURE_ID,
+      ),
+    );
     expect(JSON.stringify(capabilities)).not.toContain("proof");
   }
 });

@@ -16,8 +16,9 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { LoaderIcon, SearchIcon } from "@stll/ui/icons";
+import { SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
@@ -309,7 +310,11 @@ const ImportSkillDialogBody = ({
             variant="outline"
           >
             {discover.isPending ? (
-              <LoaderIcon className="size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             ) : (
               <SearchIcon className="size-4" />
             )}
@@ -500,12 +505,17 @@ const ImportSkillDialogBody = ({
         </DialogClose>
         {discovery && discovery.skills.length > 0 && (
           <Button
+            aria-busy={importSkills.isPending || undefined}
             disabled={selected.size === 0 || busy}
             onClick={() => importSkills.mutate(discovery)}
             type="button"
           >
             {importSkills.isPending && (
-              <LoaderIcon className="size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             )}
             {tSkills("importSelected", { count: format.number(selected.size) })}
           </Button>

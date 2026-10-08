@@ -57,6 +57,7 @@ export type CatalogTransport =
 
 /** The catalog entry fields the CLI codegen consumes (a subset of the export). */
 export type CapabilityCatalogEntry = {
+  feature?: string;
   featureId?: string;
   featureAccess?: "required" | "conditional";
   id: string;
@@ -605,6 +606,7 @@ export const deriveCapabilityLeaf = (
     spec: {
       commandPath,
       capabilityId: entry.id,
+      ...(entry.feature === undefined ? {} : { feature: entry.feature }),
       ...(entry.featureId === undefined || entry.featureAccess !== "required"
         ? {}
         : { featureId: entry.featureId }),

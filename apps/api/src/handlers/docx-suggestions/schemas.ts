@@ -5,20 +5,20 @@ import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 /** Ceiling on one persist batch; mirrors the edit tool's operation cap. */
-export const MAX_DOCX_SUGGESTIONS_PER_BATCH = 200;
+const MAX_DOCX_SUGGESTIONS_PER_BATCH = 200;
 /** Default page size for the entity suggestion list. The max is
  *  `DOCX_SUGGESTIONS_PAGE_SIZE_MAX` in @stll/api-contract, which the client
  *  requests per hydration fetch. */
 export const DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT = 100;
 
-export const tDocxSuggestionSeverity = t.Union([
+const tDocxSuggestionSeverity = t.Union([
   t.Literal("low"),
   t.Literal("medium"),
   t.Literal("high"),
   t.Literal("unspecified"),
 ]);
 
-export const tDocxSuggestionApplyMode = t.Union([
+const tDocxSuggestionApplyMode = t.Union([
   t.Literal("tracked-changes"),
   t.Literal("direct"),
   t.Literal("suggested"),
@@ -53,7 +53,7 @@ export const tRejectPendingDocxSuggestionsBody = t.Object({
  * so the web client can reconcile its optimistic in-memory rows with the
  * server ids without a second round trip.
  */
-export const tDocxSuggestionInput = t.Object({
+const tDocxSuggestionInput = t.Object({
   ref: t.String({ minLength: 1, maxLength: 128 }),
   opPayload: t.Unknown(),
   comment: t.Optional(t.Union([t.String({ maxLength: 4000 }), t.Null()])),

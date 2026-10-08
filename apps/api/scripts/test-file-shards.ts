@@ -7,6 +7,7 @@ import {
   MISSING_TEST_DURATION,
   readDurationWeights,
   readTimingArtifact,
+  testFileDurationWeights,
 } from "./test-timings";
 
 /** Resolve the explicit selection before duration bins partition it. */
@@ -57,23 +58,12 @@ export const partitionTestFiles = ({
   if (new Set(files).size !== files.length) {
     panic("Test paths must be unique");
   }
-  const measured = files
-    .flatMap((file) => {
-      const duration = durations[file];
-      if (duration === undefined) {
-        return [];
-      }
-      if (!Number.isFinite(duration) || duration < 0) {
-        panic(`Invalid duration for ${file}`);
-      }
-      return [duration];
-    })
-    .toSorted((a, b) => a - b);
-  const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
+  const weights = testFileDurationWeights(files, durations);
   if (count === 1) {
     return [[...files]];
   }
-  const weight = (file: string) => durations[file] ?? fallback;
+  const weight = (file: string) =>
+    weights[file] ?? panic(`Missing resolved duration for ${file}`);
   const bins = Array.from({ length: count }, () => ({
     files: new Set<string>(),
     seconds: 0,

@@ -9,6 +9,10 @@ import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { CLI_IDENTITY_SCOPES } from "./auth/constants.js";
 import { parseScopesFlag } from "./auth/scopes.js";
 import type { Context } from "./context.js";
+import {
+  VERIFICATION_RUN_CAP_CODES,
+  type VerificationRunCapCode,
+} from "./generated/mcp-contract.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
 import {
@@ -1025,4 +1029,32 @@ describe("toolErrorLines", () => {
       "hint: Fix the fields",
     ]);
   });
+});
+
+test("verification limit envelopes retain recovery metadata and select their exit class", () => {
+  const expectedExits = {
+    [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
+    [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
+  } as const satisfies Record<VerificationRunCapCode, number>;
+  for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+    for (const retryable of [true, false]) {
+      const error = {
+        code,
+        message: "Verification run limit reached",
+        hint: "Check verification runs before starting another run.",
+        retryable,
+        issues: [],
+      };
+      const payload = { error };
+      expect(errorEnvelope(payload)).toEqual({
+        ...error,
+        requestId: undefined,
+      });
+      expect(classifyToolError(payload)).toBe(expectedExits[code]);
+      expect(toolErrorLines(error)).toEqual([
+        `error: ${error.message}`,
+        `hint: ${error.hint}`,
+      ]);
+    }
+  }
 });

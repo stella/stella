@@ -1,3 +1,4 @@
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 /**
  * A minimal, readable text PDF built without a PDF library: one Helvetica
  * font, WinAnsi text, ~45 lines a page. For server-built sample documents
@@ -156,10 +157,7 @@ export const createTextPdf = (title: string, bodyText?: string): Buffer => {
   }
 
   // Group into pages
-  const pages: string[][] = [];
-  for (let i = 0; i < allLines.length; i += LINES_PER_PAGE) {
-    pages.push(allLines.slice(i, i + LINES_PER_PAGE));
-  }
+  const pages = chunkItems(allLines, LINES_PER_PAGE);
   if (pages.length === 0) {
     pages.push([title]);
   }

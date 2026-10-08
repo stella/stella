@@ -2386,6 +2386,8 @@
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
+      "verificationActiveLimitReached": "Vaše organizace dosáhla limitu současně probíhajících ověření. Počkejte na dokončení některého ověření a zkuste to znovu.",
+      "verificationDailyLimitReached": "Vaše organizace dosáhla denního limitu ověření. Zkuste to znovu po půlnoci (Europe/Prague).",
       "versionConflict": "Někdo jiný to během vaší úpravy změnil. Načtěte znovu aktuální verzi."
     },
     "failedToAcceptInvitation": "Nepodařilo se přijmout pozvánku",
@@ -5344,7 +5346,6 @@
       "noLanguagesFound": "Žádné jazyky nenalezeny",
       "notConfigured": "DeepL není pro tuto organizaci nastaven. Pro povolení překladu přidejte v nastavení organizace API klíč DeepL.",
       "outputLabel": "Typ překladu",
-      "progress": "Průběh překladu",
       "progressCount": "Dokončeno {completed} z {total}",
       "providerUnavailable": "Překladová služba není dostupná. Zkuste to později nebo kontaktujte správce.",
       "runFailed": "Překlad se nepodařilo dokončit.",
@@ -5476,14 +5477,8 @@
     "exportToCsv": "Uložit do CSV",
     "fields": {
       "calculating": "Načítá se…",
-      "currencyLabel": "Měna (nepovinné)",
-      "currencyPlaceholder": "např. USD, EUR",
-      "editFieldValue": "Upravit hodnotu pole",
       "errored": "Chyba",
-      "fieldValueLabel": "Hodnota pole",
-      "fieldValuePlaceholder": "Zadejte hodnotu pole",
       "formatNotSupported": "Formát není podporován",
-      "numberPlaceholder": "Zadejte číslo",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty"
     },

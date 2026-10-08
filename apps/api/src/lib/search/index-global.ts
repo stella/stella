@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
@@ -472,8 +473,6 @@ const sqlWhen = (condition: boolean, fragment: () => SQL): SQL =>
 const emptyWorkspaceFacetQuery = sql`
   SELECT NULL::uuid AS value, NULL::text AS label WHERE false
 `;
-
-export { contactWorkspaceAccessSql };
 
 const toStringFacetMap = (
   rows: RawRow[],
@@ -1389,7 +1388,7 @@ export const searchGlobal = async (
 // to look up bucket values that the top-N default may have hidden.
 // ---------------------------------------------------------------------------
 
-export type GlobalFacetName = "editor" | "workspace" | "mimeType";
+type GlobalFacetName = "editor" | "workspace" | "mimeType";
 
 export type GlobalFacetSearchQuery = {
   facet: GlobalFacetName;
@@ -1933,11 +1932,8 @@ export const upsertWorkspaceSearchDocuments = async (
   // order) and two overlapping cascades wait on each other instead of
   // deadlocking.
   const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
-  for (let start = 0; start < pending.length; start += REINDEX_BATCH_SIZE) {
-    await writeWorkspaceProjections(
-      pending.slice(start, start + REINDEX_BATCH_SIZE),
-      database,
-    );
+  for (const itemBatch of chunkItems(pending, REINDEX_BATCH_SIZE)) {
+    await writeWorkspaceProjections(itemBatch, database);
   }
 };
 

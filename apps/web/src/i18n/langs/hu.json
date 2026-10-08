@@ -2386,6 +2386,8 @@
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
+      "verificationActiveLimitReached": "A szervezet elérte az egyidejű ellenőrzések számának korlátját. Várja meg egy ellenőrzés befejezését, majd próbálja újra.",
+      "verificationDailyLimitReached": "A szervezet elérte az ellenőrzések napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."
     },
     "failedToAcceptInvitation": "Nem sikerült elfogadni a meghívót",
@@ -5344,7 +5346,6 @@
       "noLanguagesFound": "Nem találhatók nyelvek",
       "notConfigured": "A DeepL nincs beállítva ehhez a szervezethez. A fordítás engedélyezéséhez adjon hozzá egy DeepL API-kulcsot a szervezet beállításaiban.",
       "outputLabel": "Fordítás típusa",
-      "progress": "Fordítási folyamat",
       "progressCount": "{completed}/{total} elkészült",
       "providerUnavailable": "A fordítási szolgáltatás nem érhető el. Próbálja újra később, vagy lépjen kapcsolatba a rendszergazdával.",
       "runFailed": "A fordítást nem sikerült befejezni.",
@@ -5476,14 +5477,8 @@
     "exportToCsv": "Exportálás CSV-be",
     "fields": {
       "calculating": "Számítás...",
-      "currencyLabel": "Pénznem (opcionális)",
-      "currencyPlaceholder": "pl. USD, EUR",
-      "editFieldValue": "Mezőérték szerkesztése",
       "errored": "Hiba",
-      "fieldValueLabel": "Mező értéke",
-      "fieldValuePlaceholder": "Adja meg a mezőértéket",
       "formatNotSupported": "Formátum nem támogatott",
-      "numberPlaceholder": "Szám megadása",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket"
     },

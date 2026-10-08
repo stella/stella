@@ -3,6 +3,7 @@ import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -1362,6 +1363,50 @@ test.each(resultJob.needs)(
     }
   },
 );
+
+test("a run that passes as superseded records no completion evidence", () => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-result-evidence-"));
+  try {
+    const cases = [
+      { label: "complete", results: {} },
+      ...resultJob.needs
+        .filter((job) => job !== "ci-plan")
+        .map((job) => ({ label: job, results: { [job]: "cancelled" } })),
+    ];
+    for (const { item, exitCode, stdout } of runBashBatch(cases, (entry) => {
+      const base = resultGateCase({
+        event: EVENT.pullRequest,
+        results: entry.results,
+        suiteDepth: SUITE_DEPTH.fast,
+        cancellationEvidence: "superseded",
+      });
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          GITHUB_OUTPUT: nodePath.join(directory, entry.label),
+          RUN_REQUIRED: "true",
+          COMPLETION_MARKER: "ci-completed-v5-fixture",
+          HEAD_SHA: "a".repeat(40),
+          BASE_SHA: "b".repeat(40),
+          HEAD_REPO_ID: "456",
+        },
+      };
+    })) {
+      expect(exitCode, item.label).toBe(0);
+      const output = nodePath.join(directory, item.label);
+      const written = existsSync(output) ? readFileSync(output, "utf-8") : "";
+      expect(written.includes("evidence="), item.label).toBe(
+        item.label === "complete",
+      );
+      if (item.label !== "complete") {
+        expect(stdout, item.label).toContain("superseded");
+      }
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
 
 test("cancelled jobs retain failed-step evidence and cannot pass verified supersession", () => {
   const cases = [...FAST_DEPTH_EVENTS, EVENT.mergeGroup].flatMap((event) =>
@@ -5143,5 +5188,36 @@ test("desktop browser detector failures and malformed output cannot skip the PR 
   )) {
     expect(exitCode, stderr).toBe(0);
     expect(stdout).toBe(item.expected);
+  }
+});
+
+test("Postgres PR required checks follow trust, run eligibility and the general opt-in", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const trusted of ["true", "false"]) {
+    for (const runRequired of ["true", "false"]) {
+      for (const prSwitch of ["on", "off", ""]) {
+        for (const scope of ["true", "false"]) {
+          const enabled =
+            trusted === "true" &&
+            runRequired === "true" &&
+            prSwitch === "on" &&
+            scope === "true";
+          expect(
+            evaluate(plan.outputs["postgres_pr_required"] ?? "", {
+              values: {
+                "github.event_name": EVENT.pullRequest,
+                "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
+                "steps.completed-depth.outputs.run_required": runRequired,
+                "steps.check.outputs.trusted": trusted,
+                "steps.changed-files.outputs.service_suites_pr_required": scope,
+              },
+            }),
+          ).toBe(enabled);
+        }
+      }
+    }
   }
 });

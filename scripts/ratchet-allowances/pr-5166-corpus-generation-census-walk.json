@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/scripts/corpus-generation.ts",
+  "delta": 2,
+  "reason": "The serving flip's launch proof is a full zero-drift census: a keyset walk over each census page (each cursor comes from the page before it) and one sequential pass per index and kind, bounded by the generation's index count, so the first drifted index is the one an operator acts on. The page reads cannot be batched without loading the generation's whole revision set."
+}

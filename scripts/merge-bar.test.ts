@@ -1825,6 +1825,15 @@ describe("green result freshness", () => {
         ["scripts/ratchet.ts"],
         "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
       ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/ownership/example.ts" }],
+        },
+        ["scripts/ownership/another.ts"],
+        "main changed the ratchet since the green run (scripts/ownership/example.ts) and this PR changes it too",
+      ],
     ] as const) {
       const result = direct(
         comparison,
@@ -2691,6 +2700,19 @@ jobs:
       }
       closure.add(file);
       const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      for (const [, directory] of source.matchAll(
+        /loadOwnershipDeclarations\(\s*new URL\("([^"]+)"/gu,
+      )) {
+        if (directory === undefined) {
+          continue;
+        }
+        const relative = path.posix.join(path.posix.dirname(file), directory);
+        pending.push(
+          ...readdirSync(path.join(repositoryRoot, relative))
+            .filter((name) => name.endsWith(".ts"))
+            .map((name) => path.posix.join(relative, name)),
+        );
+      }
       for (const [, specifier] of source.matchAll(
         /^(?:import|export)\b[^;]*?\bfrom "(\.{1,2}\/[^"]+)"/gmu,
       )) {
@@ -2708,7 +2730,16 @@ jobs:
     }
     expect(
       [...closure].filter((file) => file.endsWith(".ts")).toSorted(),
-    ).toEqual(ratchetDefinitionPaths.toSorted());
+    ).toEqual(
+      ratchetDefinitionPaths
+        .flatMap((pattern) => [
+          ...new Bun.Glob(pattern).scanSync({
+            cwd: repositoryRoot,
+            onlyFiles: true,
+          }),
+        ])
+        .toSorted(),
+    );
   });
 
   test("rewritten history refuses a stale green result", () => {

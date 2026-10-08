@@ -30,6 +30,29 @@ export const durationSeconds = (value: unknown) =>
     ]),
   );
 
+/** Resolve missing live files with the same median for shard and lane planning. */
+export const testFileDurationWeights = (
+  files: readonly string[],
+  durations: Readonly<Record<string, number>>,
+) => {
+  const measured = files
+    .flatMap((file) => {
+      const duration = durations[file];
+      if (duration === undefined) {
+        return [];
+      }
+      if (!Number.isFinite(duration) || duration < 0) {
+        panic(`Invalid duration for ${file}`);
+      }
+      return [duration];
+    })
+    .toSorted((a, b) => a - b);
+  const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
+  return Object.fromEntries(
+    files.map((file) => [file, durations[file] ?? fallback]),
+  );
+};
+
 const timingSchema = v.strictObject({
   version: v.literal(1),
   files: v.record(v.string(), v.pipe(v.number(), v.finite(), v.minValue(0))),

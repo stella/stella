@@ -2386,6 +2386,8 @@
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
+      "verificationActiveLimitReached": "Votre organisation a atteint la limite de vérifications simultanées. Attendez la fin d’une vérification, puis réessayez.",
+      "verificationDailyLimitReached": "Votre organisation a atteint la limite quotidienne de vérifications. Réessayez après minuit (Europe/Prague).",
       "versionConflict": "Quelqu’un d’autre l’a modifié pendant votre édition. Rechargez pour obtenir la version actuelle."
     },
     "failedToAcceptInvitation": "Impossible d'accepter l'invitation",
@@ -5344,7 +5346,6 @@
       "noLanguagesFound": "Aucune langue trouvée",
       "notConfigured": "DeepL n'est pas configuré pour cette organisation. Ajoutez une clé API DeepL dans les paramètres de l'organisation pour activer la traduction.",
       "outputLabel": "Type de traduction",
-      "progress": "Progression de la traduction",
       "progressCount": "{completed} sur {total} terminés",
       "providerUnavailable": "Le service de traduction est indisponible. Réessayez plus tard ou contactez votre administrateur.",
       "runFailed": "La traduction n'a pas pu être terminée.",
@@ -5476,14 +5477,8 @@
     "exportToCsv": "Exporter en CSV",
     "fields": {
       "calculating": "Calcul en cours...",
-      "currencyLabel": "Devise (facultatif)",
-      "currencyPlaceholder": "ex. USD, EUR",
-      "editFieldValue": "Modifier la valeur du champ",
       "errored": "Erreur",
-      "fieldValueLabel": "Valeur du champ",
-      "fieldValuePlaceholder": "Saisir la valeur du champ",
       "formatNotSupported": "Format non pris en charge",
-      "numberPlaceholder": "Saisir un nombre",
       "selectAValue": "Sélectionner une valeur",
       "selectValues": "Sélectionner des valeurs"
     },

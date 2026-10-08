@@ -33,10 +33,13 @@ import {
 import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
+import type { QueryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
@@ -111,6 +114,9 @@ const initialTimeEntryValues = (
   currency: entry?.currency ?? DEFAULT_CURRENCY,
 });
 
+const loadedItems = <TData, TError>(view: QueryView<TData, TError>) =>
+  view.type === "items" ? view.items : undefined;
+
 export const TimeEntryForm = ({
   workspaceId,
   userId,
@@ -128,18 +134,18 @@ export const TimeEntryForm = ({
     initialRateInput(defaultValues),
   );
 
-  const { data: taskCodes } = useQuery(
-    billingCodesOptions(workspaceId, "task"),
-  );
-  const { data: activityCodes } = useQuery(
+  const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
+  const taskCodesView = useQueryView(taskCodesQuery);
+  const taskCodes = loadedItems(taskCodesView);
+  const activityCodesQuery = useQuery(
     billingCodesOptions(workspaceId, "activity"),
   );
-
-  const schema = timeEntryFormSchema(contextState, t("billing.matterRequired"));
+  const activityCodesView = useQueryView(activityCodesQuery);
+  const activityCodes = loadedItems(activityCodesView);
 
   const form = useForm(
     schemaFormOptions({
-      schema,
+      schema: timeEntryFormSchema(contextState, t("billing.matterRequired")),
       submitValues: "raw",
       defaultValues: initialTimeEntryValues(defaultValues),
       onSubmit: async ({ value }) => {
@@ -162,9 +168,11 @@ export const TimeEntryForm = ({
 
   const dateWorked = useSelector(form.store, (s) => s.values.dateWorked);
 
-  const { data: resolved } = useQuery(
+  const resolvedQuery = useQuery(
     resolvedRateOptions(workspaceId, userId, dateWorked),
   );
+  const resolvedView = useQueryView(resolvedQuery);
+  const resolved = loadedItems(resolvedView);
 
   // Resolved rates are automatic defaults, not unsaved user changes.
   // Sync the external form store until the user overrides the rate.
@@ -207,9 +215,15 @@ export const TimeEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!rateOverride && resolvedView.type !== "items") {
+          return;
+        }
         detached(form.handleSubmit(), "time-entry-form.submit");
       }}
     >
+      <QueryViewFeedback view={taskCodesView} />
+      <QueryViewFeedback view={activityCodesView} />
+      <QueryViewFeedback view={resolvedView} />
       <div className="flex flex-col gap-1.5">
         <form.Field name="matterId">
           {(field) => (
@@ -417,7 +431,12 @@ export const TimeEntryForm = ({
             {t("common.cancel")}
           </Button>
         )}
-        <Button type="submit">{submitLabel ?? t("common.save")}</Button>
+        <Button
+          type="submit"
+          disabled={!rateOverride && resolvedView.type !== "items"}
+        >
+          {submitLabel ?? t("common.save")}
+        </Button>
       </div>
     </Form>
   );

@@ -26,6 +26,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
   getRlsFixture,
@@ -81,6 +82,8 @@ const seed = async (type: "avt" | "filesystem") => {
 };
 
 const context = () => ({
+  recordAuditEvent: auditRecorderDouble(),
+  createAuditRecorder: () => auditRecorderDouble(),
   workspaceId: ids.wsA1,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
@@ -264,7 +267,6 @@ describe("AVT views follow the current access grant", () => {
     if (Array.isArray(denied)) {
       expect(denied.find((view) => view.id === avtId)).toEqual({
         id: avtId,
-        layout: { type: "avt" },
         eligibility: "unavailable",
       });
       expect(denied.some((view) => view.id === ordinaryId)).toBe(true);
@@ -536,7 +538,6 @@ test.each(["unavailable", "colleague"] as const)(
         Array.isArray(views) && views.find((view) => view.id === viewId),
       ).toEqual({
         id: viewId,
-        layout: { type: "avt" },
         eligibility: "unavailable",
       });
       expect(
@@ -707,7 +708,6 @@ test("deployment availability remains a ceiling for granted AVT controls", async
       Array.isArray(views) && views.find((view) => view.id === viewId),
     ).toEqual({
       id: viewId,
-      layout: { type: "avt" },
       eligibility: "unavailable",
     });
     expect(

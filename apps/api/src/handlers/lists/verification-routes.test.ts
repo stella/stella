@@ -104,7 +104,8 @@ describe("list verification route admission", () => {
       expect(isRecord(featureAccess)).toBe(true);
       if (
         !isRecord(featureAccess) ||
-        featureAccess["featureId"] !== FEATURE_ID
+        featureAccess["featureId"] !== FEATURE_ID ||
+        featureAccess["type"] !== "required"
       ) {
         continue;
       }

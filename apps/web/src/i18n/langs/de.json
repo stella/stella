@@ -2386,6 +2386,8 @@
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
+      "verificationActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitige Überprüfungen erreicht. Warten Sie, bis eine Überprüfung abgeschlossen ist, und versuchen Sie es erneut.",
+      "verificationDailyLimitReached": "Ihre Organisation hat das Tageslimit für Überprüfungen erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
     },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",
@@ -5344,7 +5346,6 @@
       "noLanguagesFound": "Keine Sprachen gefunden",
       "notConfigured": "DeepL ist für diese Organisation nicht konfiguriert. Fügen Sie in den Organisationseinstellungen einen DeepL-API-Schlüssel hinzu, um die Übersetzung zu aktivieren.",
       "outputLabel": "Übersetzungsart",
-      "progress": "Übersetzungsfortschritt",
       "progressCount": "{completed} von {total} abgeschlossen",
       "providerUnavailable": "Der Übersetzungsdienst ist nicht verfügbar. Versuchen Sie es später erneut oder wenden Sie sich an Ihre Administration.",
       "runFailed": "Die Übersetzung konnte nicht abgeschlossen werden.",
@@ -5476,14 +5477,8 @@
     "exportToCsv": "Als CSV exportieren",
     "fields": {
       "calculating": "Berechnung...",
-      "currencyLabel": "Währung (optional)",
-      "currencyPlaceholder": "z. B. USD, EUR",
-      "editFieldValue": "Feldwert bearbeiten",
       "errored": "Fehler",
-      "fieldValueLabel": "Feldwert",
-      "fieldValuePlaceholder": "Feldwert eingeben",
       "formatNotSupported": "Format nicht unterstützt",
-      "numberPlaceholder": "Zahl eingeben",
       "selectAValue": "Wert auswählen",
       "selectValues": "Werte auswählen"
     },
