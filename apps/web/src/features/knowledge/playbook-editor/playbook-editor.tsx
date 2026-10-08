@@ -70,7 +70,10 @@ import {
   resolvePositionSources,
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
-import { readParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
+import {
+  readParkedPlaybookPane,
+  clearPlaybookPaneDraft,
+} from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
 import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
@@ -636,7 +639,7 @@ const PlaybookEditorForm = ({
     initial.leaveState === "save-failed" ? "failed" : "idle",
   );
   // A playbook being deleted takes no more autosaves.
-  const deletingRef = useRef(false);
+  const deletionRef = useRef<"idle" | "in-flight" | "deleted">("idle");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   // Non-null while confirming a graded → extract conversion that would drop
@@ -1142,7 +1145,7 @@ const PlaybookEditorForm = ({
   } = usePlaybookSaveQueue({ updatedAt, sendSave });
 
   const isAutosaveDue = () =>
-    !deletingRef.current &&
+    deletionRef.current === "idle" &&
     autosaves &&
     (isDirty || hasPendingSave()) &&
     !nameMissing &&
@@ -1220,7 +1223,8 @@ const PlaybookEditorForm = ({
     canSave,
     nameMissing,
     invalidCount: invalidIds.length,
-    isDeleting: () => deletingRef.current,
+    isDeleting: () => deletionRef.current !== "idle",
+    wasDeleted: () => deletionRef.current === "deleted",
     readScrollTop: () => scrollTopRef.current,
     flush: flushOnLeave,
   });
@@ -1262,14 +1266,14 @@ const PlaybookEditorForm = ({
       return;
     }
     setSaving(true);
-    deletingRef.current = true;
+    deletionRef.current = "in-flight";
     const response = await api
       .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
       .delete();
     setSaving(false);
 
     if (response.error) {
-      deletingRef.current = false;
+      deletionRef.current = "idle";
       notifyUserError(
         toAPIError(response.error),
         t("knowledge.playbooks.deleteFailed"),
@@ -1283,6 +1287,7 @@ const PlaybookEditorForm = ({
       return;
     }
 
+    deletionRef.current = "deleted";
     stellaToast.add({
       type: "success",
       title: t("knowledge.playbooks.deleted"),
@@ -1297,6 +1302,7 @@ const PlaybookEditorForm = ({
     if (host.type === "page") {
       host.onSaved();
     } else {
+      clearPlaybookPaneDraft({ tabId: host.tabId, playbookId });
       host.onClose();
     }
   };

@@ -9,6 +9,7 @@ import {
 import {
   completeParkedPlaybookPaneSave,
   discardParkedPlaybookPane,
+  discardParkedPlaybookDraft,
   markParkedPlaybookPaneSaveFailed,
   parkPlaybookPane,
   registerPlaybookPaneLeaveGuard,
@@ -31,6 +32,7 @@ type PaneLifecycleOptions = {
   nameMissing: boolean;
   invalidCount: number;
   isDeleting: () => boolean;
+  wasDeleted: () => boolean;
   flush: (canSaveDraft: boolean) => Promise<SaveOutcome | null>;
   readScrollTop: () => number;
 };
@@ -47,6 +49,7 @@ export const usePlaybookPaneLifecycle = ({
   nameMissing,
   invalidCount,
   isDeleting,
+  wasDeleted,
   flush,
   readScrollTop,
 }: PaneLifecycleOptions) => {
@@ -131,6 +134,9 @@ export const usePlaybookPaneLifecycle = ({
     if (tabId === undefined || panePlaybookId === undefined) {
       return undefined;
     }
+    if (leaveState === "saved") {
+      discardParkedPlaybookDraft({ tabId, playbookId: panePlaybookId });
+    }
     return registerPlaybookPaneLeaveGuard({
       tabId,
       playbookId: panePlaybookId,
@@ -142,6 +148,13 @@ export const usePlaybookPaneLifecycle = ({
   return useLatestCallback(() => {
     const current = capture();
     if (current === null) {
+      return;
+    }
+    if (wasDeleted()) {
+      discardParkedPlaybookDraft({
+        tabId: current.pane.tabId,
+        playbookId: current.pane.playbookId,
+      });
       return;
     }
     if (!current.pane.isTabOpen(current.pane.tabId)) {

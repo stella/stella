@@ -157,6 +157,37 @@ export const markParkedPlaybookPaneSaveFailed = ({
   }, true);
 };
 
+type PaneDraftId = { tabId: string; playbookId: string };
+type PaneDraftRegistry<T> = Readonly<
+  Record<string, Readonly<Record<string, T>>>
+>;
+
+const removePaneDraft = <T>(
+  current: PaneDraftRegistry<T>,
+  { tabId, playbookId }: PaneDraftId,
+): PaneDraftRegistry<T> => {
+  const tab = current[tabId];
+  if (tab?.[playbookId] === undefined) {
+    return current;
+  }
+  const remaining = Object.fromEntries(
+    Object.entries(tab).filter(([id]) => id !== playbookId),
+  );
+  if (Object.keys(remaining).length > 0) {
+    return { ...current, [tabId]: remaining };
+  }
+  return Object.fromEntries(
+    Object.entries(current).filter(([id]) => id !== tabId),
+  );
+};
+
+export const discardParkedPlaybookDraft = (id: PaneDraftId) => {
+  useParkedPlaybookPanes.setState(
+    (current) => removePaneDraft(current, id),
+    true,
+  );
+};
+
 export const discardParkedPlaybookPane = (tabId: string) => {
   useParkedPlaybookPanes.setState(
     (current) =>
@@ -183,6 +214,19 @@ type PaneLeaveGuards = Readonly<
 >;
 
 const usePaneLeaveGuards = create<PaneLeaveGuards>(() => ({}));
+
+export const clearPlaybookPaneDraft = (id: PaneDraftId) => {
+  const request = usePlaybookPaneLeave.getState();
+  if (
+    request.type !== "idle" &&
+    request.tabId === id.tabId &&
+    request.playbookId === id.playbookId
+  ) {
+    cancelPlaybookPaneLeave();
+  }
+  usePaneLeaveGuards.setState((current) => removePaneDraft(current, id), true);
+  discardParkedPlaybookDraft(id);
+};
 
 export const registerPlaybookPaneLeaveGuard = ({
   tabId,

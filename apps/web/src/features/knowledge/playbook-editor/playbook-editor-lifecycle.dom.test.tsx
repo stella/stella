@@ -23,6 +23,8 @@ const ORGANIZATION_ID = "editor-lifecycle-organization";
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;
 const putBodies: string[] = [];
+let saveResult: "failed" | "saved" = "failed";
+let deleteRequests = 0;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const address = input instanceof Request ? input.url : String(input);
@@ -40,7 +42,25 @@ globalThis.fetch = Object.assign(
         body = await input.clone().text();
       }
       putBodies.push(body);
+      if (saveResult === "saved") {
+        const saved = {
+          updatedAt: "2026-10-08T08:01:00.000Z",
+        } satisfies NonNullable<
+          Extract<
+            Awaited<ReturnType<ReturnType<typeof api.playbooks>["put"]>>,
+            { data: unknown }
+          >["data"]
+        >;
+        return Response.json(saved);
+      }
       return Response.json({ message: "Save unavailable" }, { status: 503 });
+    }
+    if (
+      url.pathname.endsWith(`/playbooks/${PLAYBOOK_ID}`) &&
+      method === "DELETE"
+    ) {
+      deleteRequests += 1;
+      return Response.json({});
     }
     return Response.json(
       { message: "Unexpected request in editor lifecycle test" },
@@ -174,6 +194,8 @@ afterEach(async () => {
   }
   cancelPlaybookPaneLeave();
   putBodies.length = 0;
+  saveResult = "failed";
+  deleteRequests = 0;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -246,4 +268,66 @@ test("a real approved editor parks unsaved edits on hide and the global owner ke
   window.dispatchEvent(afterHide);
   expect(afterHide.defaultPrevented).toBe(true);
   expect(putBodies).toHaveLength(0);
+});
+
+test("deleting an edited real draft before autosave closes the tab without parking or another save", async () => {
+  const { view, store, tabId } = await mountEditor("draft");
+  fireEvent.change(view.getByLabelText(messages.common.name), {
+    target: { value: "Draft being deleted" },
+  });
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", {
+        name: messages.knowledge.playbooks.deletePlaybook,
+      }),
+    );
+  });
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: messages.common.delete, exact: true }),
+    );
+  });
+  await waitFor(() => expect(store.getState().tabs).toHaveLength(0));
+  expect(deleteRequests).toBe(1);
+  expect(putBodies).toHaveLength(0);
+  expect(usePlaybookPaneLeave.getState()).toEqual({ type: "idle" });
+  expect(readParkedPlaybookPane(tabId, PLAYBOOK_ID)).toBeNull();
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(view.queryByRole("alertdialog")).toBeNull();
+});
+
+test("saving a reopened approved editor clears parked and global unload guards", async () => {
+  const { view, store, tabId } = await mountEditor("approved");
+  const draftName = "Approved edit to save after reopening";
+  fireEvent.change(view.getByLabelText(messages.common.name), {
+    target: { value: draftName },
+  });
+  await act(async () => {
+    store.getState().setMinimized(true);
+  });
+  await waitFor(() =>
+    expect(readParkedPlaybookPane(tabId, PLAYBOOK_ID)).toMatchObject({
+      draft: { name: draftName },
+      leaveState: "dirty-unsaveable",
+    }),
+  );
+  expect(hasUnsavedWork()).toBe(true);
+  await act(async () => {
+    store.getState().setMinimized(false);
+  });
+  await waitFor(() => expect(view.getByDisplayValue(draftName)).toBeDefined());
+  saveResult = "saved";
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: messages.common.save, exact: true }),
+    );
+  });
+  await waitFor(() => expect(putBodies).toHaveLength(1));
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(view.getByDisplayValue(draftName)).toBeDefined();
+  expect(readParkedPlaybookPane(tabId, PLAYBOOK_ID)).toBeNull();
+  const afterSave = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(afterSave);
+  expect(afterSave.defaultPrevented).toBe(false);
+  expect(store.getState().tabs.map((tab) => tab.id)).toEqual([tabId]);
 });
