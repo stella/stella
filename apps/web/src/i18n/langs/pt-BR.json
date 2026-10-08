@@ -4027,7 +4027,10 @@
         "incomplete": "Informe uma chave de API e um modelo para o modelo de decisão, ou remova-o.",
         "instanceProvided": "stella já fornece um modelo de decisão; adicione o seu apenas para usar outro.",
         "label": "Modelo de decisão",
-        "modelId": "ID do modelo"
+        "modelId": "ID do modelo",
+        "regionEu": "União Europeia",
+        "reuseOpenAIKey": "Usar minha chave OpenAI",
+        "separateKey": "Usar uma chave separada"
       },
       "defaultModel": "Padrão: {model}",
       "defaultModelOption": "Padrão",

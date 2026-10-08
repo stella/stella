@@ -9,6 +9,8 @@ import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
 
 import feedbackCreateEndpoint from "@/api/handlers/feedback/create";
+import readAIConfigEndpoint from "@/api/handlers/organization-settings/read-ai-config";
+import updateAIConfigEndpoint from "@/api/handlers/organization-settings/update-ai-config";
 import {
   UPLOAD_PURPOSE_PERMISSION,
   uploadRoutePermission,
@@ -1283,4 +1285,25 @@ describe("static feature tool enrolment boundary", () => {
       }
     }
   });
+});
+
+test("decision-provider settings stay outside MCP and CLI discovery during beta", () => {
+  for (const endpoint of [readAIConfigEndpoint, updateAIConfigEndpoint]) {
+    expect(endpoint.config.mcp).toEqual({
+      type: "internal",
+      reason: "provider_secret",
+    });
+  }
+  expect(
+    catalogEntries.filter(({ id }) =>
+      /^organization-settings\.(?:read|update)-ai-config$/u.test(id),
+    ),
+  ).toEqual([]);
+  for (const listing of registrySnapshot) {
+    expect(JSON.stringify(listing.inputSchema)).not.toContain('"gpt-6-luna"');
+    expect(listing.name).not.toMatch(/(?:read|update)_ai_config/u);
+  }
+  for (const definition of listStaticMcpToolDefinitions()) {
+    expect(definition.name).not.toMatch(/(?:read|update)_ai_config/u);
+  }
 });

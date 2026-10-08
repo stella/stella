@@ -4027,7 +4027,10 @@
         "incomplete": "Podaj klucz API i model dla modelu decyzyjnego albo go usuń.",
         "instanceProvided": "stella udostępnia już model decyzyjny; dodaj własny tylko po to, aby użyć innego.",
         "label": "Model decyzyjny",
-        "modelId": "Identyfikator modelu"
+        "modelId": "Identyfikator modelu",
+        "regionEu": "Unia Europejska",
+        "reuseOpenAIKey": "Użyj mojego klucza OpenAI",
+        "separateKey": "Użyj osobnego klucza"
       },
       "defaultModel": "Domyślny: {model}",
       "defaultModelOption": "Domyślny",

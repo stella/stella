@@ -4027,7 +4027,10 @@
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
         "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
         "label": "Entscheidungsmodell",
-        "modelId": "Modell-ID"
+        "modelId": "Modell-ID",
+        "regionEu": "Europäische Union",
+        "reuseOpenAIKey": "Meinen OpenAI-Schlüssel verwenden",
+        "separateKey": "Separaten Schlüssel verwenden"
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",

@@ -4027,7 +4027,10 @@
         "incomplete": "Adjon meg API-kulcsot és modellt a döntési modellhez, vagy távolítsa el.",
         "instanceProvided": "stella már biztosít döntési modellt; sajátot csak akkor adjon hozzá, ha másikat szeretne használni.",
         "label": "Döntési modell",
-        "modelId": "Modellazonosító"
+        "modelId": "Modellazonosító",
+        "regionEu": "Európai Unió",
+        "reuseOpenAIKey": "Saját OpenAI-kulcs használata",
+        "separateKey": "Külön kulcs használata"
       },
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",

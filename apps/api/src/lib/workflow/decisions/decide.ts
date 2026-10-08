@@ -30,6 +30,10 @@ import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy"
 import { logger } from "@/api/lib/observability/logger";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import {
+  decisionConfidenceFloor,
+  decisionPrice,
+} from "@/api/lib/workflow/decisions/decision-policy";
 import { recordDecisionUsage } from "@/api/lib/workflow/decisions/decision-usage";
 import type { DecisionUsageMetering } from "@/api/lib/workflow/decisions/decision-usage";
 import type {
@@ -43,17 +47,7 @@ import type {
   SystemOneQuestions,
   SystemOneState,
 } from "@/api/lib/workflow/decisions/system-one";
-import {
-  isSystemOneAnswerForQuestion,
-  SYSTEM_ONE_USD_PER_INPUT_TOKEN,
-} from "@/api/lib/workflow/decisions/system-one";
-
-/**
- * Below this confidence a decision is not taken. Measured against Jev 1.13 on
- * the citation-polarity comparison; move it with the model, not per call
- * site. A site whose cost of a wrong answer is higher passes its own floor.
- */
-const DECISION_ACCEPT_CONFIDENCE = 0.6;
+import { isSystemOneAnswerForQuestion } from "@/api/lib/workflow/decisions/system-one";
 
 /** Answers arrive in well under a second; the default covers a queued retry. */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -67,6 +61,7 @@ const DECISION_UNDECIDED_REASONS = [
   "below-floor",
   /** The call failed; the error was captured. */
   "failed",
+  "refusal",
 ] as const;
 export type DecisionUndecidedReason =
   (typeof DECISION_UNDECIDED_REASONS)[number];
@@ -97,6 +92,7 @@ type DecideBaseOptions = {
   dataClass: AIDataClass;
   state: SystemOneState;
   floor?: number | undefined;
+  confidencePurpose?: "default" | "polarity" | undefined;
   abortSignal?: AbortSignal | undefined;
   timeoutMs?: number | undefined;
   /** Injected by tests and comparison runs; the org's resolved model otherwise. */
@@ -130,7 +126,9 @@ const readAnswer = (answer: AnyAnswer): Reading => {
     case "choice":
       return {
         answer,
-        probability: answer.probabilities[answer.choice] ?? 0,
+        probability:
+          answer.probabilities[answer.choice] ??
+          panic("Decision answer omitted the chosen probability"),
         confidence: answer.confidence,
       };
     case "noul":
@@ -165,6 +163,7 @@ const hasEveryDecision = <TQuestions extends SystemOneQuestions>(
   Object.entries(questions).every(([id, question]) => {
     const decision = decisions[id];
     return (
+      Object.hasOwn(decisions, id) &&
       decision !== undefined &&
       (decision.state === "undecided" ||
         isSystemOneAnswerForQuestion(question, decision.answer))
@@ -175,10 +174,11 @@ const undecidedAll = <TQuestions extends SystemOneQuestions>(
   questions: TQuestions,
   reason: DecisionUndecidedReason,
 ): Decisions<TQuestions> => {
-  const decisions: Record<string, Decision<SystemOneAnswer>> = {};
+  const decisionMap = new Map<string, Decision<SystemOneAnswer>>();
   for (const key of Object.keys(questions)) {
-    decisions[key] = { state: "undecided", reason, confidence: null };
+    decisionMap.set(key, { state: "undecided", reason, confidence: null });
   }
+  const decisions = Object.fromEntries(decisionMap);
   return hasEveryDecision(questions, decisions)
     ? decisions
     : panic("Undecided decision construction lost a question");
@@ -190,7 +190,8 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
   dataClass,
   state,
   questions,
-  floor = DECISION_ACCEPT_CONFIDENCE,
+  floor,
+  confidencePurpose = "default",
   abortSignal,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   client,
@@ -206,11 +207,13 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
     model === null ||
     Object.keys(questions).length === 0 ||
     (model.keySource === "instance" &&
-      !isManagedProviderAvailable("typesafe", dataClass)) ||
+      !isManagedProviderAvailable(model.provider, dataClass)) ||
     (usageMetering && orgAIConfig && model.keySource === "instance")
   ) {
     return { decisions: undecidedAll(questions, "no-backend"), model: null };
   }
+  const confidenceFloor =
+    floor ?? decisionConfidenceFloor(model.model, confidencePurpose);
   const timeout = AbortSignal.timeout(timeoutMs);
   const asked = await model.ask({
     state,
@@ -231,11 +234,13 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
     await recordDecisionUsage({
       metering: usageMetering,
       keySource: model.keySource,
+      provider: model.provider,
+      region: model.region,
       inputTokens: asked.value.usage.inputTokens,
     });
   }
 
-  const decisions: Record<string, Decision<SystemOneAnswer>> = {};
+  const decisionMap = new Map<string, Decision<SystemOneAnswer>>();
   const readings: Record<string, string | number>[] = [];
   let decided = 0;
   for (const key of Object.keys(questions)) {
@@ -243,20 +248,34 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
     if (answer === undefined) {
       return panic(`Decision model returned no answer for "${key}"`);
     }
+    if (answer.type === "refusal") {
+      decisionMap.set(key, {
+        state: "undecided",
+        reason: "refusal",
+        confidence: null,
+      });
+      if (readings.length < READINGS_MAX) {
+        readings.push({ q: key, type: "refusal", state: "undecided" });
+      }
+      continue;
+    }
     const reading = readAnswer(answer);
-    const accepted = reading.confidence >= floor;
-    decisions[key] = accepted
-      ? {
-          state: "decided",
-          answer: reading.answer,
-          probability: reading.probability,
-          confidence: reading.confidence,
-        }
-      : {
-          state: "undecided",
-          reason: "below-floor",
-          confidence: reading.confidence,
-        };
+    const accepted = reading.confidence >= confidenceFloor;
+    decisionMap.set(
+      key,
+      accepted
+        ? {
+            state: "decided",
+            answer: reading.answer,
+            probability: reading.probability,
+            confidence: reading.confidence,
+          }
+        : {
+            state: "undecided",
+            reason: "below-floor",
+            confidence: reading.confidence,
+          },
+    );
     decided += accepted ? 1 : 0;
     if (readings.length < READINGS_MAX) {
       readings.push({
@@ -269,16 +288,18 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
       });
     }
   }
+  const decisions = Object.fromEntries(decisionMap);
   const questionCount = Object.keys(questions).length;
   logger.info("ai.decision", {
     decision: id,
     model: asked.value.model,
+    provider: model.provider,
     questionCount,
     decidedCount: decided,
     undecidedCount: questionCount - decided,
-    floor,
+    floor: confidenceFloor,
     inputTokens: asked.value.usage.inputTokens,
-    usd: asked.value.usage.inputTokens * SYSTEM_ONE_USD_PER_INPUT_TOKEN,
+    usd: asked.value.usage.inputTokens * decisionPrice(model).usdPerInputToken,
     latencyMs: asked.value.latencyMs,
     readings: JSON.stringify(readings),
   });

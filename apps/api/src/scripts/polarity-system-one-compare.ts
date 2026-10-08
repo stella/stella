@@ -11,25 +11,27 @@ import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { excerptOf } from "@/api/handlers/case-law/polarity/classifier";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
-import {
-  POLARITY_QUESTION,
-  SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
-} from "@/api/handlers/case-law/polarity/system-one-classifier";
+import { POLARITY_QUESTION } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
-  createSystemOneClient,
-  SYSTEM_ONE_USD_PER_INPUT_TOKEN,
-} from "@/api/lib/workflow/decisions/system-one";
+  decisionConfidenceFloor,
+  decisionPrice,
+} from "@/api/lib/workflow/decisions/decision-policy";
+import { createOpenAIDecisionsClient } from "@/api/lib/workflow/decisions/openai-decisions";
+import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
+import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 import {
   disagreements,
   DISAGREEMENT_EXAMPLES,
   parseCompareArgs,
   planSampleBuckets,
   renderComparisonReport,
+  renderPairedComparisonReport,
+  summarisePairedComparison,
   STORED_LABEL_ABSENT,
   storedLabelOf,
   summariseComparison,
@@ -38,7 +40,7 @@ import {
 } from "@/api/scripts/polarity-system-one-compare.logic";
 import type {
   ComparisonRow,
-  JevOutcome,
+  DecisionOutcome,
   LlmOutcome,
   SampleBucket,
   SampleSkipReason,
@@ -63,7 +65,8 @@ import type {
  *     --limit 200 --language cs --seed 2026-09-17
  *
  * Needs PUBLIC_LAW_DATABASE_URL (the read-only corpus role) and
- * TYPESAFE_API_KEY; TYPESAFE_MODEL or --model pins the model.
+ * the selected provider key (TYPESAFE_API_KEY or OPENAI_API_KEY).
+ * --compare-provider openai reads the same sample with both decision providers.
  */
 
 const USAGE_EXIT_CODE = 2;
@@ -100,14 +103,43 @@ if (envBase.PUBLIC_LAW_DATABASE_URL === undefined) {
     "PUBLIC_LAW_DATABASE_URL is not set. Point it at the corpus, as the read-only public-law role.",
   );
 }
-const apiKey = env.TYPESAFE_API_KEY;
-if (apiKey === undefined) {
-  abort("TYPESAFE_API_KEY is not set; the System One tier cannot be measured.");
-}
-const client = createSystemOneClient({
-  apiKey,
-  model: options.model ?? env.TYPESAFE_MODEL,
-});
+const clientFor = (
+  provider: typeof options.decisionProvider,
+): SystemOneClient => {
+  switch (provider) {
+    case "typesafe": {
+      const apiKey = env.TYPESAFE_API_KEY;
+      if (apiKey === undefined) {
+        abort(
+          "TYPESAFE_API_KEY is not set; the typesafe tier cannot be measured.",
+        );
+      }
+      return createSystemOneClient({
+        apiKey,
+        model: options.model ?? env.TYPESAFE_MODEL,
+      });
+    }
+    case "openai": {
+      const apiKey = process.env["OPENAI_API_KEY"];
+      if (apiKey === undefined) {
+        abort("OPENAI_API_KEY is not set; the openai tier cannot be measured.");
+      }
+      return createOpenAIDecisionsClient({
+        apiKey,
+        region: options.openaiRegion,
+        ...(options.decisionProvider === "openai" && options.model !== null
+          ? { model: options.model }
+          : {}),
+      });
+    }
+    default:
+      provider satisfies never;
+      return panic("unhandled decision comparison provider", { provider });
+  }
+};
+const client = clientFor(options.decisionProvider);
+const comparisonClient =
+  options.compareProvider === null ? null : clientFor(options.compareProvider);
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -310,8 +342,11 @@ for (const citation of citations) {
  * so every reading is kept whatever its confidence, together with the model,
  * latency and tokens the run is priced from.
  */
-const readWithSystemOne = async (item: ComparisonItem): Promise<JevOutcome> => {
-  const asked = await client.ask({
+const readWithDecisionModel = async (
+  item: ComparisonItem,
+  decisionClient: SystemOneClient,
+): Promise<DecisionOutcome> => {
+  const asked = await decisionClient.ask({
     state: {
       language: item.decision.language,
       citation: item.citation.citationText,
@@ -328,6 +363,14 @@ const readWithSystemOne = async (item: ComparisonItem): Promise<JevOutcome> => {
     };
   }
   const { answers, model, latencyMs, usage } = asked.value;
+  if (answers.polarity.type === "refusal") {
+    return {
+      status: "refused",
+      inputTokens: usage.inputTokens,
+      latencyMs,
+      model,
+    };
+  }
   return {
     status: "read",
     polarity: answers.polarity.choice,
@@ -358,17 +401,20 @@ const readWithLlm = async (item: ComparisonItem): Promise<LlmOutcome> => {
 };
 
 let completed = 0;
-const rows = await mapWithConcurrency({
+const results = await mapWithConcurrency({
   items,
   limit: options.concurrency,
-  operation: async (item: ComparisonItem): Promise<ComparisonRow> => {
-    const [jev, llm] = await Promise.all([
-      readWithSystemOne(item),
+  operation: async (item: ComparisonItem) => {
+    const [decision, llm, comparison] = await Promise.all([
+      readWithDecisionModel(item, client),
       readWithLlm(item),
+      comparisonClient === null
+        ? null
+        : readWithDecisionModel(item, comparisonClient),
     ]);
     completed += 1;
     console.error(`read ${completed}/${items.length}…`);
-    return {
+    const row = {
       citationId: item.citation.id,
       citingDecisionId: item.citation.citingDecisionId,
       citedDecisionId:
@@ -382,36 +428,76 @@ const rows = await mapWithConcurrency({
       citationText: item.citation.citationText,
       excerpt: truncateExcerpt(item.context),
       stored: storedLabelOf(item.citation.storedPolarity),
-      jev,
+      decision,
       llm,
-    };
+    } satisfies ComparisonRow;
+    return { row, comparison };
   },
 });
+
+const rows = results.map(({ row }) => row);
+const comparisonRows =
+  comparisonClient === null
+    ? null
+    : results.map(({ row, comparison }) => ({
+        ...row,
+        decision:
+          comparison ?? panic("paired citation has no comparison outcome"),
+      }));
 
 const summary = summariseComparison({
   rows,
   sampled: citations.length,
   skipped,
-  usdPerInputToken: SYSTEM_ONE_USD_PER_INPUT_TOKEN,
+  usdPerInputToken: decisionPrice({
+    provider: options.decisionProvider,
+    region: options.openaiRegion,
+  }).usdPerInputToken,
 });
 
-const markdown = renderComparisonReport({
+const primaryMarkdown = renderComparisonReport({
   summary,
   options,
   rows,
-  acceptFloor: SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
+  acceptFloor: decisionConfidenceFloor(client.model, "polarity"),
   model:
     rows
-      .flatMap((row) => (row.jev.status === "read" ? [row.jev.model] : []))
+      .flatMap((row) =>
+        row.decision.status === "read" ? [row.decision.model] : [],
+      )
       .at(0) ?? null,
 });
+
+const pairedSummary =
+  comparisonRows === null
+    ? null
+    : summarisePairedComparison({
+        typesafe: {
+          rows,
+          usdPerInputToken: decisionPrice({ provider: "typesafe" })
+            .usdPerInputToken,
+        },
+        openai: {
+          rows: comparisonRows,
+          usdPerInputToken: decisionPrice({
+            provider: "openai",
+            region: options.openaiRegion,
+          }).usdPerInputToken,
+        },
+        sampled: citations.length,
+        skipped,
+      });
+const markdown =
+  pairedSummary === null
+    ? primaryMarkdown
+    : `${renderPairedComparisonReport(pairedSummary)}\n\n${primaryMarkdown}`;
 
 await mkdir(options.outDir, { recursive: true });
 const jsonPath = `${options.outDir}/report.json`;
 const markdownPath = `${options.outDir}/report.md`;
 await Bun.write(
   jsonPath,
-  `${JSON.stringify({ options, summary, rows }, null, 2)}\n`,
+  `${JSON.stringify({ options, summary, rows, pairedSummary, comparisonRows }, null, 2)}\n`,
 );
 await Bun.write(markdownPath, `${markdown}\n`);
 
@@ -420,15 +506,19 @@ console.log(markdown);
 // and this is the part a human reads to judge who is right.
 for (const row of disagreements(rows, DISAGREEMENT_EXAMPLES)) {
   const read =
-    row.jev.status === "read"
-      ? row.jev
+    row.decision.status === "read"
+      ? row.decision
       : panic("a disagreement carries no reading", {
           citationId: row.citationId,
         });
   console.log(
-    `\n${row.caseNumber} — stored ${row.stored}, Jev ${read.polarity} (${read.confidence.toFixed(2)})\n  ${row.citationText}\n  ${row.excerpt}`,
+    `\n${row.caseNumber} — stored ${row.stored}, ${options.decisionProvider} ${read.polarity} (${read.confidence.toFixed(2)})\n  ${row.citationText}\n  ${row.excerpt}`,
   );
 }
 console.log(`\nwrote ${jsonPath} and ${markdownPath}`);
 
-process.exit(summary.read === 0 ? EMPTY_SAMPLE_EXIT_CODE : 0);
+process.exit(
+  summary.read === 0 || pairedSummary?.openai.read === 0
+    ? EMPTY_SAMPLE_EXIT_CODE
+    : 0,
+);

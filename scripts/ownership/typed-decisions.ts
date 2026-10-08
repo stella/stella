@@ -8,6 +8,8 @@ export default {
     "apps/api/src/lib/workflow/decisions/decide.ts",
     "apps/api/src/lib/workflow/decisions/decision-model.ts",
     "apps/api/src/lib/workflow/decisions/system-one.ts",
+    "apps/api/src/lib/workflow/decisions/openai-decisions.ts",
+    "apps/api/src/lib/workflow/decisions/decision-policy.ts",
     "apps/api/src/lib/workflow/decisions/system-one-runtime.ts",
     "apps/api/src/lib/workflow/decisions/answer-questions.ts",
   ],
@@ -19,7 +21,7 @@ export default {
     "returns a `Decision` the caller must narrow before reading, so a " +
     "deployment without a model takes the same path as an answer under the " +
     "floor. `decision-model.ts` owns which model answers for an org, " +
-    "`system-one.ts` the wire contract and retry, `system-one-runtime.ts` the " +
+    "`system-one.ts` and `openai-decisions.ts` the wire contracts and retry, `system-one-runtime.ts` the " +
     "instance credential, and `answer-questions.ts` the translation of a table " +
     "column (select, date, int) into questions and back into the `Answer` the " +
     "generative path writes. A caller builds questions with the constructors in " +
@@ -29,8 +31,13 @@ export default {
     specifiers: [
       "@/api/lib/workflow/decisions/system-one-runtime",
       "@/api/lib/workflow/decisions/system-one",
+      "@/api/lib/workflow/decisions/openai-decisions",
     ],
-    names: ["getSystemOneClient", "createSystemOneClient"],
+    names: [
+      "getSystemOneClient",
+      "createSystemOneClient",
+      "createOpenAIDecisionsClient",
+    ],
     allowed: [
       {
         path: "apps/api/src/scripts/polarity-system-one-compare.ts",

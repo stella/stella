@@ -1,78 +1,151 @@
-/**
- * Resolving the decision model an AI-config update stores.
- *
- * The decision model is not one of the generative roles, so it merges on its
- * own terms: an absent field keeps what is stored, `null` clears it, and an
- * object replaces it. A key may be omitted only to keep the stored one, and
- * only while the provider stays the same, so a provider switch can never
- * inherit a credential that was issued for another one.
- */
+import { panic } from "better-result";
 
 import type {
   DecisionModelProvider,
+  OrgAIProviderConfig,
   OrgDecisionModelConfig,
 } from "@/api/lib/ai-config";
 
 export type DecisionConfigInput = {
   provider: DecisionModelProvider;
-  apiKey?: string | undefined;
+  apiKey?: string | null | undefined;
+  region?: "eu" | "global" | undefined;
   modelId: string;
 };
 
+type ProbeConfig = OrgDecisionModelConfig & { apiKey: string };
 export type DecisionConfigResult =
+  | { valid: true; decision: OrgDecisionModelConfig | null; needsProbe: false }
   | {
       valid: true;
-      decision: OrgDecisionModelConfig | null;
-      /** The credential/model pairing changed, so it still has to be probed. */
-      needsProbe: boolean;
+      decision: OrgDecisionModelConfig;
+      needsProbe: true;
+      probeConfig: ProbeConfig;
     }
   | { valid: false; error: string };
 
-export const resolveDecisionConfig = (
-  input: DecisionConfigInput | null | undefined,
-  existing: OrgDecisionModelConfig | null | undefined,
-): DecisionConfigResult => {
-  if (input === undefined) {
-    return { valid: true, decision: existing ?? null, needsProbe: false };
-  }
-  if (input === null) {
+type ResolveDecisionConfigOptions = {
+  input: DecisionConfigInput | null | undefined;
+  existing: OrgDecisionModelConfig | null | undefined;
+  providers: readonly OrgAIProviderConfig[];
+  existingProviders: readonly OrgAIProviderConfig[];
+};
+
+export const resolveDecisionConfig = ({
+  input,
+  existing,
+  providers,
+  existingProviders,
+}: ResolveDecisionConfigOptions): DecisionConfigResult => {
+  if (input === null || (input === undefined && !existing)) {
     return { valid: true, decision: null, needsProbe: false };
   }
-
-  const modelId = input.modelId.trim();
+  const selection = input ?? existing;
+  if (!selection) {
+    return { valid: true, decision: null, needsProbe: false };
+  }
+  const modelId = selection.modelId.trim();
   if (!modelId) {
     return {
       valid: false,
       error: "A model is required for the decision model",
     };
   }
-
-  const apiKey = input.apiKey?.trim();
-  if (apiKey) {
-    return {
-      valid: true,
-      decision: { provider: input.provider, apiKey, modelId },
-      needsProbe: true,
-    };
+  const storedKey =
+    existing?.provider === selection.provider ? existing.apiKey : undefined;
+  const apiKey =
+    input?.apiKey === null ? undefined : selection.apiKey?.trim() || storedKey;
+  let decision: OrgDecisionModelConfig;
+  switch (selection.provider) {
+    case "typesafe":
+      if (!apiKey) {
+        return {
+          valid: false,
+          error: "API key is required for the decision model",
+        };
+      }
+      decision = { provider: "typesafe", apiKey, modelId };
+      break;
+    case "openai":
+      decision = {
+        provider: "openai",
+        ...(apiKey ? { apiKey } : {}),
+        region:
+          input?.region ??
+          (existing?.provider === "openai" ? existing.region : "eu"),
+        modelId,
+      };
+      break;
+    default:
+      selection.provider satisfies never;
+      return panic("Unhandled decision provider");
   }
+  return resolveDecisionProbe({
+    decision,
+    inputApiKey: input?.apiKey,
+    existing,
+    providers,
+    existingProviders,
+  });
+};
 
-  // The stored key is filed under its own provider and read back by lookup,
-  // not by comparison, so a second provider cannot inherit a credential that
-  // was issued for the first one.
-  const storedKeys: Partial<Record<DecisionModelProvider, string>> = existing
-    ? { [existing.provider]: existing.apiKey }
-    : {};
-  const reusableKey = storedKeys[input.provider];
-  if (reusableKey === undefined) {
+type ResolveDecisionProbeOptions = {
+  decision: OrgDecisionModelConfig;
+  inputApiKey: string | null | undefined;
+  existing: OrgDecisionModelConfig | null | undefined;
+  providers: readonly OrgAIProviderConfig[];
+  existingProviders: readonly OrgAIProviderConfig[];
+};
+
+const resolveDecisionProbe = ({
+  decision,
+  inputApiKey,
+  existing,
+  providers,
+  existingProviders,
+}: ResolveDecisionProbeOptions): DecisionConfigResult => {
+  const resolvedKey =
+    decision.apiKey ??
+    providers.find(({ provider }) => provider === "openai")?.apiKey;
+  if (!resolvedKey) {
     return {
       valid: false,
-      error: "API key is required for the decision model",
+      error: "An OpenAI API key is required for the decision model",
     };
   }
-
+  const previousKey =
+    existing?.apiKey ??
+    (existing?.provider === "openai"
+      ? existingProviders.find(({ provider }) => provider === "openai")?.apiKey
+      : undefined);
+  const needsProbe =
+    (inputApiKey !== null &&
+      inputApiKey !== undefined &&
+      !!inputApiKey.trim()) ||
+    existing?.provider !== decision.provider ||
+    existing.modelId !== decision.modelId ||
+    previousKey !== resolvedKey ||
+    (decision.provider === "openai" &&
+      (existing?.provider !== "openai" || existing.region !== decision.region));
+  if (!needsProbe) {
+    return { valid: true, decision, needsProbe: false };
+  }
   return {
     valid: true,
-    decision: { provider: input.provider, apiKey: reusableKey, modelId },
-    needsProbe: existing?.modelId !== modelId,
+    decision,
+    needsProbe: true,
+    probeConfig:
+      decision.provider === "openai"
+        ? {
+            provider: "openai",
+            modelId: decision.modelId,
+            region: decision.region,
+            apiKey: resolvedKey,
+          }
+        : {
+            provider: "typesafe",
+            modelId: decision.modelId,
+            apiKey: resolvedKey,
+          },
   };
 };

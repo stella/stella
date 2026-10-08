@@ -32,6 +32,8 @@ import {
   parseCompareArgs,
   planSampleBuckets,
   renderComparisonReport,
+  renderPairedComparisonReport,
+  summarisePairedComparison,
   STORED_LABEL_ABSENT,
   STORED_LABELS,
   storedLabelOf,
@@ -42,7 +44,7 @@ import {
 import type {
   ComparisonRow,
   CompareOptions,
-  JevOutcome,
+  DecisionOutcome,
   LlmOutcome,
   StoredLabel,
 } from "./polarity-system-one-compare.logic";
@@ -69,7 +71,7 @@ const reading = ({
   confidence?: number;
   latencyMs?: number;
   inputTokens?: number;
-}): JevOutcome => ({
+}): DecisionOutcome => ({
   status: "read",
   polarity,
   probabilities: evenProbabilities(polarity),
@@ -83,12 +85,12 @@ let nextRow = 0;
 
 const comparisonRow = ({
   stored,
-  jev,
+  decision,
   llm = { status: "not-run" },
   excerpt = "…v souladu s rozsudkem Nejvyššího soudu…",
 }: {
   stored: StoredLabel;
-  jev: JevOutcome;
+  decision: DecisionOutcome;
   llm?: LlmOutcome;
   excerpt?: string;
 }): ComparisonRow => {
@@ -103,7 +105,7 @@ const comparisonRow = ({
     citationText: "sp. zn. 30 Cdo 1/2020",
     excerpt,
     stored,
-    jev,
+    decision,
     llm,
   };
 };
@@ -117,6 +119,9 @@ const options: CompareOptions = {
   outDir: "/tmp/polarity",
   llm: false,
   model: null,
+  decisionProvider: "typesafe",
+  compareProvider: null,
+  openaiRegion: "eu",
 };
 
 const parsedOptions = (argv: readonly string[]): CompareOptions => {
@@ -149,6 +154,9 @@ describe("comparison arguments", () => {
       outDir: DEFAULT_OUT_DIR,
       llm: false,
       model: null,
+      decisionProvider: "typesafe",
+      compareProvider: null,
+      openaiRegion: "eu",
     });
   });
 
@@ -187,6 +195,9 @@ describe("comparison arguments", () => {
       outDir: "/tmp/out",
       llm: true,
       model: "jev-2026-09",
+      decisionProvider: "typesafe",
+      compareProvider: null,
+      openaiRegion: "eu",
     });
   });
 
@@ -308,30 +319,32 @@ describe("confusion matrix", () => {
     const matrix = buildConfusionMatrix([
       comparisonRow({
         stored: POLARITY.POSITIVE,
-        jev: reading({ polarity: POLARITY.POSITIVE }),
+        decision: reading({ polarity: POLARITY.POSITIVE }),
       }),
       comparisonRow({
         stored: POLARITY.POSITIVE,
-        jev: reading({ polarity: POLARITY.NEUTRAL }),
+        decision: reading({ polarity: POLARITY.NEUTRAL }),
       }),
       comparisonRow({
         stored: POLARITY.POSITIVE,
-        jev: { status: "failed", kind: "http", message: "429" },
+        decision: { status: "failed", kind: "http", message: "429" },
       }),
     ]);
     expect(matrix.map((row) => row.stored)).toEqual([...STORED_LABELS]);
     for (const row of matrix) {
-      expect(row.byJev.map(({ label }) => label)).toEqual([
+      expect(row.byDecision.map(({ label }) => label)).toEqual([
         ...CLASSIFIABLE_POLARITIES,
       ]);
     }
     const positive = matrix.find((row) => row.stored === POLARITY.POSITIVE);
     expect(positive).toMatchObject({ failed: 1, total: 3 });
     expect(
-      positive?.byJev.find(({ label }) => label === POLARITY.NEUTRAL)?.count,
+      positive?.byDecision.find(({ label }) => label === POLARITY.NEUTRAL)
+        ?.count,
     ).toBe(1);
     expect(
-      positive?.byJev.find(({ label }) => label === POLARITY.POSITIVE)?.count,
+      positive?.byDecision.find(({ label }) => label === POLARITY.POSITIVE)
+        ?.count,
     ).toBe(1);
   });
 });
@@ -340,23 +353,23 @@ describe("agreement", () => {
   const rows = [
     comparisonRow({
       stored: POLARITY.POSITIVE,
-      jev: reading({ polarity: POLARITY.POSITIVE }),
+      decision: reading({ polarity: POLARITY.POSITIVE }),
     }),
     comparisonRow({
       stored: POLARITY.POSITIVE,
-      jev: reading({ polarity: POLARITY.NEGATIVE }),
+      decision: reading({ polarity: POLARITY.NEGATIVE }),
     }),
     comparisonRow({
       stored: POLARITY.NEUTRAL,
-      jev: reading({ polarity: POLARITY.NEUTRAL }),
+      decision: reading({ polarity: POLARITY.NEUTRAL }),
     }),
     comparisonRow({
       stored: POLARITY.UNKNOWN,
-      jev: reading({ polarity: POLARITY.SUPPORTIVE }),
+      decision: reading({ polarity: POLARITY.SUPPORTIVE }),
     }),
     comparisonRow({
       stored: STORED_LABEL_ABSENT,
-      jev: reading({ polarity: POLARITY.NEUTRAL }),
+      decision: reading({ polarity: POLARITY.NEUTRAL }),
     }),
   ];
 
@@ -393,7 +406,8 @@ describe("agreement", () => {
     );
     expect(unknown?.read).toBe(1);
     expect(
-      unknown?.byJev.find(({ label }) => label === POLARITY.SUPPORTIVE)?.count,
+      unknown?.byDecision.find(({ label }) => label === POLARITY.SUPPORTIVE)
+        ?.count,
     ).toBe(1);
   });
 
@@ -422,11 +436,11 @@ describe("failures", () => {
       rows: [
         comparisonRow({
           stored: POLARITY.POSITIVE,
-          jev: { status: "failed", kind: "http", message: "429" },
+          decision: { status: "failed", kind: "http", message: "429" },
         }),
         comparisonRow({
           stored: POLARITY.NEUTRAL,
-          jev: { status: "failed", kind: "network", message: "reset" },
+          decision: { status: "failed", kind: "network", message: "reset" },
         }),
       ],
       sampled: 2,
@@ -451,19 +465,19 @@ describe("acceptance curve", () => {
   const rows = [
     comparisonRow({
       stored: POLARITY.POSITIVE,
-      jev: reading({ polarity: POLARITY.POSITIVE, confidence: 0.95 }),
+      decision: reading({ polarity: POLARITY.POSITIVE, confidence: 0.95 }),
     }),
     comparisonRow({
       stored: POLARITY.NEUTRAL,
-      jev: reading({ polarity: POLARITY.NEUTRAL, confidence: 0.75 }),
+      decision: reading({ polarity: POLARITY.NEUTRAL, confidence: 0.75 }),
     }),
     comparisonRow({
       stored: POLARITY.NEGATIVE,
-      jev: reading({ polarity: POLARITY.NEUTRAL, confidence: 0.55 }),
+      decision: reading({ polarity: POLARITY.NEUTRAL, confidence: 0.55 }),
     }),
     comparisonRow({
       stored: STORED_LABEL_ABSENT,
-      jev: reading({ polarity: POLARITY.SUPPORTIVE, confidence: 0.99 }),
+      decision: reading({ polarity: POLARITY.SUPPORTIVE, confidence: 0.99 }),
     }),
   ];
 
@@ -506,7 +520,7 @@ describe("the generative tier", () => {
   const rows = [
     comparisonRow({
       stored: POLARITY.POSITIVE,
-      jev: reading({ polarity: POLARITY.POSITIVE }),
+      decision: reading({ polarity: POLARITY.POSITIVE }),
       llm: {
         status: "read",
         polarity: POLARITY.POSITIVE,
@@ -517,7 +531,7 @@ describe("the generative tier", () => {
     }),
     comparisonRow({
       stored: POLARITY.NEUTRAL,
-      jev: reading({ polarity: POLARITY.NEUTRAL }),
+      decision: reading({ polarity: POLARITY.NEUTRAL }),
       llm: {
         status: "read",
         polarity: POLARITY.SUPPORTIVE,
@@ -528,7 +542,7 @@ describe("the generative tier", () => {
     }),
     comparisonRow({
       stored: POLARITY.NEGATIVE,
-      jev: reading({ polarity: POLARITY.NEGATIVE }),
+      decision: reading({ polarity: POLARITY.NEGATIVE }),
       llm: { status: "failed", message: "timeout" },
     }),
   ];
@@ -539,7 +553,7 @@ describe("the generative tier", () => {
         rows: [
           comparisonRow({
             stored: POLARITY.POSITIVE,
-            jev: reading({ polarity: POLARITY.POSITIVE }),
+            decision: reading({ polarity: POLARITY.POSITIVE }),
           }),
         ],
         sampled: 1,
@@ -564,7 +578,7 @@ describe("the generative tier", () => {
       agreed: 1,
       rate: 0.5,
     });
-    expect(llm?.agreementWithJev).toEqual({
+    expect(llm?.agreementWithDecision).toEqual({
       compared: 2,
       agreed: 1,
       rate: 0.5,
@@ -577,19 +591,19 @@ describe("disagreements", () => {
   const rows = [
     comparisonRow({
       stored: POLARITY.POSITIVE,
-      jev: reading({ polarity: POLARITY.POSITIVE }),
+      decision: reading({ polarity: POLARITY.POSITIVE }),
     }),
     comparisonRow({
       stored: POLARITY.NEUTRAL,
-      jev: reading({ polarity: POLARITY.NEGATIVE }),
+      decision: reading({ polarity: POLARITY.NEGATIVE }),
     }),
     comparisonRow({
       stored: POLARITY.UNKNOWN,
-      jev: reading({ polarity: POLARITY.NEGATIVE }),
+      decision: reading({ polarity: POLARITY.NEGATIVE }),
     }),
     comparisonRow({
       stored: POLARITY.SUPPORTIVE,
-      jev: { status: "failed", kind: "network", message: "reset" },
+      decision: { status: "failed", kind: "network", message: "reset" },
     }),
   ];
 
@@ -607,13 +621,13 @@ describe("disagreements", () => {
 describe("the Markdown report", () => {
   const agreed = comparisonRow({
     stored: POLARITY.POSITIVE,
-    jev: reading({ polarity: POLARITY.POSITIVE }),
+    decision: reading({ polarity: POLARITY.POSITIVE }),
   });
   const rows = [
     agreed,
     comparisonRow({
       stored: POLARITY.NEUTRAL,
-      jev: reading({ polarity: POLARITY.NEGATIVE, confidence: 0.61 }),
+      decision: reading({ polarity: POLARITY.NEGATIVE, confidence: 0.61 }),
       excerpt: "…soud se odchýlil | od rozsudku\n  sp. zn. 30 Cdo 1/2020…",
     }),
   ];
@@ -670,5 +684,165 @@ describe("the Markdown report", () => {
         model: "jev-1",
       }),
     ).toContain("None: every compared citation");
+  });
+});
+
+describe("decision provider evaluation arguments", () => {
+  test("selects OpenAI and its regional endpoint explicitly", () => {
+    expect(
+      parsedOptions([
+        "--decision-provider",
+        "openai",
+        "--openai-region",
+        "global",
+      ]),
+    ).toMatchObject({
+      decisionProvider: "openai",
+      openaiRegion: "global",
+      compareProvider: null,
+    });
+    expect(parsedOptions(["--compare-provider", "openai"])).toMatchObject({
+      decisionProvider: "typesafe",
+      compareProvider: "openai",
+      openaiRegion: "eu",
+    });
+  });
+
+  test("rejects unsupported providers, regions and self-comparisons", () => {
+    expect(parseError(["--decision-provider", "other"])).toContain(
+      "typesafe or openai",
+    );
+    expect(parseError(["--compare-provider", "typesafe"])).toContain(
+      "must be openai",
+    );
+    expect(parseError(["--openai-region", "us"])).toContain("eu or global");
+    expect(
+      parseError([
+        "--decision-provider",
+        "openai",
+        "--compare-provider",
+        "openai",
+      ]),
+    ).toContain("requires --decision-provider typesafe");
+  });
+});
+
+describe("paired decision provider reports", () => {
+  const primary = [
+    comparisonRow({
+      stored: POLARITY.POSITIVE,
+      decision: reading({
+        polarity: POLARITY.POSITIVE,
+        confidence: 0.95,
+        latencyMs: 10,
+        inputTokens: 100,
+      }),
+    }),
+    comparisonRow({
+      stored: POLARITY.NEGATIVE,
+      decision: reading({
+        polarity: POLARITY.NEUTRAL,
+        confidence: 0.6,
+        latencyMs: 30,
+        inputTokens: 100,
+      }),
+    }),
+    comparisonRow({
+      stored: POLARITY.NEUTRAL,
+      decision: { status: "failed", kind: "http", message: "429" },
+    }),
+  ];
+  const openai = primary.map((row, index) => {
+    if (index === 0) {
+      return {
+        ...row,
+        decision: reading({
+          polarity: POLARITY.POSITIVE,
+          confidence: 0.85,
+          latencyMs: 20,
+          inputTokens: 200,
+        }),
+      } satisfies ComparisonRow;
+    }
+    if (index === 1) {
+      return {
+        ...row,
+        decision: {
+          status: "refused",
+          latencyMs: 40,
+          inputTokens: 200,
+          model: "gpt-6-luna",
+        },
+      } satisfies ComparisonRow;
+    }
+    return {
+      ...row,
+      decision: {
+        status: "failed",
+        kind: "invalid_response",
+        message: "unknown choice",
+      },
+    } satisfies ComparisonRow;
+  });
+  const pairedOptions = {
+    typesafe: { rows: primary, usdPerInputToken: 1e-6 },
+    openai: { rows: openai, usdPerInputToken: 2e-6 },
+    sampled: 4,
+    skipped: ["context-not-found"],
+  } satisfies Parameters<typeof summarisePairedComparison>[0];
+
+  test("counts each provider independently and bills refusals without scoring them", () => {
+    const paired = summarisePairedComparison(pairedOptions);
+    expect(paired.typesafe.agreement.overall).toEqual({
+      compared: 2,
+      agreed: 1,
+      rate: 0.5,
+    });
+    expect(paired.openai.agreement.overall).toEqual({
+      compared: 1,
+      agreed: 1,
+      rate: 1,
+    });
+    expect(paired.openai.refused).toBe(1);
+    expect(paired.typesafe.cost.inputTokens).toBe(200);
+    expect(paired.typesafe.cost.usd).toBeCloseTo(0.0002, 10);
+    expect(paired.openai.cost.inputTokens).toBe(400);
+    expect(paired.openai.cost.usd).toBeCloseTo(0.0008, 10);
+    expect(paired.typesafe.latency).toEqual({ samples: 2, p50: 10, p95: 30 });
+    expect(paired.openai.latency).toEqual({ samples: 2, p50: 20, p95: 40 });
+    expect(
+      paired.typesafe.curve.find(({ floor }) => floor === 0.9),
+    ).toMatchObject({ accepted: 1, rate: 1 });
+    expect(
+      paired.openai.curve.find(({ floor }) => floor === 0.9),
+    ).toMatchObject({ accepted: 0, rate: null });
+  });
+
+  test("renders accuracy, floors, latency, invalid responses and costs side by side", () => {
+    const report = renderPairedComparisonReport(
+      summarisePairedComparison(pairedOptions),
+    );
+    expect(report).toContain("| accuracy | 50.0% | 100.0% |");
+    expect(report).toContain("| p50 latency | 10 ms | 20 ms |");
+    expect(report).toContain("| p95 latency | 30 ms | 40 ms |");
+    expect(report).toContain("| invalid responses | 0 | 1 |");
+    expect(report).toContain("| refusals | 0 | 1 |");
+    expect(report).toContain("| cost | $0.0002 | $0.0008 |");
+    expect(report).toContain("| 0.9 | 1 | 50.0% | 100.0% | 0 | 0.0% | — |");
+  });
+
+  test("refuses reports built from different samples or sample order", () => {
+    expect(() =>
+      summarisePairedComparison({
+        ...pairedOptions,
+        openai: { ...pairedOptions.openai, rows: openai.slice(1) },
+      }),
+    ).toThrow("require the same sample");
+    expect(() =>
+      summarisePairedComparison({
+        ...pairedOptions,
+        openai: { ...pairedOptions.openai, rows: openai.toReversed() },
+      }),
+    ).toThrow("require the same sample");
   });
 });
