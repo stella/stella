@@ -45,6 +45,7 @@ import {
   approvalToolArguments,
   HARNESS_CHAT_MODEL_ID,
 } from "@/api/tests/helpers/chat-approval-harness";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -377,6 +378,7 @@ describe("a turn's settlement count", () => {
         startAdmission: async () =>
           Result.ok({
             signal: admission.signal,
+            modelAdmission: testModelAdmission(ids.orgA),
             reservePeriod: async () => Result.ok(undefined),
             release: async () => undefined,
           }),

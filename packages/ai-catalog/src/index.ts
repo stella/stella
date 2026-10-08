@@ -40,6 +40,7 @@ export {
 } from "./model-rate";
 export type { ModelRate, ModelRateAmounts } from "./model-rate";
 export {
+  MODELS_DEV_RATE_CORRECTIONS,
   MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
   MODELS_DEV_RATE_SOURCE_ALIASES,
   RETAINED_MODELS_DEV_RATE_ENTRIES,

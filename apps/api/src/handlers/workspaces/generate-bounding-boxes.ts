@@ -8,7 +8,11 @@ import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets"
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
@@ -17,6 +21,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "documents.bounding-boxes" },
   contentDelivery: {
     type: "none",
     reason: "Generates document geometry without delivering stored-file bytes.",
@@ -33,6 +38,7 @@ const config = {
 const generateBoundingBoxes = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     scopedDb,
     safeDb,
     session,
@@ -80,6 +86,7 @@ const generateBoundingBoxes = createSafeHandler(
     for (const pageNumber of preparedData.pageNumbers) {
       const pageBoxesResult = await generateFn({
         abortSignal: AbortSignal.timeout(60_000),
+        admission: configuredModelAdmission({ modelAdmission }),
         justificationId,
         organizationId,
         orgAIConfig: orgAIConfig ?? null,

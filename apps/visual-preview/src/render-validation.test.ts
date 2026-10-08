@@ -20,7 +20,7 @@ test("rejects UTF-8 documents beyond the shared bound before launching", async (
 test("supplies the renderer launch policy before opening a browser", async () => {
   const launches: VisualPreviewLaunchOptions[] = [];
   const result = await renderVisual({
-    input: { document: "", viewport: { width: 1200 } },
+    input: { document: "<body>Example</body>", viewport: { width: 1200 } },
     launch: async (options) => {
       launches.push(options);
       throw new Error("Example browser unavailable");

@@ -2371,6 +2371,7 @@
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nejsou povoleny. Použijte trvalou e-mailovou adresu.",
       "encryptedContent": "Obsah šifrovaného dokumentu nelze extrahovat. Odstraňte ze souboru heslo a zkuste to znovu.",
       "filePropertyTypeImmutable": "Typ souborové vlastnosti nelze změnit. Ponechte stávající typ; pro jiné hodnoty vytvořte vlastní vlastnost.",
+      "fileSecurityRejected": "Soubor neprošel bezpečnostní kontrolou. Odstraňte označený obsah a nahrajte upravenou kopii.",
       "forbidden": "K této akci nemáte oprávnění.",
       "hostedCheckoutOpen": "Pro tuto organizaci už je otevřená objednávka. Dokončete ji, nebo začněte novou, až vyprší.",
       "hostedSubscriptionLive": "Tato organizace už má předplatné. Změňte ho v části Spravovat hostované využití.",

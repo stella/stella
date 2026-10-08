@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/chat/tools/template-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
@@ -60,6 +61,7 @@ describe("suggest_template_fields tool error handling", () => {
   test("sanitizes the provider error before it reaches the model, while still capturing the original", async () => {
     const tools = createTemplateAuthoringTools({
       organizationId,
+      modelAdmission: testModelAdmission(organizationId),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,

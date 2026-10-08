@@ -145,6 +145,9 @@
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/outbound-transport-census.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
@@ -215,7 +218,11 @@
     },
     "@stll/extension#build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/VERSION",
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+      ],
       "outputs": [".output/**"]
     },
     "dev": {

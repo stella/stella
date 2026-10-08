@@ -98,7 +98,7 @@ test("context rows remain visible while owned content inherits visibility", () =
 test("the committed migration matches every schema-owned visibility policy", async () => {
   const migration = await Bun.file(
     new URL(
-      "../../drizzle/20261005120400_entity_feature_visibility/migration.sql",
+      "../../drizzle/20261007090200_entity_feature_visibility/migration.sql",
       import.meta.url,
     ),
   ).text();

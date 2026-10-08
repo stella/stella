@@ -98,11 +98,18 @@ type AuthAccountStore = Pick<
 >;
 
 /** The account half of the store, written through Better Auth itself. */
-export const createReviewAccountAuthStore = (context: {
-  adapter: Pick<AuthContext["adapter"], "deleteMany">;
-  internalAdapter: AuthContext["internalAdapter"];
-  password: Pick<AuthContext["password"], "hash">;
-}): AuthAccountStore => ({
+export const createReviewAccountAuthStore = (
+  context: {
+    adapter: Pick<AuthContext["adapter"], "deleteMany">;
+    internalAdapter: AuthContext["internalAdapter"];
+    password: Pick<AuthContext["password"], "hash">;
+  },
+  /**
+   * Creates the account through Better Auth's server-only provisioning
+   * endpoint, where the configured user validation can run.
+   */
+  createUser: AuthAccountStore["createUser"],
+): AuthAccountStore => ({
   findUserIdByEmail: async (email) =>
     (await context.internalAdapter.findUserByEmail(email))?.user.id ?? null,
   hasTwoFactorEnabled: async (userId) => {
@@ -113,13 +120,7 @@ export const createReviewAccountAuthStore = (context: {
       Reflect.get(user, "twoFactorEnabled") === true
     );
   },
-  createUser: async (email) =>
-    (
-      await context.internalAdapter.createUser(
-        { email, name: "Reviewer", emailVerified: true },
-        { method: "admin" },
-      )
-    ).id,
+  createUser,
   setPassword: async ({ userId, password }) => {
     const hash = await context.password.hash(password);
     const accounts = await context.internalAdapter.findAccounts(userId);

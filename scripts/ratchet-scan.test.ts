@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  assessMeasurements,
   openSourceTree,
   RATCHET_METRICS,
   type RatchetMetric,
@@ -213,4 +214,42 @@ describe("shared ratchet scan", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+});
+
+test("outbound transport identities only shrink within each owner", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ratchet-outbound-owner-"));
+  const file = "apps/api/src/handlers/transport-owner.ts";
+  const metrics = RATCHET_METRICS.filter(
+    ({ id }) => id === "api-legacy-outbound-transports",
+  );
+  try {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    const measure = (source: string) => {
+      writeFileSync(path.join(root, file), source);
+      return scanTree({ tree: openSourceTree(root), metrics }).snapshot;
+    };
+    const baseline = measure("void fetch(url);");
+    expect(
+      assessMeasurements({
+        current: measure("void fetch(url);"),
+        baseline,
+        metrics,
+      }).allowed,
+    ).toBe(true);
+    expect(
+      assessMeasurements({
+        current: measure("export const ready = true;"),
+        baseline,
+        metrics,
+      }).allowed,
+    ).toBe(true);
+    for (const module of ["undici", "node:http", "node:https"]) {
+      const current = measure(`import * as transport from "${module}";`);
+      expect(assessMeasurements({ current, baseline, metrics }).allowed).toBe(
+        false,
+      );
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

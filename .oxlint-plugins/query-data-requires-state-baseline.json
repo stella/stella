@@ -48,7 +48,6 @@
     "apps/web/src/components/references/reference-chip.tsx::useReferenceFacts::hintQuery": "pending migration to useQueryView",
     "apps/web/src/components/require-ai-key.tsx::AIAvailabilityProvider::data": "pending migration to useQueryView",
     "apps/web/src/components/require-ai-key.tsx::AIKeyRequiredDialog::config": "pending migration to useQueryView",
-    "apps/web/src/components/require-ai-key.tsx::useAIAvailable::data": "pending migration to useQueryView",
     "apps/web/src/components/search-dialog-facets.tsx::SearchableFacetGroup::searchData": "pending migration to useQueryView",
     "apps/web/src/components/search-dialog-results.tsx::RecentFileIcon::entity": "pending migration to useQueryView",
     "apps/web/src/components/search-dialog.tsx::SearchDialog::aiAvailability": "pending migration to useQueryView",

@@ -43,7 +43,7 @@ const toCalendarDayKey = (value: string | null | undefined): string | null => {
   ).unwrapOr(null);
 };
 
-export const getCalendarTaskDate = (
+const getCalendarTaskDate = (
   task: CalendarTask,
   propertyId: string,
 ): string | null => {

@@ -317,17 +317,28 @@ describe("network baseline workflows", () => {
     const jobs = readWorkflowJobs("network-baseline-deliver.yml");
     expect(Object.keys(jobs)).toEqual(["deliver"]);
     const deliver = jobs["deliver"] ?? expect.unreachable("delivery job");
+    const parsed: unknown = Bun.YAML.parse(source);
+    expect(isRecord(parsed) && parsed["on"]).toEqual({ workflow_call: null });
+    expect(deliver.if).toContain("github.ref == 'refs/heads/main'");
     expect(deliver.if).toContain(
-      "head_branch == github.event.repository.default_branch",
+      "github.workflow_ref == format('{0}/.github/workflows/network-baseline-record.yml@refs/heads/main', github.repository)",
     );
     expect(deliver.if).toContain(
-      "head_repository.full_name == github.repository",
+      `contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)`,
     );
-    expect(deliver.if).toContain("conclusion == 'success'");
-    // The display name alone does not identify the recorder workflow.
-    expect(deliver.if).toContain(
-      "github.event.workflow_run.path == '.github/workflows/network-baseline-record.yml'",
+    const caller: unknown = Bun.YAML.parse(
+      workflowSource("network-baseline-record.yml"),
     );
+    expect(
+      isRecord(caller) && isRecord(caller["jobs"]) && caller["jobs"]["deliver"],
+    ).toMatchObject({
+      needs: "record",
+      uses: "./.github/workflows/network-baseline-deliver.yml",
+      permissions: { actions: "read", contents: "read" },
+    });
+    expect(source).not.toContain("github.event.workflow_run");
+    expect(source).toContain(`RUN_ID: ${githubExpression("github.run_id")}`);
+    expect(source).toContain(`RECORDED_SHA: ${githubExpression("github.sha")}`);
     expect(deliver.permissions).toEqual({ actions: "read", contents: "read" });
     const validation = deliver.steps.findIndex((step) =>
       step.run?.includes(" validate "),
@@ -335,7 +346,7 @@ describe("network baseline workflows", () => {
     const publication = deliver.steps.findIndex(
       (step) =>
         step.with?.["name"] ===
-        `network-baseline-main-${githubExpression("github.event.workflow_run.head_sha")}`,
+        `network-baseline-main-${githubExpression("github.sha")}`,
     );
     expect(validation).toBeGreaterThan(-1);
     expect(publication).toBeGreaterThan(validation);
@@ -587,7 +598,7 @@ describe("merge-base preparation integration", () => {
       const gh = path.join(directory, "bin/gh");
       writeFileSync(
         gh,
-        "#!/usr/bin/env bash\nprintf '%s\\n' '{\"artifacts\":[],\"workflow_runs\":[]}'\n",
+        '#!/usr/bin/env bash\nprintf \'%s\\n\' \'{"total_count":0,"artifacts":[],"workflow_runs":[]}\'\n',
       );
       chmodSync(gh, 0o755);
       const summary = path.join(directory, "summary");
@@ -646,6 +657,15 @@ describe("merge-base preparation integration", () => {
       );
       expect(mutant).not.toBe(script);
       const mutantPath = path.join(directory, "prepare-mutant.sh");
+      writeFileSync(
+        path.join(directory, "select-recording.sh"),
+        readFileSync(
+          path.join(
+            root,
+            ".github/actions/prepare-network-baseline/select-recording.sh",
+          ),
+        ),
+      );
       writeFileSync(mutantPath, mutant);
       const mutation = prepare(mutantPath);
       expect(mutation.exitCode).not.toBe(0);
@@ -760,7 +780,7 @@ esac
             REPOSITORY: "fixture/fixture",
             RUNNER_TEMP: directory,
             GITHUB_STEP_SUMMARY: summary,
-            TEST_ARTIFACTS: '{"artifacts":[]}',
+            TEST_ARTIFACTS: '{"total_count":0,"artifacts":[]}',
             TEST_RUNS: '{"workflow_runs":[]}',
             ...artifactEnv,
           },
@@ -814,6 +834,7 @@ esac
       expect(zip.exitCode).toBe(0);
       const artifactEnv = {
         TEST_ARTIFACTS: JSON.stringify({
+          total_count: 1,
           artifacts: [
             {
               id: 1,
@@ -831,6 +852,8 @@ esac
           event: "workflow_run",
           conclusion: "success",
           head_branch: "main",
+          head_sha: firstBase,
+          head_repository: { full_name: "fixture/fixture" },
         }),
         TEST_ZIP: path.join(directory, "baseline.zip"),
       };
@@ -846,6 +869,8 @@ esac
             event: "pull_request",
             conclusion: "success",
             head_branch: "feature",
+            head_sha: firstBase,
+            head_repository: { full_name: "fixture/fixture" },
           }),
         }),
       ).toEqual({ "/chat": entry(1), "/settings": entry(2) });
@@ -900,6 +925,7 @@ esac
       const shuffledArtifacts = {
         ...artifactEnv,
         TEST_ARTIFACTS: JSON.stringify({
+          total_count: 2,
           artifacts: [
             {
               id: 1,
@@ -957,7 +983,8 @@ esac
           TEST_ARTIFACTS: "fail",
         },
       );
-      expect(unavailable.exitCode).toBe(42);
+      expect(unavailable.exitCode).toBe(1);
+      expect(unavailable.stderr.toString()).toContain("ERROR");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -1072,6 +1099,7 @@ esac
             RUNNER_TEMP: directory,
             GITHUB_STEP_SUMMARY: summary,
             TEST_ARTIFACTS: JSON.stringify({
+              total_count: 1,
               artifacts: [
                 {
                   id: 1,
@@ -1089,6 +1117,8 @@ esac
               event: "workflow_run",
               conclusion: "success",
               head_branch: "main",
+              head_sha: source,
+              head_repository: { full_name: "fixture/fixture" },
             }),
             TEST_ZIP: path.join(directory, "baseline.zip"),
           },

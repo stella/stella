@@ -43,6 +43,9 @@ import { CITATION_SHEET_NUMBER_MAX_LENGTH } from "@/api/handlers/case-law/citati
 import { PORTRAIT_SOURCES } from "@/api/handlers/case-law/judges/consts";
 import type { JudgeExternalRefs } from "@/api/handlers/case-law/judges/consts";
 import {
+  AI_CITATION_REVIEW_ORIGINS,
+  CITATION_REVIEW_ORIGIN,
+  CITATION_REVIEW_ORIGINS,
   POLARITIES,
   REVIEWABLE_POLARITIES,
   RULE_SOURCE,
@@ -214,6 +217,14 @@ const REVIEWABLE_POLARITY_SQL_VALUES = REVIEWABLE_POLARITIES.map((polarity) =>
   sql.raw(`'${polarity}'`),
 );
 
+const CITATION_REVIEW_ORIGIN_SQL_VALUES = CITATION_REVIEW_ORIGINS.map(
+  (origin) => sql.raw(`'${origin}'`),
+);
+
+const AI_CITATION_REVIEW_ORIGIN_SQL_VALUES = AI_CITATION_REVIEW_ORIGINS.map(
+  (origin) => sql.raw(`'${origin}'`),
+);
+
 const CITATION_KIND_SQL_VALUES = CITATION_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
 );
@@ -331,6 +342,10 @@ const DECISION_IDENTIFIER_TYPE_SQL_VALUES = Object.values(
 const DECISION_PRIMARY_REFERENCE_TYPE_SQL_VALUES =
   DECISION_PRIMARY_REFERENCE_TYPES.map((type) => sql.raw(`'${type}'`));
 
+const CASE_LAW_SOURCE_LEASE_PURPOSES = ["ingestion", "decision-merge"] as const;
+const CASE_LAW_SOURCE_LEASE_PURPOSE_SQL_VALUES =
+  CASE_LAW_SOURCE_LEASE_PURPOSES.map((purpose) => sql.raw(`'${purpose}'`));
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -350,6 +365,16 @@ export const caseLawSources = p.pgTable(
       .notNull(),
     ingestionLeaseToken: p.uuid("ingestion_lease_token"),
     ingestionLeaseExpiresAt: timestamptz("ingestion_lease_expires_at"),
+    ingestionLeasePurpose: p
+      .text("ingestion_lease_purpose", { enum: CASE_LAW_SOURCE_LEASE_PURPOSES })
+      .default("ingestion")
+      .notNull(),
+    // Advances on every decision-merge claim, so a document writer detects a
+    // merge that started and finished while it was not looking.
+    decisionMergeEpoch: p
+      .bigint("decision_merge_epoch", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts. A
@@ -401,6 +426,10 @@ export const caseLawSources = p.pgTable(
     p.check(
       "case_law_sources_ingestion_lease_pair",
       sql`(${t.ingestionLeaseToken} IS NULL) = (${t.ingestionLeaseExpiresAt} IS NULL)`,
+    ),
+    p.check(
+      "case_law_sources_ingestion_lease_purpose_valid",
+      sql`${t.ingestionLeasePurpose} IN (${sql.join(CASE_LAW_SOURCE_LEASE_PURPOSE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "case_law_sources_reported_total_trio",
@@ -2630,6 +2659,19 @@ export const caseLawCitationReviews = p.pgTable(
       .notNull(),
     /** Opaque reference to where the review is recorded. */
     reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
+    /**
+     * Who produced the label; decides which review stands when another
+     * arrives (`CITATION_REVIEW_ORIGIN_PRECEDENCE`). The provenance columns
+     * below are set exactly when a model produced it.
+     */
+    origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
+    model: p.text("model"),
+    promptVersion: p.text("prompt_version"),
+    promptSha256: p.varchar("prompt_sha256", { length: 64 }),
+    /** Digest of the passage the label was read from. */
+    evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
+    runId: p.text("run_id"),
+    producedAt: timestamptz("produced_at"),
     /** When the current review was made; a changed review moves it. */
     reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
@@ -2654,6 +2696,21 @@ export const caseLawCitationReviews = p.pgTable(
       sql`${t.citationKey} <> ''`,
     ),
     p.check("citation_reviews_review_ref_non_empty", sql`${t.reviewRef} <> ''`),
+    p.check(
+      "citation_reviews_origin_values",
+      sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "citation_reviews_origin_provenance",
+      sql`(${t.origin} IN (${sql.raw(`'${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}'`)})
+        AND ${t.model} IS NULL AND ${t.promptVersion} IS NULL
+        AND ${t.promptSha256} IS NULL AND ${t.evidenceSha256} IS NULL
+        AND ${t.runId} IS NULL AND ${t.producedAt} IS NULL)
+      OR (${t.origin} IN (${sql.join(AI_CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})
+        AND ${t.model} IS NOT NULL AND ${t.promptVersion} IS NOT NULL
+        AND ${t.promptSha256} IS NOT NULL AND ${t.evidenceSha256} IS NOT NULL
+        AND ${t.runId} IS NOT NULL AND ${t.producedAt} IS NOT NULL)`,
+    ),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
