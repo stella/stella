@@ -60,9 +60,12 @@ test("reader breadcrumb titles equal the shared passage paths at every anchor", 
   for (const [anchorId, path] of paths) {
     const block = blocks.find((value) => value.anchorId === anchorId);
     const ancestors = shared.get(anchorId);
+    if (ancestors === undefined) {
+      throw new Error(`Shared path missing for ${anchorId}`);
+    }
     expect(path).toEqual(
       block?.type === "heading"
-        ? [...(ancestors ?? []), { anchorId, title: block.plainText }]
+        ? [...ancestors, { anchorId, title: block.plainText }]
         : ancestors,
     );
     for (const segment of path) {

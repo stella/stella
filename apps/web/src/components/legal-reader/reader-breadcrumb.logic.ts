@@ -58,5 +58,12 @@ export const fitReaderPath = ({
   return { widths, showMiddle };
 };
 
-export const readerProvisionNumber = (title: string): string | null =>
-  /(?:^|\n)\s*(§\s*\d+[\p{L}\p{N}]*)/u.exec(title)?.at(1) ?? null;
+export const readerProvisionNumber = (title: string): string | null => {
+  for (const line of title.split("\n")) {
+    const number = /^(§\s*\d+\p{L}*)/u.exec(line.trimStart())?.at(1);
+    if (number !== undefined) {
+      return number;
+    }
+  }
+  return null;
+};

@@ -33,7 +33,7 @@ export const LegalReaderBreadcrumb = ({
     const content = contentRef.current;
     const viewport = viewportRef.current;
     if (content === null || viewport === null) {
-      return;
+      return undefined;
     }
     return observeReaderBreadcrumb({
       content,
@@ -46,7 +46,7 @@ export const LegalReaderBreadcrumb = ({
         }
         const next = model.paths.get(anchorId);
         if (next === undefined) {
-          return panic("Visible heading has no breadcrumb path");
+          panic("Visible heading has no breadcrumb path");
         }
         setPath(next);
       },

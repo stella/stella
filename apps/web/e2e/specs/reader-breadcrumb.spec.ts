@@ -25,7 +25,6 @@ const headings = [
   { title: "Díl 1", level: 4 },
   { title: "§ 5 Žádost o poskytnutí přímé platby", level: 5 },
 ] as const;
-const titles = headings.map(({ title }) => title);
 const ast = {
   version: 1,
   source: {
@@ -123,7 +122,9 @@ for (const view of views) {
     await page.route(
       (url) =>
         url.origin === E2E_API_ORIGIN && view.paths.includes(url.pathname),
-      (route) => route.fulfill({ json: view.value }),
+      async (route) => {
+        await route.fulfill({ json: view.value });
+      },
     );
     const response = await request.get(
       `${E2E_API_ORIGIN}/api/auth/get-session`,
@@ -175,7 +176,7 @@ for (const view of views) {
       await expect(initialContents).toBeVisible();
       await initialContents.click();
       await expect(
-        page.getByRole("button", { name: titles[0], exact: true }),
+        page.getByRole("button", { name: headings[0].title, exact: true }),
       ).toBeVisible();
       await page.keyboard.press("Escape");
       const before = await breadcrumb.boundingBox();
@@ -197,7 +198,7 @@ for (const view of views) {
           64;
       });
       const current = breadcrumb.getByRole("button", {
-        name: `Contents: ${titles.at(-1)}`,
+        name: `Contents: ${headings[4].title}`,
       });
       await expect(current).toBeVisible();
       expect(await breadcrumb.boundingBox()).toEqual(before);

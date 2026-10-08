@@ -30,6 +30,7 @@ import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-sc
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import {
@@ -83,6 +84,13 @@ export const CaseDecisionInspectorView = ({
   } = useQuery(decisionOptions(decisionId));
   const decisionDate = decision?.decisionDate ?? null;
   const ast = parseDocumentAst(decision?.documentAst);
+  const analysis = useLazyDecisionAnalysis({
+    decisionId,
+    decisionUpdatedAt: decision?.updatedAt ?? "",
+    documentReady: ast !== null,
+    sourceAllowsDerivedAi: decision?.source.allowsDerivedAi === true,
+    mode: "enabled",
+  });
   // No text is shown before the decision loads, so the default is moot then.
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
@@ -198,7 +206,7 @@ export const CaseDecisionInspectorView = ({
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}
       <LegalReaderAIChat
-        aiMode="enabled"
+        aiMode={analysis.available ? "enabled" : "gated"}
         activeLegal={activeLegalFromReaderTarget(annotationTarget)}
         className="min-h-0 flex-1"
       >
@@ -271,7 +279,7 @@ export const CaseDecisionInspectorView = ({
         </ScrollArea>
         {/* The same bar the PDF floats over its page, over the text. */}
         <LegalReaderControls
-          blocks={ast?.blocks ?? []}
+          blocks={ast === null ? [] : ast.blocks}
           contentRef={contentRef}
           viewportRef={scrollRef}
           textScale={textScale}

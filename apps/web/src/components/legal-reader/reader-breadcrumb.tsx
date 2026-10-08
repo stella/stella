@@ -36,7 +36,7 @@ export const ReaderBreadcrumb = ({
   const current = path.at(-1);
   const measure = (node: HTMLElement | null) => {
     if (node === null) {
-      return;
+      return undefined;
     }
     const update = () => {
       if (node.clientWidth === 0) {
@@ -193,6 +193,7 @@ export const ReaderBreadcrumb = ({
           if (layout?.widths[index] === 0) {
             return null;
           }
+          const width = layout?.widths[index];
           const last = index === visible.length - 1;
           const number = last ? readerProvisionNumber(segment.title) : null;
           const label = (
@@ -228,7 +229,7 @@ export const ReaderBreadcrumb = ({
                 contentsControl({
                   label,
                   title: segment.title,
-                  width: layout?.widths[index],
+                  ...(width === undefined ? {} : { width }),
                 })
               ) : (
                 <Button

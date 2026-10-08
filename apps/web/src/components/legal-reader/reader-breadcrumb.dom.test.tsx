@@ -33,7 +33,9 @@ const mount = (onJump: (id: string) => void) =>
 
 test("reader breadcrumb shows three heading levels and exposes hidden jump destinations on click", async () => {
   const jumps: string[] = [];
-  mount((id) => jumps.push(id));
+  mount((id) => {
+    jumps.push(id);
+  });
   expect(screen.queryByRole("button", { name: "Hlava I" })).toBeNull();
   expect(screen.getByRole("button", { name: "Část druhá" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Díl 1" })).toBeTruthy();
@@ -57,7 +59,9 @@ test("reader breadcrumb opens hidden levels on hover", async () => {
 test("reader breadcrumb jumps ancestors and opens Contents at the current provision", async () => {
   const positioned = spyOn(HTMLElement.prototype, "scrollIntoView");
   const jumps: string[] = [];
-  mount((id) => jumps.push(id));
+  mount((id) => {
+    jumps.push(id);
+  });
   await act(async () =>
     fireEvent.click(screen.getByRole("button", { name: "Část druhá" })),
   );
@@ -66,7 +70,11 @@ test("reader breadcrumb jumps ancestors and opens Contents at the current provis
     fireEvent.click(screen.getByRole("button", { name: /Contents: § 5/u })),
   );
   expect(jumps).toEqual(["heading-0"]);
-  const current = screen.getByRole("button", { name: path.at(-1)?.title });
+  const currentTitle = path.at(-1)?.title;
+  if (currentTitle === undefined) {
+    throw new Error("Current heading is missing from fixture");
+  }
+  const current = screen.getByRole("button", { name: currentTitle });
   expect(current.getAttribute("aria-current")).toBe("location");
   expect(positioned.mock.contexts.includes(current)).toBe(true);
   positioned.mockRestore();
@@ -83,7 +91,7 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
   document.body.append(viewport);
   for (const [index, { anchorId }] of path.entries()) {
     const heading = document.createElement("h2");
-    heading.dataset.anchor = anchorId;
+    heading.dataset["anchor"] = anchorId;
     heading.getBoundingClientRect = () =>
       new DOMRect(0, index * 100 - viewport.scrollTop, 200, 24);
     content.append(heading);
@@ -94,7 +102,9 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
     viewport,
     content,
     anchors: path.map(({ anchorId }) => anchorId),
-    onAnchorChange: (id) => changes.push(id),
+    onAnchorChange: (id) => {
+      changes.push(id);
+    },
   });
   expect(changes).toEqual(["heading-0"]);
   viewport.scrollTop = 250;
@@ -210,7 +220,7 @@ test("Contents remains reachable while introductory paragraphs precede the first
   const intro = document.createElement("p");
   intro.textContent = "Introductory wording";
   const heading = document.createElement("h2");
-  heading.dataset.anchor = "first";
+  heading.dataset["anchor"] = "first";
   heading.getBoundingClientRect = () => new DOMRect(0, 200, 200, 24);
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
   content.append(intro, heading);

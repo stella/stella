@@ -416,7 +416,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       </h1>
       <div className="relative min-h-0 flex-1">
         <LegalReaderControls
-          blocks={ast?.blocks ?? []}
+          blocks={ast === null ? [] : ast.blocks}
           contentRef={contentRef}
           viewportRef={mainRef}
           textScale={textScale}
