@@ -874,6 +874,8 @@
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página"
     },
+    "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.}}",
+    "paragraphRangeUnavailable": "Não foi possível encontrar os parágrafos solicitados. O início da decisão está sendo exibido.",
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",

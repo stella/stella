@@ -13,7 +13,12 @@ test("every outline entry addresses its heading in the served text", () => {
     blocks: [
       { type: "heading", plainText: "I. Průběh řízení", anchorId: "h-1" },
       { type: "heading", plainText: "IV. Důvodnost dovolání", anchorId: "h-2" },
-      { type: "paragraph", plainText: "[42] Námitka.", anchorId: "p-3" },
+      {
+        type: "paragraph",
+        plainText: "[42] Námitka.",
+        anchorId: "p-3",
+        number: 42,
+      },
       { type: "heading", plainText: "Absent heading", anchorId: "h-4" },
     ],
   });
@@ -31,6 +36,11 @@ test("every outline entry addresses its heading in the served text", () => {
     "h-1",
     "h-2",
     "p-3",
+  ]);
+  expect(outline.map(({ number }) => number)).toEqual([
+    undefined,
+    undefined,
+    42,
   ]);
 });
 

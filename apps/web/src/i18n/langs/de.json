@@ -874,6 +874,8 @@
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite"
     },
+    "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
+    "paragraphRangeUnavailable": "Die angeforderten Absätze wurden nicht gefunden. Der Anfang der Entscheidung wird angezeigt.",
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",

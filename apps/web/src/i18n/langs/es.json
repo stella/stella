@@ -874,6 +874,8 @@
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
       "perPage": "Por página"
     },
+    "paragraphRangeSelected": "{count, plural, one {El párrafo {range} está resaltado.} other {Los párrafos {range} están resaltados.}}",
+    "paragraphRangeUnavailable": "No se encontraron los párrafos solicitados. Se muestra el inicio de la resolución.",
     "provision": {
       "article": "art. {value}",
       "letter": "letra {value})",

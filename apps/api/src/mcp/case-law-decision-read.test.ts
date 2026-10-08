@@ -310,6 +310,30 @@ describe("paragraphs matching a query", () => {
     ].join("\n"),
   });
 
+  test("query matches retain court numbering independently of parser anchors", () => {
+    const found = paragraphsMatching({
+      budget: 8000,
+      language: "cs",
+      paragraphs: decisionParagraphs({
+        located: [
+          {
+            type: "paragraph",
+            anchorId: "p-1",
+            number: 48,
+            start: 0,
+            end: 6,
+            text: "Nájem.",
+          },
+        ],
+        text: "Nájem.",
+      }),
+      query: "nájem",
+    });
+    expect(found.paragraphs).toEqual([
+      { anchorId: "p-1", number: 48, text: "Nájem.", paragraph: 1, hit: true },
+    ]);
+  });
+
   test("finds a word in any inflection, with its neighbours", () => {
     const found = paragraphsMatching({
       budget: 8000,

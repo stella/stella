@@ -874,6 +874,8 @@
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje"
     },
+    "paragraphRangeSelected": "{count, plural, one {Pastraipa {range} paryškinta.} few {Pastraipos {range} paryškintos.} many {Pastraipos {range} paryškintos.} other {Pastraipos {range} paryškintos.}}",
+    "paragraphRangeUnavailable": "Prašomų pastraipų nepavyko rasti. Rodoma sprendimo pradžia.",
     "provision": {
       "article": "{value} str.",
       "letter": "{value} papunktis",

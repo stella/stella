@@ -874,6 +874,8 @@
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة"
     },
+    "paragraphRangeSelected": "{count, plural, zero {تم تمييز الفقرات {range}.} one {تم تمييز الفقرة {range}.} two {تم تمييز الفقرتين {range}.} few {تم تمييز الفقرات {range}.} many {تم تمييز الفقرات {range}.} other {تم تمييز الفقرات {range}.}}",
+    "paragraphRangeUnavailable": "تعذر العثور على الفقرات المطلوبة. يتم عرض بداية القرار.",
     "provision": {
       "article": "المادة {value}",
       "letter": "البند {value}",

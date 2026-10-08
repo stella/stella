@@ -877,6 +877,8 @@ type Messages = {
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
     };
+    "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}";
+    "paragraphRangeUnavailable": "The requested paragraphs could not be found. Showing the start of the decision.";
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";

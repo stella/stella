@@ -286,6 +286,7 @@ export const citationSummaryOutput = (
 /** One paragraph of the served text, numbered from 1 in document order. */
 export type DecisionParagraph = {
   anchorId: string | null;
+  number?: number | undefined;
   text: string;
 };
 
@@ -301,7 +302,11 @@ export const decisionParagraphs = ({
   text: string;
 }): DecisionParagraph[] =>
   located !== null && located.length > 0
-    ? located.map((block) => ({ anchorId: block.anchorId, text: block.text }))
+    ? located.map((block) => ({
+        anchorId: block.anchorId,
+        text: block.text,
+        ...(block.number === undefined ? {} : { number: block.number }),
+      }))
     : text.split(/\r?\n/u).flatMap((line) => {
         const trimmed = line.trim();
         return trimmed === "" ? [] : [{ anchorId: null, text: trimmed }];
@@ -405,6 +410,9 @@ export const paragraphsMatching = ({
           paragraphs[index] ?? panic("A chosen paragraph must exist");
         return {
           anchorId: paragraph.anchorId,
+          ...(paragraph.number === undefined
+            ? {}
+            : { number: paragraph.number }),
           text: paragraph.text.slice(0, length),
           paragraph: index + 1,
           hit: hitSet.has(index),

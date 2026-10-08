@@ -874,6 +874,8 @@
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku"
     },
+    "paragraphRangeSelected": "{count, plural, one {Odstavec {range} je zvýrazněný.} few {Odstavce {range} jsou zvýrazněné.} other {Odstavce {range} jsou zvýrazněné.}}",
+    "paragraphRangeUnavailable": "Požadované odstavce se nepodařilo najít. Zobrazuje se začátek rozhodnutí.",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",

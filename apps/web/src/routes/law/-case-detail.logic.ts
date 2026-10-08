@@ -233,6 +233,9 @@ const canonicalDecisionHash = async ({
   decision: { documentAst, resolution },
   hash,
 }: CanonicalDecisionHashOptions): Promise<string> => {
+  if (hash.startsWith("par=")) {
+    return hash;
+  }
   // Loaded on redirect only: the document parser stays out of the chunks
   // every page preloads.
   const { anchorAfterResolution } =

@@ -874,6 +874,8 @@
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
       "perPage": "Lehekülje kohta"
     },
+    "paragraphRangeSelected": "{count, plural, one {Lõik {range} on esile tõstetud.} other {Lõigud {range} on esile tõstetud.}}",
+    "paragraphRangeUnavailable": "Soovitud lõike ei leitud. Kuvatakse kohtulahendi algus.",
     "provision": {
       "article": "art {value}",
       "letter": "p {value})",
