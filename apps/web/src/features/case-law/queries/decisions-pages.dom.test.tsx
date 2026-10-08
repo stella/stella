@@ -144,7 +144,7 @@ describe("a page of case-law results", () => {
     const requests = installSearch();
     const client = makeClient();
 
-    const page = await client.fetchQuery(
+    const page = await client.query(
       decisionsPageOptions({ filters: FILTERS, page: 7, pageSize: PAGE_SIZE }),
     );
 
@@ -160,7 +160,7 @@ describe("a page of case-law results", () => {
     const requests = installSearch();
     const client = makeClient();
 
-    await client.fetchQuery(
+    await client.query(
       decisionsPageOptions({ filters: FILTERS, page: 1, pageSize: PAGE_SIZE }),
     );
 
@@ -176,15 +176,17 @@ describe("a page of case-law results", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(firstRow(view)).toBe(decisionIdAt(0)));
+    await waitFor(() => {
+      expect(firstRow(view)).toBe(decisionIdAt(0));
+    });
     const secondPage = decisionsPageOptions({
       filters: FILTERS,
       page: 2,
       pageSize: PAGE_SIZE,
     });
-    await waitFor(() =>
-      expect(client.getQueryData(secondPage.queryKey)).toBeDefined(),
-    );
+    await waitFor(() => {
+      expect(client.getQueryData(secondPage.queryKey)).toBeDefined();
+    });
     expect(requests).toEqual([
       { offset: undefined, limit: PAGE_SIZE },
       { offset: PAGE_SIZE, limit: PAGE_SIZE },
@@ -202,11 +204,11 @@ describe("a page of case-law results", () => {
       requests.filter((request) => request.offset === PAGE_SIZE),
     ).toHaveLength(1);
     // And the page after that is warmed in turn.
-    await waitFor(() =>
+    await waitFor(() => {
       expect(requests.at(-1)).toEqual({
         offset: 2 * PAGE_SIZE,
         limit: PAGE_SIZE,
-      }),
-    );
+      });
+    });
   });
 });
