@@ -93,6 +93,9 @@
     "weekStartSunday": "Sekmadienis"
   },
   "auth": {
+    "accessReset": {
+      "description": "Tęsiant bus atsieti šie prisijungimo būdai: <identity>{providers}</identity>, ir atsijungta kituose įrenginiuose. Šie ryšiai nepatvirtino jūsų el. pašto adreso. Tęsti?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Sąrankos prieigos raktas",
     "checkSpamHint": "Jei jo nematote, patikrinkite šlamšto aplanką.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Sukurti organizaciją",
     "emailPlaceholder": "jus@example.com",
     "error": {
-      "accountNotLinked": "Šis el. paštas prisijungia kitu būdu. Naudokite pradinį prisijungimo būdą arba bandykite dar kartą.",
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
       "title": "Nepavyko jūsų prijungti"
     },
@@ -132,6 +134,13 @@
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "signInWithPassword": "Prisijungti slaptažodžiu",
+    "socialLink": {
+      "connect": "Susieti <identity>{provider}</identity> kitam kartui?",
+      "connectButton": "Susieti <identity>{provider}</identity>",
+      "emailProof": "Norėdami tęsti, prisijunkite el. paštu gautu kodu.",
+      "methodHint": "Šis el. pašto adresas jau naudoja <identity>{method}</identity>. Norėdami tęsti, prisijunkite el. paštu gautu kodu.",
+      "skip": "Kol kas praleisti"
+    },
     "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su DI pagalba.",
     "twoFactor": {
       "backupCodePlaceholder": "Įveskite atsarginį kodą",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Neišsaugota",
-      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas",
-      "saved": "Išsaugota",
-      "saving": "Išsaugoma…"
+      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
     "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
@@ -1881,6 +1888,8 @@
     "saveAndLeave": "Išsaugoti ir išeiti",
     "saveAsPdf": "Išsaugoti kaip PDF",
     "saveChanges": "Išsaugoti pakeitimus",
+    "saved": "Išsaugota",
+    "saving": "Išsaugoma…",
     "scopeThisPage": "(šis puslapis)",
     "scrollToBottom": "Slinkti į apačią",
     "scrollToTop": "Slinkti į viršų",
@@ -3573,6 +3582,11 @@
       "askContentLabel": "Atsakymo tipas",
       "askQuestionLabel": "Klausimas",
       "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
+      "autosave": {
+        "failed": "Nepavyko išsaugoti",
+        "nameMissing": "Neišsaugota: pridėkite pavadinimą",
+        "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja}} dėmesio"
+      },
       "check": "Naudoti tikslią taisyklę vietoje DI",
       "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
       "checkKind": {
@@ -3602,6 +3616,7 @@
       "deletePlaybook": "Ištrinti peržiūros vadovą",
       "deletePosition": "Ištrinti poziciją",
       "deleted": "Peržiūros vadovas ištrintas",
+      "deletedElsewhere": "Šis peržiūros vadovas ištrintas.",
       "derivedAutomatically": "Išgavimo klausimas ir atsakymo formatas sukuriami pagal šią poziciją. Nieko nustatyti nereikia.",
       "derivedQuestion": "Išgavimo klausimas",
       "derivedType": "Atsakymo formatas",
@@ -3654,10 +3669,12 @@
       },
       "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
       "noSettledPosition": "Nusistovėjusios pozicijos nėra",
+      "openInPane": "Atidaryti peržiūros vadovą",
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
       "positionOfTotal": "Pozicija {index} iš {total}",
+      "positionRemoved": "Pozicija pašalinta",
       "positions": "Pozicijos",
       "recent": "Neseniai naudoti",
       "recommended": "Rekomenduojami ruošiniai",

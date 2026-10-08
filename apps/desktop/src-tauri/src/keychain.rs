@@ -18,8 +18,14 @@ use keyring_core::{Entry, Error};
 const CLIPBOARD_HISTORY_KEY: &str = "clipboard:history:v1";
 const ACCOUNT_CONNECTION_KEY: &str = "account:connection:v1";
 const LEGACY_REGISTRY_ACCOUNT_KEY: &str = "registry:account:v1";
-const ACCOUNT_KEYS_TO_DELETE: [&str; 2] =
-  [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY];
+const ACCOUNT_EXPIRED_KEY: &str = "account:expired:v1";
+const ACCOUNT_ROTATION_KEY: &str = "account:rotation:v1";
+const ACCOUNT_KEYS_TO_DELETE: [&str; 4] = [
+  ACCOUNT_CONNECTION_KEY,
+  LEGACY_REGISTRY_ACCOUNT_KEY,
+  ACCOUNT_EXPIRED_KEY,
+  ACCOUNT_ROTATION_KEY,
+];
 
 fn delete_named_credential(key: &str) -> Result<(), String> {
   match named_entry(key)?.delete_credential() {
@@ -263,6 +269,83 @@ pub fn create_clipboard_key() -> Result<[u8; 32], String> {
   Ok(key.into())
 }
 
+pub async fn get_account_rotation() -> Result<Option<String>, String> {
+  let read = tokio::task::spawn_blocking(|| {
+    match named_entry(ACCOUNT_ROTATION_KEY)?.get_password() {
+      Ok(value) => Ok(Some(value)),
+      Err(Error::NoEntry) => Ok(None),
+      Err(_) => Err("Account rotation Keychain read failed".into()),
+    }
+  });
+  tokio::time::timeout(std::time::Duration::from_secs(5), read)
+    .await
+    .map_err(|_| "Account Keychain read timed out".to_string())?
+    .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+pub async fn set_account_rotation(value: Option<String>) -> Result<(), String> {
+  tokio::task::spawn_blocking(move || match value {
+    Some(value) => named_entry(ACCOUNT_ROTATION_KEY)?
+      .set_password(&value)
+      .map_err(|_| "Could not stage account rotation in Keychain".to_string()),
+    None => delete_named_credential(ACCOUNT_ROTATION_KEY),
+  })
+  .await
+  .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+pub async fn account_expired() -> Result<bool, String> {
+  tokio::task::spawn_blocking(|| {
+    match named_entry(ACCOUNT_EXPIRED_KEY)?.get_password() {
+      Ok(_) => Ok(true),
+      Err(Error::NoEntry) => Ok(false),
+      Err(_) => Err("Account expiry Keychain read failed".into()),
+    }
+  })
+  .await
+  .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+fn mark_account_expired_with(
+  write_marker: impl FnOnce() -> Result<(), String>,
+  mut delete: impl FnMut(&str) -> Result<(), String>,
+) -> Result<(), String> {
+  write_marker()?;
+  let mut failure = None;
+  for key in ACCOUNT_KEYS_TO_DELETE
+    .into_iter()
+    .filter(|key| *key != ACCOUNT_EXPIRED_KEY)
+  {
+    if let Err(error) = delete(key)
+      && failure.is_none()
+    {
+      failure = Some(error);
+    }
+  }
+  failure.map_or(Ok(()), Err)
+}
+
+pub async fn mark_account_expired() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| {
+    mark_account_expired_with(
+      || {
+        named_entry(ACCOUNT_EXPIRED_KEY)?
+          .set_password("expired")
+          .map_err(|_| "Could not save account expiry in Keychain".to_string())
+      },
+      delete_named_credential,
+    )
+  })
+  .await
+  .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+pub async fn clear_account_expired() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| delete_named_credential(ACCOUNT_EXPIRED_KEY))
+    .await
+    .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -276,10 +359,7 @@ mod tests {
     })
     .unwrap();
 
-    assert_eq!(
-      deleted,
-      [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY]
-    );
+    assert_eq!(deleted, ACCOUNT_KEYS_TO_DELETE);
   }
 
   #[test]
@@ -295,9 +375,35 @@ mod tests {
     .unwrap_err();
 
     assert_eq!(error, "current key failure");
-    assert_eq!(
-      deleted,
-      [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY]
+    assert_eq!(deleted, ACCOUNT_KEYS_TO_DELETE);
+  }
+  #[test]
+  fn expiry_marker_is_durable_before_secret_cleanup_and_survives_its_failure() {
+    let marked = std::cell::Cell::new(false);
+    let mut deleted = Vec::new();
+    assert!(
+      mark_account_expired_with(
+        || {
+          marked.set(true);
+          Ok(())
+        },
+        |key| {
+          assert!(marked.get());
+          assert_ne!(key, ACCOUNT_EXPIRED_KEY);
+          deleted.push(key.to_string());
+          Err("cleanup unavailable".into())
+        },
+      )
+      .is_err()
+    );
+    assert!(marked.get());
+    assert_eq!(deleted.len(), ACCOUNT_KEYS_TO_DELETE.len() - 1);
+    assert!(
+      mark_account_expired_with(
+        || Err("marker unavailable".into()),
+        |_| panic!("credential must remain until its expiry reason is durable"),
+      )
+      .is_err()
     );
   }
 }

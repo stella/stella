@@ -1,10 +1,13 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { panic } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 import type { AnyElysia } from "elysia";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
@@ -33,7 +36,10 @@ import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
-import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
+import {
+  featureOmittedCapabilityIds,
+  parseCatalog,
+} from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES, MCP_MODES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpOmittedToolNamesByReason } from "@/api/mcp/server-core";
@@ -47,6 +53,8 @@ import {
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const capabilityCatalog = parseCatalog(readCapabilityCatalog());
 
 const FLAG = "FEATURE_TIME_BILLING";
 const FEATURE_ID = "time-billing";
@@ -422,9 +430,9 @@ describe("time billing on agent surfaces", () => {
     });
   });
 
-  // The REST gate is a route hook invoke_capability does not pass through; the
+  // The REST gate is a route hook capability executors do not pass through; the
   // catalog's feature tag is what refuses a guessed id.
-  test("invoke_capability refuses every time billing capability while the flag is off and passes it on once on", async () => {
+  test("capability executors refuse every time billing capability while the flag is off and passes it on once on", async () => {
     const capabilities = await featureOmittedCapabilityIds(
       (feature) => feature !== FLAG,
       enrolledContext(),
@@ -432,16 +440,24 @@ describe("time billing on agent surfaces", () => {
     expect(capabilities).toContain("invoices.list");
     expect(capabilities).toContain("invoices.pdf.export");
 
-    const refusalWith = async (enabled: boolean, capability: string) =>
-      await withTimeBilling(enabled, async () =>
+    const refusalWith = async (enabled: boolean, capability: string) => {
+      const entry = capabilityCatalog.find(
+        (candidate) => candidate.id === capability,
+      );
+      const access = entry?.access;
+      if (access !== "read" && access !== "write") {
+        panic("Test capability access is not registered");
+      }
+      return await withTimeBilling(enabled, async () =>
         errorOf(
           await handleMcpToolCall({
             args: { capability, input: {} },
             context: { ...enrolledContext(), grantedScopes: [] },
-            toolName: "invoke_capability",
+            toolName: MCP_CAPABILITY_EXECUTORS[access],
           }),
         ),
       );
+    };
 
     for (const capability of capabilities) {
       expect({

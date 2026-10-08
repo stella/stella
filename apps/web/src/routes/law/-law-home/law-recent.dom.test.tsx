@@ -16,7 +16,7 @@ const { act, cleanup, fireEvent, render, screen, within } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { clearLawRecent, recordLawOpen, recordLawSearch } =
-  await import("@/lib/law-search-history");
+  await import("@/lib/law-search-history/law-search-history");
 const { LawRecent } = await import("./law-recent");
 
 setSystemTime(new Date("2026-10-05T10:00:00Z"));
