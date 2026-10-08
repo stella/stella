@@ -360,9 +360,12 @@ const SearchControls = ({
           placeholder={t("searchPlaceholder")}
           groupClassName="flex-1"
         />
-        <Button type="submit" variant="outline">
-          <SearchIcon />
-          <span className="max-sm:sr-only">{t("search")}</span>
+        <Button
+          type="submit"
+          variant="outline"
+          className="h-auto shrink-0 sm:h-auto"
+        >
+          {t("search")}
         </Button>
       </div>
       <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]">
