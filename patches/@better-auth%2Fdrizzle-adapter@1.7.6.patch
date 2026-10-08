@@ -1,0 +1,15 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index c85ec20..c8f3336 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -534,7 +534,9 @@ const drizzleAdapter = (db, config) => {
+ 				}
+ 				if (!idColumn) return null;
+ 				const targetIds = db.select({ id: idColumn }).from(table).where(...clause).limit(1);
+-				return (await db.update(table).set(assignments).where(inArray(idColumn, targetIds)).returning())[0] ?? null;
++				// Postgres rechecks only the outer WHERE after waiting on a concurrent
++				// update, so the conditions stay on the updated row as well.
++				return (await db.update(table).set(assignments).where(and(inArray(idColumn, targetIds), ...clause)).returning())[0] ?? null;
+ 			},
+ 			options: config
+ 		};

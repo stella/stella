@@ -9263,6 +9263,22 @@
     "seconds": 1,
     "source": "estimated"
   },
+  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-response-parity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-link-hint.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/migration-roles.test.ts": {
     "seconds": 1,
     "source": "estimated"
