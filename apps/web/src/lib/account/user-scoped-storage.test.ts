@@ -209,12 +209,33 @@ describe("signing out", () => {
     local.setItem("sidebar_pinneduser-a", '["matter-a"]');
     local.setItem("stella-ui-theme", "dark");
 
-    forgetUserStorage(areas());
+    forgetUserStorage("user-a", areas());
 
     expect(storageOwner()).toEqual(VISITOR);
     expect(keys(local)).toEqual([
       "law_search_history:u:user-b",
       "stella-ui-theme",
+    ]);
+  });
+
+  test("a deleted account leaves nothing behind after the tab already passed to the visitor", () => {
+    const queryClient = new QueryClient();
+    installUserScopedStorage(queryClient, areas);
+    queryClient.setQueryData(["session"], { user: { id: "user-a" } });
+    local.setItem(userStorageKey("law_search_history"), HISTORY_A);
+    local.setItem(userStorageKey("law_search_history", USER_B), HISTORY_A);
+    local.setItem("sidebar_pinneduser-a", '["matter-a"]');
+    local.setItem("sidebar_pinneduser-b", '["matter-b"]');
+    // The session ends before the deletion is handled.
+    queryClient.setQueryData(["session"], null);
+    expect(storageOwner()).toEqual(VISITOR);
+
+    forgetUserStorage("user-a", areas());
+
+    expect(storageOwner()).toEqual(VISITOR);
+    expect(keys(local)).toEqual([
+      "law_search_history:u:user-b",
+      "sidebar_pinneduser-b",
     ]);
   });
 });
@@ -452,7 +473,18 @@ describe("signing in and out over time", () => {
     }),
     fc.constant({ type: "sign-out" as const }),
     fc.constant({ type: "write" as const }),
+    // The account is deleted, whoever the tab holds by then.
+    fc.record({
+      type: fc.constant("forget" as const),
+      userId: fc.constantFrom("a", "b", "c"),
+    }),
+    // An entry from before entries were keyed by owner, naming its user.
+    fc.record({
+      type: fc.constant("legacy-write" as const),
+      userId: fc.constantFrom("a", "b", "c"),
+    }),
   );
+  const PINNED = "sidebar_pinned";
   // A kept family (search history) and a cleared one (running exports).
   const KEPT = "law_search_history";
   const CLEARED = "stella.report-exports.active";
@@ -469,6 +501,11 @@ describe("signing in and out over time", () => {
         // What each owner last wrote and may read back.
         const kept = new Map<string, string>();
         const cleared = new Map<string, string>();
+        // Users with a pre-keying pinned entry waiting, and with one adopted.
+        const legacyPinned = new Set<string>();
+        const pinned = new Set<string>();
+        // Every user a step has named so far.
+        const known = new Set<string>();
         const leave = (previous: string, next: string) => {
           if (previous === next) {
             return;
@@ -480,10 +517,16 @@ describe("signing in and out over time", () => {
         };
         for (const [index, current] of steps.entries()) {
           const before = ownerName(storageOwner());
+          if (current.type !== "sign-out" && current.type !== "write") {
+            known.add(current.userId);
+          }
           switch (current.type) {
             case "sign-in":
               assignUserStorage(current.userId, areas());
               leave(before, current.userId);
+              if (legacyPinned.delete(current.userId)) {
+                pinned.add(current.userId);
+              }
               break;
             case "sign-out":
               releaseUserStorage(areas());
@@ -498,6 +541,17 @@ describe("signing in and out over time", () => {
               cleared.set(before, value);
               break;
             }
+            case "forget":
+              forgetUserStorage(current.userId, areas());
+              leave(before, "visitor");
+              kept.delete(current.userId);
+              legacyPinned.delete(current.userId);
+              pinned.delete(current.userId);
+              break;
+            case "legacy-write":
+              local.setItem(`${PINNED}${current.userId}`, '["matter"]');
+              legacyPinned.add(current.userId);
+              break;
             default:
               current satisfies never;
           }
@@ -515,6 +569,19 @@ describe("signing in and out over time", () => {
                 local.getItem(userStorageKey(KEPT, { kind: "user", userId })),
               ).toBe(value);
             }
+          }
+          // A deleted user's entries go; everyone else's stay as they were.
+          for (const userId of known) {
+            const user = { kind: "user", userId } as const;
+            expect(local.getItem(userStorageKey(KEPT, user))).toBe(
+              kept.get(userId) ?? null,
+            );
+            expect(local.getItem(`${PINNED}${userId}`) !== null).toBe(
+              legacyPinned.has(userId),
+            );
+            expect(local.getItem(userStorageKey(PINNED, user)) !== null).toBe(
+              pinned.has(userId),
+            );
           }
         }
       }),

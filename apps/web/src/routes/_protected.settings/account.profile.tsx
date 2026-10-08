@@ -286,10 +286,13 @@ function ProfilePageBody() {
       }[];
     }) => {
       setOtpError(null);
+      // Named before the delete: afterwards the session may name no one.
+      const deletedUserId = authenticatedUser.id;
       const res = await api.me.delete.verify.post(payload);
-      return unwrapEden(res);
+      unwrapEden(res);
+      return { deletedUserId };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ deletedUserId }) => {
       stellaToast.add({
         title: t("settings.account.deleteAccountSuccess"),
         type: "success",
@@ -299,7 +302,7 @@ function ProfilePageBody() {
       } catch {
         // Session might already be invalidated on the server
       }
-      forgetUserStorage();
+      forgetUserStorage(deletedUserId);
       signalSessionChange();
       hideSessionDocument();
       window.location.href = "/auth";

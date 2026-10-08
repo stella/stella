@@ -149,10 +149,10 @@ type Transition = {
   previous: StorageOwner;
   next: StorageOwner;
   /**
-   * The previous user's account is gone: what is kept for an owner who comes
-   * back goes too.
+   * The user whose account is gone (`null`: none): what is kept for them
+   * goes too, whoever the browser held before.
    */
-  forgetPrevious: boolean;
+  forgotten: string | null;
 };
 
 /**
@@ -191,7 +191,7 @@ const readLegacyKey = (
 const keeps = (
   family: UserStorageFamily,
   key: string,
-  { previous, next, forgetPrevious }: Transition,
+  { previous, next, forgotten }: Transition,
 ): boolean => {
   if (family.owner === "carried") {
     // A visitor's draft goes on into their account; a signed-in user's never
@@ -205,7 +205,7 @@ const keeps = (
   if (
     family.retention === "kept-for-owner" &&
     owner.kind === "user" &&
-    !(forgetPrevious && sameOwner(owner, previous))
+    owner.userId !== forgotten
   ) {
     // Waits under its owner's key for them; every read names the current
     // owner's key, so no one else reads it.
@@ -226,15 +226,10 @@ const adoptLegacy = (
     key: string;
     legacy: { base: string; userId: string | null };
   },
-  { previous, next, forgetPrevious }: Transition,
+  { next, forgotten }: Transition,
 ) => {
   const { family, key, legacy } = entry;
-  if (
-    forgetPrevious &&
-    legacy.userId !== null &&
-    previous.kind === "user" &&
-    previous.userId === legacy.userId
-  ) {
+  if (legacy.userId !== null && legacy.userId === forgotten) {
     storage.removeItem(key);
     return;
   }
@@ -270,9 +265,9 @@ export const pruneUserStorage = (
   areas: Areas,
   previous: StorageOwner,
   next: StorageOwner,
-  { forgetPrevious = false }: { forgetPrevious?: boolean } = {},
+  { forgotten = null }: { forgotten?: string | null } = {},
 ): void => {
-  const transition = { previous, next, forgetPrevious };
+  const transition = { previous, next, forgotten };
   for (const family of USER_STORAGE_FAMILIES) {
     const storage = areas[family.area];
     if (storage === null) {
@@ -343,7 +338,7 @@ export const hasCurrentTabStorageOwner = (
 const handOver = (
   areas: Areas,
   next: StorageOwner,
-  options: { forgetPrevious?: boolean } = {},
+  options: { forgotten?: string } = {},
 ) => {
   // A tab reloaded since its last owner still remembers them: the tab's own
   // entries follow that owner, not the visitor every document starts as.
@@ -373,9 +368,16 @@ export const releaseUserStorage = (areas: Areas = browserStorageAreas()) => {
   handOver(areas, VISITOR);
 };
 
-/** The account is deleted: nothing of the user stays in this browser. */
-export const forgetUserStorage = (areas: Areas = browserStorageAreas()) => {
-  handOver(areas, VISITOR, { forgetPrevious: true });
+/**
+ * The account of `userId` is deleted: nothing of that user stays in this
+ * browser, even when the tab already handed over to someone else. Callers
+ * name the user before deleting, since by now the session may name no one.
+ */
+export const forgetUserStorage = (
+  userId: string,
+  areas: Areas = browserStorageAreas(),
+) => {
+  handOver(areas, VISITOR, { forgotten: userId });
 };
 
 /** The authentication boundary supplies the account identified by its session. */
