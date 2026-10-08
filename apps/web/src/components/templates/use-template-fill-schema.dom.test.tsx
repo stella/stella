@@ -35,6 +35,9 @@ globalThis.fetch = Object.assign(
     if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clauses`) {
       return Response.json({ links: [linkedClause()] });
     }
+    if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clause-slots`) {
+      return Response.json({ slots: [] });
+    }
     if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clauses/sync`) {
       syncStarted.resolve(undefined);
       await sync.promise;

@@ -69,7 +69,7 @@ import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -750,13 +750,16 @@ type SummaryMatter = { color: string | null; id: string; name: string };
 const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   const { activeOrganizationId } = useChatApproval();
   const user = useMaybeAuthenticatedUser();
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
     }),
     enabled: user !== null,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
     return byId;
