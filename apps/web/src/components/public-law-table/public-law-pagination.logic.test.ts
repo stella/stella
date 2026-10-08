@@ -15,6 +15,7 @@ import {
   publicLawNumberedPagerModel,
   publicLawPageIndex,
   type PublicLawPageItem,
+  PUBLIC_LAW_PAGE_REST,
   publicLawPageWindow,
   publicLawPageNumber,
   publicLawPagesToWalk,
@@ -359,7 +360,7 @@ describe("a pager over pages addressed by offset", () => {
   test("a long result set is numbered up to the deepest page and asks for a narrower search", () => {
     const model = publicLawNumberedPagerModel({
       deepestPage: 10,
-      hasMore: true,
+      rest: PUBLIC_LAW_PAGE_REST.more,
       page: 6,
       pageSize: 50,
       total: estimated(116_300),
@@ -382,7 +383,7 @@ describe("a pager over pages addressed by offset", () => {
   test("the deepest page offers no step further", () => {
     const model = publicLawNumberedPagerModel({
       deepestPage: 10,
-      hasMore: true,
+      rest: PUBLIC_LAW_PAGE_REST.more,
       page: 10,
       pageSize: 50,
       total: estimated(116_300),
@@ -395,7 +396,7 @@ describe("a pager over pages addressed by offset", () => {
   test("a result set within reach ends at its own last page", () => {
     const model = publicLawNumberedPagerModel({
       deepestPage: 10,
-      hasMore: false,
+      rest: PUBLIC_LAW_PAGE_REST.end,
       page: 3,
       pageSize: 50,
       total: { type: SEARCH_TOTAL_TYPE.EXACT, count: 120 },
@@ -406,10 +407,42 @@ describe("a pager over pages addressed by offset", () => {
     expect(model.beyondReach).toBe(false);
   });
 
+  test("an estimate that overstates the results ends where the search says they end", () => {
+    // The estimate promises 20 pages; page 3 is the last that exists.
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 10,
+      rest: PUBLIC_LAW_PAGE_REST.end,
+      page: 3,
+      pageSize: 50,
+      total: estimated(1000),
+    });
+
+    expect(drawWindow(model.items, model.currentPage)).toBe("1 2 [3]");
+    expect(model.nextPage).toBeNull();
+    expect(model.beyondReach).toBe(false);
+    expect(model.pageCount).toEqual({
+      type: "counted",
+      precision: SEARCH_TOTAL_TYPE.EXACT,
+      pages: 3,
+    });
+  });
+
+  test("while the page is still loading, the estimate stands", () => {
+    const model = publicLawNumberedPagerModel({
+      deepestPage: 10,
+      rest: PUBLIC_LAW_PAGE_REST.unknown,
+      page: 3,
+      pageSize: 50,
+      total: estimated(1000),
+    });
+
+    expect(model.nextPage).toBe(4);
+  });
+
   test("an estimate that falls short does not hide the page the search says follows", () => {
     const model = publicLawNumberedPagerModel({
       deepestPage: 10,
-      hasMore: true,
+      rest: PUBLIC_LAW_PAGE_REST.more,
       page: 2,
       pageSize: 50,
       total: estimated(60),
@@ -421,7 +454,7 @@ describe("a pager over pages addressed by offset", () => {
   test("an uncounted result set steps either way and numbers nothing", () => {
     const model = publicLawNumberedPagerModel({
       deepestPage: 10,
-      hasMore: true,
+      rest: PUBLIC_LAW_PAGE_REST.more,
       page: 4,
       pageSize: 50,
       total: SEARCH_TOTAL_NOT_COUNTED,
@@ -434,7 +467,7 @@ describe("a pager over pages addressed by offset", () => {
     expect(
       publicLawNumberedPagerModel({
         deepestPage: 10,
-        hasMore: true,
+        rest: PUBLIC_LAW_PAGE_REST.more,
         page: 10,
         pageSize: 50,
         total: SEARCH_TOTAL_NOT_COUNTED,
@@ -449,7 +482,7 @@ describe("a pager over pages addressed by offset", () => {
         fc.integer({ min: 1, max: DEEPEST_PAGE_CEILING }),
         fc.integer({ min: 1, max: REQUESTED_PAGE_CEILING }),
         fc.constantFrom(...PUBLIC_LAW_PAGE_SIZES),
-        fc.boolean(),
+        fc.constantFrom(...Object.values(PUBLIC_LAW_PAGE_REST)),
         fc.oneof(
           fc.constant(SEARCH_TOTAL_NOT_COUNTED),
           fc
@@ -459,12 +492,12 @@ describe("a pager over pages addressed by offset", () => {
             .integer({ min: 0, max: RESULT_COUNT_CEILING })
             .map((count) => ({ type: SEARCH_TOTAL_TYPE.ESTIMATE, count })),
         ),
-        (deepestPage, page, pageSize, hasMore, total) => {
+        (deepestPage, page, pageSize, rest, total) => {
           const model = publicLawNumberedPagerModel({
             deepestPage,
-            hasMore,
             page,
             pageSize,
+            rest,
             total,
           });
           const reachable = (target: number | null) =>
@@ -476,6 +509,43 @@ describe("a pager over pages addressed by offset", () => {
           for (const item of model.items) {
             if (item.type === "page") {
               expect(reachable(item.page)).toBe(true);
+            }
+          }
+        },
+      ),
+    );
+  });
+
+  test("a page the search says ends the results is the last page offered", () => {
+    assertProperty(
+      "a page the search says ends the results is the last page offered",
+      fc.property(
+        fc.integer({ min: 1, max: DEEPEST_PAGE_CEILING }),
+        fc.integer({ min: 1, max: REQUESTED_PAGE_CEILING }),
+        fc.constantFrom(...PUBLIC_LAW_PAGE_SIZES),
+        fc.oneof(
+          fc.constant(SEARCH_TOTAL_NOT_COUNTED),
+          fc
+            .integer({ min: 0, max: RESULT_COUNT_CEILING })
+            .map((count) => ({ type: SEARCH_TOTAL_TYPE.EXACT, count })),
+          fc
+            .integer({ min: 0, max: RESULT_COUNT_CEILING })
+            .map((count) => ({ type: SEARCH_TOTAL_TYPE.ESTIMATE, count })),
+        ),
+        (deepestPage, page, pageSize, total) => {
+          const model = publicLawNumberedPagerModel({
+            deepestPage,
+            page,
+            pageSize,
+            rest: PUBLIC_LAW_PAGE_REST.end,
+            total,
+          });
+
+          expect(model.nextPage).toBeNull();
+          expect(model.beyondReach).toBe(false);
+          for (const item of model.items) {
+            if (item.type === "page") {
+              expect(item.page).toBeLessThanOrEqual(model.currentPage);
             }
           }
         },

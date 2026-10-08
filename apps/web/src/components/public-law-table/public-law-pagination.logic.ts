@@ -233,14 +233,60 @@ export type PublicLawNumberedPagerModel = {
   beyondReach: boolean;
 };
 
+/**
+ * What the search said follows the page on screen. `unknown` while the rows
+ * on screen still belong to another page (a step in flight): only the page's
+ * own answer may move the end of the list.
+ */
+export const PUBLIC_LAW_PAGE_REST = {
+  more: "more",
+  end: "end",
+  unknown: "unknown",
+} as const;
+
+export type PublicLawPageRest =
+  (typeof PUBLIC_LAW_PAGE_REST)[keyof typeof PUBLIC_LAW_PAGE_REST];
+
 type PublicLawNumberedPagerInput = {
   page: number;
   pageSize: number;
   /** The deepest page a request may address at this page size. */
   deepestPage: number;
   total: SearchTotal;
-  /** Whether the search reported results after the page on screen. */
-  hasMore: boolean;
+  rest: PublicLawPageRest;
+};
+
+type CountedPagesInput = {
+  count: number;
+  currentPage: number;
+  pageSize: number;
+  rest: PublicLawPageRest;
+};
+
+/**
+ * How many pages the results fill. The page on screen outweighs the
+ * arithmetic both ways: a page saying another follows extends a count that
+ * fell short, and a page saying none does ends the list there, however many
+ * pages the estimate promised.
+ */
+const countedPages = ({
+  count,
+  currentPage,
+  pageSize,
+  rest,
+}: CountedPagesInput): number => {
+  const estimated = Math.max(1, Math.ceil(count / pageSize));
+  switch (rest) {
+    case PUBLIC_LAW_PAGE_REST.more:
+      return Math.max(estimated, currentPage + 1);
+    case PUBLIC_LAW_PAGE_REST.end:
+      return currentPage;
+    case PUBLIC_LAW_PAGE_REST.unknown:
+      return Math.max(estimated, currentPage);
+    default:
+      rest satisfies never;
+      return panic("Unhandled page rest");
+  }
 };
 
 /**
@@ -250,9 +296,9 @@ type PublicLawNumberedPagerInput = {
  */
 export const publicLawNumberedPagerModel = ({
   deepestPage,
-  hasMore,
   page,
   pageSize,
+  rest,
   total,
 }: PublicLawNumberedPagerInput): PublicLawNumberedPagerModel => {
   const currentPage = Math.min(Math.max(1, page), Math.max(1, deepestPage));
@@ -261,12 +307,12 @@ export const publicLawNumberedPagerModel = ({
   switch (total.type) {
     case SEARCH_TOTAL_TYPE.EXACT:
     case SEARCH_TOTAL_TYPE.ESTIMATE: {
-      // An estimate can fall short of where the results really end, so the
-      // page on screen saying another follows outweighs the arithmetic.
-      const pages = Math.max(
-        Math.ceil(total.count / pageSize),
-        hasMore ? currentPage + 1 : currentPage,
-      );
+      const pages = countedPages({
+        count: total.count,
+        currentPage,
+        pageSize,
+        rest,
+      });
       const lastPage = Math.min(pages, deepestPage);
       return {
         currentPage,
@@ -275,7 +321,11 @@ export const publicLawNumberedPagerModel = ({
         nextPage: currentPage < lastPage ? currentPage + 1 : null,
         pageCount: {
           type: "counted",
-          precision: total.type,
+          // Where the list ended is known, not estimated.
+          precision:
+            rest === PUBLIC_LAW_PAGE_REST.end
+              ? SEARCH_TOTAL_TYPE.EXACT
+              : total.type,
           pages,
         },
         beyondReach: pages > deepestPage,
@@ -286,9 +336,13 @@ export const publicLawNumberedPagerModel = ({
         currentPage,
         items: [],
         previousPage,
-        nextPage: hasMore && currentPage < deepestPage ? currentPage + 1 : null,
+        nextPage:
+          rest === PUBLIC_LAW_PAGE_REST.more && currentPage < deepestPage
+            ? currentPage + 1
+            : null,
         pageCount: { type: "not_counted" },
-        beyondReach: hasMore && currentPage >= deepestPage,
+        beyondReach:
+          rest === PUBLIC_LAW_PAGE_REST.more && currentPage >= deepestPage,
       };
     default:
       total satisfies never;

@@ -92,8 +92,9 @@ import {
 import {
   CASE_LAW_MAX_PAGE,
   caseLawDeepestPage,
-  caseLawPageBeforeEnd,
+  caseLawLandingPage,
   caseLawPageNumber,
+  caseLawPageRest,
 } from "@/features/case-law/case-law-pages.logic";
 import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
 import { useDecisionColumnGroups } from "@/features/case-law/components/decision-column-groups";
@@ -379,7 +380,7 @@ export const Route = createFileRoute("/law/cases/")({
   // HTTP redirect for crawlers and no-JS clients. The blank-page race that
   // no-beforeload-redirect guards against is specific to the client-only
   // _protected subtree.
-  beforeLoad: async ({ cause, context: { queryClient }, search }) => {
+  beforeLoad: async ({ context: { queryClient }, search }) => {
     const country = resolveCaseLawRouteCountry({
       country: search.country,
       locale: getMessageLocale(),
@@ -427,38 +428,36 @@ export const Route = createFileRoute("/law/cases/")({
       page: 1,
       pageSize,
     });
-    const mode = publicLawLoadMode({
-      cause,
-      hasCachedPages:
-        queryClient.getQueryData(firstPageOptions.queryKey) !== undefined,
-    });
-    // Only a cold deep arrival checks that its page holds rows. A step on a
-    // drawn page goes to a page the pager drew from the count, and a first
-    // page leaves the fetching to the loader. The first page comes along: it
-    // is the count the correction needs, and the loader reads both from here.
-    if (wanted > 1 && mode === "await") {
-      const pages = await resultsOrOutage(
-        Promise.all([
-          ensureRouteQueryData(queryClient, firstPageOptions),
+    // Every navigation to a page past the first checks that the page holds
+    // rows, a pager step as much as a cold arrival: the count may be an
+    // estimate that overstates the results, and an empty table is not a page.
+    // A page the pager prefetched is a cache read here; any other is the one
+    // request the page needs anyway, and the loader and the rows read it from
+    // the cache. The first page comes along for the count the walk back needs.
+    if (wanted > 1) {
+      const readPage = async (page: number) =>
+        await resultsOrOutage(
           ensureRouteQueryData(
             queryClient,
-            decisionsPageOptions({ filters, page: wanted, pageSize }),
+            decisionsPageOptions({ filters, page, pageSize }),
           ),
-        ]),
-      );
+        );
+      const [firstPage] = await Promise.all([
+        resultsOrOutage(ensureRouteQueryData(queryClient, firstPageOptions)),
+        readPage(wanted),
+      ]);
       // An outage proves nothing about which pages exist, so the URL keeps
       // the page the reader linked to: the results region says the search is
       // down, and correcting them to page one would lose the link to a
       // failure that passes.
-      if (pages !== null) {
-        const [firstPage, wantedPage] = pages;
-        if (wantedPage.decisions.length === 0) {
-          reached = caseLawPageBeforeEnd({
-            emptyPage: wanted,
-            pageSize,
-            total: firstPage.total,
-          });
-        }
+      if (firstPage !== null) {
+        reached = await caseLawLandingPage({
+          pageSize,
+          rowsOn: async (page) =>
+            (await readPage(page))?.decisions.length ?? null,
+          total: firstPage.total,
+          wanted,
+        });
       }
     }
     const page = publicLawPageSearchValue(reached);
@@ -758,9 +757,9 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const searchTotal = firstPage?.total ?? SEARCH_TOTAL_NOT_COUNTED;
   const pager = publicLawNumberedPagerModel({
     deepestPage: caseLawDeepestPage(pageSize),
-    hasMore: pageData?.hasMore ?? false,
     page: wantedPage,
     pageSize,
+    rest: caseLawPageRest({ page: pageData, rows }),
     total: searchTotal,
   });
   const decisions = pageDecisions(pageData);
