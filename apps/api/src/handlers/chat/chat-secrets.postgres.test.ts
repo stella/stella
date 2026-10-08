@@ -7,6 +7,7 @@ import {
   REQUEST_SECRET_TOOL_NAME,
   requestSecretOutputSchema,
 } from "@stll/api-contract/chat-secret";
+import type { RequestSecretInput } from "@stll/api-contract/chat-secret";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
