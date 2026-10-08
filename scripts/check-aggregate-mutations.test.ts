@@ -121,6 +121,18 @@ describe("aggregate mutation route coverage", () => {
       "|POST|/router/inner/child/existing|",
     );
   });
+  test("cyclic receiver aliases terminate without hiding concrete routes", () => {
+    const sources = fixture('post("/existing", existing.handler)');
+    sources.set(
+      routes,
+      `${String(sources.get(routes))} const a = b; const b = a; a.post("/cycle", cyclic.handler);`,
+    );
+    const registrations = enumerate(sources);
+    expect(registrations).toHaveLength(1);
+    expect(registrations.at(0)?.key).toContain("|POST|/existing|");
+    expect(registrations.at(0)?.declared).toBe(false);
+  });
+
   test("unresolved group prefixes fail closed", () => {
     expect(() =>
       enumerate(

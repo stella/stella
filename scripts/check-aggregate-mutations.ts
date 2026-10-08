@@ -409,7 +409,7 @@ const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
     ) {
       return isRouteReceiver(node.expression.expression, visited);
     }
-    if (!ts.isIdentifier(node) || visited.has(node)) {
+    if (!ts.isIdentifier(node) || visited.has(node.text)) {
       return false;
     }
     visited.add(node.text);
