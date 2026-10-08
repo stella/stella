@@ -36,6 +36,7 @@ export const VISUAL_BLOCKED_GLOBALS = [
   "WebTransportDatagramDuplexStream",
   "WebTransportError",
   "WebTransportReceiveStream",
+  "WebTransportSendGroup",
   "WebTransportSendStream",
   "EventSource",
   "Worker",

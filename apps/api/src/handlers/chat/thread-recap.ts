@@ -10,6 +10,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**
@@ -78,6 +79,7 @@ const cleanRecapText = (text: string): string | null => {
 };
 
 type GenerateThreadRecapTextArgs = {
+  admission: ModelDispatchAdmission;
   messages: readonly RecapMessage[];
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -94,6 +96,7 @@ type GenerateThreadRecapTextArgs = {
  * rather than an error.
  */
 export const generateThreadRecapText = async ({
+  admission,
   messages,
   organizationId,
   orgAIConfig,
@@ -127,6 +130,7 @@ export const generateThreadRecapText = async ({
       orgAIConfig,
       managedAIResidency,
       organizationId,
+      admission,
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,

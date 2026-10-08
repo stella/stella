@@ -171,7 +171,13 @@ test("a rendered decision paints only CSS find ranges and Escape leaves no searc
   const decision = textDecision();
   const screen = renderReaders([
     {
-      content: <DecisionText decision={decision} decisionId="decision" />,
+      content: (
+        <DecisionText
+          surface="development"
+          decision={decision}
+          decisionId="decision"
+        />
+      ),
       initialQuery: "odpovědnost",
       name: "decision",
     },
@@ -353,6 +359,7 @@ test("a letter-spaced heading still marks a find for the collapsed word", async 
     {
       content: (
         <DecisionText
+          surface="development"
           decision={textDecision({
             documentAst: readerAst([
               {
@@ -405,6 +412,7 @@ test("a run-on caption still marks a find inside a caption line", async () => {
     {
       content: (
         <DecisionText
+          surface="development"
           decision={textDecision({
             documentAst: readerAst([
               {
@@ -471,6 +479,7 @@ test("a hard-wrapped decision finds words inside both drawn paragraphs", async (
     {
       content: (
         <DecisionText
+          surface="development"
           decision={textDecision({
             documentAst: readerAst(
               HARD_WRAPPED_LINES.map((text, index) => ({

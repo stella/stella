@@ -15,10 +15,12 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
+import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 // The real `chat()` engine runs here; only the provider boundary is faked, so
 // a fixture cannot invent chunk shapes the engine never emits. Each request the
@@ -163,6 +165,33 @@ const modelWith = (script: RunScript) =>
 
 const resolveTextModel = async () => modelWith(COMPLETE_RUN);
 
+/** A provider that answers nothing until its run is aborted, reporting the
+ *  signal it was handed once the engine reaches it. */
+const blockingModel = (reached: PromiseWithResolvers<AbortSignal>) => {
+  const model = modelWith(COMPLETE_RUN);
+  const adapter: AnyTextAdapter = {
+    ...model.adapter,
+    async *chatStream(options) {
+      const signal = options.request?.signal;
+      if (!signal) {
+        throw new Error("Expected the engine to pass an abort signal.");
+      }
+      reached.resolve(signal);
+      const aborted = Promise.withResolvers<never>();
+      signal.addEventListener("abort", () => aborted.reject(signal.reason), {
+        once: true,
+      });
+      await aborted.promise;
+      yield {
+        type: EventType.RUN_STARTED,
+        runId: "run-1",
+        threadId: "thread-1",
+      } satisfies StreamChunk;
+    },
+  };
+  return { ...model, adapter };
+};
+
 /** Model resolution that hands every call of one generator the same scripted
  *  adapter, so a retry sees the next scripted run rather than a fresh script. */
 const resolveScriptedModel = (script: RunScript) => {
@@ -216,11 +245,50 @@ const outputCeilingAt = (index: number): number => {
   return maxOutputTokens;
 };
 const buildTestAiFieldGenerator = (
-  options: Parameters<typeof buildAiFieldGenerator>[0],
-) => buildAiFieldGenerator({ resolveTextModel, ...options });
+  options: Omit<Parameters<typeof buildAiFieldGenerator>[0], "admission">,
+) =>
+  buildAiFieldGenerator({
+    admission: testModelAdmission(organizationId),
+    resolveTextModel,
+    ...options,
+  });
 const buildTestAiOccurrenceAdapter = (
-  options: Parameters<typeof buildAiOccurrenceAdapter>[0],
-) => buildAiOccurrenceAdapter({ resolveTextModel, ...options });
+  options: Omit<Parameters<typeof buildAiOccurrenceAdapter>[0], "admission">,
+) =>
+  buildAiOccurrenceAdapter({
+    admission: testModelAdmission(organizationId),
+    resolveTextModel,
+    ...options,
+  });
+
+describe("buildAiFieldGenerator admitted action", () => {
+  test("a generation in flight stops when its admitted action's lease is lost", async () => {
+    const lease = new AbortController();
+    const reached = Promise.withResolvers<AbortSignal>();
+    const model = blockingModel(reached);
+    const generation = admitModelDispatch({
+      organizationId,
+      actionKind: "report-export.background",
+      signal: lease.signal,
+      run: async (admission) =>
+        await buildAiFieldGenerator({
+          admission,
+          resolveTextModel: async () => model,
+          orgAIConfig,
+          managedAIResidency: "eu" as const,
+          organizationId,
+          tenantWorkspaceIds: [],
+        })?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} }),
+    });
+
+    const providerSignal = await reached.promise;
+    expect(providerSignal.aborted).toBe(false);
+    lease.abort();
+
+    expect(await generation).toMatchObject({ type: "failed" });
+    expect(providerSignal.aborted).toBe(true);
+  });
+});
 
 describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("does not advertise skill tools for a ref to no available skill", async () => {
@@ -558,6 +626,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -576,6 +645,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -595,6 +665,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -612,6 +683,7 @@ describe("buildAiConditionDecider decision tier", () => {
       orgAIConfig,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       resolveTextModel,
       tenantWorkspaceIds: [],
     });
@@ -641,6 +713,7 @@ describe("buildAiConditionDecider decision tier", () => {
         orgAIConfig: null,
         managedAIResidency: "eu",
         organizationId,
+        admission: testModelAdmission(organizationId),
         resolveTextModel,
         tenantWorkspaceIds: [],
       });

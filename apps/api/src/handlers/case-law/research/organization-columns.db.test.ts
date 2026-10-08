@@ -33,6 +33,7 @@ import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
 import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -454,6 +455,7 @@ describe("a run answers only the cells that need it", () => {
 
     await runResearchAnswers(
       asTestRaw({
+        admission: testModelAdmission(ids.orgA),
         organizationId: ids.orgA,
         userId: ids.userA1,
         columns,
@@ -476,6 +478,7 @@ describe("a run answers only the cells that need it", () => {
     // claim check rather than the write path being broken.
     await runResearchAnswers(
       asTestRaw({
+        admission: testModelAdmission(ids.orgA),
         organizationId: ids.orgA,
         userId: ids.userA1,
         columns,
