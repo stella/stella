@@ -1618,6 +1618,7 @@
     "actions": "Műveletek",
     "active": "Aktív",
     "add": "Hozzáadás",
+    "advanced": "Speciális",
     "all": "Összes",
     "and": "És",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",
+    "custom": "Egyéni",
     "date": "Dátum",
     "datePicker": {
       "label": "Dátumválasztó",
@@ -1870,6 +1872,7 @@
     "rename": "Átnevezés",
     "required": "Kötelező",
     "reset": "Visszaállítás",
+    "resetToDefault": "Visszaállítás alapértelmezettre",
     "resetZoom": "Nagyítás visszaállítása",
     "restore": "Visszaállítás",
     "retry": "Újrapróbál",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "Adjon hozzá egy nem módosító billentyűt",
       "notRebindable": "Ez a billentyűparancs nem módosítható",
       "pressKeys": "Nyomja le az új billentyűket…",
-      "resetToDefault": "Visszaállítás alapértelmezettre",
       "title": "Billentyűparancsok"
     },
     "showShortcuts": "Billentyűparancsok megjelenítése",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
+      "defaultRationale": {
+        "chat": "Beszélgetésekhez és mindennapi kérdésekhez.",
+        "fast": "Rövid, rutinszerű feladatokhoz.",
+        "pdf": "PDF-dokumentumok olvasásához és elemzéséhez.",
+        "reasoning": "Alapos érvelést igénylő összetett feladatokhoz."
+      },
       "deploymentNamePlaceholder": "Üzembe helyezés neve",
       "description": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót.",
       "editProviders": "Szolgáltatók szerkesztése",
@@ -4082,6 +4090,7 @@
       "removeProvider": "Szolgáltató eltávolítása",
       "removeProviderConfirm": "Eltávolítja a(z) {provider} szolgáltatót és a mentett hitelesítő adatait?",
       "replaceKey": "Kulcs cseréje",
+      "roleUnavailable": "A(z) {provider} nem támogatja ezt a szerepkört.",
       "roles": {
         "chat": "Csevegés",
         "fast": "Gyors",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "Válasszon legalább egy szerepkört ehhez a kulcshoz.",
       "selectModelForEachRole": "Adjon hozzá szolgáltatót, és válasszon modellt minden kategóriához.",
       "selectedProvider": "{provider}",
-      "title": "AI-konfiguráció"
+      "title": "AI-konfiguráció",
+      "usingDefaults": "Alapértelmezett beállítások használatban"
     },
     "invitations": {
       "cancelInvitation": "Meghívó visszavonása",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "A mintának tartalmaznia kell a '{'SEQ'}' tokent",
       "patternRequired": "A minta megadása kötelező",
       "presets": {
-        "custom": "Egyéni",
         "sequential": "Sorszámos (001)",
         "yearMonthSequential": "Év-Hónap / Sorszámos (2026-02/001)",
         "yearSequential": "Év / Sorszámos (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "Speciális szűrő hozzáadása",
       "addFields": "Mezők hozzáadása",
-      "advancedFilter": "Speciális",
       "advancedFilterCount": "{count, plural, =0 {bármelyik} one {# szabály} other {# szabály}}",
       "aiGenerated": "AI által generált",
       "calendar": {

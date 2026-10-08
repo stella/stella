@@ -20,10 +20,10 @@ type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
 
 const models = BYOK_DEFAULT_MODELS.google;
 const overrideModels = {
-  fast: { provider: "google", modelId: models.fast },
-  chat: { provider: "google", modelId: models.chat },
-  reasoning: { provider: "google", modelId: models.reasoning },
-  pdf: { provider: "google", modelId: models.pdf },
+  fast: { provider: "google", modelId: models.fast.modelId },
+  chat: { provider: "google", modelId: models.chat.modelId },
+  reasoning: { provider: "google", modelId: models.reasoning.modelId },
+  pdf: { provider: "google", modelId: models.pdf.modelId },
 } as const;
 
 const createSettingsDb = (
@@ -123,10 +123,13 @@ describe("organization AI settings validation", () => {
 describe("Anthropic workspace settings", () => {
   const anthropicModels = BYOK_DEFAULT_MODELS.anthropic;
   const anthropicOverrides = {
-    fast: { provider: "anthropic", modelId: anthropicModels.fast },
-    chat: { provider: "anthropic", modelId: anthropicModels.chat },
-    reasoning: { provider: "anthropic", modelId: anthropicModels.reasoning },
-    pdf: { provider: "anthropic", modelId: anthropicModels.pdf },
+    fast: { provider: "anthropic", modelId: anthropicModels.fast.modelId },
+    chat: { provider: "anthropic", modelId: anthropicModels.chat.modelId },
+    reasoning: {
+      provider: "anthropic",
+      modelId: anthropicModels.reasoning.modelId,
+    },
+    pdf: { provider: "anthropic", modelId: anthropicModels.pdf.modelId },
   } as const;
 
   test("verifies and stores a user key and workspace together", async () => {
@@ -412,5 +415,82 @@ describe("Anthropic workspace settings", () => {
         }),
       ).toBe(false);
     }
+  });
+});
+
+describe("sparse custom model settings", () => {
+  const readSaved = async (db: ReturnType<typeof createSettingsDb>) => {
+    const written = db.written();
+    if (written === undefined) {
+      throw new Error("Expected persisted configuration");
+    }
+    return await decryptAIConfig(
+      toSafeId<"organization">("org_test"),
+      written.aiConfigEncrypted,
+      written.aiConfigIv,
+    );
+  };
+  test("key-only settings preserve defaults without creating overrides", async () => {
+    const db = createSettingsDb("global", {
+      providers: [{ provider: "google", apiKey: "test-key" }],
+      overrideModels: null,
+      decision: null,
+    });
+    await updateAIConfig.handler(
+      createTestHandlerContext<UpdateContext>({
+        recordAuditEvent: auditRecorderDouble(),
+        safeDb: db.safeDb,
+        body: { providers: [{ provider: "google" }] },
+      }),
+    );
+    expect((await readSaved(db)).overrideModels).toBeNull();
+  });
+  test("saving one custom role stores only that role, and null resets all roles", async () => {
+    const db = createSettingsDb();
+    const custom = { chat: overrideModels.chat };
+    await updateAIConfig.handler(
+      createTestHandlerContext<UpdateContext>({
+        recordAuditEvent: auditRecorderDouble(),
+        safeDb: db.safeDb,
+        body: { providers: [{ provider: "google" }], overrideModels: custom },
+      }),
+    );
+    const saved = await readSaved(db);
+    expect(saved.overrideModels).toEqual(custom);
+    const reset = createSettingsDb("global", saved);
+    await updateAIConfig.handler(
+      createTestHandlerContext<UpdateContext>({
+        recordAuditEvent: auditRecorderDouble(),
+        safeDb: reset.safeDb,
+        body: { providers: [{ provider: "google" }], overrideModels: null },
+      }),
+    );
+    expect((await readSaved(reset)).overrideModels).toBeNull();
+  });
+  test("credential-only saves retain custom roles and prune removed providers", async () => {
+    const db = createSettingsDb("global", {
+      providers: [
+        { provider: "google", apiKey: "test-key" },
+        { provider: "anthropic", apiKey: "test-key" },
+      ],
+      overrideModels: {
+        chat: overrideModels.chat,
+        fast: {
+          provider: "anthropic",
+          modelId: BYOK_DEFAULT_MODELS.anthropic.fast.modelId,
+        },
+      },
+      decision: null,
+    });
+    await updateAIConfig.handler(
+      createTestHandlerContext<UpdateContext>({
+        recordAuditEvent: auditRecorderDouble(),
+        safeDb: db.safeDb,
+        body: { providers: [{ provider: "google" }] },
+      }),
+    );
+    expect((await readSaved(db)).overrideModels).toEqual({
+      chat: overrideModels.chat,
+    });
   });
 });

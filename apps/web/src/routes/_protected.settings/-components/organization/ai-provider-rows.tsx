@@ -21,6 +21,7 @@ import {
   ListGroup,
   ListGroupHeader,
   ListGroupTitle,
+  ListGroupDescription,
   ListItem,
 } from "@stll/ui/list";
 import {
@@ -62,21 +63,29 @@ export const AIProviderRows = ({
   return (
     <ListGroup>
       <ListGroupHeader>
-        <ListGroupTitle>{t("providersPanel")}</ListGroupTitle>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled || getNextAvailableProvider(providers) === null}
-          onClick={() => {
-            const provider = getNextAvailableProvider(providers);
-            if (provider) {
-              onChange([...providers, createProviderCredentialDraft(provider)]);
-            }
-          }}
-        >
-          <PlusIcon />
-          {t("addProvider")}
-        </Button>
+        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5">
+          <ListGroupTitle>{t("providersPanel")}</ListGroupTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled || getNextAvailableProvider(providers) === null}
+            onClick={() => {
+              const provider = getNextAvailableProvider(providers);
+              if (provider) {
+                onChange([
+                  ...providers,
+                  createProviderCredentialDraft(provider),
+                ]);
+              }
+            }}
+          >
+            <PlusIcon />
+            {t("addProvider")}
+          </Button>
+          <ListGroupDescription className="col-start-1">
+            {t("providersDescription")}
+          </ListGroupDescription>
+        </div>
       </ListGroupHeader>
       <List>
         {providers.map((draft) => (

@@ -71,12 +71,14 @@ const decisionModelSchema = v.strictObject({
 /** Validate the decrypted JSON matches OrgAIConfig shape. */
 const orgAIConfigSchema = v.strictObject({
   providers: v.pipe(v.array(providerSchema), v.minLength(1)),
-  overrideModels: v.strictObject({
-    fast: modelSelectionSchema,
-    chat: modelSelectionSchema,
-    reasoning: modelSelectionSchema,
-    pdf: modelSelectionSchema,
-  }),
+  overrideModels: v.nullable(
+    v.strictObject({
+      fast: v.optional(modelSelectionSchema),
+      chat: v.optional(modelSelectionSchema),
+      reasoning: v.optional(modelSelectionSchema),
+      pdf: v.optional(modelSelectionSchema),
+    }),
+  ),
   // A blob written before the decision model existed has no key for it and
   // reads as "none", the same state clearing the setting writes.
   decision: v.optional(v.nullable(decisionModelSchema), null),

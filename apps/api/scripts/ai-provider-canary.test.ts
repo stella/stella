@@ -188,7 +188,12 @@ describe("AI provider catalog canary coverage", () => {
       const ids = catalogModelIds(provider);
       expect(new Set(ids).size).toBe(ids.length);
       for (const role of MODEL_ROLES) {
-        expect(ids).toContain(DEFAULT_MODELS[provider][role]);
+        const modelId = DEFAULT_MODELS[provider][role];
+        if (modelId === null) {
+          expect(isBYOKProviderRoleSupported({ provider, role })).toBe(false);
+          continue;
+        }
+        expect(ids).toContain(modelId);
       }
       for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
         expect(ids).toContain(modelId);

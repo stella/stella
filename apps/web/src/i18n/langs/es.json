@@ -1618,6 +1618,7 @@
     "actions": "Acciones",
     "active": "Activo",
     "add": "Añadir",
+    "advanced": "Avanzado",
     "all": "Todos",
     "and": "Y",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "Creado el {date}",
     "currency": "Moneda",
     "currentPage": "Página actual",
+    "custom": "Personalizado",
     "date": "Fecha",
     "datePicker": {
       "label": "Selector de fecha",
@@ -1870,6 +1872,7 @@
     "rename": "Renombrar",
     "required": "Obligatorio",
     "reset": "Restablecer",
+    "resetToDefault": "Restablecer valores predeterminados",
     "resetZoom": "Restablecer zoom",
     "restore": "Restaurar",
     "retry": "Reintentar",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "Añade una tecla que no sea modificadora",
       "notRebindable": "Este atajo no se puede cambiar",
       "pressKeys": "Pulsa las nuevas teclas…",
-      "resetToDefault": "Restablecer valores predeterminados",
       "title": "Atajos de teclado"
     },
     "showShortcuts": "Mostrar atajos de teclado",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "Predeterminado: {model}",
       "defaultModelOption": "Predeterminado",
+      "defaultRationale": {
+        "chat": "Para conversar y responder preguntas cotidianas.",
+        "fast": "Para tareas breves y rutinarias.",
+        "pdf": "Para leer y analizar documentos PDF.",
+        "reasoning": "Para tareas complejas que requieren un razonamiento cuidadoso."
+      },
       "deploymentNamePlaceholder": "Nombre de implementación",
       "description": "Usa tu propia clave de API o configura la región de soberanía de los datos.",
       "editProviders": "Editar proveedores",
@@ -4082,6 +4090,7 @@
       "removeProvider": "Quitar proveedor",
       "removeProviderConfirm": "¿Eliminar {provider} y sus credenciales guardadas?",
       "replaceKey": "Sustituir clave",
+      "roleUnavailable": "{provider} no admite esta función.",
       "roles": {
         "chat": "Chat",
         "fast": "Rápido",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",
       "selectedProvider": "{provider}",
-      "title": "Configuración de la IA"
+      "title": "Configuración de la IA",
+      "usingDefaults": "Se usan los valores predeterminados"
     },
     "invitations": {
       "cancelInvitation": "Cancelar invitación",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "El patrón debe contener '{'SEQ'}'",
       "patternRequired": "El patrón es obligatorio",
       "presets": {
-        "custom": "Personalizado",
         "sequential": "Secuencial (001)",
         "yearMonthSequential": "Año-Mes / Secuencial (2026-02/001)",
         "yearSequential": "Año / Secuencial (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "Añadir filtro avanzado",
       "addFields": "Añadir campos",
-      "advancedFilter": "Avanzado",
       "advancedFilterCount": "{count, plural, =0 {Cualquiera} one {# regla} other {# reglas}}",
       "aiGenerated": "Generado por IA",
       "calendar": {

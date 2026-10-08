@@ -1621,6 +1621,7 @@ type Messages = {
     "actions": "Actions";
     "active": "Active";
     "add": "Add";
+    "advanced": "Advanced";
     "all": "All";
     "and": "And";
     "anonymizationLabels": {
@@ -1687,6 +1688,7 @@ type Messages = {
     "createdAt": "Created at {date}";
     "currency": "Currency";
     "currentPage": "Current page";
+    "custom": "Custom";
     "date": "Date";
     "datePicker": {
       "label": "Date picker";
@@ -1873,6 +1875,7 @@ type Messages = {
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
+    "resetToDefault": "Reset to default";
     "resetZoom": "Reset zoom";
     "restore": "Restore";
     "retry": "Retry";
@@ -3923,7 +3926,6 @@ type Messages = {
       "invalidBinding": "Add a non-modifier key";
       "notRebindable": "This shortcut can't be changed";
       "pressKeys": "Press new keys…";
-      "resetToDefault": "Reset to default";
       "title": "Keyboard shortcuts";
     };
     "showShortcuts": "Show keyboard shortcuts";
@@ -4041,6 +4043,12 @@ type Messages = {
       };
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";
+      "defaultRationale": {
+        "chat": "For conversation and everyday questions.";
+        "fast": "For short, routine tasks.";
+        "pdf": "For reading and analysing PDF documents.";
+        "reasoning": "For complex tasks that need careful reasoning.";
+      };
       "deploymentNamePlaceholder": "Deployment name";
       "description": "Bring your own API key or configure data sovereignty region.";
       "editProviders": "Edit providers";
@@ -4085,6 +4093,7 @@ type Messages = {
       "removeProvider": "Remove provider";
       "removeProviderConfirm": "Remove {provider} and its saved credential?";
       "replaceKey": "Replace key";
+      "roleUnavailable": "{provider} does not support this role.";
       "roles": {
         "chat": "Chat";
         "fast": "Fast";
@@ -4096,6 +4105,7 @@ type Messages = {
       "selectModelForEachRole": "Add a provider and select a model for each category.";
       "selectedProvider": "{provider}";
       "title": "AI configuration";
+      "usingDefaults": "Using defaults";
     };
     "invitations": {
       "cancelInvitation": "Cancel invitation";
@@ -4125,7 +4135,6 @@ type Messages = {
       "patternMustContainSeq": "Pattern must contain '{'SEQ'}'";
       "patternRequired": "Pattern is required";
       "presets": {
-        "custom": "Custom";
         "sequential": "Sequential (001)";
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)";
         "yearSequential": "Year / Sequential (2026/001)";
@@ -6163,7 +6172,6 @@ type Messages = {
     "views": {
       "addAdvancedFilter": "Add advanced filter";
       "addFields": "Add fields";
-      "advancedFilter": "Advanced";
       "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}";
       "aiGenerated": "AI-generated";
       "calendar": {

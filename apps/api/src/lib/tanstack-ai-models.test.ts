@@ -7,6 +7,7 @@ import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   getModelReasoningEfforts,
+  isBYOKProviderRoleSupported,
   MODEL_ROLES,
   shouldEmitTemperature,
   TANSTACK_AI_PROVIDERS,
@@ -1326,22 +1327,23 @@ const orgConfigForProvider = (
     | "openai_compatible"
     | "openrouter",
   region?: "eu" | "global" | "ch",
-): OrgAIConfig => ({
-  providers: [
-    {
-      provider,
-      apiKey: "test-org-provider-key",
-      ...(region === undefined ? {} : { region }),
+) =>
+  ({
+    providers: [
+      {
+        provider,
+        apiKey: "test-org-provider-key",
+        ...(region === undefined ? {} : { region }),
+      },
+    ],
+    overrideModels: {
+      fast: { provider, modelId: "model-fast" },
+      chat: { provider, modelId: "model-chat" },
+      reasoning: { provider, modelId: "model-reasoning" },
+      pdf: { provider, modelId: "model-pdf" },
     },
-  ],
-  overrideModels: {
-    fast: { provider, modelId: "model-fast" },
-    chat: { provider, modelId: "model-chat" },
-    reasoning: { provider, modelId: "model-reasoning" },
-    pdf: { provider, modelId: "model-pdf" },
-  },
-  decision: null,
-});
+    decision: null,
+  }) satisfies OrgAIConfig;
 
 describe("Anthropic workspace dispatch", () => {
   test("every model role receives workspace headers and changed workspace invalidates the cached factory", async () => {
@@ -1380,10 +1382,13 @@ describe("Anthropic workspace dispatch", () => {
             },
           ],
           overrideModels: {
-            fast: { provider: "anthropic", modelId: defaults.fast },
-            chat: { provider: "anthropic", modelId: defaults.chat },
-            reasoning: { provider: "anthropic", modelId: defaults.reasoning },
-            pdf: { provider: "anthropic", modelId: defaults.pdf },
+            fast: { provider: "anthropic", modelId: defaults.fast.modelId },
+            chat: { provider: "anthropic", modelId: defaults.chat.modelId },
+            reasoning: {
+              provider: "anthropic",
+              modelId: defaults.reasoning.modelId,
+            },
+            pdf: { provider: "anthropic", modelId: defaults.pdf.modelId },
           },
           decision: null,
         } satisfies OrgAIConfig;
@@ -1412,4 +1417,38 @@ describe("Anthropic workspace dispatch", () => {
       clearByokAdapterCache();
     }
   });
+});
+
+test("unoverridden organization roles dispatch the catalog default with truthful role availability", () => {
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    const config = {
+      providers: [{ provider, apiKey: "fixture-key" }],
+      overrideModels: null,
+      decision: null,
+    } satisfies OrgAIConfig;
+    for (const role of MODEL_ROLES) {
+      const supported = isBYOKProviderRoleSupported({ provider, role });
+      const available = requireTanStackAIAvailableForRole({
+        configStatus: ORG_AI_CONFIG_STATUS.ok,
+        dataClass: "customer",
+        orgConfig: config,
+        role,
+      });
+      expect(available.isOk()).toBe(supported);
+      const entry = BYOK_DEFAULT_MODELS[provider][role];
+      if (entry.kind === "unsupported") {
+        continue;
+      }
+      expect(
+        getTanStackTextModelInfoForRole(role, config, {
+          dataClass: "customer",
+          organizationId: orgId,
+        }),
+      ).toMatchObject({
+        provider,
+        modelId: entry.modelId,
+        keySource: "byok",
+      });
+    }
+  }
 });

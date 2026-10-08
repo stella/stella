@@ -257,7 +257,7 @@ describe("resolveWorkingBYOKModelForRole", () => {
         modelId: "gemini-3-flash-preview",
         role: "reasoning",
       }),
-    ).toBe(BYOK_DEFAULT_MODELS.google.reasoning);
+    ).toBe(BYOK_DEFAULT_MODELS.google.reasoning.modelId);
   });
 
   test("heals a Bedrock model that cannot take tools on every role", () => {
@@ -271,7 +271,7 @@ describe("resolveWorkingBYOKModelForRole", () => {
           modelId: "us.deepseek.r1-v1:0",
           role,
         }),
-      ).toBe(BYOK_DEFAULT_MODELS.bedrock[role]);
+      ).toBe(BYOK_DEFAULT_MODELS.bedrock[role].modelId);
     }
   });
 
@@ -281,31 +281,43 @@ describe("resolveWorkingBYOKModelForRole", () => {
       modelId: "gemini-3-flash-preview",
       role: "pdf",
     });
-    expect(healed).toBe(BYOK_DEFAULT_MODELS.google.pdf);
+    expect(healed).toBe(BYOK_DEFAULT_MODELS.google.pdf.modelId);
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.google).toContain(
-      BYOK_DEFAULT_MODELS.google.pdf,
+      BYOK_DEFAULT_MODELS.google.pdf.modelId,
     );
   });
 
-  test("every BYOK default is offered for its role (except mistral+pdf)", () => {
-    // resolveWorkingBYOKModelForRole only returns null when even the
-    // per-role default is not offered. That must stay a one-off
-    // (mistral+pdf, which has no document-capable model): if a future
-    // catalog edit drops a default from BYOK_MODEL_OPTIONS, healing would
-    // silently stop and leave a stale model pinned. Catch that here.
+  test("every BYOK provider-role entry matches capability and supported defaults are allowed", () => {
     for (const provider of TANSTACK_AI_PROVIDERS) {
       for (const role of MODEL_ROLES) {
-        const modelId = BYOK_DEFAULT_MODELS[provider][role];
-        const resolved = resolveWorkingBYOKModelForRole({
-          provider,
-          modelId,
-          role,
-        });
-        if (provider === "mistral" && role === "pdf") {
-          expect(resolved).toBeNull();
-        } else {
-          expect(resolved).toBe(modelId);
+        const entry = BYOK_DEFAULT_MODELS[provider][role];
+        const supported = isBYOKProviderRoleSupported({ provider, role });
+        expect(entry.kind === "default").toBe(supported);
+        if (entry.kind === "unsupported") {
+          expect(
+            resolveWorkingBYOKModelForRole({
+              provider,
+              modelId: "fixture-unsupported-model",
+              role,
+            }),
+          ).toBeNull();
+          expect(DEFAULT_MODELS[provider][role]).toBeNull();
+          continue;
         }
+        expect(entry.rationaleKey).toBe(
+          `organization.aiConfig.defaultRationale.${role}`,
+        );
+        expect(BYOK_MODEL_OPTIONS[provider]).toContain(entry.modelId);
+        expect(
+          isBYOKModelRoleSupported({ provider, modelId: entry.modelId, role }),
+        ).toBe(true);
+        expect(
+          resolveWorkingBYOKModelForRole({
+            provider,
+            modelId: entry.modelId,
+            role,
+          }),
+        ).toBe(entry.modelId);
       }
     }
   });
@@ -331,7 +343,7 @@ describe("resolveWorkingBYOKModelForRole", () => {
         modelId: "some-retired-mistral-id",
         role: "chat",
       }),
-    ).toBe(BYOK_DEFAULT_MODELS.mistral.chat);
+    ).toBe(BYOK_DEFAULT_MODELS.mistral.chat.modelId);
   });
 });
 
@@ -532,9 +544,11 @@ describe("supportsStreamingToolUse", () => {
     // stream them would break that provider's chat outright.
     for (const provider of TANSTACK_AI_PROVIDERS) {
       for (const role of MODEL_ROLES) {
-        expect(
-          supportsStreamingToolUse(BYOK_DEFAULT_MODELS[provider][role]),
-        ).toBe(true);
+        const entry = BYOK_DEFAULT_MODELS[provider][role];
+        if (entry.kind === "unsupported") {
+          continue;
+        }
+        expect(supportsStreamingToolUse(entry.modelId)).toBe(true);
       }
     }
   });

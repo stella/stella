@@ -42,6 +42,7 @@ import type {
 
 import { env } from "@/api/env";
 import {
+  resolveOrgAIModelForRole,
   normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
@@ -1226,7 +1227,10 @@ export const requireTanStackAIAvailableForRole = ({
     return Result.ok(undefined);
   }
 
-  const selection = orgConfig.overrideModels[role];
+  const selection = resolveOrgAIModelForRole(orgConfig, role);
+  if (selection === null) {
+    return Result.err(byokRoleNotConfiguredError(role));
+  }
   const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
   const support = resolveTanStackAIProviderSupport({
     provider: providerConfig.provider,
@@ -1277,7 +1281,10 @@ export const isDeferredServiceTierAvailableForRole = (
   orgConfig: OrgAIConfig | null | undefined,
 ): boolean => {
   if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+    const selection = resolveOrgAIModelForRole(orgConfig, role);
+    if (selection === null) {
+      return false;
+    }
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     return (
@@ -2026,8 +2033,10 @@ export const getTanStackTextModelForRole = (
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const selection = orgConfig
+    ? resolveOrgAIModelForRole(orgConfig, role)
+    : null;
+  if (orgConfig && selection !== null) {
     return resolveByokTextModel({
       role,
       providerConfig: getOrgProviderConfig(orgConfig, selection.provider),
@@ -2036,7 +2045,7 @@ export const getTanStackTextModelForRole = (
     });
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
@@ -2050,7 +2059,14 @@ export const getTanStackTextModelForRole = (
       throw availability.error;
     }
   }
+  assertTanStackProviderRoleSupport(
+    resolveTanStackTextProvider({ provider }),
+    role,
+  );
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  if (modelId === null) {
+    return panic("Supported instance role has no catalog default");
+  }
   return resolveInstanceTextModel({
     role,
     modelId,
@@ -2067,8 +2083,10 @@ export const getTanStackTextModelInfoForRole = (
     organizationId: SafeId<"organization"> | null;
   },
 ): ResolvedTanStackTextModelInfo => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const selection = orgConfig
+    ? resolveOrgAIModelForRole(orgConfig, role)
+    : null;
+  if (orgConfig && selection !== null) {
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     const provider = resolveTanStackTextProvider({
@@ -2091,7 +2109,7 @@ export const getTanStackTextModelInfoForRole = (
     };
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
@@ -2099,6 +2117,9 @@ export const getTanStackTextModelInfoForRole = (
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  if (modelId === null) {
+    return panic("Supported instance role has no catalog default");
+  }
   // Metadata must agree with dispatch: never advertise an instance
   // model that resolveInstanceTextModel would refuse as unrated.
   if (supportedProvider === "openrouter") {

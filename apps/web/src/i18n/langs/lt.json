@@ -1618,6 +1618,7 @@
     "actions": "Veiksmai",
     "active": "Aktyvus",
     "add": "Pridėti",
+    "advanced": "Išplėstiniai nustatymai",
     "all": "Visi",
     "and": "Ir",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "Sukurta {date}",
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",
+    "custom": "Pasirinktiniai",
     "date": "Data",
     "datePicker": {
       "label": "Datos parinkiklis",
@@ -1870,6 +1872,7 @@
     "rename": "Pervadinti",
     "required": "Privalomas",
     "reset": "Atstatyti",
+    "resetToDefault": "Atkurti numatytuosius",
     "resetZoom": "Atstatyti mastelį",
     "restore": "Atkurti",
     "retry": "Bandyti dar kartą",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "Pridėkite ne modifikavimo klavišą",
       "notRebindable": "Šio sparčiojo klavišo pakeisti negalima",
       "pressKeys": "Paspauskite naujus klavišus…",
-      "resetToDefault": "Atkurti numatytuosius",
       "title": "Spartieji klavišai"
     },
     "showShortcuts": "Rodyti sparčiuosius klavišus",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
+      "defaultRationale": {
+        "chat": "Pokalbiams ir kasdieniams klausimams.",
+        "fast": "Trumpoms, įprastoms užduotims.",
+        "pdf": "PDF dokumentams skaityti ir analizuoti.",
+        "reasoning": "Sudėtingoms užduotims, kurioms reikia kruopštaus samprotavimo."
+      },
       "deploymentNamePlaceholder": "Diegimo pavadinimas",
       "description": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną.",
       "editProviders": "Redaguoti teikėjus",
@@ -4082,6 +4090,7 @@
       "removeProvider": "Pašalinti teikėją",
       "removeProviderConfirm": "Pašalinti {provider} ir išsaugotus prisijungimo duomenis?",
       "replaceKey": "Pakeisti raktą",
+      "roleUnavailable": "{provider} nepalaiko šio vaidmens.",
       "roles": {
         "chat": "Pokalbis",
         "fast": "Greitas",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",
-      "title": "DI konfigūracija"
+      "title": "DI konfigūracija",
+      "usingDefaults": "Naudojami numatytieji nustatymai"
     },
     "invitations": {
       "cancelInvitation": "Atšaukti kvietimą",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "Šablonas turi turėti '{'SEQ'}'",
       "patternRequired": "Šablonas yra privalomas",
       "presets": {
-        "custom": "Pasirinktinis",
         "sequential": "Nuoseklus (001)",
         "yearMonthSequential": "Metai-mėnuo / Nuoseklus (2026-02/001)",
         "yearSequential": "Metai / Nuoseklus (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "Pridėti išplėstinį filtrą",
       "addFields": "Pridėti laukus",
-      "advancedFilter": "Išplėstinis",
       "advancedFilterCount": "{count, plural, =0 {bet kuris} one {# taisyklė} few {# taisyklės} other {# taisyklių}}",
       "aiGenerated": "Sugeneruota DI",
       "calendar": {

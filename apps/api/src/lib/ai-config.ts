@@ -2,6 +2,8 @@ import { panic } from "better-result";
 
 import {
   BYOK_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+  BYOK_DEFAULT_MODELS,
   resolveWorkingBYOKModelForRole,
 } from "@stll/ai-catalog";
 import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
@@ -82,7 +84,9 @@ export type OrgAIConfig = {
    * configured provider. Additional configured providers may
    * be stored for later assignment.
    */
-  overrideModels: Record<ModelRole, OrgAIModelSelection>;
+  overrideModels: Partial<
+    Record<ModelRole, OrgAIModelSelection | undefined>
+  > | null;
   /**
    * The model typed decisions go to (see `lib/decisions/decide.ts`). It is
    * not one of the generative roles: a decision model answers choice and
@@ -223,13 +227,53 @@ const healOverrideModel = (
 };
 
 const healOverrideModels = (
-  overrideModels: Record<ModelRole, OrgAIModelSelection>,
-): Record<ModelRole, OrgAIModelSelection> => ({
-  fast: healOverrideModel("fast", overrideModels.fast),
-  chat: healOverrideModel("chat", overrideModels.chat),
-  reasoning: healOverrideModel("reasoning", overrideModels.reasoning),
-  pdf: healOverrideModel("pdf", overrideModels.pdf),
-});
+  overrideModels: OrgAIConfig["overrideModels"],
+): OrgAIConfig["overrideModels"] => {
+  if (overrideModels === null) {
+    return null;
+  }
+  return {
+    ...(overrideModels.fast === undefined
+      ? {}
+      : { fast: healOverrideModel("fast", overrideModels.fast) }),
+    ...(overrideModels.chat === undefined
+      ? {}
+      : { chat: healOverrideModel("chat", overrideModels.chat) }),
+    ...(overrideModels.reasoning === undefined
+      ? {}
+      : {
+          reasoning: healOverrideModel("reasoning", overrideModels.reasoning),
+        }),
+    ...(overrideModels.pdf === undefined
+      ? {}
+      : { pdf: healOverrideModel("pdf", overrideModels.pdf) }),
+  };
+};
+
+/** Resolve defaults without turning them into persisted custom selections. */
+export const resolveOrgAIModelForRole = (
+  config: OrgAIConfig,
+  role: ModelRole,
+): OrgAIModelSelection | null => {
+  const override = config.overrideModels?.[role];
+  if (override !== undefined) {
+    return override;
+  }
+  for (const { provider } of config.providers) {
+    if (isBYOKProviderId(provider)) {
+      const entry = BYOK_DEFAULT_MODELS[provider][role];
+      if (entry.kind === "unsupported") {
+        continue;
+      }
+      return { provider, modelId: entry.modelId };
+    }
+    const modelId = DEFAULT_MODELS[provider][role];
+    if (modelId !== null) {
+      return { provider, modelId };
+    }
+  }
+  return null;
+};
 
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
   providers: config.providers.map(normalizeOrgAIProviderConfig),

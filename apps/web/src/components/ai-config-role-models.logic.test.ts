@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -25,6 +26,8 @@ import {
   serializeDecisionModel,
   serializeOverrideModels,
   serializeProviderDrafts,
+  serializeRoleOverrides,
+  roleOverridesFromStoredModels,
 } from "@/components/ai-config-role-models.logic";
 import type {
   RoleModelSelections,
@@ -689,4 +692,30 @@ describe("provider credential changes", () => {
       }),
     ).toBe(true);
   });
+});
+
+test("only explicit role overrides are serialized, even when equal to a default", () => {
+  const defaults = createDefaultRoleModels(["google"]);
+  const chat = defaults.chat;
+  if (chat === null) {
+    panic("Google chat fixture requires a default");
+  }
+  expect(
+    serializeRoleOverrides({ providers: ["google"], overrides: {} }),
+  ).toEqual({ kind: "valid", overrides: null });
+  expect(
+    serializeRoleOverrides({ providers: ["google"], overrides: { chat } }),
+  ).toEqual({ kind: "valid", overrides: { chat } });
+  expect(
+    roleOverridesFromStoredModels({
+      providers: ["google"],
+      overrideModels: { chat },
+    }),
+  ).toEqual({ chat });
+  expect(
+    serializeRoleOverrides({
+      providers: ["google"],
+      overrides: { chat: null },
+    }),
+  ).toEqual({ kind: "invalid" });
 });

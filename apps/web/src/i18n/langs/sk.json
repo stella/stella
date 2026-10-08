@@ -1618,6 +1618,7 @@
     "actions": "Akcie",
     "active": "Aktívny",
     "add": "Pridať",
+    "advanced": "Rozšírené",
     "all": "Všetko",
     "and": "A",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "Vytvorené {date}",
     "currency": "Mena",
     "currentPage": "Aktuálna stránka",
+    "custom": "Vlastné",
     "date": "Dátum",
     "datePicker": {
       "label": "Výber dátumu",
@@ -1870,6 +1872,7 @@
     "rename": "Premenovať",
     "required": "Povinné",
     "reset": "Obnoviť",
+    "resetToDefault": "Obnoviť predvolené",
     "resetZoom": "Obnoviť priblíženie",
     "restore": "Obnoviť",
     "retry": "Skúsiť znova",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "Pridajte kláves, ktorý nie je modifikátor",
       "notRebindable": "Túto skratku nie je možné zmeniť",
       "pressKeys": "Stlačte nové klávesy…",
-      "resetToDefault": "Obnoviť predvolené",
       "title": "Klávesové skratky"
     },
     "showShortcuts": "Zobraziť klávesové skratky",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
+      "defaultRationale": {
+        "chat": "Na konverzáciu a bežné otázky.",
+        "fast": "Na krátke, rutinné úlohy.",
+        "pdf": "Na čítanie a analýzu dokumentov PDF.",
+        "reasoning": "Na zložité úlohy vyžadujúce dôkladné uvažovanie."
+      },
       "deploymentNamePlaceholder": "Názov nasadenia",
       "description": "Použite vlastný API kľúč alebo zvoľte región pre suverenitu dát.",
       "editProviders": "Upraviť poskytovateľov",
@@ -4082,6 +4090,7 @@
       "removeProvider": "Odstrániť poskytovateľa",
       "removeProviderConfirm": "Odstrániť {provider} aj uložené prihlasovacie údaje?",
       "replaceKey": "Nahradiť kľúč",
+      "roleUnavailable": "{provider} túto rolu nepodporuje.",
       "roles": {
         "chat": "Chat",
         "fast": "Rýchly",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurácia AI"
+      "title": "Konfigurácia AI",
+      "usingDefaults": "Používa predvolené nastavenia"
     },
     "invitations": {
       "cancelInvitation": "Zrušiť pozvánku",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "Vzor musí obsahovať '{'SEQ'}'",
       "patternRequired": "Vzor je povinný",
       "presets": {
-        "custom": "Vlastný",
         "sequential": "Poradový (001)",
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
         "yearSequential": "Rok / Poradový (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "Pridať rozšírený filter",
       "addFields": "Pridať polia",
-      "advancedFilter": "Rozšírený",
       "advancedFilterCount": "{count, plural, =0 {ľubovoľné} one {# pravidlo} few {# pravidlá} other {# pravidiel}}",
       "aiGenerated": "Vygenerované AI",
       "calendar": {

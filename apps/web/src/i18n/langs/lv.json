@@ -1618,6 +1618,7 @@
     "actions": "Darbības",
     "active": "Aktīvs",
     "add": "Pievienot",
+    "advanced": "Papildu iestatījumi",
     "all": "Visi",
     "and": "Un",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
+    "custom": "Pielāgots",
     "date": "Datums",
     "datePicker": {
       "label": "Datuma atlasītājs",
@@ -1870,6 +1872,7 @@
     "rename": "Pārdēvēt",
     "required": "Obligāts",
     "reset": "Atiestatīt",
+    "resetToDefault": "Atiestatīt uz noklusējumu",
     "resetZoom": "Atiestatīt tālummaiņu",
     "restore": "Atjaunot",
     "retry": "Mēģināt vēlreiz",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "Pievienojiet taustiņu, kas nav modifikators",
       "notRebindable": "Šo saīsni nevar mainīt",
       "pressKeys": "Nospiediet jaunos taustiņus…",
-      "resetToDefault": "Atiestatīt uz noklusējumu",
       "title": "Tastatūras saīsnes"
     },
     "showShortcuts": "Rādīt tastatūras saīsnes",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
+      "defaultRationale": {
+        "chat": "Sarunām un ikdienas jautājumiem.",
+        "fast": "Īsiem, ikdienišķiem uzdevumiem.",
+        "pdf": "PDF dokumentu lasīšanai un analīzei.",
+        "reasoning": "Sarežģītiem uzdevumiem, kam nepieciešama rūpīga spriešana."
+      },
       "deploymentNamePlaceholder": "Izvietojuma nosaukums",
       "description": "Izmantojiet savu API atslēgu vai konfigurējiet datu suverenitātes reģionu.",
       "editProviders": "Rediģēt pakalpojumu sniedzējus",
@@ -4082,6 +4090,7 @@
       "removeProvider": "Noņemt pakalpojumu sniedzēju",
       "removeProviderConfirm": "Noņemt {provider} un saglabātos autentifikācijas datus?",
       "replaceKey": "Aizstāt atslēgu",
+      "roleUnavailable": "{provider} neatbalsta šo lomu.",
       "roles": {
         "chat": "Tērzēšana",
         "fast": "Ātrs",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
       "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",
       "selectedProvider": "{provider}",
-      "title": "AI konfigurācija"
+      "title": "AI konfigurācija",
+      "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
     "invitations": {
       "cancelInvitation": "Atcelt uzaicinājumu",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "Šablonam jāsatur '{'SEQ'}'",
       "patternRequired": "Šablons ir obligāts",
       "presets": {
-        "custom": "Pielāgots",
         "sequential": "Secīgs (001)",
         "yearMonthSequential": "Gads-mēnesis / Secīgs (2026-02/001)",
         "yearSequential": "Gads / Secīgs (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "Pievienot paplašināto filtru",
       "addFields": "Pievienot laukus",
-      "advancedFilter": "Paplašināts",
       "advancedFilterCount": "{count, plural, =0 {jebkurš} zero {nav kārtulu} one {# kārtula} other {# kārtulas}}",
       "aiGenerated": "AI ģenerēts",
       "calendar": {

@@ -1618,6 +1618,7 @@
     "actions": "Toimingud",
     "active": "Aktiivne",
     "add": "Lisa",
+    "advanced": "Täpsemad seaded",
     "all": "Kõik",
     "and": "Ja",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
+    "custom": "Kohandatud",
     "date": "Kuupäev",
     "datePicker": {
       "label": "Kuupäevavalija",
@@ -1870,6 +1872,7 @@
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
+    "resetToDefault": "Lähtesta vaikeväärtusele",
     "resetZoom": "Lähtesta suum",
     "restore": "Taasta",
     "retry": "Proovi uuesti",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "Lisage klahv, mis pole muuteklahv",
       "notRebindable": "Seda otseteed ei saa muuta",
       "pressKeys": "Vajutage uued klahvid…",
-      "resetToDefault": "Lähtesta vaikeväärtusele",
       "title": "Klaviatuuri otseteed"
     },
     "showShortcuts": "Kuva klaviatuuri otseteed",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
+      "defaultRationale": {
+        "chat": "Vestlusteks ja igapäevasteks küsimusteks.",
+        "fast": "Lühikesteks tavapärasteks ülesanneteks.",
+        "pdf": "PDF-dokumentide lugemiseks ja analüüsimiseks.",
+        "reasoning": "Keerukateks ülesanneteks, mis nõuavad põhjalikku arutlemist."
+      },
       "deploymentNamePlaceholder": "Juurutuse nimi",
       "description": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond.",
       "editProviders": "Muuda teenusepakkujaid",
@@ -4082,6 +4090,7 @@
       "removeProvider": "Eemalda teenusepakkuja",
       "removeProviderConfirm": "Kas eemaldada {provider} ja salvestatud autentimisandmed?",
       "replaceKey": "Asenda võti",
+      "roleUnavailable": "{provider} ei toeta seda rolli.",
       "roles": {
         "chat": "Vestlus",
         "fast": "Kiire",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
-      "title": "AI seadistus"
+      "title": "AI seadistus",
+      "usingDefaults": "Kasutusel on vaikeseaded"
     },
     "invitations": {
       "cancelInvitation": "Tühista kutse",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "Muster peab sisaldama '{'SEQ'}'",
       "patternRequired": "Muster on kohustuslik",
       "presets": {
-        "custom": "Kohandatud",
         "sequential": "Järjestikune (001)",
         "yearMonthSequential": "Aasta-kuu / Järjestikune (2026-02/001)",
         "yearSequential": "Aasta / Järjestikune (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "Lisa täpsem filter",
       "addFields": "Lisa väljad",
-      "advancedFilter": "Täpsem",
       "advancedFilterCount": "{count, plural, =0 {suvaline} one {# reegel} other {# reeglit}}",
       "aiGenerated": "Tehisintellektiga loodud",
       "calendar": {

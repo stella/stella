@@ -958,8 +958,9 @@ type PdfCanarySelection = {
 export const pdfCanarySelection = (
   provider: CanaryProvider,
 ): PdfCanarySelection | null => {
-  if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
-    return { modelId: DEFAULT_MODELS[provider].pdf, role: "pdf" };
+  const defaultModelId = DEFAULT_MODELS[provider].pdf;
+  if (defaultModelId !== null) {
+    return { modelId: defaultModelId, role: "pdf" };
   }
 
   const modelId = CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
@@ -1214,12 +1215,16 @@ const runStructuredOutputModelRoleProbe = async ({
   role,
   signal,
 }: RunModelRoleProbeOptions): Promise<void> => {
+  const modelId = DEFAULT_MODELS[provider][role];
+  if (modelId === null) {
+    return panic("Unsupported role must not run a structured output canary");
+  }
   await generateTanStackObjectForRole({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
-      modelId: DEFAULT_MODELS[provider][role],
+      modelId,
       role,
     }),
     organizationId: null,
@@ -1512,12 +1517,17 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
       ? rotatedModelId
       : DEFAULT_MODELS[provider][role];
 
-  return {
-    fast: { provider, modelId: modelIdForRole("fast") },
-    chat: { provider, modelId: modelIdForRole("chat") },
-    reasoning: { provider, modelId: modelIdForRole("reasoning") },
-    pdf: { provider, modelId: modelIdForRole("pdf") },
-  };
+  const selections: [
+    ModelRole,
+    { provider: CanaryProvider; modelId: string },
+  ][] = [];
+  for (const role of MODEL_ROLES) {
+    const modelId = modelIdForRole(role);
+    if (modelId !== null) {
+      selections.push([role, { provider, modelId }]);
+    }
+  }
+  return Object.fromEntries(selections);
 };
 
 /**
@@ -1530,7 +1540,10 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
 export const catalogModelIds = (provider: CanaryProvider): string[] => {
   const ids = new Set<string>();
   for (const role of MODEL_ROLES) {
-    ids.add(DEFAULT_MODELS[provider][role]);
+    const modelId = DEFAULT_MODELS[provider][role];
+    if (modelId !== null) {
+      ids.add(modelId);
+    }
   }
   for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
     ids.add(modelId);

@@ -18,27 +18,24 @@ import { Button } from "@stll/ui/button";
 import { Trash2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
-import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
 import {
   createProviderCredentialDraft,
-  createDefaultRoleModels,
-  ensureRoleModelsForProviders,
   getProviderValues,
   hasProviderCredentialChanges,
   hasUsableDecisionModel,
   providerDraftsFromStoredProviders,
-  roleModelsFromOverrideModels,
   serializeDecisionModel,
-  serializeOverrideModels,
+  serializeRoleOverrides,
+  roleOverridesFromStoredModels,
+  retainRoleOverridesForProviders,
   serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
 import type {
   DecisionModelState,
   ProviderCredentialDraft,
-  RoleModelSelections,
+  RoleModelOverrides,
   StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
-import { CopyActionButton } from "@/components/copy-action-button";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -52,8 +49,9 @@ import {
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
-import { AIConfigDecisionModel } from "@/routes/_protected.settings/-components/organization/ai-config-decision-model";
 import { AIProviderRows } from "@/routes/_protected.settings/-components/organization/ai-provider-rows";
+
+import { AIConfigAdvanced } from "./ai-config-advanced";
 
 export const AIConfigCard = () => {
   const activeOrganizationId = useRouteContext({
@@ -161,7 +159,7 @@ type AIConfigFormProps = {
 
 type PersistAIConfigOptions = {
   nextProviders: ProviderCredentialDraft[];
-  nextRoles: RoleModelSelections;
+  nextRoles: RoleModelOverrides;
   mode: "credentials" | "settings";
 };
 
@@ -177,11 +175,11 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     config.configured ? initialProviders : [createProviderCredentialDraft()],
   );
   const initialRoles = config.configured
-    ? roleModelsFromOverrideModels({
+    ? roleOverridesFromStoredModels({
         overrideModels: config.overrideModels,
         providers: getProviderValues(initialProviders),
       })
-    : createDefaultRoleModels();
+    : {};
   const [roleModels, setRoleModels] = useState(initialRoles);
   const [savedRoles, setSavedRoles] = useState(initialRoles);
   const [decisionState, setDecisionState] = useState<DecisionModelState>({
@@ -228,11 +226,11 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     nextRoles,
     mode,
   }: PersistAIConfigOptions) => {
-    const overrideModels = serializeOverrideModels({
+    const serialized = serializeRoleOverrides({
       providers: getProviderValues(nextProviders),
-      roleModels: nextRoles,
+      overrides: nextRoles,
     });
-    if (!overrideModels) {
+    if (mode === "settings" && serialized.kind === "invalid") {
       const error = new APIError({
         code: "ai_config_model_invalid",
         status: 400,
@@ -244,21 +242,27 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       mode === "settings" ? serializeDecisionModel(decisionState) : undefined;
     const response = await api["organization-settings"]["ai-config"].post({
       providers: serializeProviderDrafts(nextProviders),
-      overrideModels,
+      ...(mode === "settings" && serialized.kind === "valid"
+        ? { overrideModels: serialized.overrides }
+        : {}),
       ...(decision === undefined ? {} : { decision }),
     });
     const data = unwrapEden(response);
     const saved = providerDraftsFromStoredProviders(data.providers);
     setStoredProviders(saved);
+    const savedOverrides = roleOverridesFromStoredModels({
+      overrideModels: data.overrideModels,
+      providers: getProviderValues(saved),
+    });
     setRoleModels((current) =>
       mode === "settings"
-        ? nextRoles
-        : ensureRoleModelsForProviders({
+        ? savedOverrides
+        : retainRoleOverridesForProviders({
             providers: getProviderValues(saved),
-            roleModels: current,
+            overrides: current,
           }),
     );
-    setSavedRoles(nextRoles);
+    setSavedRoles(savedOverrides);
     setStoredDecision(data.decision);
     if (mode === "settings") {
       setDecisionState({ kind: "untouched" });
@@ -277,10 +281,7 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
           ),
           draft,
         ];
-        const nextRoles = ensureRoleModelsForProviders({
-          providers: getProviderValues(next),
-          roleModels: savedRoles,
-        });
+        const nextRoles = savedRoles;
         const saved = await persist({
           nextProviders: next,
           nextRoles,
@@ -324,19 +325,15 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
             await api["organization-settings"]["ai-config"].delete({}),
           );
           setStoredProviders([]);
-          const emptyRoles = createDefaultRoleModels();
-          setRoleModels(emptyRoles);
-          setSavedRoles(emptyRoles);
+          setRoleModels({});
+          setSavedRoles({});
           setStoredDecision(null);
           setDecisionState({ kind: "untouched" });
           await refresh(false);
         } else {
           await persist({
             nextProviders: next,
-            nextRoles: ensureRoleModelsForProviders({
-              providers: getProviderValues(next),
-              roleModels: savedRoles,
-            }),
+            nextRoles: savedRoles,
             mode: "credentials",
           });
         }
@@ -377,8 +374,8 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
   const providerValues = getProviderValues(storedProviders);
   const canSaveSettings =
     storedProviders.length > 0 &&
-    serializeOverrideModels({ providers: providerValues, roleModels }) !==
-      null &&
+    serializeRoleOverrides({ providers: providerValues, overrides: roleModels })
+      .kind === "valid" &&
     hasUsableDecisionModel({ state: decisionState, stored: storedDecision });
   return (
     <div className="flex flex-col gap-4">
@@ -391,50 +388,29 @@ export const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
         onRemove={removeProvider}
       />
       {storedProviders.length > 0 && (
-        <>
-          <AIConfigRoleModelPicker
-            disabled={saveState === "saving"}
-            providers={providerValues}
-            roleModels={roleModels}
-            onModelChange={(role, model) =>
-              setRoleModels((previous) => ({ ...previous, [role]: model }))
-            }
-          />
-          <AIConfigDecisionModel
-            disabled={saveState === "saving"}
-            instanceProvisioned={config.decisionInstanceProvisioned}
-            onStateChange={setDecisionState}
-            state={decisionState}
-            stored={storedDecision}
-          />
-          {!hasUsableDecisionModel({
-            state: decisionState,
-            stored: storedDecision,
-          }) && (
-            <p className="text-destructive text-xs">
-              {t("aiConfig.decision.incomplete")}
-            </p>
-          )}
-          <Button
-            className="self-start"
-            size="sm"
-            disabled={!canSaveSettings || saveState === "saving"}
-            onClick={() => detached(saveSettings(), "ai-config.save-settings")}
-          >
-            {common("saveChanges")}
-          </Button>
-          {settingsError && (
-            <div
-              role="alert"
-              className="text-destructive flex items-start gap-2 text-sm"
-            >
-              <p className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
-                {settingsError}
-              </p>
-              <CopyActionButton text={settingsError} />
-            </div>
-          )}
-        </>
+        <AIConfigAdvanced
+          disabled={saveState === "saving"}
+          providers={providerValues}
+          roleModels={roleModels}
+          onRoleChange={(role, model) =>
+            setRoleModels((previous) => ({ ...previous, [role]: model }))
+          }
+          onRoleReset={(role) =>
+            setRoleModels((previous) =>
+              Object.fromEntries(
+                Object.entries(previous).filter(([key]) => key !== role),
+              ),
+            )
+          }
+          decisionState={decisionState}
+          storedDecision={storedDecision}
+          onDecisionChange={setDecisionState}
+          decisionInstanceProvisioned={config.decisionInstanceProvisioned}
+          canSave={canSaveSettings}
+          onSave={() => detached(saveSettings(), "ai-config.save-settings")}
+          settingsError={settingsError}
+          custom={Object.keys(savedRoles).length > 0 || storedDecision !== null}
+        />
       )}
       <AlertDialog
         open={blocker.status === "blocked"}

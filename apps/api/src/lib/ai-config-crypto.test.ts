@@ -189,7 +189,7 @@ describe("isOrgAIConfig", () => {
     ).toBe(false);
   });
 
-  test("rejects configs missing any role in overrideModels", () => {
+  test("accepts sparse custom model overrides", () => {
     expect(
       isOrgAIConfig({
         providers: [{ provider: "openai", apiKey: "sk-test" }],
@@ -197,7 +197,7 @@ describe("isOrgAIConfig", () => {
           chat: { provider: "openai", modelId: "gpt-5.4" },
         },
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test("rejects unknown model override roles", () => {
@@ -338,4 +338,14 @@ describe("decision model in the stored blob", () => {
       }),
     ).toBe(false);
   });
+});
+
+test("encrypted configuration schema accepts catalog defaults without custom overrides", () => {
+  expect(
+    isOrgAIConfig({
+      providers: [{ provider: "openai", apiKey: "fixture-key" }],
+      overrideModels: null,
+      decision: null,
+    }),
+  ).toBe(true);
 });

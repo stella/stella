@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
 
+import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 
@@ -28,16 +29,26 @@ const savedConfig = {
     { provider: "google", apiKeyMasked: "AIza****1234", region: "global" },
   ],
   overrideModels: {
-    chat: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.chat },
-    fast: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.fast },
+    chat: {
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.chat.modelId,
+    },
+    fast: {
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
+    },
     reasoning: {
       provider: "google",
-      modelId: BYOK_DEFAULT_MODELS.google.reasoning,
+      modelId: BYOK_DEFAULT_MODELS.google.reasoning.modelId,
     },
-    pdf: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.pdf },
+    pdf: {
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
+    },
   },
   decision: null,
 } satisfies OrganizationAIConfig;
+let responseConfig: OrganizationAIConfig = savedConfig;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -57,7 +68,7 @@ globalThis.fetch = Object.assign(
       ) {
         return Response.json(settingsFailure, { status: 400 });
       }
-      return Response.json(savedConfig);
+      return Response.json(responseConfig);
     }
     return Response.json({ models: [] });
   },
@@ -82,6 +93,7 @@ afterEach(() => {
   clients.length = 0;
   requests.length = 0;
   settingsFailure = undefined;
+  responseConfig = savedConfig;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -91,6 +103,12 @@ afterAll(async () => {
 });
 
 const mount = async (initialConfig: OrganizationAIConfig = config) => {
+  responseConfig = {
+    ...savedConfig,
+    overrideModels: initialConfig.configured
+      ? initialConfig.overrideModels
+      : null,
+  };
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -298,6 +316,11 @@ test("removing the last saved provider deletes the configuration", async () => {
 
 test("removing the last provider clears edited roles and the leave prompt", async () => {
   await mount(savedConfig);
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(messages.common.advanced, "u"),
+    }),
+  );
   const modelLabel = messages.organization.aiConfig.modelForRole.replace(
     "{role}",
     () => messages.organization.aiConfig.roles.chat,
@@ -483,3 +506,182 @@ test("clearing a draft workspace ID back to absent clears row dirty state and th
   expect(await screen.findByText(messages.common.done)).toBeDefined();
   expect(screen.queryByRole("alertdialog")).toBeNull();
 });
+
+test("Advanced shows catalog defaults, saves only explicit overrides and resets them", async () => {
+  const defaults = {
+    ...savedConfig,
+    overrideModels: null,
+  } satisfies OrganizationAIConfig;
+  responseConfig = defaults;
+  await mount(defaults);
+  const advanced = screen.getByRole("button", {
+    name: messages.common.advanced,
+  });
+  expect(advanced.getAttribute("aria-expanded")).toBe("false");
+  expect(
+    screen.queryByText(messages.organization.aiConfig.modelsPanel),
+  ).toBeNull();
+  expect(screen.queryByText(messages.common.custom)).toBeNull();
+  fireEvent.click(advanced);
+  const modelLabel = messages.organization.aiConfig.modelForRole.replace(
+    "{role}",
+    () => messages.organization.aiConfig.roles.chat,
+  );
+  const model = await screen.findByLabelText(modelLabel);
+  expect(model).toHaveProperty(
+    "value",
+    BYOK_DEFAULT_MODELS.google.chat.modelId,
+  );
+  expect(
+    screen.getAllByText(messages.organization.aiConfig.usingDefaults),
+  ).toHaveLength(4);
+  expect(
+    screen.getByText(messages.organization.aiConfig.defaultRationale.chat),
+  ).toBeDefined();
+  const overrideId = getModelOptionsForRole({
+    provider: "google",
+    role: "chat",
+  }).find((modelId) => modelId !== BYOK_DEFAULT_MODELS.google.chat.modelId);
+  if (overrideId === undefined) {
+    panic("Google chat must offer an alternate model");
+  }
+  act(() => model.focus());
+  fireEvent.change(model, { target: { value: overrideId } });
+  fireEvent.keyDown(model, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: overrideId }));
+  expect(hasUnsavedWork()).toBe(true);
+  fireEvent.click(advanced);
+  expect(hasUnsavedWork()).toBe(true);
+  fireEvent.click(advanced);
+  responseConfig = {
+    ...defaults,
+    overrideModels: { chat: { provider: "google", modelId: overrideId } },
+  };
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  const write = requests.find(({ method }) => method === "POST");
+  expect(JSON.parse(write?.body ?? "null")).toMatchObject({
+    overrideModels: { chat: { provider: "google", modelId: overrideId } },
+  });
+  expect(JSON.parse(write?.body ?? "null").overrideModels).toEqual({
+    chat: { provider: "google", modelId: overrideId },
+  });
+  fireEvent.click(advanced);
+  expect(advanced.textContent).toContain(messages.common.custom);
+  expect(screen.queryByLabelText(modelLabel)).toBeNull();
+  fireEvent.click(advanced);
+  fireEvent.click(
+    await screen.findByRole("button", { name: messages.common.resetToDefault }),
+  );
+  expect(screen.getByLabelText(modelLabel)).toHaveProperty(
+    "value",
+    BYOK_DEFAULT_MODELS.google.chat.modelId,
+  );
+  responseConfig = defaults;
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.saveChanges }),
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+  expect(
+    requests.filter(({ method }) => method === "POST").at(1)?.body,
+  ).toContain('"overrideModels":null');
+  expect(advanced.textContent).not.toContain(messages.common.custom);
+});
+
+test("saving a key in the compact view sends no role overrides", async () => {
+  responseConfig = { ...savedConfig, overrideModels: null };
+  await mount();
+  dirtyKey();
+  fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
+  await screen.findByText(messages.organization.aiConfig.savedVerified);
+  expect(requests.find(({ method }) => method === "POST")?.body).not.toContain(
+    "overrideModels",
+  );
+  expect(
+    screen.queryByText(messages.organization.aiConfig.modelsPanel),
+  ).toBeNull();
+  expect(screen.queryByText(messages.common.custom)).toBeNull();
+});
+
+test("provider title and trailing add action share the section header", async () => {
+  await mount();
+  const title = screen.getByText(messages.organization.aiConfig.providersPanel);
+  const add = screen.getByRole("button", {
+    name: messages.organization.aiConfig.addProvider,
+  });
+  expect(title.parentElement).toBe(add.parentElement);
+  expect(title.parentElement?.className).toContain(
+    "grid-cols-[minmax(0,1fr)_auto]",
+  );
+  expect(title.parentElement?.className).toContain("items-center");
+  expect(
+    screen.getByText(messages.organization.aiConfig.providersDescription)
+      .parentElement,
+  ).toBe(title.parentElement);
+});
+
+test("stored overrides keep Advanced collapsed and mark Custom even when equal to defaults", async () => {
+  await mount(savedConfig);
+  const advanced = screen.getByRole("button", {
+    name: new RegExp(messages.common.advanced, "u"),
+  });
+  expect(advanced.getAttribute("aria-expanded")).toBe("false");
+  expect(advanced.textContent).toContain(messages.common.custom);
+  expect(
+    screen.queryByText(messages.organization.aiConfig.modelsPanel),
+  ).toBeNull();
+});
+
+test.each([false, true])(
+  "Advanced hides unavailable Mistral PDF controls (fallback provider: %s)",
+  async (withFallback) => {
+    const mistral = {
+      provider: "mistral",
+      apiKeyMasked: "****1234",
+      region: "global",
+    } as const;
+    const openai = {
+      provider: "openai",
+      apiKeyMasked: "sk-****5678",
+      region: "global",
+    } as const;
+    await mount({
+      ...savedConfig,
+      providers: withFallback ? [mistral, openai] : [mistral],
+      overrideModels: null,
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.advanced }),
+    );
+    expect(
+      await screen.findByText(
+        messages.organization.aiConfig.roleUnavailable.replace(
+          "{provider}",
+          "Mistral",
+        ),
+      ),
+    ).toBeDefined();
+    const pdfLabel = messages.organization.aiConfig.modelForRole.replace(
+      "{role}",
+      () => messages.organization.aiConfig.roles.pdf,
+    );
+    if (withFallback) {
+      expect(screen.getByLabelText(pdfLabel)).toHaveProperty(
+        "value",
+        BYOK_DEFAULT_MODELS.openai.pdf.modelId,
+      );
+    } else {
+      expect(screen.queryByLabelText(pdfLabel)).toBeNull();
+      expect(
+        screen.queryByLabelText(
+          messages.organization.aiConfig.providerForRole.replace(
+            "{role}",
+            () => messages.organization.aiConfig.roles.pdf,
+          ),
+        ),
+      ).toBeNull();
+    }
+  },
+);

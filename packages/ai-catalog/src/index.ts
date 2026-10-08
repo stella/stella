@@ -223,44 +223,156 @@ const GPT_56_OPENROUTER_MODEL_IDS = Object.values(GPT_56_MODEL_IDS).map(
  * Shared between the instance default table (`DEFAULT_MODELS`) and the
  * settings-UI default selection, so a default is defined exactly once.
  */
+type BYOKRoleDefault =
+  | {
+      kind: "default";
+      modelId: string;
+      rationaleKey: `organization.aiConfig.defaultRationale.${ModelRole}`;
+    }
+  | { kind: "unsupported" };
+
 export const BYOK_DEFAULT_MODELS = {
   google: {
-    fast: "gemini-3.8-flash",
-    chat: "gemini-3.8-flash",
-    reasoning: "gemini-3.8-flash",
-    pdf: "gemini-3.8-flash",
+    fast: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: "gemini-3.8-flash",
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   openrouter: {
-    fast: GPT_6_MODEL_IDS.luna.openrouter,
-    chat: GPT_6_MODEL_IDS.sol.openrouter,
-    reasoning: GPT_6_MODEL_IDS.sol.openrouter,
-    pdf: GPT_6_MODEL_IDS.sol.openrouter,
+    fast: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.luna.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openrouter,
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   openai: {
-    fast: GPT_6_MODEL_IDS.luna.openai,
-    chat: GPT_6_MODEL_IDS.sol.openai,
-    reasoning: GPT_6_MODEL_IDS.sol.openai,
-    pdf: GPT_6_MODEL_IDS.sol.openai,
+    fast: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.luna.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: GPT_6_MODEL_IDS.sol.openai,
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   anthropic: {
-    fast: "claude-opus-5-5",
-    chat: "claude-opus-5-5",
-    reasoning: "claude-opus-5-5",
-    pdf: "claude-opus-5-5",
+    fast: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: "claude-opus-5-5",
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   bedrock: {
-    fast: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    chat: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    reasoning: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    pdf: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    fast: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: {
+      kind: "default",
+      modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      rationaleKey: "organization.aiConfig.defaultRationale.pdf",
+    },
   },
   mistral: {
-    fast: "mistral-small-latest",
-    chat: "mistral-medium-latest",
-    reasoning: "mistral-medium-latest",
-    pdf: "mistral-large-latest",
+    fast: {
+      kind: "default",
+      modelId: "mistral-small-latest",
+      rationaleKey: "organization.aiConfig.defaultRationale.fast",
+    },
+    chat: {
+      kind: "default",
+      modelId: "mistral-medium-latest",
+      rationaleKey: "organization.aiConfig.defaultRationale.chat",
+    },
+    reasoning: {
+      kind: "default",
+      modelId: "mistral-medium-latest",
+      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+    },
+    pdf: { kind: "unsupported" },
   },
-} as const satisfies Record<TanStackAIProvider, Record<ModelRole, string>>;
+} as const satisfies Record<
+  TanStackAIProvider,
+  Record<ModelRole, BYOKRoleDefault>
+>;
+
+const defaultModelIds = (
+  defaults: Record<ModelRole, Extract<BYOKRoleDefault, { kind: "default" }>>,
+) => ({
+  fast: defaults.fast.modelId,
+  chat: defaults.chat.modelId,
+  reasoning: defaults.reasoning.modelId,
+  pdf: defaults.pdf.modelId,
+});
 
 /**
  * Instance-level default model IDs per provider. Extends the BYOK
@@ -268,7 +380,17 @@ export const BYOK_DEFAULT_MODELS = {
  * (custom deployments and OpenAI-compatible endpoints).
  */
 export const DEFAULT_MODELS = {
-  ...BYOK_DEFAULT_MODELS,
+  google: defaultModelIds(BYOK_DEFAULT_MODELS.google),
+  openrouter: defaultModelIds(BYOK_DEFAULT_MODELS.openrouter),
+  openai: defaultModelIds(BYOK_DEFAULT_MODELS.openai),
+  anthropic: defaultModelIds(BYOK_DEFAULT_MODELS.anthropic),
+  bedrock: defaultModelIds(BYOK_DEFAULT_MODELS.bedrock),
+  mistral: {
+    fast: BYOK_DEFAULT_MODELS.mistral.fast.modelId,
+    chat: BYOK_DEFAULT_MODELS.mistral.chat.modelId,
+    reasoning: BYOK_DEFAULT_MODELS.mistral.reasoning.modelId,
+    pdf: null,
+  },
   // Azure AI Foundry does not list GPT-6 Sol or Luna yet.
   azure_foundry: {
     fast: GPT_56_MODEL_IDS.luna.openai,
@@ -288,7 +410,7 @@ export const DEFAULT_MODELS = {
     reasoning: "speakleash/Bielik-11B-v2.3-Instruct",
     pdf: "speakleash/Bielik-11B-v2.3-Instruct",
   },
-} as const satisfies Record<AIProvider, Record<ModelRole, string>>;
+} as const satisfies Record<AIProvider, Record<ModelRole, string | null>>;
 
 /**
  * BYOK-offered model IDs per provider — the curated catalog users pick
@@ -842,7 +964,11 @@ export const resolveWorkingBYOKModelForRole = ({
   if (isOfferedBYOKModelForRole({ provider, modelId, role })) {
     return modelId;
   }
-  const fallback = BYOK_DEFAULT_MODELS[provider][role];
+  const entry = BYOK_DEFAULT_MODELS[provider][role];
+  if (entry.kind === "unsupported") {
+    return null;
+  }
+  const fallback = entry.modelId;
   return isOfferedBYOKModelForRole({ provider, modelId: fallback, role })
     ? fallback
     : null;

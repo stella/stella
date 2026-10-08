@@ -1618,6 +1618,7 @@
     "actions": "Aktionen",
     "active": "Aktiv",
     "add": "Hinzufügen",
+    "advanced": "Erweitert",
     "all": "Alle",
     "and": "Und",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
+    "custom": "Benutzerdefiniert",
     "date": "Datum",
     "datePicker": {
       "label": "Datumsauswahl",
@@ -1870,6 +1872,7 @@
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
+    "resetToDefault": "Auf Standard zurücksetzen",
     "resetZoom": "Zoom zurücksetzen",
     "restore": "Wiederherstellen",
     "retry": "Erneut versuchen",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "Fügen Sie eine Nicht-Modifikatortaste hinzu",
       "notRebindable": "Dieses Tastenkürzel kann nicht geändert werden",
       "pressKeys": "Neue Tasten drücken…",
-      "resetToDefault": "Auf Standard zurücksetzen",
       "title": "Tastenkürzel"
     },
     "showShortcuts": "Tastenkürzel anzeigen",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
+      "defaultRationale": {
+        "chat": "Für Gespräche und alltägliche Fragen.",
+        "fast": "Für kurze Routineaufgaben.",
+        "pdf": "Zum Lesen und Analysieren von PDF-Dokumenten.",
+        "reasoning": "Für komplexe Aufgaben, die sorgfältiges Schlussfolgern erfordern."
+      },
       "deploymentNamePlaceholder": "Bereitstellungsname",
       "description": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität.",
       "editProviders": "Anbieter bearbeiten",
@@ -4082,6 +4090,7 @@
       "removeProvider": "Provider entfernen",
       "removeProviderConfirm": "{provider} und die gespeicherten Zugangsdaten entfernen?",
       "replaceKey": "Schlüssel ersetzen",
+      "roleUnavailable": "{provider} unterstützt diese Rolle nicht.",
       "roles": {
         "chat": "Chat",
         "fast": "Schnell",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",
-      "title": "KI-Konfiguration"
+      "title": "KI-Konfiguration",
+      "usingDefaults": "Standardeinstellungen aktiv"
     },
     "invitations": {
       "cancelInvitation": "Einladung stornieren",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "Muster muss '{'SEQ'}' enthalten",
       "patternRequired": "Muster ist erforderlich",
       "presets": {
-        "custom": "Benutzerdefiniert",
         "sequential": "Fortlaufend (001)",
         "yearMonthSequential": "Jahr-Monat / fortlaufend (2026-02/001)",
         "yearSequential": "Jahr / fortlaufend (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "Erweiterten Filter hinzufügen",
       "addFields": "Felder hinzufügen",
-      "advancedFilter": "Erweitert",
       "advancedFilterCount": "{count, plural, =0 {Beliebig} one {# Regel} other {# Regeln}}",
       "aiGenerated": "KI-generiert",
       "calendar": {

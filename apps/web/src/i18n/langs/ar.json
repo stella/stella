@@ -1618,6 +1618,7 @@
     "actions": "الإجراءات",
     "active": "نشط",
     "add": "إضافة",
+    "advanced": "خيارات متقدمة",
     "all": "الكل",
     "and": "و",
     "anonymizationLabels": {
@@ -1684,6 +1685,7 @@
     "createdAt": "أُنشئ في {date}",
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
+    "custom": "مخصص",
     "date": "التاريخ",
     "datePicker": {
       "label": "منتقي التاريخ",
@@ -1870,6 +1872,7 @@
     "rename": "إعادة تسمية",
     "required": "مطلوب",
     "reset": "إعادة تعيين",
+    "resetToDefault": "إعادة التعيين إلى الوضع الافتراضي",
     "resetZoom": "إعادة تعيين التكبير",
     "restore": "استعادة",
     "retry": "إعادة المحاولة",
@@ -3920,7 +3923,6 @@
       "invalidBinding": "أضف مفتاحًا غير معدِّل",
       "notRebindable": "لا يمكن تغيير هذا الاختصار",
       "pressKeys": "اضغط مفاتيح جديدة…",
-      "resetToDefault": "إعادة التعيين إلى الوضع الافتراضي",
       "title": "اختصارات لوحة المفاتيح"
     },
     "showShortcuts": "عرض اختصارات لوحة المفاتيح",
@@ -4038,6 +4040,12 @@
       },
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
+      "defaultRationale": {
+        "chat": "للمحادثات والأسئلة اليومية.",
+        "fast": "للمهام القصيرة والروتينية.",
+        "pdf": "لقراءة مستندات PDF وتحليلها.",
+        "reasoning": "للمهام المعقدة التي تتطلب استدلالًا متأنيًا."
+      },
       "deploymentNamePlaceholder": "اسم النشر",
       "description": "أحضر مفتاح API الخاص بك أو اضبط منطقة سيادة البيانات.",
       "editProviders": "تعديل المزوّدين",
@@ -4082,6 +4090,7 @@
       "removeProvider": "إزالة المزوّد",
       "removeProviderConfirm": "هل تريد إزالة {provider} وبيانات الاعتماد المحفوظة؟",
       "replaceKey": "استبدال المفتاح",
+      "roleUnavailable": "لا يدعم {provider} هذا الدور.",
       "roles": {
         "chat": "دردشة",
         "fast": "سريع",
@@ -4092,7 +4101,8 @@
       "selectAtLeastOneRole": "اختر دورًا واحدًا على الأقل لهذا المفتاح.",
       "selectModelForEachRole": "أضف مزوّدًا واختر نموذجًا لكل فئة.",
       "selectedProvider": "{provider}",
-      "title": "إعدادات الذكاء الاصطناعي"
+      "title": "إعدادات الذكاء الاصطناعي",
+      "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
     "invitations": {
       "cancelInvitation": "إلغاء الدعوة",
@@ -4122,7 +4132,6 @@
       "patternMustContainSeq": "يجب أن يحتوي النمط على '{'SEQ'}'",
       "patternRequired": "النمط مطلوب",
       "presets": {
-        "custom": "مخصص",
         "sequential": "تسلسلي (001)",
         "yearMonthSequential": "السنة-الشهر / تسلسلي (2026-02/001)",
         "yearSequential": "السنة / تسلسلي (2026/001)"
@@ -6160,7 +6169,6 @@
     "views": {
       "addAdvancedFilter": "إضافة عامل تصفية متقدم",
       "addFields": "إضافة حقول",
-      "advancedFilter": "متقدم",
       "advancedFilterCount": "{count, plural, =0 {أي} zero {لا قواعد} one {قاعدة واحدة} two {قاعدتان} few {# قواعد} many {# قاعدة} other {# قاعدة}}",
       "aiGenerated": "مُنشأ بالذكاء الاصطناعي",
       "calendar": {
