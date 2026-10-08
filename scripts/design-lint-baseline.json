@@ -161,7 +161,7 @@
     "apps/web/src/routes/_protected.workspaces/-components/matters-table.tsx": 11,
     "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 2,
     "apps/web/src/routes/auth/route.tsx": 1,
-    "apps/web/src/routes/consent.tsx": 4,
+    "apps/web/src/routes/consent.tsx": 2,
     "apps/web/src/routes/dev/-components/control-sizes-playground.tsx": 1,
     "apps/web/src/routes/dev/-components/ui-playground.tsx": 16,
     "apps/web/src/routes/knowledge/-components/category-sidebar.tsx": 1,
