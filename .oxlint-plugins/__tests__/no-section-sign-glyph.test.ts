@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-const lint = (source: string) =>
+const lint = async (source: string) =>
   lintSingleRule("no-section-sign-glyph", source, { sourcePath: "source.tsx" });
 
 test("rejects a lone section sign as element text", async () => {
