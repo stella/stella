@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
@@ -13,6 +13,8 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 import { listOutgoingDecisionCitations } from "./citations";
 import { readDecisionHandler } from "./get";
@@ -25,6 +27,17 @@ export type ReaderSourceOptions = {
   referenceCursor?: string | undefined;
   withheldTextPolicy: "metadata-only" | "show-to-user";
 };
+
+class ReaderProvisionSpanMismatchError extends TaggedError(
+  "ReaderProvisionSpanMismatchError",
+)<{ message: string }> {}
+
+// A stored span that no longer matches its projection piece is withheld, not
+// relocated; it signals a projection that needs republishing.
+const readerProvisionSpanMismatch = failureSink({
+  event: "case_law.reader.provision_span_mismatch",
+  expected: [],
+});
 
 /** Each anchor stream is a bounded batch, not one query per block or link. */
 export const readDecisionReaderSource = async ({
@@ -158,6 +171,12 @@ export const readDecisionReaderSource = async ({
           text.slice(row.printStart, row.printEnd) !== row.printText ||
           preview.blocks.length === 0
         ) {
+          observeFailure(
+            new ReaderProvisionSpanMismatchError({
+              message: "Stored provision span does not match its piece",
+            }),
+            { sink: readerProvisionSpanMismatch },
+          );
           continue;
         }
         provisionAnchors.push({

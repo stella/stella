@@ -1,0 +1,6 @@
+{
+  "metric": "lint-suppression-directives",
+  "file": "apps/api/src/mcp/output-excess-keys.ts",
+  "delta": 1,
+  "reason": "The output excess-key check stops at identical types through the standard generic-signature identity probe, whose type parameter appears once by construction; without the stop, recursive document AST outputs exceed the instantiation depth."
+}

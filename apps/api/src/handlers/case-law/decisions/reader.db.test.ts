@@ -401,11 +401,11 @@ beforeAll(
 
 afterAll(async () => await client.close());
 
-const read = (
+const read = async (
   decisionId: SafeId<"caseLawDecision">,
   phase: "blocks" | "citations" | "provisions",
 ) =>
-  readDecisionReaderSource({
+  await readDecisionReaderSource({
     caseLawDb,
     legislationDb,
     decisionId,

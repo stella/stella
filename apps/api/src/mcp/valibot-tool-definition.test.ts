@@ -4,8 +4,9 @@ import * as v from "valibot";
 
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
-  identifierValueSchema,
-  structuredIdentifierValueSchema,
+  DECISION_IDENTIFIER_TYPES,
+  decisionIdentifierSchema,
+  reporterCitationIdentifierSchema,
 } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
@@ -616,31 +617,36 @@ describe("Valibot-backed MCP tool definitions", () => {
 describe("legal AST output identifiers", () => {
   test("canonical identifier outputs publish bounded strings and retain runtime content checks", () => {
     const source = v.strictObject({
-      visible: identifierValueSchema,
-      searchable: structuredIdentifierValueSchema,
+      identifier: decisionIdentifierSchema,
+      reporter: reporterCitationIdentifierSchema,
     });
     const contract = defineMcpToolOutput(source);
     expect(contract.outputSchema).toMatchObject({
       properties: {
-        visible: { type: "string", maxLength: DECISION_IDENTIFIER_MAX_LENGTH },
-        searchable: {
-          type: "string",
-          maxLength: DECISION_IDENTIFIER_MAX_LENGTH,
+        reporter: {
+          properties: {
+            value: {
+              type: "string",
+              maxLength: DECISION_IDENTIFIER_MAX_LENGTH,
+            },
+          },
         },
       },
     });
-    expect(
+    const parse = (visible: string, searchable: string) =>
       v.safeParse(contract.outputSchemaSource, {
-        visible: "48 Cdo 1/2026",
-        searchable: "ECLI:CZ:NS:2026:1",
-      }).success,
-    ).toBe(true);
-    expect(
-      v.safeParse(contract.outputSchemaSource, {
-        visible: "\u200B",
-        searchable: "...",
-      }).success,
-    ).toBe(false);
+        identifier: {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: visible,
+        },
+        reporter: {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: searchable,
+        },
+      });
+    expect(parse("48 Cdo 1/2026", "Sb. NS 1/2026").success).toBe(true);
+    expect(parse("\u200B", "Sb. NS 1/2026").success).toBe(false);
+    expect(parse("48 Cdo 1/2026", "...").success).toBe(false);
     expect(() =>
       defineMcpToolOutput(
         v.strictObject({

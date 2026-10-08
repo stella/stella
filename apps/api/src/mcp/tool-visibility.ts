@@ -1,16 +1,18 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import type { McpToolDefinition } from "./tool-types";
-
 const visibilitySchema = v.pipe(
   v.array(v.picklist(["model", "app"])),
   v.nonEmpty(),
 );
 
-/** MCP Apps defaults omitted visibility to both audiences. */
+/**
+ * MCP Apps defaults omitted visibility to both audiences. Metadata is read as
+ * unknown and validated here, so any definition's literal `_meta` (readonly
+ * tuples from `as const` registries included) is accepted.
+ */
 export const isMcpToolVisibleTo = (
-  definition: Pick<McpToolDefinition, "_meta">,
+  definition: { readonly _meta?: Readonly<Record<string, unknown>> },
   audience: "model" | "app",
 ): boolean => {
   const ui = definition._meta?.["ui"];

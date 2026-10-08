@@ -24,6 +24,7 @@ import {
   DECISION_READER_TOOL_SET,
 } from "./decision-reader-tools";
 import type { ReaderSource } from "./decision-reader.logic";
+import type { McpToolHandler, McpToolResponse } from "./tool-types";
 
 const id = "af6c7d89-41ab-42ba-814e-b657703584eb";
 const otherId = "af6c7d89-41ab-42ba-814e-b657703584ec";
@@ -101,9 +102,39 @@ const contextWith = (
   testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
 ) => asTestRaw<McpRequestContext>({ testDependencies });
 
-const open = DECISION_READER_TOOL_SET.handlers.open_case_law_decision;
-const blocks = DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks;
-const preview = DECISION_READER_TOOL_SET.handlers.preview_cited_provision;
+type HandlerInput = Parameters<McpToolHandler>[0];
+
+// Registry handlers erase their data type; parsing through the published
+// output schema restores it and asserts the contract on every call.
+const typedCall =
+  <TSchema extends v.GenericSchema>(
+    handler: (
+      input: HandlerInput,
+    ) => McpToolResponse | Promise<McpToolResponse>,
+    output: TSchema,
+  ) =>
+  async (input: HandlerInput) => {
+    const response = await handler(input);
+    if ("egress" in response) {
+      throw new Error("Decision reader tools return data, not egress plans");
+    }
+    return response.status === "success"
+      ? { status: "success" as const, data: v.parse(output, response.data) }
+      : response;
+  };
+
+const open = typedCall(
+  DECISION_READER_TOOL_SET.handlers.open_case_law_decision,
+  openDecisionOutput,
+);
+const blocks = typedCall(
+  DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks,
+  blocksDecisionOutput,
+);
+const preview = typedCall(
+  DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
+  provisionPreviewOutput,
+);
 
 describe("decision reader tool contracts", () => {
   test("anchor page offsets reset across reference cursors and phase transitions", async () => {
@@ -386,7 +417,10 @@ describe("decision reader tool contracts", () => {
         return source;
       },
     });
-    const withheld = await createReaderBlocksTool("metadata-only")({
+    const withheld = await typedCall(
+      createReaderBlocksTool("metadata-only"),
+      blocksDecisionOutput,
+    )({
       args: { decision_id: id },
       context,
     });
@@ -399,7 +433,10 @@ describe("decision reader tool contracts", () => {
     expect(withheld.data).not.toHaveProperty("items");
     expect(withheld.data).not.toHaveProperty("citationAnchors");
     expect(v.safeParse(blocksDecisionOutput, withheld.data).success).toBe(true);
-    const shown = await createReaderBlocksTool("show-to-user")({
+    const shown = await typedCall(
+      createReaderBlocksTool("show-to-user"),
+      blocksDecisionOutput,
+    )({
       args: { decision_id: id },
       context,
     });

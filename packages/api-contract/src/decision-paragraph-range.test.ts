@@ -12,17 +12,19 @@ import {
   parseDecisionParagraphRange,
 } from "./decision-paragraph-range";
 
+const rangeSchema = decisionParagraphRangeSchema("Court paragraph range.");
+
 describe("decision paragraph ranges", () => {
   test("schema reads a string and transforms both dash spellings into an inclusive range", () => {
-    expect(v.safeParse(decisionParagraphRangeSchema, "48")).toMatchObject({
+    expect(v.safeParse(rangeSchema, "48")).toMatchObject({
       success: true,
       output: { from: 48, to: 48 },
     });
-    expect(v.safeParse(decisionParagraphRangeSchema, "48-53")).toMatchObject({
+    expect(v.safeParse(rangeSchema, "48-53")).toMatchObject({
       success: true,
       output: { from: 48, to: 53 },
     });
-    expect(v.safeParse(decisionParagraphRangeSchema, "48–53")).toMatchObject({
+    expect(v.safeParse(rangeSchema, "48–53")).toMatchObject({
       success: true,
       output: { from: 48, to: 53 },
     });
@@ -32,20 +34,16 @@ describe("decision paragraph ranges", () => {
     const garbage = parseDecisionParagraphRange("0");
     const reversed = parseDecisionParagraphRange("4-3");
     const tooWide = parseDecisionParagraphRange("1-501");
-    expect(garbage.isError()).toBe(true);
-    expect(garbage.isError() && garbage.error.reason).toBe("garbage");
-    expect(reversed.isError() && reversed.error.reason).toBe("reversed");
-    expect(tooWide.isError() && tooWide.error.reason).toBe("too-wide");
+    expect(garbage.isErr()).toBe(true);
+    expect(garbage.isErr() && garbage.error.reason).toBe("garbage");
+    expect(reversed.isErr() && reversed.error.reason).toBe("reversed");
+    expect(tooWide.isErr() && tooWide.error.reason).toBe("too-wide");
   });
 
   test("accepts the full 500-number inclusive span and rejects unsafe integers", () => {
     expect(parseDecisionParagraphRange("1-500").isOk()).toBe(true);
-    expect(parseDecisionParagraphRange("9007199254740992").isError()).toBe(
-      true,
-    );
-    expect(v.safeParse(decisionParagraphRangeSchema, "1-501").success).toBe(
-      false,
-    );
+    expect(parseDecisionParagraphRange("9007199254740992").isErr()).toBe(true);
+    expect(v.safeParse(rangeSchema, "1-501").success).toBe(false);
     for (const input of [
       "",
       " 48",
@@ -60,17 +58,13 @@ describe("decision paragraph ranges", () => {
       "9".repeat(1000),
     ]) {
       const parsed = parseDecisionParagraphRange(input);
-      expect(parsed.isError()).toBe(true);
-      expect(parsed.isError() && parsed.error.reason).toBe("garbage");
-      expect(v.safeParse(decisionParagraphRangeSchema, input).success).toBe(
-        false,
-      );
+      expect(parsed.isErr()).toBe(true);
+      expect(parsed.isErr() && parsed.error.reason).toBe("garbage");
+      expect(v.safeParse(rangeSchema, input).success).toBe(false);
     }
     const maximum = String(Number.MAX_SAFE_INTEGER);
     expect(parseDecisionParagraphRange(maximum).isOk()).toBe(true);
-    expect(v.safeParse(decisionParagraphRangeSchema, maximum).success).toBe(
-      true,
-    );
+    expect(v.safeParse(rangeSchema, maximum).success).toBe(true);
   });
 
   test("formatting and fragments round-trip the canonical hyphen spelling", () => {

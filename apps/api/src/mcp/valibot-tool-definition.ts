@@ -6,11 +6,6 @@ import {
   agentInputNormalizationMetadata,
   type AgentInputNormalizationAnnotation,
 } from "@stll/agent-input";
-import {
-  DECISION_IDENTIFIER_MAX_LENGTH,
-  identifierValueSchema,
-  structuredIdentifierValueSchema,
-} from "@stll/legal-ast/decision-identifier";
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
@@ -245,17 +240,6 @@ const deriveMcpInputSchema = (
  */
 type OutputSchemaCompaction = "equivalent" | "none";
 
-// AST identifiers are validated against their canonical schemas at runtime.
-// Their sanitization/normalization checks cannot be expressed in JSON Schema;
-// only these two exact owner schemas project to the bounded wire string.
-const projectLegalIdentifierOutput: NonNullable<
-  ToJsonSchemaConfig["overrideSchema"]
-> = ({ valibotSchema }) =>
-  valibotSchema === identifierValueSchema ||
-  valibotSchema === structuredIdentifierValueSchema
-    ? { type: "string", maxLength: DECISION_IDENTIFIER_MAX_LENGTH }
-    : undefined;
-
 const deriveMcpOutputSchema = (
   schema: v.GenericSchema,
   customSchemaProjection: "none" | "chat-string-ids" = "none",
@@ -264,18 +248,10 @@ const deriveMcpOutputSchema = (
   const { $schema: _dialect, ...jsonSchema } = toJsonSchema(
     schema,
     customSchemaProjection === "none"
-      ? {
-          ...VALIBOT_MCP_JSON_SCHEMA_CONFIG,
-          overrideSchema: projectLegalIdentifierOutput,
-        }
+      ? VALIBOT_MCP_JSON_SCHEMA_CONFIG
       : {
           ...VALIBOT_MCP_JSON_SCHEMA_CONFIG,
-          overrideSchema: (context) => {
-            const identifier = projectLegalIdentifierOutput(context);
-            if (identifier !== undefined) {
-              return identifier;
-            }
-            const { valibotSchema } = context;
+          overrideSchema: ({ valibotSchema }) => {
             if (valibotSchema.type !== "custom") {
               return undefined;
             }

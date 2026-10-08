@@ -9,7 +9,9 @@ export type DecisionParagraphRange = {
 
 const MAX_DECISION_PARAGRAPH_RANGE_SPAN = 500;
 const MAX_DECISION_PARAGRAPH_RANGE_INPUT_CHARS = 33;
-const PARAGRAPH_RANGE_PATTERN = /^(?<from>\d+)(?:[-–](?<to>\d+))?$/u;
+// Group-free so the published JSON Schema pattern is portable across validators.
+const PARAGRAPH_RANGE_PATTERN = /^\d+(?:[-–]\d+)?$/u;
+const PARAGRAPH_RANGE_SEPARATOR = /[-–]/u;
 
 export type DecisionParagraphRangeErrorReason =
   | "garbage"
@@ -29,16 +31,13 @@ const invalidRange = (
 ) => Result.err(new DecisionParagraphRangeError({ message, reason }));
 
 const rangeFromString = (input: string): DecisionParagraphRange | null => {
-  if (input.length > MAX_DECISION_PARAGRAPH_RANGE_INPUT_CHARS) {
+  if (
+    input.length > MAX_DECISION_PARAGRAPH_RANGE_INPUT_CHARS ||
+    !PARAGRAPH_RANGE_PATTERN.test(input)
+  ) {
     return null;
   }
-  const groups = PARAGRAPH_RANGE_PATTERN.exec(input)?.groups;
-  const fromText = groups?.["from"];
-  const toText = groups?.["to"];
-  if (fromText === undefined) {
-    return null;
-  }
-
+  const [fromText, toText] = input.split(PARAGRAPH_RANGE_SEPARATOR);
   const from = Number(fromText);
   const to = toText === undefined ? from : Number(toText);
   if (
@@ -80,32 +79,51 @@ const parseErrorReasonOf = (
   return Result.isError(parsed) ? parsed.error.reason : null;
 };
 
-/** A Valibot wire schema whose advertised input stays a string. */
-export const decisionParagraphRangeSchema: v.GenericSchema<
-  string,
-  DecisionParagraphRange
-> = v.pipe(
-  v.string(),
-  v.maxLength(MAX_DECISION_PARAGRAPH_RANGE_INPUT_CHARS),
-  v.check(
-    (input) => parseErrorReasonOf(input) !== "garbage",
-    "Expected a positive safe paragraph number or range",
-  ),
-  v.regex(PARAGRAPH_RANGE_PATTERN),
-  v.check(
-    (input) => parseErrorReasonOf(input) !== "reversed",
-    "Paragraph range ends before it starts",
-  ),
-  v.check(
-    (input) => parseErrorReasonOf(input) !== "too-wide",
-    "Paragraph range may span at most 500 numbers",
-  ),
-  v.transform((input) => {
-    const [fromText, toText] = input.split(/[-–]/u);
-    const from = Number(fromText);
-    return { from, to: toText === undefined ? from : Number(toText) };
-  }),
+const garbageCheck = v.check(
+  (input: string) => parseErrorReasonOf(input) !== "garbage",
+  "Expected a positive safe paragraph number or range",
 );
+const reversedCheck = v.check(
+  (input: string) => parseErrorReasonOf(input) !== "reversed",
+  "Paragraph range ends before it starts",
+);
+const tooWideCheck = v.check(
+  (input: string) => parseErrorReasonOf(input) !== "too-wide",
+  "Paragraph range may span at most 500 numbers",
+);
+
+/**
+ * Checks JSON Schema cannot express. A converter publishes the remaining
+ * bounded, patterned string and leaves these to runtime validation.
+ */
+export const DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS = [
+  garbageCheck,
+  reversedCheck,
+  tooWideCheck,
+] as const;
+
+/**
+ * A Valibot wire schema whose advertised input stays a string. The
+ * description precedes the transform: an input-mode JSON Schema projection
+ * stops at the first transformation and would drop a trailing description.
+ */
+export const decisionParagraphRangeSchema = (
+  description: string,
+): v.GenericSchema<string, DecisionParagraphRange> =>
+  v.pipe(
+    v.string(),
+    v.description(description),
+    v.maxLength(MAX_DECISION_PARAGRAPH_RANGE_INPUT_CHARS),
+    garbageCheck,
+    v.regex(PARAGRAPH_RANGE_PATTERN),
+    reversedCheck,
+    tooWideCheck,
+    v.transform((input) => {
+      const [fromText, toText] = input.split(PARAGRAPH_RANGE_SEPARATOR);
+      const from = Number(fromText);
+      return { from, to: toText === undefined ? from : Number(toText) };
+    }),
+  );
 
 /** Canonical spelling for a court paragraph range. */
 export const formatDecisionParagraphRange = ({

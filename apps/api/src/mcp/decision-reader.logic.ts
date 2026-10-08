@@ -82,7 +82,7 @@ export const selectReaderWindow = ({
   ) {
     return { status: "too_large" as const };
   }
-  let remaining = READER_OPEN_TEXT_CHARS;
+  let remaining: number = READER_OPEN_TEXT_CHARS;
   let truncated = false;
   const window = selected.flatMap((block) => {
     if (remaining === 0) {
@@ -160,7 +160,7 @@ type PackReaderBlocksOptions = {
   offset: number;
   blockOffset: number;
 };
-export const packReaderBlocks = ({
+const packReaderBlocks = ({
   blocks,
   offset,
   blockOffset,
