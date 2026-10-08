@@ -218,6 +218,11 @@ run_module_mock_ledger_guard() {
   bun scripts/fill-diagnostics-ledger.ts --base "$base_ref"
 }
 
+run_test_state_baseline_guard() {
+  bun test scripts/check-test-state-baseline.test.ts .oxlint-plugins/__tests__/no-direct-test-state.test.ts || return 1
+  bun scripts/check-test-state-baseline.ts --base "$base_ref"
+}
+
 run_suppression_waiver_guard() {
   # Every suppression of a security-tier lint rule (tenancy, authorization,
   # credential, audit) must have an entry in scripts/suppression-waivers.json,
@@ -465,6 +470,7 @@ run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
 run_step "Split-button census" run_split_buttons_guard
 run_step "Module-mock ledger membership" run_module_mock_ledger_guard
+run_step "Test environment fixture baseline" run_test_state_baseline_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
 run_step "Custom lint rule coverage self-tests" bun test scripts/check-oxlint-rule-coverage.test.ts
