@@ -522,9 +522,9 @@ const assertOversizedError = async (
 };
 
 for (const options of largeModelListOptions) {
-  test(`accepts successful model lists above 64 KiB for ${options.provider}`, () =>
+  test(`accepts successful model lists above 64 KiB for ${options.provider}`, async () =>
     assertLargeModelList(options));
-  test(`refuses oversized error diagnostics without truncation for ${options.provider}`, () =>
+  test(`refuses oversized error diagnostics without truncation for ${options.provider}`, async () =>
     assertOversizedError(options));
 }
 
