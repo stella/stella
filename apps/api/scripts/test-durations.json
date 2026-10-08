@@ -8567,6 +8567,10 @@
     "seconds": 1.100013,
     "source": "estimated"
   },
+  "src/mcp/tool-auth-challenge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/tool-call-outcome.test.ts": {
     "seconds": 1.21972,
     "source": "estimated"
