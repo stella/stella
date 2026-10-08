@@ -20,10 +20,12 @@ import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import {
   type AnalysisQueryResult,
   type DecisionAnalysisRequestKey,
+  analysisRefetchInterval,
   decisionAnalysisOptions,
   requestDecisionAnalysis,
 } from "@/features/case-law/queries/decision-analysis";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
+import { readQueryResult } from "@/lib/errors/query-result";
 
 export type AnalysisState =
   | { status: "idle" }
@@ -106,11 +108,13 @@ export const useDecisionAnalysis = ({
         queryKey: options.queryKey,
         exact: true,
       });
-      return await requestDecisionAnalysis({
-        decisionId: key.decisionId,
-        mode: ANALYSIS_REQUEST_MODE.retry,
-        signal: AbortSignal.timeout(15_000),
-      });
+      return readQueryResult(
+        await requestDecisionAnalysis({
+          decisionId: key.decisionId,
+          mode: ANALYSIS_REQUEST_MODE.retry,
+          signal: AbortSignal.timeout(15_000),
+        }),
+      );
     },
     onSuccess: (result) => {
       queryClient.setQueryData(options.queryKey, result);
@@ -122,7 +126,8 @@ export const useDecisionAnalysis = ({
   const query = useQuery({
     ...options,
     enabled: enabled && !retrying,
-    refetchInterval: retrying ? false : options.refetchInterval,
+    refetchInterval: (current) =>
+      retrying ? false : analysisRefetchInterval(current),
   });
   const finishedAnalysis =
     query.data?.kind === "done" ? query.data.analysis : null;

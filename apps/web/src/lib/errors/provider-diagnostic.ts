@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
@@ -15,15 +15,18 @@ export class ProviderDiagnosticError extends TaggedError(
 }> {}
 
 /** Parse only the explicit provider diagnostic envelope, never arbitrary error text. */
-export const parseProviderDiagnostic = (value: unknown) => {
+export const parseProviderDiagnostic = (
+  value: unknown,
+): Result<ProviderDiagnostic, ClientOperationError> => {
   const parsed = v.safeParse(providerDiagnosticSchema, value);
-  if (!parsed.success) {
-    throw new ClientOperationError({
-      action: "parse-provider-diagnostic",
-      message: "Invalid provider diagnostic response",
-    });
-  }
-  return parsed.output;
+  return parsed.success
+    ? Result.ok(parsed.output)
+    : Result.err(
+        new ClientOperationError({
+          action: "parse-provider-diagnostic",
+          message: "Invalid provider diagnostic response",
+        }),
+      );
 };
 
 export const providerDiagnosticFromThrown = (

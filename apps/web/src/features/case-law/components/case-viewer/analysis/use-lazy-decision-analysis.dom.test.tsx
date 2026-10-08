@@ -27,6 +27,12 @@ const { decisionAnalysisOptions } =
 const { useLazyDecisionAnalysis } =
   await import("./use-lazy-decision-analysis");
 
+/** What the shared analysis cache holds for these options. */
+const cachedAnalysis = (
+  client: InstanceType<typeof QueryClient>,
+  options: ReturnType<typeof decisionAnalysisOptions>,
+): AnalysisQueryResult | undefined => client.getQueryData(options.queryKey);
+
 const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(() => {
@@ -370,12 +376,12 @@ test("explicit retry sends retry once for shared views and subsequent progress p
     ...key,
     organizationId: user.activeOrganizationId,
   });
-  await waitFor(() =>
-    expect(client.getQueryData(options.queryKey)).toEqual({
+  await waitFor(() => {
+    expect(cachedAnalysis(client, options)).toEqual({
       kind: "generating",
       tree: [],
-    }),
-  );
+    });
+  });
   await waitFor(() => expect(requests).toHaveLength(3), { timeout: 4000 });
   await act(async () => {
     pendingPoll.resolve(Response.json({ status: "done", analysis }));
@@ -389,7 +395,7 @@ test("explicit retry sends retry once for shared views and subsequent progress p
     ANALYSIS_REQUEST_MODE.retry,
     ANALYSIS_REQUEST_MODE.poll,
   ]);
-  expect(client.getQueryData(options.queryKey)).toEqual({
+  expect(cachedAnalysis(client, options)).toEqual({
     kind: "done",
     analysis,
   });
@@ -436,7 +442,7 @@ test("a view mounted during retry waits for retry before resuming normal polling
     pendingRetry.resolve(Response.json({ status: "generating" }));
   });
   await waitFor(() => expect(requests).toHaveLength(3), { timeout: 4000 });
-  expect(client.getQueryData(options.queryKey)).toEqual({
+  expect(cachedAnalysis(client, options)).toEqual({
     kind: "generating",
     tree: [],
   });
@@ -454,7 +460,7 @@ test("a view mounted during retry waits for retry before resuming normal polling
   });
   await waitFor(() => expect(first.result.current.state.status).toBe("done"));
   expect(arriving.result.current.state).toEqual({ status: "done", analysis });
-  expect(client.getQueryData(options.queryKey)).toEqual({
+  expect(cachedAnalysis(client, options)).toEqual({
     kind: "done",
     analysis,
   });
@@ -500,7 +506,7 @@ test("retry cancels a stale poll before replacing the shared analysis cache", as
     stalePoll.resolve(Response.json({ status: "error" }));
     await refetch;
   });
-  expect(client.getQueryData(options.queryKey)).toEqual({
+  expect(cachedAnalysis(client, options)).toEqual({
     kind: "done",
     analysis,
   });

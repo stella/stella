@@ -5,6 +5,7 @@ import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { decisionAnalysisOptions } from "@/features/case-law/queries/decision-analysis";
+import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 import {
   decisionOptions,
   publicDecisionReadFilter,
@@ -176,15 +177,22 @@ test("provider diagnostics in analysis cache are isolated by active organization
     ...identity,
     organizationId: "second-organization",
   });
-  client.setQueryData(first.queryKey, {
-    kind: "error",
-    providerDiagnostic: {
-      provider: "anthropic",
-      code: null,
-      message: "Private setup failure",
-    },
-  });
-  expect(client.getQueryData(second.queryKey)).toBeUndefined();
+  client.setQueryData(
+    first.queryKey,
+    () =>
+      ({
+        kind: "error",
+        providerDiagnostic: {
+          provider: "anthropic",
+          code: null,
+          message: "Private setup failure",
+        },
+      }) satisfies AnalysisQueryResult,
+  );
+  const secondCached: AnalysisQueryResult | undefined = client.getQueryData(
+    second.queryKey,
+  );
+  expect(secondCached).toBeUndefined();
   expect(first.queryKey).not.toEqual(second.queryKey);
   client.clear();
 });

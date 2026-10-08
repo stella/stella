@@ -3,6 +3,7 @@ import type { StreamChunk } from "@tanstack/ai";
 
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { parseProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
 /**
@@ -17,7 +18,14 @@ export const observeChatProviderDiagnostic = async function* (
     if (chunk.type === EventType.RUN_ERROR) {
       const diagnostic: unknown = chunk.metadata?.["providerDiagnostic"];
       if (diagnostic !== undefined) {
-        onDiagnostic(parseProviderDiagnostic(diagnostic));
+        const parsed = parseProviderDiagnostic(diagnostic);
+        if (parsed.isOk()) {
+          onDiagnostic(parsed.value);
+        } else {
+          // The run already failed and says so; only its setup guidance is
+          // missing, which a malformed envelope must not invent.
+          getAnalytics().captureError(parsed.error);
+        }
       }
     }
     yield chunk;

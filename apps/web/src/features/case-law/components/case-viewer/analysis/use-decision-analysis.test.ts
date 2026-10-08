@@ -32,7 +32,9 @@ const analysis = {
 
 describe("decision analysis response parsing", () => {
   test("accepts a complete analysis", () => {
-    expect(parseAnalysisResponse({ status: "done", analysis })).toEqual({
+    expect(
+      parseAnalysisResponse({ status: "done", analysis }).unwrap(),
+    ).toEqual({
       status: "done",
       analysis,
     });
@@ -48,7 +50,7 @@ describe("decision analysis response parsing", () => {
           startedAt: "2026-08-23T10:00:00.000Z",
           inputFingerprint: "f".repeat(64),
         },
-      }),
+      }).unwrap(),
     ).toEqual({ status: "generating", tree: [] });
   });
 
@@ -62,20 +64,31 @@ describe("decision analysis response parsing", () => {
           startedAt: "2026-08-23T10:00:00.000Z",
           inputFingerprint: "f".repeat(64),
         },
-      }),
+      }).unwrap(),
     ).toBeNull();
   });
 
   test("rejects an analysis without a fingerprint", () => {
     const { inputFingerprint: _absent, ...unfingerprinted } = analysis;
     expect(
-      parseAnalysisResponse({ status: "done", analysis: unfingerprinted }),
+      parseAnalysisResponse({
+        status: "done",
+        analysis: unfingerprinted,
+      }).unwrap(),
     ).toBeNull();
+  });
+
+  test("refuses an error whose provider diagnostic is malformed", () => {
+    const parsed = parseAnalysisResponse({
+      status: "error",
+      providerDiagnostic: { provider: "openai", message: 42 },
+    });
+    expect(parsed.isErr()).toBe(true);
   });
 
   test("accepts an error without exposing its transport message", () => {
     expect(
-      parseAnalysisResponse({ status: "error", error: "HTTP 500" }),
+      parseAnalysisResponse({ status: "error", error: "HTTP 500" }).unwrap(),
     ).toEqual({ status: "error" });
   });
 });
@@ -128,7 +141,7 @@ test("decision analysis diagnostics survive stored failure and HTTP failure stat
   const parsed = parseAnalysisResponse({
     status: "error",
     providerDiagnostic: diagnostic,
-  });
+  }).unwrap();
   expect(parsed).toEqual({ status: "error", providerDiagnostic: diagnostic });
   expect(
     analysisStateFromQuery({

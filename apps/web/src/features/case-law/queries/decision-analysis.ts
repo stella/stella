@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic, Result } from "better-result";
 
 import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import type { AnalysisRequestMode } from "@stll/api-contract/case-law-analysis";
@@ -13,8 +14,11 @@ import {
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { apiUrl } from "@/lib/api-url";
 import { STALE_TIME } from "@/lib/consts";
+import type { APIError } from "@/lib/errors/api";
 import { toAPIError } from "@/lib/errors/api";
+import type { ClientOperationError } from "@/lib/errors/client";
 import { parseProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
+import { readQueryResult } from "@/lib/errors/query-result";
 
 type AnalysisResponse =
   | { status: "done"; analysis: DecisionAnalysis }
@@ -36,11 +40,16 @@ const completeAnalysis = (
 ): DecisionAnalysis | null =>
   analysis !== null && !("status" in analysis) ? analysis : null;
 
+/**
+ * The analysis endpoint's answer, or null for one the reader cannot use. A
+ * failure that carries a malformed provider diagnostic is an error of its
+ * own: the guidance is validated, never shown as it came.
+ */
 export const parseAnalysisResponse = (
   value: unknown,
-): AnalysisResponse | null => {
+): Result<AnalysisResponse | null, ClientOperationError> => {
   if (!isRecord(value)) {
-    return null;
+    return Result.ok(null);
   }
 
   const status = value["status"];
@@ -49,29 +58,42 @@ export const parseAnalysisResponse = (
     const analysis = completeAnalysis(
       parsePersistedDecisionAnalysis(value["analysis"]),
     );
-    return analysis === null ? null : { status: "done", analysis };
+    return Result.ok(analysis === null ? null : { status: "done", analysis });
   }
 
   if (status === "generating") {
     // The run holds only a sentinel on the row; the tree arrives whole.
-    return { status: "generating", tree: [] };
+    return Result.ok({ status: "generating", tree: [] });
   }
 
   if (status === "error") {
     const diagnostic = value["providerDiagnostic"];
-    return {
-      status: "error",
-      ...(diagnostic === undefined
-        ? {}
-        : { providerDiagnostic: parseProviderDiagnostic(diagnostic) }),
-    };
+    if (diagnostic === undefined) {
+      return Result.ok({ status: "error" });
+    }
+    return parseProviderDiagnostic(diagnostic).map(
+      (providerDiagnostic): AnalysisResponse => ({
+        status: "error",
+        providerDiagnostic,
+      }),
+    );
   }
 
-  return null;
+  return Result.ok(null);
 };
 
 const isTerminal = (result: AnalysisQueryResult | undefined): boolean =>
   result?.kind === "done" || result?.kind === "error";
+
+type AnalysisPollState = {
+  state: { data: AnalysisQueryResult | undefined; error: unknown };
+};
+
+/** Poll while a run is in flight; a settled run or a failed read stops it. */
+export const analysisRefetchInterval = ({
+  state,
+}: AnalysisPollState): number | false =>
+  state.error !== null || isTerminal(state.data) ? false : POLL_INTERVAL_MS;
 
 /**
  * The AI analysis of one decision: the only place the reader holds it, as the
@@ -105,12 +127,38 @@ type DecisionAnalysisRequestOptions = {
   signal: AbortSignal;
 };
 
+const analysisQueryResult = (
+  parsed: AnalysisResponse | null,
+): AnalysisQueryResult => {
+  if (parsed === null) {
+    return { kind: "error" };
+  }
+  switch (parsed.status) {
+    case "done":
+      return { kind: "done", analysis: parsed.analysis };
+    case "generating":
+      return { kind: "generating", tree: parsed.tree };
+    case "error":
+      return {
+        kind: "error",
+        ...(parsed.providerDiagnostic === undefined
+          ? {}
+          : { providerDiagnostic: parsed.providerDiagnostic }),
+      };
+    default:
+      parsed satisfies never;
+      return panic("Unhandled analysis response");
+  }
+};
+
 /** Both background polling and an explicit retry use the same transport/parser. */
 export const requestDecisionAnalysis = async ({
   decisionId,
   mode,
   signal,
-}: DecisionAnalysisRequestOptions): Promise<AnalysisQueryResult> => {
+}: DecisionAnalysisRequestOptions): Promise<
+  Result<AnalysisQueryResult, APIError | ClientOperationError>
+> => {
   const url = new URL(apiUrl(`/case/decisions/${decisionId}/analysis`));
   url.searchParams.set("mode", mode);
   const response = await fetchWithTimeout(url, {
@@ -121,26 +169,9 @@ export const requestDecisionAnalysis = async ({
 
   const data: unknown = await response.json();
   if (!response.ok) {
-    throw toAPIError({ status: response.status, value: data });
+    return Result.err(toAPIError({ status: response.status, value: data }));
   }
-  const parsed = parseAnalysisResponse(data);
-
-  if (!parsed) {
-    return { kind: "error" };
-  }
-
-  if (parsed.status === "done") {
-    return { kind: "done", analysis: parsed.analysis };
-  }
-  if (parsed.status === "generating") {
-    return { kind: "generating", tree: parsed.tree };
-  }
-  return {
-    kind: "error",
-    ...(parsed.providerDiagnostic === undefined
-      ? {}
-      : { providerDiagnostic: parsed.providerDiagnostic }),
-  };
+  return parseAnalysisResponse(data).map(analysisQueryResult);
 };
 
 export const decisionAnalysisOptions = ({
@@ -156,13 +187,14 @@ export const decisionAnalysisOptions = ({
       { decisionUpdatedAt },
     ],
     queryFn: async ({ signal }) =>
-      await requestDecisionAnalysis({
-        decisionId,
-        mode: ANALYSIS_REQUEST_MODE.poll,
-        signal,
-      }),
-    refetchInterval: ({ state }) =>
-      state.error !== null || isTerminal(state.data) ? false : POLL_INTERVAL_MS,
+      readQueryResult(
+        await requestDecisionAnalysis({
+          decisionId,
+          mode: ANALYSIS_REQUEST_MODE.poll,
+          signal,
+        }),
+      ),
+    refetchInterval: analysisRefetchInterval,
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
