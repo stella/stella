@@ -187,11 +187,18 @@ const releaseRun = async (
   `);
   const expiredBefore = new Date(
     record.recordedAt.getTime() - ANALYSIS_FAILURE_HOLD_MS,
-  );
+  ).toISOString();
+  // The expiry is checked on the deleted row itself as well as in the
+  // candidate subquery. A candidate another writer refreshed while this
+  // statement waited on its lock is rechecked against the outer condition
+  // only, so without it the fresh record would be deleted by its key.
   await db
     .delete(caseLawAnalysisFailures)
     .where(
-      sql`(${caseLawAnalysisFailures.decisionId}, ${caseLawAnalysisFailures.keyTag}) IN (SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures" WHERE "recorded_at" < ${expiredBefore.toISOString()}::timestamptz ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH})`,
+      and(
+        sql`(${caseLawAnalysisFailures.decisionId}, ${caseLawAnalysisFailures.keyTag}) IN (SELECT "decision_id", "key_tag" FROM "case_law_analysis_failures" WHERE "recorded_at" < ${expiredBefore}::timestamptz ORDER BY "recorded_at" LIMIT ${FAILURE_SWEEP_BATCH})`,
+        sql`${caseLawAnalysisFailures.recordedAt} < ${expiredBefore}::timestamptz`,
+      ),
     );
 };
 

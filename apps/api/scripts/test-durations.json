@@ -9246,5 +9246,13 @@
   "src/handlers/case-law/analysis/generate-failure.db.test.ts": {
     "seconds": 1,
     "source": "estimated"
+  },
+  "src/lib/case-law/analysis-failure-sweep.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/case-law/analysis-failure.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   }
 }
