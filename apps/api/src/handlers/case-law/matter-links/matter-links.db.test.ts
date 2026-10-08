@@ -99,7 +99,8 @@ const modelCapabilityContext = (): McpRequestContext => {
     accessibleWorkspaceStatusById: new Map([[ids.wsA1, "active"]]),
     accessibleWorkspaces: [{ id: ids.wsA1, status: "active" }],
     createOperationDatabaseScope: () => ({
-      pinServerValidatedWorkspaceId: (workspaceId) => workspaceId === ids.wsA1,
+      pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) =>
+        workspaceId === ids.wsA1,
       safeDb,
       scopedDb,
     }),

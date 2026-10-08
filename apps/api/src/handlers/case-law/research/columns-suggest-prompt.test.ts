@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 
 import { decisionSampleForPrompt } from "@/api/handlers/case-law/research/columns-suggest-prompt";
-import { presentTextField } from "@/api/lib/case-law/decision-text";
 
 test("suggestion samples retain identity and omit withheld summaries", () => {
   expect(
@@ -9,7 +8,11 @@ test("suggestion samples retain identity and omit withheld summaries", () => {
       caseNumber: "15 Cdo 45/2024",
       court: "Nejvyšší soud",
       decisionDate: "2024-05-15",
-      headnote: presentTextField("Publisher summary and keywords"),
+      headnote: {
+        type: "present",
+        text: "Publisher summary and keywords",
+        truncated: false,
+      },
       textWithheldReason: "source_licence",
     }),
   ).toEqual({
@@ -26,9 +29,11 @@ test("suggestion samples keep available published summaries", () => {
       caseNumber: "25 Cdo 1234/2021",
       court: "Nejvyšší soud",
       decisionDate: "2021-04-02",
-      headnote: presentTextField(
-        "Ušlý zisk se nahrazuje jen v prokázaném rozsahu.",
-      ),
+      headnote: {
+        type: "present",
+        text: "Ušlý zisk se nahrazuje jen v prokázaném rozsahu.",
+        truncated: false,
+      },
       textWithheldReason: null,
     }).headnote,
   ).toBe("Ušlý zisk se nahrazuje jen v prokázaném rozsahu.");

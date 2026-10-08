@@ -893,13 +893,17 @@ test("full text search reads the source permission beside human excerpts", async
     queryUsed: "sampleword",
     sort: DEFAULT_SEARCH_SORT,
   });
-  const rows = await caseLawDb(async (tx) => await tx.execute(plan.hits));
+  const result = await withPublicLawReaderRole(
+    drizzle({ client }),
+    async (tx) => await tx.execute(plan.hits),
+  );
+  const rows = result.rows;
   const dispositions = new Map(
-    rows.rows.map((row) => [row["decision_id"], row["allows_derived_ai"]]),
+    rows.map((row) => [row["decision_id"], row["allows_derived_ai"]]),
   );
   expect(dispositions.get(czechId)).toBe(true);
   expect(dispositions.get(withheldId)).toBe(false);
   expect(
-    rows.rows.find((row) => row["decision_id"] === withheldId)?.["headline"],
+    rows.find((row) => row["decision_id"] === withheldId)?.["headline"],
   ).toContain("sampleword");
 });

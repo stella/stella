@@ -1624,7 +1624,6 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
               citationText: "21 Cdo 500/2019",
-              textWithheldReason: null,
               citedDecisionId: toSafeId<"caseLawDecision">(uid(56)),
               sectionIndex: 0,
             },
@@ -1633,7 +1632,6 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(57)),
               citationText: "23 Cdo 200/2021",
-              textWithheldReason: null,
               citingDecisionId: toSafeId<"caseLawDecision">(uid(58)),
               sectionIndex: 1,
             },
