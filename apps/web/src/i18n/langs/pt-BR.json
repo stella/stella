@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Não salvo",
-      "failedTitle": "Sua alteração não foi salva",
-      "saved": "Salvo",
-      "saving": "Salvando…"
+      "failedTitle": "Sua alteração não foi salva"
     },
     "sourceMediumTooltip": "Meio da fonte — um descritor neutro. Por si só, não reduz a confiança.",
     "states": {
@@ -1271,6 +1269,8 @@
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
     "openCitation": "Abrir citação {label}",
     "openThread": "Abrir conversa",
+    "overlayLoadFailed": "Não foi possível carregar o chat do documento.",
+    "overlayUpdated": "A stella foi atualizada. Recarregue a página para usar o chat do documento.",
     "pastedChars": "Colado · {count} caracteres",
     "pastedText": {
       "expand": "Mostrar texto completo",
@@ -1879,6 +1879,8 @@
     "saveAndLeave": "Salvar e sair",
     "saveAsPdf": "Salvar como PDF",
     "saveChanges": "Salvar alterações",
+    "saved": "Salvo",
+    "saving": "Salvando…",
     "scopeThisPage": "(esta página)",
     "scrollToBottom": "Rolar para baixo",
     "scrollToTop": "Rolar para o topo",
@@ -3571,6 +3573,11 @@
       "askContentLabel": "Tipo de resposta",
       "askQuestionLabel": "Pergunta",
       "askQuestionPlaceholder": "O que devemos ler de cada documento? Deixe em branco para entrada manual.",
+      "autosave": {
+        "failed": "Não foi possível salvar",
+        "nameMissing": "Não salvo: adicione um nome",
+        "positionsNeedAttention": "Não salvo: {count, plural, one {# posição precisa} other {# posições precisam}} de atenção"
+      },
       "check": "Usar uma regra exata em vez de IA",
       "checkHint": "Para condições mensuráveis, por exemplo: prazo de pagamento ≤ 30 dias.",
       "checkKind": {
@@ -3600,6 +3607,7 @@
       "deletePlaybook": "Excluir playbook",
       "deletePosition": "Excluir posição",
       "deleted": "Playbook excluído",
+      "deletedElsewhere": "Este playbook foi excluído.",
       "derivedAutomatically": "A pergunta de extração e o formato de resposta são gerados com base nesta posição. Nenhuma configuração é necessária.",
       "derivedQuestion": "Pergunta de extração",
       "derivedType": "Formato da resposta",
@@ -3652,10 +3660,12 @@
       },
       "noPositions": "Ainda não há posições. Adicione a primeira.",
       "noSettledPosition": "Nenhuma posição estabelecida",
+      "openInPane": "Abrir playbook",
       "optionPlaceholder": "Valor da opção",
       "optionsLabel": "Opções",
       "outline": "Esquema",
       "positionOfTotal": "Posição {index} de {total}",
+      "positionRemoved": "Posição removida",
       "positions": "Posições",
       "recent": "Usados recentemente",
       "recommended": "Modelos recomendados",
@@ -5524,6 +5534,7 @@
       "desktopGate": {
         "alreadyInstalled": "Já está instalado? Conectar",
         "connect": "Conectar o stella desktop",
+        "connected": "O stella desktop está conectado",
         "editNone": "Baixe o stella desktop para editar este arquivo",
         "editOutdated": "Atualize o stella desktop para editar",
         "editReason": "A edição no computador abre o arquivo em um app do seu computador pelo stella desktop.",
@@ -5545,6 +5556,7 @@
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
       "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
       "pdfSigning": {
+        "alreadySigningTitle": "Já há uma assinatura em andamento no stella desktop",
         "cancelledBaseVersionDescription": "O documento mudou durante a assinatura. Abra a versão mais recente e assine novamente.",
         "cancelledCertificateDescription": "O certificado escolhido não pode ser usado para assinar. Escolha um que permita assinaturas digitais.",
         "cancelledCertifiedDescription": "Este PDF é certificado, e a certificação não permite novas assinaturas.",
@@ -5565,6 +5577,9 @@
         "inProgressDescription": "Este arquivo já está sendo assinado. Conclua ou cancele essa assinatura no stella desktop primeiro.",
         "noFileDescription": "Este documento não tem arquivo para assinar.",
         "notAPdfDescription": "Somente arquivos PDF podem ser assinados.",
+        "notOpeningConnect": "Não abriu? Conecte o stella desktop",
+        "notPickedUpDescription": "O stella desktop pode não estar aberto ou conectado a esta conta. Conecte-o e tente novamente.",
+        "notPickedUpTitle": "O stella desktop não abriu o PDF",
         "placementBox": "Posição do carimbo",
         "placementConfirm": "Abrir o stella desktop",
         "placementDescription": "Escolha como a assinatura aparece no PDF.",
@@ -5579,10 +5594,12 @@
         "placementTooSmall": "Esta página é pequena demais para um carimbo. Escolha outra página.",
         "placementVisible": "Carimbo visível",
         "placementVisibleDescription": "Um quadro na página mostra quem assinou e quando.",
+        "preparingDescription": "Preparando o PDF para o stella desktop.",
         "readOnlyDescription": "Este documento é somente leitura.",
         "signedDescription": "A assinatura foi salva como a versão {versionNumber, number}.",
         "signedDescriptionNoVersion": "A assinatura foi salva como uma nova versão.",
         "signedTitle": "PDF assinado",
+        "signingLabel": "Assinando no stella desktop…",
         "stampLocation": "Local",
         "stampRejectedDescription": "Não é possível colocar o carimbo nesse local. Posicione-o novamente e tente outra vez.",
         "stampSignedBy": "Assinado digitalmente por",

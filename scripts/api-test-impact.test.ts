@@ -13,6 +13,7 @@ import * as v from "valibot";
 import {
   API_ALL_RULES,
   API_SHARD_SECONDS,
+  analyzeModule,
   selectApiTestImpact,
 } from "./api-test-impact";
 
@@ -217,6 +218,77 @@ test("parse errors, unresolved changed imports, deleted modules and selector exc
   ).toBe("all");
 });
 
+test("an executable script with a shebang keeps a failure-strict plan selective", () => {
+  withRepository((root, write) => {
+    write(
+      "apps/api/scripts/tool.ts",
+      '#!/usr/bin/env bun\nimport { value } from "../src/handler";\nexport const tool = value;',
+    );
+    write("apps/api/scripts/tool.test.ts", 'import "./tool";');
+    const plan = selectApiTestImpact({
+      root,
+      changed: ["apps/api/src/handler.ts"],
+      graphFailurePolicy: "all",
+    });
+    expect(plan.mode).toBe("selected");
+    expect(plan.files.toSorted()).toEqual([
+      "scripts/tool.test.ts",
+      "src/handler.test.ts",
+    ]);
+  });
+});
+
+test("prose about globs or directory reads does not make a module a scanner", () => {
+  withRepository((root, write) => {
+    write(
+      "apps/api/src/handler.ts",
+      '/** Glob matching every index; never readdir here. */\n// import(name) in prose\nexport const value = "ok";',
+    );
+    const plan = selectApiTestImpact({
+      root,
+      changed: ["packages/example/src/feature.ts"],
+    });
+    expect(plan.mode).toBe("none");
+    write(
+      "apps/api/src/handler.ts",
+      'export const files = [...new Bun.Glob("*.json").scanSync()];',
+    );
+    expect(
+      selectApiTestImpact({
+        root,
+        changed: ["packages/example/src/feature.ts"],
+      }).files,
+    ).toEqual(["src/handler.test.ts"]);
+  });
+});
+
+test("every tracked API and workspace module is scannable by the import graph", () => {
+  const listed = Bun.spawnSync(
+    ["git", "ls-files", "-z", "apps/api", "packages"],
+    {
+      cwd: path.resolve(import.meta.dir, ".."),
+    },
+  );
+  expect(listed.exitCode).toBe(0);
+  const modules = listed.stdout
+    .toString()
+    .split("\0")
+    .filter((file) => /\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file));
+  expect(modules.length).toBeGreaterThan(1000);
+  const unscannable = modules.filter((file) => {
+    try {
+      analyzeModule(
+        file,
+        readFileSync(path.resolve(import.meta.dir, "..", file), "utf-8"),
+      );
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  expect(unscannable).toEqual([]);
+}, 30_000);
+
 test("duration budgeting uses selected work only and never creates an empty shard", () => {
   withRepository((root, write) => {
     for (const seconds of [
@@ -275,8 +347,19 @@ test("computed template imports and require calls retain their test importers", 
   });
 });
 
-// Two repository graph walks take about 3 s serial; allow 3x under parallel CI.
+// Two walks over the real repository graph: the limit only catches a hang.
+// Their cost grows with the graph, the number of tests and the runner's load,
+// so it is not a performance budget (the scan test above uses the same limit).
 test("the repository graph reaches real handler tests and workspace consumers", () => {
+  const listed = Bun.spawnSync(["git", "ls-files", "-z", "apps/api"], {
+    cwd: path.resolve(import.meta.dir, ".."),
+  });
+  expect(listed.exitCode).toBe(0);
+  const apiTestCount = listed.stdout
+    .toString()
+    .split("\0")
+    .filter((file) => /\.test\.[cm]?[jt]sx?$/u.test(file)).length;
+  expect(apiTestCount).toBeGreaterThan(100);
   const handler = selectApiTestImpact({
     changed: ["apps/api/src/handlers/case-law/provisions/response.ts"],
   });
@@ -289,7 +372,10 @@ test("the repository graph reaches real handler tests and workspace consumers", 
   });
   expect(pkg.mode).toBe("selected");
   expect(pkg.files).toContain("src/handlers/api-keys/list.db.test.ts");
-}, 9000);
+  // A selector that returns every test must not pass as "selected".
+  expect(handler.files.length).toBeLessThan(apiTestCount);
+  expect(pkg.files.length).toBeLessThan(apiTestCount);
+}, 30_000);
 
 test("selection is a deterministic union through cycles, duplicates and reordered changes", () => {
   withRepository((root, write) => {

@@ -21,6 +21,7 @@ import {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 import {
@@ -510,7 +511,7 @@ const documentProcessingRemediationProjection = v.variant("type", [
   projectionBranch(
     v.strictObject({
       type: v.literal("action"),
-      tool: v.literal("invoke_capability"),
+      tool: v.literal(MCP_CAPABILITY_EXECUTORS.write),
       // Internal chat cannot invoke generic capabilities. Strip arguments
       // defensively if this unreachable branch is ever returned.
       arguments: strippedField(),

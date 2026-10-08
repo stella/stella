@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Salvestamata",
-      "failedTitle": "Teie muudatust ei salvestatud",
-      "saved": "Salvestatud",
-      "saving": "Salvestamine…"
+      "failedTitle": "Teie muudatust ei salvestatud"
     },
     "sourceMediumTooltip": "Allika kandja on neutraalne kirjeldus ega vähenda iseenesest kindlust.",
     "states": {
@@ -1271,6 +1269,8 @@
     "officeCitationUnavailable": "See viide pole enam saadaval.",
     "openCitation": "Ava viide {label}",
     "openThread": "Ava vestlus",
+    "overlayLoadFailed": "Dokumendi vestlust ei õnnestunud laadida.",
+    "overlayUpdated": "stella on uuendatud. Dokumendi vestluse kasutamiseks laadige leht uuesti.",
     "pastedChars": "Kleebitud · {count} märki",
     "pastedText": {
       "expand": "Näita kogu teksti",
@@ -1879,6 +1879,8 @@
     "saveAndLeave": "Salvesta ja lahku",
     "saveAsPdf": "Salvesta PDF-na",
     "saveChanges": "Salvesta muudatused",
+    "saved": "Salvestatud",
+    "saving": "Salvestamine…",
     "scopeThisPage": "(see leht)",
     "scrollToBottom": "Keri alla",
     "scrollToTop": "Keri üles",
@@ -3571,6 +3573,11 @@
       "askContentLabel": "Vastuse tüüp",
       "askQuestionLabel": "Küsimus",
       "askQuestionPlaceholder": "Mida peaksime igast dokumendist välja lugema? Käsitsi sisestamiseks jätke tühjaks.",
+      "autosave": {
+        "failed": "Salvestamine ebaõnnestus",
+        "nameMissing": "Salvestamata: lisage nimi",
+        "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
+      },
       "check": "Kasuta tehisintellekti asemel täpset reeglit",
       "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
       "checkKind": {
@@ -3600,6 +3607,7 @@
       "deletePlaybook": "Kustuta playbook",
       "deletePosition": "Kustuta seisukoht",
       "deleted": "Playbook kustutatud",
+      "deletedElsewhere": "See playbook on kustutatud.",
       "derivedAutomatically": "Eraldusküsimus ja vastuse vorming luuakse selle positsiooni põhjal. Midagi pole vaja seadistada.",
       "derivedQuestion": "Eraldusküsimus",
       "derivedType": "Vastuse vorming",
@@ -3652,10 +3660,12 @@
       },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
       "noSettledPosition": "Kindlaks määratud seisukoht puudub",
+      "openInPane": "Ava playbook",
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
       "positionOfTotal": "Seisukoht {index}/{total}",
+      "positionRemoved": "Seisukoht eemaldatud",
       "positions": "Seisukohad",
       "recent": "Hiljuti kasutatud",
       "recommended": "Soovitatud lähtekohad",
@@ -5524,6 +5534,7 @@
       "desktopGate": {
         "alreadyInstalled": "Juba paigaldatud? Ühenda",
         "connect": "Ühenda stella desktop",
+        "connected": "stella desktop on ühendatud",
         "editNone": "Laadi alla stella desktop, et seda faili muuta",
         "editOutdated": "Uuenda stella desktop, et muuta",
         "editReason": "Arvutis muutmine avab faili stella desktopi kaudu sinu arvuti rakenduses.",
@@ -5545,6 +5556,7 @@
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
       "ocrQueued": "Tekstituvastus lisati järgmisse OCR-i paketti",
       "pdfSigning": {
+        "alreadySigningTitle": "Allkirjastamine on stella desktopis juba pooleli",
         "cancelledBaseVersionDescription": "Dokument muutus allkirjastamise ajal. Ava uusim versioon ja allkirjasta uuesti.",
         "cancelledCertificateDescription": "Valitud sertifikaati ei saa allkirjastamiseks kasutada. Vali sertifikaat, mis lubab digiallkirja.",
         "cancelledCertifiedDescription": "See PDF on sertifitseeritud ja sertifitseerimine ei luba rohkem allkirju lisada.",
@@ -5565,6 +5577,9 @@
         "inProgressDescription": "Seda faili juba allkirjastatakse. Lõpeta või tühista see allkirjastamine stella desktopis enne.",
         "noFileDescription": "Sellel dokumendil pole allkirjastatavat faili.",
         "notAPdfDescription": "Allkirjastada saab ainult PDF-faile.",
+        "notOpeningConnect": "Ei avane? Ühenda stella desktop",
+        "notPickedUpDescription": "stella desktop ei pruugi töötada või pole selle kontoga ühendatud. Ühenda see ja proovi uuesti.",
+        "notPickedUpTitle": "stella desktop ei avanud PDF-i",
         "placementBox": "Templi asukoht",
         "placementConfirm": "Ava stella desktop",
         "placementDescription": "Vali, kuidas allkiri PDF-is paistab.",
@@ -5579,10 +5594,12 @@
         "placementTooSmall": "See lehekülg on templi jaoks liiga väike. Vali mõni teine lehekülg.",
         "placementVisible": "Nähtav tempel",
         "placementVisibleDescription": "Leheküljel olev kast näitab, kes ja millal allkirjastas.",
+        "preparingDescription": "PDF-i ettevalmistamine stella desktopi jaoks.",
         "readOnlyDescription": "See dokument on kirjutuskaitstud.",
         "signedDescription": "Allkiri salvestati versioonina {versionNumber, number}.",
         "signedDescriptionNoVersion": "Allkiri salvestati uue versioonina.",
         "signedTitle": "PDF allkirjastatud",
+        "signingLabel": "Allkirjastamine stella desktopis…",
         "stampLocation": "Asukoht",
         "stampRejectedDescription": "Templit ei saa sinna paigutada. Paiguta see uuesti ja proovi uuesti.",
         "stampSignedBy": "Digitaalselt allkirjastanud",

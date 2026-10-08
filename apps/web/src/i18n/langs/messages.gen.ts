@@ -307,8 +307,6 @@ type Messages = {
     "save": {
       "failed": "Not saved";
       "failedTitle": "Your change was not saved";
-      "saved": "Saved";
-      "saving": "Saving…";
     };
     "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.";
     "states": {
@@ -1274,6 +1272,8 @@ type Messages = {
     "officeCitationUnavailable": "This citation is no longer available.";
     "openCitation": "Open citation {label}";
     "openThread": "Open conversation";
+    "overlayLoadFailed": "The document chat couldn't load.";
+    "overlayUpdated": "stella was updated. Reload the page to use the document chat.";
     "pastedChars": "Pasted · {count} chars";
     "pastedText": {
       "expand": "Show full text";
@@ -1882,6 +1882,8 @@ type Messages = {
     "saveAndLeave": "Save and leave";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
+    "saved": "Saved";
+    "saving": "Saving…";
     "scopeThisPage": "(this page)";
     "scrollToBottom": "Scroll to bottom";
     "scrollToTop": "Scroll to top";
@@ -3574,6 +3576,11 @@ type Messages = {
       "askContentLabel": "Answer type";
       "askQuestionLabel": "Question";
       "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
+      "autosave": {
+        "failed": "Could not save";
+        "nameMissing": "Not saved: add a name";
+        "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention";
+      };
       "check": "Use an exact rule instead of AI";
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";
       "checkKind": {
@@ -3603,6 +3610,7 @@ type Messages = {
       "deletePlaybook": "Delete playbook";
       "deletePosition": "Delete position";
       "deleted": "Playbook deleted";
+      "deletedElsewhere": "This playbook has been deleted.";
       "derivedAutomatically": "The extraction question and answer format are generated from this position. No setup is needed.";
       "derivedQuestion": "Extraction question";
       "derivedType": "Answer format";
@@ -3655,10 +3663,12 @@ type Messages = {
       };
       "noPositions": "No positions yet. Add the first one.";
       "noSettledPosition": "No settled position";
+      "openInPane": "Open playbook";
       "optionPlaceholder": "Option value";
       "optionsLabel": "Options";
       "outline": "Outline";
       "positionOfTotal": "Position {index} of {total}";
+      "positionRemoved": "Position removed";
       "positions": "Positions";
       "recent": "Recently used";
       "recommended": "Recommended starters";
@@ -5527,6 +5537,7 @@ type Messages = {
       "desktopGate": {
         "alreadyInstalled": "Already installed? Connect it";
         "connect": "Connect stella desktop";
+        "connected": "stella desktop is connected";
         "editNone": "Download stella desktop to edit this file";
         "editOutdated": "Update stella desktop to edit";
         "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.";
@@ -5548,6 +5559,7 @@ type Messages = {
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued for the next OCR batch";
       "pdfSigning": {
+        "alreadySigningTitle": "Signing is already in progress in stella desktop";
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.";
         "cancelledCertificateDescription": "The selected certificate cannot be used for signing. Choose one that allows digital signatures.";
         "cancelledCertifiedDescription": "This PDF is certified, and its certification does not allow further signatures.";
@@ -5568,6 +5580,9 @@ type Messages = {
         "inProgressDescription": "This file is already being signed. Finish or cancel that signing in stella desktop first.";
         "noFileDescription": "This document has no file to sign.";
         "notAPdfDescription": "Only PDF files can be signed.";
+        "notOpeningConnect": "Not opening? Connect stella desktop";
+        "notPickedUpDescription": "stella desktop may not be running or connected to this account. Connect it, then retry.";
+        "notPickedUpTitle": "stella desktop did not open the PDF";
         "placementBox": "Stamp position";
         "placementConfirm": "Open stella desktop";
         "placementDescription": "Choose how the signature appears in the PDF.";
@@ -5582,10 +5597,12 @@ type Messages = {
         "placementTooSmall": "This page is too small for a stamp. Choose another page.";
         "placementVisible": "Visible stamp";
         "placementVisibleDescription": "A box on the page shows who signed and when.";
+        "preparingDescription": "Preparing the PDF for stella desktop.";
         "readOnlyDescription": "This document is read-only.";
         "signedDescription": "The signature was saved as version {versionNumber, number}.";
         "signedDescriptionNoVersion": "The signature was saved as a new version.";
         "signedTitle": "PDF signed";
+        "signingLabel": "Signing in stella desktop…";
         "stampLocation": "Location";
         "stampRejectedDescription": "The stamp could not be placed there. Place it again and retry.";
         "stampSignedBy": "Digitally signed by";

@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Nie zapisano",
-      "failedTitle": "Twoja zmiana nie została zapisana",
-      "saved": "Zapisano",
-      "saving": "Zapisywanie…"
+      "failedTitle": "Twoja zmiana nie została zapisana"
     },
     "sourceMediumTooltip": "Nośnik źródła — neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
@@ -1271,6 +1269,8 @@
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
     "openCitation": "Otwórz cytowanie {label}",
     "openThread": "Otwórz konwersację",
+    "overlayLoadFailed": "Nie udało się wczytać czatu dokumentu.",
+    "overlayUpdated": "stella została zaktualizowana. Odśwież stronę, aby korzystać z czatu dokumentu.",
     "pastedChars": "Wklejono · {count} znaków",
     "pastedText": {
       "expand": "Pokaż pełny tekst",
@@ -1879,6 +1879,8 @@
     "saveAndLeave": "Zapisz i wyjdź",
     "saveAsPdf": "Zapisz jako PDF",
     "saveChanges": "Zapisz zmiany",
+    "saved": "Zapisano",
+    "saving": "Zapisywanie…",
     "scopeThisPage": "(ta strona)",
     "scrollToBottom": "Przewiń na dół",
     "scrollToTop": "Przewiń do góry",
@@ -3571,6 +3573,11 @@
       "askContentLabel": "Typ odpowiedzi",
       "askQuestionLabel": "Treść pytania",
       "askQuestionPlaceholder": "Co odczytać z każdego dokumentu? Pozostaw puste, aby wprowadzić ręcznie.",
+      "autosave": {
+        "failed": "Nie udało się zapisać",
+        "nameMissing": "Nie zapisano: podaj nazwę",
+        "positionsNeedAttention": "Nie zapisano: {count, plural, one {# stanowisko wymaga} few {# stanowiska wymagają} many {# stanowisk wymaga} other {# stanowiska wymaga}} uwagi"
+      },
       "check": "Użyj dokładnej reguły zamiast AI",
       "checkHint": "Do mierzalnych warunków, na przykład: termin płatności ≤ 30 dni.",
       "checkKind": {
@@ -3600,6 +3607,7 @@
       "deletePlaybook": "Usuń playbook",
       "deletePosition": "Usuń stanowisko",
       "deleted": "Playbook usunięty",
+      "deletedElsewhere": "Ten playbook został usunięty.",
       "derivedAutomatically": "Pytanie wyodrębniające i format odpowiedzi są generowane na podstawie tej pozycji. Nie trzeba nic konfigurować.",
       "derivedQuestion": "Pytanie wyodrębniające",
       "derivedType": "Format odpowiedzi",
@@ -3652,10 +3660,12 @@
       },
       "noPositions": "Brak stanowisk. Dodaj pierwsze.",
       "noSettledPosition": "Brak ustalonego stanowiska",
+      "openInPane": "Otwórz playbook",
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",
       "outline": "Spis treści",
       "positionOfTotal": "Stanowisko {index} z {total}",
+      "positionRemoved": "Stanowisko usunięte",
       "positions": "Stanowiska",
       "recent": "Ostatnio używane",
       "recommended": "Polecane szablony",
@@ -5524,6 +5534,7 @@
       "desktopGate": {
         "alreadyInstalled": "Masz już zainstalowane? Połącz",
         "connect": "Połącz stella desktop",
+        "connected": "stella desktop jest połączony",
         "editNone": "Pobierz stella desktop, aby edytować ten plik",
         "editOutdated": "Zaktualizuj stella desktop, aby edytować",
         "editReason": "Edycja na komputerze otwiera plik w aplikacji na Twoim komputerze przez stella desktop.",
@@ -5545,6 +5556,7 @@
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
       "ocrQueued": "Rozpoznawanie tekstu dodane do następnej partii OCR",
       "pdfSigning": {
+        "alreadySigningTitle": "Podpisywanie w stella desktop już trwa",
         "cancelledBaseVersionDescription": "Dokument zmienił się w trakcie podpisywania. Otwórz najnowszą wersję i podpisz go ponownie.",
         "cancelledCertificateDescription": "Wybrany certyfikat nie nadaje się do podpisu. Wybierz taki, który pozwala na podpis cyfrowy.",
         "cancelledCertifiedDescription": "Ten PDF jest certyfikowany, a jego certyfikacja nie pozwala na kolejne podpisy.",
@@ -5565,6 +5577,9 @@
         "inProgressDescription": "Ten plik jest już podpisywany. Najpierw dokończ lub anuluj to podpisywanie w stella desktop.",
         "noFileDescription": "Ten dokument nie ma pliku do podpisania.",
         "notAPdfDescription": "Podpisać można tylko pliki PDF.",
+        "notOpeningConnect": "Nic się nie otwiera? Połącz stella desktop",
+        "notPickedUpDescription": "stella desktop może nie być uruchomiony lub połączony z tym kontem. Połącz go i spróbuj ponownie.",
+        "notPickedUpTitle": "stella desktop nie otworzył pliku PDF",
         "placementBox": "Położenie pieczęci",
         "placementConfirm": "Otwórz stella desktop",
         "placementDescription": "Wybierz, jak podpis ma wyglądać w pliku PDF.",
@@ -5579,10 +5594,12 @@
         "placementTooSmall": "Ta strona jest za mała na pieczęć. Wybierz inną stronę.",
         "placementVisible": "Widoczna pieczęć",
         "placementVisibleDescription": "Ramka na stronie pokazuje, kto i kiedy podpisał.",
+        "preparingDescription": "Przygotowywanie pliku PDF dla stella desktop.",
         "readOnlyDescription": "Ten dokument jest tylko do odczytu.",
         "signedDescription": "Podpis zapisano jako wersję {versionNumber, number}.",
         "signedDescriptionNoVersion": "Podpis zapisano jako nową wersję.",
         "signedTitle": "PDF podpisany",
+        "signingLabel": "Podpisywanie w stella desktop…",
         "stampLocation": "Miejsce",
         "stampRejectedDescription": "Nie można umieścić pieczęci w tym miejscu. Umieść ją ponownie i spróbuj jeszcze raz.",
         "stampSignedBy": "Podpisany cyfrowo przez",

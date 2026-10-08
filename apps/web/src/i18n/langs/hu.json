@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Nincs mentve",
-      "failedTitle": "A módosítás mentése sikertelen volt",
-      "saved": "Mentve",
-      "saving": "Mentés…"
+      "failedTitle": "A módosítás mentése sikertelen volt"
     },
     "sourceMediumTooltip": "A forrás adathordozója — semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
     "states": {
@@ -1271,6 +1269,8 @@
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
     "openCitation": "Hivatkozás megnyitása: {label}",
     "openThread": "Beszélgetés megnyitása",
+    "overlayLoadFailed": "A dokumentum csevegését nem sikerült betölteni.",
+    "overlayUpdated": "A stella frissült. Töltse be újra az oldalt a dokumentum csevegésének használatához.",
     "pastedChars": "Beillesztve · {count} karakter",
     "pastedText": {
       "expand": "Teljes szöveg megjelenítése",
@@ -1879,6 +1879,8 @@
     "saveAndLeave": "Mentés és kilépés",
     "saveAsPdf": "Mentés PDF-ként",
     "saveChanges": "Változtatások mentése",
+    "saved": "Mentve",
+    "saving": "Mentés…",
     "scopeThisPage": "(ez az oldal)",
     "scrollToBottom": "Görgetés az aljára",
     "scrollToTop": "Görgetés a tetejére",
@@ -3571,6 +3573,11 @@
       "askContentLabel": "Válasz típusa",
       "askQuestionLabel": "A kérdés szövege",
       "askQuestionPlaceholder": "Mit olvassunk ki minden dokumentumból? Hagyja üresen a kézi bevitelhez.",
+      "autosave": {
+        "failed": "A mentés nem sikerült",
+        "nameMissing": "Nincs mentve: adjon meg egy nevet",
+        "positionsNeedAttention": "Nincs mentve: {count, plural, one {# álláspont} other {# álláspont}} figyelmet igényel"
+      },
       "check": "Pontos szabály használata AI helyett",
       "checkHint": "Mérhető feltételekhez, például: fizetési határidő ≤ 30 nap.",
       "checkKind": {
@@ -3600,6 +3607,7 @@
       "deletePlaybook": "Playbook törlése",
       "deletePosition": "Álláspont törlése",
       "deleted": "Playbook törölve",
+      "deletedElsewhere": "Ezt a playbookot törölték.",
       "derivedAutomatically": "A kinyerési kérdés és a válaszformátum ebből a pozícióból készül. Nincs szükség beállításra.",
       "derivedQuestion": "Kinyerési kérdés",
       "derivedType": "Válaszformátum",
@@ -3652,10 +3660,12 @@
       },
       "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
       "noSettledPosition": "Nincs kialakult álláspont",
+      "openInPane": "Playbook megnyitása",
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
       "positionOfTotal": "{index}. álláspont, összesen {total}",
+      "positionRemoved": "Álláspont eltávolítva",
       "positions": "Álláspontok",
       "recent": "Nemrég használt",
       "recommended": "Ajánlott kiindulópontok",
@@ -5524,6 +5534,7 @@
       "desktopGate": {
         "alreadyInstalled": "Már telepítve van? Csatlakoztatás",
         "connect": "stella desktop csatlakoztatása",
+        "connected": "A stella desktop csatlakoztatva van",
         "editNone": "Töltse le a stella desktopot a fájl szerkesztéséhez",
         "editOutdated": "Frissítse a stella desktopot a szerkesztéshez",
         "editReason": "Az asztali szerkesztés a stella desktopon keresztül a számítógépén lévő alkalmazásban nyitja meg a fájlt.",
@@ -5545,6 +5556,7 @@
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
       "ocrQueued": "A szövegfelismerés bekerült a következő OCR-kötegbe",
       "pdfSigning": {
+        "alreadySigningTitle": "Az aláírás már folyamatban van a stella desktopban",
         "cancelledBaseVersionDescription": "A dokumentum aláírás közben megváltozott. Nyisd meg a legújabb verziót, és írd alá újra.",
         "cancelledCertificateDescription": "A kiválasztott tanúsítvány nem használható aláírásra. Válassz olyat, amely engedélyezi a digitális aláírást.",
         "cancelledCertifiedDescription": "Ez a PDF hitelesített, és a hitelesítése nem enged további aláírásokat.",
@@ -5565,6 +5577,9 @@
         "inProgressDescription": "Ezt a fájlt már aláírják. Előbb fejezd be vagy szakítsd meg azt az aláírást a stella desktopban.",
         "noFileDescription": "Ehhez a dokumentumhoz nem tartozik aláírható fájl.",
         "notAPdfDescription": "Csak PDF-fájlok írhatók alá.",
+        "notOpeningConnect": "Nem nyílik meg? Csatlakoztassa a stella desktopot",
+        "notPickedUpDescription": "Lehet, hogy a stella desktop nem fut, vagy nincs ehhez a fiókhoz csatlakoztatva. Csatlakoztassa, majd próbálja újra.",
+        "notPickedUpTitle": "A stella desktop nem nyitotta meg a PDF-et",
         "placementBox": "A bélyegző helye",
         "placementConfirm": "stella desktop megnyitása",
         "placementDescription": "Válaszd ki, hogyan jelenjen meg az aláírás a PDF-ben.",
@@ -5579,10 +5594,12 @@
         "placementTooSmall": "Ez az oldal túl kicsi a bélyegzőhöz. Válassz másik oldalt.",
         "placementVisible": "Látható bélyegző",
         "placementVisibleDescription": "Egy keret az oldalon mutatja, ki és mikor írta alá.",
+        "preparingDescription": "A PDF előkészítése a stella desktop számára.",
         "readOnlyDescription": "Ez a dokumentum csak olvasható.",
         "signedDescription": "Az aláírás a(z) {versionNumber, number}. verzióként lett mentve.",
         "signedDescriptionNoVersion": "Az aláírás új verzióként lett mentve.",
         "signedTitle": "A PDF alá van írva",
+        "signingLabel": "Aláírás a stella desktopban…",
         "stampLocation": "Hely",
         "stampRejectedDescription": "A bélyegzőt nem lehet oda elhelyezni. Helyezd el újra, és próbáld meg ismét.",
         "stampSignedBy": "Digitálisan aláírta",

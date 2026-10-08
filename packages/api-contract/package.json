@@ -11,6 +11,7 @@
     "./visual-preview": "./src/visual-preview.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
     "./limits": "./src/limits.ts",
+    "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
     "./audit-log": "./src/audit-log.ts",
     "./verification-run-caps": "./src/verification-run-caps.ts",

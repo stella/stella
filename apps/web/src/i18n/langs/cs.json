@@ -303,9 +303,7 @@
     },
     "save": {
       "failed": "Neuloženo",
-      "failedTitle": "Vaše změna nebyla uložena",
-      "saved": "Uloženo",
-      "saving": "Ukládání…"
+      "failedTitle": "Vaše změna nebyla uložena"
     },
     "sourceMediumTooltip": "Médium zdroje — neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
@@ -1271,6 +1269,8 @@
     "officeCitationUnavailable": "Tato citace už není dostupná.",
     "openCitation": "Otevřít citaci {label}",
     "openThread": "Otevřít konverzaci",
+    "overlayLoadFailed": "Chat k dokumentu se nepodařilo načíst.",
+    "overlayUpdated": "stella byla aktualizována. Chcete-li používat chat k dokumentu, načtěte stránku znovu.",
     "pastedChars": "Vloženo · {count} znaků",
     "pastedText": {
       "expand": "Zobrazit celý text",
@@ -1879,6 +1879,8 @@
     "saveAndLeave": "Uložit a odejít",
     "saveAsPdf": "Uložit jako PDF",
     "saveChanges": "Uložit změny",
+    "saved": "Uloženo",
+    "saving": "Ukládání…",
     "scopeThisPage": "(tato stránka)",
     "scrollToBottom": "Posunout dolů",
     "scrollToTop": "Posunout nahoru",
@@ -3571,6 +3573,11 @@
       "askContentLabel": "Typ odpovědi",
       "askQuestionLabel": "Otázka",
       "askQuestionPlaceholder": "Co se má z každého dokumentu vyčíst? Ponechte prázdné pro ruční zadání.",
+      "autosave": {
+        "failed": "Nepodařilo se uložit",
+        "nameMissing": "Neuloženo: zadejte název",
+        "positionsNeedAttention": "Neuloženo: {count, plural, one {# pozice vyžaduje} few {# pozice vyžadují} other {# pozic vyžaduje}} pozornost"
+      },
       "check": "Použít přesné pravidlo místo AI",
       "checkHint": "Pro měřitelné podmínky, například: splatnost ≤ 30 dnů.",
       "checkKind": {
@@ -3600,6 +3607,7 @@
       "deletePlaybook": "Smazat playbook",
       "deletePosition": "Smazat pozici",
       "deleted": "Playbook smazán",
+      "deletedElsewhere": "Tento playbook byl smazán.",
       "derivedAutomatically": "Otázka a formát odpovědi se vygenerují z této pozice. Není třeba nic nastavovat.",
       "derivedQuestion": "Otázka pro získání odpovědi",
       "derivedType": "Formát odpovědi",
@@ -3652,10 +3660,12 @@
       },
       "noPositions": "Zatím žádné pozice. Přidejte první.",
       "noSettledPosition": "Bez ustálené pozice",
+      "openInPane": "Otevřít playbook",
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
       "positionOfTotal": "Pozice {index} z {total}",
+      "positionRemoved": "Pozice odstraněna",
       "positions": "Pozice",
       "recent": "Nedávno použité",
       "recommended": "Doporučené výchozí playbooky",
@@ -5524,6 +5534,7 @@
       "desktopGate": {
         "alreadyInstalled": "Už nainstalováno? Připojit",
         "connect": "Připojit stella desktop",
+        "connected": "stella desktop je připojený",
         "editNone": "Stáhněte stella desktop a upravte tento soubor",
         "editOutdated": "Aktualizujte stella desktop a upravujte",
         "editReason": "Úpravy na počítači otevírají soubor v aplikaci ve vašem počítači přes stella desktop.",
@@ -5545,6 +5556,7 @@
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
       "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "pdfSigning": {
+        "alreadySigningTitle": "Podepisování ve stella desktop už probíhá",
         "cancelledBaseVersionDescription": "Dokument se během podepisování změnil. Otevřete nejnovější verzi a podepište ho znovu.",
         "cancelledCertificateDescription": "Vybraný certifikát nelze použít k podpisu. Zvolte certifikát, který umožňuje digitální podpis.",
         "cancelledCertifiedDescription": "Toto PDF je certifikované a jeho certifikace nepovoluje další podpisy.",
@@ -5565,6 +5577,9 @@
         "inProgressDescription": "Tento soubor se už podepisuje. Nejprve toto podepisování ve stella desktop dokončete nebo zrušte.",
         "noFileDescription": "K tomuto dokumentu není připojen žádný soubor k podpisu.",
         "notAPdfDescription": "Podepisovat lze pouze soubory PDF.",
+        "notOpeningConnect": "Neotevírá se? Připojte stella desktop",
+        "notPickedUpDescription": "stella desktop možná neběží nebo není připojený k tomuto účtu. Připojte ho a zkuste to znovu.",
+        "notPickedUpTitle": "stella desktop PDF neotevřel",
         "placementBox": "Umístění razítka",
         "placementConfirm": "Otevřít stella desktop",
         "placementDescription": "Zvolte, jak se podpis v PDF zobrazí.",
@@ -5579,10 +5594,12 @@
         "placementTooSmall": "Tato stránka je pro razítko příliš malá. Zvolte jinou stránku.",
         "placementVisible": "Viditelné razítko",
         "placementVisibleDescription": "Rámeček na stránce ukazuje, kdo a kdy podepsal.",
+        "preparingDescription": "Připravuje se PDF pro stella desktop.",
         "readOnlyDescription": "Tento dokument je jen pro čtení.",
         "signedDescription": "Podpis byl uložen jako verze {versionNumber, number}.",
         "signedDescriptionNoVersion": "Podpis byl uložen jako nová verze.",
         "signedTitle": "PDF podepsáno",
+        "signingLabel": "Podepisuje se ve stella desktop…",
         "stampLocation": "Místo",
         "stampRejectedDescription": "Razítko na toto místo nelze umístit. Umístěte ho znovu a zkuste to znovu.",
         "stampSignedBy": "Digitálně podepsal",

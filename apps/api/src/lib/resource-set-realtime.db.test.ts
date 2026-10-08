@@ -36,7 +36,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // An open matter tab refreshes its lists from `resource_set_updated` events on
 // the matter's event stream. A write must announce itself there whichever
-// transport ran it: the REST route the web app calls, and `invoke_capability`,
+// transport ran it: the REST route the web app calls, and `write_capability`,
 // which MCP clients and the CLI use. Both drive the real handler, the real
 // database and the real event stream here.
 
@@ -232,7 +232,7 @@ const mcpUpdateMatter = async (
           await Promise.resolve({ ok: true, retryAfterSeconds: 0 }),
       },
     },
-    toolName: "invoke_capability",
+    toolName: "write_capability",
   });
 };
 
@@ -283,7 +283,7 @@ describe("a matter write announces its resource set on the matter's event stream
     }
   });
 
-  test("through invoke_capability (MCP and CLI): once on success, never on a refusal or a rolled-back write", async () => {
+  test("through write_capability (MCP and CLI): once on success, never on a refusal or a rolled-back write", async () => {
     const fixture = await createMatter();
     const events = await openResourceSetEvents(
       fixture.owner,
