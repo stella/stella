@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/action-admission";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type {
@@ -63,32 +64,7 @@ const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
               createDocumentMattersView: { type: "empty" },
             }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-                continueRequestSecret: async () => {},
-                handleRequestSecret: async () => ({
-                  status: "declined",
-                  target: { type: "mcp-connector", connectorSlug: "test" },
-                }),
-                secretAvailabilityKey: "test-thread",
-                resolveSecretTarget: async () => ({
-                  available: false,
-                  connector: {
-                    connectionId: "sample-connection",
-                    displayName: "Sample connector",
-                    host: "sample.test",
-                    responseDisposition: "normal",
-                  },
-                }),
-              }}
-            >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
               <FormattingProvider locale="en" timeZone="UTC">
                 <ChatEditorProvider>{children}</ChatEditorProvider>
               </FormattingProvider>

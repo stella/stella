@@ -34,7 +34,7 @@ type RecoverChatSecretOptions = {
 };
 
 /** Same-decision retries allowed per request before the generic conflict. */
-export const CHAT_SECRET_RETRY_LIMIT = 5;
+const CHAT_SECRET_RETRY_LIMIT = 5;
 
 export const chatSecretSubmissionConflict = () =>
   new HandlerError({

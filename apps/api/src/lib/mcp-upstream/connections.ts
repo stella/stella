@@ -736,7 +736,7 @@ export const proxyMcpToolCall = async ({
   }
 };
 
-export const createSafeMcpFetch = (
+const createSafeMcpFetch = (
   safeOutboundFetchStreamImpl: typeof safeOutboundFetchStream,
   permit: ThirdPartyOutboundPermit,
 ): typeof fetch => {

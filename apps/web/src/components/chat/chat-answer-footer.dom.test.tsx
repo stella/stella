@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import type { ChatSourceDocument } from "@/lib/api-contract";
@@ -54,32 +55,7 @@ const renderWithProviders = (children: ReactNode) => {
           <ChatMattersContext
             value={{ createDocumentMattersView: { type: "empty" } }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-                continueRequestSecret: async () => {},
-                handleRequestSecret: async () => ({
-                  status: "declined",
-                  target: { type: "mcp-connector", connectorSlug: "test" },
-                }),
-                secretAvailabilityKey: "test-thread",
-                resolveSecretTarget: async () => ({
-                  available: false,
-                  connector: {
-                    connectionId: "sample-connection",
-                    displayName: "Sample connector",
-                    host: "sample.test",
-                    responseDisposition: "normal",
-                  },
-                }),
-              }}
-            >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
               <ChatEditorProvider>{children}</ChatEditorProvider>
             </ChatApprovalContext>
           </ChatMattersContext>
