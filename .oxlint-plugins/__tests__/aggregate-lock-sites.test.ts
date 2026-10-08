@@ -59,6 +59,28 @@ describe("aggregate lock confinement", () => {
       ),
     ).toHaveLength(3);
   });
+  test("requires SQL context for bare RELEASE and ignores release prose", () => {
+    for (const message of [
+      "Release manifest",
+      "Release manifest artifacts",
+      "Release reader locks",
+      "Release reader",
+    ]) {
+      expect(
+        aggregateLockSites(file, `const message = ${JSON.stringify(message)}`),
+      ).toEqual([]);
+    }
+    for (const source of [
+      "sql`RELEASE example`",
+      'sql.raw("RELEASE example")',
+      'tx.execute("RELEASE example")',
+      'connection.query("RELEASE example")',
+      'connection.unsafe("RELEASE example")',
+      'query("RELEASE example")',
+    ]) {
+      expect(aggregateLockSites(file, source)).toHaveLength(1);
+    }
+  });
   test("enumerates every mode and computed builder spelling", () => {
     for (const mode of [
       "update",

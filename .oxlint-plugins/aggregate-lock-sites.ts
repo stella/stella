@@ -34,7 +34,7 @@ const maskSqlLiteralsAndComments = (text: string) =>
         ? part.replaceAll('"', " ")
         : part.replace(/[^\n]/gu, " "),
   );
-const sqlLocks = (text: string) => {
+const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
   const masked = maskSqlLiteralsAndComments(text);
   const matches = [
     ...masked.matchAll(
@@ -42,6 +42,9 @@ const sqlLocks = (text: string) => {
     ),
   ];
   return matches.filter((match) => {
+    if (/^RELEASE$/iu.test(match[0]) && context === "unknown") {
+      return false;
+    }
     const start = masked.lastIndexOf(";", match.index) + 1;
     if (/^(?:SAVEPOINT|RELEASE|ROLLBACK)\b/iu.test(match[0])) {
       return (
@@ -82,7 +85,7 @@ type AddAggregateLockSiteOptions = {
   offset: number;
 };
 type SqlFragmentContextOptions = {
-  node: ts.TemplateExpression;
+  node: ts.Node;
   ast: ts.SourceFile;
   text: string;
 };
@@ -99,6 +102,12 @@ const isSqlFragmentContext = ({
     ts.isPropertyAccessExpression(parent.expression) &&
     parent.expression.name.text === "raw" &&
     parent.expression.expression.getText(ast) === "sql";
+  const executionSql =
+    ts.isCallExpression(parent) &&
+    (ts.isIdentifier(parent.expression)
+      ? ["execute", "query", "unsafe"].includes(parent.expression.text)
+      : ts.isPropertyAccessExpression(parent.expression) &&
+        ["execute", "query", "unsafe"].includes(parent.expression.name.text));
   const statement = text.trimStart();
   const sqlStatement =
     (/^SELECT\b/iu.test(statement) && /\bFROM\b/iu.test(statement)) ||
@@ -106,7 +115,7 @@ const isSqlFragmentContext = ({
       /\b(?:SELECT|UPDATE|DELETE|INSERT)\b/iu.test(statement)) ||
     (/^UPDATE\s+\S+/iu.test(statement) && /\bSET\b/iu.test(statement)) ||
     /^(?:DELETE\s+FROM|INSERT\s+INTO|LOCK\s+TABLE)\b/iu.test(statement);
-  return taggedSql || rawSql || sqlStatement;
+  return taggedSql || rawSql || executionSql || sqlStatement;
 };
 export const aggregateLockSites = (
   file: string,
@@ -121,7 +130,7 @@ export const aggregateLockSites = (
       line: source.slice(0, offset).split("\n").length,
     });
   if (file.endsWith(".sql")) {
-    for (const match of sqlLocks(source)) {
+    for (const match of sqlLocks(source, "sql")) {
       const start = source.lastIndexOf(";", match.index) + 1;
       const end = source.indexOf(";", match.index);
       add({
@@ -180,7 +189,10 @@ export const aggregateLockSites = (
     if (ts.isBinaryExpression(node)) {
       const text = staticText(node);
       if (text !== undefined) {
-        for (const match of sqlLocks(text)) {
+        for (const match of sqlLocks(
+          text,
+          isSqlFragmentContext({ node, ast, text }) ? "sql" : "unknown",
+        )) {
           add({
             primitive: match[0].toLowerCase().replace(/\s+/gu, " "),
             text: node.getText(ast),
@@ -197,7 +209,10 @@ export const aggregateLockSites = (
             .map((span) => ` \${expression} ${span.literal.text}`)
             .join("")
         : node.text;
-      for (const match of sqlLocks(text)) {
+      for (const match of sqlLocks(
+        text,
+        isSqlFragmentContext({ node, ast, text }) ? "sql" : "unknown",
+      )) {
         add({
           primitive: match[0].toLowerCase().replace(/\s+/gu, " "),
           text: node.getText(ast),

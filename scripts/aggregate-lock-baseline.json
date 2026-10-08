@@ -1,11 +1,5 @@
 [
   {
-    "file": ".oxlint-plugins/require-stream-reader-disposal.ts",
-    "fingerprint": "f157f1facc7d00a2b4718c00f6cce0be537381fb9526bad43002d27743618414",
-    "count": 1,
-    "reason": "release in .oxlint-plugins/require-stream-reader-disposal.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
     "file": "apps/api/scripts/backfill-image-thumbnails.ts",
     "fingerprint": "33b1b3dcd11c3837de9181d4f3a2dce7df1aad6faaf8d5ce61a43fa2a3629434",
     "count": 1,
@@ -4062,12 +4056,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on scope.db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/scheduler/jobs.ts",
-    "fingerprint": "b37a9cd7de8a5c6bc447bf9682c228d8aedde52849faec840200c105e857b1f8",
-    "count": 1,
-    "reason": "release in apps/api/src/lib/scheduler/jobs.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
     "file": "apps/api/src/lib/scheduler/runner.ts",
     "fingerprint": "0bddd7cf83ac129ae8478c66e0d7b14c6a5526192eee7e0a6500741277d82101",
     "count": 1,
@@ -4836,18 +4824,6 @@
     "reason": "transaction-boundary in apps/api/src/scripts/seed-polarity-rules.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/landing/src/lib/changelog.ts",
-    "fingerprint": "fc6d99a93b30d132f4b58cee825c84461b192c3a888fb03a95249a236124cbaa",
-    "count": 1,
-    "reason": "release in apps/landing/src/lib/changelog.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
-    "file": "apps/web/src/i18n/langs/messages.gen.ts",
-    "fingerprint": "9c7fab9823427098e0e9e7e3e26cd5c9a5ac2b27ff3e752c8932ff3e29d32535",
-    "count": 1,
-    "reason": "release in apps/web/src/i18n/langs/messages.gen.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
     "file": "packages/db-load-gate/src/heavy-work-slot.ts",
     "fingerprint": "6be0dd69033b010ad690352709fa4bddd499adf13c50d51b458f870caf362d21",
     "count": 1,
@@ -4876,35 +4852,5 @@
     "fingerprint": "e7007abc0471aa3cffc7263aa3a06b64cca632b130144e89c1d11d37b432bbb1",
     "count": 1,
     "reason": "pg_try_advisory_xact_lock( in packages/db-load-gate/src/heavy-work-slot.ts: Existing session coordination remains with its connection owner."
-  },
-  {
-    "file": "scripts/prepare-maintenance-release.ts",
-    "fingerprint": "b0b4af47be5712e965bd947d72dbb2b85dbe0ee367ecfa2309b2527c8dd3f718",
-    "count": 1,
-    "reason": "release in scripts/prepare-maintenance-release.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
-    "file": "scripts/selfhost-tool.ts",
-    "fingerprint": "64ac9494c80199f7f1bde2f76b57b36cb503f9785d772fc5e6c4e2223c1050e0",
-    "count": 1,
-    "reason": "release in scripts/selfhost-tool.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
-    "file": "scripts/selfhost-tool.ts",
-    "fingerprint": "a388b3e0ed85e4bddb6e1183a29e455c60ad315676f539b3b64ae7928abd222a",
-    "count": 1,
-    "reason": "release in scripts/selfhost-tool.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
-    "file": "scripts/selfhost-tool.ts",
-    "fingerprint": "bf55e7c9f5137fc2ab6adc6c5fa1d00f56d972e4b0bfc0bea070c01df11b74be",
-    "count": 1,
-    "reason": "release in scripts/selfhost-tool.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
-  },
-  {
-    "file": "scripts/selfhost-tool.ts",
-    "fingerprint": "e284aeca0835217da149642d5f49fd522ebeef1acf524239c0940b989d7a9f7f",
-    "count": 1,
-    "reason": "release in scripts/selfhost-tool.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
   }
 ]
