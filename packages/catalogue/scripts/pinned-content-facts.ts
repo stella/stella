@@ -1,4 +1,5 @@
 import { Result, TaggedError } from "better-result";
+import type { MaybePromise } from "bun";
 import nodePath from "node:path";
 import * as v from "valibot";
 
@@ -68,15 +69,15 @@ type FileFacts = v.InferOutput<typeof fileSchema>;
 type SkillFacts = v.InferOutput<typeof skillSchema>;
 type EntryFacts = v.InferOutput<typeof entrySchema>;
 export type PinnedSource = {
-  skill: (target: GithubTarget) => Promise<SkillFacts | null>;
+  skill: (target: GithubTarget) => MaybePromise<SkillFacts | null>;
   directory: (args: {
     target: GithubTarget;
     directory: string;
-  }) => Promise<{ itemCount: number; items: GithubContentItem[] }>;
+  }) => MaybePromise<{ itemCount: number; items: GithubContentItem[] }>;
   resource: (args: {
     target: GithubTarget;
     path: string;
-  }) => Promise<FileFacts | null>;
+  }) => MaybePromise<FileFacts | null>;
 };
 export const PINNED_SNAPSHOT_PATH = nodePath.resolve(
   import.meta.dir,
@@ -242,7 +243,7 @@ export const readPinnedSnapshot = async (
   targets: GithubTarget[],
   file = PINNED_SNAPSHOT_PATH,
 ): Promise<PinnedSource> => {
-  const read = await Result.tryPromise(() => Bun.file(file).text());
+  const read = await Result.tryPromise(async () => Bun.file(file).text());
   if (read.isErr()) {
     throw new PinnedContentError({
       message: "Pinned facts are missing; run refresh-pinned",
@@ -310,8 +311,8 @@ export const readPinnedSnapshot = async (
     return item;
   };
   return {
-    skill: async (target) => get(target).skill,
-    directory: async ({ target, directory }) => {
+    skill: (target) => get(target).skill,
+    directory: ({ target, directory }) => {
       const listing = get(target).directories.find(
         (item) => item.path === directory,
       );
@@ -322,7 +323,7 @@ export const readPinnedSnapshot = async (
       }
       return listing;
     },
-    resource: async ({ target, path }) => {
+    resource: ({ target, path }) => {
       const resource = get(target).resources.find((item) => item.path === path);
       if (!resource) {
         throw new PinnedContentError({

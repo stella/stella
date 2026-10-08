@@ -53,6 +53,8 @@ const steps = Object.values(workflow.jobs).flatMap(
 const precedentSteps = Object.values(precedent.jobs).flatMap(
   ({ steps: jobSteps }) => jobSteps,
 );
+const stepPosition = ({ name }: v.InferOutput<typeof stepSchema>) =>
+  steps.findIndex((step) => step.name === name);
 const commandStep = (command: string) =>
   v.parse(
     stepSchema,
@@ -69,22 +71,22 @@ test("refreshes and validates pinned facts even when no upstream revision advanc
   expect(refresh.if).toBeUndefined();
   expect(check.if).toBeUndefined();
   expect(check.env).toBeUndefined();
-  expect(steps.indexOf(bump)).toBeLessThan(steps.indexOf(refresh));
-  expect(steps.indexOf(refresh)).toBeLessThan(steps.indexOf(check));
+  expect(stepPosition(bump)).toBeLessThan(stepPosition(refresh));
+  expect(stepPosition(refresh)).toBeLessThan(stepPosition(check));
 
   const proposals = steps.filter(
-    ({ with: options }) => options?.mode === "refresh-pr",
+    ({ with: options }) => options?.["mode"] === "refresh-pr",
   );
   expect(proposals).toHaveLength(1);
   expect(
     steps.filter(({ uses }) => uses?.includes("/signed-commit@")),
   ).toHaveLength(1);
   const proposal = v.parse(stepSchema, proposals.at(0));
-  expect(proposal.with?.branch).toBe("catalogue/upstream-revs");
+  expect(proposal.with?.["branch"]).toBe("catalogue/upstream-revs");
   expect(proposal.if).not.toContain("update_count");
   expect(proposal.if).not.toContain("changed");
   expect(proposal.if).toBe("steps.app-token.outcome == 'success'");
-  expect(steps.indexOf(check)).toBeLessThan(steps.indexOf(proposal));
+  expect(stepPosition(check)).toBeLessThan(stepPosition(proposal));
 });
 
 test("uses the reviewed app-token producer so the refresh PR triggers CI", () => {
@@ -109,14 +111,16 @@ test("uses the reviewed app-token producer so the refresh PR triggers CI", () =>
 
   const proposal = v.parse(
     stepSchema,
-    steps.find(({ with: options }) => options?.mode === "refresh-pr"),
+    steps.find(({ with: options }) => options?.["mode"] === "refresh-pr"),
   );
   const precedentProposal = v.parse(
     stepSchema,
-    precedentSteps.find(({ with: options }) => options?.mode === "refresh-pr"),
+    precedentSteps.find(
+      ({ with: options }) => options?.["mode"] === "refresh-pr",
+    ),
   );
   expect(proposal.uses).toBe(precedentProposal.uses);
-  expect(proposal.with?.token).toBe(precedentProposal.with?.token);
+  expect(proposal.with?.["token"]).toBe(precedentProposal.with?.["token"]);
   expect(workflow.permissions).toEqual({});
   for (const job of Object.values(workflow.jobs)) {
     expect(job.permissions).toEqual({ contents: "read" });
@@ -126,10 +130,13 @@ test("uses the reviewed app-token producer so the refresh PR triggers CI", () =>
 test("confines every proposed file to the refresh write allowlist before publication", () => {
   const proposal = v.parse(
     stepSchema,
-    steps.find(({ with: options }) => options?.mode === "refresh-pr"),
+    steps.find(({ with: options }) => options?.["mode"] === "refresh-pr"),
   );
   const confinement = commandStep("git status --porcelain");
-  const paths = v.parse(v.string(), proposal.with?.paths).trim().split("\n");
+  const paths = v
+    .parse(v.string(), proposal.with?.["paths"])
+    .trim()
+    .split("\n");
   expect(paths).toHaveLength(4);
   expect(paths).toContain("packages/catalogue/entries/**/manifest.json");
   expect(paths).toContain(
@@ -155,7 +162,7 @@ test("confines every proposed file to the refresh write allowlist before publica
   expect(confinement.if).toBeUndefined();
   expect(confinement.run).toContain("::error::");
   expect(confinement.run).toContain("exit 1");
-  expect(steps.indexOf(confinement)).toBeLessThan(steps.indexOf(proposal));
+  expect(stepPosition(confinement)).toBeLessThan(stepPosition(proposal));
 });
 
 test("surfaces upstream failures after publication even when an earlier step fails", () => {
@@ -164,11 +171,14 @@ test("surfaces upstream failures after publication even when an earlier step fai
   expect(failures.if).toContain("steps.check.outputs.failure_count != '0'");
   expect(failures.run).toContain("::warning::");
   expect(failures.run).toContain("exit 1");
+  const report = commandStep("UPSTREAM_REPORT=$RUNNER_TEMP/");
+  expect(report.run).toContain("$GITHUB_ENV");
+  expect(report.run).toContain("catalogue-upstream.json");
+  expect(stepPosition(report)).toBeLessThan(
+    stepPosition(commandStep("check-upstream.ts")),
+  );
   for (const job of Object.values(workflow.jobs)) {
-    const report = v.parse(v.string(), job.env?.UPSTREAM_REPORT);
-    expect(report).toStartWith(["$", "{{ runner.temp }}/"].join(""));
-    expect(report).toEndWith(".json");
-    expect(report).not.toContain("$UPSTREAM_REPORT");
+    expect(job.env?.["UPSTREAM_REPORT"]).toBeUndefined();
   }
-  expect(steps.at(-1)).toBe(failures);
+  expect(steps.at(-1)).toEqual(failures);
 });
