@@ -509,11 +509,13 @@ test("a hard-wrapped decision finds words inside both drawn paragraphs", async (
   ]);
 });
 
-test("Next and Previous take the reader back to a lone match, while repaints leave the view alone", async () => {
-  // Happy DOM has no scroller around the reader, so every move to a match
-  // lands in the element's own scrollIntoView.
+/**
+ * Records every move to a match. Happy DOM has no scroller around the
+ * reader, so each one lands in the element's own scrollIntoView.
+ */
+const recordScrolls = () => {
   const scrolledTo: string[] = [];
-  const ownScrollIntoView = Object.getOwnPropertyDescriptor(
+  const own = Object.getOwnPropertyDescriptor(
     HTMLElement.prototype,
     "scrollIntoView",
   );
@@ -523,6 +525,17 @@ test("Next and Previous take the reader back to a lone match, while repaints lea
       scrolledTo.push(this.textContent);
     },
   });
+  const restore = () => {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    if (own !== undefined) {
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", own);
+    }
+  };
+  return { restore, scrolledTo };
+};
+
+test("Next and Previous take the reader back to a lone match, while repaints leave the view alone", async () => {
+  const { restore, scrolledTo } = recordScrolls();
   try {
     const screen = renderReaders([
       { initialQuery: "samostatný", name: "decision" },
@@ -557,13 +570,46 @@ test("Next and Previous take the reader back to a lone match, while repaints lea
       expect(screen.getByText(matchCounter(1, 1))).toBeTruthy();
     }
   } finally {
-    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
-    if (ownScrollIntoView !== undefined) {
-      Object.defineProperty(
-        HTMLElement.prototype,
-        "scrollIntoView",
-        ownScrollIntoView,
-      );
-    }
+    restore();
+  }
+});
+
+test("removing the active match from the text moves the active mark but not the view", async () => {
+  const { restore, scrolledTo } = recordScrolls();
+  try {
+    const screen = renderReaders([
+      { initialQuery: "odpovědnost", name: "decision" },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 2))).toBeTruthy(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(2, 2))).toBeTruthy(),
+    );
+    expect(scrolledTo.at(-1)).toBe(readerText.liabilityParagraph);
+    const scrolls = scrolledTo.length;
+
+    // A toggle in the text takes the paragraph with the active match away;
+    // the remaining match becomes active where it already is on screen.
+    screen.getByText(readerText.liabilityParagraph).remove();
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
+    );
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(activeRange("decision")?.toString()).toBe("Odpovědnosti");
+    expect(scrolledTo).toHaveLength(scrolls);
+
+    // Asking for the next match still takes the reader there.
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    await waitFor(() => expect(scrolledTo).toHaveLength(scrolls + 1));
+  } finally {
+    restore();
   }
 });

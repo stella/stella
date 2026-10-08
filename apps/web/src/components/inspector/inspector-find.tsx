@@ -32,6 +32,21 @@ type InspectorFindOptions = {
   panelRef: RefObject<HTMLElement | null>;
 };
 
+/**
+ * Moving the reader is something the reader asks for: a new query, Next or
+ * Previous, or opening the bar with terms. The text changing under an open
+ * bar (a provision card unfolds, a disclosure opens, a note arrives) repaints
+ * the marks and may move the active index, but never the view.
+ */
+const FIND_SCROLL_INTENT = {
+  /** Take the reader to the active match once, then settle. */
+  reveal: "reveal",
+  /** Repaint in place. */
+  stay: "stay",
+} as const;
+type FindScrollIntent =
+  (typeof FIND_SCROLL_INTENT)[keyof typeof FIND_SCROLL_INTENT];
+
 type FindBarState =
   | { open: false }
   | {
@@ -44,12 +59,8 @@ type FindBarState =
        * the bar is already open still returns the caret to the query.
        */
       focusRequest: number;
-      /**
-       * Bumped on every Next or Previous, so a step always takes the reader
-       * to its match, even when it lands on the match it was already on
-       * (one match, which the reader has scrolled away from).
-       */
-      navigation: number;
+      /** Whether the next match collection takes the reader to the active match. */
+      scrollIntent: FindScrollIntent;
     };
 
 const FIND_CLOSED: FindBarState = { open: false };
@@ -59,13 +70,13 @@ const FIND_OPENED: FindBarState = {
   matchCount: 0,
   activeIndex: 0,
   focusRequest: 0,
-  navigation: 0,
+  scrollIntent: FIND_SCROLL_INTENT.reveal,
 };
 
 /** What a match collection reads from the bar. */
 type FindInputs = {
   activeIndex: number;
-  navigation: number;
+  scrollIntent: FindScrollIntent;
   enabled: boolean;
   findQuery: string;
 };
@@ -122,7 +133,14 @@ export const useInspectorFind = ({
 
   const setFindQuery = useCallback((query: string) => {
     setFindState((prev) =>
-      prev.open ? { ...prev, query, activeIndex: 0 } : prev,
+      prev.open
+        ? {
+            ...prev,
+            query,
+            activeIndex: 0,
+            scrollIntent: FIND_SCROLL_INTENT.reveal,
+          }
+        : prev,
     );
   }, []);
 
@@ -134,7 +152,7 @@ export const useInspectorFind = ({
       return {
         ...prev,
         activeIndex: (prev.activeIndex + 1) % prev.matchCount,
-        navigation: prev.navigation + 1,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
   }, []);
@@ -147,7 +165,7 @@ export const useInspectorFind = ({
       return {
         ...prev,
         activeIndex: (prev.activeIndex - 1 + prev.matchCount) % prev.matchCount,
-        navigation: prev.navigation + 1,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
   }, []);
@@ -157,7 +175,9 @@ export const useInspectorFind = ({
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
   const focusRequest = findState.open ? findState.focusRequest : 0;
-  const navigation = findState.open ? findState.navigation : 0;
+  const scrollIntent = findState.open
+    ? findState.scrollIntent
+    : FIND_SCROLL_INTENT.stay;
 
   // The DOCX pane and a table view's toolbar are candidates for the same
   // press: an inspector reader reaches the whole app while it is showing
@@ -195,13 +215,6 @@ export const useInspectorFind = ({
     };
   }, [closeFind, enabled, findOpen, panelRef]);
 
-  // The match the reader was last taken to. The text changes under an open
-  // bar for many reasons (a provision card unfolds, a disclosure opens, a
-  // note arrives) and each change repaints the marks, but only a new query
-  // or an explicit Next/Previous moves the reader; otherwise every toggle in
-  // the text would scroll back to the active match.
-  const scrolledToRef = useRef<string | null>(null);
-
   // One collection for both things that change what matches: the bar's own
   // values, and the reader's text arriving later. Called with the values
   // rather than closing over them, so the effect below lists what it reads.
@@ -210,7 +223,7 @@ export const useInspectorFind = ({
       activeIndex: index,
       enabled: isEnabled,
       findQuery: queryInput,
-      navigation: step,
+      scrollIntent: intent,
     }: FindInputs) => {
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(allHighlightName);
@@ -220,7 +233,6 @@ export const useInspectorFind = ({
       const root = contentRef.current;
       const query = queryInput.trim();
       if (!isEnabled || !root || query.length === 0) {
-        scrolledToRef.current = null;
         setFindState((prev) =>
           prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
             ? { ...prev, matchCount: 0, activeIndex: 0 }
@@ -259,10 +271,13 @@ export const useInspectorFind = ({
       if (activeRange) {
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
         CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
-        const target = `${String(step)}:${String(safeActiveIndex)}:${query}`;
-        if (scrolledToRef.current !== target) {
-          scrolledToRef.current = target;
+        if (intent === FIND_SCROLL_INTENT.reveal) {
           scrollRangeIntoView(activeRange);
+          setFindState((prev) =>
+            prev.open && prev.scrollIntent === FIND_SCROLL_INTENT.reveal
+              ? { ...prev, scrollIntent: FIND_SCROLL_INTENT.stay }
+              : prev,
+          );
         }
       }
 
@@ -276,15 +291,15 @@ export const useInspectorFind = ({
   );
 
   useLayoutEffect(
-    () => applyFind({ activeIndex, enabled, findQuery, navigation }),
-    [activeIndex, applyFind, enabled, findQuery, navigation],
+    () => applyFind({ activeIndex, enabled, findQuery, scrollIntent }),
+    [activeIndex, applyFind, enabled, findQuery, scrollIntent],
   );
 
   // The reader fills in after the bar can be open: citations, provision
   // history and "load more" insert text later. Each insertion is a new
   // document to match against, so the collection runs again on it.
   const reapplyFind = useLatestCallback(() => {
-    applyFind({ activeIndex, enabled, findQuery, navigation });
+    applyFind({ activeIndex, enabled, findQuery, scrollIntent });
   });
   useExternalSyncEffect(() => {
     const root = contentRef.current;
