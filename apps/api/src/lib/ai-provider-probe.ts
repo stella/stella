@@ -18,8 +18,8 @@ import {
 } from "@/api/lib/azure-foundry";
 import { PROVIDER_DATA_POLICY } from "@/api/lib/chat/provider-data-policy";
 import { sanitizeCredentialText } from "@/api/lib/credential-text";
+import { PROVIDER_ERROR_TEXT_MAX_BYTES } from "@/api/lib/errors/provider-diagnostic";
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
-import { PROVIDER_ERROR_TEXT_MAX_BYTES } from "@/api/lib/provider-diagnostic";
 import { identifyProviderSetupError } from "@/api/lib/provider-error-catalogue";
 import type {
   SafeOutboundFetchResponse,

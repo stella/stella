@@ -192,6 +192,10 @@ import {
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
+  createProviderDiagnostic,
+  redactedProviderDiagnostic,
+} from "@/api/lib/errors/provider-diagnostic";
+import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
 } from "@/api/lib/errors/tagged-errors";
@@ -203,10 +207,6 @@ import {
   providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
-import {
-  createProviderDiagnostic,
-  redactedProviderDiagnostic,
-} from "@/api/lib/provider-diagnostic";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,

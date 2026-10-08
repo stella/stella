@@ -5,9 +5,9 @@ import {
   INCOMPLETE_STREAM_CODE,
   TRUNCATED_AT_OUTPUT_CEILING_CODE,
 } from "@/api/lib/chat/provider-stream-contract";
+import type { RedactedProviderDiagnostic } from "@/api/lib/errors/provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
-import type { RedactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 export const PROVIDER_CALL_ERROR_MESSAGE = "AI provider request failed";

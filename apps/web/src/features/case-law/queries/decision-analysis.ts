@@ -175,7 +175,9 @@ export const requestDecisionAnalysis = async ({
   const response = await fetchWithTimeout(url, {
     credentials: "include",
     signal,
-    timeoutMs: 15_000,
+    // The answer is small; a stalled response fails without capping a slow
+    // but progressing one.
+    timeout: { type: "idle", ms: 15_000 },
   });
 
   const data: unknown = await response.json();

@@ -11,9 +11,12 @@ import * as failureOwner from "@/api/lib/case-law/analysis-failure";
 import * as analysisOwner from "@/api/lib/case-law/analysis-store";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
+import {
+  redactedProviderDiagnostic,
+  redactProviderMessage,
+} from "@/api/lib/errors/provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { redactedProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import * as generation from "@/api/lib/tanstack-ai-generate";
@@ -235,7 +238,7 @@ test("two polls retain the same terminal failure and make no model calls", async
       providerDiagnostic: {
         provider: diagnostic.provider,
         code: diagnostic.code,
-        message: ANALYSIS_PROVIDER_REFUSAL_MESSAGE,
+        message: redactProviderMessage(ANALYSIS_PROVIDER_REFUSAL_MESSAGE),
       },
     });
   }

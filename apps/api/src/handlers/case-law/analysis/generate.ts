@@ -40,13 +40,13 @@ import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   redactProviderMessage,
   type RedactedProviderDiagnostic,
-} from "@/api/lib/provider-diagnostic";
+} from "@/api/lib/errors/provider-diagnostic";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   createDetachedModelActionStarter,
   createModelActionAdmitter,

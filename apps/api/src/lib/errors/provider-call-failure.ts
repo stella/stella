@@ -4,9 +4,9 @@ import {
   PROVIDER_CALL_ERROR_MESSAGE,
   providerCallErrorCode,
 } from "@/api/lib/errors/provider-call-error";
+import { createProviderDiagnostic } from "@/api/lib/errors/provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
-import { createProviderDiagnostic } from "@/api/lib/provider-diagnostic";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 

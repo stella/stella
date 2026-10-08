@@ -2,15 +2,16 @@ import { expect, test } from "bun:test";
 
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 
+import { aiErrorStatusBody, aiHandlerError } from "@/api/lib/ai-error";
 import { PROVIDER_SETUP_ERROR_FIXTURES } from "@/api/tests/fixtures/provider-setup-errors";
 
-import { aiErrorStatusBody, aiHandlerError } from "./ai-error";
-import { ProviderCallError } from "./errors/provider-call-error";
-import { createProviderCallError } from "./errors/provider-call-failure";
+import { ProviderCallError } from "./provider-call-error";
+import { createProviderCallError } from "./provider-call-failure";
 import {
   createProviderDiagnostic,
   PROVIDER_ERROR_TEXT_MAX_BYTES,
   redactedProviderDiagnostic,
+  redactProviderMessage,
   registerProviderDiagnosticCredentials,
 } from "./provider-diagnostic";
 
@@ -23,7 +24,7 @@ test("every catalogue fixture reaches guidance and supported runtime adapters ke
     ).toEqual({
       provider: fixture.provider,
       code,
-      message: fixture.error.message,
+      message: redactProviderMessage(fixture.error.message),
     });
     // Azure setup is supported by the probe, but has no runtime text adapter.
     if (model.provider === "azure_foundry") {
@@ -37,7 +38,7 @@ test("every catalogue fixture reaches guidance and supported runtime adapters ke
     expect(error.providerDiagnostic).toEqual({
       provider: fixture.provider,
       code,
-      message: fixture.error.message,
+      message: redactProviderMessage(fixture.error.message),
     });
     const mapped = aiHandlerError(error, { status: 502, message: "Fallback" });
     expect(mapped).toBeInstanceOf(ProviderCallError);
@@ -70,7 +71,11 @@ test("projects only the actual provider message, preserving unknown reasons in f
       model: { provider: "anthropic", keySource: "byok" },
       evidence,
     }),
-  ).toEqual({ provider: "anthropic", code: null, message });
+  ).toEqual({
+    provider: "anthropic",
+    code: null,
+    message: redactProviderMessage(message),
+  });
   expect(
     createProviderDiagnostic({
       model: { provider: "anthropic", keySource: "byok" },
@@ -92,7 +97,7 @@ test("AWS provider exceptions project the provider reason while ordinary errors 
   ).toEqual({
     provider: "bedrock",
     code: null,
-    message: "Provider throttled this operation",
+    message: redactProviderMessage("Provider throttled this operation"),
   });
 });
 
@@ -107,7 +112,7 @@ test("registered BYOK credentials are removed even without a recognizable prefix
         message: "Key fixture-opaque-credential is denied",
       },
     })?.message,
-  ).toBe("Key [redacted-secret] is denied");
+  ).toBe(redactProviderMessage("Key [redacted-secret] is denied"));
 });
 
 test("managed provider failures retain the existing customer error surface", () => {
@@ -149,7 +154,11 @@ test("SDK response bodies expose only their actual provider reason", () => {
       model: { provider: "openrouter", keySource: "byok" },
       evidence,
     }),
-  ).toEqual({ provider: "openrouter", code: null, message });
+  ).toEqual({
+    provider: "openrouter",
+    code: null,
+    message: redactProviderMessage(message),
+  });
   expect(
     createProviderDiagnostic({
       model: { provider: "openrouter", keySource: "byok" },
@@ -167,7 +176,11 @@ test("unknown provider error bodies without a code retain their full reason", ()
       model: { provider: "mistral", keySource: "byok" },
       evidence: { error: { message } },
     }),
-  ).toEqual({ provider: "mistral", code: null, message });
+  ).toEqual({
+    provider: "mistral",
+    code: null,
+    message: redactProviderMessage(message),
+  });
 });
 
 /** A provider reason carrying every credential shape a provider echoes back. */
