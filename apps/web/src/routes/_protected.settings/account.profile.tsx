@@ -56,7 +56,7 @@ import {
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
-import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
+import { forgetUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -299,7 +299,7 @@ function ProfilePageBody() {
       } catch {
         // Session might already be invalidated on the server
       }
-      releaseUserStorage();
+      forgetUserStorage();
       signalSessionChange();
       hideSessionDocument();
       window.location.href = "/auth";

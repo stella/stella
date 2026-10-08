@@ -15,9 +15,10 @@ import { detached } from "@/lib/detached";
 /**
  * What the browser keeps for one signed-in user (recent searches, drafts,
  * tracked exports, tool grants, open tabs) belongs to that user alone. Each
- * such entry is keyed by its owner, and every session read prunes the
- * browser's entries to the owner it names: a signed-in user keeps only their
- * own, and a visitor without a session keeps only the visitor's.
+ * such entry is keyed by its owner and read only under the current owner's
+ * key. Every session read prunes the browser's entries for the owner it
+ * names: the user's own history, drafts and choices wait under their key for
+ * them to come back, and everything else of anyone but that owner goes.
  */
 
 export type { StorageOwner };
@@ -142,28 +143,115 @@ const sameOwner = (a: StorageOwner, b: StorageOwner) =>
     ? b.kind === "user" && a.userId === b.userId
     : b.kind === a.kind;
 
-/** Whether an entry stays once `next` owns the browser, coming from `previous`. */
+/** How a browser changes hands. */
+type Transition = {
+  previous: StorageOwner;
+  next: StorageOwner;
+  /**
+   * The previous user's account is gone: what is kept for an owner who comes
+   * back goes too.
+   */
+  forgetPrevious: boolean;
+};
+
+/**
+ * An entry from before entries were keyed by owner: the base its per-user
+ * key is built on, and the user it was written for (`null`: anyone, so the
+ * first user to sign in takes it over).
+ */
+const readLegacyKey = (
+  family: UserStorageFamily,
+  key: string,
+): { base: string; userId: string | null } | null => {
+  if (family.legacy === undefined || ownerOfKey(family, key) !== "unknown") {
+    return null;
+  }
+  switch (family.legacy.keys) {
+    case "bare":
+      return key === family.prefix ? { base: key, userId: null } : null;
+    case "base":
+      return { base: key, userId: null };
+    case "user-suffix": {
+      const tail = key.slice(family.prefix.length);
+      const at = tail.lastIndexOf(":");
+      const userId = tail.slice(at + 1);
+      return userId === ""
+        ? null
+        : { base: family.prefix + tail.slice(0, at + 1), userId };
+    }
+    default: {
+      family.legacy.keys satisfies never;
+      return panic(`Unhandled legacy keys: ${String(family.legacy.keys)}`);
+    }
+  }
+};
+
+/** Whether an owner-keyed entry stays through `transition`. */
 const keeps = (
   family: UserStorageFamily,
   key: string,
-  previous: StorageOwner,
-  next: StorageOwner,
+  { previous, next, forgetPrevious }: Transition,
 ): boolean => {
   if (family.owner === "carried") {
     // A visitor's draft goes on into their account; a signed-in user's never
     // outlives them.
     return previous.kind === "visitor" || sameOwner(previous, next);
   }
+  const owner = ownerOfKey(family, key);
+  if (owner === "unknown") {
+    return false;
+  }
   if (
-    key === family.prefix &&
-    family.legacy !== undefined &&
-    next.kind === "visitor"
+    family.retention === "kept-for-owner" &&
+    owner.kind === "user" &&
+    !(forgetPrevious && sameOwner(owner, previous))
   ) {
-    // Kept for the first user to sign in, who takes it over.
+    // Waits under its owner's key for them; every read names the current
+    // owner's key, so no one else reads it.
     return true;
   }
-  const owner = ownerOfKey(family, key);
-  return owner !== "unknown" && sameOwner(owner, next);
+  return sameOwner(owner, next);
+};
+
+/**
+ * Takes an entry from before entries were keyed by owner into the signed-in
+ * user's own entry, when it can be theirs. Until then it stays: the user's
+ * data is moved, never dropped.
+ */
+const adoptLegacy = (
+  storage: Storage,
+  entry: {
+    family: UserStorageFamily;
+    key: string;
+    legacy: { base: string; userId: string | null };
+  },
+  { previous, next, forgetPrevious }: Transition,
+) => {
+  const { family, key, legacy } = entry;
+  if (
+    forgetPrevious &&
+    legacy.userId !== null &&
+    previous.kind === "user" &&
+    previous.userId === legacy.userId
+  ) {
+    storage.removeItem(key);
+    return;
+  }
+  if (
+    family.legacy === undefined ||
+    next.kind !== "user" ||
+    (legacy.userId !== null && legacy.userId !== next.userId)
+  ) {
+    return;
+  }
+  const raw = storage.getItem(key);
+  const target = userStorageKey(legacy.base, next);
+  const adopted =
+    raw === null ? null : family.legacy.adopt(raw, storage.getItem(target));
+  if (adopted !== null) {
+    storage.setItem(target, adopted);
+  }
+  storage.removeItem(key);
 };
 
 const keysOf = (storage: Storage): string[] =>
@@ -172,37 +260,31 @@ const keysOf = (storage: Storage): string[] =>
   ).filter((key): key is string => key !== null);
 
 /**
- * Removes every entry that is not `next`'s. Entries written before they were
- * keyed by owner belong to no one known and go too, but for the protective
- * part of one, which the first user takes over.
+ * Leaves the browser's entries as `next` may find them: what is kept for its
+ * owner stays under that owner's key, everything else that is not `next`'s
+ * goes. Entries written before they were keyed by owner move into the first
+ * user they can belong to; an unkeyed entry no family takes over goes.
  */
 export const pruneUserStorage = (
   areas: Areas,
   previous: StorageOwner,
   next: StorageOwner,
+  { forgetPrevious = false }: { forgetPrevious?: boolean } = {},
 ): void => {
+  const transition = { previous, next, forgetPrevious };
   for (const family of USER_STORAGE_FAMILIES) {
     const storage = areas[family.area];
     if (storage === null) {
       continue;
     }
-    const legacyValue = storage.getItem(family.prefix);
-    const adopted =
-      family.legacy !== undefined && legacyValue !== null
-        ? family.legacy.adopt(legacyValue)
-        : null;
-    if (
-      adopted !== null &&
-      next.kind === "user" &&
-      storage.getItem(userStorageKey(family.prefix, next)) === null
-    ) {
-      storage.setItem(userStorageKey(family.prefix, next), adopted);
-    }
     for (const key of keysOf(storage)) {
-      if (
-        key.startsWith(family.prefix) &&
-        !keeps(family, key, previous, next)
-      ) {
+      if (!key.startsWith(family.prefix)) {
+        continue;
+      }
+      const legacy = readLegacyKey(family, key);
+      if (legacy !== null) {
+        adoptLegacy(storage, { family, key, legacy }, transition);
+      } else if (!keeps(family, key, transition)) {
         storage.removeItem(key);
       }
     }
@@ -257,7 +339,11 @@ export const hasCurrentTabStorageOwner = (
 };
 
 /** Moves the browser's entries to `next`, whoever held them before. */
-const handOver = (areas: Areas, next: StorageOwner) => {
+const handOver = (
+  areas: Areas,
+  next: StorageOwner,
+  options: { forgetPrevious?: boolean } = {},
+) => {
   // A tab reloaded since its last owner still remembers them: the tab's own
   // entries follow that owner, not the visitor every document starts as.
   const previous =
@@ -270,15 +356,25 @@ const handOver = (areas: Areas, next: StorageOwner) => {
         { local: null, session: null, [area]: storage },
         previous,
         next,
+        options,
       );
     }).unwrapOr(undefined);
   }
   setOwner(areas, next);
 };
 
-/** Signing out: nothing of the user stays, and the visitor owns the browser. */
+/**
+ * Signing out: the visitor owns the browser. Only what is kept for its owner
+ * (their history, drafts and choices) stays, under the user's own key, for
+ * when they sign in again; everything else of the user goes.
+ */
 export const releaseUserStorage = (areas: Areas = browserStorageAreas()) => {
   handOver(areas, VISITOR);
+};
+
+/** The account is deleted: nothing of the user stays in this browser. */
+export const forgetUserStorage = (areas: Areas = browserStorageAreas()) => {
+  handOver(areas, VISITOR, { forgetPrevious: true });
 };
 
 /** The authentication boundary supplies the account identified by its session. */
