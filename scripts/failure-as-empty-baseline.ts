@@ -14,7 +14,6 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
-import { readRenames, renameEntries } from "./git-renames.ts";
 import { exactSetDifference, ruleCensusDiagnostics } from "./rule-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -106,10 +105,7 @@ const committedKeys = (
   const content =
     git(["show", `${baseRevision}:${file}`]) ??
     panic(`Cannot read the committed ${file}`);
-  return renameEntries(
-    keysOf(JSON.parse(content)),
-    readRenames({ baseRef: baseRevision, repoRoot: ROOT }),
-  );
+  return keysOf(JSON.parse(content));
 };
 
 if (import.meta.main) {

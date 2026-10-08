@@ -9,7 +9,6 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
-import { readRenames, renameEntries } from "./git-renames.ts";
 import { exactSetDifference, ruleCensusDiagnostics } from "./rule-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -102,10 +101,7 @@ if (import.meta.main) {
       BASELINE_SCHEMA,
       JSON.parse(baseFile.stdout.toString()),
     );
-    committed = renameEntries(
-      Object.keys(base.entries),
-      readRenames({ baseRef: baseRevision, repoRoot: ROOT }),
-    );
+    committed = Object.keys(base.entries);
   }
   const difference = exactSetDifference({
     observed,

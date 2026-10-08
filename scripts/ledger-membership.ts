@@ -2,8 +2,6 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { readRenames, renameEntries } from "./git-renames.ts";
-
 type ReadBaseLedgerOptions = {
   baseRef: string;
   ledgerRel: string;
@@ -47,10 +45,9 @@ const compareLedgerMembership = ({
     repoRoot,
     parseLedger,
   });
-  const renames = readRenames({ baseRef: commit, repoRoot });
   return {
     type: "compared",
-    added: addedEntries(current, base && renameEntries(base, renames)),
+    added: addedEntries(current, base),
   };
 };
 
@@ -112,10 +109,6 @@ const selfTestLedgerMembership = (label: string): number => {
   }
   if (addedEntries(["a::x"], ["a::x", "b::y"]).length !== 0) {
     failures.push("a shrunk ledger must pass");
-  }
-  const moved = renameEntries(["a::x", "b::y"], new Map([["a", "m"]]));
-  if (addedEntries(["m::x", "b::y"], moved).length !== 0) {
-    failures.push("an entry whose file moved must not read as new");
   }
   const swapped = addedEntries(["a::x", "c::z"], ["a::x", "b::y"]);
   if (swapped.length !== 1 || swapped[0] !== "c::z") {

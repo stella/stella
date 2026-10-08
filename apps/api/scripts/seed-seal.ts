@@ -28,30 +28,16 @@ import path from "node:path";
 
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 
-// Written by reading or browsing the stack or by its scheduled jobs, never by
-// content a person or an agent enters: session refresh, key use, audit
-// trails, job bookkeeping, and indexes, extractions or screenings derived
-// from seeded rows. An audited or derived write also changes the content
-// table it came from, so ignoring these hides nothing. Any other table that
-// changes blocks attachment.
+// Written by reading or browsing the stack, never by content a person or an
+// agent enters: session refresh, key use, audit trails, job bookkeeping. An
+// audited write also changes the content table it touched, so ignoring the
+// trail hides nothing. Any other table that changes blocks attachment.
 const OPERATIONAL_TABLES = new Set([
   "public.apikey",
   "public.audit_logs",
-  "public.chat_message_search_documents",
-  "public.chat_thread_search_documents",
-  "public.database_backfill_states",
-  "public.document_processing_runs",
-  "public.extracted_content",
-  "public.sanctions_contact_screenings",
-  "public.sanctions_edition_fanouts",
-  "public.sanctions_monitoring_backfills",
   "public.scheduler_job_runs",
   "public.scheduler_jobs",
-  "public.scout_runs",
-  "public.search_document_preview_passages",
-  "public.search_documents",
   "public.session",
-  "public.system_audit_runs",
 ]);
 
 const MODES = ["write", "check"] as const;
@@ -130,14 +116,10 @@ switch (mode) {
     if (!isSeal(sealed)) {
       panic(`${sealPath} is not a seal`);
     }
-    // A seal written before a table was declared operational still lists it.
     const tables = [
       ...new Set([...Object.keys(sealed), ...Object.keys(digests)]),
     ]
-      .filter(
-        (table) =>
-          !OPERATIONAL_TABLES.has(table) && sealed[table] !== digests[table],
-      )
+      .filter((table) => sealed[table] !== digests[table])
       .toSorted();
     console.log(
       JSON.stringify(

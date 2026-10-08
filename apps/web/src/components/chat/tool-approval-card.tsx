@@ -811,7 +811,6 @@ const useCachedReaderAnnotationMark = (
               .getQueriesData({ queryKey: readerAnnotationKeys.all })
               .map(([, data]) => data),
           }),
-    () => undefined,
   );
   if (annotationId === null || rows === undefined) {
     return null;
