@@ -26,9 +26,13 @@ type ProvisionCardHeaderProps = {
  * The one header every cited-provision card draws, inline under a paragraph
  * and in the citation's hover card: one row naming the provision, the act
  * by number and title, the date the quoted wording took effect, and a
- * button that opens the provision. The row never wraps; when it runs out of
- * room the act's title gives way first, so the provision and the date stay
- * whole.
+ * button that opens the provision.
+ *
+ * The row never wraps, and the open button sits outside the part that gives
+ * way, so it is always there to press. When the rest runs out of room it
+ * gives way in a fixed order: the act's title first (it takes only the room
+ * left once the label and the date fit), then the provision label (its full
+ * text stays in the tooltip), and the date last, cut off at the edge.
  */
 export const ProvisionCardHeader = ({
   label,
@@ -48,41 +52,47 @@ export const ProvisionCardHeader = ({
 
   return (
     <span
-      className="reader-chrome flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap"
+      className="reader-chrome flex min-w-0 items-center gap-1.5"
       data-slot="provision-card-header"
     >
-      <BidiText
-        as="span"
-        className="shrink-0 text-sm font-medium"
-        data-slot="provision-card-label"
-      >
-        {label}
-      </BidiText>
-      {actText !== "" && (
-        <>
-          <HeaderSeparator />
-          <BidiText
-            as="span"
-            className="text-muted-foreground min-w-0 truncate text-xs"
-            data-slot="provision-card-act"
-            title={actText}
-          >
-            {actText}
-          </BidiText>
-        </>
-      )}
-      <HeaderSeparator />
       <span
-        className="text-muted-foreground shrink-0 text-xs"
-        data-slot="provision-card-date"
+        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap"
+        data-slot="provision-card-summary"
       >
-        {date === null
-          ? t("statutes.wordingVersionUnknown")
-          : t("statutes.provisionEffectiveFrom", { date })}
+        <BidiText
+          as="span"
+          className="min-w-0 truncate text-sm font-medium"
+          data-slot="provision-card-label"
+          title={label}
+        >
+          {label}
+        </BidiText>
+        {actText !== "" && (
+          <>
+            <HeaderSeparator />
+            <BidiText
+              as="span"
+              className="text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs"
+              data-slot="provision-card-act"
+              title={actText}
+            >
+              {actText}
+            </BidiText>
+          </>
+        )}
+        <HeaderSeparator />
+        <span
+          className="text-muted-foreground shrink-0 text-xs"
+          data-slot="provision-card-date"
+        >
+          {date === null
+            ? t("statutes.wordingVersionUnknown")
+            : t("statutes.provisionEffectiveFrom", { date })}
+        </span>
       </span>
       <Button
         aria-label={t("statutes.openProvision")}
-        className="ms-auto shrink-0"
+        className="shrink-0"
         onClick={() => inspector.open(createProvisionViewTab(provision))}
         size="icon-xs"
         tooltip={t("statutes.openProvision")}

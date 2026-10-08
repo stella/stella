@@ -8,6 +8,7 @@ import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 const DEV_VISUAL = {
   controlSizes: "control-sizes",
   inspectorPane: "inspector-pane",
+  provisionHeader: "provision-header",
   shellPending: "shell-pending",
   workspaceTable: "workspace-table",
 } as const;
@@ -38,6 +39,15 @@ const InspectorPanePlayground = import.meta.env.DEV
     })
   : null;
 
+const ProvisionHeaderPlayground = import.meta.env.DEV
+  ? React.lazy(async () => {
+      const module =
+        await import("@/routes/dev/-components/provision-header-playground");
+
+      return { default: module.ProvisionHeaderPlayground };
+    })
+  : null;
+
 const WorkspaceTablePlayground = import.meta.env.DEV
   ? React.lazy(async () => {
       const module =
@@ -52,6 +62,7 @@ const searchSchema = v.object({
     v.picklist([
       DEV_VISUAL.controlSizes,
       DEV_VISUAL.inspectorPane,
+      DEV_VISUAL.provisionHeader,
       DEV_VISUAL.shellPending,
       DEV_VISUAL.workspaceTable,
     ]),
@@ -106,6 +117,20 @@ function DevRouteComponent() {
       <React.Suspense fallback={null}>
         <main className="bg-background flex min-h-0 flex-1 flex-col overflow-auto p-4">
           <InspectorPanePlayground />
+        </main>
+      </React.Suspense>
+    );
+  }
+
+  if (visual === DEV_VISUAL.provisionHeader) {
+    if (ProvisionHeaderPlayground === null) {
+      return null;
+    }
+
+    return (
+      <React.Suspense fallback={null}>
+        <main className="bg-background min-h-0 flex-1 overflow-y-auto p-4">
+          <ProvisionHeaderPlayground />
         </main>
       </React.Suspense>
     );

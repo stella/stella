@@ -710,38 +710,58 @@ describe("the provision card header", () => {
     expect(peeked.textContent).toBe(inline.textContent);
   });
 
-  test("keeps to one row whose act title gives way before the date", async () => {
+  // Which part gives way at which width is measured in a browser
+  // (e2e/ui-playground/provision-header.geometry.spec.ts); this pins the
+  // structure that measurement relies on, and runs on every pull request.
+  test("keeps the open button outside the part of the row that gives way", async () => {
     const view = await renderDecision();
     const peek = await openPeek(view, FIRST_CITATION);
     const header =
       peek.querySelector('[data-slot="provision-card-header"]') ??
       panic("The hover card has no header");
-    expect(headerParts(header)).toEqual([
+    expect(headerParts(header)).toEqual(["provision-card-summary", "button"]);
+    const summary =
+      header.querySelector('[data-slot="provision-card-summary"]') ??
+      panic("The header has no summary");
+    expect(headerParts(summary)).toEqual([
       "provision-card-label",
       "span",
       "provision-card-act",
       "span",
       "provision-card-date",
-      "button",
     ]);
     const classesOf = (slot: string) =>
       header.querySelector(`[data-slot="${slot}"]`)?.classList ??
       panic(`No ${slot}`);
-    // One line: nothing in the row wraps, and the row clips rather than grows.
-    expect(header.classList.contains("whitespace-nowrap")).toBe(true);
-    expect(header.classList.contains("overflow-hidden")).toBe(true);
-    expect(header.classList.contains("flex-wrap")).toBe(false);
-    // The act's title is the only part that may shrink, so it truncates
-    // first; the provision and the date keep their width.
-    expect(classesOf("provision-card-act").contains("truncate")).toBe(true);
-    expect(classesOf("provision-card-act").contains("min-w-0")).toBe(true);
-    for (const slot of ["provision-card-label", "provision-card-date"]) {
-      expect(classesOf(slot).contains("shrink-0")).toBe(true);
-      expect(classesOf(slot).contains("truncate")).toBe(false);
-    }
+    // One line that clips rather than wraps, beside a button it never clips.
     expect(
-      header.querySelector('[data-slot="provision-card-label"]')?.textContent,
-    ).toBe(FIRST_CITATION);
+      classesOf("provision-card-summary").contains("whitespace-nowrap"),
+    ).toBe(true);
+    expect(
+      classesOf("provision-card-summary").contains("overflow-hidden"),
+    ).toBe(true);
+    expect(header.classList.contains("overflow-hidden")).toBe(false);
+    expect(header.classList.contains("flex-wrap")).toBe(false);
+    // The act takes only the room left over, so it gives way first; the
+    // label shrinks after it; the date never shrinks, only clips last.
+    for (const token of [
+      "flex-1",
+      "basis-0",
+      "max-w-max",
+      "min-w-0",
+      "truncate",
+    ]) {
+      expect(classesOf("provision-card-act").contains(token)).toBe(true);
+    }
+    for (const token of ["min-w-0", "truncate"]) {
+      expect(classesOf("provision-card-label").contains(token)).toBe(true);
+    }
+    expect(classesOf("provision-card-date").contains("shrink-0")).toBe(true);
+    const label =
+      header.querySelector('[data-slot="provision-card-label"]') ??
+      panic("No label");
+    expect(label.textContent).toBe(FIRST_CITATION);
+    expect(label.getAttribute("title")).toBe(FIRST_CITATION);
     expect(
       header.querySelector('[data-slot="provision-card-act"]')?.textContent,
     ).toBe("1/2026 Sb., Test Act");
