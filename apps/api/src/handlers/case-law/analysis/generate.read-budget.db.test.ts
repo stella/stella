@@ -177,6 +177,7 @@ describe("answering a stored or in-flight analysis", () => {
     const { response, statements } = await runWithQueryCounter(
       async (queries) => {
         const result = await generateAnalysis({
+          mode: "poll",
           admitModelAction: async () => {
             modelActions.push("admit");
             return panic("A stored answer must not admit a model action");

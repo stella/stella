@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import { sleep } from "@stll/concurrency/sleep";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -14,11 +15,13 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-test("an HTTP provider failure stops automatic requests until an explicit retry", async () => {
-  let requests = 0;
+test("an HTTP provider failure stops automatic requests and query refetch remains a poll", async () => {
+  const modes: (string | null)[] = [];
   globalThis.fetch = Object.assign(
-    async () => {
-      requests += 1;
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      modes.push(
+        new URL(new Request(input, init).url).searchParams.get("mode"),
+      );
       return Response.json(
         { message: "Provider authentication failed" },
         { status: 401 },
@@ -47,9 +50,12 @@ test("an HTTP provider failure stops automatic requests until an explicit retry"
   try {
     await failed;
     await sleep(2200);
-    expect(requests).toBe(1);
+    expect(modes).toEqual([ANALYSIS_REQUEST_MODE.poll]);
     await observer.refetch();
-    expect(requests).toBe(2);
+    expect(modes).toEqual([
+      ANALYSIS_REQUEST_MODE.poll,
+      ANALYSIS_REQUEST_MODE.poll,
+    ]);
   } finally {
     unsubscribe();
     observer.destroy();

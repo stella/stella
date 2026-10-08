@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
@@ -326,4 +327,240 @@ test("lazy analysis retains provider guidance data from an async failed response
       providerDiagnostic: diagnostic,
     }),
   );
+});
+
+test("explicit retry sends retry once for shared views and subsequent progress polling uses poll", async () => {
+  const pendingRetry = Promise.withResolvers<Response>();
+  const pendingPoll = Promise.withResolvers<Response>();
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return await pendingRetry.promise;
+    }
+    return await pendingPoll.promise;
+  });
+  const client = clientWithAvailability();
+  const wrapper = wrapperFor({ client });
+  const first = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  const second = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("error"));
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([ANALYSIS_REQUEST_MODE.poll]);
+  await act(async () => {
+    first.result.current.generate();
+    first.result.current.generate();
+    second.result.current.generate();
+  });
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(first.result.current.state.status).toBe("generating");
+  expect(second.result.current.state.status).toBe("generating");
+  await act(async () => {
+    pendingRetry.resolve(Response.json({ status: "generating" }));
+  });
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  await waitFor(() =>
+    expect(client.getQueryData(options.queryKey)).toEqual({
+      kind: "generating",
+      tree: [],
+    }),
+  );
+  await waitFor(() => expect(requests).toHaveLength(3), { timeout: 4000 });
+  await act(async () => {
+    pendingPoll.resolve(Response.json({ status: "done", analysis }));
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("done"));
+  expect(second.result.current.state).toEqual({ status: "done", analysis });
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.poll,
+  ]);
+  expect(client.getQueryData(options.queryKey)).toEqual({
+    kind: "done",
+    analysis,
+  });
+  await act(async () => first.result.current.generate());
+  expect(requests).toHaveLength(3);
+});
+
+test("a view mounted during retry waits for retry before resuming normal polling", async () => {
+  const pendingRetry = Promise.withResolvers<Response>();
+  const pendingPoll = Promise.withResolvers<Response>();
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return await pendingRetry.promise;
+    }
+    return await pendingPoll.promise;
+  });
+  const client = clientWithAvailability();
+  const wrapper = wrapperFor({ client });
+  const first = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("error"));
+  await act(async () => first.result.current.generate());
+  await waitFor(() => expect(requests).toHaveLength(2));
+
+  const arriving = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper,
+  });
+  await act(async () => arriving.rerender());
+  expect(arriving.result.current.state.status).toBe("generating");
+  expect(requests).toHaveLength(2);
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  expect(client.getQueryState(options.queryKey)?.fetchStatus).toBe("idle");
+
+  await act(async () => {
+    pendingRetry.resolve(Response.json({ status: "generating" }));
+  });
+  await waitFor(() => expect(requests).toHaveLength(3), { timeout: 4000 });
+  expect(client.getQueryData(options.queryKey)).toEqual({
+    kind: "generating",
+    tree: [],
+  });
+  expect(first.result.current.state.status).toBe("generating");
+  expect(arriving.result.current.state.status).toBe("generating");
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.poll,
+  ]);
+  await act(async () => {
+    pendingPoll.resolve(Response.json({ status: "done", analysis }));
+  });
+  await waitFor(() => expect(first.result.current.state.status).toBe("done"));
+  expect(arriving.result.current.state).toEqual({ status: "done", analysis });
+  expect(client.getQueryData(options.queryKey)).toEqual({
+    kind: "done",
+    analysis,
+  });
+  expect(requests).toHaveLength(3);
+});
+
+test("retry cancels a stale poll before replacing the shared analysis cache", async () => {
+  const stalePoll = Promise.withResolvers<Response>();
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return await stalePoll.promise;
+    }
+    return Response.json({ status: "done", analysis });
+  });
+  const client = clientWithAvailability();
+  const mounted = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper: wrapperFor({ client }),
+  });
+  await waitFor(() =>
+    expect(mounted.result.current.state.status).toBe("error"),
+  );
+  const options = decisionAnalysisOptions({
+    ...key,
+    organizationId: user.activeOrganizationId,
+  });
+  let refetch: Promise<void> | undefined;
+  await act(async () => {
+    refetch = client.refetchQueries({
+      queryKey: options.queryKey,
+      exact: true,
+    });
+  });
+  await waitFor(() => expect(requests).toHaveLength(2));
+  await act(async () => mounted.result.current.generate());
+  await waitFor(() => expect(mounted.result.current.state.status).toBe("done"));
+  expect(requests.at(1)?.signal.aborted).toBe(true);
+  await act(async () => {
+    stalePoll.resolve(Response.json({ status: "error" }));
+    await refetch;
+  });
+  expect(client.getQueryData(options.queryKey)).toEqual({
+    kind: "done",
+    analysis,
+  });
+  expect(mounted.result.current.state).toEqual({ status: "done", analysis });
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+  ]);
+});
+
+test("a retry transport error retains its provider diagnostic until the next retry", async () => {
+  const diagnostic = {
+    provider: "anthropic",
+    code: PROVIDER_SETUP_ERROR_CODE.anthropicNoCredits,
+    message: "Synthetic provider refusal after explicit retry",
+  };
+  let served = 0;
+  const requests = respondToAnalysis(async () => {
+    served += 1;
+    if (served === 1) {
+      return Response.json({ status: "error" });
+    }
+    if (served === 2) {
+      return Response.json(
+        {
+          message: "Provider refused",
+          providerDiagnostic: diagnostic,
+        },
+        { status: 402 },
+      );
+    }
+    return Response.json({ status: "done", analysis });
+  });
+  const client = clientWithAvailability();
+  const mounted = renderHook(() => useLazyDecisionAnalysis(eligible), {
+    wrapper: wrapperFor({ client }),
+  });
+  await waitFor(() =>
+    expect(mounted.result.current.state.status).toBe("error"),
+  );
+  await act(async () => mounted.result.current.generate());
+  await waitFor(() =>
+    expect(mounted.result.current.state).toEqual({
+      status: "error",
+      providerDiagnostic: diagnostic,
+    }),
+  );
+  expect(requests).toHaveLength(2);
+  await act(async () => mounted.result.current.generate());
+  await waitFor(() =>
+    expect(mounted.result.current.state).toEqual({ status: "done", analysis }),
+  );
+  expect(
+    requests.map((request) => new URL(request.url).searchParams.get("mode")),
+  ).toEqual([
+    ANALYSIS_REQUEST_MODE.poll,
+    ANALYSIS_REQUEST_MODE.retry,
+    ANALYSIS_REQUEST_MODE.retry,
+  ]);
 });

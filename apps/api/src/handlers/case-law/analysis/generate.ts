@@ -9,6 +9,8 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
+import type { AnalysisRequestMode } from "@stll/api-contract/case-law-analysis";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type {
   AnalysisGenerating,
@@ -195,6 +197,7 @@ type GenerateAnalysisResponse =
   | { status: "error"; error: string; providerDiagnostic?: ProviderDiagnostic };
 
 type GenerateAnalysisOptions = {
+  mode: AnalysisRequestMode;
   /** Admits a background significance refresh. */
   admitModelAction: ModelActionAdmitter;
   /** Admits a new generation, held until it settles after the response. */
@@ -208,6 +211,7 @@ type GenerateAnalysisOptions = {
 };
 
 export const generateAnalysis = async ({
+  mode,
   admitModelAction,
   startModelAction,
   decisionId,
@@ -299,11 +303,12 @@ export const generateAnalysis = async ({
     });
   }
 
-  const failure = await analysisFailureStore().take({
+  const failureScope = {
     organizationId,
     decisionId,
     fingerprint: input.fingerprint,
-  });
+  };
+  const failure = await analysisFailureStore().read(failureScope);
   if (Result.isError(failure)) {
     const error = new AnalysisFailureStoreError({
       message: "Analysis failure delivery is unavailable",
@@ -313,7 +318,7 @@ export const generateAnalysis = async ({
       new HandlerError({ status: 503, message: error.message }),
     );
   }
-  if (failure.value !== null) {
+  if (failure.value !== null && mode === ANALYSIS_REQUEST_MODE.poll) {
     return Result.ok({
       status: "error",
       error: "Analysis generation failed",
@@ -342,15 +347,34 @@ export const generateAnalysis = async ({
   const started = await startModelAction({
     label: "analysis-generate.run-generation",
     // Another request won the race when the claim returns null.
-    start: async () =>
-      await analysisStore().claim({
+    start: async () => {
+      const sentinel = await analysisStore().claim({
         decisionId,
         fingerprint: input.fingerprint,
         observed,
-      }),
+      });
+      if (sentinel === null || failure.value === null) {
+        return Result.ok(sentinel);
+      }
+      // Only the claim winner may clear the failure, before its model runs.
+      // A losing concurrent retry must not erase that run's later failure.
+      const cleared = await analysisFailureStore().clear(
+        failureScope,
+        failure.value.failureId,
+      );
+      if (Result.isError(cleared)) {
+        await analysisStore().clear({ decisionId, sentinel });
+        return Result.err(cleared.error);
+      }
+      if (!cleared.value) {
+        await analysisStore().clear({ decisionId, sentinel });
+        return Result.ok(null);
+      }
+      return Result.ok(sentinel);
+    },
     // The proof aborts the generation's model call if the lease is lost.
-    background: async ({ admission }, sentinel) => {
-      if (sentinel === null) {
+    background: async ({ admission }, claimed) => {
+      if (Result.isError(claimed) || claimed.value === null) {
         return;
       }
       await runGeneration({
@@ -363,7 +387,7 @@ export const generateAnalysis = async ({
         orgAIConfig,
         organizationId,
         promptCachingEnabled,
-        sentinel,
+        sentinel: claimed.value,
       });
     },
   });
@@ -378,6 +402,15 @@ export const generateAnalysis = async ({
           }),
     );
   }
+  if (Result.isError(started.value)) {
+    const error = new AnalysisFailureStoreError({
+      message: "Analysis failure delivery is unavailable",
+    });
+    observeFailure(error, { sink: FAILURE_DELIVERY_READ, ctx: { decisionId } });
+    return Result.err(
+      new HandlerError({ status: 503, message: error.message }),
+    );
+  }
 
   return Result.ok({ status: "generating" });
 };
@@ -389,8 +422,9 @@ const config = {
     "generating while a run is in flight (poll until it is done), or error " +
     "when the decision is unknown, its text could not be parsed, or no " +
     "analysis prompt exists for its language, or a background run failed. " +
-    "Background failure details are delivered once to the initiating organization; " +
-    "an explicit next request may retry. " +
+    "Use mode poll to read progress or a terminal failure; failure details stay " +
+    "available to the initiating organization for ten minutes. Use mode retry " +
+    "only for an explicit retry of a failed run. " +
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
@@ -404,12 +438,14 @@ const config = {
   // that updates the decision row.
   access: "write",
   params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  query: t.Object({ mode: t.Enum(ANALYSIS_REQUEST_MODE) }),
 } satisfies HandlerConfig;
 
 const generateDecisionAnalysis = createSafeRootHandler(
   config,
   async function* ({
     params: { decisionId },
+    query: { mode },
     session,
     scopedDb,
     orgAIConfig,
@@ -424,6 +460,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
       Result.tryPromise(
         async () =>
           await generateAnalysis({
+            mode,
             // Both runs continue after the response, outside its admission.
             admitModelAction: createModelActionAdmitter({
               organizationId: session.activeOrganizationId,

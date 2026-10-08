@@ -31,10 +31,10 @@ const modelIds = BYOK_DEFAULT_MODELS.openai;
 const orgAIConfig = {
   providers: [{ provider: "openai", apiKey: "fixture-key" }],
   overrideModels: {
-    fast: { provider: "openai", modelId: modelIds.fast },
-    chat: { provider: "openai", modelId: modelIds.chat },
-    reasoning: { provider: "openai", modelId: modelIds.reasoning },
-    pdf: { provider: "openai", modelId: modelIds.pdf },
+    fast: { provider: "openai", modelId: modelIds.fast.modelId },
+    chat: { provider: "openai", modelId: modelIds.chat.modelId },
+    reasoning: { provider: "openai", modelId: modelIds.reasoning.modelId },
+    pdf: { provider: "openai", modelId: modelIds.pdf.modelId },
   },
   decision: null,
 } satisfies OrgAIConfig;
@@ -68,11 +68,28 @@ const owners = (stored: unknown = null) => {
     anchorIds: [],
   } as const satisfies AnalysisInputResolution;
   spyOn(inputOwner, "resolveAnalysisInput").mockResolvedValue(resolution);
+  let held: unknown = null;
   const store = {
-    peek: () => null,
-    claim: async () => analysisSentinel(fingerprint, new Date()),
+    peek: () => held,
+    claim: async ({
+      observed,
+    }: Parameters<analysisOwner.AnalysisStore["claim"]>[0]) => {
+      if (held !== null && held !== observed) {
+        return null;
+      }
+      const sentinel = analysisSentinel(fingerprint, new Date());
+      held = sentinel;
+      return sentinel;
+    },
     save: async () => true,
-    clear: async () => await Promise.resolve(),
+    clear: async ({
+      sentinel,
+    }: Parameters<analysisOwner.AnalysisStore["clear"]>[0]) => {
+      if (held === sentinel) {
+        held = null;
+      }
+      await Promise.resolve();
+    },
   };
   spyOn(analysisOwner, "analysisStore").mockReturnValue(store);
   spyOn(analysisOwner, "storesAnalyses").mockReturnValue(true);
@@ -80,6 +97,7 @@ const owners = (stored: unknown = null) => {
 };
 
 const options = {
+  mode: "poll",
   organizationId,
   decisionId,
   orgAIConfig,
@@ -125,49 +143,154 @@ for (const status of ["done", "generating"] as const) {
   });
 }
 
-test("a scoped background failure is delivered once before the next explicit request retries", async () => {
+const diagnostic = {
+  provider: "openai",
+  code: "ai_config_openai_insufficient_quota",
+  message: "Full provider quota reason",
+} as const;
+
+const terminalFailureStore = async () => {
+  const values = new Map<string, string>();
+  const commands: string[] = [];
+  const store = failureOwner.createAnalysisFailureStore({
+    createRedis: () => ({
+      connect: async () => await Promise.resolve(),
+      send: async (command, args) => {
+        commands.push(command);
+        const key =
+          args.at(command === "EVAL" ? 2 : 0) ??
+          panic("Expected coordination key");
+        switch (command) {
+          case "SET":
+            values.set(key, args.at(1) ?? panic("Expected failure value"));
+            return "OK";
+          case "GET":
+            return values.get(key) ?? null;
+          case "GETDEL": {
+            const value = values.get(key) ?? null;
+            values.delete(key);
+            return value;
+          }
+          case "EVAL":
+            if (
+              JSON.parse(values.get(key) ?? "null")?.failureId !== args.at(3)
+            ) {
+              return 0;
+            }
+            return values.delete(key) ? 1 : 0;
+          default:
+            return panic(`Unexpected coordination command ${command}`);
+        }
+      },
+    }),
+  });
+  expect(
+    (
+      await store.write({ organizationId, decisionId, fingerprint }, diagnostic)
+    ).isOk(),
+  ).toBe(true);
+  spyOn(failureOwner, "analysisFailureStore").mockReturnValue(store);
+  return { store, commands };
+};
+
+test("two polls retain the same terminal failure and make no model calls", async () => {
   owners();
-  const diagnostic = {
-    provider: "openai",
-    code: "ai_config_openai_insufficient_quota",
-    message: "Full provider quota reason",
-  } as const;
-  let failure: {
-    status: "error";
-    providerDiagnostic: typeof diagnostic;
-  } | null = { status: "error", providerDiagnostic: diagnostic };
-  const scopes: unknown[] = [];
-  spyOn(failureOwner, "analysisFailureStore").mockReturnValue({
-    write: async () => Result.ok(undefined),
-    take: async (scope) => {
-      scopes.push(scope);
-      const reply = failure;
-      failure = null;
-      return Result.ok(reply);
-    },
-  });
-  const first = await generateAnalysis(options);
-  expect(first.unwrap()).toEqual({
-    status: "error",
-    error: "Analysis generation failed",
-    providerDiagnostic: diagnostic,
-  });
-  const retry = await generateAnalysis(options);
-  expect(Result.isError(retry)).toBe(true);
-  if (Result.isError(retry)) {
-    expect(retry.error.message).toBe("Analysis generation could not start");
+  const { commands } = await terminalFailureStore();
+  const model = spyOn(
+    generation,
+    "generateTanStackObjectForRole",
+  ).mockRejectedValue(
+    new HandlerError({ status: 503, message: "Unexpected model call" }),
+  );
+  const startModelAction = mock(runBackground);
+  for (let poll = 0; poll < 2; poll++) {
+    expect(
+      (await generateAnalysis({ ...options, startModelAction })).unwrap(),
+    ).toEqual({
+      status: "error",
+      error: "Analysis generation failed",
+      providerDiagnostic: diagnostic,
+    });
   }
-  expect(scopes).toEqual([
-    { organizationId, decisionId, fingerprint },
-    { organizationId, decisionId, fingerprint },
-  ]);
+  expect(model).toHaveBeenCalledTimes(0);
+  expect(startModelAction).toHaveBeenCalledTimes(0);
+  expect(commands).toEqual(["SET", "GET", "GET"]);
 });
+
+for (const schedule of ["single", "concurrent", "delayed-admission"] as const) {
+  test(`${schedule} explicit retries clear the observed failure and start exactly one model call`, async () => {
+    const retries = schedule === "single" ? 1 : 2;
+    owners();
+    const { commands, store } = await terminalFailureStore();
+    const error = createProviderCallError({
+      model: { provider: "openai", keySource: "byok" },
+      status: 429,
+      evidence: {
+        error: { code: "insufficient_quota", message: "New terminal failure" },
+      },
+    });
+    const model = spyOn(
+      generation,
+      "generateTanStackObjectForRole",
+    ).mockRejectedValue(error);
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    try {
+      const firstSettled = Promise.withResolvers<undefined>();
+      let starts = 0;
+      const startModelAction: DetachedModelActionStarter = async (work) => {
+        const position = starts++;
+        if (schedule === "delayed-admission" && position > 0) {
+          await firstSettled.promise;
+        }
+        const result = await runBackground(work);
+        if (position === 0) {
+          firstSettled.resolve(undefined);
+        }
+        return result;
+      };
+      const results = await Promise.all(
+        Array.from(
+          { length: retries },
+          async () =>
+            await generateAnalysis({
+              ...options,
+              mode: "retry",
+              startModelAction,
+            }),
+        ),
+      );
+      expect(results.map((result) => result.unwrap())).toEqual(
+        Array.from({ length: retries }, () => ({ status: "generating" })),
+      );
+      expect(model).toHaveBeenCalledTimes(1);
+      expect(commands.filter((command) => command === "EVAL")).toHaveLength(
+        schedule === "delayed-admission" ? 2 : 1,
+      );
+      expect(commands.indexOf("EVAL")).toBeLessThan(
+        commands.lastIndexOf("SET"),
+      );
+      expect(
+        (
+          await store.read({ organizationId, decisionId, fingerprint })
+        ).unwrap(),
+      ).toMatchObject({
+        status: "error",
+        providerDiagnostic: error.providerDiagnostic,
+      });
+    } finally {
+      logs.restore();
+      analytics.restore();
+    }
+  });
+}
 
 test("a failure-delivery read outage is captured and returned explicitly without starting generation", async () => {
   owners();
   spyOn(failureOwner, "analysisFailureStore").mockReturnValue({
     write: async () => Result.ok(undefined),
-    take: async () =>
+    clear: async () => Result.ok(true),
+    read: async () =>
       Result.err(
         new failureOwner.AnalysisFailureStoreError({
           message: "Fixture unavailable",
@@ -205,6 +328,47 @@ const runBackground: DetachedModelActionStarter = async ({
   return Result.ok(sentinel);
 };
 
+test("a retry clear outage preserves the failure and releases its claim without a model call", async () => {
+  const analysis = owners();
+  const { store } = await terminalFailureStore();
+  spyOn(store, "clear").mockResolvedValue(
+    Result.err(
+      new failureOwner.AnalysisFailureStoreError({
+        message: "Fixture unavailable",
+      }),
+    ),
+  );
+  const released = spyOn(analysis, "clear");
+  const model = spyOn(generation, "generateTanStackObjectForRole");
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  try {
+    const result = await generateAnalysis({
+      ...options,
+      mode: "retry",
+      startModelAction: runBackground,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        status: 503,
+        message: "Analysis failure delivery is unavailable",
+      });
+    }
+    expect(model).toHaveBeenCalledTimes(0);
+    expect(released).toHaveBeenCalledTimes(1);
+    expect(
+      (await store.read({ organizationId, decisionId, fingerprint })).unwrap(),
+    ).toMatchObject({
+      status: "error",
+      providerDiagnostic: diagnostic,
+    });
+  } finally {
+    logs.restore();
+    analytics.restore();
+  }
+});
+
 for (const delivery of ["available", "outage"] as const) {
   test(`background failure ${delivery} delivery never enters the shared analysis and always releases its exact sentinel`, async () => {
     const store = owners();
@@ -226,7 +390,8 @@ for (const delivery of ["available", "outage"] as const) {
     spyOn(generation, "generateTanStackObjectForRole").mockRejectedValue(error);
     const snapshots: unknown[] = [];
     spyOn(failureOwner, "analysisFailureStore").mockReturnValue({
-      take: async () => Result.ok(null),
+      clear: async () => Result.ok(true),
+      read: async () => Result.ok(null),
       write: async (scope, providerDiagnostic) => {
         operations.push("write");
         snapshots.push({ scope, providerDiagnostic });

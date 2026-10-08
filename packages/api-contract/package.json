@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./provider-setup": "./src/provider-setup.ts",
+    "./case-law-analysis": "./src/case-law-analysis.ts",
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./limits": "./src/limits.ts",

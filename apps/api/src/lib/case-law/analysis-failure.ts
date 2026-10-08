@@ -15,7 +15,15 @@ import {
 
 const FAILURE_TTL_SECONDS = 600;
 const COMMAND_TIMEOUT_MS = 500;
+const CLEAR_OBSERVED_FAILURE = `
+local failure = redis.call('GET', KEYS[1])
+if failure and cjson.decode(failure).failureId == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`;
 const failureSchema = v.strictObject({
+  failureId: v.pipe(v.string(), v.uuid()),
   status: v.literal("error"),
   providerDiagnostic: v.optional(providerDiagnosticSchema),
 });
@@ -41,7 +49,7 @@ type AnalysisFailureStoreOptions = {
   commandTimeoutMs?: number;
 };
 
-/** One delivery to the initiating organization; its next explicit request can retry. */
+/** Terminal failure shared by the organization's readers until retry or expiry. */
 export const createAnalysisFailureStore = ({
   createRedis = () =>
     createRedisClient({
@@ -57,7 +65,8 @@ export const createAnalysisFailureStore = ({
   const command = async (
     options:
       | { name: "SET"; key: CoordinationKey; value: string }
-      | { name: "GETDEL"; key: CoordinationKey },
+      | { name: "GET"; key: CoordinationKey }
+      | { name: "clear"; key: CoordinationKey; expected: string },
   ) => {
     const result = await Result.tryPromise({
       try: async () =>
@@ -75,8 +84,15 @@ export const createAnalysisFailureStore = ({
                     ttl: { unit: "seconds", value: FAILURE_TTL_SECONDS },
                   }),
                 );
-              case "GETDEL":
-                return await redis.send("GETDEL", [options.key]);
+              case "GET":
+                return await redis.send(options.name, [options.key]);
+              case "clear":
+                return await redis.send("EVAL", [
+                  CLEAR_OBSERVED_FAILURE,
+                  "1",
+                  options.key,
+                  options.expected,
+                ]);
               default:
                 options satisfies never;
                 return panic("Unhandled analysis failure command");
@@ -109,6 +125,7 @@ export const createAnalysisFailureStore = ({
       providerDiagnostic: ProviderDiagnostic | undefined,
     ) => {
       const failure = {
+        failureId: Bun.randomUUIDv7(),
         status: "error",
         ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
       } as const;
@@ -119,8 +136,16 @@ export const createAnalysisFailureStore = ({
       });
       return result.map(() => undefined);
     },
-    take: async (scope: AnalysisFailureScope) => {
-      const result = await command({ name: "GETDEL", key: keyFor(scope) });
+    clear: async (scope: AnalysisFailureScope, expectedFailureId: string) =>
+      (
+        await command({
+          name: "clear",
+          key: keyFor(scope),
+          expected: expectedFailureId,
+        })
+      ).map((removed) => removed === 1),
+    read: async (scope: AnalysisFailureScope) => {
+      const result = await command({ name: "GET", key: keyFor(scope) });
       if (Result.isError(result)) {
         return Result.err(result.error);
       }

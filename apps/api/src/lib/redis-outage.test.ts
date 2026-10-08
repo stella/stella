@@ -380,7 +380,7 @@ test("organization-scoped analysis failures fail explicitly during a real Valkey
   };
   try {
     const written = await settle(store.write(scope, undefined));
-    const read = await settle(store.take(scope));
+    const read = await settle(store.read(scope));
     for (const result of [written, read]) {
       expect(result.status).toBe("ok");
       if (result.status === "ok") {

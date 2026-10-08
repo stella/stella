@@ -120,6 +120,7 @@ describe("generating an analysis for a decision in a language with no prompt", (
     expect(claimsBefore).not.toBeNull();
 
     const response = await generateAnalysis({
+      mode: "poll",
       admitModelAction: async () =>
         panic("Unsupported languages must not admit a model action"),
       startModelAction: async () =>

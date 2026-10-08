@@ -1,4 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 /**
  * Hook to manage decision analysis state.
@@ -8,6 +13,7 @@ import { panic } from "better-result";
  * retry failures.
  */
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
@@ -15,8 +21,8 @@ import {
   type AnalysisQueryResult,
   type DecisionAnalysisRequestKey,
   decisionAnalysisOptions,
+  requestDecisionAnalysis,
 } from "@/features/case-law/queries/decision-analysis";
-import { detached } from "@/lib/detached";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 
 export type AnalysisState =
@@ -88,27 +94,51 @@ export const useDecisionAnalysis = ({
   enabled,
   ...key
 }: UseDecisionAnalysisOptions) => {
+  const queryClient = useQueryClient();
+  const options = decisionAnalysisOptions(key);
+  const mutationKey = [...options.queryKey, "retry"];
+  const retrying = useIsMutating({ mutationKey, exact: true }) > 0;
+  const retry = useMutation({
+    mutationKey,
+    retry: false,
+    mutationFn: async () => {
+      await queryClient.cancelQueries({
+        queryKey: options.queryKey,
+        exact: true,
+      });
+      return await requestDecisionAnalysis({
+        decisionId: key.decisionId,
+        mode: ANALYSIS_REQUEST_MODE.retry,
+        signal: AbortSignal.timeout(15_000),
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(options.queryKey, result);
+    },
+  });
   // Disabled, the observer still reads the cache, so an analysis finished
-  // earlier is drawn without asking for a run.
+  // earlier is drawn without asking for a run. An explicit retry owns the
+  // transport until it settles; polling resumes only with the normal options.
   const query = useQuery({
-    ...decisionAnalysisOptions(key),
-    enabled,
+    ...options,
+    enabled: enabled && !retrying,
+    refetchInterval: retrying ? false : options.refetchInterval,
   });
   const finishedAnalysis =
     query.data?.kind === "done" ? query.data.analysis : null;
 
-  const hasErrorResult = query.data?.kind === "error" || query.isError;
-  const refetch = query.refetch;
-
+  const hasErrorResult =
+    query.data?.kind === "error" || query.isError || retry.isError;
   const generate = () => {
-    if (!enabled || finishedAnalysis !== null) {
+    if (
+      !enabled ||
+      finishedAnalysis !== null ||
+      queryClient.isMutating({ mutationKey, exact: true }) > 0
+    ) {
       return;
     }
-    // Allow retry when the previous attempt settled into an error
-    // state: refetch the polling query so it picks up a fresh
-    // result instead of staying on the cached failure.
     if (hasErrorResult) {
-      detached(refetch(), "use-decision-analysis.refetch");
+      retry.mutate();
     }
   };
 
@@ -120,10 +150,10 @@ export const useDecisionAnalysis = ({
       return { status: "idle" };
     }
     return analysisStateFromQuery({
-      hasQueryError: query.isError,
-      isFetching: query.isFetching,
-      result: query.data,
-      queryError: query.error,
+      hasQueryError: query.isError || retry.isError,
+      isFetching: query.isFetching || retrying,
+      result: retry.isError ? undefined : query.data,
+      queryError: retry.error ?? query.error,
     });
   })();
 

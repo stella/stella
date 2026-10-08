@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { decisionAnalysisOptions } from "@/features/case-law/queries/decision-analysis";
@@ -67,9 +68,10 @@ const mockReads = ({ analysisAnswers, decisionVersions }: MockReadsOptions) => {
     paths.filter((path) => path.endsWith(suffix)).length;
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
-      const { pathname } = new URL(new Request(input, init).url);
+      const { pathname, searchParams } = new URL(new Request(input, init).url);
       paths.push(pathname);
       if (pathname.endsWith(ANALYSIS_PATH)) {
+        expect(searchParams.get("mode")).toBe(ANALYSIS_REQUEST_MODE.poll);
         return json(inTurn(analysisAnswers, count(ANALYSIS_PATH)));
       }
       expect(pathname).toEndWith(DECISION_PATH);

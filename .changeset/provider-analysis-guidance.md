@@ -1,5 +1,4 @@
 ---
-"@stll/cli": patch
 ---
 
-Expose typed provider setup guidance with authenticated analysis failure responses.
+Expose typed provider setup guidance and explicit analysis poll/retry modes.

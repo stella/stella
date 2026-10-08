@@ -1,5 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
+import type { AnalysisRequestMode } from "@stll/api-contract/case-law-analysis";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
@@ -97,6 +99,50 @@ export type DecisionAnalysisRequestKey = DecisionAnalysisKey & {
   organizationId: string;
 };
 
+type DecisionAnalysisRequestOptions = {
+  decisionId: DecisionAnalysisKey["decisionId"];
+  mode: AnalysisRequestMode;
+  signal: AbortSignal;
+};
+
+/** Both background polling and an explicit retry use the same transport/parser. */
+export const requestDecisionAnalysis = async ({
+  decisionId,
+  mode,
+  signal,
+}: DecisionAnalysisRequestOptions): Promise<AnalysisQueryResult> => {
+  const url = new URL(apiUrl(`/case/decisions/${decisionId}/analysis`));
+  url.searchParams.set("mode", mode);
+  const response = await fetchWithTimeout(url, {
+    credentials: "include",
+    signal,
+    timeoutMs: 15_000,
+  });
+
+  const data: unknown = await response.json();
+  if (!response.ok) {
+    throw toAPIError({ status: response.status, value: data });
+  }
+  const parsed = parseAnalysisResponse(data);
+
+  if (!parsed) {
+    return { kind: "error" };
+  }
+
+  if (parsed.status === "done") {
+    return { kind: "done", analysis: parsed.analysis };
+  }
+  if (parsed.status === "generating") {
+    return { kind: "generating", tree: parsed.tree };
+  }
+  return {
+    kind: "error",
+    ...(parsed.providerDiagnostic === undefined
+      ? {}
+      : { providerDiagnostic: parsed.providerDiagnostic }),
+  };
+};
+
 export const decisionAnalysisOptions = ({
   decisionId,
   decisionUpdatedAt,
@@ -109,46 +155,20 @@ export const decisionAnalysisOptions = ({
       decisionId,
       { decisionUpdatedAt },
     ],
-    queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
-      const response = await fetchWithTimeout(
-        apiUrl(`/case/decisions/${decisionId}/analysis`),
-        {
-          credentials: "include",
-          signal,
-          timeoutMs: 15_000,
-        },
-      );
-
-      const data: unknown = await response.json();
-      if (!response.ok) {
-        throw toAPIError({ status: response.status, value: data });
-      }
-      const parsed = parseAnalysisResponse(data);
-
-      if (!parsed) {
-        return { kind: "error" };
-      }
-
-      if (parsed.status === "done") {
-        return { kind: "done", analysis: parsed.analysis };
-      }
-      if (parsed.status === "generating") {
-        return { kind: "generating", tree: parsed.tree };
-      }
-      return {
-        kind: "error",
-        ...(parsed.providerDiagnostic === undefined
-          ? {}
-          : { providerDiagnostic: parsed.providerDiagnostic }),
-      };
-    },
+    queryFn: async ({ signal }) =>
+      await requestDecisionAnalysis({
+        decisionId,
+        mode: ANALYSIS_REQUEST_MODE.poll,
+        signal,
+      }),
     refetchInterval: ({ state }) =>
       state.error !== null || isTerminal(state.data) ? false : POLL_INTERVAL_MS,
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     // A finished analysis changes only when regenerated, so it is never asked
-    // again; a run in flight or a failed one is, on the next poll or retry.
+    // again; an in-flight run is read on the next poll. A failed run
+    // starts again only through the explicit retry request.
     staleTime: ({ state }) =>
       state.data?.kind === "done" ? STALE_TIME.INFINITE : 0,
     // Held past the reader leaving the decision, so coming back to it draws
