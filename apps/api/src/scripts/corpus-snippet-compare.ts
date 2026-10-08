@@ -224,5 +224,5 @@ await runScriptWithErrorOutput(async () => {
   await Bun.write(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
   await Bun.write(markdownPath, `${renderSnippetCompareMarkdown(report)}\n`);
   console.log(`wrote ${jsonPath} and ${markdownPath}`);
-  process.exitCode = 0;
+  process.exit(0);
 });

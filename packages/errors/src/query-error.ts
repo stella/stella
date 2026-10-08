@@ -171,16 +171,9 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
         Reflect.set(output, "query", queryShape(input.query));
         output.message += `: ${queryShape(input.query)}`;
       }
-      // Keep source locations, excluding headers and inferred function names.
-      if (typeof input.stack === "string") {
-        const frames = input.stack.split("\n").flatMap((line) => {
-          const location = /^\s+at (?:.*?\()?([^()]+:\d+:\d+)\)?$/u
-            .exec(line)
-            ?.at(1);
-          return location === undefined ? [] : [`    at ${location}`];
-        });
-        output.stack = `${output.name}: ${output.message}\n${frames.join("\n")}`;
-      }
+      // Input stacks include untrusted message continuation lines. Query
+      // projections omit them; telemetry reads trusted frames separately.
+      delete output.stack;
       return output;
     }
     if (Array.isArray(input)) {

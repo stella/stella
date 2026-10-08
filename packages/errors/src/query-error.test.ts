@@ -46,6 +46,42 @@ for (const literal of [
   });
 }
 
+test("query output excludes multiline values shaped like stack frames", () => {
+  const marker = "fixture-value-shaped-as-frame";
+  for (const frame of [
+    `    at ${marker}:1:1`,
+    `    at handler (packages/${marker}.ts:1:1)`,
+  ]) {
+    const parameter = `prefix\n${frame}`;
+    const query = Object.assign(
+      new Error(
+        `Failed query: insert into account values ($1)\nparams: ${parameter}`,
+      ),
+      {
+        name: "DrizzleQueryError",
+        query: "insert into account values ($1)",
+        params: [parameter],
+        cause: Object.assign(new Error(`Query rejected: ${parameter}`), {
+          name: "PostgresError",
+          code: "23505",
+          constraint_name: "account_token_unique",
+        }),
+      },
+    );
+    expect(query.stack).toContain(frame);
+    expect(query.cause.stack).toContain(frame);
+    const wrapper = new Error(`Wrapped query failure: ${parameter}`, {
+      cause: query,
+    });
+    for (const error of [query, wrapper]) {
+      const safe = sanitizeErrorForOutput(error);
+      expect(inspect(safe, { depth: 20 })).not.toContain(marker);
+      expect(JSON.stringify(safe)).not.toContain(marker);
+      expect(inspect(safe, { depth: 20 })).toContain("account_token_unique");
+    }
+  }
+});
+
 test("query output redacts nested aggregate and cyclic causes without invoking custom inspectors", () => {
   const query = failure("insert into account values ($1)");
   Reflect.set(query, Symbol.for("nodejs.util.inspect.custom"), () => SECRET);

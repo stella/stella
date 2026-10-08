@@ -2608,5 +2608,6 @@ if (import.meta.main) {
     await ensureTestUsers(DEFAULT_ORG_ID);
     await seedTemplates();
     console.log("\nDone.");
+    process.exit(0);
   });
 }

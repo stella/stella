@@ -25,6 +25,11 @@ const SECRETS = [
   "$argon2id$v=19$m=65536$fixture-password-hash",
   "fixture-private-token-9f8a",
   "fixture-person@example.test",
+  "fixture-value-shaped-as-frame",
+];
+const QUERY_PARAMS = [
+  ...SECRETS,
+  `prefix\n    at packages/${SECRETS.at(3)}.ts:1:1`,
 ];
 const queryFailure = () => {
   const driver = Object.assign(
@@ -32,16 +37,16 @@ const queryFailure = () => {
     {
       name: "PostgresError",
       code: "23505",
-      constraint_name: "account_token_unique",
+      constraint: "account_token_unique",
       detail: SECRETS.join(","),
       hint: SECRETS.join(","),
       query: `insert into account values ('${SECRETS.at(1)}')`,
-      params: SECRETS,
+      params: QUERY_PARAMS,
     },
   );
   return new DrizzleQueryError(
     `insert into "account" ("password", "token") values ($1, $2) returning '${SECRETS.at(2)}'`,
-    SECRETS,
+    QUERY_PARAMS,
     driver,
   );
 };
@@ -60,6 +65,7 @@ afterEach(() => {
 test("query error output excludes parameter values across console, dev sink and script printer", () => {
   const error = queryFailure();
   expect(inspect(error)).toContain(SECRETS.at(0));
+  expect(error.stack).toContain(QUERY_PARAMS.at(-1));
   const consoleRecords: unknown[][] = [];
   const sinkRecords: unknown[] = [];
   console.error = (...args: unknown[]) => {
@@ -92,7 +98,7 @@ test("query error output excludes parameter values across console, dev sink and 
   expect(inspect(consoleRecords, { depth: 20 })).toContain(
     "insert into ? ( ? , ? ) values ( $1 , $2 ) returning ?",
   );
-  expect(error.params).toEqual(SECRETS);
+  expect(error.params).toEqual(QUERY_PARAMS);
   expect(error.cause).toHaveProperty("code", "23505");
 });
 
