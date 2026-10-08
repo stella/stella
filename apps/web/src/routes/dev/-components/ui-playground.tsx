@@ -1689,6 +1689,9 @@ function SharedChatRendererSample() {
             handleDeny: () => {
               /* no-op in playground */
             },
+            continueRequestSecret: async () => {
+              /* no-op in playground */
+            },
             handleRequestSecret: async () => ({
               status: "declined",
               target: { type: "mcp-connector", connectorSlug: "playground" },

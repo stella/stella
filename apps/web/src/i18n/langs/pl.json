@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Sprawdzanie szczegółów łącznika…",
       "connectionDisposition": "Połączenie: {disposition}",
+      "continuationError": "Twoja odpowiedź została zapisana, ale czat nie mógł być kontynuowany.",
       "declined": "Odmówiono",
       "description": "Asystent potrzebuje ich, aby kontynuować",
       "error": "Nie udało się przekazać danych dostępowych. Spróbuj ponownie.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "Cel określony przez AI: {purpose}",
       "receiptOnlyConnection": "Tylko prywatne połączenie",
       "replaceOrdinaryConnection": "Zastąp zwykłe połączenie użyciem wyłącznie prywatnym",
+      "retryContinuationAction": "Kontynuuj czat",
       "saveForFuture": "Zapisz na potrzeby przyszłych czatów",
       "savedAvailabilityError": "Nie udało się sprawdzić, czy zapisano dane dostępowe.",
       "target": "Cel: {target}",

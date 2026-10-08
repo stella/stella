@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Connector-Details werden überprüft …",
       "connectionDisposition": "Verbindung: {disposition}",
+      "continuationError": "Ihre Antwort wurde gespeichert, aber der Chat konnte nicht fortgesetzt werden.",
       "declined": "Abgelehnt",
       "description": "Der Assistent benötigt diese Angabe, um fortzufahren",
       "error": "Die Zugangsdaten konnten nicht übermittelt werden. Versuchen Sie es erneut.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "Von der KI angegebener Zweck: {purpose}",
       "receiptOnlyConnection": "Nur private Verbindung",
       "replaceOrdinaryConnection": "Normale Verbindung durch private Nutzung ersetzen",
+      "retryContinuationAction": "Chat fortsetzen",
       "saveForFuture": "Für zukünftige Chats speichern",
       "savedAvailabilityError": "Gespeicherte Zugangsdaten konnten nicht überprüft werden.",
       "target": "Ziel: {target}",

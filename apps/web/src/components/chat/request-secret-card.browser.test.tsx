@@ -66,6 +66,7 @@ const mountCard = ({
     },
   }),
   handleRequestSecret = async () => declineOutput,
+  continueRequestSecret = async () => {},
 }: {
   resolveSecretTarget?: (
     connectorSlug: string,
@@ -75,6 +76,10 @@ const mountCard = ({
     toolCallId: string,
     decision: RequestSecretDecision,
   ) => Promise<RequestSecretOutput>;
+  continueRequestSecret?: (
+    toolCallId: string,
+    receipt: RequestSecretOutput,
+  ) => Promise<void>;
 }) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -92,6 +97,7 @@ const mountCard = ({
             handleApprove: () => {},
             handleDeny: () => {},
             handleRequestSecret,
+            continueRequestSecret,
             secretAvailabilityKey: "sample-thread",
             resolveSecretTarget,
           }}
@@ -189,6 +195,69 @@ describe("request secret card", () => {
     expect(
       screen.getByText(messages.chat.requestSecret.provided),
     ).not.toBeNull();
+    queryClient.clear();
+  });
+
+  test("retries only the chat continuation after the credential was accepted", async () => {
+    const submissions: RequestSecretDecision[] = [];
+    const continuations: {
+      toolCallId: string;
+      receipt: RequestSecretOutput;
+    }[] = [];
+    const { queryClient } = mountCard({
+      handleRequestSecret: async (_toolCallId, decision) => {
+        submissions.push(decision);
+        return providedOutput;
+      },
+      continueRequestSecret: async (toolCallId, receipt) => {
+        continuations.push({ toolCallId, receipt });
+        if (continuations.length === 1) {
+          throw new Error("continuation unavailable");
+        }
+      },
+    });
+
+    const credentialField = await screen.findByLabelText(
+      messages.chat.requestSecret.valueLabel,
+    );
+    fireEvent.change(credentialField, { target: { value: "sample-value" } });
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.chat.requestSecret.provideAction,
+        }),
+      ),
+    );
+
+    expect(
+      await screen.findByText(messages.chat.requestSecret.continuationError),
+    ).not.toBeNull();
+    expect(
+      screen.getByText(messages.chat.requestSecret.provided),
+    ).not.toBeNull();
+    expect(
+      screen.queryByRole("button", { name: messages.common.decline }),
+    ).toBeNull();
+    expect(
+      screen.queryByLabelText(messages.chat.requestSecret.valueLabel),
+    ).toBeNull();
+
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.chat.requestSecret.retryContinuationAction,
+        }),
+      ),
+    );
+
+    expect(submissions).toHaveLength(1);
+    expect(continuations).toEqual([
+      { toolCallId: "sample-request-call", receipt: providedOutput },
+      { toolCallId: "sample-request-call", receipt: providedOutput },
+    ]);
+    expect(
+      screen.queryByText(messages.chat.requestSecret.continuationError),
+    ).toBeNull();
     queryClient.clear();
   });
 

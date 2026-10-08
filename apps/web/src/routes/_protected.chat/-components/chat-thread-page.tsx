@@ -250,6 +250,7 @@ export const ChatThreadPage = ({
     handleAllowInConversation,
     handleDeny,
     handleRequestSecret,
+    continueRequestSecret,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -590,6 +591,7 @@ export const ChatThreadPage = ({
             handleApprove,
             handleDeny,
             handleRequestSecret,
+            continueRequestSecret,
             resolveSecretTarget,
             secretAvailabilityKey,
           }}

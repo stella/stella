@@ -58,6 +58,10 @@ type ChatApprovalContextValue = {
     toolCallId: string,
     decision: RequestSecretDecision,
   ) => PromiseLike<RequestSecretOutput>;
+  continueRequestSecret: (
+    toolCallId: string,
+    receipt: RequestSecretOutput,
+  ) => PromiseLike<void>;
   secretAvailabilityKey: string;
   resolveSecretTarget: (
     connectorSlug: string,

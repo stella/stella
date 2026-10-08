@@ -259,6 +259,7 @@ export const ChatTabPanel = ({
     handleAllowInConversation,
     handleDeny,
     handleRequestSecret,
+    continueRequestSecret,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -548,6 +549,7 @@ export const ChatTabPanel = ({
           handleApprove,
           handleDeny,
           handleRequestSecret,
+          continueRequestSecret,
           resolveSecretTarget,
           secretAvailabilityKey,
         }}

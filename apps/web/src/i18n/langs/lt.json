@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Tikrinama jungties informacija…",
       "connectionDisposition": "Ryšys: {disposition}",
+      "continuationError": "Jūsų atsakymas išsaugotas, bet pokalbio nepavyko tęsti.",
       "declined": "Atsisakyta",
       "description": "Asistentui jų reikia, kad galėtų tęsti",
       "error": "Nepavyko pateikti prisijungimo duomenų. Bandykite dar kartą.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "DI parašytas tikslas: {purpose}",
       "receiptOnlyConnection": "Tik privatus ryšys",
       "replaceOrdinaryConnection": "Pakeisti įprastą ryšį į tik privatų naudojimą",
+      "retryContinuationAction": "Tęsti pokalbį",
       "saveForFuture": "Išsaugoti būsimiems pokalbiams",
       "savedAvailabilityError": "Nepavyko patikrinti, ar yra išsaugotų prisijungimo duomenų.",
       "target": "Paskirtis: {target}",

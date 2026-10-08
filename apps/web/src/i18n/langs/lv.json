@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Tiek pārbaudīta savienotāja informācija…",
       "connectionDisposition": "Savienojums: {disposition}",
+      "continuationError": "Jūsu atbilde ir saglabāta, bet tērzēšanu neizdevās turpināt.",
       "declined": "Atteikts",
       "description": "Asistentam tā ir vajadzīga, lai turpinātu",
       "error": "Neizdevās iesniegt piekļuves informāciju. Mēģiniet vēlreiz.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "AI norādītais mērķis: {purpose}",
       "receiptOnlyConnection": "Tikai privāts savienojums",
       "replaceOrdinaryConnection": "Aizstāt parasto savienojumu ar tikai privātu izmantošanu",
+      "retryContinuationAction": "Turpināt tērzēšanu",
       "saveForFuture": "Saglabāt turpmākām tērzēšanas sarunām",
       "savedAvailabilityError": "Neizdevās pārbaudīt, vai ir saglabāti piekļuves dati.",
       "target": "Mērķis: {target}",

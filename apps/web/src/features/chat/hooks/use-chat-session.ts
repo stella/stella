@@ -935,25 +935,32 @@ export const useChatSession = ({
     },
     [addToolResult],
   );
+  // Submitting the decision and continuing the chat are separate
+  // steps: once the server commits a decision, the card keeps the
+  // returned receipt (never the value) and retries only the
+  // continuation, so a failed continuation never re-sends the value.
   const handleRequestSecret = useCallback(
     async (
       toolCallId: string,
       decision: RequestSecretDecision,
-    ): Promise<RequestSecretOutput> => {
-      const output = await unwrapEden(
+    ): Promise<RequestSecretOutput> =>
+      unwrapEden(
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(conversationId) })
           .secrets({ toolCallId })
           .post(decision),
-      );
+      ),
+    [conversationId],
+  );
+  const continueRequestSecret = useCallback(
+    async (toolCallId: string, receipt: RequestSecretOutput) => {
       await addToolResult({
         tool: "request_secret",
         toolCallId,
-        output,
+        output: receipt,
       });
-      return output;
     },
-    [addToolResult, conversationId],
+    [addToolResult],
   );
   const resolveSecretTarget = useCallback(
     async (
@@ -1606,6 +1613,7 @@ export const useChatSession = ({
     handleDeny,
     handleAskUserSubmit,
     handleRequestSecret,
+    continueRequestSecret,
     resolveSecretTarget,
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,

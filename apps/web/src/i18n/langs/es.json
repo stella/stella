@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Comprobando los datos del conector…",
       "connectionDisposition": "Conexión: {disposition}",
+      "continuationError": "Tu respuesta se ha guardado, pero el chat no ha podido continuar.",
       "declined": "Rechazada",
       "description": "El asistente la necesita para continuar",
       "error": "No se pudo enviar la credencial. Inténtalo de nuevo.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "Propósito escrito por la IA: {purpose}",
       "receiptOnlyConnection": "Conexión solo privada",
       "replaceOrdinaryConnection": "Sustituir la conexión normal por un uso solo privado",
+      "retryContinuationAction": "Continuar el chat",
       "saveForFuture": "Guardar para futuros chats",
       "savedAvailabilityError": "No se pudo comprobar si hay una credencial guardada.",
       "target": "Destino: {target}",

@@ -4,7 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { RequestSecretInput } from "@stll/api-contract/chat-secret";
+import type {
+  RequestSecretInput,
+  RequestSecretOutput,
+} from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
 import { CheckIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -164,21 +167,61 @@ const RequestSecretDetails = ({
   );
 };
 
+type RequestSecretContinuationRetryProps = {
+  hasError: boolean;
+  isSubmitting: boolean;
+  onRetry: () => void;
+};
+
+const RequestSecretContinuationRetry = ({
+  hasError,
+  isSubmitting,
+  onRetry,
+}: RequestSecretContinuationRetryProps) => {
+  const t = useTranslations();
+  if (!hasError) {
+    return null;
+  }
+  return (
+    <div className="mt-4 space-y-3">
+      <p className="text-destructive text-sm" role="alert">
+        {t("chat.requestSecret.continuationError")}
+      </p>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button disabled={isSubmitting} onClick={onRetry} type="button">
+          {isSubmitting ? <Loader className="size-4" /> : null}
+          {t("chat.requestSecret.retryContinuationAction")}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const RequestSecretCard = ({
   isAwaitingUser,
   part,
 }: RequestSecretCardProps) => {
   const t = useTranslations();
-  const { handleRequestSecret, secretAvailabilityKey, resolveSecretTarget } =
-    useChatApproval();
+  const {
+    handleRequestSecret,
+    continueRequestSecret,
+    secretAvailabilityKey,
+    resolveSecretTarget,
+  } = useChatApproval();
   const [value, setValue] = useState("");
   const [saveForFuture, setSaveForFuture] = useState(false);
   const [normalConnectionAction, setNormalConnectionAction] =
     useState<NormalConnectionAction>("preserve");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasError, setHasError] = useState(false);
+  // The server-committed receipt (status, secretRef, target; never the
+  // value). Held so a failed chat continuation retries only the
+  // continuation instead of re-submitting the credential.
+  const [heldReceipt, setHeldReceipt] = useState<RequestSecretOutput>();
+  const [hasContinuationError, setHasContinuationError] = useState(false);
   const input = part.state === "input-streaming" ? null : part.input;
   const output = part.state === "complete" ? part.output : undefined;
+  const shownOutput = output ?? heldReceipt;
   const isPending = isAwaitingUser && output === undefined;
   const connectorSlug = input?.target.connectorSlug;
   const savedSecretQuery = useQuery({
@@ -195,8 +238,30 @@ export const RequestSecretCard = ({
     ? savedSecretQuery.data
     : undefined;
 
+  const continueWithReceipt = async (receipt: RequestSecretOutput) => {
+    setIsSubmitting(true);
+    const result = await Result.tryPromise(() =>
+      continueRequestSecret(part.id, receipt),
+    );
+    setHasContinuationError(Result.isError(result));
+    setIsSubmitting(false);
+  };
+
+  const retryContinuation = async () => {
+    if (heldReceipt === undefined || !isPending || isSubmitting) {
+      return;
+    }
+    await continueWithReceipt(heldReceipt);
+  };
+
   const submit = async (decision: RequestSecretDecision["decision"]) => {
-    if (input === null || input === undefined || !isPending || isSubmitting) {
+    if (
+      input === null ||
+      input === undefined ||
+      !isPending ||
+      isSubmitting ||
+      heldReceipt !== undefined
+    ) {
       return;
     }
     if (
@@ -258,8 +323,11 @@ export const RequestSecretCard = ({
     );
     if (Result.isError(result)) {
       setHasError(true);
+      setIsSubmitting(false);
+      return;
     }
-    setIsSubmitting(false);
+    setHeldReceipt(result.value);
+    await continueWithReceipt(result.value);
   };
 
   return (
@@ -269,26 +337,38 @@ export const RequestSecretCard = ({
       data-slot="request-secret-card"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
-        {output?.status === "provided" ? (
+        {shownOutput?.status === "provided" ? (
           <CheckIcon aria-hidden="true" className="size-4" />
         ) : null}
         {t("chat.requestSecret.title")}
       </div>
-      {input && output === undefined ? (
+      {input && shownOutput === undefined ? (
         <RequestSecretDetails
           input={input}
           isCheckingTarget={savedSecretQuery.isPending}
           secretTarget={secretTarget}
         />
       ) : null}
-      {output ? (
+      {shownOutput ? (
         <p className="text-muted-foreground mt-3 text-sm">
-          {output.status === "provided"
+          {shownOutput.status === "provided"
             ? t("chat.requestSecret.provided")
             : t("chat.requestSecret.declined")}
         </p>
       ) : null}
-      {isPending && input ? (
+      {isPending && heldReceipt !== undefined ? (
+        <RequestSecretContinuationRetry
+          hasError={hasContinuationError}
+          isSubmitting={isSubmitting}
+          onRetry={() =>
+            detached(
+              retryContinuation(),
+              "request-secret-card.retry-continuation",
+            )
+          }
+        />
+      ) : null}
+      {isPending && input && heldReceipt === undefined ? (
         <div className="mt-4 space-y-3">
           {secretTarget ? (
             <RequestSecretCredentialFields

@@ -41,6 +41,7 @@ const renderCard = (
             handleAlwaysAllow: noop,
             handleApprove: noop,
             handleDeny: noop,
+            continueRequestSecret: async () => {},
             handleRequestSecret: async () => ({
               status: "declined",
               target: { type: "mcp-connector", connectorSlug: "test" },

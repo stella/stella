@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Kontrollin ühenduse üksikasju…",
       "connectionDisposition": "Ühendus: {disposition}",
+      "continuationError": "Teie vastus salvestati, kuid vestlust ei saanud jätkata.",
       "declined": "Keeldutud",
       "description": "Assistent vajab seda jätkamiseks",
       "error": "Mandaadi saatmine ebaõnnestus. Proovi uuesti.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "Tehisintellekti kirjutatud eesmärk: {purpose}",
       "receiptOnlyConnection": "Ainult privaatne ühendus",
       "replaceOrdinaryConnection": "Asenda tavaline ühendus ainult privaatse kasutusega",
+      "retryContinuationAction": "Jätka vestlust",
       "saveForFuture": "Salvesta tulevaste vestluste jaoks",
       "savedAvailabilityError": "Salvestatud mandaadi olemasolu ei saanud kontrollida.",
       "target": "Sihtkoht: {target}",

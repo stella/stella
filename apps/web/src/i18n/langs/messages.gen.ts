@@ -1321,6 +1321,7 @@ type Messages = {
     "requestSecret": {
       "checkingTarget": "Checking connector details…";
       "connectionDisposition": "Connection: {disposition}";
+      "continuationError": "Your answer was saved, but the chat could not continue.";
       "declined": "Declined";
       "description": "The assistant needs this to continue";
       "error": "Could not submit the credential. Try again.";
@@ -1334,6 +1335,7 @@ type Messages = {
       "purposeByAi": "Purpose written by the AI: {purpose}";
       "receiptOnlyConnection": "Private-only connection";
       "replaceOrdinaryConnection": "Replace ordinary connection with private-only use";
+      "retryContinuationAction": "Continue chat";
       "saveForFuture": "Save for future chats";
       "savedAvailabilityError": "Could not check for a saved credential.";
       "target": "Target: {target}";

@@ -71,6 +71,7 @@ const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
                 handleAlwaysAllow: () => {},
                 handleApprove: () => {},
                 handleDeny: () => {},
+                continueRequestSecret: async () => {},
                 handleRequestSecret: async () => ({
                   status: "declined",
                   target: { type: "mcp-connector", connectorSlug: "test" },

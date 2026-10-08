@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "A csatlakozó adatainak ellenőrzése…",
       "connectionDisposition": "Kapcsolat: {disposition}",
+      "continuationError": "A válaszát mentettük, de a csevegés nem tudott folytatódni.",
       "declined": "Elutasítva",
       "description": "Az asszisztensnek szüksége van erre a folytatáshoz",
       "error": "Nem sikerült elküldeni a hitelesítő adatot. Próbáld újra.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "A mesterséges intelligencia által megadott cél: {purpose}",
       "receiptOnlyConnection": "Csak privát kapcsolat",
       "replaceOrdinaryConnection": "A szokásos kapcsolat lecserélése privát használatra",
+      "retryContinuationAction": "Csevegés folytatása",
       "saveForFuture": "Mentés későbbi csevegésekhez",
       "savedAvailabilityError": "Nem sikerült ellenőrizni a mentett hitelesítő adatot.",
       "target": "Cél: {target}",

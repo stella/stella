@@ -1318,6 +1318,7 @@
     "requestSecret": {
       "checkingTarget": "Ověřují se podrobnosti konektoru…",
       "connectionDisposition": "Připojení: {disposition}",
+      "continuationError": "Vaše odpověď byla uložena, ale chat nemohl pokračovat.",
       "declined": "Odmítnuto",
       "description": "Asistent tento údaj potřebuje k pokračování",
       "error": "Přístupový údaj se nepodařilo odeslat. Zkuste to znovu.",
@@ -1331,6 +1332,7 @@
       "purposeByAi": "Účel napsaný umělou inteligencí: {purpose}",
       "receiptOnlyConnection": "Pouze soukromé připojení",
       "replaceOrdinaryConnection": "Nahradit běžné připojení soukromým použitím",
+      "retryContinuationAction": "Pokračovat v chatu",
       "saveForFuture": "Uložit pro budoucí chaty",
       "savedAvailabilityError": "Nepodařilo se ověřit, zda jsou přihlašovací údaje uložené.",
       "target": "Cíl: {target}",
