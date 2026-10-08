@@ -697,7 +697,9 @@
       },
       "devDependencies": {
         "@stll/concurrency": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
+        "@stll/stable-stringify": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },

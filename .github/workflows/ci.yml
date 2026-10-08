@@ -2988,6 +2988,12 @@ jobs:
         # missing audience, so a broken guard cannot pass silently.
         run: bun apps/api/scripts/mcp-surface-baseline.ts --self-test
 
+      - name: Offline catalogue pinned-content policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/offline-check-policy.ts
+          bun --filter @stll/catalogue check-pinned --check
+
       - name: Catalogue pinned-content check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         timeout-minutes: 5

@@ -819,6 +819,19 @@
         "$TURBO_ROOT$/scripts/**"
       ]
     },
+    "@stll/catalogue#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/catalogue-upstream.yml",
+        "$TURBO_ROOT$/.github/workflows/model-catalog-check.yml",
+        "$TURBO_ROOT$/scripts/offline-network-preload.ts",
+        "$TURBO_ROOT$/packages/skills/src/loader.ts",
+        "$TURBO_ROOT$/packages/skills/src/resource-kinds.ts",
+        "$TURBO_ROOT$/packages/skills/src/package-limits.ts",
+        "$TURBO_ROOT$/packages/skills/package.json"
+      ]
+    },
     "@stll/scripts#test": {
       "dependsOn": [],
       "inputs": [
