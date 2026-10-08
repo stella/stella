@@ -28,6 +28,7 @@ import type {
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
+import { createEventLoopSlicer } from "@/api/lib/event-loop-slicer";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   fetchStreamFollowingRedirects,
@@ -45,6 +46,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const STREAM_TOTAL_TIMEOUT_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
 const MAX_REDIRECT_HOPS = 3;
+const PARSE_SLICE_BYTES = 16 * 1024;
 const EU_XML_TITLE = "Consolidated Financial Sanctions File 1.1";
 const EU_XML_PATH = "/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content";
 const CZ_CSV_NAME = /^Vnitrostatni_sankcni_seznam_\d{4}_\d{2}_\d{2}\.csv$/u;
@@ -673,10 +675,21 @@ const loadEditionOnce = async (
   }
   const body = trackStreamFailure(downloaded.value.body);
   const hash = createHash("sha256");
+  // The parse runs on the serving event loop. Chunks that have already
+  // arrived are read without ever yielding to timers or I/O, so the parser is
+  // fed small slices and gives way between them.
+  const pause = createEventLoopSlicer();
   const hashed = async function* () {
     for await (const chunk of body.chunks) {
       hash.update(chunk);
-      yield chunk;
+      for (
+        let offset = 0;
+        offset < chunk.byteLength;
+        offset += PARSE_SLICE_BYTES
+      ) {
+        await pause();
+        yield chunk.subarray(offset, offset + PARSE_SLICE_BYTES);
+      }
     }
   };
   const parsed = await parseStreamedList(marker.source, hashed());

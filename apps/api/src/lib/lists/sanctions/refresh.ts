@@ -8,6 +8,7 @@ import {
   type ListReplacementError,
   type ListStats,
   type ParsedList,
+  type SanctionsEntry,
   type SanctionsSource,
 } from "@stll/sanctions";
 import { stableStringify } from "@stll/stable-stringify";
@@ -21,6 +22,7 @@ import {
 } from "@/api/db/schema";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createEventLoopSlicer } from "@/api/lib/event-loop-slicer";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
   fetchSanctionsEdition,
@@ -328,14 +330,38 @@ const recordRejectedReplacement = async ({
     : { status: "lost-race", source };
 };
 
+type StagedEntry = { sourceEntryId: string; contentHash: string };
+
 type ActivateStagedArgs = {
   db: ScopedDb;
   source: SanctionsSource;
   snapshotActiveId: SafeId<"sanctionsEdition"> | null;
   editionId: SafeId<"sanctionsEdition">;
-  expectedEntries: readonly { sourceEntryId: string; contentHash: string }[];
+  expectedEntries: readonly StagedEntry[];
   previousEntryCount: number | null;
   entryCount: number;
+};
+
+const storedEntriesMatch = async (
+  stored: readonly StagedEntry[],
+  expected: readonly StagedEntry[],
+): Promise<boolean> => {
+  if (stored.length !== expected.length) {
+    return false;
+  }
+  const pause = createEventLoopSlicer();
+  const expectedById = new Map<string, string>();
+  for (const entry of expected) {
+    await pause();
+    expectedById.set(entry.sourceEntryId, entry.contentHash);
+  }
+  for (const entry of stored) {
+    await pause();
+    if (expectedById.get(entry.sourceEntryId) !== entry.contentHash) {
+      return false;
+    }
+  }
+  return true;
 };
 
 const activateStagedEdition = async ({
@@ -390,16 +416,7 @@ const activateStagedEdition = async ({
       .from(sanctionsEditionEntries)
       .where(eq(sanctionsEditionEntries.editionId, editionId))
       .limit(expectedEntries.length + 1);
-    const expectedById = new Map(
-      expectedEntries.map((entry) => [entry.sourceEntryId, entry.contentHash]),
-    );
-    const matches =
-      storedEntries.length === expectedEntries.length &&
-      storedEntries.every(
-        (stored) =>
-          expectedById.get(stored.sourceEntryId) === stored.contentHash,
-      );
-    if (!matches) {
+    if (!(await storedEntriesMatch(storedEntries, expectedEntries))) {
       const now = new Date();
       await tx
         .update(sanctionsEditions)
@@ -559,21 +576,27 @@ const stageAcceptedEdition = async ({
     }
   }
 
-  const expectedEntries = parsed.entries
-    .map((entry) => ({
+  // Hashing every entry of a large list takes seconds of CPU; it gives way to
+  // requests as it goes, as the parse before it did.
+  const pause = createEventLoopSlicer();
+  const hashedEntries: (StagedEntry & { payload: SanctionsEntry })[] = [];
+  for (const entry of parsed.entries) {
+    await pause();
+    hashedEntries.push({
       sourceEntryId: entry.sourceId,
       contentHash: sha256(stableStringify(entry)),
       payload: entry,
-    }))
-    .toSorted((left, right) => {
-      if (left.sourceEntryId < right.sourceEntryId) {
-        return -1;
-      }
-      if (left.sourceEntryId > right.sourceEntryId) {
-        return 1;
-      }
-      return 0;
     });
+  }
+  const expectedEntries = hashedEntries.toSorted((left, right) => {
+    if (left.sourceEntryId < right.sourceEntryId) {
+      return -1;
+    }
+    if (left.sourceEntryId > right.sourceEntryId) {
+      return 1;
+    }
+    return 0;
+  });
 
   const itemBatches = chunkItems(expectedEntries, ENTRY_BATCH_SIZE)[
     Symbol.iterator
@@ -644,18 +667,26 @@ type FetchCurrentOptions = {
   fetchEdition: typeof fetchSanctionsEdition;
 };
 
-const validParsedEntries = (
+const validParsedEntries = async (
   source: SanctionsSource,
   parsed: ParsedList,
-): boolean =>
-  parsed.entries.every(
-    (entry) =>
-      entry.source === source &&
-      entry.sourceId.length > 0 &&
-      entry.sourceId.length <= MAX_SOURCE_ENTRY_ID_LENGTH,
-  ) &&
-  new Set(parsed.entries.map((entry) => entry.sourceId)).size ===
-    parsed.entries.length;
+): Promise<boolean> => {
+  const pause = createEventLoopSlicer();
+  const sourceIds = new Set<string>();
+  for (const entry of parsed.entries) {
+    await pause();
+    if (
+      entry.source !== source ||
+      entry.sourceId.length === 0 ||
+      entry.sourceId.length > MAX_SOURCE_ENTRY_ID_LENGTH ||
+      sourceIds.has(entry.sourceId)
+    ) {
+      return false;
+    }
+    sourceIds.add(entry.sourceId);
+  }
+  return true;
+};
 
 const fetchCurrentEdition = async ({
   source,
@@ -727,7 +758,7 @@ const fetchCurrentEdition = async ({
 
   if (
     !downloadMatchesMarker(marker, edition.value) ||
-    !validParsedEntries(source, edition.value.parsed)
+    !(await validParsedEntries(source, edition.value.parsed))
   ) {
     return { status: "failed", code: "parse-failed" };
   }
