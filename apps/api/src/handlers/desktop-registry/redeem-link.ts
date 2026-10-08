@@ -236,9 +236,6 @@ export const createDesktopLinkRedeemHandler = (
         yield* Result.await(services.revokeCredential(identity, minted.id));
         return Result.err(audited.error);
       }
-      if (!minted.expiresAt) {
-        panic("Desktop credential was minted without an expiry");
-      }
       return Result.ok({
         status: "credential" as const,
         account: {
