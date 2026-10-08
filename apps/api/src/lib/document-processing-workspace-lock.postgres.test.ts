@@ -253,7 +253,7 @@ const runQueueWriter = async ({
     }
     default:
       path satisfies never;
-      return panic("Unknown queue writer");
+      panic("Unknown queue writer");
   }
 };
 

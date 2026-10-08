@@ -1481,6 +1481,53 @@ const isSameNativeExtractionSource = (
   field.content.id === candidate.content.id &&
   field.content.sha256Hex === candidate.content.sha256Hex;
 
+type RootTransaction = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
+
+/** Parents first: candidates whose organization or matter is gone drop out. */
+const lockLiveNativeCandidates = async (
+  tx: RootTransaction,
+  candidates: DocumentProcessingCandidate[],
+): Promise<DocumentProcessingCandidate[]> => {
+  const parents = await lockForWrite(tx, {
+    organizationIds: candidates.map((candidate) => candidate.organizationId),
+    workspaceIds: candidates.map((candidate) => candidate.workspaceId),
+  });
+  return candidates.filter(
+    (candidate) =>
+      parents.organizationIds.has(candidate.organizationId) &&
+      parents.workspaceIds.has(candidate.workspaceId),
+  );
+};
+
+/** Then the source entities, in id order, under the parents already held. */
+const lockNativeCandidateEntities = async (
+  tx: RootTransaction,
+  liveCandidates: DocumentProcessingCandidate[],
+) =>
+  await tx
+    .select({
+      currentVersionId: entities.currentVersionId,
+      id: entities.id,
+      readOnly: entities.readOnly,
+      workspaceId: entities.workspaceId,
+    })
+    .from(entities)
+    .where(
+      and(
+        inArray(
+          entities.id,
+          liveCandidates.map(({ entityId }) => entityId),
+        ),
+        inArray(
+          entities.workspaceId,
+          liveCandidates.map((candidate) => candidate.workspaceId),
+        ),
+      ),
+    )
+    .orderBy(asc(entities.id))
+    .limit(RECONCILE_BATCH_SIZE)
+    .for("update");
+
 export const persistMissingNativeExtractionRuns = async (
   candidates: DocumentProcessingCandidate[],
   database: typeof rootDb,
@@ -1490,41 +1537,14 @@ export const persistMissingNativeExtractionRuns = async (
   }
 
   return await database.transaction(async (tx) => {
-    const parents = await lockForWrite(tx, {
-      organizationIds: candidates.map((candidate) => candidate.organizationId),
-      workspaceIds: candidates.map((candidate) => candidate.workspaceId),
-    });
-    const liveCandidates = candidates.filter(
-      (candidate) =>
-        parents.organizationIds.has(candidate.organizationId) &&
-        parents.workspaceIds.has(candidate.workspaceId),
-    );
+    const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
     if (liveCandidates.length === 0) {
       return [];
     }
-    const lockedEntities = await tx
-      .select({
-        currentVersionId: entities.currentVersionId,
-        id: entities.id,
-        readOnly: entities.readOnly,
-        workspaceId: entities.workspaceId,
-      })
-      .from(entities)
-      .where(
-        and(
-          inArray(
-            entities.id,
-            liveCandidates.map(({ entityId }) => entityId),
-          ),
-          inArray(
-            entities.workspaceId,
-            liveCandidates.map((candidate) => candidate.workspaceId),
-          ),
-        ),
-      )
-      .orderBy(asc(entities.id))
-      .limit(RECONCILE_BATCH_SIZE)
-      .for("update");
+    const lockedEntities = await lockNativeCandidateEntities(
+      tx,
+      liveCandidates,
+    );
     const lockedEntityById = new Map(
       lockedEntities.map((entity) => [entity.id, entity]),
     );

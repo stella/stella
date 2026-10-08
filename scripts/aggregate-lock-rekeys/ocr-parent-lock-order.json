@@ -32,7 +32,7 @@
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "from": "e941989ae71d987bcf4c15a246479b8e97fa335af6bbd158cd5cbf8215d6e2dd",
-    "to": "907bfb0173effa1e37c2d7d93a54df087c439968d5bee81db9c602fb4de7a120",
+    "to": "c2f531a036b7187c4c4d27a7a2dc608e4e65e1fbf361b035511524616a35fce8",
     "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {

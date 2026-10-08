@@ -2779,12 +2779,6 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "907bfb0173effa1e37c2d7d93a54df087c439968d5bee81db9c602fb4de7a120",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "90f1c7d2fc9546145c456c1c8810293a2ae476b65d4f33f7d26fa5399163c68b",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
@@ -2794,6 +2788,12 @@
     "fingerprint": "bd3d6ac95d69c67d25971827b428c9b031d7c0040a85616fd701de9c9aed5f92",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+  },
+  {
+    "file": "apps/api/src/lib/document-processing-queue.ts",
+    "fingerprint": "c2f531a036b7187c4c4d27a7a2dc608e4e65e1fbf361b035511524616a35fce8",
+    "count": 1,
+    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
