@@ -95,6 +95,110 @@ const collect = async (stream: AsyncIterable<unknown>) => {
   return chunks;
 };
 describe("durable chat transport", () => {
+  for (const providerRuns of [1, 2]) {
+    for (const ending of ["success", "cancelled", "error"] as const) {
+      test(`a rejoined delivery settles ${providerRuns} distinct provider runs after ${ending}`, async () => {
+        const completed = Promise.withResolvers<undefined>();
+        const errors: Error[] = [];
+        let loading: "waiting" | "started" = "waiting";
+        let joins = 0;
+        const replay = Array.from({ length: providerRuns }, (_, index) => {
+          const runId = `provider-${index}`;
+          expect(runId).not.toBe(RUN_ID);
+          const terminal =
+            index === providerRuns - 1 && ending === "error"
+              ? { type: "RUN_ERROR", runId, message: "Provider failed" }
+              : {
+                  type: "RUN_FINISHED",
+                  runId,
+                  threadId: THREAD_ID,
+                  ...(index === providerRuns - 1 && ending === "cancelled"
+                    ? { outcome: { type: "cancelled" } }
+                    : {}),
+                };
+          return [
+            { type: "RUN_STARTED", runId, threadId: THREAD_ID },
+            {
+              type: "TEXT_MESSAGE_START",
+              messageId: `answer-${index}`,
+              role: "assistant",
+            },
+            {
+              type: "TEXT_MESSAGE_CONTENT",
+              messageId: `answer-${index}`,
+              delta: `Reply ${index}`,
+            },
+            { type: "TEXT_MESSAGE_END", messageId: `answer-${index}` },
+            terminal,
+          ];
+        }).flat();
+        const transport = createDurableChatTransport({
+          initialTurn: { type: "active" },
+          threadId: THREAD_ID,
+          initialMessages: [],
+          sendUrl: "https://chat.test/chat",
+          joinUrl: () => "https://chat.test/join",
+          fetchClient: Object.assign(
+            async (_input: RequestInfo | URL, init?: RequestInit) => {
+              expect(init?.method).toBe("GET");
+              joins += 1;
+              return new Response(
+                replay
+                  .map(
+                    (event, id) =>
+                      `id: ${id}\ndata: ${JSON.stringify(event)}\n\n`,
+                  )
+                  .join(""),
+                { headers: { "Content-Type": "text/event-stream" } },
+              );
+            },
+            { preconnect: () => undefined },
+          ),
+          probe: async () => ({
+            type: "running",
+            turnId: "turn-rejoin",
+            runId: RUN_ID,
+          }),
+          onReconnectChange: () => undefined,
+          onTranscript: () => undefined,
+          onError: (error) => completed.reject(error),
+        });
+        const client = new ChatClient({
+          threadId: THREAD_ID,
+          connection: transport.connection,
+          persistence: transport.persistence,
+          onLoadingChange: (isLoading) => {
+            if (isLoading) {
+              loading = "started";
+            } else if (loading === "started") {
+              completed.resolve(undefined);
+            }
+          },
+          onError: (error) => errors.push(error),
+        });
+        client.attach();
+        try {
+          await completed.promise;
+          expect(joins).toBe(1);
+          expect(client.getIsLoading()).toBe(false);
+          expect(client.getSessionGenerating()).toBe(false);
+          expect(client.getMessages().map((message) => message.parts)).toEqual(
+            Array.from({ length: providerRuns }, (_, index) => [
+              { type: "text", content: `Reply ${index}` },
+            ]),
+          );
+          if (ending === "error") {
+            expect(errors).toHaveLength(1);
+            expect(errors.at(0)?.message).toBe("Provider failed");
+          } else {
+            expect(errors).toEqual([]);
+          }
+        } finally {
+          client.dispose();
+        }
+      });
+    }
+  }
   test("every delivered chunk boundary rejoins without duplicated or missing events", async () => {
     const uninterrupted = setup();
     const expected = await collect(

@@ -21,6 +21,7 @@ export type ChatResumeProbe = ChatTurnResumeProbe;
 
 const RECONNECT_WINDOW_MS = 180_000;
 const MAX_RECONNECT_DELAY_MS = 15_000;
+const REJOIN_ATTACHED_EVENT = "stella.chat.rejoin-attached";
 
 type ReconnectDelayOptions = { attempt: number; jitter: number };
 
@@ -386,10 +387,14 @@ export const createDurableChatTransport = <
         }
       },
       async *joinRun(runId: string, signal?: AbortSignal) {
-        // The SDK bounds first-event attachment to two seconds. Establish the
-        // known running lifecycle before a bounded network retry, without
-        // changing the transcript or invoking a provider.
-        yield { type: EventType.RUN_STARTED, runId, threadId } as const;
+        // Any chunk clears the SDK's first-event deadline. A run lifecycle
+        // event would register the delivery-log id as a provider run, which
+        // the replay's provider terminal event cannot settle.
+        yield {
+          type: EventType.CUSTOM,
+          name: REJOIN_ATTACHED_EVENT,
+          value: { runId, threadId },
+        } as const;
         for await (const chunk of upstream.joinRun(runId, signal)) {
           progress();
           yield chunk;
