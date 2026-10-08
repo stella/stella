@@ -171,6 +171,16 @@ pub struct ActivityDaySnapshot {
   unreadable: bool,
 }
 
+struct ObservationCommit {
+  generation: u64,
+  enabled: bool,
+  now: DateTime<Utc>,
+  monotonic: Instant,
+  idle: Duration,
+  observation: Observation,
+  partition: DayPartition,
+}
+
 pub struct ActivityManager {
   settings: ActivitySettings,
   persistence: ActivityPersistence,
@@ -522,6 +532,19 @@ impl ActivityManager {
 
   fn accepts_observation(&self, generation: u64, enabled: bool) -> bool {
     enabled && self.is_recording() && generation == self.observation_generation
+  }
+
+  fn commit_observation(&mut self, sample: ObservationCommit) -> Option<bool> {
+    if !self.accepts_observation(sample.generation, sample.enabled) {
+      return None;
+    }
+    Some(self.observe_at(
+      sample.now,
+      sample.monotonic,
+      sample.idle,
+      sample.observation,
+      sample.partition,
+    ))
   }
 
   fn observe_at(
@@ -1055,8 +1078,17 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
     emit_changed(app);
     return;
   };
-  let closed =
-    manager.observe_at(now, monotonic, idle, observation, partition_in(&Local, now));
+  let Some(closed) = manager.commit_observation(ObservationCommit {
+    generation,
+    enabled: is_enabled(app),
+    now,
+    monotonic,
+    idle,
+    observation,
+    partition: partition_in(&Local, now),
+  }) else {
+    return;
+  };
   let flushed = manager.flush_due(monotonic);
   if flushed && let Err(error) = manager.flush(now) {
     tracing::warn!(error = %error, "activity timeline could not be written");
@@ -1405,6 +1437,66 @@ mod tests {
     assert!(restarted.prune_expired(much_later).unwrap());
     assert!(store.load_day(day).unwrap().is_empty());
     ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn in_flight_foreground_lookup_cannot_commit_after_gate_or_settings_change() {
+    use std::sync::{
+      atomic::{AtomicBool, Ordering},
+      mpsc,
+    };
+    for transition in ["disable", "exclude", "pause-resume", "delete", "unlink"] {
+      let manager = Arc::new(Mutex::new(recording_manager()));
+      let enabled = Arc::new(AtomicBool::new(true));
+      let (started, lookup_started) = mpsc::channel();
+      let (resume, lookup_resumed) = mpsc::channel();
+      let sampler_manager = Arc::clone(&manager);
+      let sampler_enabled = Arc::clone(&enabled);
+      let sampler = std::thread::spawn(move || {
+        let generation = sampler_manager.lock().unwrap().observation_generation;
+        // The OS lookup holds no manager lock and can finish after a command.
+        started.send(()).unwrap();
+        lookup_resumed.recv().unwrap();
+        sampler_manager
+          .lock()
+          .unwrap()
+          .commit_observation(ObservationCommit {
+            generation,
+            enabled: sampler_enabled.load(Ordering::SeqCst),
+            now: at(5),
+            monotonic: Instant::now(),
+            idle: Duration::ZERO,
+            observation: active("word"),
+            partition: partition_in(&Local, at(5)),
+          })
+      });
+      lookup_started.recv().unwrap();
+      {
+        let mut manager = manager.lock().unwrap();
+        match transition {
+          "disable" => enabled.store(false, Ordering::SeqCst),
+          "exclude" => manager
+            .exclude_app("word", "Word", ActivityHistoryDisposition::Keep)
+            .unwrap(),
+          "pause-resume" => {
+            manager
+              .set_recording_status(ActivityRecordingStatus::Paused, at(0))
+              .unwrap();
+            manager
+              .set_recording_status(ActivityRecordingStatus::Recording, at(0))
+              .unwrap();
+          }
+          "delete" => manager.delete_all().unwrap(),
+          "unlink" => manager.unload_account(at(0)).unwrap(),
+          _ => unreachable!(),
+        }
+      }
+      resume.send(()).unwrap();
+      assert!(sampler.join().unwrap().is_none(), "{transition}");
+      let manager = manager.lock().unwrap();
+      assert!(manager.open.is_none(), "{transition}");
+      assert!(manager.days.is_empty(), "{transition}");
+    }
   }
 
   #[test]
