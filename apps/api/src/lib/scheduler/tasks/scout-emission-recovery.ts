@@ -10,6 +10,7 @@ import {
   pendingScoutEmissions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
@@ -85,7 +86,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
     signal.throwIfAborted();
     // db-await-in-loop: bounded source page; independent atomic tenant emission and dequeue
     const recovery = await Result.tryPromise(() =>
-      db.transaction(async (tx) => {
+      withAggregateTransaction(db, async (tx) => {
         await lockFeatureRecoveryAdmission({
           tx,
           organizationId: source.organizationId,
@@ -219,7 +220,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
     }
     // audit: skip — preserves a retryable source and its sanitized failure after emission rolled back.
     // db-await-in-loop: retry the failed source independently after its emission transaction rolled back
-    await db.transaction(async (tx) => {
+    await withAggregateTransaction(db, async (tx) => {
       await lockFeatureRecoveryAdmission({
         tx,
         organizationId: source.organizationId,
@@ -378,7 +379,7 @@ const reconcileScoutEmissionGrantState = async ({
     items: [...groups],
     limit: 4,
     operation: async ([organizationId, rows]) =>
-      database.transaction(async (tx) => {
+      withAggregateTransaction(database, async (tx) => {
         await lockFeatureRecoveryAdmission({
           tx,
           organizationId,

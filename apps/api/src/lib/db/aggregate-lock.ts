@@ -16,6 +16,7 @@ import type {
 } from "drizzle-orm/pg-core/query-builders/select.types";
 
 import type { Transaction } from "@/api/db/root";
+import type { pendingScoutEmissions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -29,6 +30,7 @@ export const AGGREGATE_LOCKS = {
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
+  uploadReceipt: { rank: 50, kind: "row" },
   scoutCensus: { rank: 60, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
@@ -58,6 +60,7 @@ export const AGGREGATE_CHAINS = {
     "schedulerClaim",
     "definitionCap",
     "definition",
+    "uploadReceipt",
   ],
   flowEffect: [
     "orgFeatureAdmission",
@@ -122,11 +125,23 @@ type AggregateIdentities = {
     id: SafeId<"flowDefinition">;
     organizationId: SafeId<"organization">;
   };
-  scoutCensus: {
-    type: "run";
-    id: SafeId<"scoutRun">;
+  uploadReceipt: {
+    definitionId: SafeId<"flowDefinition">;
+    entityId: SafeId<"entity">;
     organizationId: SafeId<"organization">;
   };
+  scoutCensus:
+    | {
+        type: "run";
+        id: SafeId<"scoutRun">;
+        organizationId: SafeId<"organization">;
+      }
+    | (Pick<
+        typeof pendingScoutEmissions.$inferSelect,
+        "organizationId" | "sourceKind" | "sourceId"
+      > & {
+        type: "receipt";
+      });
   workspace: {
     id: SafeId<"workspace">;
     organizationId: SafeId<"organization">;
@@ -531,10 +546,31 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "scoutCensus":
+      if (options.id.type === "receipt") {
+        return {
+          table: "pending_scout_emissions",
+          columns: ["organization_id", "source_kind", "source_id"],
+          values: [
+            options.id.organizationId,
+            options.id.sourceKind,
+            options.id.sourceId,
+          ],
+          scopeColumns: [],
+          scopeValues: [],
+        };
+      }
       return {
         table: "scout_runs",
         columns: ["id"],
         values: [options.id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
+      };
+    case "uploadReceipt":
+      return {
+        table: "flow_upload_trigger_intents",
+        columns: ["definition_id", "entity_id"],
+        values: [options.id.definitionId, options.id.entityId],
         scopeColumns: ["organization_id"],
         scopeValues: [options.id.organizationId],
       };

@@ -9,6 +9,7 @@ import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -113,13 +114,25 @@ export const runScout = async ({
         organizationId,
         featureId: "signals",
       });
-      const owned = await tx
-        .select({ id: scoutRuns.id })
-        .from(scoutRuns)
-        .where(claim)
-        .for("update")
-        .limit(1);
-      if (!owned.at(0)) {
+      const owned = await withAggregateRowQuery({
+        aggregate: "scoutCensus",
+        id: { type: "run", id: runId, organizationId },
+        tx,
+        mode: "update",
+        select: (queryTx) =>
+          queryTx
+            .select({
+              id: scoutRuns.id,
+              organizationId: scoutRuns.organizationId,
+            })
+            .from(scoutRuns)
+            .limit(1),
+        where: claim,
+      });
+      if (owned.status === "busy") {
+        throw owned.error;
+      }
+      if (!owned.rows.at(0)) {
         observationAccepted = false;
         outcome = "stale";
         return { insertedIds: [], emittedCount: 0 };

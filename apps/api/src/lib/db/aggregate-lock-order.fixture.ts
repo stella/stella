@@ -33,6 +33,11 @@ export const aggregateFences = () => {
       mode: "update",
     },
     definitionCap: { aggregate: "definitionCap", id: { definitionId } },
+    uploadReceipt: {
+      aggregate: "uploadReceipt",
+      id: { definitionId, entityId: createSafeId<"entity">(), organizationId },
+      mode: "update",
+    },
     definition: {
       aggregate: "definition",
       id: { id: definitionId, organizationId },

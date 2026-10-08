@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "The deadline model-action acceptance callback rejects a revoked, superseded or replaced source inside the authoritative transaction before period reservation. Its tagged refusal must abort that transaction; the model-action Result boundary captures it and the source owner records a typed pause, cancellation or stale outcome."
+}

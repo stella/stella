@@ -40,6 +40,7 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -1495,7 +1496,7 @@ export const failFlowRunFromWorker = async (
   // still finalizes instead of being stranded non-terminal.
   const failed =
     scope.actorUserId === null
-      ? await database.transaction(writeFailure)
+      ? await withAggregateTransaction(database, writeFailure)
       : await makeScopedDb({
           organizationId: scope.organizationId,
           userId: scope.actorUserId,

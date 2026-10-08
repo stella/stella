@@ -3,9 +3,11 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 
-import type { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -28,7 +30,7 @@ const FLOW_RUN_UPDATE_EVENT_TYPE = REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE;
 type DeliverFlowRunWorkspaceEventOptions = Parameters<
   SseConnectionAuthorizers["workspaceEvent"]
 >[0] & {
-  database: Pick<typeof rootDb, "transaction">;
+  database: { transaction: ScopedDb<Pick<Transaction, "select" | "execute">> };
 };
 
 const recipientEnrolments = alias(
@@ -52,7 +54,7 @@ export const deliverFlowRunWorkspaceEvent = async ({
   if (!isDeploymentFeatureEnabled("FEATURE_FLOWS") || userIds.length === 0) {
     return;
   }
-  await database.transaction(async (tx) => {
+  await withAggregateTransaction(database, async (tx) => {
     await lockFeatureRecoveryAdmission({
       tx,
       organizationId,

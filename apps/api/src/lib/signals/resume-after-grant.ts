@@ -1,5 +1,6 @@
 import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { resumeScoutEmissionAfterGrant } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
@@ -15,7 +16,7 @@ export const resumeSignalsAfterGrant = async ({
   organizationId,
   userId,
 }: ResumeSignalsAfterGrantOptions): Promise<void> => {
-  await rootDb.transaction(async (tx) => {
+  await withAggregateTransaction(rootDb, async (tx) => {
     await lockFeatureRecoveryAdmission({
       tx,
       organizationId,

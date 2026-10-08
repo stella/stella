@@ -10,6 +10,10 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
@@ -101,20 +105,15 @@ const claimUploadTriggerCandidates = async ({
   now,
   selected,
 }: ClaimUploadTriggerCandidatesOptions) => {
-  const groups = new Map<
-    SafeId<"organization">,
-    SelectedUploadTriggerCandidate[]
-  >();
-  for (const candidate of selected) {
-    const group = groups.get(candidate.intent.organizationId) ?? [];
-    group.push(candidate);
-    groups.set(candidate.intent.organizationId, group);
-  }
+  const groups = Map.groupBy(
+    selected,
+    (candidate) => candidate.intent.organizationId,
+  );
   const pages = await mapWithConcurrency({
     items: [...groups],
     limit: 4,
     operation: async ([organizationId, rows]) =>
-      await database.transaction(async (tx) => {
+      await withAggregateTransaction(database, async (tx) => {
         await lockFeatureRecoveryAdmission({
           tx,
           organizationId,
@@ -180,7 +179,7 @@ const settleUploadTriggerClaim = async ({
   intent,
   claimToken,
 }: SettleUploadTriggerClaimOptions): Promise<"settled" | "paused" | "stale"> =>
-  await database.transaction(async (tx) => {
+  await withAggregateTransaction(database, async (tx) => {
     await lockFeatureRecoveryAdmission({
       tx,
       organizationId: intent.organizationId,
@@ -189,27 +188,37 @@ const settleUploadTriggerClaim = async ({
     if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
       return "paused";
     }
-    const current = (
-      await tx
-        .select({
-          status: flowUploadTriggerIntents.status,
-          admitted: uploadTriggerActorExists(),
-        })
-        .from(flowUploadTriggerIntents)
-        .where(
-          and(
-            eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
-            eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
-            eq(flowUploadTriggerIntents.entityId, intent.entityId),
-            timestampMatchesCasToken(
-              flowUploadTriggerIntents.retryAt,
-              claimToken,
-            ),
-          ),
-        )
-        .limit(1)
-        .for("update")
-    ).at(0);
+    const acquired = await withAggregateRowQuery({
+      aggregate: "uploadReceipt",
+      id: {
+        definitionId: intent.definitionId,
+        entityId: intent.entityId,
+        organizationId: intent.organizationId,
+      },
+      mode: "update",
+      tx,
+      select: (queryTx) =>
+        queryTx
+          .select({
+            definitionId: flowUploadTriggerIntents.definitionId,
+            entityId: flowUploadTriggerIntents.entityId,
+            organizationId: flowUploadTriggerIntents.organizationId,
+            status: flowUploadTriggerIntents.status,
+            admitted: uploadTriggerActorExists(),
+          })
+          .from(flowUploadTriggerIntents)
+          .limit(1),
+      where: and(
+        eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
+        eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
+        eq(flowUploadTriggerIntents.entityId, intent.entityId),
+        timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
+      ),
+    });
+    if (acquired.status === "busy") {
+      throw acquired.error;
+    }
+    const current = acquired.rows.at(0);
     if (current === undefined || current.status !== "pending") {
       return "stale";
     }
@@ -495,7 +504,7 @@ const reconcileUploadTriggerGrantState = async ({
     items: [...groups],
     limit: 4,
     operation: async ([organizationId, rows]) =>
-      database.transaction(async (tx) => {
+      withAggregateTransaction(database, async (tx) => {
         await lockFeatureRecoveryAdmission({
           tx,
           organizationId,

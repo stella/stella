@@ -3174,28 +3174,10 @@
     "reason": "builder-for in apps/api/src/lib/files/pdf-signing/sessions.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "3022c5720db6b5a6a55bb3a2863922ef45fb3c22c6584ee789279969c49b6488",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/flows/automated-run-cap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "786ecc9573c847f206b2e7a6db5abd7abc66383c3675aea0d96d94eb935cb9fc",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/flows/automated-run-cap.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
-    "fingerprint": "4205677a801602cbae5cd9abf5540fb2e84f83756efca8be7487f2a1fb9e99b9",
+    "fingerprint": "4a10eb724d1d95ce2837af3b769afddb0e3fc37eb60fae9b4519de97f7e7e9f9",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/flows/flow-executor.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/flows/flow-executor.ts",
-    "fingerprint": "6f45b0e7a54052216a8316e7653dc6f16afcd26a3cc5d76817405e295c2630f2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/flows/flow-executor.ts: Existing acquisition sequence; migrate together with its aggregate order."
+    "reason": "existing acquisition, query changed by #5308; selected step projection now includes the opaque startedAtToken; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
@@ -3894,94 +3876,94 @@
     "reason": "builder-for in apps/api/src/lib/matter-reference.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "00dee21d6793638ce68be3919a7a1275e4ce7ed2698967daf3cc6087e1975577",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "0b97673bbacc672a43f5b817e77c54571a0af0bbb768b90f7e7dd04ade6673f3",
+    "count": 1,
+    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "1426e2ca8d888507f62366e57349246041082fea39a3226bd410e1762f285982",
+    "count": 1,
+    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "17f394aff15489ecec81b34616e8e226db1e2b310e63e11db418c0b3bae9b62e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "fingerprint": "203b1e8fb9964ae685e25420909ebeaf1f2ffc261c05fc22daee53a00b016ee5",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "fingerprint": "21ee7ed7d23db71e6270cb0299bc158cac6f2e27916bd56c433cc622f4d85419",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "2599f08be0a75edfa7e8c249566fd4cb63d1c829d1b2ab21dee0612e0cfac4f2",
     "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "fingerprint": "42bb09abc328a75fdcc314a4c504cf1c20682bcb72a827c277d824b03df98651",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "2828ce709dca68f7e3e767ac5c8bc69c008f5d59d84dd48cad3bcb068047ae05",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "5b20991a794d61fd84852641d91b5835c5ae1ffa124b9f9fda62c8b17e292e0c",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "641499b4b42e65c3405cee7054391786b35e05f74a369f2e87021bcb8329d805",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "6ab1087d5bcb4cc26ed3a6cd902f8e014330bfd047596e7bd99a930f3fa3421e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "fingerprint": "729fa437573451081ab824c7c2897581c5e0f75fb4167a482e60039923296af2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "7658f64321021ba1b9c84e4ead3ba0bccfb7c7c7044f666bfb6c61073345c999",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "fingerprint": "9da13dce619de2de5432c01617347fa12ad129b0f7063a540d793569707dc335",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "89012eaac6159e46125ff0b0d3c30678fa53e3e674a30598aa1170ad4bf67f86",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "fingerprint": "bb3dc694454717656339d319a8cd4642c0cb13cecd9fe0c32e2577a77173b19c",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "bec933f4965a61b15c9f826ae913b3782fcca098f3a8800e212587f5e5db3846",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "fingerprint": "c49bd83d0e2b6d82d9ed605861299f22aaefd320c0f2b18840fafaedc9f94b5c",
+    "count": 1,
+    "reason": "existing acquisition, query changed by #5308; direct batch LIMIT moved to readCursorPage LIMIT batch+1 (one locked sentinel); mode/table/key/predicate identical; migrates with owner extension follow-up"
+  },
+  {
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "dc1895cb4fefa177f64451a22aa2f388230255c400865e71eabfcc3a84abaf16",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "dcf88c26320f001b0076bc903791e51552ce19a4d8cdd0af2c2e15d45bafb48e",
     "count": 1,
-    "reason": "pg_try_advisory_xact_lock( in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/memory/persist-explicit-memory.ts",
@@ -4046,12 +4028,6 @@
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",
     "fingerprint": "9f4c541e936fd204d19f5ac82fefa52c54850c5677c4a69bd2c464208a9bff18",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on scope.db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/review-organization/reset.ts",
-    "fingerprint": "e5c584364ea0f13cbf50c2f1a82d38dedc69735c628dbc182bd70166f319f0bf",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on scope.db; opens the owning database transaction for this module."
   },

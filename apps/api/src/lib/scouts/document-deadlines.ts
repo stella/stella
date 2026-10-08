@@ -23,6 +23,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
 import {
+  withAggregateLock,
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
@@ -498,31 +503,36 @@ export const validateDocumentDeadlineScoutClaim = async ({
   if (actorMatter.length === 0) {
     return "not-granted" as const;
   }
-  await tx
-    .select({ id: entities.id })
-    .from(entities)
-    .where(
-      and(
-        eq(entities.id, run.entityId),
-        eq(entities.workspaceId, run.workspaceId),
+  await withAggregateLock({
+    aggregate: "entity",
+    id: { id: run.entityId, workspaceId: run.workspaceId },
+    tx,
+    mode: "update",
+  });
+  const claimed = await withAggregateRowQuery({
+    aggregate: "processingClaim",
+    id: { id: run.id, workspaceId: run.workspaceId },
+    tx,
+    mode: "update",
+    select: (queryTx) =>
+      queryTx
+        .select({
+          id: documentProcessingRuns.id,
+          workspaceId: documentProcessingRuns.workspaceId,
+        })
+        .from(documentProcessingRuns),
+    where: and(
+      eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+      timestampMatchesCasToken(
+        documentProcessingRuns.deadlineScoutClaimedAt,
+        run.deadlineScoutClaimedAtToken,
       ),
-    )
-    .for("update");
-  const claimed = await tx
-    .select({ id: documentProcessingRuns.id })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.id, run.id),
-        eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-        timestampMatchesCasToken(
-          documentProcessingRuns.deadlineScoutClaimedAt,
-          run.deadlineScoutClaimedAtToken,
-        ),
-      ),
-    )
-    .for("update");
-  if (claimed.length === 0) {
+    ),
+  });
+  if (claimed.status === "busy") {
+    throw claimed.error;
+  }
+  if (claimed.rows.length === 0) {
     return "stale_claim" as const;
   }
   const current = await tx
@@ -660,7 +670,7 @@ const claimAdmittedDeadlineSource = async ({
 }: RunDocumentDeadlineScoutArgs & {
   actorUserId: SafeId<"user">;
 }): Promise<ClaimedRun | null> =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const source = (
       await tx
         .select({

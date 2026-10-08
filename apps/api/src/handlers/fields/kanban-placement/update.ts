@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
-import { abortableTx } from "@/api/db/safe-db";
+import { abortTransaction, abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { kanbanPlacementRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -106,7 +106,7 @@ export const createUpdateKanbanPlacement = ({
             userId: user.id,
           });
           if (currentAdmission.isErr()) {
-            throw currentAdmission.error;
+            abortTransaction(currentAdmission.error);
           }
           const txSafeDb = transactionSafeDb(tx);
 

@@ -13,6 +13,11 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  withAggregateTransaction,
+  withAggregateRowQuery,
+  withAggregateLock,
+} from "@/api/lib/db/aggregate-lock";
+import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
@@ -51,13 +56,6 @@ import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
  * an RLS-scoped, single-workspace session could not see. The run's
  * `workspace_id` still comes from a server-validated trigger source.
  */
-
-/**
- * Namespace for the per-definition advisory lock. `pg_advisory_xact_lock` keys
- * are process-global, so a fixed first key isolates this rail from unrelated
- * advisory locks; the definition-id hash is the second key.
- */
-const FLOW_RUN_CAP_LOCK_NAMESPACE = 0x0f_10_cc_a9;
 
 const replayIdentityFor = (triggerSource: FlowTriggerSource) => {
   switch (triggerSource.type) {
@@ -231,7 +229,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
   reservePeriod,
   database,
 }: InsertAutomatedFlowRunWithinCapInput): Promise<InsertAutomatedFlowRunWithinCapResult> =>
-  await database.transaction(async (tx) => {
+  await withAggregateTransaction(database, async (tx) => {
     // Admission precedes resource locks; the existing cap -> definition order stays intact.
     await lockFeatureRecoveryAdmission({
       tx,
@@ -249,73 +247,83 @@ export const insertAutomatedFlowRunWithinCap = async ({
       return { outcome: "paused" };
     }
     if (schedulerClaim !== undefined) {
-      const owned = await tx
-        .select({ id: schedulerJobs.id })
-        .from(schedulerJobs)
-        .where(
-          and(
-            eq(schedulerJobs.id, schedulerClaim.jobId),
-            eq(schedulerJobs.lockedBy, schedulerClaim.lockedBy),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      if (owned.length === 0) {
+      const owned = await withAggregateRowQuery({
+        aggregate: "schedulerClaim",
+        id: { id: schedulerClaim.jobId },
+        tx,
+        mode: "update",
+        where: eq(schedulerJobs.lockedBy, schedulerClaim.lockedBy),
+        select: (queryTx) =>
+          queryTx.select({ id: schedulerJobs.id }).from(schedulerJobs).limit(1),
+      });
+      if (owned.status === "busy") {
+        throw owned.error;
+      }
+      if (owned.rows.length === 0) {
         return { outcome: "stale" };
       }
     }
     // Serialize concurrent automated starts for this definition. The xact lock
     // releases on commit/rollback, after the prior holder's run row is visible,
     // so the count below can never miss a committed sibling.
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(${FLOW_RUN_CAP_LOCK_NAMESPACE}, hashtext(${definitionId}))`,
-    );
+    await withAggregateLock({
+      aggregate: "definitionCap",
+      id: { definitionId },
+      tx,
+    });
 
     // Keep the cap's advisory lock before the definition lock already
     // required by run insertion. NO KEY UPDATE also permits receipt FK checks.
-    const uploadDefinition =
-      rows.run.triggerSource.type === "file-upload"
-        ? (
-            await tx
-              .select()
-              .from(flowDefinitions)
-              .where(
-                and(
-                  eq(flowDefinitions.id, definitionId),
-                  eq(flowDefinitions.organizationId, organizationId),
-                ),
-              )
-              .limit(1)
-              .for("no key update")
-          ).at(0)
-        : undefined;
+    let uploadDefinition: typeof flowDefinitions.$inferSelect | undefined;
+    if (rows.run.triggerSource.type === "file-upload") {
+      const definition = await withAggregateRowQuery({
+        aggregate: "definition",
+        id: { id: definitionId, organizationId },
+        tx,
+        mode: "no key update",
+        select: (queryTx) => queryTx.select().from(flowDefinitions).limit(1),
+      });
+      if (definition.status === "busy") {
+        throw definition.error;
+      }
+      uploadDefinition = definition.rows.at(0);
+    }
 
     if (rows.run.triggerSource.type === "file-upload") {
       if (uploadTriggerClaimToken === undefined) {
         return { outcome: "stale" };
       }
-      const owned = await tx
-        .select({ entityId: flowUploadTriggerIntents.entityId })
-        .from(flowUploadTriggerIntents)
-        .where(
-          and(
-            eq(flowUploadTriggerIntents.definitionId, definitionId),
-            eq(flowUploadTriggerIntents.organizationId, organizationId),
-            eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
-            eq(
-              flowUploadTriggerIntents.entityId,
-              brandPersistedEntityId(rows.run.triggerSource.entityId),
-            ),
-            eq(flowUploadTriggerIntents.status, "pending"),
-            timestampMatchesCasToken(
-              flowUploadTriggerIntents.retryAt,
-              uploadTriggerClaimToken,
-            ),
+      const owned = await withAggregateRowQuery({
+        aggregate: "uploadReceipt",
+        id: {
+          definitionId,
+          organizationId,
+          entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
+        },
+        tx,
+        mode: "update",
+        where: and(
+          eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
+          eq(flowUploadTriggerIntents.status, "pending"),
+          timestampMatchesCasToken(
+            flowUploadTriggerIntents.retryAt,
+            uploadTriggerClaimToken,
           ),
-        )
-        .limit(1)
-        .for("update");
-      if (owned.length === 0) {
+        ),
+        select: (queryTx) =>
+          queryTx
+            .select({
+              definitionId: flowUploadTriggerIntents.definitionId,
+              organizationId: flowUploadTriggerIntents.organizationId,
+              entityId: flowUploadTriggerIntents.entityId,
+            })
+            .from(flowUploadTriggerIntents)
+            .limit(1),
+      });
+      if (owned.status === "busy") {
+        throw owned.error;
+      }
+      if (owned.rows.length === 0) {
         return { outcome: "stale" };
       }
     }

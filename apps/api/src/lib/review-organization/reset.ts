@@ -27,6 +27,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
@@ -566,7 +567,7 @@ const sweepRemainingRows = async (
   }
   const outcome = await Result.tryPromise({
     try: async () =>
-      await scope.db.transaction(async (tx) => {
+      await withAggregateTransaction(scope.db, async (tx) => {
         await scope.fence.assert(tx);
         if (scope.signal.aborted) {
           abortTransaction(

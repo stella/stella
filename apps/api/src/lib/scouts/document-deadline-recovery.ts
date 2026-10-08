@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
@@ -135,7 +136,7 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
   if (!source) {
     return { status: "stale_claim" };
   }
-  return await database.transaction(async (tx) => {
+  return await withAggregateTransaction(database, async (tx) => {
     await lockFeatureRecoveryAdmission({
       tx,
       organizationId: source.organizationId,
@@ -247,7 +248,7 @@ const reconcileDeadlineAdmission = async ({
     items: [...organizations],
     limit: DEADLINE_SCOUT_DISPATCH_CONCURRENCY,
     operation: async ([organizationId, ids]) =>
-      await database.transaction(async (tx) => {
+      await withAggregateTransaction(database, async (tx) => {
         await lockFeatureRecoveryAdmission({
           tx,
           organizationId,
@@ -331,7 +332,8 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   const reclaimedDispatchCount =
     staleDispatches.length === 0
       ? 0
-      : await database.transaction(
+      : await withAggregateTransaction(
+          database,
           async (tx) =>
             await transitionScopedCount({
               tx,
@@ -393,7 +395,8 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   const failedCensusCount =
     staleCensusRuns.length === 0
       ? 0
-      : await database.transaction(
+      : await withAggregateTransaction(
+          database,
           async (tx) =>
             await transitionScopedCount({
               tx,
