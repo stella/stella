@@ -5,13 +5,14 @@ import * as v from "valibot";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   GENERATED_VISUAL_URI_PREFIX,
-  generatedVisualPageSchema,
+  generatedVisualInputSchema,
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 
 import showcase from "../../api/src/handlers/visual-sandbox/fixtures/showcase/court-year-showcase.json" with { type: "json" };
+import { prepareGeneratedVisual } from "../../api/src/handlers/visual-sandbox/prepare";
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "../src/consts";
 import { installDockedChatHistory } from "./helpers/docked-chat-fixtures";
 import { dockedChatMessagePage } from "./helpers/docked-chat-history";
@@ -29,16 +30,18 @@ const captureVisualDesign = async ({
 }: VisualDesignCaptureContext) => {
   const threadId = "019a0000-0000-7000-8000-000000000001";
   const fileId = "019a0000-0000-7000-8000-000000000003";
-  const visual = v.parse(generatedVisualPageSchema, {
-    ...showcase,
-    html: await readFile(
-      new URL(
-        "../../api/src/handlers/visual-sandbox/fixtures/showcase/court-year-showcase.html",
-        import.meta.url,
+  const visual = prepareGeneratedVisual(
+    v.parse(generatedVisualInputSchema, {
+      ...showcase,
+      html: await readFile(
+        new URL(
+          "../../api/src/handlers/visual-sandbox/fixtures/showcase/court-year-showcase.html",
+          import.meta.url,
+        ),
+        "utf-8",
       ),
-      "utf-8",
-    ),
-  });
+    }),
+  ).unwrap();
   const part = v.parse(generatedVisualPartSchema, {
     type: "ui-resource",
     resource: {
@@ -84,6 +87,7 @@ const captureVisualDesign = async ({
   await page.goto(`${webUrl}/chat/${threadId}`, { waitUntil: "commit" });
   const selector = `iframe[title="${visual.title}"]`;
   const outer = page.locator(selector);
+  await expect(outer).toBeVisible({ timeout: 120_000 });
   const guest = page.frameLocator(selector).frameLocator("iframe");
   const caption = outer.locator("xpath=ancestor::section[1]").locator("header");
   const chart = guest.locator("#chart");
