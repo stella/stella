@@ -76,7 +76,9 @@ export const searchView = (data: SearchResults) => {
   }
   return {
     type: "search",
-    results: data.results.map((row) => resultRow(row, row.snippet)),
+    results: data.results.map((row) =>
+      resultRow(row, "snippet" in row ? row.snippet : null),
+    ),
     facets:
       data.facets === null
         ? null

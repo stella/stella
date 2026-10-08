@@ -234,17 +234,21 @@
             "matchingPassages": {
               "type": "number"
             },
+            "sourceUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "snippet": {
               "type": [
                 "string",
                 "null"
               ]
             },
-            "sourceUrl": {
-              "type": [
-                "string",
-                "null"
-              ]
+            "excerpt": {
+              "type": "object",
+              "additionalProperties": true
             }
           },
           "required": [
@@ -264,7 +268,6 @@
             "language",
             "matchedQueries",
             "matchingPassages",
-            "snippet",
             "sourceUrl"
           ],
           "additionalProperties": false

@@ -56,6 +56,7 @@ const responseWithText = (text: string): SearchResponse => {
       ),
       omitted: 0,
     },
+    textWithheldReason: null,
     headline: `<mark>${escapeSearchHtml(text)}</mark>`,
     anchorId: text,
     citationCount: Number.MAX_VALUE,

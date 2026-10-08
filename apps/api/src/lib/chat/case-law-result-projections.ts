@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
@@ -86,6 +87,34 @@ export const caseNumberTypeProjection = v.optional(
   v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
 );
 
+const caseLawSearchIdentityFields = {
+  // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
+  // is disabled (`FEATURE_PUBLIC_LAW`), so the projected shape is
+  // nullable; a non-nullable declaration would fail the strict parse and
+  // take the tool off the chat surface on any deployment with the flag off.
+  appUrl: v.nullable(v.string()),
+  url: v.nullable(publicUrl()),
+  source_url: v.optional(publicUrl()),
+  caseNumber: v.string(),
+  citationCount: v.number(),
+  // `ln(1 + weighted citations)`, the score the ranking blends in.
+  citationAuthority: v.number(),
+  country: v.string(),
+  ...CASE_LAW_COURT_PROJECTION.entries,
+  decisionDate: v.nullable(v.string()),
+  decisionId: passthroughId(),
+  resourceName: passthroughId(),
+  decisionType: v.nullable(v.string()),
+  ecli: v.nullable(v.string()),
+  language: v.string(),
+  // Which of the call's `queries` returned this decision, by index,
+  // ascending. A decision several phrasings agree on carries several.
+  matchedQueries: v.array(v.number()),
+  // Passages of the decision that matched, within the scanned window.
+  matchingPassages: v.number(),
+  sourceUrl: v.nullable(publicUrl()),
+} as const;
+
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
  * (`stella-tools.ts`) merging one `searchDecisionsHandler` page per query.
@@ -143,36 +172,23 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
         }),
       ),
       results: v.array(
-        v.strictObject({
-          // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
-          // is disabled (`FEATURE_PUBLIC_LAW`), so the projected shape is
-          // nullable; a non-nullable declaration would fail the strict parse and
-          // take the tool off the chat surface on any deployment with the flag off.
-          appUrl: v.nullable(v.string()),
-          url: v.nullable(publicUrl()),
-          source_url: v.optional(publicUrl()),
-          caseNumber: v.string(),
-          citationCount: v.number(),
-          // `ln(1 + weighted citations)`, the score the ranking blends in.
-          citationAuthority: v.number(),
-          country: v.string(),
-          ...CASE_LAW_COURT_PROJECTION.entries,
-          decisionDate: v.nullable(v.string()),
-          decisionId: passthroughId(),
-          resourceName: passthroughId(),
-          decisionType: v.nullable(v.string()),
-          ecli: v.nullable(v.string()),
-          language: v.string(),
-          // Which of the call's `queries` returned this decision, by index,
-          // ascending. A decision several phrasings agree on carries several.
-          matchedQueries: v.array(v.number()),
-          // Passages of the decision that matched, within the scanned window.
-          matchingPassages: v.number(),
-          snippet: v.nullable(v.string()),
-          // The publisher's own decision URL, which may embed the publisher's
-          // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-          sourceUrl: v.nullable(publicUrl()),
-        }),
+        v.union([
+          projectionBranch(
+            v.strictObject({
+              ...caseLawSearchIdentityFields,
+              snippet: v.nullable(v.string()),
+            }),
+          ),
+          projectionBranch(
+            v.strictObject({
+              ...caseLawSearchIdentityFields,
+              excerpt: v.strictObject({
+                type: v.literal("withheld"),
+                reason: v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+              }),
+            }),
+          ),
+        ]),
       ),
       total: searchTotalProjection,
       // Only on an empty result while the organization has no practice

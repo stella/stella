@@ -8,6 +8,13 @@ export const TEXT_FIELD_TYPE = {
   PRESENT: "present",
 } as const;
 
+export const DECISION_TEXT_WITHHELD_REASON = {
+  SOURCE_LICENCE: "source_licence",
+} as const;
+
+export type DecisionTextWithheldReason =
+  (typeof DECISION_TEXT_WITHHELD_REASON)[keyof typeof DECISION_TEXT_WITHHELD_REASON];
+
 export const TEXT_ABSENCE_REASONS = [
   "not_published",
   "parse_failed",

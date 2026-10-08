@@ -2314,7 +2314,14 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
-    snippet: toPlainTextSnippet(hit.headline),
+    ...(hit.textWithheldReason === null
+      ? { snippet: toPlainTextSnippet(hit.headline) }
+      : {
+          excerpt: {
+            type: "withheld" as const,
+            reason: hit.textWithheldReason,
+          },
+        }),
     sourceUrl: hit.sourceUrl,
   };
 };
@@ -2850,10 +2857,14 @@ const decisionStaticFields = ({
           ...(read.ecli === null ? {} : { ecli: read.ecli }),
         }
       : {}),
-    ...(includedFields.has("metadata") && Object.keys(metadata).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("metadata") &&
+    Object.keys(metadata).length > 0
       ? { metadata }
       : {}),
-    ...(includedFields.has("textFields") && Object.keys(textFields).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("textFields") &&
+    Object.keys(textFields).length > 0
       ? { textFields }
       : {}),
     ...(includedFields.has("source") && sourceName !== null
@@ -3548,6 +3559,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       citations: read.page.items.map((item) => ({
         citationId: item.id,
         citationText: item.citationText,
+        textWithheldReason: item.textWithheldReason,
         polarity: item.treatment,
         decision:
           item.decision === null

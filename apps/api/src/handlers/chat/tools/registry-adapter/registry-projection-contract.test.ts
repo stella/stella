@@ -1479,6 +1479,7 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              textWithheldReason: null,
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
               languageAlternates: [],
@@ -1552,6 +1553,7 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              textWithheldReason: null,
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
               languageAlternates: [],
@@ -1622,6 +1624,7 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
               citationText: "21 Cdo 500/2019",
+              textWithheldReason: null,
               citedDecisionId: toSafeId<"caseLawDecision">(uid(56)),
               sectionIndex: 0,
             },
@@ -1630,6 +1633,7 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(57)),
               citationText: "23 Cdo 200/2021",
+              textWithheldReason: null,
               citingDecisionId: toSafeId<"caseLawDecision">(uid(58)),
               sectionIndex: 1,
             },
@@ -1723,6 +1727,7 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
               citationText: "21 Cdo 500/2019",
+              textWithheldReason: null,
               sectionIndex: 0,
               treatment: "neutral",
               decision: relatedDecision(56, "21 Cdo 500/2019"),
@@ -1730,6 +1735,7 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(60)),
               citationText: "sp. zn. 20 Cdo 1/2001",
+              textWithheldReason: null,
               sectionIndex: 1,
               treatment: "neutral",
               decision: null,
@@ -1755,6 +1761,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                textWithheldReason: null,
                 sectionIndex: 1,
                 treatment: "positive",
                 decision: {

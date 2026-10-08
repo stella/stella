@@ -9,6 +9,8 @@
 
 import { panic } from "better-result";
 
+import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
@@ -242,13 +244,31 @@ export const citationSummaryOutput = (
   const cited = new Map<
     string,
     | { caseNumber: string; decisionId: string; url?: string }
-    | { citation: string }
+    | { citation: string; textWithheldReason: null }
+    | { citation: null; textWithheldReason: DecisionTextWithheldReason }
   >();
   for (const row of digest.cites) {
     if (row.decision === null) {
-      const key = `text:${row.citationText.trim().toLowerCase()}`;
+      if (row.textWithheldReason !== null) {
+        const key = `withheld:${row.textWithheldReason}`;
+        if (!cited.has(key)) {
+          cited.set(key, {
+            citation: null,
+            textWithheldReason: row.textWithheldReason,
+          });
+        }
+        continue;
+      }
+      const citationText = row.citationText;
+      if (citationText === null) {
+        return panic("Available citation text must be present");
+      }
+      const key = `text:${citationText.trim().toLowerCase()}`;
       if (!cited.has(key)) {
-        cited.set(key, { citation: row.citationText.trim() });
+        cited.set(key, {
+          citation: citationText.trim(),
+          textWithheldReason: null,
+        });
       }
       continue;
     }

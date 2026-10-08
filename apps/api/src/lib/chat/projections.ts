@@ -8,6 +8,7 @@ import {
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
+  DECISION_TEXT_WITHHELD_REASON,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -1490,8 +1491,15 @@ const caseLawCitationSummaryProjection = v.strictObject({
               decisionId: passthroughId(),
             }),
           ),
-          // Not held: the reference as the decision wrote it.
-          projectionBranch(v.strictObject({ citation: v.string() })),
+          // Not held: a reference or its text disposition.
+          projectionBranch(
+            v.strictObject({
+              citation: v.nullable(v.string()),
+              textWithheldReason: v.nullable(
+                v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+              ),
+            }),
+          ),
         ]),
       ),
     ),
@@ -1635,13 +1643,15 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
   citations: v.array(
     v.strictObject({
       citationId: passthroughId(),
-      citationText: v.string(),
+      citationText: v.nullable(v.string()),
+      textWithheldReason: v.nullable(
+        v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+      ),
       // The classified reading, or `unclassified` where there is none: a row
       // the classifier never reached and one it could not answer for are both
       // the absence of a reading, never a neutral one.
       polarity: v.picklist(CITATION_TREATMENTS),
-      // Null for a citation the corpus holds no decision for; its text is
-      // still returned, so an agent sees what the court cited.
+      // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({
           // Nullable for the same reason as search_case_law's `appUrl`.

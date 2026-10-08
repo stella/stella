@@ -98,6 +98,7 @@ const projectHit = (hit: SearchHit): SearchHit => ({
   decisionType: nullableText(hit.decisionType, bytes.decisionType),
   sourceUrl: nullableText(hit.sourceUrl, bytes.sourceUrl),
   headnote: projectHeadnote(hit.headnote),
+  textWithheldReason: hit.textWithheldReason,
   headline:
     hit.headline === null
       ? null

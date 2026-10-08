@@ -527,6 +527,7 @@ describe("empty-result onboarding next step", () => {
           ecli: null,
           headline: "hit",
           language: "cs",
+          textWithheldReason: null,
           matchingPassages: 1,
           sourceUrl: "https://example.test",
         },
