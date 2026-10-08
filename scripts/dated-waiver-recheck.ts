@@ -316,6 +316,7 @@ const prNumber = (value: unknown): number => {
 // swapping the PR head; moving an open PR straight to main would close it.
 type PublishRecheckOptions = {
   baseSha: string;
+  baseFiles: Readonly<Record<string, string>>;
   body: string;
   files: Readonly<Record<string, string>>;
   repo: string | undefined;
@@ -323,11 +324,12 @@ type PublishRecheckOptions = {
 };
 export const publishRecheck = async ({
   baseSha,
+  baseFiles,
   body,
   files,
   repo,
   request,
-}: PublishRecheckOptions): Promise<number> => {
+}: PublishRecheckOptions): Promise<number | undefined> => {
   if (repo !== "stella/stella") {
     panic("Dated-waiver publishing requires stella/stella");
   }
@@ -406,6 +408,14 @@ export const publishRecheck = async ({
     );
   }
   const existing = open.at(0);
+  if (
+    !existing &&
+    Object.entries(files).every(
+      ([file, content]) => baseFiles[file] === content,
+    )
+  ) {
+    return undefined;
+  }
   if (existing) {
     const sameFiles = await Promise.all(
       Object.entries(files).map(async ([file, content]) => {
@@ -512,8 +522,44 @@ const main = async (): Promise<void> => {
   const body = renderRecheckBody(due, decisions);
   const files = { [CHECKLIST_FILE]: body, [DOC_SOURCE_FILE]: updated };
   if (process.argv.includes("--publish")) {
+    const tracked = Bun.spawnSync(
+      ["git", "ls-tree", "--name-only", baseSha, "--", ...Object.keys(files)],
+      { cwd: root },
+    );
+    if (tracked.exitCode !== 0) {
+      panic("Cannot list dated-waiver proposal base files");
+    }
+    const baseFiles = Object.fromEntries(
+      tracked.stdout
+        .toString()
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((file) => {
+          const original = Bun.spawnSync(
+            ["git", "show", `${baseSha}:${file}`],
+            {
+              cwd: root,
+            },
+          );
+          if (original.exitCode !== 0) {
+            panic("Cannot read dated-waiver proposal base file");
+          }
+          return [file, original.stdout.toString()];
+        }),
+    );
+    const number = await publishRecheck({
+      baseSha,
+      baseFiles,
+      body,
+      files,
+      repo: process.env.GITHUB_REPOSITORY,
+      request: gh,
+    });
     console.log(
-      `Dated-waiver recheck PR #${await publishRecheck({ baseSha, body, files, repo: process.env.GITHUB_REPOSITORY, request: gh })}`,
+      number === undefined
+        ? "Dated-waiver proposal matches the checkout; nothing to publish."
+        : `Dated-waiver recheck PR #${number}`,
     );
   } else {
     for (const [file, contents] of Object.entries(files)) {

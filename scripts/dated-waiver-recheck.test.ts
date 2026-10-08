@@ -322,6 +322,36 @@ describe("one recheck PR", () => {
     expect(creates).toBe(0);
   });
 
+  test("a merged checklist with a still-due manual waiver publishes nothing", async () => {
+    const manual = { ...waiver, kind: "dependency-audit" } as const;
+    const due = dueWaivers([manual], new Date("2026-09-29T00:00:00.000Z"));
+    expect(due).toHaveLength(1);
+    const body = renderRecheckBody(due, []);
+    const files = {
+      [CHECKLIST_FILE]: body,
+      ".claude/mcp/doc-sources.ts": source,
+    };
+    const calls: (readonly string[])[] = [];
+    const request = async (args: readonly string[]): Promise<unknown> => {
+      calls.push([...args]);
+      if (args.at(0) === "repos/stella/stella/pulls" && args.includes("GET")) {
+        return []; // The earlier proposal is merged, so there is no open PR.
+      }
+      throw new TypeError(`Unexpected GitHub call: ${args.join(" ")}`);
+    };
+    expect(
+      await publishRecheck({
+        baseSha: "merged-checklist-sha",
+        baseFiles: files,
+        body,
+        files,
+        repo: "stella/stella",
+        request,
+      }),
+    ).toBeUndefined();
+    expect(calls).toHaveLength(1);
+  });
+
   test("failed signed commits leave the proposal head and PR untouched", async () => {
     const writes: string[] = [];
     const request = async (
@@ -353,6 +383,7 @@ describe("one recheck PR", () => {
       await rejectionOf(
         publishRecheck({
           baseSha: "base-sha",
+          baseFiles: {},
           body: "checklist",
           files: { [CHECKLIST_FILE]: "checklist" },
           repo: "stella/stella",
@@ -466,6 +497,7 @@ describe("one recheck PR", () => {
     expect(
       await publishRecheck({
         baseSha: checkoutSha,
+        baseFiles: { ".claude/mcp/doc-sources.ts": source },
         body: "checklist",
         files,
         repo: "stella/stella",
@@ -484,13 +516,13 @@ describe("one recheck PR", () => {
     expect(latestMain.registry).toContain('dependencies: ["added"]');
   });
 
-  test("signed GitHub publishing creates one draft PR and makes no writes on an identical rerun", async () => {
+  test("a closed-unmerged proposal is recreated once and an identical open rerun makes no writes", async () => {
     const files = {
       [CHECKLIST_FILE]: "checklist",
       ".claude/mcp/doc-sources.ts": source,
     };
     const open: RecheckPr[] = [];
-    const refs = new Set<string>();
+    const refs = new Set([RECHECK_BRANCH]);
     const calls: { args: readonly string[]; input: unknown }[] = [];
     const request = async (
       args: readonly string[],
@@ -550,6 +582,7 @@ describe("one recheck PR", () => {
     expect(
       await publishRecheck({
         baseSha: "base-sha",
+        baseFiles: { ".claude/mcp/doc-sources.ts": source },
         body: "checklist",
         files,
         repo: "stella/stella",
@@ -581,6 +614,7 @@ describe("one recheck PR", () => {
     expect(
       await publishRecheck({
         baseSha: "base-sha",
+        baseFiles: { ".claude/mcp/doc-sources.ts": source },
         body: "checklist",
         files,
         repo: "stella/stella",
