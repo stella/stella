@@ -13,7 +13,7 @@ time_daily_targets.minutes          integer             null              billin
 time_daily_targets.updated_at       timestamptz         default,not null  billing.ts:72
 ```
 
-## time_entries · `timeEntries` · billing.ts:127
+## time_entries · `timeEntries` · billing.ts:127 · rls
 
 ```text
 time_entries.id                   pUuid               pk,not null       billing.ts:130
@@ -79,7 +79,7 @@ time_timer_confirmations.time_entry_id    safeUuid            fk,null           
 time_timer_confirmations.created_at       timestamptz         default,not null  billing.ts:460
 ```
 
-## saved_time_narratives · `savedTimeNarratives` · billing.ts:481
+## saved_time_narratives · `savedTimeNarratives` · billing.ts:481 · rls
 
 ```text
 saved_time_narratives.id                  pUuid               pk,not null       billing.ts:484
@@ -123,7 +123,7 @@ billing_codes.sort_order       integer             default,not null  billing.ts:
 billing_codes.created_at       timestamptz         default,not null  billing.ts:590
 ```
 
-## seller_profiles · `sellerProfiles` · billing.ts:610
+## seller_profiles · `sellerProfiles` · billing.ts:610 · rls
 
 ```text
 seller_profiles.id                pUuid               pk,not null       billing.ts:613
@@ -147,7 +147,7 @@ seller_profiles.created_at        timestamptz         default,not null  billing.
 seller_profiles.updated_at        timestamptz         default,not null  billing.ts:633
 ```
 
-## number_series · `numberSeries` · billing.ts:661
+## number_series · `numberSeries` · billing.ts:661 · rls
 
 ```text
 number_series.id                 pUuid               pk,not null       billing.ts:664
@@ -163,7 +163,7 @@ number_series.created_at         timestamptz         default,not null  billing.t
 number_series.updated_at         timestamptz         default,not null  billing.ts:678
 ```
 
-## number_series_counters · `numberSeriesCounters` · billing.ts:723
+## number_series_counters · `numberSeriesCounters` · billing.ts:723 · rls
 
 ```text
 number_series_counters.organization_id  safeOrganizationId  not null  billing.ts:726
@@ -172,7 +172,7 @@ number_series_counters.period_key       varchar             not null  billing.ts
 number_series_counters.last_value       integer             not null  billing.ts:729
 ```
 
-## number_series_allocations · `numberSeriesAllocations` · billing.ts:749
+## number_series_allocations · `numberSeriesAllocations` · billing.ts:749 · rls
 
 ```text
 number_series_allocations.organization_id  safeOrganizationId  not null  billing.ts:752
@@ -196,7 +196,7 @@ rate_tables.created_at       timestamptz         default,not null  billing.ts:79
 rate_tables.updated_at       timestamptz         default,not null  billing.ts:796
 ```
 
-## rate_entries · `rateEntries` · billing.ts:814
+## rate_entries · `rateEntries` · billing.ts:814 · rls
 
 ```text
 rate_entries.id              pUuid            pk,not null       billing.ts:817
@@ -297,7 +297,7 @@ invoice_lines.created_at       timestamptz         default,not null  billing.ts:
 invoice_lines.updated_at       timestamptz         default,not null  billing.ts:1075
 ```
 
-## vat_rates · `vatRates` · billing.ts:1138
+## vat_rates · `vatRates` · billing.ts:1138 · rls
 
 ```text
 vat_rates.id               pUuid               pk,not null       billing.ts:1141

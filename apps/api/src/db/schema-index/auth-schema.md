@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## user · `user` · auth-schema.ts:23
+## user · `user` · auth-schema.ts:23 · rls
 
 ```text
 user.id                  text         pk,not null       auth-schema.ts:26
@@ -24,7 +24,7 @@ user.created_at          timestamptz  default,not null  auth-schema.ts:50
 user.updated_at          timestamptz  default,not null  auth-schema.ts:51
 ```
 
-## session · `session` · auth-schema.ts:99
+## session · `session` · auth-schema.ts:99 · rls
 
 ```text
 session.id                      text         pk,not null       auth-schema.ts:102
@@ -42,7 +42,7 @@ session.prior_token_hash        text         null              auth-schema.ts:11
 session.prior_token_expires_at  timestamptz  null              auth-schema.ts:120
 ```
 
-## account · `account` · auth-schema.ts:136
+## account · `account` · auth-schema.ts:136 · rls
 
 ```text
 account.id                        text         pk,not null       auth-schema.ts:139
@@ -61,7 +61,7 @@ account.created_at                timestamptz  default,not null  auth-schema.ts:
 account.updated_at                timestamptz  not null          auth-schema.ts:157
 ```
 
-## verification · `verification` · auth-schema.ts:177
+## verification · `verification` · auth-schema.ts:177 · rls
 
 ```text
 verification.id          text         pk,not null       auth-schema.ts:180
@@ -72,7 +72,7 @@ verification.created_at  timestamptz  default,not null  auth-schema.ts:184
 verification.updated_at  timestamptz  default,not null  auth-schema.ts:185
 ```
 
-## two_factor · `twoFactor` · auth-schema.ts:201
+## two_factor · `twoFactor` · auth-schema.ts:201 · rls
 
 TOTP secret + backup codes are encrypted by Better Auth before storage (secret always; backupCodes per the plugin's default `storeBackupCodes: "encrypted"`), b…
 
@@ -86,7 +86,7 @@ two_factor.failed_verification_count  integer      default,not null  auth-schema
 two_factor.locked_until               timestamptz  null              auth-schema.ts:220
 ```
 
-## organization · `organization` · auth-schema.ts:235
+## organization · `organization` · auth-schema.ts:235 · rls
 
 ```text
 organization.id          text         pk,not null      auth-schema.ts:238
@@ -97,7 +97,7 @@ organization.created_at  timestamptz  not null         auth-schema.ts:242
 organization.metadata    text         null             auth-schema.ts:243
 ```
 
-## member · `member` · auth-schema.ts:251
+## member · `member` · auth-schema.ts:251 · rls
 
 ```text
 member.id                        text         pk,not null       auth-schema.ts:254
@@ -108,7 +108,7 @@ member.last_active_workspace_id  text         null              auth-schema.ts:2
 member.created_at                timestamptz  not null          auth-schema.ts:263
 ```
 
-## invitation · `invitation` · auth-schema.ts:287
+## invitation · `invitation` · auth-schema.ts:287 · rls
 
 ```text
 invitation.id               text         pk,not null       auth-schema.ts:290
@@ -121,7 +121,7 @@ invitation.created_at       timestamptz  default,not null  auth-schema.ts:298
 invitation.inviter_id       text         fk,not null       auth-schema.ts:299
 ```
 
-## jwks · `jwks` · auth-schema.ts:317
+## jwks · `jwks` · auth-schema.ts:317 · rls
 
 ```text
 jwks.id           text         pk,not null  auth-schema.ts:320
@@ -133,7 +133,7 @@ jwks.created_at   timestamptz  not null     auth-schema.ts:325
 jwks.expires_at   timestamptz  null         auth-schema.ts:326
 ```
 
-## apikey · `apikey` · auth-schema.ts:350
+## apikey · `apikey` · auth-schema.ts:350 · rls
 
 Storage for `@better-auth/api-key`.
 
@@ -162,7 +162,7 @@ apikey.permissions             text         null              auth-schema.ts:375
 apikey.metadata                text         null              auth-schema.ts:376
 ```
 
-## oauth_client · `oauthClient` · auth-schema.ts:422
+## oauth_client · `oauthClient` · auth-schema.ts:422 · rls
 
 ```text
 oauth_client.id                                   text         pk,not null             auth-schema.ts:425
@@ -206,7 +206,7 @@ oauth_client.reference_id                         text         null             
 oauth_client.metadata                             jsonb        null                    auth-schema.ts:479
 ```
 
-## oauth_resource · `oauthResource` · auth-schema.ts:503
+## oauth_resource · `oauthResource` · auth-schema.ts:503 · rls
 
 ```text
 oauth_resource.id                                 text         pk,not null       auth-schema.ts:506
@@ -226,7 +226,7 @@ oauth_resource.policy_version                     integer      default,not null 
 oauth_resource.metadata                           jsonb        null              auth-schema.ts:525
 ```
 
-## oauth_client_resource · `oauthClientResource` · auth-schema.ts:530
+## oauth_client_resource · `oauthClientResource` · auth-schema.ts:530 · rls
 
 ```text
 oauth_client_resource.id           text         pk,not null       auth-schema.ts:533
@@ -236,14 +236,14 @@ oauth_client_resource.metadata     jsonb        null              auth-schema.ts
 oauth_client_resource.created_at   timestamptz  default,not null  auth-schema.ts:541
 ```
 
-## oauth_client_assertion · `oauthClientAssertion` · auth-schema.ts:554
+## oauth_client_assertion · `oauthClientAssertion` · auth-schema.ts:554 · rls
 
 ```text
 oauth_client_assertion.id          text         pk,not null  auth-schema.ts:557
 oauth_client_assertion.expires_at  timestamptz  not null     auth-schema.ts:558
 ```
 
-## oauth_refresh_token · `oauthRefreshToken` · auth-schema.ts:566
+## oauth_refresh_token · `oauthRefreshToken` · auth-schema.ts:566 · rls
 
 ```text
 oauth_refresh_token.id                          text         pk,not null       auth-schema.ts:569
@@ -266,7 +266,7 @@ oauth_refresh_token.confirmation                jsonb        null              a
 oauth_refresh_token.scopes                      text         array,not null    auth-schema.ts:596
 ```
 
-## oauth_access_token · `oauthAccessToken` · auth-schema.ts:610
+## oauth_access_token · `oauthAccessToken` · auth-schema.ts:610 · rls
 
 ```text
 oauth_access_token.id                          text         pk,not null       auth-schema.ts:613
@@ -286,7 +286,7 @@ oauth_access_token.confirmation                jsonb        null              au
 oauth_access_token.scopes                      text         array,not null    auth-schema.ts:637
 ```
 
-## oauth_consent · `oauthConsent` · auth-schema.ts:652
+## oauth_consent · `oauthConsent` · auth-schema.ts:652 · rls
 
 ```text
 oauth_consent.id                          text         pk,not null       auth-schema.ts:655

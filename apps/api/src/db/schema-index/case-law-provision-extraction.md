@@ -15,7 +15,7 @@ case_law_provision_extraction_scopes.status      text     not null  case-law-pro
 case_law_provision_extraction_scopes.generation  bigint   not null  case-law-provision-extraction.ts:117
 ```
 
-## case_law_provision_scope_transitions · `caseLawProvisionScopeTransitions` · case-law-provision-extraction.ts:140
+## case_law_provision_scope_transitions · `caseLawProvisionScopeTransitions` · case-law-provision-extraction.ts:140 · rls
 
 The durable job behind one scope transition: which generation it applies, and how far through the scope's decisions (by id) it has got.
 
@@ -49,7 +49,7 @@ case_law_provision_admission.revision    integer      not null          case-law
 case_law_provision_admission.updated_at  timestamptz  default,not null  case-law-provision-extraction.ts:201
 ```
 
-## case_law_provision_extraction_revisions_registry · `caseLawProvisionExtractionRevisionsRegistry` · case-law-provision-extraction.ts:218
+## case_law_provision_extraction_revisions_registry · `caseLawProvisionExtractionRevisionsRegistry` · case-law-provision-extraction.ts:218 · rls
 
 What one extraction revision means for one jurisdiction.
 
@@ -62,7 +62,7 @@ case_law_provision_extraction_revisions_registry.projection_revision  smallint  
 case_law_provision_extraction_revisions_registry.registered_at        timestamptz  default,not null  case-law-provision-extraction.ts:228
 ```
 
-## case_law_provision_extraction_revisions · `caseLawProvisionExtractionRevisions` · case-law-provision-extraction.ts:254
+## case_law_provision_extraction_revisions · `caseLawProvisionExtractionRevisions` · case-law-provision-extraction.ts:254 · rls
 
 The revision each jurisdiction extracts at, and the oldest revision whose output still counts as current.
 
@@ -73,7 +73,7 @@ case_law_provision_extraction_revisions.min_current_revision  integer      not n
 case_law_provision_extraction_revisions.changed_at            timestamptz  default,not null  case-law-provision-extraction.ts:260
 ```
 
-## case_law_provision_extractions · `caseLawProvisionExtractions` · case-law-provision-extraction.ts:295
+## case_law_provision_extractions · `caseLawProvisionExtractions` · case-law-provision-extraction.ts:295 · rls
 
 One row per decision the provision extraction owes or has published.
 

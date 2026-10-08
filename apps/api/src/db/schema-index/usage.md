@@ -112,7 +112,7 @@ usage_allocations.allocated_by_user_id  text                fk,null           us
 usage_allocations.created_at            timestamptz         default,not null  usage.ts:605
 ```
 
-## account_deletion_requests · `accountDeletionRequests` · usage.ts:648
+## account_deletion_requests · `accountDeletionRequests` · usage.ts:648 · rls
 
 ```text
 account_deletion_requests.id                       pUuid               pk,not null             usage.ts:651

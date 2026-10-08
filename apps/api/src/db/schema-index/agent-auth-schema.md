@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## agent_registration · `agentRegistration` · agent-auth-schema.ts:25
+## agent_registration · `agentRegistration` · agent-auth-schema.ts:25 · rls
 
 Agent-registration ceremony state for the auth.md protocol.
 
@@ -30,7 +30,7 @@ agent_registration.created_at              timestamptz  default,not null        
 agent_registration.updated_at              timestamptz  default,not null        agent-auth-schema.ts:57
 ```
 
-## agent_trusted_issuer · `agentTrustedIssuer` · agent-auth-schema.ts:92
+## agent_trusted_issuer · `agentTrustedIssuer` · agent-auth-schema.ts:92 · rls
 
 Operator-managed allow-list of identity providers whose ID-JAG assertions Stella will accept.
 
@@ -43,7 +43,7 @@ agent_trusted_issuer.created_at          timestamptz  default,not null  agent-au
 agent_trusted_issuer.updated_at          timestamptz  default,not null  agent-auth-schema.ts:105
 ```
 
-## agent_delegation · `agentDelegation` · agent-auth-schema.ts:122
+## agent_delegation · `agentDelegation` · agent-auth-schema.ts:122 · rls
 
 Durable `(iss, sub)` -> Stella user/org binding established the first time a trusted issuer vouches for an identity.
 
@@ -56,7 +56,7 @@ agent_delegation.organization_id  text         not null          agent-auth-sche
 agent_delegation.created_at       timestamptz  default,not null  agent-auth-schema.ts:130
 ```
 
-## agent_assertion_replay · `agentAssertionReplay` · agent-auth-schema.ts:145
+## agent_assertion_replay · `agentAssertionReplay` · agent-auth-schema.ts:145 · rls
 
 One-time-use store of accepted ID-JAG `jti` values: a presented `jti` already here is a replay and is rejected.
 

@@ -285,7 +285,7 @@ export const indexSchemaSource = (
         line: lineOf(statement),
         rls:
           calleeName(call.expression) === "withRLS" ||
-          /\bPolicies\(\)|pgPolicy\(/u.test(call.getText(sourceFile)),
+          /Policies\(\)|pgPolicy\(/u.test(call.getText(sourceFile)),
         sqlName: nameArgument.text,
         summary: leadingSummary(statement, source),
       });

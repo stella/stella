@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## user_files · `userFiles` · files-views.ts:23
+## user_files · `userFiles` · files-views.ts:23 · rls
 
 ```text
 user_files.id                 pUuid        pk,not null       files-views.ts:26
@@ -23,7 +23,7 @@ user_files.created_at         timestamptz  default,not null  files-views.ts:48
 user_files.updated_at         timestamptz  default,not null  files-views.ts:49
 ```
 
-## workspace_views · `workspaceViews` · files-views.ts:71
+## workspace_views · `workspaceViews` · files-views.ts:71 · rls
 
 ```text
 workspace_views.id            pUuid            pk,not null       files-views.ts:74
@@ -34,7 +34,7 @@ workspace_views.position      integer          not null          files-views.ts:
 workspace_views.created_at    timestamptz      default,not null  files-views.ts:81
 ```
 
-## workspace_view_templates · `workspaceViewTemplates` · files-views.ts:97
+## workspace_view_templates · `workspaceViewTemplates` · files-views.ts:97 · rls
 
 ```text
 workspace_view_templates.id                   pUuid               pk,not null       files-views.ts:100

@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## entity_views · `entityViews` · entity-views.ts:15
+## entity_views · `entityViews` · entity-views.ts:15 · rls
 
 Organization-wide, user-owned saved layouts for cross-matter surfaces.
 

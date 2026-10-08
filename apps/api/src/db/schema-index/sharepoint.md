@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## sharepoint_connections · `sharepointConnections` · sharepoint.ts:32
+## sharepoint_connections · `sharepointConnections` · sharepoint.ts:32 · rls
 
 Per user+org delegated Graph connection.
 
@@ -26,7 +26,7 @@ sharepoint_connections.created_at               timestamptz         default,not 
 sharepoint_connections.updated_at               timestamptz         default,not null  sharepoint.ts:59
 ```
 
-## sharepoint_oauth_state · `sharepointOAuthState` · sharepoint.ts:78
+## sharepoint_oauth_state · `sharepointOAuthState` · sharepoint.ts:78 · rls
 
 Short-lived per-request OAuth state consumed by the callback.
 

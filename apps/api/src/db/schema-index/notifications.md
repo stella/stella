@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## notifications · `notifications` · notifications.ts:45
+## notifications · `notifications` · notifications.ts:45 · rls
 
 A per-user awareness pointer: "you were mentioned", "your export finished", "your flow run needs approval", "announcement".
 

@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## entities · `entities` · entities.ts:72
+## entities · `entities` · entities.ts:72 · rls
 
 ```text
 entities.id                          pUuid            pk,not null       entities.ts:75
@@ -72,7 +72,7 @@ entity_deletion_effect_chunks.request_id                            safeUuid  no
 entity_deletion_effect_chunks.{...destructiveEffectChunkColumns()}  spread                 entities.ts:273
 ```
 
-## task_assignees · `taskAssignees` · entities.ts:283
+## task_assignees · `taskAssignees` · entities.ts:283 · rls
 
 ```text
 task_assignees.id            pUuid            pk,not null       entities.ts:286
@@ -83,7 +83,7 @@ task_assignees.role          text             not null          entities.ts:297
 task_assignees.created_at    timestamptz      default,not null  entities.ts:298
 ```
 
-## entity_links · `entityLinks` · entities.ts:311
+## entity_links · `entityLinks` · entities.ts:311 · rls
 
 ```text
 entity_links.id                pUuid            pk,not null       entities.ts:314
@@ -94,7 +94,7 @@ entity_links.link_type         varchar          default,not null  entities.ts:32
 entity_links.created_at        timestamptz      default,not null  entities.ts:328
 ```
 
-## entity_versions · `entityVersions` · entities.ts:352
+## entity_versions · `entityVersions` · entities.ts:352 · rls
 
 ```text
 entity_versions.id                                  pUuid            pk,not null       entities.ts:355
@@ -133,7 +133,7 @@ entity_version_ai_summaries.model_id           varchar             not null     
 entity_version_ai_summaries.generated_at       timestamptz         default,not null  entities.ts:453
 ```
 
-## desktop_edit_sessions · `desktopEditSessions` · entities.ts:495
+## desktop_edit_sessions · `desktopEditSessions` · entities.ts:495 · rls
 
 ```text
 desktop_edit_sessions.id                                pUuid            pk,not null       entities.ts:498
@@ -161,7 +161,7 @@ desktop_edit_sessions.closed_at                         timestamptz      null   
 desktop_edit_sessions.expiry_notification_published_at  timestamptz      null              entities.ts:539
 ```
 
-## desktop_edit_handoffs · `desktopEditHandoffs` · entities.ts:599
+## desktop_edit_handoffs · `desktopEditHandoffs` · entities.ts:599 · rls
 
 ```text
 desktop_edit_handoffs.id                  pUuid            pk,not null       entities.ts:602
@@ -183,7 +183,7 @@ desktop_edit_handoffs.created_at          timestamptz      default,not null  ent
 desktop_edit_handoffs.updated_at          timestamptz      default,not null  entities.ts:627
 ```
 
-## folio_collab_rooms · `folioCollabRooms` · entities.ts:673
+## folio_collab_rooms · `folioCollabRooms` · entities.ts:673 · rls
 
 ```text
 folio_collab_rooms.id                             pUuid            pk,not null       entities.ts:676
@@ -212,7 +212,7 @@ folio_collab_rooms.created_at                     timestamptz      default,not n
 folio_collab_rooms.updated_at                     timestamptz      default,not null  entities.ts:715
 ```
 
-## folio_collab_room_tokens · `folioCollabRoomTokens` · entities.ts:810
+## folio_collab_room_tokens · `folioCollabRoomTokens` · entities.ts:810 · rls
 
 ```text
 folio_collab_room_tokens.id            pUuid            pk,not null       entities.ts:813
@@ -226,7 +226,7 @@ folio_collab_room_tokens.expires_at    timestamptz      not null          entiti
 folio_collab_room_tokens.created_at    timestamptz      default,not null  entities.ts:828
 ```
 
-## folio_collab_contributions · `folioCollabContributions` · entities.ts:856
+## folio_collab_contributions · `folioCollabContributions` · entities.ts:856 · rls
 
 Contribution rows are capped per room and reset after every publication; deleting the durable room cascades any unpublished remainder.
 
@@ -241,7 +241,7 @@ folio_collab_contributions.created_at        timestamptz      default,not null  
 folio_collab_contributions.updated_at        timestamptz      default,not null  entities.ts:869
 ```
 
-## folio_collab_publications · `folioCollabPublications` · entities.ts:905
+## folio_collab_publications · `folioCollabPublications` · entities.ts:905 · rls
 
 Publications are the durable idempotency ledger for immutable versions.
 
@@ -298,7 +298,7 @@ buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not n
 buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1197
 ```
 
-## fields · `fields` · entities.ts:1300
+## fields · `fields` · entities.ts:1300 · rls
 
 ```text
 fields.id                 pUuid            pk,not null  entities.ts:1303
@@ -309,7 +309,7 @@ fields.file_id            safeUuid         null         entities.ts:1309
 fields.content            jsonb            not null     entities.ts:1310
 ```
 
-## cell_metadata · `cellMetadata` · entities.ts:1379
+## cell_metadata · `cellMetadata` · entities.ts:1379 · rls
 
 ```text
 cell_metadata.workspace_id       safeWorkspaceId  not null          entities.ts:1382
@@ -322,7 +322,7 @@ cell_metadata.created_at         timestamptz      default,not null  entities.ts:
 cell_metadata.updated_at         timestamptz      default,not null  entities.ts:1395
 ```
 
-## justifications · `justifications` · entities.ts:1415
+## justifications · `justifications` · entities.ts:1415 · rls
 
 ```text
 justifications.id              pUuid            pk,not null             entities.ts:1418

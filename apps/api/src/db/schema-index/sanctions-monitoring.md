@@ -34,7 +34,7 @@ sanctions_monitoring_backfills.state              text                default,no
 sanctions_monitoring_backfills.scheduled_at       timestamptz         default,not null  sanctions-monitoring.ts:117
 ```
 
-## sanctions_edition_fanouts · `sanctionsEditionFanouts` · sanctions-monitoring.ts:161
+## sanctions_edition_fanouts · `sanctionsEditionFanouts` · sanctions-monitoring.ts:161 · rls
 
 ```text
 sanctions_edition_fanouts.source_id               text                pk,fk,not null    sanctions-monitoring.ts:164

@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## style_sets · `styleSets` · style-sets.ts:15
+## style_sets · `styleSets` · style-sets.ts:15 · rls
 
 ```text
 style_sets.id               pUuid                pk,not null       style-sets.ts:18

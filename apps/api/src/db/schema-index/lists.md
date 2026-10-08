@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legal_lists · `legalLists` · lists.ts:138
+## legal_lists · `legalLists` · lists.ts:138 · rls
 
 ```text
 legal_lists.id            pUuid            pk,not null       lists.ts:141
@@ -17,7 +17,7 @@ legal_lists.created_at    timestamptz      default,not null  lists.ts:154
 legal_lists.updated_at    timestamptz      default,not null  lists.ts:155
 ```
 
-## legal_list_sections · `legalListSections` · lists.ts:170
+## legal_list_sections · `legalListSections` · lists.ts:170 · rls
 
 ```text
 legal_list_sections.id            pUuid            pk,not null       lists.ts:173
@@ -29,7 +29,7 @@ legal_list_sections.created_at    timestamptz      default,not null  lists.ts:17
 legal_list_sections.updated_at    timestamptz      default,not null  lists.ts:179
 ```
 
-## legal_list_columns · `legalListColumns` · lists.ts:199
+## legal_list_columns · `legalListColumns` · lists.ts:199 · rls
 
 ```text
 legal_list_columns.id            pUuid            pk,not null       lists.ts:202
@@ -41,7 +41,7 @@ legal_list_columns.required      boolean          default,not null  lists.ts:207
 legal_list_columns.created_at    timestamptz      default,not null  lists.ts:208
 ```
 
-## legal_list_items · `legalListItems` · lists.ts:235
+## legal_list_items · `legalListItems` · lists.ts:235 · rls
 
 ```text
 legal_list_items.entity_id      safeUuid         pk,not null       lists.ts:238
@@ -95,7 +95,7 @@ legal_list_item_sources.created_at                timestamptz      default,not n
 legal_list_item_sources.updated_at                timestamptz      default,not null  lists.ts:411
 ```
 
-## legal_list_generation_runs · `legalListGenerationRuns` · lists.ts:488
+## legal_list_generation_runs · `legalListGenerationRuns` · lists.ts:488 · rls
 
 ```text
 legal_list_generation_runs.id            pUuid            pk,not null       lists.ts:491
@@ -122,7 +122,7 @@ legal_list_generation_sources.source_entity_version_id  safeUuid         not nul
 legal_list_generation_sources.created_at                timestamptz      default,not null  lists.ts:543
 ```
 
-## legal_list_generation_candidates · `legalListGenerationCandidates` · lists.ts:610
+## legal_list_generation_candidates · `legalListGenerationCandidates` · lists.ts:610 · rls
 
 ```text
 legal_list_generation_candidates.id                            pUuid            pk,not null       lists.ts:613
@@ -160,7 +160,7 @@ legal_list_generation_candidate_sources.quote                     text          
 legal_list_generation_candidate_sources.created_at                timestamptz      default,not null  lists.ts:715
 ```
 
-## legal_list_item_comments · `legalListItemComments` · lists.ts:796
+## legal_list_item_comments · `legalListItemComments` · lists.ts:796 · rls
 
 ```text
 legal_list_item_comments.id              pUuid            pk,not null       lists.ts:799

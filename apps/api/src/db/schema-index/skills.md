@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## agent_skills · `agentSkills` · skills.ts:26
+## agent_skills · `agentSkills` · skills.ts:26 · rls
 
 ```text
 agent_skills.id               pUuid               pk,not null       skills.ts:29
@@ -28,7 +28,7 @@ agent_skills.created_at       timestamptz         default,not null  skills.ts:56
 agent_skills.updated_at       timestamptz         default,not null  skills.ts:57
 ```
 
-## agent_skill_resources · `agentSkillResources` · skills.ts:103
+## agent_skill_resources · `agentSkillResources` · skills.ts:103 · rls
 
 ```text
 agent_skill_resources.id               pUuid               pk,not null       skills.ts:106
@@ -41,7 +41,7 @@ agent_skill_resources.size_bytes       integer             not null          ski
 agent_skill_resources.created_at       timestamptz         default,not null  skills.ts:117
 ```
 
-## agent_skill_revisions · `agentSkillRevisions` · skills.ts:142
+## agent_skill_revisions · `agentSkillRevisions` · skills.ts:142 · rls
 
 Immutable snapshots of a skill body.
 

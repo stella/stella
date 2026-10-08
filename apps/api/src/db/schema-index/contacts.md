@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## contacts · `contacts` · contacts.ts:45
+## contacts · `contacts` · contacts.ts:45 · rls
 
 ```text
 contacts.id                         pUuid               pk,not null             contacts.ts:48
@@ -43,7 +43,7 @@ contacts.created_at                 timestamptz         default,not null        
 contacts.updated_at                 timestamptz         default,not null        contacts.ts:108
 ```
 
-## contact_import_requests · `contactImportRequests` · contacts.ts:185
+## contact_import_requests · `contactImportRequests` · contacts.ts:185 · rls
 
 ```text
 contact_import_requests.id                   pUuid               pk,not null       contacts.ts:188
@@ -55,7 +55,7 @@ contact_import_requests.result               jsonb               not null       
 contact_import_requests.created_at           timestamptz         default,not null  contacts.ts:201
 ```
 
-## contact_extraction_uploads · `contactExtractionUploads` · contacts.ts:219
+## contact_extraction_uploads · `contactExtractionUploads` · contacts.ts:219 · rls
 
 ```text
 contact_extraction_uploads.id                     pUuid               pk,not null       contacts.ts:222
@@ -73,7 +73,7 @@ contact_extraction_uploads.created_at             timestamptz         default,no
 contact_extraction_uploads.used_at                timestamptz         null              contacts.ts:242
 ```
 
-## contact_relationships · `contactRelationships` · contacts.ts:264
+## contact_relationships · `contactRelationships` · contacts.ts:264 · rls
 
 ```text
 contact_relationships.id                  pUuid               pk,not null       contacts.ts:267
@@ -106,7 +106,7 @@ workspaces.last_activity_at   timestamptz         default,not null  contacts.ts:
 workspaces.created_at         timestamptz         default,not null  contacts.ts:336
 ```
 
-## workspace_members · `workspaceMembers` · contacts.ts:378
+## workspace_members · `workspaceMembers` · contacts.ts:378 · rls
 
 ```text
 workspace_members.id            pUuid            pk,not null       contacts.ts:381
@@ -195,7 +195,7 @@ scheduler_job_runs.duration_ms  integer      null              contacts.ts:744
 scheduler_job_runs.error        text         null              contacts.ts:745
 ```
 
-## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:765
+## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:765 · rls
 
 -- InfoSoud Tracking --
 

@@ -50,7 +50,7 @@ legal_list_verification_read_receipts.user_id          text                fk,no
 legal_list_verification_read_receipts.audited_day      date                not null     lists-verification.ts:242
 ```
 
-## legal_list_verification_blocks · `legalListVerificationBlocks` · lists-verification.ts:280
+## legal_list_verification_blocks · `legalListVerificationBlocks` · lists-verification.ts:280 · rls
 
 Exact source text read by the engine, pinned with the run.
 
@@ -64,7 +64,7 @@ legal_list_verification_blocks.page_number   integer          null      lists-ve
 legal_list_verification_blocks.text          text             not null  lists-verification.ts:289
 ```
 
-## legal_list_claims · `legalListClaims` · lists-verification.ts:328
+## legal_list_claims · `legalListClaims` · lists-verification.ts:328 · rls
 
 One claim the engine found in the run's document, with its verdict.
 

@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## mcp_connectors · `mcpConnectors` · mcp.ts:28
+## mcp_connectors · `mcpConnectors` · mcp.ts:28 · rls
 
 ```text
 mcp_connectors.id                                pUuid               pk,not null       mcp.ts:31
@@ -26,7 +26,7 @@ mcp_connectors.created_at                        timestamptz         default,not
 mcp_connectors.updated_at                        timestamptz         default,not null  mcp.ts:58
 ```
 
-## mcp_oauth_clients · `mcpOAuthClients` · mcp.ts:79
+## mcp_oauth_clients · `mcpOAuthClients` · mcp.ts:79 · rls
 
 ```text
 mcp_oauth_clients.id                        pUuid               pk,not null       mcp.ts:82
@@ -54,7 +54,7 @@ mcp_connector_authorization_reviews.status                     text             
 mcp_connector_authorization_reviews.updated_at                 timestamptz         default,not null  mcp.ts:141
 ```
 
-## mcp_user_connections · `mcpUserConnections` · mcp.ts:192
+## mcp_user_connections · `mcpUserConnections` · mcp.ts:192 · rls
 
 ```text
 mcp_user_connections.id                         pUuid               pk,not null       mcp.ts:195
@@ -85,7 +85,7 @@ mcp_user_connections.created_at                 timestamptz         default,not 
 mcp_user_connections.updated_at                 timestamptz         default,not null  mcp.ts:235
 ```
 
-## mcp_oauth_state · `mcpOAuthState` · mcp.ts:258
+## mcp_oauth_state · `mcpOAuthState` · mcp.ts:258 · rls
 
 ```text
 mcp_oauth_state.state                     varchar             pk,not null       mcp.ts:261

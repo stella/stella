@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## corpus_index_projection_intents · `corpusIndexProjectionIntents` · corpus-index-projections.ts:44
+## corpus_index_projection_intents · `corpusIndexProjectionIntents` · corpus-index-projections.ts:44 · rls
 
 One immutable Quickwit append attempt.
 
@@ -38,7 +38,7 @@ corpus_index_projection_intents.created_at                     timestamptz  defa
 corpus_index_projection_intents.updated_at                     timestamptz  default,not null  corpus-index-projections.ts:85
 ```
 
-## corpus_index_projection_states · `corpusIndexProjectionStates` · corpus-index-projections.ts:361
+## corpus_index_projection_states · `corpusIndexProjectionStates` · corpus-index-projections.ts:361 · rls
 
 PostgreSQL-authoritative desired and applied state for one generation.
 

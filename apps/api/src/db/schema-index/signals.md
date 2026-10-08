@@ -48,7 +48,7 @@ signal_events.payload          jsonb               null              signals.ts:
 signal_events.created_at       timestamptz         default,not null  signals.ts:238
 ```
 
-## scout_runs · `scoutRuns` · signals.ts:298
+## scout_runs · `scoutRuns` · signals.ts:298 · rls
 
 Census of scout executions: proves a scout ran and how many signals it emitted vs.
 

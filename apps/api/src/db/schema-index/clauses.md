@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## clause_categories · `clauseCategories` · clauses.ts:22
+## clause_categories · `clauseCategories` · clauses.ts:22 · rls
 
 ```text
 clause_categories.id               pUuid               pk,not null       clauses.ts:25
@@ -17,7 +17,7 @@ clause_categories.created_at       timestamptz         default,not null  clauses
 clause_categories.updated_at       timestamptz         default,not null  clauses.ts:39
 ```
 
-## clauses · `clauses` · clauses.ts:50
+## clauses · `clauses` · clauses.ts:50 · rls
 
 ```text
 clauses.id               pUuid               pk,not null       clauses.ts:53
@@ -36,7 +36,7 @@ clauses.created_at       timestamptz         default,not null  clauses.ts:75
 clauses.updated_at       timestamptz         default,not null  clauses.ts:76
 ```
 
-## clause_variants · `clauseVariants` · clauses.ts:92
+## clause_variants · `clauseVariants` · clauses.ts:92 · rls
 
 ```text
 clause_variants.id               pUuid               pk,not null       clauses.ts:95
@@ -49,7 +49,7 @@ clause_variants.created_at       timestamptz         default,not null  clauses.t
 clause_variants.updated_at       timestamptz         default,not null  clauses.ts:102
 ```
 
-## clause_versions · `clauseVersions` · clauses.ts:117
+## clause_versions · `clauseVersions` · clauses.ts:117 · rls
 
 ```text
 clause_versions.id               pUuid               pk,not null       clauses.ts:120
@@ -60,7 +60,7 @@ clause_versions.body             jsonb               not null          clauses.t
 clause_versions.created_at       timestamptz         default,not null  clauses.ts:125
 ```
 
-## template_recipes · `templateRecipes` · clauses.ts:147
+## template_recipes · `templateRecipes` · clauses.ts:147 · rls
 
 Saved structural-block recipes: a named, org-wide snapshot of pre-configured template fields (optionally wrapped in a `{% for %}` loop) that can be inserted in…
 
@@ -75,7 +75,7 @@ template_recipes.created_at       timestamptz         default,not null  clauses.
 template_recipes.updated_at       timestamptz         default,not null  clauses.ts:162
 ```
 
-## template_clauses · `templateClauses` · clauses.ts:173
+## template_clauses · `templateClauses` · clauses.ts:173 · rls
 
 ```text
 template_clauses.id                    pUuid               pk,not null       clauses.ts:176
@@ -90,7 +90,7 @@ template_clauses.sort_order            integer             default,not null  cla
 template_clauses.inserted_at           timestamptz         default,not null  clauses.ts:200
 ```
 
-## template_fills · `templateFills` · clauses.ts:227
+## template_fills · `templateFills` · clauses.ts:227 · rls
 
 ```text
 template_fills.id                pUuid               pk,not null       clauses.ts:230

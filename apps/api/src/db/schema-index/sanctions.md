@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## sanctions_sources · `sanctionsSources` · sanctions.ts:43
+## sanctions_sources · `sanctionsSources` · sanctions.ts:43 · rls
 
 ```text
 sanctions_sources.id                           text         pk,not null       sanctions.ts:46
@@ -25,7 +25,7 @@ sanctions_sources.created_at                   timestamptz  default,not null  sa
 sanctions_sources.updated_at                   timestamptz  default,not null  sanctions.ts:65
 ```
 
-## sanctions_editions · `sanctionsEditions` · sanctions.ts:113
+## sanctions_editions · `sanctionsEditions` · sanctions.ts:113 · rls
 
 ```text
 sanctions_editions.id                    pUuid        pk,not null       sanctions.ts:116
@@ -42,14 +42,14 @@ sanctions_editions.created_at            timestamptz  default,not null  sanction
 sanctions_editions.activated_at          timestamptz  null              sanctions.ts:134
 ```
 
-## sanctions_entry_payloads · `sanctionsEntryPayloads` · sanctions.ts:177
+## sanctions_entry_payloads · `sanctionsEntryPayloads` · sanctions.ts:177 · rls
 
 ```text
 sanctions_entry_payloads.content_hash  text   pk,not null  sanctions.ts:180
 sanctions_entry_payloads.payload       jsonb  not null     sanctions.ts:181
 ```
 
-## sanctions_edition_entries · `sanctionsEditionEntries` · sanctions.ts:197
+## sanctions_edition_entries · `sanctionsEditionEntries` · sanctions.ts:197 · rls
 
 ```text
 sanctions_edition_entries.edition_id       safeUuid  fk,not null  sanctions.ts:200

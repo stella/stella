@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## corpus_index_generations · `corpusIndexGenerations` · corpus-index-generations.ts:30
+## corpus_index_generations · `corpusIndexGenerations` · corpus-index-generations.ts:30 · rls
 
 Immutable binding of one corpus generation to the trusted Quickwit cluster that owns it, plus the generation's small serving lifecycle.
 
@@ -18,7 +18,7 @@ corpus_index_generations.created_at       timestamptz  default,not null  corpus-
 corpus_index_generations.updated_at       timestamptz  default,not null  corpus-index-generations.ts:41
 ```
 
-## corpus_index_projection_revisions · `corpusIndexProjectionRevisions` · corpus-index-generations.ts:89
+## corpus_index_projection_revisions · `corpusIndexProjectionRevisions` · corpus-index-generations.ts:89 · rls
 
 Sequence-ordered revisions for projection mutations.
 
@@ -30,7 +30,7 @@ corpus_index_projection_revisions.transaction_id  bigint       not null         
 corpus_index_projection_revisions.created_at      timestamptz  default,not null  corpus-index-generations.ts:101
 ```
 
-## corpus_index_group_enrollments · `corpusIndexGroupEnrollments` · corpus-index-generations.ts:157
+## corpus_index_group_enrollments · `corpusIndexGroupEnrollments` · corpus-index-generations.ts:157 · rls
 
 One index group of a generation bound to the contract its physical index is created under, for a group whose index the manifest cannot vouch for: one under a g…
 

@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## properties · `properties` · properties.ts:32
+## properties · `properties` · properties.ts:32 · rls
 
 ```text
 properties.id                      pUuid            pk,not null       properties.ts:35
@@ -21,7 +21,7 @@ properties.playbook_definition_id  safeUuid         fk,null           properties
 properties.created_at              timestamptz      default,not null  properties.ts:66
 ```
 
-## property_dependencies · `propertyDependencies` · properties.ts:84
+## property_dependencies · `propertyDependencies` · properties.ts:84 · rls
 
 ```text
 property_dependencies.id                      pUuid            pk,not null  properties.ts:87
@@ -31,7 +31,7 @@ property_dependencies.depends_on_property_id  safeUuid         not null     prop
 property_dependencies.condition               jsonb            null         properties.ts:93
 ```
 
-## playbook_definitions · `playbookDefinitions` · properties.ts:146
+## playbook_definitions · `playbookDefinitions` · properties.ts:146 · rls
 
 An org-scoped playbook definition: a saved, reusable set of graded Positions.
 
@@ -51,7 +51,7 @@ playbook_definitions.created_at         timestamptz         default,not null  pr
 playbook_definitions.updated_at         timestamptz         default,not null  properties.ts:181
 ```
 
-## playbook_definition_versions · `playbookDefinitionVersions` · properties.ts:223
+## playbook_definition_versions · `playbookDefinitionVersions` · properties.ts:223 · rls
 
 Immutable snapshot of a `playbookDefinitions` row taken on each approval (`approve.ts`).
 
@@ -69,7 +69,7 @@ playbook_definition_versions.created_at              timestamptz         default
 playbook_definition_versions.created_by              text                fk,not null       properties.ts:238
 ```
 
-## document_types · `documentTypes` · properties.ts:278
+## document_types · `documentTypes` · properties.ts:278 · rls
 
 An org-owned, editable taxonomy of document TYPES (e.g.
 

@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## business_registry_credentials · `businessRegistryCredentials` · workspace-admin.ts:30
+## business_registry_credentials · `businessRegistryCredentials` · workspace-admin.ts:30 · rls
 
 ```text
 business_registry_credentials.organization_id  safeOrganizationId  not null          workspace-admin.ts:33
@@ -14,7 +14,7 @@ business_registry_credentials.iv               bytea               not null     
 business_registry_credentials.updated_at       timestamptz         default,not null  workspace-admin.ts:39
 ```
 
-## matter_counters · `matterCounters` · workspace-admin.ts:83
+## matter_counters · `matterCounters` · workspace-admin.ts:83 · rls
 
 ```text
 matter_counters.id               pUuid               pk,not null       workspace-admin.ts:86
@@ -23,7 +23,7 @@ matter_counters.scope_key        varchar             not null          workspace
 matter_counters.last_value       integer             default,not null  workspace-admin.ts:91
 ```
 
-## document_counters · `documentCounters` · workspace-admin.ts:101
+## document_counters · `documentCounters` · workspace-admin.ts:101 · rls
 
 ```text
 document_counters.id            pUuid            pk,not null       workspace-admin.ts:104
@@ -31,7 +31,7 @@ document_counters.workspace_id  safeWorkspaceId  fk,not null       workspace-adm
 document_counters.last_value    integer          default,not null  workspace-admin.ts:108
 ```
 
-## document_reference_counters · `documentReferenceCounters` · workspace-admin.ts:131
+## document_reference_counters · `documentReferenceCounters` · workspace-admin.ts:131 · rls
 
 Every matter reference documents have been numbered under, with the matter that owns it and how far its numbering has run.
 
@@ -43,7 +43,7 @@ document_reference_counters.workspace_id     safeWorkspaceId     null           
 document_reference_counters.last_value       integer             default,not null  workspace-admin.ts:143
 ```
 
-## organization_settings · `organizationSettings` · workspace-admin.ts:170
+## organization_settings · `organizationSettings` · workspace-admin.ts:170 · rls
 
 ```text
 organization_settings.id                              pUuid               pk,not null         workspace-admin.ts:173
@@ -80,7 +80,7 @@ organization_settings.memory_extraction_scheduled_at  timestamptz         null  
 organization_settings.updated_at                      timestamptz         default,not null    workspace-admin.ts:322
 ```
 
-## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:390
+## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:390 · rls
 
 Anonymization allowlist — entries that the detection pipeline should NOT mask.
 
@@ -95,7 +95,7 @@ anonymization_allowlist_entries.created_by       text                fk,null    
 anonymization_allowlist_entries.created_at       timestamptz         default,not null  workspace-admin.ts:407
 ```
 
-## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:456
+## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:456 · rls
 
 ```text
 anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:459

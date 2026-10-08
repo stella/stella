@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legislation_sources · `legislationSources` · legislation.ts:131
+## legislation_sources · `legislationSources` · legislation.ts:131 · rls
 
 ```text
 legislation_sources.id                    pUuid        pk,not null       legislation.ts:134
@@ -20,7 +20,7 @@ legislation_sources.created_at            timestamptz  default,not null  legisla
 legislation_sources.updated_at            timestamptz  default,not null  legislation.ts:151
 ```
 
-## legislation_documents · `legislationDocuments` · legislation.ts:168
+## legislation_documents · `legislationDocuments` · legislation.ts:168 · rls
 
 ```text
 legislation_documents.id                              pUuid            pk,not null       legislation.ts:171
@@ -102,7 +102,7 @@ legislation_work_changes.eli         varchar      not null          legislation.
 legislation_work_changes.changed_at  timestamptz  default,not null  legislation.ts:596
 ```
 
-## legislation_search_documents · `legislationSearchDocuments` · legislation.ts:611
+## legislation_search_documents · `legislationSearchDocuments` · legislation.ts:611 · rls
 
 ```text
 legislation_search_documents.document_id      safeUuid     pk,fk,not null    legislation.ts:614
@@ -115,7 +115,7 @@ legislation_search_documents.updated_at       timestamptz  default,not null  leg
 legislation_search_documents.retry_after      timestamptz  null              legislation.ts:623
 ```
 
-## legislation_index_jobs · `legislationIndexJobs` · legislation.ts:636
+## legislation_index_jobs · `legislationIndexJobs` · legislation.ts:636 · rls
 
 ```text
 legislation_index_jobs.id             pUuid        pk,not null       legislation.ts:639

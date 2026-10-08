@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## desktop_presence · `desktopPresence` · desktop-presence.ts:12
+## desktop_presence · `desktopPresence` · desktop-presence.ts:12 · rls
 
 One current observation per installation; membership or account removal erases it.
 

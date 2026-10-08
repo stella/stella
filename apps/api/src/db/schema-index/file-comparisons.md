@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## file_comparison_uploads · `fileComparisonUploads` · file-comparisons.ts:59
+## file_comparison_uploads · `fileComparisonUploads` · file-comparisons.ts:59 · rls
 
 Short-lived objects for redlining two DOCX files that stella does not store: the two staged inputs and the redline the comparison writes.
 

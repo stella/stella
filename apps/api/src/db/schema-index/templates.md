@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## template_lookup_formats · `templateLookupFormats` · templates.ts:54
+## template_lookup_formats · `templateLookupFormats` · templates.ts:54 · rls
 
 ```text
 template_lookup_formats.id               pUuid               pk,not null       templates.ts:57
@@ -16,7 +16,7 @@ template_lookup_formats.preference       text                default,not null  t
 template_lookup_formats.created_at       timestamptz         default,not null  templates.ts:73
 ```
 
-## template_lookup_format_user_defaults · `templateLookupFormatUserDefaults` · templates.ts:121
+## template_lookup_format_user_defaults · `templateLookupFormatUserDefaults` · templates.ts:121 · rls
 
 One member's own choice among the organization's saved company specification formats, per registry.
 
@@ -29,7 +29,7 @@ template_lookup_format_user_defaults.created_at       timestamptz         defaul
 template_lookup_format_user_defaults.updated_at       timestamptz         default,not null  templates.ts:129
 ```
 
-## template_categories · `templateCategories` · templates.ts:169
+## template_categories · `templateCategories` · templates.ts:169 · rls
 
 ```text
 template_categories.id               pUuid               pk,not null       templates.ts:172
@@ -42,7 +42,7 @@ template_categories.created_at       timestamptz         default,not null  templ
 template_categories.updated_at       timestamptz         default,not null  templates.ts:186
 ```
 
-## templates · `templates` · templates.ts:224
+## templates · `templates` · templates.ts:224 · rls
 
 ```text
 templates.id               pUuid                pk,not null             templates.ts:227
@@ -89,7 +89,7 @@ template_persistence_requests.created_at           timestamptz         default,n
 template_persistence_requests.completed_at         timestamptz         null              templates.ts:406
 ```
 
-## template_versions · `templateVersions` · templates.ts:438
+## template_versions · `templateVersions` · templates.ts:438 · rls
 
 ```text
 template_versions.id               pUuid                pk,not null       templates.ts:441
@@ -145,7 +145,7 @@ search_document_preview_passages.content          text                not null  
 search_document_preview_passages.tsv              tsvector            not null     templates.ts:565
 ```
 
-## contact_search_documents · `contactSearchDocuments` · templates.ts:602
+## contact_search_documents · `contactSearchDocuments` · templates.ts:602 · rls
 
 ```text
 contact_search_documents.contact_id          safeUuid            pk,fk,not null    templates.ts:605
@@ -192,7 +192,7 @@ workspace_search_document_preview_passages.content          text                
 workspace_search_document_preview_passages.tsv              tsvector            not null     templates.ts:722
 ```
 
-## search_projection_repair_queue · `searchProjectionRepairQueue` · templates.ts:781
+## search_projection_repair_queue · `searchProjectionRepairQueue` · templates.ts:781 · rls
 
 The durable record that a search projection is behind its source.
 

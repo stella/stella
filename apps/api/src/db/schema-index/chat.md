@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## chat_threads · `chatThreads` · chat.ts:92
+## chat_threads · `chatThreads` · chat.ts:92 · rls
 
 ```text
 chat_threads.id                       pUuid               pk,not null             chat.ts:95
@@ -34,7 +34,7 @@ chat_threads.created_at               timestamptz         default,not null      
 chat_threads.updated_at               timestamptz         default,not null        chat.ts:244
 ```
 
-## chat_messages · `chatMessages` · chat.ts:301
+## chat_messages · `chatMessages` · chat.ts:301 · rls
 
 ```text
 chat_messages.id                          pUuid            pk,not null       chat.ts:304
@@ -47,7 +47,7 @@ chat_messages.memory_extraction_eligible  boolean          default,not null  cha
 chat_messages.created_at                  timestamptz      default,not null  chat.ts:332
 ```
 
-## chat_turns · `chatTurns` · chat.ts:353
+## chat_turns · `chatTurns` · chat.ts:353 · rls
 
 Durable ownership and settlement for one assistant turn.
 
@@ -102,7 +102,7 @@ chat_run_log_entries.batch_index      integer             not null  chat.ts:615
 chat_run_log_entries.chunk            jsonb               not null  chat.ts:616
 ```
 
-## file_chat_threads · `fileChatThreads` · chat.ts:648
+## file_chat_threads · `fileChatThreads` · chat.ts:648 · rls
 
 ```text
 file_chat_threads.id               pUuid               pk,not null       chat.ts:651
@@ -116,7 +116,7 @@ file_chat_threads.created_at       timestamptz         default,not null  chat.ts
 file_chat_threads.updated_at       timestamptz         default,not null  chat.ts:666
 ```
 
-## template_chat_threads · `templateChatThreads` · chat.ts:724
+## template_chat_threads · `templateChatThreads` · chat.ts:724 · rls
 
 Per-user mapping of an org-scoped template to its latest chat thread, so reopening a template in the Template Studio resumes the conversation.
 
@@ -130,7 +130,7 @@ template_chat_threads.created_at       timestamptz         default,not null  cha
 template_chat_threads.updated_at       timestamptz         default,not null  chat.ts:740
 ```
 
-## chat_thread_search_documents · `chatThreadSearchDocuments` · chat.ts:763
+## chat_thread_search_documents · `chatThreadSearchDocuments` · chat.ts:763 · rls
 
 ```text
 chat_thread_search_documents.thread_id           safeUuid     pk,fk,not null    chat.ts:766
@@ -141,7 +141,7 @@ chat_thread_search_documents.tsv                 tsvector     null              
 chat_thread_search_documents.updated_at          timestamptz  default,not null  chat.ts:773
 ```
 
-## chat_thread_search_preview_passages · `chatThreadSearchPreviewPassages` · chat.ts:781
+## chat_thread_search_preview_passages · `chatThreadSearchPreviewPassages` · chat.ts:781 · rls
 
 ```text
 chat_thread_search_preview_passages.thread_id   safeUuid  fk,not null  chat.ts:784
@@ -151,7 +151,7 @@ chat_thread_search_preview_passages.content     text      not null     chat.ts:7
 chat_thread_search_preview_passages.tsv         tsvector  not null     chat.ts:792
 ```
 
-## chat_message_search_documents · `chatMessageSearchDocuments` · chat.ts:807
+## chat_message_search_documents · `chatMessageSearchDocuments` · chat.ts:807 · rls
 
 ```text
 chat_message_search_documents.message_id       safeUuid     pk,fk,not null    chat.ts:810
@@ -163,7 +163,7 @@ chat_message_search_documents.created_at       timestamptz  not null          ch
 chat_message_search_documents.updated_at       timestamptz  default,not null  chat.ts:820
 ```
 
-## chat_thread_names · `chatThreadNames` · chat.ts:837
+## chat_thread_names · `chatThreadNames` · chat.ts:837 · rls
 
 The names a thread's requests minted that later requests must read the same way (`ChatThreadNameKind`), so each request reads them with one indexed query inste…
 
@@ -175,7 +175,7 @@ chat_thread_names.target      jsonb        null              chat.ts:847  What a
 chat_thread_names.created_at  timestamptz  default,not null  chat.ts:848
 ```
 
-## chat_thread_compactions · `chatThreadCompactions` · chat.ts:867
+## chat_thread_compactions · `chatThreadCompactions` · chat.ts:867 · rls
 
 ```text
 chat_thread_compactions.id                                    pUuid               pk,not null             chat.ts:870
@@ -203,7 +203,7 @@ chat_thread_compactions.memory_extraction_data_workspace_ids  safeWorkspaceId   
 chat_thread_compactions.created_at                            timestamptz         default,not null        chat.ts:951
 ```
 
-## ai_memories · `aiMemories` · chat.ts:1082
+## ai_memories · `aiMemories` · chat.ts:1082 · rls
 
 Persistent AI memory: typed facts and preferences the assistant recalls across sessions, scoped to the firm (organization), the lawyer (user), or a matter (wor…
 

@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## case_law_sources · `caseLawSources` · case-law.ts:349
+## case_law_sources · `caseLawSources` · case-law.ts:349 · rls
 
 ```text
 case_law_sources.id                            pUuid        pk,not null       case-law.ts:352
@@ -34,7 +34,7 @@ case_law_sources.created_at                    timestamptz  default,not null  ca
 case_law_sources.updated_at                    timestamptz  default,not null  case-law.ts:416
 ```
 
-## case_law_corpus_jurisdictions · `caseLawCorpusJurisdictions` · case-law.ts:485
+## case_law_corpus_jurisdictions · `caseLawCorpusJurisdictions` · case-law.ts:485 · rls
 
 Jurisdictions ever observed in the case-law corpus.
 
@@ -43,7 +43,7 @@ case_law_corpus_jurisdictions.country            varchar      pk,not null       
 case_law_corpus_jurisdictions.first_observed_at  timestamptz  default,not null  case-law.ts:489
 ```
 
-## case_law_decisions · `caseLawDecisions` · case-law.ts:494
+## case_law_decisions · `caseLawDecisions` · case-law.ts:494 · rls
 
 ```text
 case_law_decisions.id                              pUuid            pk,not null       case-law.ts:497
@@ -99,7 +99,7 @@ case_law_decisions.created_at                      timestamptz      default,not 
 case_law_decisions.updated_at                      timestamptz      default,not null  case-law.ts:691
 ```
 
-## case_law_decision_identifiers · `caseLawDecisionIdentifiers` · case-law.ts:1001
+## case_law_decision_identifiers · `caseLawDecisionIdentifiers` · case-law.ts:1001 · rls
 
 Searchable identifiers stated by a decision's publisher.
 
@@ -112,7 +112,7 @@ case_law_decision_identifiers.declared_at       timestamptz  null              c
 case_law_decision_identifiers.created_at        timestamptz  default,not null  case-law.ts:1018
 ```
 
-## case_law_judges · `caseLawJudges` · case-law.ts:1056
+## case_law_judges · `caseLawJudges` · case-law.ts:1056 · rls
 
 Judges of a court, as that court publishes them.
 
@@ -133,7 +133,7 @@ case_law_judges.created_at             timestamptz  default,not null  case-law.t
 case_law_judges.updated_at             timestamptz  default,not null  case-law.ts:1075
 ```
 
-## case_law_decision_judges · `caseLawDecisionJudges` · case-law.ts:1115
+## case_law_decision_judges · `caseLawDecisionJudges` · case-law.ts:1115 · rls
 
 The judges a decision names, in the roles its publisher states.
 
@@ -146,7 +146,7 @@ case_law_decision_judges.role             text      not null  case-law.ts:1122
 case_law_decision_judges.position         smallint  not null  case-law.ts:1123
 ```
 
-## case_law_decision_identifier_backfills · `caseLawDecisionIdentifierBackfills` · case-law.ts:1198
+## case_law_decision_identifier_backfills · `caseLawDecisionIdentifierBackfills` · case-law.ts:1198 · rls
 
 Durable progress and completion receipt for the typed-identifier rollout.
 
@@ -160,7 +160,7 @@ case_law_decision_identifier_backfills.completed_at       timestamptz  null     
 case_law_decision_identifier_backfills.updated_at         timestamptz  default,not null  case-law.ts:1216
 ```
 
-## case_law_decision_source_identities · `caseLawDecisionSourceIdentities` · case-law.ts:1254
+## case_law_decision_source_identities · `caseLawDecisionSourceIdentities` · case-law.ts:1254 · rls
 
 Durable ownership for every exact publisher identity observed for a decision.
 
@@ -171,7 +171,7 @@ case_law_decision_source_identities.decision_id         safeUuid     not null   
 case_law_decision_source_identities.created_at          timestamptz  default,not null  case-law.ts:1264
 ```
 
-## case_law_decision_aliases · `caseLawDecisionAliases` · case-law.ts:1279
+## case_law_decision_aliases · `caseLawDecisionAliases` · case-law.ts:1279 · rls
 
 Retired UUIDs outlive their rows; targets remain live and chains are flattened.
 
@@ -181,7 +181,7 @@ case_law_decision_aliases.canonical_decision_id  safeUuid     not null          
 case_law_decision_aliases.created_at             timestamptz  default,not null  case-law.ts:1288
 ```
 
-## case_law_decision_supplements · `caseLawDecisionSupplements` · case-law.ts:1322
+## case_law_decision_supplements · `caseLawDecisionSupplements` · case-law.ts:1322 · rls
 
 Documents a publisher serves under their own id that belong inside another decision's document: SAOS publishes the written reasons of a ruling apart from it.
 
@@ -209,7 +209,7 @@ case_law_decision_supplements.created_at               timestamptz  default,not 
 case_law_decision_supplements.updated_at               timestamptz  default,not null  case-law.ts:1356
 ```
 
-## case_law_corpus_upload_intents · `caseLawCorpusUploadIntents` · case-law.ts:1408
+## case_law_corpus_upload_intents · `caseLawCorpusUploadIntents` · case-law.ts:1408 · rls
 
 Exact corpus-object keys reserved before an external PUT.
 
@@ -227,7 +227,7 @@ case_law_corpus_upload_intents.next_cleanup_at        timestamptz  null         
 case_law_corpus_upload_intents.created_at             timestamptz  default,not null  case-law.ts:1440
 ```
 
-## case_law_corpus_pack_refs · `caseLawCorpusPackRefs` · case-law.ts:1483
+## case_law_corpus_pack_refs · `caseLawCorpusPackRefs` · case-law.ts:1483 · rls
 
 Which pack each stored corpus pointer addresses.
 
@@ -239,7 +239,7 @@ case_law_corpus_pack_refs.location     varchar      not null          case-law.t
 case_law_corpus_pack_refs.created_at   timestamptz  default,not null  case-law.ts:1492
 ```
 
-## case_law_corpus_tombstones · `caseLawCorpusTombstones` · case-law.ts:1521
+## case_law_corpus_tombstones · `caseLawCorpusTombstones` · case-law.ts:1521 · rls
 
 Locations a reader must refuse, whatever the object behind them still holds.
 
@@ -251,7 +251,7 @@ case_law_corpus_tombstones.reason       varchar      not null          case-law.
 case_law_corpus_tombstones.created_at   timestamptz  default,not null  case-law.ts:1535
 ```
 
-## case_law_raw_sweeps · `caseLawRawSweeps` · case-law.ts:1567
+## case_law_raw_sweeps · `caseLawRawSweeps` · case-law.ts:1567 · rls
 
 Decisions whose raw objects are owed a sweep.
 
@@ -264,7 +264,7 @@ case_law_raw_sweeps.attempt_count    integer      default,not null  case-law.ts:
 case_law_raw_sweeps.created_at       timestamptz  default,not null  case-law.ts:1575
 ```
 
-## case_law_coverage_slices · `caseLawCoverageSlices` · case-law.ts:1596
+## case_law_coverage_slices · `caseLawCoverageSlices` · case-law.ts:1596 · rls
 
 Per-slice crawl coverage: what a court said a slice contains against what the crawl stored for it.
 
@@ -278,7 +278,7 @@ case_law_coverage_slices.checked_at  timestamptz  default,not null  case-law.ts:
 case_law_coverage_slices.walk_error  text         null              case-law.ts:1619  Why the last listing walk of this slice failed, null when it listed.
 ```
 
-## case_law_reconciliation_items · `caseLawReconciliationItems` · case-law.ts:1672
+## case_law_reconciliation_items · `caseLawReconciliationItems` · case-law.ts:1672 · rls
 
 ```text
 case_law_reconciliation_items.id               pUuid        pk,not null       case-law.ts:1675
@@ -296,7 +296,7 @@ case_law_reconciliation_items.first_seen_at    timestamptz  default,not null  ca
 case_law_reconciliation_items.last_attempt_at  timestamptz  null              case-law.ts:1698
 ```
 
-## case_law_citations · `caseLawCitations` · case-law.ts:1743
+## case_law_citations · `caseLawCitations` · case-law.ts:1743 · rls
 
 ```text
 case_law_citations.id                           pUuid        pk,not null       case-law.ts:1746
@@ -320,7 +320,7 @@ case_law_citations.polarity_rule_id             safeUuid     fk,null           c
 case_law_citations.created_at                   timestamptz  default,not null  case-law.ts:1843
 ```
 
-## case_law_provision_citations · `caseLawProvisionCitations` · case-law.ts:1959
+## case_law_provision_citations · `caseLawProvisionCitations` · case-law.ts:1959 · rls
 
 ```text
 case_law_provision_citations.id                                         pUuid        pk,not null       case-law.ts:1962
@@ -372,7 +372,7 @@ case_law_provision_citations.target_document_id                         safeUuid
 case_law_provision_citations.target_status                              text         null              case-law.ts:2033
 ```
 
-## case_law_statute_citation_memberships · `caseLawStatuteCitationMemberships` · case-law.ts:2183
+## case_law_statute_citation_memberships · `caseLawStatuteCitationMemberships` · case-law.ts:2183 · rls
 
 One distinct citing decision per statute target.
 
@@ -400,7 +400,7 @@ case_law_statute_citation_counts.decision_count  integer      not null          
 case_law_statute_citation_counts.updated_at      timestamptz  default,not null  case-law.ts:2247
 ```
 
-## case_law_statute_citation_count_state · `caseLawStatuteCitationCountState` · case-law.ts:2290
+## case_law_statute_citation_count_state · `caseLawStatuteCitationCountState` · case-law.ts:2290 · rls
 
 Completeness of the initial corpus pass.
 
@@ -436,7 +436,7 @@ case_law_browse_facet_counts.value      varchar   not null     case-law.ts:2369
 case_law_browse_facet_counts.total      integer   not null     case-law.ts:2370
 ```
 
-## case_law_citation_resolution_progress · `caseLawCitationResolutionProgress` · case-law.ts:2414
+## case_law_citation_resolution_progress · `caseLawCitationResolutionProgress` · case-law.ts:2414 · rls
 
 Where the standing resolution walk had got to.
 
@@ -447,7 +447,7 @@ case_law_citation_resolution_progress.cursor_citation_id         safeUuid     nu
 case_law_citation_resolution_progress.updated_at                 timestamptz  default,not null  case-law.ts:2424
 ```
 
-## case_law_citation_authority_sweep · `caseLawCitationAuthoritySweep` · case-law.ts:2455
+## case_law_citation_authority_sweep · `caseLawCitationAuthoritySweep` · case-law.ts:2455 · rls
 
 Where the citation-authority sweep is in its current pass.
 
@@ -458,7 +458,7 @@ case_law_citation_authority_sweep.pass_started_at     timestamptz  null         
 case_law_citation_authority_sweep.updated_at          timestamptz  default,not null  case-law.ts:2461
 ```
 
-## case_law_citation_resolution_census_runs · `caseLawCitationResolutionCensusRuns` · case-law.ts:2485
+## case_law_citation_resolution_census_runs · `caseLawCitationResolutionCensusRuns` · case-law.ts:2485 · rls
 
 One pass of the citation-resolution census: a snapshot of the resolver's populations, taken in bounded steps.
 
@@ -474,7 +474,7 @@ case_law_citation_resolution_census_runs.cursor_key                 varchar     
 case_law_citation_resolution_census_runs.updated_at                 timestamptz  default,not null  case-law.ts:2505
 ```
 
-## case_law_citation_resolution_census · `caseLawCitationResolutionCensus` · case-law.ts:2547
+## case_law_citation_resolution_census · `caseLawCitationResolutionCensus` · case-law.ts:2547 · rls
 
 One counted population of one run: precedent citations from decisions of (`country`, `court`), split by `kind` into a status, the rule that resolved them, or t…
 
@@ -488,7 +488,7 @@ case_law_citation_resolution_census.keys       integer   default,not null  case-
 case_law_citation_resolution_census.citations  integer   default,not null  case-law.ts:2557
 ```
 
-## case_law_polarity_rules · `caseLawPolarityRules` · case-law.ts:2600
+## case_law_polarity_rules · `caseLawPolarityRules` · case-law.ts:2600 · rls
 
 ```text
 case_law_polarity_rules.id             pUuid            pk,not null       case-law.ts:2603
@@ -503,7 +503,7 @@ case_law_polarity_rules.created_at     timestamptz      default,not null  case-l
 case_law_polarity_rules.updated_at     timestamptz      default,not null  case-law.ts:2616
 ```
 
-## case_law_citation_reviews · `caseLawCitationReviews` · case-law.ts:2648
+## case_law_citation_reviews · `caseLawCitationReviews` · case-law.ts:2648 · rls
 
 A reviewed polarity for one citation of one decision.
 
@@ -524,7 +524,7 @@ case_law_citation_reviews.reviewed_at         timestamptz  default,not null  cas
 case_law_citation_reviews.updated_at          timestamptz  default,not null  case-law.ts:2677
 ```
 
-## case_law_matter_links · `caseLawMatterLinks` · case-law.ts:2722
+## case_law_matter_links · `caseLawMatterLinks` · case-law.ts:2722 · rls
 
 --------------------------------------------------------------------------- Case Law — Tenant-scoped tables ---------------------------------------------------…
 
@@ -537,7 +537,7 @@ case_law_matter_links.linked_by     text             fk,not null       case-law.
 case_law_matter_links.created_at    timestamptz      default,not null  case-law.ts:2737
 ```
 
-## case_law_research_columns · `caseLawResearchColumns` · case-law.ts:2770
+## case_law_research_columns · `caseLawResearchColumns` · case-law.ts:2770 · rls
 
 One question the organization asks of every decision it looks at.
 
@@ -553,7 +553,7 @@ case_law_research_columns.created_at       timestamptz         default,not null 
 case_law_research_columns.updated_at       timestamptz         default,not null  case-law.ts:2782
 ```
 
-## case_law_research_answers · `caseLawResearchAnswers` · case-law.ts:2816
+## case_law_research_answers · `caseLawResearchAnswers` · case-law.ts:2816 · rls
 
 One cell: a column's answer for one decision.
 
@@ -570,7 +570,7 @@ case_law_research_answers.created_at       timestamptz         default,not null 
 case_law_research_answers.updated_at       timestamptz         default,not null  case-law.ts:2839
 ```
 
-## case_law_court_weights · `caseLawCourtWeights` · case-law.ts:2883
+## case_law_court_weights · `caseLawCourtWeights` · case-law.ts:2883 · rls
 
 --------------------------------------------------------------------------- Case Law — Search index (global, no tenant column) --------------------------------…
 
@@ -593,7 +593,7 @@ case_law_court_directory_ranks.tier      smallint  not null  case-law.ts:2914
 case_law_court_directory_ranks.weight    smallint  not null  case-law.ts:2915
 ```
 
-## case_law_fts_configs · `caseLawFtsConfigs` · case-law.ts:2935
+## case_law_fts_configs · `caseLawFtsConfigs` · case-law.ts:2935 · rls
 
 ```text
 case_law_fts_configs.language      varchar  pk,not null       case-law.ts:2938
@@ -601,7 +601,7 @@ case_law_fts_configs.regconfig     varchar  not null          case-law.ts:2939
 case_law_fts_configs.use_unaccent  boolean  default,not null  case-law.ts:2940
 ```
 
-## case_law_search_documents · `caseLawSearchDocuments` · case-law.ts:2945
+## case_law_search_documents · `caseLawSearchDocuments` · case-law.ts:2945 · rls
 
 ```text
 case_law_search_documents.decision_id         safeUuid     pk,fk,not null    case-law.ts:2948
@@ -614,7 +614,7 @@ case_law_search_documents.tsv                 tsvector     null              cas
 case_law_search_documents.updated_at          timestamptz  default,not null  case-law.ts:2959
 ```
 
-## case_law_search_backfill_failures · `caseLawSearchBackfillFailures` · case-law.ts:2978
+## case_law_search_backfill_failures · `caseLawSearchBackfillFailures` · case-law.ts:2978 · rls
 
 ```text
 case_law_search_backfill_failures.decision_id        safeUuid     pk,not null  case-law.ts:2981
@@ -626,7 +626,7 @@ case_law_search_backfill_failures.next_eligible_at   timestamptz  null         c
 case_law_search_backfill_failures.last_failed_at     timestamptz  not null     case-law.ts:2989
 ```
 
-## case_law_search_document_preview_passages · `caseLawSearchDocumentPreviewPassages` · case-law.ts:3024
+## case_law_search_document_preview_passages · `caseLawSearchDocumentPreviewPassages` · case-law.ts:3024 · rls
 
 ```text
 case_law_search_document_preview_passages.decision_id  safeUuid  fk,not null  case-law.ts:3027
@@ -636,7 +636,7 @@ case_law_search_document_preview_passages.content      text      not null     ca
 case_law_search_document_preview_passages.tsv          tsvector  not null     case-law.ts:3035
 ```
 
-## case_law_ingestion_events · `caseLawIngestionEvents` · case-law.ts:3054
+## case_law_ingestion_events · `caseLawIngestionEvents` · case-law.ts:3054 · rls
 
 --------------------------------------------------------------------------- Case Law — Ingestion observability ------------------------------------------------…
 
@@ -656,7 +656,7 @@ case_law_ingestion_events.started_at              timestamptz  not null         
 case_law_ingestion_events.finished_at             timestamptz  default,not null  case-law.ts:3074
 ```
 
-## case_law_ingestion_failures · `caseLawIngestionFailures` · case-law.ts:3086
+## case_law_ingestion_failures · `caseLawIngestionFailures` · case-law.ts:3086 · rls
 
 ```text
 case_law_ingestion_failures.id               pUuid        pk,not null       case-law.ts:3089
@@ -670,7 +670,7 @@ case_law_ingestion_failures.record_identity  varchar      null              case
 case_law_ingestion_failures.created_at       timestamptz  default,not null  case-law.ts:3103
 ```
 
-## case_law_index_jobs · `caseLawIndexJobs` · case-law.ts:3124
+## case_law_index_jobs · `caseLawIndexJobs` · case-law.ts:3124 · rls
 
 Append-only audit trail for search-index mutations across the object-store + corpus index boundary.
 

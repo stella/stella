@@ -4,7 +4,7 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## work_obligations · `workObligations` · workflow.ts:160
+## work_obligations · `workObligations` · workflow.ts:160 · rls
 
 Governed operational state for a task entity.
 
