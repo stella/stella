@@ -60,7 +60,7 @@ organization_settings.time_zone                       text                null  
 organization_settings.document_stamp_enabled          boolean             default,not null    workspace-admin.ts:215
 organization_settings.document_processing_mode        text                default,not null    workspace-admin.ts:224  Whether uploaded documents may receive additional processing beyond their native text layer.
 organization_settings.practice_jurisdictions          jsonb               default,not null    workspace-admin.ts:230
-organization_settings.native_tool_overrides           jsonb               default,not null    workspace-admin.ts:241  Per-slug overrides for built-in native tools (e.g.
+organization_settings.native_tool_overrides           jsonb               default,not null    workspace-admin.ts:241  Per-slug overrides for built-in native tools (e.g. ARES).
 organization_settings.disabled_native_tools           jsonb               default,not null    workspace-admin.ts:251  Legacy disable list kept for rolling deploy compatibility.
 organization_settings.ai_config_encrypted             bytea               null                workspace-admin.ts:256  Encrypted OrgAIConfig JSON (AES-256-GCM).
 organization_settings.ai_config_iv                    bytea               null                workspace-admin.ts:258  AES-GCM initialization vector for aiConfigEncrypted.

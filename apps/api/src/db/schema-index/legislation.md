@@ -96,10 +96,10 @@ statute_sitemap_shards.lastmod  varchar  not null  legislation.ts:563
 Works whose versions changed, one row per affected `(country, eli)`.
 
 ```text
-legislation_work_changes.id          bigint       pk,not null       legislation.ts:590
-legislation_work_changes.country     varchar      not null          legislation.ts:594
-legislation_work_changes.eli         varchar      not null          legislation.ts:595
-legislation_work_changes.changed_at  timestamptz  default,not null  legislation.ts:596
+legislation_work_changes.id          bigint       pk,generated,not null  legislation.ts:590
+legislation_work_changes.country     varchar      not null               legislation.ts:594
+legislation_work_changes.eli         varchar      not null               legislation.ts:595
+legislation_work_changes.changed_at  timestamptz  default,not null       legislation.ts:596
 ```
 
 ## legislation_search_documents · `legislationSearchDocuments` · legislation.ts:611 · rls

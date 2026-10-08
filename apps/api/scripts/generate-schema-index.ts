@@ -39,6 +39,61 @@ const EXTRA_SCHEMA_FILES = [
   "registration-budget-schema.ts",
 ] as const;
 
+/** Words whose closing full stop does not end a sentence. */
+const ABBREVIATIONS = new Set([
+  "approx.",
+  "cf.",
+  "e.g.",
+  "etc.",
+  "i.e.",
+  "incl.",
+  "resp.",
+  "viz.",
+  "vs.",
+]);
+
+const SENTENCE_STOPS = new Set([".", "!", "?"]);
+
+/** A comment line without its `/**`, `*`, `*\/` or `//` decoration. */
+const commentLineText = (line: string): string => {
+  let text = line.trim();
+  for (const prefix of ["/**", "/*", "//", "*"]) {
+    if (text.startsWith(prefix)) {
+      text = text.slice(prefix.length);
+      break;
+    }
+  }
+  if (text.endsWith("*/")) {
+    text = text.slice(0, -2);
+  }
+  return text.trim();
+};
+
+const OPENERS = new Set(["(", "[", '"', "'", "`", "“", "‘"]);
+
+/** A word without the brackets and quotes that open it: `(e.g.` is `e.g.`. */
+const withoutOpeners = (word: string): string => {
+  let start = 0;
+  while (start < word.length && OPENERS.has(word.charAt(start))) {
+    start += 1;
+  }
+  return word.slice(start);
+};
+
+/**
+ * The first sentence of flattened text: up to the first word that ends in a
+ * stop, unless that word is a common abbreviation.
+ */
+const firstSentence = (text: string): string => {
+  const words = text.split(" ");
+  const end = words.findIndex(
+    (word) =>
+      SENTENCE_STOPS.has(word.at(-1) ?? "") &&
+      !ABBREVIATIONS.has(withoutOpeners(word).toLowerCase()),
+  );
+  return end === -1 ? text : words.slice(0, end + 1).join(" ");
+};
+
 /** Longest summary kept per line; the comment itself is one jump away. */
 const SUMMARY_MAX_LENGTH = 160;
 
@@ -108,12 +163,14 @@ export const leadingSummary = (node: ts.Node, source: string): string => {
   const text = block
     .map((range) => source.slice(range.pos, range.end))
     .join("\n")
-    .replaceAll(/^\s*\/\*\*?|\*\/\s*$/gmu, "")
-    .replaceAll(/^\s*(?:\*|\/\/)\s?/gmu, "")
-    .replaceAll(/\s+/gu, " ")
-    .trim();
-  const sentenceEnd = text.search(/[.!?](?:\s|$)/u);
-  const sentence = sentenceEnd === -1 ? text : text.slice(0, sentenceEnd + 1);
+    .split("\n")
+    .map(commentLineText)
+    .filter((line) => line !== "")
+    .join(" ")
+    .split(" ")
+    .filter((word) => word !== "")
+    .join(" ");
+  const sentence = firstSentence(text);
   return sentence.length > SUMMARY_MAX_LENGTH
     ? `${sentence.slice(0, SUMMARY_MAX_LENGTH - 1).trimEnd()}…`
     : sentence;
@@ -183,7 +240,14 @@ const describeColumn = (
           flags.add("default");
           break;
         case "generatedAlwaysAs":
+          // A computed column can stay nullable.
           flags.add("generated");
+          break;
+        case "generatedAlwaysAsIdentity":
+        case "generatedByDefaultAsIdentity":
+          // An identity column is always populated.
+          flags.add("generated");
+          flags.add("not null");
           break;
         default:
           break;
@@ -211,10 +275,15 @@ const describeColumn = (
 const propertyKey = (name: ts.PropertyName): string | null =>
   ts.isIdentifier(name) || ts.isStringLiteralLike(name) ? name.text : null;
 
-export const indexSchemaSource = (
-  fileName: string,
-  source: string,
-): IndexedTable[] => {
+type IndexSchemaSourceOptions = {
+  fileName: string;
+  source: string;
+};
+
+export const indexSchemaSource = ({
+  fileName,
+  source,
+}: IndexSchemaSourceOptions): IndexedTable[] => {
   const sourceFile = ts.createSourceFile(
     fileName,
     source,
@@ -360,7 +429,10 @@ export const schemaIndexArtifacts = () =>
     const relativeSource = path.relative(API_SRC_DIR, file);
     const contents = renderSchemaIndex(
       relativeSource,
-      indexSchemaSource(file, readFileSync(file, "utf-8")),
+      indexSchemaSource({
+        fileName: file,
+        source: readFileSync(file, "utf-8"),
+      }),
     );
     return contents === null
       ? []

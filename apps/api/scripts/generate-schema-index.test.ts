@@ -35,7 +35,7 @@ export const notATable = { id: 1 };
 const unexported = p.pgTable("hidden", { id: p.text() });
 `;
 
-const tables = indexSchemaSource("chat.ts", SOURCE);
+const tables = indexSchemaSource({ fileName: "chat.ts", source: SOURCE });
 
 test("indexes each exported table with its SQL name, export, line and summary", () => {
   expect(
@@ -114,7 +114,9 @@ test("cuts a long summary to one bounded line", () => {
     /** ${"word ".repeat(80)}*/
     c: p.text(),
   });`;
-  const summary = indexSchemaSource("t.ts", long).at(0)?.columns.at(0)?.summary;
+  const summary = indexSchemaSource({ fileName: "t.ts", source: long })
+    .at(0)
+    ?.columns.at(0)?.summary;
 
   expect(summary?.length).toBe(160);
   expect(summary?.endsWith("…")).toBe(true);
@@ -132,4 +134,34 @@ test("renders one grep-able line per column under a heading per table", () => {
 
 test("a module without tables has no index", () => {
   expect(renderSchemaIndex("db/schema/common.ts", [])).toBeNull();
+});
+
+test("an abbreviation does not end a summary", () => {
+  const source = `export const t = p.pgTable("t", {
+    /** Labels per kind (e.g. contract or memo), i.e. a taxonomy. Shown in filters. */
+    c: p.text(),
+  });`;
+
+  expect(
+    indexSchemaSource({ fileName: "t.ts", source }).at(0)?.columns.at(0)
+      ?.summary,
+  ).toBe("Labels per kind (e.g. contract or memo), i.e. a taxonomy.");
+});
+
+test("an identity column is generated and never null; a computed one may be", () => {
+  const source = `export const t = p.pgTable("t", {
+    id: p.integer().generatedAlwaysAsIdentity(),
+    seq: p.bigint({ mode: "number" }).generatedByDefaultAsIdentity(),
+    total: p.integer().generatedAlwaysAs(sql\`1\`),
+  });`;
+
+  expect(
+    indexSchemaSource({ fileName: "t.ts", source })
+      .at(0)
+      ?.columns.map(({ flags, key }) => ({ flags, key })),
+  ).toEqual([
+    { flags: ["generated", "not null"], key: "id" },
+    { flags: ["generated", "not null"], key: "seq" },
+    { flags: ["generated", "null"], key: "total" },
+  ]);
 });

@@ -37,7 +37,7 @@ Operator-managed allow-list of identity providers whose ID-JAG assertions Stella
 ```text
 agent_trusted_issuer.issuer              text         pk,not null       agent-auth-schema.ts:95
 agent_trusted_issuer.display_name        text         not null          agent-auth-schema.ts:96
-agent_trusted_issuer.attestation_policy  jsonb        null              agent-auth-schema.ts:102  Optional per-issuer attestation policy enforced during validation (e.g.
+agent_trusted_issuer.attestation_policy  jsonb        null              agent-auth-schema.ts:102  Optional per-issuer attestation policy enforced during validation (e.g. `{ requiredAmr: ["mfa"] }`).
 agent_trusted_issuer.enabled             boolean      default,not null  agent-auth-schema.ts:103
 agent_trusted_issuer.created_at          timestamptz  default,not null  agent-auth-schema.ts:104
 agent_trusted_issuer.updated_at          timestamptz  default,not null  agent-auth-schema.ts:105

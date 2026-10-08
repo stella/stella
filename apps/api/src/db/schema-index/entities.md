@@ -44,7 +44,7 @@ entities.external_ical_uid           varchar          null              entities
 entities.external_data               jsonb            null              entities.ts:130
 entities.read_only                   boolean          default,not null  entities.ts:131
 entities.sort_order                  varchar          null              entities.ts:132
-entities.metadata                    jsonb            null              entities.ts:134  Structured metadata for non-document entity kinds (e.g.
+entities.metadata                    jsonb            null              entities.ts:134  Structured metadata for non-document entity kinds (e.g. links).
 entities.created_at                  timestamptz      default,not null  entities.ts:135
 entities.updated_at                  timestamptz      default,null      entities.ts:136
 ```
@@ -101,8 +101,8 @@ entity_versions.id                                  pUuid            pk,not null
 entity_versions.workspace_id                        safeWorkspaceId  not null          entities.ts:356
 entity_versions.entity_id                           safeUuid         not null          entities.ts:357
 entity_versions.version_number                      integer          default,not null  entities.ts:358
-entity_versions.stamp                               varchar          null              entities.ts:360  Frozen human-readable reference (e.g.
-entity_versions.label                               varchar          null              entities.ts:362  User-assigned workflow label (e.g.
+entity_versions.stamp                               varchar          null              entities.ts:360  Frozen human-readable reference (e.g. "2026/001/015.v3").
+entity_versions.label                               varchar          null              entities.ts:362  User-assigned workflow label (e.g. "Internal draft", "Final version").
 entity_versions.description                         varchar          null              entities.ts:364  Free-text note describing this version.
 entity_versions.diff_words_added                    integer          null              entities.ts:366  Word-level diff stats vs previous version (computed on finalization).
 entity_versions.diff_words_removed                  integer          null              entities.ts:367

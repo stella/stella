@@ -71,7 +71,7 @@ playbook_definition_versions.created_by              text                fk,not 
 
 ## document_types · `documentTypes` · properties.ts:278 · rls
 
-An org-owned, editable taxonomy of document TYPES (e.g.
+An org-owned, editable taxonomy of document TYPES (e.g. "Share Purchase Agreement").
 
 ```text
 document_types.id               pUuid               pk,not null       properties.ts:281

@@ -271,7 +271,7 @@ Per-slice crawl coverage: what a court said a slice contains against what the cr
 ```text
 case_law_coverage_slices.id          pUuid        pk,not null       case-law.ts:1599
 case_law_coverage_slices.source_id   safeUuid     fk,not null       case-law.ts:1600
-case_law_coverage_slices.slice       varchar      not null          case-law.ts:1604  The crawl slice, e.g.
+case_law_coverage_slices.slice       varchar      not null          case-law.ts:1604  The crawl slice, e.g. an ISO day for date-cursor adapters.
 case_law_coverage_slices.reported    integer      null              case-law.ts:1609  The source's own count for this slice; null while the slice has never been listed successfully (see `walkError`).
 case_law_coverage_slices.collected   integer      null              case-law.ts:1611  What the crawl produced for it; null with `reported`.
 case_law_coverage_slices.checked_at  timestamptz  default,not null  case-law.ts:1612

@@ -23,11 +23,11 @@ corpus_index_generations.updated_at       timestamptz  default,not null  corpus-
 Sequence-ordered revisions for projection mutations.
 
 ```text
-corpus_index_projection_revisions.family          text         not null          corpus-index-generations.ts:92
-corpus_index_projection_revisions.generation      varchar      not null          corpus-index-generations.ts:93
-corpus_index_projection_revisions.revision        bigint       null              corpus-index-generations.ts:96
-corpus_index_projection_revisions.transaction_id  bigint       not null          corpus-index-generations.ts:100
-corpus_index_projection_revisions.created_at      timestamptz  default,not null  corpus-index-generations.ts:101
+corpus_index_projection_revisions.family          text         not null            corpus-index-generations.ts:92
+corpus_index_projection_revisions.generation      varchar      not null            corpus-index-generations.ts:93
+corpus_index_projection_revisions.revision        bigint       generated,not null  corpus-index-generations.ts:96
+corpus_index_projection_revisions.transaction_id  bigint       not null            corpus-index-generations.ts:100
+corpus_index_projection_revisions.created_at      timestamptz  default,not null    corpus-index-generations.ts:101
 ```
 
 ## corpus_index_group_enrollments · `corpusIndexGroupEnrollments` · corpus-index-generations.ts:157 · rls
@@ -52,12 +52,12 @@ corpus_index_group_enrollments.updated_at           timestamptz  default,not nul
 Append-only trail of index-group attestation withdrawals: which group, the digest it was attested against, who withdrew it and why, written in the withdrawing…
 
 ```text
-corpus_index_group_withdrawals.id                bigint       null              corpus-index-generations.ts:238
-corpus_index_group_withdrawals.family            text         not null          corpus-index-generations.ts:241
-corpus_index_group_withdrawals.generation        varchar      not null          corpus-index-generations.ts:242
-corpus_index_group_withdrawals.index_group       varchar      not null          corpus-index-generations.ts:245
-corpus_index_group_withdrawals.effective_digest  varchar      not null          corpus-index-generations.ts:246
-corpus_index_group_withdrawals.actor             varchar      not null          corpus-index-generations.ts:247
-corpus_index_group_withdrawals.reason            varchar      not null          corpus-index-generations.ts:248
-corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null  corpus-index-generations.ts:249
+corpus_index_group_withdrawals.id                bigint       generated,not null  corpus-index-generations.ts:238
+corpus_index_group_withdrawals.family            text         not null            corpus-index-generations.ts:241
+corpus_index_group_withdrawals.generation        varchar      not null            corpus-index-generations.ts:242
+corpus_index_group_withdrawals.index_group       varchar      not null            corpus-index-generations.ts:245
+corpus_index_group_withdrawals.effective_digest  varchar      not null            corpus-index-generations.ts:246
+corpus_index_group_withdrawals.actor             varchar      not null            corpus-index-generations.ts:247
+corpus_index_group_withdrawals.reason            varchar      not null            corpus-index-generations.ts:248
+corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null    corpus-index-generations.ts:249
 ```

@@ -50,7 +50,7 @@ signal_events.created_at       timestamptz         default,not null  signals.ts:
 
 ## scout_runs · `scoutRuns` · signals.ts:298 · rls
 
-Census of scout executions: proves a scout ran and how many signals it emitted vs.
+Census of scout executions: proves a scout ran and how many signals it emitted vs. deduplicated, so "no signals" is distinguishable from "never ran".
 
 ```text
 scout_runs.id               pUuid               pk,not null       signals.ts:301
