@@ -73,6 +73,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
   recordAuditGroups,
+  searchHistoryAuditEvent,
 } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import {
@@ -104,7 +105,6 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { searchHistoryAuditEvent } from "@/api/lib/search-history/audit";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 

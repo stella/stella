@@ -558,6 +558,52 @@ describe("auth and scope gating (S4)", () => {
 });
 
 describe("generated capability flags", () => {
+  test("personal history omitting kind sends an unfiltered request", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { items: [], nextCursor: null, limit: 20 },
+    }));
+    const result = await runCli({
+      args: ["capability", "search-history", "list", "--limit", "20", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      capability: "search-history.list",
+      input: { query: { limit: 20 } },
+    });
+  });
+
+  test("personal history explicit kind sends only the requested filter", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { items: [], nextCursor: null, limit: 20 },
+    }));
+    const result = await runCli({
+      args: [
+        "capability",
+        "search-history",
+        "list",
+        "--limit",
+        "20",
+        "--kind",
+        "decision",
+        "--json",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      capability: "search-history.list",
+      input: { query: { limit: 20, kind: "decision" } },
+    });
+  });
+
   test("a descriptive long flag can target a terse query property", async () => {
     const server = startMockServer(() => ({ toolPayload: { items: [] } }));
     const result = await runCli({

@@ -358,9 +358,12 @@ if (!databaseUrl || !enabled) {
               documentId: "decision-known",
               title: "23 Cdo 1001/2021",
               path: "/law/cze/cases/ns/23-cdo-1001-2021",
-              courtId: null,
-              courtAbbreviation: "NS",
-              courtTier: "supreme",
+              courtId: "0191d14d-9a63-7d2e-a021-06053e542c89",
+              documentIdentity: {
+                kind: "decision",
+                courtAbbreviation: "NS",
+                courtTier: "supreme",
+              },
             },
             usedAt: "2020-01-01T00:00:00Z",
           },
@@ -379,8 +382,7 @@ if (!databaseUrl || !enabled) {
               documentId: "/eli/cz/sb/2012/89",
               title: "Občanský zákoník",
               path: "/law/cze/statutes/89-2012",
-              statuteNumber: "89",
-              statuteYear: "2012",
+              documentIdentity: { kind: "statute", number: "89", year: "2012" },
             },
             usedAt: "2020-01-03T00:00:00Z",
           },
@@ -393,6 +395,26 @@ if (!databaseUrl || !enabled) {
             },
             usedAt: "2020-01-04T00:00:00Z",
           },
+          {
+            entry: {
+              kind: "decision",
+              documentId: "wrong-decision-identity",
+              title: "23 Cdo 1001/2021",
+              path: "/law/cze/cases/ns/23-cdo-1001-2021",
+              documentIdentity: { kind: "statute", number: "89", year: "2012" },
+            },
+            usedAt: "2020-01-05T00:00:00Z",
+          },
+          {
+            entry: {
+              kind: "statute",
+              documentId: "wrong-statute-identity",
+              title: "Statute",
+              path: "/law/cze/statutes/90-2013",
+              documentIdentity: { kind: "decision", courtAbbreviation: "NS" },
+            },
+            usedAt: "2020-01-06T00:00:00Z",
+          },
         ];
         expect(
           await importEntries.handler(
@@ -400,7 +422,7 @@ if (!databaseUrl || !enabled) {
               Parameters<typeof importEntries.handler>[0]
             >({ ...identity(fixture), body: { entries } }),
           ),
-        ).toEqual({ entries: 4, skipped: 0 });
+        ).toEqual({ entries: 4, skipped: 2 });
         const history = (await readHistory(fixture)).items;
         expect(history).toHaveLength(4);
         expect(history).toEqual(
@@ -408,28 +430,28 @@ if (!databaseUrl || !enabled) {
             expect.objectContaining({
               kind: "decision",
               documentId: "decision-known",
-              courtId: null,
-              courtAbbreviation: "NS",
-              courtTier: "supreme",
+              courtId: "0191d14d-9a63-7d2e-a021-06053e542c89",
+              documentIdentity: {
+                kind: "decision",
+                courtAbbreviation: "NS",
+                courtTier: "supreme",
+              },
             }),
             expect.objectContaining({
               kind: "decision",
               documentId: "decision-unknown",
               courtId: null,
-              courtAbbreviation: null,
-              courtTier: null,
+              documentIdentity: { kind: "unknown" },
             }),
             expect.objectContaining({
               kind: "statute",
               documentId: "/eli/cz/sb/2012/89",
-              statuteNumber: "89",
-              statuteYear: "2012",
+              documentIdentity: { kind: "statute", number: "89", year: "2012" },
             }),
             expect.objectContaining({
               kind: "statute",
               documentId: "/eli/cz/sb/2013/90",
-              statuteNumber: null,
-              statuteYear: null,
+              documentIdentity: { kind: "unknown" },
             }),
           ]),
         );
@@ -675,16 +697,22 @@ if (!databaseUrl || !enabled) {
           title: "audit-private-decision-title",
           path: "/law/cze/cases/private-court/audit-private-decision",
           courtId: "audit-private-court",
-          courtAbbreviation: "PRIVATE",
-          courtTier: "supreme" as const,
+          documentIdentity: {
+            kind: "decision" as const,
+            courtAbbreviation: "PRIVATE",
+            courtTier: "supreme" as const,
+          },
         };
         const statute = {
           kind: "statute" as const,
           documentId: "audit-private-statute",
           title: "audit-private-statute-title",
           path: "/law/cze/statutes/audit-private-statute",
-          statuteNumber: "971",
-          statuteYear: "2049",
+          documentIdentity: {
+            kind: "statute" as const,
+            number: "971",
+            year: "2049",
+          },
         };
         const recorded = await recordQuery(fixture, query);
         for (const body of [decision, statute]) {
@@ -844,12 +872,12 @@ if (!databaseUrl || !enabled) {
           decision.title,
           decision.path,
           decision.courtId,
-          decision.courtAbbreviation,
+          decision.documentIdentity.courtAbbreviation,
           statute.documentId,
           statute.title,
           statute.path,
-          statute.statuteNumber,
-          String(statute.statuteYear),
+          statute.documentIdentity.number,
+          String(statute.documentIdentity.year),
           ...lookupKeys.map(({ lookupKey }) => lookupKey),
         ]) {
           expect(serialized).not.toContain(content);
@@ -859,6 +887,7 @@ if (!databaseUrl || !enabled) {
           "title",
           "path",
           "courtId",
+          "documentIdentity",
           "courtAbbreviation",
           "courtTier",
           "statuteNumber",

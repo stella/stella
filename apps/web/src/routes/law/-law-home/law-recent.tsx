@@ -49,32 +49,8 @@ const recentEntryIcon = (entry: HistoryEntry) => {
     case "search":
       return <SearchIcon className="size-4" />;
     case "statute":
-      return (
-        <DocumentIdentityBadge
-          identity={{
-            kind: "statute",
-            number: entry.statuteNumber,
-            year: entry.statuteYear,
-          }}
-        />
-      );
     case "decision":
-      return entry.courtTier === null ? (
-        <DocumentIdentityBadge
-          identity={{
-            kind: "decision",
-            courtAbbreviation: entry.courtAbbreviation,
-          }}
-        />
-      ) : (
-        <DocumentIdentityBadge
-          identity={{
-            kind: "decision",
-            courtAbbreviation: entry.courtAbbreviation,
-            courtTier: entry.courtTier,
-          }}
-        />
-      );
+      return <DocumentIdentityBadge identity={entry.documentIdentity} />;
     default:
       entry satisfies never;
       return panic("Unhandled law history kind");

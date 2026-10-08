@@ -186,8 +186,10 @@ const useRecordStatuteOpen = ({
     recordHistory({
       kind: "statute",
       documentId: eli,
-      statuteNumber: number ?? null,
-      statuteYear: year ?? null,
+      documentIdentity:
+        number === undefined || year === undefined
+          ? { kind: "unknown" }
+          : { kind: "statute", number, year },
       title:
         citation !== null || year === undefined || number === undefined
           ? title

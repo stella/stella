@@ -8,8 +8,6 @@ CREATE TABLE "search_history_entries" (
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
   "kind" text NOT NULL,
   "court_id" varchar(128),
-  "statute_number" varchar(32),
-  "statute_year" varchar(4),
   "lookup_key" varchar(64) NOT NULL,
   "ciphertext" bytea NOT NULL,
   "iv" bytea NOT NULL,

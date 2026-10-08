@@ -13,7 +13,8 @@ type DocumentIdentityBadgeProps = {
         courtAbbreviation: string | null | undefined;
         courtTier?: CourtTierLabel;
       }
-    | { kind: "statute"; number: string | null; year: string | null };
+    | { kind: "statute"; number: string | null; year: string | null }
+    | { kind: "unknown" };
   title?: string;
 };
 
@@ -23,6 +24,8 @@ export const DocumentIdentityBadge = ({
   title,
 }: DocumentIdentityBadgeProps) => {
   switch (identity.kind) {
+    case "unknown":
+      return <FileTextIcon className="size-4" />;
     case "decision":
       if (!identity.courtAbbreviation) {
         return <FileTextIcon className="size-4" />;

@@ -13,6 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import { searchHistoryEntries, SEARCH_HISTORY_KINDS } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   contentLookupKey,
@@ -26,7 +27,6 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
-import { searchHistoryAuditEvent } from "@/api/lib/search-history/audit";
 
 const documentIdSchema = t.String({
   minLength: 1,
@@ -44,6 +44,35 @@ const pathSchema = t.String({
   pattern: "^/law/[A-Za-z0-9_/-]+$",
   description: "The public law page the entry reopens.",
 });
+
+const unknownDocumentIdentitySchema = t.Object(
+  { kind: t.Literal("unknown") },
+  { additionalProperties: false },
+);
+const decisionDocumentIdentitySchema = t.Object(
+  {
+    kind: t.Literal("decision"),
+    courtAbbreviation: t.Nullable(t.String({ minLength: 1, maxLength: 128 })),
+    courtTier: t.Optional(
+      t.Enum(
+        Object.fromEntries(
+          COURT_TIER_LABELS.map((tier) => [tier, tier] as const),
+        ),
+      ),
+    ),
+  },
+  { additionalProperties: false },
+);
+const statuteDocumentIdentitySchema = t.Object(
+  {
+    kind: t.Literal("statute"),
+    number: t.Nullable(t.String({ minLength: 1, maxLength: 32 })),
+    year: t.Nullable(
+      t.String({ minLength: 1, maxLength: 4, pattern: "^[0-9]{1,4}$" }),
+    ),
+  },
+  { additionalProperties: false },
+);
 
 /** One use to record: a typed query, or a decision or statute opened. */
 export const searchHistoryEntryInputSchema = t.Union([
@@ -63,11 +92,11 @@ export const searchHistoryEntryInputSchema = t.Union([
       courtId: t.Optional(
         t.Nullable(t.String({ minLength: 1, maxLength: 128 })),
       ),
-      courtAbbreviation: t.Optional(
-        t.Nullable(t.String({ minLength: 1, maxLength: 128 })),
-      ),
-      courtTier: t.Optional(
-        t.Nullable(t.UnionEnum(COURT_TIER_LABELS, { default: undefined })),
+      documentIdentity: t.Optional(
+        t.Union([
+          decisionDocumentIdentitySchema,
+          unknownDocumentIdentitySchema,
+        ]),
       ),
       documentId: documentIdSchema,
       title: titleSchema,
@@ -78,13 +107,8 @@ export const searchHistoryEntryInputSchema = t.Union([
   t.Object(
     {
       kind: t.Literal("statute"),
-      statuteNumber: t.Optional(
-        t.Nullable(t.String({ minLength: 1, maxLength: 32 })),
-      ),
-      statuteYear: t.Optional(
-        t.Nullable(
-          t.String({ minLength: 1, maxLength: 4, pattern: "^[0-9]{1,4}$" }),
-        ),
+      documentIdentity: t.Optional(
+        t.Union([statuteDocumentIdentitySchema, unknownDocumentIdentitySchema]),
       ),
       documentId: documentIdSchema,
       title: titleSchema,
@@ -98,11 +122,10 @@ export type SearchHistoryEntryInput = Static<
   typeof searchHistoryEntryInputSchema
 >;
 
-// An omitted filter means all kinds; Elysia otherwise adds the first enum
-// member as a default, which generic capability invocation applies.
-export const searchHistoryKindSchema = t.UnionEnum(SEARCH_HISTORY_KINDS, {
-  default: undefined,
-});
+// Enum derives its choices without assigning a default to an omitted filter.
+export const searchHistoryKindSchema = t.Enum(
+  Object.fromEntries(SEARCH_HISTORY_KINDS.map((kind) => [kind, kind] as const)),
+);
 
 /** What the row stores encrypted: the entry without its kind. */
 const searchPayloadSchema = v.object({ query: v.string() });
@@ -112,10 +135,30 @@ const openedPayloadSchema = v.object({
   path: v.string(),
 });
 
+const unknownDocumentIdentityPayloadSchema = v.object({
+  kind: v.literal("unknown"),
+});
 const decisionPayloadSchema = v.object({
   ...openedPayloadSchema.entries,
-  courtAbbreviation: v.nullable(v.string()),
-  courtTier: v.nullable(v.picklist(COURT_TIER_LABELS)),
+  documentIdentity: v.variant("kind", [
+    v.object({
+      kind: v.literal("decision"),
+      courtAbbreviation: v.nullable(v.string()),
+      courtTier: v.optional(v.picklist(COURT_TIER_LABELS)),
+    }),
+    unknownDocumentIdentityPayloadSchema,
+  ]),
+});
+const statutePayloadSchema = v.object({
+  ...openedPayloadSchema.entries,
+  documentIdentity: v.variant("kind", [
+    v.object({
+      kind: v.literal("statute"),
+      number: v.nullable(v.string()),
+      year: v.nullable(v.string()),
+    }),
+    unknownDocumentIdentityPayloadSchema,
+  ]),
 });
 
 const collapseWhitespace = (value: string) =>
@@ -175,14 +218,14 @@ const payloadOf = (entry: SearchHistoryEntryInput) => {
         documentId: entry.documentId,
         title: entry.title,
         path: entry.path,
-        courtAbbreviation: entry.courtAbbreviation ?? null,
-        courtTier: entry.courtTier ?? null,
+        documentIdentity: entry.documentIdentity ?? { kind: "unknown" },
       };
     case "statute":
       return {
         documentId: entry.documentId,
         title: entry.title,
         path: entry.path,
+        documentIdentity: entry.documentIdentity ?? { kind: "unknown" },
       };
     default:
       entry satisfies never;
@@ -281,12 +324,6 @@ export const prepareSearchHistoryRows = async (
         kind: use.kind,
         courtId:
           use.entry.kind === "decision" ? (use.entry.courtId ?? null) : null,
-        statuteNumber:
-          use.entry.kind === "statute"
-            ? (use.entry.statuteNumber ?? null)
-            : null,
-        statuteYear:
-          use.entry.kind === "statute" ? (use.entry.statuteYear ?? null) : null,
         lookupKey: use.lookupKey,
         ciphertext,
         iv,
@@ -361,8 +398,6 @@ export const upsertSearchHistoryRows = async ({
       target: [table.organizationId, table.userId, table.kind, table.lookupKey],
       set: {
         courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
-        statuteNumber: sql`CASE WHEN ${incomingIsLatest} THEN excluded.statute_number ELSE ${table.statuteNumber} END`,
-        statuteYear: sql`CASE WHEN ${incomingIsLatest} THEN excluded.statute_year ELSE ${table.statuteYear} END`,
         ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
         iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
         firstUsedAt: sql`LEAST(${table.firstUsedAt}, excluded.first_used_at)`,
@@ -393,8 +428,6 @@ type SearchHistoryRow = Pick<
   | "id"
   | "kind"
   | "courtId"
-  | "statuteNumber"
-  | "statuteYear"
   | "ciphertext"
   | "iv"
   | "firstUsedAt"
@@ -432,11 +465,9 @@ export const toSearchHistoryEntryResponse = async (
       };
     case "statute":
       return {
-        statuteNumber: row.statuteNumber,
-        statuteYear: row.statuteYear,
         ...usage,
         kind: row.kind,
-        ...v.parse(openedPayloadSchema, payload),
+        ...v.parse(statutePayloadSchema, payload),
       };
     default: {
       row.kind satisfies never;
@@ -468,7 +499,8 @@ type SearchHistoryEntryResponse = Awaited<
 // that validate the list projection.
 type SearchHistoryProjectionSource = SearchHistoryEntryRow &
   v.InferOutput<typeof searchPayloadSchema> &
-  v.InferOutput<typeof decisionPayloadSchema>;
+  v.InferOutput<typeof decisionPayloadSchema> &
+  v.InferOutput<typeof statutePayloadSchema>;
 
 type MissingProjectedSearchHistoryColumn = UnprojectedColumns<
   SearchHistoryProjectionSource,

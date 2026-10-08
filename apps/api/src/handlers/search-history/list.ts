@@ -90,8 +90,6 @@ const listSearchHistory = createSafeRootHandler(
             id: searchHistoryEntries.id,
             kind: searchHistoryEntries.kind,
             courtId: searchHistoryEntries.courtId,
-            statuteNumber: searchHistoryEntries.statuteNumber,
-            statuteYear: searchHistoryEntries.statuteYear,
             ciphertext: searchHistoryEntries.ciphertext,
             iv: searchHistoryEntries.iv,
             firstUsedAt: searchHistoryEntries.firstUsedAt,

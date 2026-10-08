@@ -4,8 +4,8 @@ import { and, count, eq } from "drizzle-orm";
 import { searchHistoryEntries } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { searchHistoryAuditEvent } from "@/api/lib/search-history/audit";
 
 const config = {
   description:

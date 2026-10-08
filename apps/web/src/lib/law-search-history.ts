@@ -36,11 +36,29 @@ const legacyEntrySchema = v.object({
   query: v.pipe(v.string(), v.trim(), v.nonEmpty()),
   at: atSchema,
 });
+const unknownIdentitySchema = v.object({ kind: v.literal("unknown") });
+const decisionIdentitySchema = v.object({
+  kind: v.literal("decision"),
+  courtAbbreviation: v.nullable(v.string()),
+  courtTier: v.optional(v.picklist(COURT_TIER_LABELS)),
+});
+const statuteIdentitySchema = v.object({
+  kind: v.literal("statute"),
+  number: v.nullable(v.string()),
+  year: v.nullable(v.string()),
+});
+
 const recentEntrySchema = v.variant("kind", [
   v.object({ kind: v.literal("search"), ...legacyEntrySchema.entries }),
   v.object({
     kind: v.literal("decision"),
     ...openedFields,
+    documentIdentity: v.optional(
+      v.fallback(
+        v.variant("kind", [unknownIdentitySchema, decisionIdentitySchema]),
+        { kind: "unknown" },
+      ),
+    ),
     courtId: v.optional(v.nullable(v.string()), null),
     courtAbbreviation: v.optional(v.nullable(v.string()), null),
     courtTier: v.optional(v.nullable(v.picklist(COURT_TIER_LABELS)), null),
@@ -48,6 +66,12 @@ const recentEntrySchema = v.variant("kind", [
   v.object({
     kind: v.literal("statute"),
     ...openedFields,
+    documentIdentity: v.optional(
+      v.fallback(
+        v.variant("kind", [unknownIdentitySchema, statuteIdentitySchema]),
+        { kind: "unknown" },
+      ),
+    ),
     statuteNumber: v.optional(v.nullable(v.string()), null),
     statuteYear: v.optional(v.nullable(v.string()), null),
   }),
@@ -98,7 +122,25 @@ export const localHistoryImportEntries = (values: readonly (string | null)[]) =>
       switch (entry.kind) {
         case "search":
           return { usedAt, entry: { kind: entry.kind, query: entry.query } };
-        case "decision":
+        case "decision": {
+          let documentIdentity = entry.documentIdentity;
+          if (documentIdentity === undefined) {
+            if (entry.courtAbbreviation === null) {
+              documentIdentity = { kind: "unknown" };
+            } else {
+              documentIdentity =
+                entry.courtTier === null
+                  ? {
+                      kind: "decision",
+                      courtAbbreviation: entry.courtAbbreviation,
+                    }
+                  : {
+                      kind: "decision",
+                      courtAbbreviation: entry.courtAbbreviation,
+                      courtTier: entry.courtTier,
+                    };
+            }
+          }
           return {
             usedAt,
             entry: {
@@ -107,11 +149,20 @@ export const localHistoryImportEntries = (values: readonly (string | null)[]) =>
               title: entry.title,
               path: entry.path,
               courtId: entry.courtId,
-              courtAbbreviation: entry.courtAbbreviation,
-              courtTier: entry.courtTier,
+              documentIdentity,
             },
           };
-        case "statute":
+        }
+        case "statute": {
+          const documentIdentity =
+            entry.documentIdentity ??
+            (entry.statuteNumber === null || entry.statuteYear === null
+              ? { kind: "unknown" as const }
+              : {
+                  kind: "statute" as const,
+                  number: entry.statuteNumber,
+                  year: entry.statuteYear,
+                });
           return {
             usedAt,
             entry: {
@@ -119,10 +170,10 @@ export const localHistoryImportEntries = (values: readonly (string | null)[]) =>
               documentId: entry.id,
               title: entry.title,
               path: entry.path,
-              statuteNumber: entry.statuteNumber,
-              statuteYear: entry.statuteYear,
+              documentIdentity,
             },
           };
+        }
         default:
           entry satisfies never;
           return panic("Unhandled local law history kind");

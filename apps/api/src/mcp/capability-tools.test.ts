@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
@@ -3527,15 +3529,34 @@ describe("personal search history capabilities", () => {
     }
   });
 
-  test("lists own history through the shared handler", async () => {
-    const result = await call("invoke_capability", {
-      capability: "search-history.list",
-      input: { query: { limit: 20 } },
+  test("lists own history without a kind filter when kind is omitted", async () => {
+    const queries: string[] = [];
+    const database = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: (condition: SQL) => {
+            queries.push(new PgDialect().sqlToQuery(condition).sql);
+            return { orderBy: () => ({ limit: async () => [] }) };
+          },
+        }),
+      }),
+    });
+    const result = await handleMcpToolCall({
+      toolName: "invoke_capability",
+      args: {
+        capability: "search-history.list",
+        input: { query: { limit: 20 } },
+      },
+      context: createContext(database),
     });
     expect(parseToolPayload(result)).toMatchObject({
       items: [],
       nextCursor: null,
     });
+    expect(queries).toHaveLength(1);
+    expect(queries.at(0)).not.toContain('"kind"');
+    expect(queries.at(0)).toContain('"organization_id"');
+    expect(queries.at(0)).toContain('"user_id"');
   });
 
   test("deletes and clears own history through the shared handlers", async () => {

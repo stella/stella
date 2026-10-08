@@ -61,6 +61,112 @@ describe("search history normalization", () => {
     );
   });
 
+  test("search-history document identity survives encrypted batching and latest-use selection", async () => {
+    const decisionIdentity = fc.oneof(
+      fc.constant({ kind: "unknown" as const }),
+      fc.record({
+        kind: fc.constant("decision" as const),
+        courtAbbreviation: fc.option(fc.constantFrom("NS", "NSS", "ÚS"), {
+          nil: null,
+        }),
+        courtTier: fc.constantFrom(
+          "supreme" as const,
+          "constitutional" as const,
+          "other" as const,
+        ),
+      }),
+    );
+    await assertProperty(
+      "search-history document identity survives encrypted batching and latest-use selection",
+      fc.asyncProperty(
+        fc.array(decisionIdentity, { minLength: 1, maxLength: 12 }),
+        async (identities) => {
+          const uses = identities.map((documentIdentity, index) => ({
+            entry: {
+              kind: "decision" as const,
+              documentId: "decision-identity",
+              title: "23 Cdo 1001/2021",
+              path: "/law/cze/cases/ns/23-cdo-1001-2021",
+              documentIdentity,
+            },
+            usedAt: new Date(Date.UTC(2020, 0, 1) + index),
+          }));
+          const rows = await prepareSearchHistoryRows(owner, uses.toReversed());
+          expect(rows).toHaveLength(1);
+          const row = rows.at(0);
+          if (!row) {
+            return panic("Expected prepared document history row");
+          }
+          const response = await toSearchHistoryEntryResponse(
+            owner.organizationId,
+            {
+              ...row,
+              id: toSafeId<"searchHistoryEntry">(
+                "0191d14d-9a63-7d2e-a021-06053e542c85",
+              ),
+            },
+          );
+          expect(response).toMatchObject({
+            kind: "decision",
+            courtId: null,
+            documentIdentity: identities.at(-1),
+            useCount: identities.length,
+          });
+        },
+      ),
+      { numRuns: 50 },
+    );
+  });
+
+  test("search-history statute identity preserves string citations and typed unknown values", async () => {
+    const statuteIdentity = fc.oneof(
+      fc.constant({ kind: "unknown" as const }),
+      fc.record({
+        kind: fc.constant("statute" as const),
+        number: fc.option(fc.integer({ min: 1, max: 999_999 }).map(String), {
+          nil: null,
+        }),
+        year: fc.option(fc.integer({ min: 1, max: 9999 }).map(String), {
+          nil: null,
+        }),
+      }),
+    );
+    await assertProperty(
+      "search-history statute identity preserves string citations and typed unknown values",
+      fc.asyncProperty(statuteIdentity, async (documentIdentity) => {
+        const rows = await prepareSearchHistoryRows(owner, [
+          {
+            entry: {
+              kind: "statute",
+              documentId: "/eli/cz/sb/2012/89",
+              title: "Občanský zákoník",
+              path: "/law/cze/statutes/89-2012",
+              documentIdentity,
+            },
+            usedAt: new Date(Date.UTC(2020, 0, 1)),
+          },
+        ]);
+        const row = rows.at(0);
+        if (!row) {
+          return panic("Expected prepared statute history row");
+        }
+        const response = await toSearchHistoryEntryResponse(
+          owner.organizationId,
+          {
+            ...row,
+            id: toSafeId<"searchHistoryEntry">(
+              "0191d14d-9a63-7d2e-a021-06053e542c85",
+            ),
+          },
+        );
+        expect(response).toMatchObject({ kind: "statute", documentIdentity });
+        expect(Object.hasOwn(response, "statuteNumber")).toBe(false);
+        expect(Object.hasOwn(response, "statuteYear")).toBe(false);
+      }),
+      { numRuns: 50 },
+    );
+  });
+
   test("search-history equivalent uses fold once with temporal bounds and latest spelling", async () => {
     await assertProperty(
       "search-history equivalent uses fold once with temporal bounds and latest spelling",

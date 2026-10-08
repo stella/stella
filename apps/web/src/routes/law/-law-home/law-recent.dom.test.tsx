@@ -35,8 +35,11 @@ const seed = [
     title: "23 Cdo 1001/2021 · Nejvyšší soud",
     path: "/law/cz/cases/supreme/decision-1",
     courtId: null,
-    courtAbbreviation: "NS",
-    courtTier: "supreme",
+    documentIdentity: {
+      kind: "decision",
+      courtAbbreviation: "NS",
+      courtTier: "supreme",
+    },
   },
   {
     ...usage,
@@ -46,8 +49,7 @@ const seed = [
     title: "47 C 57/2023",
     path: "/law/cz/cases/unknown/decision-2",
     courtId: null,
-    courtAbbreviation: null,
-    courtTier: null,
+    documentIdentity: { kind: "unknown" },
   },
   {
     ...usage,
@@ -57,8 +59,7 @@ const seed = [
     title: "23 Cdo 1002/2021 · Nejvyšší soud",
     path: "/law/cz/cases/supreme/decision-3",
     courtId: null,
-    courtAbbreviation: "NS",
-    courtTier: null,
+    documentIdentity: { kind: "decision", courtAbbreviation: "NS" },
   },
   {
     ...usage,
@@ -67,8 +68,7 @@ const seed = [
     documentId: "statute-1",
     title: "Act",
     path: "/law/cz/statutes/statute-1",
-    statuteNumber: "172",
-    statuteYear: "2026",
+    documentIdentity: { kind: "statute", number: "172", year: "2026" },
   },
 ] as const satisfies readonly Parameters<
   typeof LawRecentList

@@ -22,8 +22,8 @@ export type SearchHistoryKind = (typeof SEARCH_HISTORY_KINDS)[number];
  * for and which decisions and statutes they opened. Nobody else reads it, an
  * administrator included, and nothing else consumes it.
  *
- * The entry itself (the query, or the opened document's id, title and path)
- * is encrypted at rest like extracted document content. Repeats are found by
+ * The entry itself (the query, or the opened document's id, title, path
+ * and plain document identity) is encrypted at rest like document content. Repeats are found by
  * `lookup_key`, a keyed hash of the normalized entry, so using a query again
  * bumps `last_used_at` and `use_count` on its row instead of adding one.
  */
@@ -40,8 +40,6 @@ export const searchHistoryEntries = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     kind: p.text("kind", { enum: SEARCH_HISTORY_KINDS }).notNull(),
     courtId: p.varchar("court_id", { length: 128 }),
-    statuteNumber: p.varchar("statute_number", { length: 32 }),
-    statuteYear: p.varchar("statute_year", { length: 4 }),
     lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
     ciphertext: bytea("ciphertext").notNull(),
     iv: bytea("iv").notNull(),

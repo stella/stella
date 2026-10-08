@@ -74,8 +74,14 @@ export function PublicDecisionViewer({
       kind: "decision",
       documentId: decision.id,
       courtId: decision.courtId,
-      courtAbbreviation: decision.courtAbbreviation,
-      courtTier: decision.courtTier,
+      documentIdentity:
+        decision.courtAbbreviation === null
+          ? { kind: "unknown" }
+          : {
+              kind: "decision",
+              courtAbbreviation: decision.courtAbbreviation,
+              courtTier: decision.courtTier,
+            },
       title: `${decision.caseNumber} · ${decision.court}`,
       path: openedPath,
     });
