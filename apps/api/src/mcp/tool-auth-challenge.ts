@@ -6,7 +6,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 
 /** Tool-result `_meta` key hosts read as a per-call authorization challenge. */
-export const MCP_TOOL_AUTH_CHALLENGE_META_KEY = "mcp/www_authenticate";
+const MCP_TOOL_AUTH_CHALLENGE_META_KEY = "mcp/www_authenticate";
 
 const missingScopeEnvelopeSchema = v.object({
   error: v.looseObject({ code: v.literal("missing_scope") }),
