@@ -2,12 +2,12 @@ import { Result } from "better-result";
 
 import { isQueryErrorOutputKey } from "./query-field-policy";
 
-// Query failures are output through several runtimes, including SDK loggers.
-// Project them before serialization; inspecting an Error exposes non-enumerable
-// fields and its cause, so removing only `params` is insufficient.
+// Output projections retain SQL shape, SQLSTATE, and schema identifiers.
+// Original errors remain available in process for classification and retries.
 const QUERY_ERROR_NAME = /^DrizzleQueryError\d*$/u;
 const POSTGRES_DRIVER_CODE = /^ERR_POSTGRES_[A-Z0-9_]{1,64}$/u;
 const SQLSTATE = /^(?=.*[0-9])[0-9A-Z]{5}$/u;
+const QUERY_TEXT_LABEL_CHARACTER = /[a-zA-Z0-9_. -]/u;
 const SQL_REDACTED_SHAPE = "[query redacted]";
 const MAX_ERROR_DEPTH = 32;
 const MAX_ERROR_NODES = 1000;
@@ -63,6 +63,12 @@ const containsQueryError = (value: unknown): boolean => {
     count += 1
   ) {
     const item = pending.pop();
+    if (typeof item === "string") {
+      if (sanitizeQueryErrorText(item) !== item) {
+        return true;
+      }
+      continue;
+    }
     if (!isRecord(item) || visited.has(item)) {
       continue;
     }
@@ -152,13 +158,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
           });
     const causeChanged = cause !== input["cause"];
     if (input instanceof Error || database) {
-      if (
-        !database &&
-        !causeChanged &&
-        !containsQueryError(input) &&
-        (typeof input["message"] !== "string" ||
-          sanitizeQueryErrorText(input["message"]) === input["message"])
-      ) {
+      if (!database && !causeChanged && !containsQueryError(input)) {
         return input;
       }
       const output = new Error(
@@ -184,8 +184,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
         Reflect.set(output, "sqlShape", shape);
         output.message += `: ${shape}`;
       }
-      // Input stacks include untrusted message continuation lines. Query
-      // projections omit them; telemetry reads trusted frames separately.
+      // Query projections omit stacks; telemetry owns frame diagnostics.
       delete output.stack;
       return output;
     }
@@ -228,12 +227,33 @@ export const printError = (...values: unknown[]): void => {
   logErrorOutput({ level: "error", values });
 };
 
-/** Backstop for Drizzle messages flattened before reaching a structured sink. */
-export const sanitizeQueryErrorText = (text: string): string =>
-  text.replace(
-    /Failed query:[\s\S]*$/iu,
-    "Database query failed (values redacted)",
-  );
+/** Project query payload text at string output boundaries. */
+export const sanitizeQueryErrorText = (text: string): string => {
+  if (/Failed query:/iu.test(text)) {
+    return "Database query failed (values redacted)";
+  }
+  for (const delimiter of text.matchAll(/[:=]/gu)) {
+    let end = delimiter.index;
+    while (end > 0 && /\s/u.test(text.charAt(end - 1))) {
+      end -= 1;
+    }
+    const quote = text.charAt(end - 1);
+    if (quote === '"' || quote === "'") {
+      end -= 1;
+    }
+    let start = end;
+    while (
+      start > 0 &&
+      QUERY_TEXT_LABEL_CHARACTER.test(text.charAt(start - 1))
+    ) {
+      start -= 1;
+    }
+    if (isQueryErrorOutputKey(text.slice(start, end))) {
+      return "Database query failed (values redacted)";
+    }
+  }
+  return text;
+};
 
 /** Catch a script entrypoint before the runtime prints a raw rejection. */
 export const runScriptWithErrorOutput = async (

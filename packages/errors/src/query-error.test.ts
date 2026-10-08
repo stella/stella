@@ -182,3 +182,30 @@ test("query output drops every shared policy field from nested output records", 
   const error = Object.assign(new Error("fixture error"), fields);
   expect(inspect(sanitizeErrorForOutput(error))).not.toContain(SECRET);
 });
+
+test("query output projects ordinary errors with query text in their stack", () => {
+  const error = new Error("Database operation failed");
+  error.stack = `Error: Database operation failed\nFailed query: insert into account values ($1)\nparams: ${SECRET}`;
+  const safe = sanitizeErrorForOutput(error);
+  expect(inspect(safe)).not.toContain(SECRET);
+  expect(safe).not.toBe(error);
+  expect(error.message).toBe("Database operation failed");
+  expect(error.stack).toContain(SECRET);
+});
+
+test("ordinary error stacks use the shared query field policy", () => {
+  for (const field of QUERY_ERROR_OUTPUT_FIELDS) {
+    const error = new Error("Database operation failed");
+    error.stack = `Error: Database operation failed\n${field}: ${SECRET}`;
+    const nested = Object.assign(new Error("Operation failed"), { error });
+    for (const input of [
+      error,
+      nested,
+      new Error("Operation failed", { cause: error }),
+    ]) {
+      expect(
+        inspect(sanitizeErrorForOutput(input), { depth: 20 }),
+      ).not.toContain(SECRET);
+    }
+  }
+});

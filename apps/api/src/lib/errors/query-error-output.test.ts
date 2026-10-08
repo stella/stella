@@ -242,3 +242,45 @@ test("every error output sink drops fields from the shared query policy", () => 
     logs.restore();
   }
 });
+
+test("output sinks exclude query text present only in an ordinary error stack", () => {
+  const marker = "fixture-stack-query-value";
+  const error = new Error("Database operation failed");
+  error.stack = `Error: Database operation failed\nFailed query: insert into account values ($1)\nparams: ${marker}`;
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const consoleRecords: unknown[][] = [];
+  const devRecords: unknown[] = [];
+  console.error = (...args: unknown[]) => {
+    consoleRecords.push(args);
+  };
+  try {
+    const devLog = createDevErrorLogger({
+      echoErrors: true,
+      sink: (record) => {
+        devRecords.push(record);
+      },
+    });
+    devLog(error);
+    printError(error);
+    captureError(error);
+    logger.error("query.failed", unredactedErrorFields(error));
+    expect(analytics.exceptions()).toHaveLength(1);
+    expect(logs.records).toHaveLength(1);
+    expect(devRecords).toHaveLength(1);
+    expect(consoleRecords).toHaveLength(3);
+    for (const output of [
+      consoleRecords,
+      devRecords,
+      logs.records,
+      analytics.events,
+      serializeDevError(error),
+    ]) {
+      expect(inspect(output, { depth: 20 })).not.toContain(marker);
+    }
+    expect(error.stack).toContain(marker);
+  } finally {
+    analytics.restore();
+    logs.restore();
+  }
+});
