@@ -755,6 +755,16 @@ export const readOutboundProductionSources = (
   return sources;
 };
 
+/** The API's own sources: the scope the third-party permit guards read. */
+export const readApiProductionSources = (
+  repoRoot: string,
+): Map<string, string> =>
+  new Map(
+    [...readOutboundProductionSources(repoRoot)].filter(([file]) =>
+      file.startsWith("apps/api/"),
+    ),
+  );
+
 /** Local transport module identities must resolve to an inventoried source. */
 export const validateOutboundTransportModulePaths = (
   sources: ReadonlyMap<string, string>,
