@@ -20,6 +20,7 @@ import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { detached } from "@/api/lib/analytics/capture";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -918,11 +919,15 @@ export const createMcpHttpRequestHandler = ({
       });
     };
     let consumesServices = definition.consumesServices;
-    if (toolName === "invoke_capability") {
-      const classified = await invokedCapabilityConsumesServices(
-        toolRequest.params.arguments ?? {},
+    if (
+      toolName === MCP_CAPABILITY_EXECUTORS.read ||
+      toolName === MCP_CAPABILITY_EXECUTORS.write
+    ) {
+      const classified = await invokedCapabilityConsumesServices({
+        args: toolRequest.params.arguments ?? {},
         context,
-      );
+        access: toolName === MCP_CAPABILITY_EXECUTORS.read ? "read" : "write",
+      });
       if (Result.isError(classified)) {
         return serializeToolResult(classified.error);
       }

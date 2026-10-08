@@ -118,7 +118,8 @@ type StorageFamily = (typeof USER_STORAGE_FAMILIES)[number];
 const familyEntry = (family: StorageFamily) => {
   const baseKey = `${family.prefix}document:anchor`;
   const area = browserStateStorage(family.area);
-  switch (family.owner) {
+  const { owner } = family;
+  switch (owner) {
     case "scoped":
       return {
         family,
@@ -129,7 +130,7 @@ const familyEntry = (family: StorageFamily) => {
     case "carried":
       return { family, baseKey, key: baseKey, storage: area };
     default:
-      family.owner satisfies never;
+      owner satisfies never;
       return panic("Unhandled registered storage ownership");
   }
 };
@@ -150,13 +151,21 @@ const rawKeys = (area: StorageFamily["area"]) => {
   ).filter((key): key is string => key !== null);
 };
 
-const assertOnlyDeviceEntries = () => {
+/** Only device entries and what is kept for user "a" remain. */
+const assertOnlyDeviceAndKeptEntries = () => {
   for (const area of storageAreas) {
     for (const key of rawKeys(area)) {
       expect(
         DEVICE_STORAGE_FAMILIES.some(
           (family) => family.area === area && key.startsWith(family.prefix),
-        ),
+        ) ||
+          USER_STORAGE_FAMILIES.some(
+            (family) =>
+              family.area === area &&
+              family.retention === "kept-for-owner" &&
+              key.startsWith(family.prefix) &&
+              key.endsWith(":u:a"),
+          ),
       ).toBe(true);
     }
   }
@@ -200,7 +209,7 @@ const assertRegisteredSessionTransition = (transition: SessionTransition) => {
         releaseUserStorage();
       });
       expect(mounted.result.current.value).toBe("empty");
-      assertOnlyDeviceEntries();
+      assertOnlyDeviceAndKeptEntries();
       for (const entry of entries) {
         expect(entry.storage.getItem(entry.baseKey)).toBeNull();
       }
@@ -210,13 +219,15 @@ const assertRegisteredSessionTransition = (transition: SessionTransition) => {
     });
     expect(mounted.result.current.value).toBe("empty");
     for (const entry of entries) {
-      // Carried entries are dropped when their signed-in owner leaves.
+      // User "b" never reads user "a"'s entries.
       expect(entry.storage.getItem(entry.baseKey)).toBeNull();
-      for (const area of storageAreas) {
-        expect(rawKeys(area)).not.toContain(entry.key);
-      }
+      // What is kept for "a" waits under their key; the rest (carried
+      // entries too) goes when they leave.
+      expect(rawKeys(entry.family.area).includes(entry.key)).toBe(
+        entry.family.retention === "kept-for-owner",
+      );
     }
-    assertOnlyDeviceEntries();
+    assertOnlyDeviceAndKeptEntries();
     for (const device of devices) {
       expect(deviceStorage(device.area).getItem(device.key)).toBe("device");
     }

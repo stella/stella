@@ -144,6 +144,7 @@ const screeningGrades = {
   "worker-reply": { reason: "worker-reply", grade: "defect" },
   "worker-retire": { reason: "worker-retire", grade: "defect" },
   "short-read": { reason: "short-read", grade: "defect" },
+  "read-stalled": { reason: "read-stalled", grade: "defect" },
   "matcher-unavailable": { reason: "matcher-unavailable", grade: "defect" },
   "truncated-empty": { reason: "truncated-empty", grade: "defect" },
   "freshness-read": { reason: "freshness-read", grade: "defect" },
