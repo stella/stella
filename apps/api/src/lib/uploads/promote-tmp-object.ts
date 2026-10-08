@@ -147,6 +147,7 @@ export const promoteTmpObjectWithUsage = async ({
         writeState = promoted.value;
         const committed = await commitOrganizationFileBytes(
           named.value.reservation,
+          named.value.db,
         );
         if (Result.isError(committed)) {
           return Result.err(

@@ -35,6 +35,7 @@ for (const executor of ["write", "copy"] as const) {
         copy: async () => await Promise.resolve(Result.ok("checked copy")),
       },
       reservation: { status: "disabled" } as const,
+      db: undefined,
     };
     const authorized = await authorizeOperation({
       kind: "FileWriteReserved",

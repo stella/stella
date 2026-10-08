@@ -379,7 +379,7 @@ export const authorizeOrganizationFileWrite = async <
   }
   return await authorizeOperation({
     kind: FILE_WRITE_RESERVED,
-    input: { operation, reservation: reservation.value },
+    input: { operation, reservation: reservation.value, db },
     check: async () => await Promise.resolve(reservation.map(() => undefined)),
   });
 };
@@ -409,6 +409,7 @@ export const runCheckedOrganizationFileWrite = async <T, N>({
   {
     operation: Parameters<typeof writeOrganizationFile<T>>[0];
     reservation: FileUsageReservation;
+    db: FileUsageDb | undefined;
   },
   N
 >): Promise<Result<T, OrganizationFileUsageError>> => {
@@ -423,7 +424,7 @@ export const runCheckedOrganizationFileWrite = async <T, N>({
   }
   const committed = await commitOrganizationFileBytes(
     proof.input.value.reservation,
-    proof.input.value.operation.db,
+    proof.input.value.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
@@ -437,6 +438,7 @@ export const runCheckedOrganizationFileCopy = async <T, E, N>({
   {
     operation: Parameters<typeof copyOrganizationFile<T, E>>[0];
     reservation: FileUsageReservation;
+    db: FileUsageDb | undefined;
   },
   N
 >): Promise<Result<T, E | OrganizationFileUsageError>> => {
@@ -457,7 +459,7 @@ export const runCheckedOrganizationFileCopy = async <T, E, N>({
     ) {
       const released = await releaseOrganizationFileBytes(
         proof.input.value.reservation,
-        proof.input.value.operation.db,
+        proof.input.value.db,
       );
       if (Result.isError(released)) {
         return Result.err(released.error);
@@ -467,7 +469,7 @@ export const runCheckedOrganizationFileCopy = async <T, E, N>({
   }
   const committed = await commitOrganizationFileBytes(
     proof.input.value.reservation,
-    proof.input.value.operation.db,
+    proof.input.value.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
