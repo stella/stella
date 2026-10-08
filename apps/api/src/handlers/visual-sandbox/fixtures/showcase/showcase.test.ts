@@ -253,7 +253,8 @@ describe("prepared showcase page", () => {
   // Browser captures read the prepared page from disk instead of importing
   // API code; regenerate it from prepareGeneratedVisual when this fails.
   test("matches what the API prepares from the authored source", () => {
-    const page = prepareGeneratedVisual(
+    // The fixture is plain JSON; compare it with the branded page structurally.
+    const page: unknown = prepareGeneratedVisual(
       v.parse(generatedVisualInputSchema, { ...fixture, html }),
     ).unwrap();
     expect(page).toEqual(prepared);
