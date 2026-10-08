@@ -44,6 +44,8 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import { sanitizeErrorForOutput } from "@stll/errors";
+// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
@@ -1084,7 +1086,7 @@ export const assemblePlTkDecision = ({
     logger.warn("case_law.ingestion.document_parse_failed", {
       adapterKey: ADAPTER_KEYS.PL_TK,
       caseNumber,
-      "error.type": parsed.error,
+      "error.type": sanitizeErrorForOutput(parsed.error),
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
