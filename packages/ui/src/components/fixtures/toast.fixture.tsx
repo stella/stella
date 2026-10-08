@@ -11,6 +11,22 @@ const DETAIL = `Request rejected.\n${"The complete provider response must remain
   12,
 )}`;
 
+const showRejectedPromiseToast = async () => {
+  const result = await Result.tryPromise({
+    try: async () =>
+      stellaToast.promise(Promise.reject(new Error(REASON)), {
+        loading: "Verifying",
+        success: "Verified",
+        error: () => ({ title: REASON, description: DETAIL }),
+      }),
+    catch: (error) => error,
+  });
+  if (Result.isOk(result) || !(result.error instanceof Error)) {
+    panic("Expected rejected toast promise");
+  }
+  document.documentElement.dataset["promiseRejection"] = result.error.message;
+};
+
 const createErrorToasts = {
   error: () => stellaToast.error(REASON, { description: DETAIL }),
   add: () =>
@@ -23,20 +39,10 @@ const createErrorToasts = {
       type: "error",
     });
   },
-  promise: async () => {
-    const result = await Result.tryPromise({
-      try: async () =>
-        stellaToast.promise(Promise.reject(new Error(REASON)), {
-          loading: "Verifying",
-          success: "Verified",
-          error: () => ({ title: REASON, description: DETAIL }),
-        }),
-      catch: (error) => error,
+  promise: () => {
+    showRejectedPromiseToast().catch((error: unknown) => {
+      document.documentElement.dataset["promiseFixtureError"] = String(error);
     });
-    if (Result.isOk(result) || !(result.error instanceof Error)) {
-      panic("Expected rejected toast promise");
-    }
-    document.documentElement.dataset["promiseRejection"] = result.error.message;
   },
 };
 
