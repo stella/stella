@@ -176,7 +176,7 @@ export type RecordedExchange = {
   /** The JSON body the page posted. */
   request: unknown;
   /** The SSE body the page read, or the route's refusal. */
-  response: { body: string; status: number };
+  response: { body: string; status: number; turnId: string | null };
 };
 
 const CHAT_ROUTE_PATH = "/v1/chat";
@@ -940,6 +940,16 @@ export const createApprovalHarness = ({
   /** Reads of the responses a dying process left behind, still running. */
   const abandonedReads = new Set<Promise<string>>();
 
+  const reapOwnerlessTurns = async () => {
+    await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
+      asTestRaw<SchedulerTaskContext>({
+        db: testDb,
+        logger: { info: () => undefined },
+        signal: new AbortController().signal,
+      }),
+    );
+  };
+
   /**
    * Serves `body` until the run reaches a stalling model call, then lets the
    * serving process die: nothing reads the rest of the response, the page's
@@ -972,6 +982,9 @@ export const createApprovalHarness = ({
       .where(
         and(eq(chatTurns.threadId, threadId), eq(chatTurns.status, "running")),
       );
+    // Durable clients keep joining until the dead owner's turn settles. Run
+    // the scheduler tick explicitly instead of waiting on its wall clock.
+    await reapOwnerlessTurns();
     throw new ChatConnectionLostError({ message: "Failed to fetch" });
   };
 
@@ -1089,7 +1102,7 @@ export const createApprovalHarness = ({
         ...(await findUnstableRefs(raw.threadId, snapshot)),
       );
       delivered.set(raw.threadId, deliveredInterrupts(chunks));
-      await endRecord({ ended, response: { body: text, status: 200 } });
+      await endRecord({ ended, response: { body: text, status: 200, turnId } });
     });
 
   /**
@@ -1159,6 +1172,7 @@ export const createApprovalHarness = ({
       response: {
         body: await response.clone().text(),
         status: response.status,
+        turnId: response.headers.get(CHAT_TURN_ID_HEADER),
       },
     });
     return response;
@@ -1202,6 +1216,7 @@ export const createApprovalHarness = ({
           response: {
             body: await refused.clone().text(),
             status: refused.status,
+            turnId: refused.headers.get(CHAT_TURN_ID_HEADER),
           },
         });
         return { done: Promise.resolve(), response: refused };
@@ -1209,7 +1224,7 @@ export const createApprovalHarness = ({
         // The page reads no response: its request fails as a lost connection.
         await endRecord({
           ended: "connection-lost",
-          response: { body: "", status: 0 },
+          response: { body: "", status: 0, turnId: null },
         });
         throw error;
       }
@@ -1244,7 +1259,11 @@ export const createApprovalHarness = ({
     delivered.set(raw.threadId, deliveredInterrupts(outcome.chunks));
     await endRecord({
       ended: "complete",
-      response: { body: outcome.text, status: 200 },
+      response: {
+        body: outcome.text,
+        status: 200,
+        turnId: outcome.headers.get(CHAT_TURN_ID_HEADER),
+      },
     });
     return {
       done: Promise.resolve(),
@@ -1548,15 +1567,7 @@ export const createApprovalHarness = ({
       crashingThreads.add(threadId);
     },
     /** Runs the scheduler's reaper once, as its minute tick does. */
-    reapOwnerlessTurns: async () => {
-      await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
-        asTestRaw<SchedulerTaskContext>({
-          db: testDb,
-          logger: { info: () => undefined },
-          signal: new AbortController().signal,
-        }),
-      );
-    },
+    reapOwnerlessTurns,
     /**
      * Ends what the test left running, then restores the model seam and
      * `fetch`; call once the test is done, before its database closes. A run

@@ -1,4 +1,9 @@
-import { memoryStream, EventType, StreamProcessor } from "@tanstack/ai";
+import {
+  memoryStream,
+  EventType,
+  StreamProcessor,
+  toServerSentEventsResponse,
+} from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -12,7 +17,7 @@ import {
   actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
-import type { withTimeout } from "@/api/lib/with-timeout";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { startChatExecutionAdmission } from "./chat-execution-admission";
@@ -23,6 +28,64 @@ import {
 import { ChatTurnOwnership, ChatTurnRun } from "./chat-turn-run";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
+
+test("durable SSE delivers a tool start while its provider is waiting", async () => {
+  const providerMayFinish = Promise.withResolvers<undefined>();
+  const providerFinished = Promise.withResolvers<undefined>();
+  let providerReleased = false;
+  const toolStart = {
+    type: EventType.TOOL_CALL_START,
+    toolCallId: "waiting-tool-call",
+    toolCallName: "ask_user",
+    parentMessageId: "waiting-assistant",
+  } satisfies StreamChunk;
+  const source = (async function* (): AsyncIterable<StreamChunk> {
+    try {
+      yield toolStart;
+      await providerMayFinish.promise;
+      providerReleased = true;
+    } finally {
+      providerFinished.resolve(undefined);
+    }
+  })();
+  const durability = memoryStream({ runId: Bun.randomUUIDv7() });
+  const response = toServerSentEventsResponse(source, {
+    abortController: new AbortController(),
+    durability: { adapter: durability },
+  });
+  const reader = (
+    response.body ?? panic("SSE response requires a body")
+  ).getReader();
+  try {
+    const received = await withTimeout(
+      async () => {
+        const decoder = new TextDecoder();
+        let text = "";
+        while (!text.includes('"type":"TOOL_CALL_START"')) {
+          const { done, value } = await reader.read();
+          if (done) {
+            return panic("SSE ended before delivering the tool start");
+          }
+          text += decoder.decode(value, { stream: true });
+        }
+        return text;
+      },
+      { label: "durable tool start delivery", timeoutMs: 1000 },
+    );
+    expect(received).toContain('"toolCallName":"ask_user"');
+    expect(providerReleased).toBe(false);
+    expect(
+      (await durability.snapshot()).map(({ chunk }) => chunk),
+    ).toContainEqual(toolStart);
+  } finally {
+    providerMayFinish.resolve(undefined);
+    await reader.cancel();
+    await withTimeout(async () => await providerFinished.promise, {
+      label: "tool start provider cleanup",
+      timeoutMs: 1000,
+    });
+  }
+});
 
 describe("chat run admission follows owned settlement", () => {
   test("an initial durability write failure releases admission and unused connectors without pulling the provider", async () => {

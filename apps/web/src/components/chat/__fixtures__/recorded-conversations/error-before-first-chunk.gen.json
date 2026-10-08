@@ -417,8 +417,9 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225607000}\n\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225608000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
-            "status": 200
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225607000}\n\nid: 2\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225608000}\n\nid: 3\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225609000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
+            "status": 200,
+            "turnId": "00000000-0000-7000-8000-000000000004"
           },
           "page": {
             "activeTurnId": null,
