@@ -827,17 +827,20 @@ describe("validateAst scaling", () => {
   });
 
   /**
-   * Eight times the paragraphs may cost at most sixteen times the time:
-   * linear work measures six to ten, while work that grows with the square
-   * of a node's child count measures twenty and more at these sizes. Each
-   * size keeps its fastest of a few runs, so a scheduling stall on one run
-   * does not read as growth. Covers both wide shapes a source produces: one
+   * Sixteen times the paragraphs may cost at most twenty-six times the
+   * time. Linear work measures about sixteen; work that grows with the
+   * square of a node's child count measured twenty and more at an eightfold
+   * step from 5,000 paragraphs, which at a sixteenfold step from 2,500 is
+   * about forty-five. The bound sits at their geometric mean, so a slow
+   * runner and a regression have the same margin (about 1.65x), and the
+   * largest input stays at 40,000 paragraphs. Each size keeps its fastest of
+   * a few runs, so a scheduling stall on one run does not read as growth. Covers both wide shapes a source produces: one
    * wrapper per paragraph directly under the body, and every paragraph
    * inside a single wrapper.
    */
-  const SCALING_PARAGRAPHS = 5000;
-  const SCALING_FACTOR = 8;
-  const MAX_GROWTH = 16;
+  const SCALING_PARAGRAPHS = 2500;
+  const SCALING_FACTOR = 16;
+  const MAX_GROWTH = 26;
   const SCALING_RUNS = 2;
 
   const paragraphText = (index: number): string =>
