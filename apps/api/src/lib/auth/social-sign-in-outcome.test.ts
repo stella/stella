@@ -1,16 +1,11 @@
 import { APIError } from "better-auth/api";
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
   classifySocialCallback,
   socialCallbackErrorUrl,
+  type SocialSignInOutcome,
 } from "@/api/lib/auth/social-sign-in-outcome";
-import type { SocialSignInOutcome } from "@/api/lib/observability/request-metrics";
-import {
-  emitSocialSignInOutcome,
-  resetMetricLineSinkForTesting,
-  setMetricLineSinkForTesting,
-} from "@/api/lib/observability/request-metrics";
 
 const errorUrl = "https://app.example.test/api/auth/error";
 const authBaseUrl = "https://app.example.test/api/auth";
@@ -19,10 +14,6 @@ const redirectTo = (location: string) =>
   new APIError("FOUND", undefined, new Headers({ location }));
 
 describe("social sign-in outcome", () => {
-  afterEach(() => {
-    resetMetricLineSinkForTesting();
-  });
-
   test.each<[string, SocialSignInOutcome]>([
     [`${errorUrl}?error=account_not_linked`, "account_not_linked"],
     [`${errorUrl}?error=identity_not_allowed`, "identity_not_allowed"],
@@ -95,29 +86,5 @@ describe("social sign-in outcome", () => {
     expect(classifySocialCallback(new APIError("BAD_REQUEST"), errorUrl)).toBe(
       "failed",
     );
-  });
-
-  test("emits one count dimensioned by outcome only", () => {
-    const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => {
-      lines.push(line);
-    });
-    emitSocialSignInOutcome("account_not_linked", "google");
-    expect(lines).toHaveLength(1);
-    const record: unknown = JSON.parse(lines[0] ?? "");
-    expect(record).toMatchObject({
-      _aws: {
-        CloudWatchMetrics: [
-          {
-            Namespace: "Stella/Api",
-            Dimensions: [["outcome"]],
-            Metrics: [{ Name: "SocialSignInOutcome", Unit: "Count" }],
-          },
-        ],
-      },
-      outcome: "account_not_linked",
-      provider: "google",
-      SocialSignInOutcome: 1,
-    });
   });
 });

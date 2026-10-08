@@ -194,7 +194,6 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
-import { emitSocialSignInOutcome } from "@/api/lib/observability/request-metrics";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import type { NewMembership } from "@/api/lib/organization-lifecycle-hooks";
 import {
@@ -954,8 +953,9 @@ const oauthUiFragmentBridgePlugin = {
 } satisfies BetterAuthPlugin;
 
 /**
- * Counts each social callback by outcome (`classifySocialCallback`), after the
- * two-factor redirect has settled the response the browser receives.
+ * Logs each social callback's outcome (`classifySocialCallback`) as
+ * `auth.social_sign_in`, after the two-factor redirect has settled the
+ * response the browser receives.
  */
 const socialSignInOutcomePlugin = {
   id: "stella-social-sign-in-outcome",
@@ -965,8 +965,8 @@ const socialSignInOutcomePlugin = {
         matcher: (ctx: HookEndpointContext) =>
           isSocialSignInCallbackPath(ctx.path),
         handler: createAuthMiddleware(async (ctx) => {
-          emitSocialSignInOutcome(
-            classifySocialCallback(
+          logger.info("auth.social_sign_in", {
+            outcome: classifySocialCallback(
               ctx.context.returned,
               socialCallbackErrorUrl(
                 await getOAuthState(),
@@ -975,9 +975,8 @@ const socialSignInOutcomePlugin = {
                 ctx.context.baseURL,
               ),
             ),
-            socialSignInProvider(ctx.params?.["id"]),
-          );
-          await Promise.resolve();
+            provider: socialSignInProvider(ctx.params?.["id"]),
+          });
         }),
       },
     ],

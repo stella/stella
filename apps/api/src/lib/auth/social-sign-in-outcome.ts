@@ -1,5 +1,17 @@
-import type { SocialSignInOutcome } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
+
+/**
+ * Social callback outcomes, logged once per callback as `auth.social_sign_in`
+ * so refused links and failure spikes can be counted from the request logs.
+ */
+export const SOCIAL_SIGN_IN_OUTCOMES = [
+  "completed",
+  "account_not_linked",
+  "identity_not_allowed",
+  "failed",
+] as const;
+
+export type SocialSignInOutcome = (typeof SOCIAL_SIGN_IN_OUTCOMES)[number];
 
 const KNOWN_PROVIDERS = new Set(["google", "microsoft"]);
 
