@@ -875,10 +875,6 @@
     "seconds": 2.121995,
     "source": "estimated"
   },
-  "src/handlers/case-law/decisions/reader.db.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/handlers/case-law/decisions/search-hydration.db.test.ts": {
     "seconds": 2.210343,
     "source": "estimated"
@@ -4430,6 +4426,10 @@
   "src/lib/business-registries/desktop/link-grants.test.ts": {
     "seconds": 4.6,
     "source": "measured"
+  },
+  "src/lib/business-registries/desktop/renewal.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
   },
   "src/lib/business-registries/desktop/revocation.db.test.ts": {
     "seconds": 1.835933,
@@ -8291,14 +8291,6 @@
     "seconds": 1,
     "source": "estimated"
   },
-  "src/mcp/app-guards.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/mcp/app-only-tools.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/mcp/auth.test.ts": {
     "seconds": 0.41,
     "source": "estimated"
@@ -8377,14 +8369,6 @@
   },
   "src/mcp/cursor-inputs.test.ts": {
     "seconds": 0.429256,
-    "source": "estimated"
-  },
-  "src/mcp/decision-reader-tools.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
-  "src/mcp/decision-reader.logic.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/description-enum-drift.test.ts": {
@@ -8647,6 +8631,10 @@
     "seconds": 1.100013,
     "source": "estimated"
   },
+  "src/mcp/tool-auth-challenge.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/mcp/tool-call-outcome.test.ts": {
     "seconds": 1.21972,
     "source": "estimated"
@@ -8659,20 +8647,12 @@
     "seconds": 1.21972,
     "source": "estimated"
   },
-  "src/mcp/tool-schema-conversion.test.ts": {
-    "seconds": 1,
-    "source": "estimated"
-  },
   "src/mcp/tool-types.test.ts": {
     "seconds": 0.440335,
     "source": "estimated"
   },
   "src/mcp/tool-utils.test.ts": {
     "seconds": 0.568477,
-    "source": "estimated"
-  },
-  "src/mcp/tool-visibility.test.ts": {
-    "seconds": 1,
     "source": "estimated"
   },
   "src/mcp/tools.test.ts": {
@@ -8965,6 +8945,10 @@
   },
   "src/tests/helpers/test-pki.test.ts": {
     "seconds": 0.364202,
+    "source": "estimated"
+  },
+  "src/tests/helpers/test-state.test.ts": {
+    "seconds": 1,
     "source": "estimated"
   },
   "src/tests/helpers/transaction-interleaving.postgres.test.ts": {
@@ -9279,11 +9263,55 @@
     "seconds": 0.2855,
     "source": "estimated"
   },
+  "src/lib/legal-search/corpus-aggregate-cache.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-reset-confirmation.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/email-otp-response-parity.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/auth/social-link-hint.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/oauth-refresh-reuse-window.postgres.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "scripts/migration-roles.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/tests/helpers/event-loop-lag-probe.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "scripts/lib/mcp-reader-ui-guard.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
+  "src/handlers/case-law/decisions/reader.db.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
   "src/lib/chat/decision-reader-projections.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/app-guards.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/app-only-tools.test.ts": {
     "seconds": 1,
     "source": "estimated"
   },
@@ -9304,6 +9332,22 @@
     "source": "estimated"
   },
   "src/mcp/case-law-decision-link.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/decision-reader-tools.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/decision-reader.logic.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/tool-schema-conversion.test.ts": {
+    "seconds": 1,
+    "source": "estimated"
+  },
+  "src/mcp/tool-visibility.test.ts": {
     "seconds": 1,
     "source": "estimated"
   }
