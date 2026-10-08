@@ -1090,6 +1090,47 @@ test("a stalled read that ignores cancellation is never repeated and the edition
   }
 });
 
+test("a request while the warmup indexes still answers within the request deadline", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const indexing = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      ...pool,
+      run: async (work, options) => {
+        if (options?.deadlineMs === SANCTIONS_WARM_STALL_MS) {
+          // Hold the warmup inside its indexing step.
+          indexing.resolve(undefined);
+          await release.promise;
+        }
+        return await pool.run(work, options);
+      },
+    },
+    clock,
+  });
+  try {
+    await publicScreen(publicProps("A Completely Distant Name"));
+    await indexing.promise;
+    const stalled = publicScreen({
+      ...publicProps("A Completely Distant Name"),
+      // The request's own freshness read never answers.
+      db: async () => await new Promise<never>(() => {}),
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(clock.pending()).toContain(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+    clock.advance(SANCTIONS_MATCHER_CONFIG.deadlineMs);
+    const answer = (await stalled).unwrap();
+    expect(answer.status).toBe("unavailable");
+    expect(answer.lists.every(({ reason }) => reason === "warming")).toBe(true);
+  } finally {
+    release.resolve(undefined);
+    await pool.close();
+  }
+});
+
 test.each(["entries-read", "short-read"] as const)(
   "one list failing on %s does not block the other six and retries with backoff",
   async (fault) => {

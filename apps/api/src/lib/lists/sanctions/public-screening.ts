@@ -7,6 +7,7 @@ import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 import { logger } from "@/api/lib/observability/logger";
 
 import {
+  SANCTIONS_MATCHER_CONFIG,
   sharedSanctionsMatcherPool,
   isSanctionsMatcherCancelled,
 } from "./matcher-pool";
@@ -382,16 +383,34 @@ export const createPublicSanctionsScreening = ({
     // The warmup is indexing for a moment: answer from what is on file
     // instead of queueing behind it, and ask again shortly.
     if (warmer.holdsMatcher()) {
-      return await screenSanctionsSubject({
-        ...props,
-        reportFailure,
-        matcher: async ({ source, edition }) =>
-          Result.err({
-            code: warmer.status(source, edition),
-            stage: "public-warmup",
-            reason: null,
-          } as const),
-      });
+      // Bounded like a matcher lease: the freshness read alone must not hold
+      // the request past its deadline.
+      const expired = Promise.withResolvers<"expired">();
+      const cancelDeadline = clock.schedule(() => {
+        expired.resolve("expired");
+      }, SANCTIONS_MATCHER_CONFIG.deadlineMs);
+      const answered = await Promise.race([
+        screenSanctionsSubject({
+          ...props,
+          reportFailure,
+          matcher: async ({ source, edition }) =>
+            Result.err({
+              code: warmer.status(source, edition),
+              stage: "public-warmup",
+              reason: null,
+            } as const),
+        }),
+        expired.promise,
+      ]).finally(cancelDeadline);
+      return answered === "expired"
+        ? Result.ok(
+            unavailableSanctionsScreening({
+              reason: "warming",
+              practiceJurisdictions: props.practiceJurisdictions,
+              now: props.now,
+            }),
+          )
+        : answered;
     }
     const result = await pool.run(
       async (session) =>
