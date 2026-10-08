@@ -304,8 +304,8 @@ export default eslintCompatPlugin({
               hasFixture = true;
               const parent = node.parent;
               const statement =
-                parent?.type === "VariableDeclarator" ? parent.parent : parent;
-              if (statement?.parent?.type !== "Program") {
+                parent.type === "VariableDeclarator" ? parent.parent : parent;
+              if (statement.parent?.type !== "Program") {
                 nestedFixtures.push(node);
               }
             }

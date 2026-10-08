@@ -30,11 +30,10 @@ export const createTestState = <Config extends object>({
     | { type: "suite"; restores: Map<PropertyKey, () => void> }
     | { type: "closed" } = { type: "file" };
 
+  const closedMessage = `Test state fixture for ${file} is closed. Move the mutation into a test/beforeEach.`;
   const assertOpen = () => {
     if (phase.type === "closed") {
-      panic(
-        `Test state fixture for ${file} is closed. Move the mutation into a test/beforeEach.`,
-      );
+      panic(closedMessage);
     }
   };
 
@@ -48,10 +47,9 @@ export const createTestState = <Config extends object>({
         case "suite":
           return phase.restores;
         case "closed":
-          return panic(
-            `Test state fixture for ${file} is closed. Move the mutation into a test/beforeEach.`,
-          );
+          break;
       }
+      return panic(closedMessage);
     })();
     if (!restores.has(key)) {
       restores.set(key, restore);

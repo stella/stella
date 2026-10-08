@@ -519,6 +519,10 @@
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts"

@@ -113,7 +113,7 @@ test("current baselines reject missing, untracked and nonregular test files", ()
     mkdirSync(directory, { recursive: true });
     expect(validate).toThrow(failure);
     writeFileSync(path.join(repoRoot, FILE), "test fixture");
-    expect(validate()).toBeUndefined();
+    expect(validate).not.toThrow();
     expect(() =>
       validateTestStateBaselineFiles({
         members,
