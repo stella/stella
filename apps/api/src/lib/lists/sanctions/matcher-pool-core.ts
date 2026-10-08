@@ -64,6 +64,16 @@ type Slot = {
   termination: Promise<void> | null;
 };
 
+/**
+ * Slot and lifecycle hooks only signal a lease failure; the lease keeps the
+ * outcome its fail() records.
+ */
+const signalOnly =
+  (fail: (cause: SanctionsMatcherFailureCause, error?: unknown) => unknown) =>
+  (cause: SanctionsMatcherFailureCause, error?: unknown): void => {
+    fail(cause, error);
+  };
+
 // Deadlines mutate this signal across awaits; do not reuse a narrowed property.
 export const isSanctionsMatcherCancelled = (signal: AbortSignal): boolean =>
   signal.aborted;
@@ -427,7 +437,8 @@ export const createSanctionsMatcherPoolCore = ({
           return failure.outcome ?? fail(closed ? "closed" : "admission");
         }
         const slot = lease.slot;
-        slot.fail = fail;
+        const signalFailure = signalOnly(fail);
+        slot.fail = signalFailure;
         const worker = ensureMatcherWorker({
           slot,
           createWorker,
@@ -435,7 +446,7 @@ export const createSanctionsMatcherPoolCore = ({
           reportFailure,
           reportUnownedFailure,
           detached,
-          fail,
+          fail: signalFailure,
         });
         if (worker === null) {
           return fail("worker-create");
