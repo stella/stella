@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -29,7 +30,7 @@ export const ReaderBreadcrumb = ({
 }: ReaderBreadcrumbProps) => {
   const t = useTranslations();
   const { visible, hidden } = compactReaderPath(path);
-  const [widths, setWidths] = useState<readonly number[]>([]);
+  const [layout, setLayout] = useState<ReturnType<typeof fitReaderPath>>();
   const [contentsOpen, setContentsOpen] = useState(false);
   const [middleOpen, setMiddleOpen] = useState(false);
   const current = path.at(-1);
@@ -38,6 +39,9 @@ export const ReaderBreadcrumb = ({
       return;
     }
     const update = () => {
+      if (node.clientWidth === 0) {
+        return;
+      }
       const labels = compactReaderPath(path).visible.flatMap(({ anchorId }) => {
         const label = node.querySelector<HTMLElement>(
           `[data-breadcrumb-measure="${CSS.escape(anchorId)}"]`,
@@ -55,16 +59,17 @@ export const ReaderBreadcrumb = ({
           ? Math.max(44, (number?.getBoundingClientRect().width ?? 0) + 16)
           : 16,
       );
-      const separators = Math.max(0, labels.length - 1) * 16;
-      const middle = hidden.length === 0 ? 0 : 60;
       const fitted = fitReaderPath({
-        available: node.clientWidth - separators - middle,
+        available: node.clientWidth,
+        separatorWidth: 16,
+        middleWidth: hidden.length === 0 ? 0 : 60,
         naturalWidths,
         minimumWidths,
       });
-      setWidths((previous) =>
-        previous.length === fitted.length &&
-        previous.every((width, index) => width === fitted[index])
+      setLayout((previous) =>
+        previous?.showMiddle === fitted.showMiddle &&
+        previous.widths.length === fitted.widths.length &&
+        previous.widths.every((width, index) => width === fitted.widths[index])
           ? previous
           : fitted,
       );
@@ -114,6 +119,49 @@ export const ReaderBreadcrumb = ({
       ))}
     </ol>
   );
+  const contentsControl = ({
+    label,
+    title,
+    width,
+  }: {
+    label: ReactNode;
+    title?: string;
+    width?: number;
+  }) => (
+    <Popover open={contentsOpen} onOpenChange={setContentsOpen}>
+      <PopoverTrigger
+        aria-label={
+          title === undefined
+            ? t("statutes.outline")
+            : `${t("statutes.outline")}: ${title}`
+        }
+        render={
+          <Button
+            className="h-11 min-w-0 sm:h-11"
+            size="xs"
+            style={{ width }}
+            variant="ghost"
+          />
+        }
+        title={title}
+      >
+        {label}
+      </PopoverTrigger>
+      <PopoverPopup
+        align="end"
+        className="w-80 max-w-[calc(100vw-2rem)]"
+        padding="sm"
+      >
+        <ScrollArea
+          axis="vertical"
+          className="max-h-72"
+          viewportRef={contentsRef}
+        >
+          {entries(headings, () => setContentsOpen(false))}
+        </ScrollArea>
+      </PopoverPopup>
+    </Popover>
+  );
   return (
     <nav
       aria-label={t("statutes.outline")}
@@ -138,7 +186,13 @@ export const ReaderBreadcrumb = ({
         </span>
       </div>
       <ol className="flex h-11 min-w-0 items-center">
+        {path.length === 0 && headings.length > 0 && (
+          <li>{contentsControl({ label: t("statutes.outline") })}</li>
+        )}
         {visible.map((segment, index) => {
+          if (layout?.widths[index] === 0) {
+            return null;
+          }
           const last = index === visible.length - 1;
           const number = last ? readerProvisionNumber(segment.title) : null;
           const label = (
@@ -158,85 +212,71 @@ export const ReaderBreadcrumb = ({
               className="flex min-w-0 shrink-0 items-center"
               key={segment.anchorId}
             >
-              {index > 0 && (
-                <DirectionalIcon
-                  aria-hidden="true"
-                  className="size-4 shrink-0"
-                  icon={ChevronRightIcon}
-                />
-              )}
+              {index > 0 &&
+                visible
+                  .slice(0, index)
+                  .some(
+                    (_, previousIndex) => layout?.widths[previousIndex] !== 0,
+                  ) && (
+                  <DirectionalIcon
+                    aria-hidden="true"
+                    className="size-4 shrink-0"
+                    icon={ChevronRightIcon}
+                  />
+                )}
               {last ? (
-                <Popover open={contentsOpen} onOpenChange={setContentsOpen}>
-                  <PopoverTrigger
-                    aria-label={`${t("statutes.outline")}: ${segment.title}`}
-                    render={
-                      <Button
-                        className="h-11 min-w-0 sm:h-11"
-                        size="xs"
-                        style={{ width: widths[index] }}
-                        variant="ghost"
-                      />
-                    }
-                    title={segment.title}
-                  >
-                    {label}
-                  </PopoverTrigger>
-                  <PopoverPopup
-                    align="end"
-                    className="w-80 max-w-[calc(100vw-2rem)]"
-                    padding="sm"
-                  >
-                    <ScrollArea
-                      axis="vertical"
-                      className="max-h-72"
-                      viewportRef={contentsRef}
-                    >
-                      {entries(headings, () => setContentsOpen(false))}
-                    </ScrollArea>
-                  </PopoverPopup>
-                </Popover>
+                contentsControl({
+                  label,
+                  title: segment.title,
+                  width: layout?.widths[index],
+                })
               ) : (
                 <Button
                   aria-label={segment.title}
                   className="h-11 min-w-0 sm:h-11"
                   size="xs"
                   onClick={() => onJump(segment.anchorId)}
-                  style={{ width: widths[index] }}
+                  style={{ width: layout?.widths[index] }}
                   title={segment.title}
                   variant="ghost"
                 >
                   {label}
                 </Button>
               )}
-              {index === 0 && hidden.length > 0 && (
-                <>
-                  <DirectionalIcon
-                    aria-hidden="true"
-                    className="size-4 shrink-0"
-                    icon={ChevronRightIcon}
-                  />
-                  <Popover open={middleOpen} onOpenChange={setMiddleOpen}>
-                    <PopoverTrigger
-                      aria-label={t("common.showMore")}
-                      onMouseEnter={() => setMiddleOpen(true)}
-                      render={
-                        <Button className="size-11 shrink-0" variant="ghost" />
-                      }
-                    >
-                      …
-                    </PopoverTrigger>
-                    <PopoverPopup
-                      align="start"
-                      className="w-80 max-w-[calc(100vw-2rem)]"
-                      padding="sm"
-                    >
-                      <ScrollArea axis="vertical" className="max-h-72">
-                        {entries(hidden, () => setMiddleOpen(false))}
-                      </ScrollArea>
-                    </PopoverPopup>
-                  </Popover>
-                </>
-              )}
+              {index === 0 &&
+                hidden.length > 0 &&
+                (layout?.showMiddle ?? true) && (
+                  <>
+                    <DirectionalIcon
+                      aria-hidden="true"
+                      className="size-4 shrink-0"
+                      icon={ChevronRightIcon}
+                    />
+                    <Popover open={middleOpen} onOpenChange={setMiddleOpen}>
+                      <PopoverTrigger
+                        aria-label={t("common.showMore")}
+                        onMouseEnter={() => setMiddleOpen(true)}
+                        render={
+                          <Button
+                            className="size-11 shrink-0"
+                            variant="ghost"
+                          />
+                        }
+                      >
+                        …
+                      </PopoverTrigger>
+                      <PopoverPopup
+                        align="start"
+                        className="w-80 max-w-[calc(100vw-2rem)]"
+                        padding="sm"
+                      >
+                        <ScrollArea axis="vertical" className="max-h-72">
+                          {entries(hidden, () => setMiddleOpen(false))}
+                        </ScrollArea>
+                      </PopoverPopup>
+                    </Popover>
+                  </>
+                )}
             </li>
           );
         })}

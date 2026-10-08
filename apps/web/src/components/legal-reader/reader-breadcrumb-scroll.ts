@@ -41,7 +41,8 @@ export const observeReaderBreadcrumb = ({
         end = middle;
       }
     }
-    const next = headings.at(start - 1)?.anchorId ?? null;
+    const next =
+      start === 0 ? null : (headings.at(start - 1)?.anchorId ?? null);
     if (next === active) {
       return;
     }

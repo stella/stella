@@ -182,8 +182,71 @@ test("reader breadcrumb allocates narrow width to the current number before oute
     expect(navigation.querySelector('[aria-live="polite"]')?.textContent).toBe(
       path.map(({ title }) => title).join(" › "),
     );
+    Object.defineProperty(navigation, "clientWidth", {
+      value: 60,
+      configurable: true,
+    });
+    await act(async () => {
+      for (const resize of callbacks) {
+        resize();
+      }
+    });
+    expect(screen.queryByRole("button", { name: "Část druhá" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Díl 1" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Contents: § 5/u }).style.width,
+    ).toBe("60px");
   } finally {
     cleanup();
     globalThis.ResizeObserver = originalObserver;
+  }
+});
+
+test("Contents remains reachable while introductory paragraphs precede the first visible heading", async () => {
+  const { LegalReaderBreadcrumb } = await import("./legal-reader-breadcrumb");
+  const viewport = document.createElement("div");
+  const content = document.createElement("article");
+  const intro = document.createElement("p");
+  intro.textContent = "Introductory wording";
+  const heading = document.createElement("h2");
+  heading.dataset.anchor = "first";
+  heading.getBoundingClientRect = () => new DOMRect(0, 200, 200, 24);
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  content.append(intro, heading);
+  viewport.append(content);
+  document.body.append(viewport);
+  try {
+    render(
+      <IntlProvider locale="en" messages={messages}>
+        <TooltipProvider>
+          <LegalReaderBreadcrumb
+            blocks={[
+              {
+                type: "heading",
+                id: "first",
+                anchorId: "first",
+                level: 1,
+                plainText: "First heading",
+                inlines: [],
+              },
+            ]}
+            viewportRef={{ current: viewport }}
+            contentRef={{ current: content }}
+          />
+        </TooltipProvider>
+      </IntlProvider>,
+    );
+    expect(
+      screen.getByRole("navigation").querySelector('[aria-live="polite"]')
+        ?.textContent,
+    ).toBe("");
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Contents" })),
+    );
+    expect(screen.getByRole("button", { name: "First heading" })).toBeTruthy();
+  } finally {
+    cleanup();
+    viewport.remove();
   }
 });

@@ -43,32 +43,42 @@ const ast = {
     keywords: [],
     statutes: [],
   },
-  blocks: headings.flatMap(({ title, level }, index) => [
+  blocks: [
     {
-      id: `heading-${index}`,
-      anchorId: `heading-${index}`,
-      type: "heading" as const,
-      level,
-      inlines: [{ type: "text" as const, text: title }],
-      plainText: title,
-    },
-    {
-      id: `text-${index}`,
-      anchorId: `text-${index}`,
-      type: "paragraph" as const,
+      id: "introduction",
+      anchorId: "introduction",
+      type: "paragraph",
       inlines: [
-        {
-          type: "text" as const,
-          text: "Soud posoudil podmínky žádosti a předložené listiny. ".repeat(
-            30,
-          ),
-        },
+        { type: "text", text: "Úvodní ustanovení před nadpisy. ".repeat(40) },
       ],
-      plainText: "Soud posoudil podmínky žádosti a předložené listiny. ".repeat(
-        30,
-      ),
+      plainText: "Úvodní ustanovení před nadpisy. ".repeat(40),
     },
-  ]),
+    ...headings.flatMap(({ title, level }, index) => [
+      {
+        id: `heading-${index}`,
+        anchorId: `heading-${index}`,
+        type: "heading" as const,
+        level,
+        inlines: [{ type: "text" as const, text: title }],
+        plainText: title,
+      },
+      {
+        id: `text-${index}`,
+        anchorId: `text-${index}`,
+        type: "paragraph" as const,
+        inlines: [
+          {
+            type: "text" as const,
+            text: "Soud posoudil podmínky žádosti a předložené listiny. ".repeat(
+              30,
+            ),
+          },
+        ],
+        plainText:
+          "Soud posoudil podmínky žádosti a předložené listiny. ".repeat(30),
+      },
+    ]),
+  ],
 } satisfies DocumentAst;
 const decision = { ...dockedChatLegalPayloads.decision, documentAst: ast };
 const statute = { ...dockedChatLegalPayloads.statute, documentAst: ast };
@@ -158,6 +168,16 @@ for (const view of views) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       const breadcrumb = root.locator('[data-slot="reader-breadcrumb"]');
       await expect(breadcrumb).toHaveCount(1);
+      const initialContents = breadcrumb.getByRole("button", {
+        name: "Contents",
+        exact: true,
+      });
+      await expect(initialContents).toBeVisible();
+      await initialContents.click();
+      await expect(
+        page.getByRole("button", { name: titles[0], exact: true }),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
       const before = await breadcrumb.boundingBox();
       expect(before).not.toBeNull();
       await root.locator('[data-anchor="heading-4"]').evaluate((heading) => {
@@ -211,6 +231,44 @@ for (const view of views) {
         ),
       ).toBeVisible();
       await page.keyboard.press("Escape");
+      await breadcrumb.evaluate((navigation) => {
+        navigation.style.flex = "0 0 60px";
+        navigation.style.width = "60px";
+      });
+      await expect(
+        breadcrumb.getByRole("button", { name: "Část druhá", exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        breadcrumb.getByRole("button", { name: "Díl 1", exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        breadcrumb.getByRole("button", { name: "Show more", exact: true }),
+      ).toHaveCount(0);
+      await expect
+        .poll(async () =>
+          current.evaluate((button) => {
+            const number = button.querySelector("bdi");
+            const navigation = button.closest(
+              '[data-slot="reader-breadcrumb"]',
+            );
+            if (number === null || navigation === null) {
+              return false;
+            }
+            const bounds = navigation.getBoundingClientRect();
+            const numberBounds = number.getBoundingClientRect();
+            return (
+              bounds.width === 60 &&
+              number.textContent === "§ 5" &&
+              numberBounds.left >= bounds.left &&
+              numberBounds.right <= bounds.right
+            );
+          }),
+        )
+        .toBe(true);
+      await breadcrumb.evaluate((navigation) => {
+        navigation.style.flex = "";
+        navigation.style.width = "";
+      });
       if (surface === "inspector") {
         const handle = page.locator('[data-slot="inspector-resize-handle"]');
         await handle.press("Home");

@@ -14,6 +14,8 @@ type FitReaderPathOptions = {
   available: number;
   naturalWidths: readonly number[];
   minimumWidths: readonly number[];
+  separatorWidth?: number;
+  middleWidth?: number;
 };
 
 /** Spend the width on the current heading before its ancestors. */
@@ -21,21 +23,39 @@ export const fitReaderPath = ({
   available,
   naturalWidths,
   minimumWidths,
-}: FitReaderPathOptions): readonly number[] => {
+  separatorWidth = 0,
+  middleWidth = 0,
+}: FitReaderPathOptions) => {
   const widths = [...naturalWidths];
+  const minimums = [...minimumWidths];
+  let showMiddle = middleWidth > 0;
+  const reserved = () =>
+    Math.max(0, widths.filter((width) => width > 0).length - 1) *
+      separatorWidth +
+    (showMiddle ? middleWidth : 0);
+  for (let index = 0; index < widths.length - 1; index += 1) {
+    const minimum = minimums.reduce((sum, width) => sum + width, 0);
+    if (minimum + reserved() <= available) {
+      break;
+    }
+    showMiddle = false;
+    widths[index] = 0;
+    minimums[index] = 0;
+  }
   let excess = Math.max(
     0,
-    widths.reduce((sum, width) => sum + width, 0) - available,
+    widths.reduce((sum, width) => sum + width, 0) -
+      Math.max(0, available - reserved()),
   );
   for (const [index, width] of widths.entries()) {
     const shrink = Math.min(
       excess,
-      Math.max(0, width - (minimumWidths[index] ?? 0)),
+      Math.max(0, width - (minimums[index] ?? 0)),
     );
     widths[index] = width - shrink;
     excess -= shrink;
   }
-  return widths;
+  return { widths, showMiddle };
 };
 
 export const readerProvisionNumber = (title: string): string | null =>
