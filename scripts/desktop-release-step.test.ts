@@ -14,11 +14,60 @@ const releaseWorkflow = readFileSync(
   "utf-8",
 );
 
+type RecordValue = Record<string, unknown>;
+
+const record = (value: unknown): RecordValue | undefined =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value
+    : undefined;
+
 const temporary = (): string =>
   path.join(
     process.env["TMPDIR"] ?? "/tmp",
     `desktop-release-${crypto.randomUUID()}`,
   );
+
+test("release script steps follow source checkout and Bun setup", () => {
+  const workflow = record(Bun.YAML.parse(releaseWorkflow));
+  const jobs = record(workflow?.["jobs"]);
+  expect(jobs).toBeDefined();
+
+  for (const [jobName, rawJob] of Object.entries(jobs ?? {})) {
+    const steps = record(rawJob)?.["steps"];
+    if (!Array.isArray(steps)) {
+      continue;
+    }
+    let sourceCheckout = false;
+    let bunSetup = false;
+    for (const rawStep of steps) {
+      const step = record(rawStep);
+      if (step === undefined) {
+        continue;
+      }
+      const uses = step["uses"];
+      const inputs = record(step["with"]);
+      if (
+        typeof uses === "string" &&
+        uses.startsWith("actions/checkout@") &&
+        inputs?.["path"] === undefined
+      ) {
+        sourceCheckout = true;
+      }
+      if (typeof uses === "string" && uses.startsWith("oven-sh/setup-bun@")) {
+        bunSetup = true;
+      }
+      if (
+        typeof step["run"] === "string" &&
+        /\bbun\s+scripts\//u.test(step["run"])
+      ) {
+        expect(sourceCheckout, `${jobName}: ${String(step["name"])}`).toBe(
+          true,
+        );
+        expect(bunSetup, `${jobName}: ${String(step["name"])}`).toBe(true);
+      }
+    }
+  }
+});
 
 test("stamps the version into both files and pins the channel endpoint", () => {
   const root = temporary();

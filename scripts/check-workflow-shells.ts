@@ -26,10 +26,26 @@ const lineOf = (source: string, needle: string): number => {
   return index === -1 ? 1 : source.slice(0, index).split("\n").length;
 };
 
+type RunDefaults = {
+  malformed: boolean;
+  shell: unknown;
+};
+
+const runDefaults = (value: unknown): RunDefaults => {
+  const defaults = record(value);
+  const run = record(defaults?.["run"]);
+  return {
+    malformed:
+      (value !== undefined && defaults === undefined) ||
+      (defaults?.["run"] !== undefined && run === undefined),
+    shell: run?.["shell"],
+  };
+};
+
 const BASH_SYNTAX = [
   /\[\[/u,
   /\bset\s+-e(?:uo\s+pipefail)?\b/u,
-  /\$\((?!\$)[^)]*\)/u,
+  /\$\((?!\$|\[[\w.]+\]::)[^)]*\)/u,
   /<<<|\$\{[^}]+:-[^}]*\}/u,
   /\bif\b[^\n;]*;\s*then\b/u,
   /\bfor\b[^\n;]*;\s*do\b/u,
@@ -77,8 +93,15 @@ export const checkWorkflowSource = (
     throw new WorkflowShellInvariantError(`Expected YAML object in ${file}`);
   }
   const errors: WorkflowShellError[] = [];
-  const workflowShell = (record((record(parsed["defaults"]) ?? {})["run"]) ??
-    {})["shell"];
+  const workflowDefaults = runDefaults(parsed["defaults"]);
+  if (workflowDefaults.malformed) {
+    errors.push({
+      file,
+      line: lineOf(source, "defaults:"),
+      message: "defaults and defaults.run must be mappings",
+    });
+  }
+  const workflowShell = workflowDefaults.shell;
   if (!isBash(workflowShell)) {
     errors.push({
       file,
@@ -93,9 +116,15 @@ export const checkWorkflowSource = (
     if (job === undefined || job["uses"] !== undefined) {
       continue;
     }
-    const jobShell = (record((record(job["defaults"]) ?? {})["run"]) ?? {})[
-      "shell"
-    ];
+    const jobDefaults = runDefaults(job["defaults"]);
+    if (jobDefaults.malformed) {
+      errors.push({
+        file,
+        line: lineOf(source, "defaults:"),
+        message: `${jobName}: defaults and defaults.run must be mappings`,
+      });
+    }
+    const jobShell = jobDefaults.shell;
     const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
     for (const rawStep of steps) {
       const step = record(rawStep);
