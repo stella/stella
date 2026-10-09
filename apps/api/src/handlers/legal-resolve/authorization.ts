@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -28,11 +29,7 @@ export const authorizeLegalResolveRequest = async (
     return { status: 403 as const, body: { error: "missing_scope" as const } };
   }
   const session = await authenticate(authorization.slice(7));
-  if (
-    Result.isError(session) ||
-    !hasLawReadScope(session.value.scopes) ||
-    !publicLawEnabled()
-  ) {
+  if (Result.isError(session) || !hasLawReadScope(session.value.scopes)) {
     return { status: 403 as const, body: { error: "missing_scope" as const } };
   }
   const organizationId = parseAuthProviderId<"organization">(
@@ -44,15 +41,26 @@ export const authorizeLegalResolveRequest = async (
       body: { error: "access_unavailable" as const },
     };
   }
-  const entitled = await readPublicLaw(organizationId);
-  if (Result.isError(entitled)) {
+  const admission = await admitLawRead({
+    organizationId,
+    mayReadPublicLaw: readPublicLaw,
+    publicLawEnabled,
+  });
+  if (Result.isError(admission)) {
+    if (admission.error.type === "access_unavailable") {
+      return {
+        status: 503 as const,
+        body: { error: "access_unavailable" as const },
+      };
+    }
     return {
-      status: 503 as const,
-      body: { error: "access_unavailable" as const },
+      status: 403 as const,
+      body: { error: admission.error.type },
     };
   }
-  if (!entitled.value) {
-    return { status: 403 as const, body: { error: "not_entitled" as const } };
-  }
-  return { status: 200 as const, session: session.value };
+  return {
+    status: 200 as const,
+    session: session.value,
+    admission: admission.value,
+  };
 };

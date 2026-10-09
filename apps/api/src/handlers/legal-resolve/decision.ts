@@ -18,6 +18,7 @@ import {
   lookupDecisionsByIdentity,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
+import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
@@ -60,14 +61,22 @@ const candidate = (row: DecisionIdentityRow) => ({
   }),
 });
 
-export const resolveDecision = async (
-  countryInput: string,
-  identifier: string,
-  {
+type ResolveDecisionOptions = {
+  admission: LawReadAdmission;
+  country: string;
+  identifier: string;
+  dependencies?: DecisionResolverDependencies;
+};
+
+export const resolveDecision = async ({
+  admission: _admission,
+  country: countryInput,
+  identifier,
+  dependencies: {
     lookup = lookupDecisionsByIdentity,
     read = readDecisionReaderSource,
-  }: DecisionResolverDependencies = {},
-): Promise<LegalResolveResponse> => {
+  } = {},
+}: ResolveDecisionOptions): Promise<LegalResolveResponse> => {
   if (identifier.trim().length === 0) {
     return { status: "incomplete_identifier", missing: ["identifier"] };
   }

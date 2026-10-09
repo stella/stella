@@ -12,6 +12,7 @@ import {
 } from "@stll/legal-atlas/provision-citation-grammars";
 import { todayFor } from "@stll/time";
 
+import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
@@ -48,6 +49,7 @@ const normalizedSection = (
 };
 
 const czechToday = (): string => todayFor("Europe/Prague").toString();
+const CZECH_COLLECTION_OF_LAWS = "sb";
 
 const isInForceOn = (
   from: string | null,
@@ -83,7 +85,7 @@ export const resolveCzechLaw = async (
     if (missing.length === 0) {
       const { collection, year, number } = input;
       if (
-        collection !== undefined &&
+        collection === CZECH_COLLECTION_OF_LAWS &&
         year !== undefined &&
         number !== undefined
       ) {
@@ -164,10 +166,17 @@ export const LAW_RESOLVERS = {
   USA: unavailable,
 } as const satisfies Record<PublicCountry, LawResolver>;
 
-export const resolveLawCitation = async (
-  countryInput: string,
-  input: LawResolveInput,
-): Promise<LegalResolveResponse> => {
+type ResolveLawCitationOptions = {
+  admission: LawReadAdmission;
+  country: string;
+  input: LawResolveInput;
+};
+
+export const resolveLawCitation = async ({
+  admission: _admission,
+  country: countryInput,
+  input,
+}: ResolveLawCitationOptions): Promise<LegalResolveResponse> => {
   const normalized = normalizeCountry(countryInput);
   if (!normalized.ok || !isPublicCountry(normalized.value.alpha3)) {
     return { status: "country_unavailable" };

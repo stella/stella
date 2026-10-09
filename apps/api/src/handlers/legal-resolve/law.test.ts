@@ -1,6 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import { status } from "elysia";
 
+import {
+  admitLawRead,
+  type LawReadAdmission,
+} from "@/api/handlers/legal-resolve/admission";
 import {
   resolveCzechLaw,
   resolveLawCitation,
@@ -13,6 +18,28 @@ import {
 } from "@/api/handlers/legislation/reader-response";
 import { createSafeId } from "@/api/lib/branded-types";
 import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
+import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+
+const organizationId =
+  parseAuthProviderId<"organization">("organization") ??
+  panic("Fixture organization id is invalid");
+const admissionResult = await admitLawRead({
+  organizationId,
+  mayReadPublicLaw: async () => Result.ok(true),
+  publicLawEnabled: () => true,
+});
+const admission = Result.isOk(admissionResult)
+  ? admissionResult.value
+  : panic("Fixture law read was not admitted");
+
+test("requires a law-read admission at compile time", () => {
+  type Options = Parameters<typeof resolveLawCitation>[0];
+  expectTypeOf<Options["admission"]>().toEqualTypeOf<LawReadAdmission>();
+  expectTypeOf<{
+    country: string;
+    input: { citation: string };
+  }>().not.toExtend<Options>();
+});
 
 const documentId = createSafeId<"legislationDocument">();
 const eli = "https://www.e-sbirka.cz/eli/cz/sb/2024/1";
@@ -151,6 +178,37 @@ describe("law citation resolution", () => {
     );
   });
 
+  test("uses only the supported Collection of Laws identifier", async () => {
+    let resolveCount = 0;
+    const checkedDependencies = {
+      ...dependencies(),
+      resolveExpression: (async (input) => {
+        resolveCount += 1;
+        expect(input.eli).toBe(eli);
+        return { type: "expression", id: documentId };
+      }) satisfies typeof resolveStatuteExpression,
+    };
+
+    expect(
+      await resolveCzechLaw(
+        { collection: "sb", year: "2024", number: "1", section: "12a" },
+        checkedDependencies,
+      ),
+    ).toMatchObject({ status: "resolved" });
+    expect(
+      await resolveCzechLaw(
+        {
+          collection: "unknown",
+          year: "2024",
+          number: "1",
+          section: "12a",
+        },
+        checkedDependencies,
+      ),
+    ).toEqual({ status: "not_found", reason: "unknown_document" });
+    expect(resolveCount).toBe(1);
+  });
+
   test("distinguishes unknown sections and documents", async () => {
     const input = {
       collection: "sb",
@@ -174,7 +232,13 @@ describe("law citation resolution", () => {
   });
 
   test("returns country unavailable outside Czechia", async () => {
-    expect(await resolveLawCitation("DEU", { citation: "unknown" })).toEqual({
+    expect(
+      await resolveLawCitation({
+        admission,
+        country: "DEU",
+        input: { citation: "unknown" },
+      }),
+    ).toEqual({
       status: "country_unavailable",
     });
   });

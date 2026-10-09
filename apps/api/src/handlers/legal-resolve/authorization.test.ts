@@ -94,6 +94,28 @@ test("legal resolve distinguishes missing scope from organization entitlement", 
   });
 });
 
+test("the route returns 403 when the organization is not entitled", async () => {
+  const app = new Elysia().use(
+    createLegalResolveRoute({
+      authenticate: async () => Result.ok(session),
+      publicLawEnabled: () => true,
+      mayReadPublicLaw: async () => Result.ok(false),
+      decisionRateLimit: limit("not-entitled-decision"),
+      lawRateLimit: limit("not-entitled-law"),
+    }),
+  );
+
+  const response = await app.handle(
+    new Request(
+      "http://localhost/case/CZE/decisions/resolve?identifier=decision",
+      { headers: authorizationHeader },
+    ),
+  );
+
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({ error: "not_entitled" });
+});
+
 test("an organization access read failure returns 503, never 200", async () => {
   const app = new Elysia().use(
     createLegalResolveRoute({

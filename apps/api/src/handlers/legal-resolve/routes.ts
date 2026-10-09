@@ -148,8 +148,16 @@ export const createLegalResolveRoute = ({
         .get(
           "/case/:country/decisions/resolve",
           // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- protocol bearer-scope boundary; it reads only the public corpus
-          async ({ params, query }) =>
-            await resolveDecisionRequest(params.country, query.identifier),
+          async ({ legalResolveAuthorization, params, query }) => {
+            if (legalResolveAuthorization.status !== 200) {
+              return panic("Legal resolve handler ran without admission");
+            }
+            return await resolveDecisionRequest({
+              admission: legalResolveAuthorization.admission,
+              country: params.country,
+              identifier: query.identifier,
+            });
+          },
           {
             beforeHandle: requireLawRead,
             params: t.Object({
@@ -171,7 +179,16 @@ export const createLegalResolveRoute = ({
         .get(
           "/law/:country/citations/resolve",
           // oxlint-disable-next-line require-safe-route-handlers/require-safe-route-handlers -- protocol bearer-scope boundary; it reads only the public corpus
-          async ({ params, query }) => await resolveLaw(params.country, query),
+          async ({ legalResolveAuthorization, params, query }) => {
+            if (legalResolveAuthorization.status !== 200) {
+              return panic("Legal resolve handler ran without admission");
+            }
+            return await resolveLaw({
+              admission: legalResolveAuthorization.admission,
+              country: params.country,
+              input: query,
+            });
+          },
           {
             beforeHandle: requireLawRead,
             params: t.Object({
