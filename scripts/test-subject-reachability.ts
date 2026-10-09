@@ -19,7 +19,7 @@ export const REACHABILITY_CATEGORIES = [
   "repository-text-guard",
 ] as const;
 
-type ReachabilityCategory = (typeof REACHABILITY_CATEGORIES)[number];
+export type ReachabilityCategory = (typeof REACHABILITY_CATEGORIES)[number];
 
 export type ReachabilityFinding = {
   file: string;
@@ -306,7 +306,7 @@ const runtimeRoots = (
       ts.isExpressionStatement(statement) &&
       ts.isCallExpression(statement.expression) &&
       ts.isIdentifier(statement.expression.expression) &&
-      /^register/u.test(statement.expression.expression.text)
+      statement.expression.expression.text.startsWith("register")
     ) {
       enqueueNode(statement.expression);
     }
@@ -455,8 +455,11 @@ const siblingExportNames = (
 type ImportReachability = {
   hasFactory: boolean;
   importedRuntimeBindings: Set<ts.Symbol>;
+  reachesSourceFileIndex: boolean;
   reachedSiblingExports: Set<string>;
 };
+
+const SOURCE_FILE_INDEX_OWNER = "packages/scripts/src/source-file-index";
 
 type ImportReachabilityOptions = {
   repoRoot: string;
@@ -520,6 +523,7 @@ const importReachability = ({
     file.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, ""),
   );
   let hasFactory = false;
+  let reachesSourceFileIndex = false;
   for (const statement of source.statements) {
     for (const symbol of dynamicImportBindings(
       statement,
@@ -548,6 +552,15 @@ const importReachability = ({
       const symbol = binding && checker.getSymbolAtLocation(binding);
       if (symbol) {
         importedRuntimeBindings.add(symbol);
+        const owner = resolvedSource
+          .replaceAll(path.sep, "/")
+          .replace(/\.[cm]?[jt]sx?$/u, "");
+        if (
+          owner.endsWith(SOURCE_FILE_INDEX_OWNER) &&
+          usedSymbols.has(symbol)
+        ) {
+          reachesSourceFileIndex = true;
+        }
       }
       if (/^(?:create|build|make)|Factory$/u.test(name)) {
         hasFactory = true;
@@ -569,7 +582,12 @@ const importReachability = ({
       }
     }
   }
-  return { hasFactory, importedRuntimeBindings, reachedSiblingExports };
+  return {
+    hasFactory,
+    importedRuntimeBindings,
+    reachesSourceFileIndex,
+    reachedSiblingExports,
+  };
 };
 
 const localCollisionFindings = (
@@ -636,16 +654,22 @@ export const analyzeTestSubjectReachability = ({
       program.getSourceFile(absolute) ?? panic(`Could not parse ${file}`);
     const reachableRuntime = runtimeRoots(source, checker);
     const usedSymbols = runtimeSymbols(reachableRuntime, checker);
-    const { hasFactory, importedRuntimeBindings, reachedSiblingExports } =
-      importReachability({
-        repoRoot,
-        file,
-        source,
-        checker,
-        usedSymbols,
-      });
+    const {
+      hasFactory,
+      importedRuntimeBindings,
+      reachesSourceFileIndex,
+      reachedSiblingExports,
+    } = importReachability({
+      repoRoot,
+      file,
+      source,
+      checker,
+      usedSymbols,
+    });
     let category = namedCategory(file, source, text);
-    if (includesRuntimeBinding(usedSymbols, importedRuntimeBindings)) {
+    if (reachesSourceFileIndex) {
+      category = "repository-text-guard";
+    } else if (includesRuntimeBinding(usedSymbols, importedRuntimeBindings)) {
       category = hasFactory ? "source-factory" : "imported-source-subject";
     }
     if (!category) {

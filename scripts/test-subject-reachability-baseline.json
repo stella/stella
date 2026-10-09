@@ -39,7 +39,6 @@
   "apps/api/src/lib/elysia-optional-union-coercion.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/lib/health/readiness.test.ts": ["no-classified-reachability"],
   "apps/api/src/lib/mcp-upstream/connections.test.ts": [
     "local-export-collision:createMcpClientForConnection",
     "local-export-collision:proxyMcpToolCall"
@@ -47,26 +46,7 @@
   "apps/api/src/lib/mcp-upstream/tanstack-ai-mcp-timeout.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/lib/oauth-cimd-private-key-jwt.db.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/lib/oauth-cli-client-document.db.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/lib/oauth-client-id-metadata-document.db.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/lib/oauth-native-consent.db.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/lib/provider-document-adapters.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/lib/rate-limit/redis-context.cold-start.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/lib/redis-client.test.ts": ["no-classified-reachability"],
-  "apps/api/src/lib/scheduler/tasks/buffer-intent-reconciliation.test.ts": [
     "no-classified-reachability"
   ],
   "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.db.test.ts": [
@@ -107,212 +87,35 @@
   "apps/api/src/tests/test-path-filters.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/desktop/tests/i18n-language-preference.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/desktop/tests/nsis-installer-languages.test.ts": [
     "no-classified-reachability"
   ],
   "apps/web/scripts/test-run-plan.test.ts": ["no-classified-reachability"],
-  "apps/web/src/components/ai-prompt-input/ai-prompt-query-state.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/ai-suggestions/file-chat-overlay-boundary.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/ai-suggestions/use-review-start-mode.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/billing/expense-form.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/breadcrumbs/query-content.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/ask-user-card.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/chat-answer-footer.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/chat-encrypted-refusal.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/chat-thread-messages-playbook.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
   "apps/web/src/components/chat/citation-surface-inventory.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/composer-query-results.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/composer-submenu-search.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/docked-chat-stack.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/legal-citation-link.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/needs-matter-card.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/tool-approval-card.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/tool-call-card.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/chat/tool-call-code-block.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/docx/docx-suggestions-query-status.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/inspector/anonymize-pdf.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/inspector/external-reference-preview.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/inspector/inspector-find.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/inspector/skill-history/skill-revision-comparison.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/inspector/skill-history/use-skill-history-actions.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/inspector/skill-resource-panel.dom.test.tsx": [
     "no-classified-reachability"
   ],
   "apps/web/src/components/menu-row-touch-size.dom.test.tsx": [
     "no-classified-reachability"
   ],
-  "apps/web/src/components/query-view-feedback.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/require-ai-key.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/templates/use-template-fill-schema.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/translate-document-dialog.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/workspaces/copy-to-matter-dialog.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/components/workspaces/members-section.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
   "apps/web/src/components/workspaces/table/row-host.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/avt/evidence-list-empty-state.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/avt/verification-view.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/case-law/components/case-viewer/decision-workspace.logic.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/case-law/decision-filter-facets.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/case-law/use-provision-placement-telemetry.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/knowledge/playbook-editor/playbook-pane-parking.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/statutes/components/provision-leading-decisions.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/statutes/components/provision-version-context.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/features/statutes/statute-sitemap.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/hooks/use-client-auth-status.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/hooks/use-sign-out.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/lib/account/owner-scoped-state.dom.test.tsx": [
     "no-classified-reachability"
   ],
   "apps/web/src/lib/contained-handler.test.ts": ["no-classified-reachability"],
   "apps/web/src/lib/dom-dataset.dom.test.ts": ["no-classified-reachability"],
-  "apps/web/src/lib/drag-and-drop/element-registration.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
   "apps/web/src/lib/dynamic-validation.test.ts": ["no-classified-reachability"],
-  "apps/web/src/lib/files/document-reference-queries.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/web/src/lib/organization/ai-config-queries.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/lib/public-tools-sitemap.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/lib/use-effective-shortcuts.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/lib/use-query-view-error.dom.test.tsx": [
     "no-classified-reachability"
   ],
   "apps/web/src/lib/workspaces/mutations.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/web/src/lib/workspaces/mutations/entities.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
   "apps/web/src/lib/workspaces/mutations/views.logic.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/lib/workspaces/use-quick-entry-hotkey.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/routes/-legal-lists-route-gates.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-time-read.dom.test.tsx": [
     "no-classified-reachability"
   ],
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.test.ts": [
     "no-classified-reachability"
   ],
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-document-loader.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.dom.test.tsx": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/routes/auth/-components/social-link-hint.dom.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx": [
     "no-classified-reachability"
   ],
   "packages/boe/src/validation.test.ts": ["no-classified-reachability"],
@@ -618,9 +421,6 @@
     "no-classified-reachability"
   ],
   "packages/typescript-config/bun-test-each.test.ts": [
-    "no-classified-reachability"
-  ],
-  "packages/ui/src/kanban/drag-interactions.test.ts": [
     "no-classified-reachability"
   ],
   "scripts/check-cli-contract-changeset.test.ts": [

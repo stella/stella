@@ -4,21 +4,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  REACHABILITY_CATEGORIES,
   analyzeTestSubjectReachability,
   checkReachabilityBaselineMembership,
+  type ReachabilityCategory,
 } from "./test-subject-reachability";
 
 const TEST_FILE = "apps/example/src/widget.test.tsx";
-const ALL_ATTEMPTED = [
+const IMPORT_ATTEMPTED = [
   "imported-source-subject",
-  "source-factory",
-  "e2e-surface",
-  "spawned-entry",
-  "sql-or-schema-reader",
-  "artifact-or-workflow-guard",
-  "repository-text-guard",
-];
-const IMPORT_ATTEMPTED = ["imported-source-subject"];
+] satisfies readonly ReachabilityCategory[];
 
 const roots: string[] = [];
 afterEach(() => {
@@ -72,7 +67,7 @@ describe("test subject reachability", () => {
       {
         file: TEST_FILE,
         kind: "no-classified-reachability",
-        attempted: ALL_ATTEMPTED,
+        attempted: REACHABILITY_CATEGORIES,
       },
     ]);
   });
@@ -193,6 +188,26 @@ describe("test subject reachability", () => {
     const input = fixture(
       "test('cli', () => Bun.spawn(['bun', 'apps/example/src/widget.ts']));\n",
     );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
+  test("classifies a repository text guard using the shared source index", () => {
+    const input = fixture(
+      "import { sourceFileIndex } from '../../../packages/scripts/src/source-file-index';\ntest('inventory', () => sourceFileIndex().includes('widget.ts'));\n",
+    );
+    mkdirSync(path.join(input.root, "packages/scripts/src"), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(input.root, "packages/scripts/src/source-file-index.ts"),
+      "export const sourceFileIndex = () => ['widget.ts'];\n",
+    );
+
     expect(
       analyzeTestSubjectReachability({
         repoRoot: input.root,
