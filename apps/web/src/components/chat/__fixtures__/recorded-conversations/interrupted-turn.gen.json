@@ -861,14 +861,14 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225615000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"role\":\"assistant\",\"timestamp\":1767225616000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"},\"turnTiming\":{\"status\":\"running\",\"startedAt\":\"2026-01-01T00:00:10.000Z\",\"durationMs\":0}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"delta\":\"Anything else?\",\"timestamp\":1767225617000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225618000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225619000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225620000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225616000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"role\":\"assistant\",\"timestamp\":1767225617000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:10.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:11.000Z\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"delta\":\"Anything else?\",\"timestamp\":1767225618000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225619000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225620000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225621000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200
           },
           "page": {
             "activeTurnId": null,
             "messages": [
               {
-                "createdAt": "2026-01-01T00:00:11.000Z",
+                "createdAt": "2026-01-01T00:00:12.000Z",
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
                 "parts": [
@@ -879,7 +879,7 @@
                 ]
               },
               {
-                "createdAt": "2026-01-01T00:00:12.000Z",
+                "createdAt": "2026-01-01T00:00:13.000Z",
                 "id": "00000000-0000-7000-8000-000000000004",
                 "role": "user",
                 "parts": [
@@ -890,7 +890,7 @@
                 ]
               },
               {
-                "createdAt": "2026-01-01T00:00:13.000Z",
+                "createdAt": "2026-01-01T00:00:14.000Z",
                 "id": "00000000-0000-7000-8000-000000000005",
                 "metadata": {
                   "usage": {
@@ -924,7 +924,7 @@
               }
             ],
             "olderCursor": null,
-            "lastActivityAt": "2026-01-01T00:00:14.000Z"
+            "lastActivityAt": "2026-01-01T00:00:15.000Z"
           }
         }
       ]
