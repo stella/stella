@@ -57,9 +57,13 @@ const isMcpAnonymizedResourceScope = (
   scope: McpAnonymizedResourceScope | null,
 ): scope is McpAnonymizedResourceScope => scope !== null;
 
-export const MCP_ANONYMIZED_RESOURCE_SCOPES = Object.values(
-  MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
-).filter(isMcpAnonymizedResourceScope);
+export const MCP_ANONYMIZED_RESOURCE_SCOPES = [
+  ...new Set(
+    Object.values(MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE).filter(
+      isMcpAnonymizedResourceScope,
+    ),
+  ),
+];
 
 const MCP_RESOURCE_SCOPE_ACCESS = {
   "stella:search": "read-capable",

@@ -167,7 +167,7 @@ export const resolveView = (data: ResolveResults) => {
       return {
         type: "resolve",
         status: data.status,
-        missing: data.missing,
+        missing: data.missing.map((part) => part),
       } as const;
     case "not_found":
       return {

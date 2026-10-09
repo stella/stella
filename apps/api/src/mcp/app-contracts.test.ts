@@ -260,7 +260,7 @@ describe("MCP app registry and contracts", () => {
       ...observedFields(APP_SEARCH_FIXTURE, searchView),
       ...observedFields(APP_UNAVAILABLE_FIXTURE, searchView),
     ]);
-    const lookup = new Set([
+    const resolution = new Set([
       ...APP_RESOLVE_STATUS_FIXTURES.flatMap((fixture) => [
         ...observedFields(fixture, resolveView),
       ]),
@@ -268,7 +268,7 @@ describe("MCP app registry and contracts", () => {
     expect([...search].toSorted()).toEqual(
       [...MCP_APP_CONSUMED_FIELDS.search_case_law].toSorted(),
     );
-    expect([...lookup].toSorted()).toEqual(
+    expect([...resolution].toSorted()).toEqual(
       [...MCP_APP_CONSUMED_FIELDS.resolve_case_law_decision].toSorted(),
     );
     const view = searchView(APP_SEARCH_FIXTURE);
@@ -316,12 +316,12 @@ describe("MCP app registry and contracts", () => {
       throw new Error("Expected search view");
     }
     expect(absent.results.at(0)?.keywords).toBeNull();
-    const lookup = resolveView(APP_RESOLVE_FIXTURE);
-    if (lookup.type !== "resolve" || lookup.status !== "resolved") {
-      throw new Error("Expected lookup view");
+    const resolution = resolveView(APP_RESOLVE_FIXTURE);
+    if (resolution.type !== "resolve" || resolution.status !== "resolved") {
+      throw new Error("Expected resolve view");
     }
-    expect(lookup.rows).not.toHaveLength(0);
-    for (const row of lookup.rows) {
+    expect(resolution.rows).not.toHaveLength(0);
+    for (const row of resolution.rows) {
       expect(row).toMatchObject({ type: "resolve", snippet: null });
     }
   });

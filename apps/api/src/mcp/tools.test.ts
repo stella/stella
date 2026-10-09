@@ -1546,6 +1546,30 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(scopedDb).not.toHaveBeenCalled();
   });
 
+  test.each([
+    { scopes: ["stella:read"], admitted: true },
+    { scopes: ["stella:law_read"], admitted: true },
+    { scopes: ["stella:search"], admitted: false },
+    { scopes: [], admitted: false },
+  ])(
+    "legal resolve discovery follows law scope admission ($scopes)",
+    async ({ scopes, admitted }) => {
+      const toolNames = (
+        await listMcpTools(createContext(), "default", scopes)
+      ).map(({ name }) => name);
+      for (const name of [
+        "resolve_case_law_decision",
+        "resolve_law_citation",
+      ]) {
+        expect(toolNames.includes(name)).toBe(admitted);
+      }
+      expect(toolNames).not.toContain("lookup_case_law");
+      if (scopes.includes("stella:law_read")) {
+        expect(toolNames).not.toContain("list_matters");
+      }
+    },
+  );
+
   test("lists the projected read surface in anonymized mode", async () => {
     // The anonymized surface is the registry minus excluded (write / dynamic
     // gateway) tools: every read/search/reference tool, in registry order.
