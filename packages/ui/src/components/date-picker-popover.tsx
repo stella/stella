@@ -1411,9 +1411,13 @@ const useDatePickerDraft = ({
   } | null>(null);
   // Applying can move focus before React renders the cleared draft. Disarm that stale blur synchronously.
   const commitStatus = useRef<"pending" | "consumed">("consumed");
-  const inputValue = draft?.baseValue === value ? draft.value : value;
+  const hasDraft = draft?.baseValue === value;
+  const inputValue = hasDraft ? draft.value : value;
   const parsed = Result.try(() => Temporal.PlainDate.from(inputValue));
+  // Only the user's own typing is judged: an applied value outside today's
+  // bounds is not an input error until the field is edited.
   const invalid =
+    hasDraft &&
     inputValue !== "" &&
     (parsed.isErr() ||
       parsed.value.toString() !== inputValue ||

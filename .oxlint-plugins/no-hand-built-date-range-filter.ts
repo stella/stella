@@ -13,8 +13,9 @@ const FORM_OWNERS = [
   "routes/_protected.settings/-components/organization/vat-rate-form.tsx",
 ];
 const FROM_LABEL =
-  /(?:[."'](?:dateFrom|from|auditLogsFrom)["']|>\s*(?:From|Od)\s*<)/u;
-const TO_LABEL = /(?:[."'](?:dateTo|to|auditLogsTo)["']|>\s*(?:To|Do)\s*<)/u;
+  /(?:[."'](?:dateFrom|from|auditLogsFrom)["']|>\s*(?:From|Od)(?:\s+date)?\s*<|["']From date["'])/u;
+const TO_LABEL =
+  /(?:[."'](?:dateTo|to|auditLogsTo)["']|>\s*(?:To|Do)(?:\s+date)?\s*<|["']To date["'])/u;
 
 export default eslintCompatPlugin({
   meta: { name: "no-hand-built-date-range-filter" },

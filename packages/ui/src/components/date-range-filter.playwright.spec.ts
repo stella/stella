@@ -345,3 +345,19 @@ for (const bound of ["From", "To"]) {
     );
   });
 }
+
+test("an applied date outside the bounds shows no error until it is edited", async ({
+  page,
+}) => {
+  const range = page.getByRole("region", { name: "Past range" });
+  await range.getByRole("button", { name: /^To/u }).click();
+  const popup = page.locator('[data-slot="popover-popup"][data-open]');
+  await expect(popup.locator("input")).toHaveValue("2026-03-10");
+  await expect(popup.getByRole("alert")).toHaveCount(0);
+  await expect(popup.locator("input")).not.toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  await popup.locator("input").fill("2026-03-09");
+  await expect(popup.getByRole("alert")).toBeVisible();
+});

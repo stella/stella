@@ -97,3 +97,14 @@ test("keeps other plugin fixtures outside the app ownership boundary", async () 
     }),
   ).toEqual([]);
 });
+
+test("rejects imported pickers labelled From date and To date", async () => {
+  expect(
+    await lintSingleRule(
+      "no-hand-built-date-range-filter",
+      `import { DatePickerPopover } from "@/components/date-picker-popover";
+const Filter = () => <div><DatePickerPopover label="From date" /><DatePickerPopover label="To date" /></div>;`,
+      { sourcePath },
+    ),
+  ).toEqual([2]);
+});
