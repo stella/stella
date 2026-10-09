@@ -11,6 +11,7 @@ type VisualEntry = {
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },
   "control-sizes": { label: "Control sizes", layout: "control-sizes" },

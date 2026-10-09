@@ -27,6 +27,16 @@ describe("registered visual fixtures", () => {
     });
   }
 
+  test("long paste is registered as a standalone chat fixture", () => {
+    expect(v.parse(visualSearchSchema, { visual: "chat-long-paste" })).toEqual({
+      visual: "chat-long-paste",
+    });
+    expect(visualRegistry["chat-long-paste"]).toEqual({
+      label: "Chat long paste",
+      layout: "plain",
+    });
+  });
+
   test("rejects unknown names and inherited object keys", () => {
     for (const visual of ["unknown", "toString", "__proto__", 1, null]) {
       expect(v.safeParse(visualSearchSchema, { visual }).success).toBe(false);

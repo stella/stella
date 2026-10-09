@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "chat-long-paste": {
+    load: async () => {
+      const { ChatLongPastePlayground } =
+        await import("./-components/chat-long-paste-playground");
+      return { default: ChatLongPastePlayground };
+    },
+  },
   autocomplete: {
     load: async () => {
       const { AutocompletePlayground } =
