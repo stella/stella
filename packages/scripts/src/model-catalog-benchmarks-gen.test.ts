@@ -8,6 +8,7 @@ import {
   MODEL_BENCHMARK_RATINGS,
   MODEL_BENCHMARK_PUBLISH_DATE,
 } from "@stll/ai-catalog/benchmarks";
+import { Temporal } from "@stll/time";
 
 import {
   buildBenchmarkSnapshot,
@@ -15,6 +16,7 @@ import {
   parseArenaPage,
   parseArenaRow,
   referencedSourceModelIds,
+  runBenchmarkCheck,
 } from "./model-catalog-benchmarks-gen";
 import type { ArenaRow } from "./model-catalog-benchmarks-gen";
 
@@ -219,22 +221,56 @@ describe("benchmark check availability", () => {
     return { run, stateFile };
   };
 
-  test("persists two inconclusive passes and alerts from the third run onward", async () => {
-    const { run, stateFile } = await setup();
-    for (const count of [1, 2, 3, 4]) {
-      const checked = await run({ status: 503 });
-      expect(checked.exitCode).toBe(count < 3 ? 0 : 1);
-      expect(checked.output).toContain('"status":"inconclusive"');
-      expect(checked.output).toContain('"httpStatus":503');
-      expect(checked.output).toContain('"pageOffset":0');
-      expect(await Bun.file(stateFile).json()).toMatchObject({
-        consecutiveInconclusive: count,
-        lastOutcome: { status: "inconclusive", httpStatus: 503, pageOffset: 0 },
-      });
-      if (count >= 3) {
-        expect(checked.output).toContain(`${count} consecutive scheduled runs`);
-      }
-    }
+  const unavailable = async () => new Response("unavailable", { status: 500 });
+
+  test("alerts only after an inconclusive response lasts more than 7 days", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "benchmark-check-"));
+    directories.push(directory);
+    const stateFile = path.join(directory, "state.json");
+    const outputPath = path.join(directory, "benchmarks.gen.ts");
+    await Bun.write(outputPath, "committed snapshot");
+    const start = Temporal.Instant.from("2026-10-01T00:00:00.000Z");
+
+    const dayOne = await runBenchmarkCheck({
+      fetchArenaPage: unavailable,
+      now: start,
+      outputPath,
+      statePath: stateFile,
+    });
+    expect(dayOne.exitCode).toBe(0);
+    expect(dayOne.messages.join("\n")).toContain('"httpStatus":500');
+    expect(await Bun.file(outputPath).text()).toBe("committed snapshot");
+    expect(await Bun.file(stateFile).json()).toEqual({
+      version: 2,
+      lastFetchedAt: null,
+      inconclusiveSince: start.toString(),
+      lastOutcome: {
+        status: "inconclusive",
+        reason: "Arena page at offset 0 responded 500",
+        httpStatus: 500,
+        pageOffset: 0,
+      },
+    });
+
+    const beforeThreshold = await runBenchmarkCheck({
+      fetchArenaPage: unavailable,
+      now: Temporal.Instant.from("2026-10-07T23:59:00.000Z"),
+      outputPath,
+      statePath: stateFile,
+    });
+    expect(beforeThreshold.exitCode).toBe(0);
+
+    const afterThreshold = await runBenchmarkCheck({
+      fetchArenaPage: unavailable,
+      now: Temporal.Instant.from("2026-10-08T00:01:00.000Z"),
+      outputPath,
+      statePath: stateFile,
+    });
+    expect(afterThreshold.exitCode).toBe(1);
+    expect(afterThreshold.messages.join("\n")).toContain(
+      `outage started ${start.toString()}, last good fetch none`,
+    );
+    expect(afterThreshold.messages.join("\n")).toContain('"httpStatus":500');
   });
 
   test.each([
@@ -264,6 +300,15 @@ describe("benchmark check availability", () => {
     expect(checked.exitCode).toBe(0);
     expect(checked.output).toContain('"httpStatus":502');
     expect(checked.output).toContain('"pageOffset":1');
+  });
+
+  test("runs check mode against a 500 response fixture", async () => {
+    const { run } = await setup();
+    const checked = await run({ status: 500 });
+
+    expect(checked.exitCode).toBe(0);
+    expect(checked.output).toContain("[INCONCLUSIVE]");
+    expect(checked.output).toContain('"httpStatus":500');
   });
 
   const currentPage = () => ({
@@ -299,39 +344,50 @@ describe("benchmark check availability", () => {
       expect(checked.output).toContain('"pageOffset":0');
       expect(checked.output).toContain(fixture.reason);
       expect(await Bun.file(stateFile).json()).toMatchObject({
-        consecutiveInconclusive: 1,
+        version: 2,
+        inconclusiveSince: expect.any(String),
         lastOutcome: { status: "inconclusive", httpStatus: 200, pageOffset: 0 },
       });
     },
   );
 
-  test("a successful fetch resets the counter, including a hard snapshot failure", async () => {
-    const { run, stateFile } = await setup();
-    await run({ status: 503 });
-    await run({ status: 503 });
-    const checked = await run({ status: 200, body: currentPage() });
+  test("a successful fetch clears the outage and records the fetch time", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "benchmark-check-"));
+    directories.push(directory);
+    const stateFile = path.join(directory, "state.json");
+    const outputPath = path.join(directory, "benchmarks.gen.ts");
+    await Bun.write(
+      outputPath,
+      await Bun.file(
+        path.resolve(import.meta.dir, "../../ai-catalog/src/benchmarks.gen.ts"),
+      ).text(),
+    );
+    await runBenchmarkCheck({
+      fetchArenaPage: unavailable,
+      now: Temporal.Instant.from("2026-10-01T00:00:00.000Z"),
+      outputPath,
+      statePath: stateFile,
+    });
+    const fetchedAt = Temporal.Instant.from("2026-10-02T03:04:05.000Z");
+    const checked = await runBenchmarkCheck({
+      fetchArenaPage: async () => Response.json(currentPage()),
+      now: fetchedAt,
+      outputPath,
+      statePath: stateFile,
+    });
+
     expect(checked.exitCode).toBe(0);
     expect(await Bun.file(stateFile).json()).toMatchObject({
-      consecutiveInconclusive: 0,
+      version: 2,
+      lastFetchedAt: fetchedAt.toString(),
+      inconclusiveSince: null,
+      lastOutcome: { status: "fetched" },
     });
-    await run({ status: 503 });
-    const missing = await run({
-      status: 200,
-      body: { num_rows_total: 1, rows: [upstreamRow()] },
-    });
-    expect(missing.exitCode).toBe(1);
-    expect(missing.output).toContain(
-      "Referenced source ids are not ranked upstream",
-    );
-    expect(await Bun.file(stateFile).json()).toMatchObject({
-      consecutiveInconclusive: 0,
-    });
-    expect((await run({ status: 503 })).exitCode).toBe(0);
   });
 
   test("invalid persisted state fails rather than resetting the counter", async () => {
     const { run, stateFile } = await setup();
-    await Bun.write(stateFile, '{"consecutiveInconclusive":-1}');
+    await Bun.write(stateFile, '{"consecutiveInconclusive":1}');
     const checked = await run({ status: 503 });
     expect(checked.exitCode).toBe(1);
     expect(checked.output).toContain("Invalid benchmark check state");
@@ -382,7 +438,9 @@ describe("benchmark check availability", () => {
     expect(checked.exitCode).toBe(1);
     expect(checked.output).toContain("benchmarks.gen.ts is stale");
     expect(await Bun.file(stateFile).json()).toMatchObject({
-      consecutiveInconclusive: 0,
+      version: 2,
+      inconclusiveSince: null,
+      lastOutcome: { status: "fetched" },
     });
   });
 });
