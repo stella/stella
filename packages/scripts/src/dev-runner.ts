@@ -2054,8 +2054,10 @@ export const buildPersistentSteps = ({
   // Uploads only become searchable, extractable, and readable by AI once the
   // document-processing worker drains their runs; without it every upload
   // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position.
-  if (modeIncludesApi(mode)) {
+  // readiness-checked steps: checks pair with steps by position. A seeded
+  // stack disables every background worker, so the process would exit at
+  // once and the runner would treat that as a crash; it is not started.
+  if (modeIncludesApi(mode) && !seeded) {
     primary.push({
       cmd: [
         resolveCommandPath("bun"),
