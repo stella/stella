@@ -10,16 +10,19 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_CLUSTER_CONFIG,
   CORPUS_INDEX_COMMIT,
-  CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   type CorpusIndexDeleteSettlementRead,
   type CorpusIndexSettlementSplit,
+  corpusIndexCommittedIngestTimeoutMs,
   corpusIndexScoredSearchRequest,
   getCorpusIndexClient,
   parseCorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
-import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
+  DECISION_TIMESTAMP_FIELD,
+} from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexConfigFromManifest,
   CORPUS_INDEX_MANIFESTS,
@@ -38,6 +41,7 @@ import {
   runObservedAction,
   type ActionCostObservation,
 } from "@/api/lib/usage/action-costs/context";
+import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -194,11 +198,12 @@ test("q09 mutations cannot leak onto its read endpoint", async () => {
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "http://localhost:7292",
   });
 
-  const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
-    "case_law_v5_cs_sk",
-    '{"document_id":"a"}',
-    "unobserved",
-  );
+  const result = await getCorpusIndexClient("q09").ingestCommittedBatch({
+    indexId: "case_law_v5_cs_sk",
+    ndjson: '{"document_id":"a"}',
+    observer: "unobserved",
+    commitTimeoutSecs: CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+  });
 
   expect(result.isOk()).toBe(true);
   expect(requests.at(0)?.host).toBe("localhost:7291");
@@ -597,6 +602,7 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
     order,
     parsedCursor: null,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
@@ -612,6 +618,7 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
         lexicalScore: candidate.score,
         citationAuthority: 0,
       })),
+      revisionById: testRevisionsFor(candidates),
     }),
   });
 };
@@ -1702,14 +1709,30 @@ test("ingest sends the commit mode the caller asked for", async () => {
   );
 });
 
-test("the ingest budget outlasts the engine's commit wait", () => {
+test("the ingest budget outlasts every generation's commit wait", () => {
   // Under `wait_for` the engine holds the response for up to its own
   // commit timeout, and only starts counting once the NDJSON upload is
   // done. A client that gives up first turns a commit that did happen
   // into a batch the caller retries — and, for the steady-state path,
   // into a row it never marks indexed.
-  expect(CORPUS_INDEX_INGEST_TIMEOUT_MS).toBeGreaterThan(
-    CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS,
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const commitWaitMs =
+      manifest.engine.indexConfig.indexing_settings.commit_timeout_secs * 1000;
+    expect(
+      corpusIndexCommittedIngestTimeoutMs(
+        manifest.engine.indexConfig.indexing_settings.commit_timeout_secs,
+      ),
+    ).toBeGreaterThan(commitWaitMs);
+  }
+  // The budget that names no commit window covers the window the generations
+  // through v7 were created with.
+  expect(CORPUS_INDEX_INGEST_TIMEOUT_MS).toBe(
+    corpusIndexCommittedIngestTimeoutMs(
+      CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+    ),
+  );
+  expect(() => corpusIndexCommittedIngestTimeoutMs(0)).toThrow(
+    "Invalid corpus index commit timeout",
   );
 });
 
@@ -1737,11 +1760,12 @@ test("final-generation ingest requires the exact committed V2 receipt", async ()
     num_rejected_docs: 0,
   };
 
-  const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
-    "case_law_v5_cs_sk",
-    '{"document_id":"a"}\n{"document_id":"b"}',
-    "unobserved",
-  );
+  const result = await getCorpusIndexClient("q09").ingestCommittedBatch({
+    indexId: "case_law_v5_cs_sk",
+    ndjson: '{"document_id":"a"}\n{"document_id":"b"}',
+    observer: "unobserved",
+    commitTimeoutSecs: CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+  });
 
   expect(result.isOk()).toBe(true);
   expect(requests.at(0)?.search).toBe("?commit=wait_for");
@@ -1758,11 +1782,13 @@ test("the two final-generation ingests differ only in their commit mode", async 
 
   expect(
     (
-      await client.ingestCommittedBatch(
-        "case_law_v5_cs_sk",
+      await client.ingestCommittedBatch({
+        indexId: "case_law_v5_cs_sk",
         ndjson,
-        "unobserved",
-      )
+        observer: "unobserved",
+        commitTimeoutSecs:
+          CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+      })
     ).isOk(),
   ).toBe(true);
   expect(
@@ -1806,11 +1832,12 @@ test("an ingest receipt with zero ingested and rejected documents is definite", 
     num_rejected_docs: 2,
   };
 
-  const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
-    "case_law_v5_cs_sk",
-    '{"document_id":"a"}\n{"document_id":"b"}',
-    "unobserved",
-  );
+  const result = await getCorpusIndexClient("q09").ingestCommittedBatch({
+    indexId: "case_law_v5_cs_sk",
+    ndjson: '{"document_id":"a"}\n{"document_id":"b"}',
+    observer: "unobserved",
+    commitTimeoutSecs: CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+  });
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -1833,11 +1860,12 @@ test("final-generation ingest rejects missing or partial V2 counters", async () 
     },
   ]) {
     responseBody = receipt;
-    const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
-      "case_law_v5_cs_sk",
-      '{"document_id":"a"}\n{"document_id":"b"}',
-      "unobserved",
-    );
+    const result = await getCorpusIndexClient("q09").ingestCommittedBatch({
+      indexId: "case_law_v5_cs_sk",
+      ndjson: '{"document_id":"a"}\n{"document_id":"b"}',
+      observer: "unobserved",
+      commitTimeoutSecs: CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+    });
     expect(result.isErr()).toBe(true);
   }
 });

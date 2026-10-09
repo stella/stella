@@ -10,7 +10,7 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
-  CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
+  CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { isRecord } from "@/api/lib/type-guards";
@@ -91,25 +91,35 @@ const SEARCH_TIMEOUT_MS = 30_000;
 const SEARCH_RESPONSE_FORMAT = "json";
 
 /**
- * The engine's own commit timeout for `commit=wait_for`: how long it
- * will hold the response open waiting for the split to be published.
- *
- * Stated here because the client budget has to outlast it — a client
- * that gives up first turns a commit that did happen into a batch the
- * caller retries. This is the engine's default; the index config below
- * does not override it, so raising it engine-side means raising the
- * budget with it.
+ * Upload allowance in front of the engine's commit wait. Under `wait_for` the
+ * engine starts that wait only once the NDJSON upload has finished.
  */
-export const CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS =
-  CORPUS_INDEX_COMMIT_TIMEOUT_SECS * 1000;
+const CORPUS_INDEX_INGEST_UPLOAD_BUDGET_MS = 60_000;
 
 /**
- * Whole-request budget for an ingest. Must exceed the commit wait above,
- * because under `wait_for` the engine only starts that wait once the
- * NDJSON upload has finished. Pinned against the commit wait in
- * `corpus-index-client.test.ts`.
+ * Whole-request budget for a `wait_for` ingest into an index whose
+ * `commit_timeout_secs` is `commitTimeoutSecs`: the engine holds the response
+ * until its commit timer publishes the split. A client that gives up first
+ * turns a commit that did happen into a batch the caller retries.
  */
-export const CORPUS_INDEX_INGEST_TIMEOUT_MS = 120_000;
+export const corpusIndexCommittedIngestTimeoutMs = (
+  commitTimeoutSecs: number,
+): number => {
+  if (!Number.isSafeInteger(commitTimeoutSecs) || commitTimeoutSecs <= 0) {
+    return panic(`Invalid corpus index commit timeout: ${commitTimeoutSecs}`);
+  }
+  return commitTimeoutSecs * 1000 + CORPUS_INDEX_INGEST_UPLOAD_BUDGET_MS;
+};
+
+/**
+ * Whole-request budget for an ingest that does not name its index's commit
+ * window: a queued (`auto`) ingest, and the compatible `ingestBatch`, sized
+ * for the commit window the generations through v7 were created with.
+ */
+export const CORPUS_INDEX_INGEST_TIMEOUT_MS =
+  corpusIndexCommittedIngestTimeoutMs(
+    CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+  );
 const ADMIN_TIMEOUT_MS = 30_000;
 /**
  * Tighter than search: aggregations serve page chrome (facet counts), so a
@@ -158,6 +168,14 @@ export const CORPUS_INDEX_COMMIT = {
 
 type CorpusIndexCommitMode =
   (typeof CORPUS_INDEX_COMMIT)[keyof typeof CORPUS_INDEX_COMMIT];
+
+type CorpusIndexCommittedIngestInput = {
+  indexId: string;
+  ndjson: string;
+  observer: RegistryRequestObservation;
+  /** The target index's `indexing_settings.commit_timeout_secs`. */
+  commitTimeoutSecs: number;
+};
 
 type CorpusIndexSearchInput = {
   observer: RegistryRequestObservation;
@@ -456,11 +474,13 @@ export type CorpusIndexClient = {
     commit: CorpusIndexCommitMode,
     observer: RegistryRequestObservation,
   ) => Promise<Result<void, CorpusIndexError>>;
-  /** Final-generation append: durable commit plus an exact V2 receipt. */
+  /**
+   * Final-generation append: durable commit plus an exact V2 receipt. The
+   * request budget follows the index's own commit window, which the engine
+   * holds the response open for.
+   */
   ingestCommittedBatch: (
-    indexId: string,
-    ndjson: string,
-    observer: RegistryRequestObservation,
+    input: CorpusIndexCommittedIngestInput,
   ) => Promise<Result<void, CorpusIndexError>>;
   /**
    * Final-generation append that returns on acceptance instead of on the
@@ -980,6 +1000,7 @@ type IngestBatchOptions = {
   ndjson: string;
   commit: CorpusIndexCommitMode;
   receiptMode: IngestReceiptMode;
+  timeoutMs: number;
 };
 
 const ingestBatch = async ({
@@ -989,6 +1010,7 @@ const ingestBatch = async ({
   commit,
   receiptMode,
   observer,
+  timeoutMs,
 }: IngestBatchOptions): Promise<Result<void, CorpusIndexError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -1004,7 +1026,7 @@ const ingestBatch = async ({
           headers: { "content-type": "application/x-ndjson" },
           body: ndjson,
         },
-        timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
+        timeoutMs,
       });
       if (!isRecord(response)) {
         throw new CorpusIndexError({
@@ -1309,9 +1331,15 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       ndjson,
       commit,
       receiptMode: "compatible",
+      timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
     }),
 
-  ingestCommittedBatch: async (indexId, ndjson, observer) =>
+  ingestCommittedBatch: async ({
+    indexId,
+    ndjson,
+    observer,
+    commitTimeoutSecs,
+  }) =>
     await ingestBatch({
       observer,
       baseUrl: mutationBaseUrl(cluster),
@@ -1319,6 +1347,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       ndjson,
       commit: CORPUS_INDEX_COMMIT.waitFor,
       receiptMode: "exact-v2",
+      timeoutMs: corpusIndexCommittedIngestTimeoutMs(commitTimeoutSecs),
     }),
 
   ingestQueuedBatch: async (indexId, ndjson, observer) =>
@@ -1329,6 +1358,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       ndjson,
       commit: CORPUS_INDEX_COMMIT.auto,
       receiptMode: "exact-v2",
+      timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
     }),
 
   search: async ({

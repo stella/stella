@@ -22,6 +22,10 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -154,6 +158,7 @@ const readPage = async (
     order,
     parsedCursor,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -163,6 +168,7 @@ const readPage = async (
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (candidates) => ({
       context: null,
+      revisionById: testRevisionsFor(candidates),
       groups: recurringDocumentTokens(candidates),
       ranked: candidates
         .filter(
@@ -331,12 +337,14 @@ describe("a page settles within one scan round", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => stableBlendUpperBound(score, weight),
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(candidates),
         ranked: blendStableCitationAuthority({
           candidates: candidates.filter(
@@ -458,12 +466,14 @@ describe("the scan is bounded by engine round trips", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score + 1,
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(candidates),
         ranked: candidates
           .filter(
@@ -621,6 +631,7 @@ describe("a passage flood does not strand the reader", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -628,6 +639,7 @@ describe("a passage flood does not strand the reader", () => {
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(candidates),
         ranked: blendStableCitationAuthority({
           candidates: candidates.filter(
@@ -723,12 +735,14 @@ describe("residual filters preserve progress past empty scan windows", () => {
       order,
       parsedCursor,
       snippetFields: [],
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(
           candidates.filter((candidate) =>
             candidate.id.startsWith("zz-match-"),
@@ -853,12 +867,14 @@ describe("split legislation stays one hit across cursor pages", () => {
         order: RELEVANCE_ORDER,
         parsedCursor,
         snippetFields: [],
+        projectionRevisionField: "projection_revision",
         extractId: (hit: CorpusIndexHit) =>
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,
         unseenScoreUpperBound: () => 0,
         rankCandidates: async (candidates) => ({
           context: null,
+          revisionById: testRevisionsFor(candidates),
           groups: recurringDocumentTokens(candidates),
           ranked: candidates
             .filter(
@@ -916,6 +932,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -933,6 +950,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
         const recurring = recurringFixtureIdentities((id) => groupOf(id) ?? id);
         return {
           context: null,
+          revisionById: testRevisionsFor(candidates),
           ranked: representatives.filter(
             (hit) =>
               !parsedCursor?.excludedGroups?.includes(
@@ -1066,6 +1084,9 @@ describe("ranker-folded candidates stay folded across pages", () => {
 describe("only the passages a page emits are highlighted", () => {
   const snippetRequests = (): Record<string, unknown>[] =>
     requestBodies.filter((body) => body["snippet_fields"] !== undefined);
+  /** A page clause, narrowed to the revision the ranker reported as applied. */
+  const current = (clause: string, id: string): string =>
+    `(${clause} AND projection_revision:"${testRevisionOf(id)}")`;
 
   test("the scan asks for no highlighting and the page round asks for it once", async () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
@@ -1080,11 +1101,11 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.scan.highlightRounds).toBe(1);
     const snippetRequest = snippetRequests().at(0);
     expect(snippetRequest?.["snippet_fields"]).toBe("text");
-    // One passage per emitted hit, with room for the physical copies a
-    // passage mid-refresh has: bounded by the page, not by the scan.
+    // One clause per emitted hit, with room for the rows one clause can
+    // match: bounded by the page, not by the scan.
     expect(snippetRequest?.["max_hits"]).toBe(3 * HIGHLIGHT_COPIES_PER_PASSAGE);
     expect(snippetRequest?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-0:0" OR chunk_id:"doc-1:0" OR chunk_id:"doc-2:0")',
+      `(text:promlčení) AND (${current('chunk_id:"doc-0:0"', "doc-0")} OR ${current('chunk_id:"doc-1:0"', "doc-1")} OR ${current('chunk_id:"doc-2:0"', "doc-2")})`,
     );
   });
 
@@ -1128,7 +1149,7 @@ describe("only the passages a page emits are highlighted", () => {
     expect(snippetRequests()).toHaveLength(1);
     expect(second.scan.highlightRounds).toBe(1);
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-3:0" OR chunk_id:"doc-4:0" OR chunk_id:"doc-5:0")',
+      `(text:promlčení) AND (${current('chunk_id:"doc-3:0"', "doc-3")} OR ${current('chunk_id:"doc-4:0"', "doc-4")} OR ${current('chunk_id:"doc-5:0"', "doc-5")})`,
     );
     for (const hit of second.pageRanked) {
       expect(second.snippetById.get(hit.id)).toBe(`snip ${hit.id}`);
@@ -1146,7 +1167,7 @@ describe("only the passages a page emits are highlighted", () => {
     const page = await readPage();
 
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (document_id:"doc-a" OR document_id:"doc-b")',
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")} OR ${current('document_id:"doc-b"', "doc-b")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
   });
@@ -1168,7 +1189,7 @@ describe("only the passages a page emits are highlighted", () => {
     // doc-a matched three passages; only its best is worth highlighting, and
     // it is the same passage the anchor deep-links to.
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-b:7" OR chunk_id:"doc-a:2")',
+      `(text:promlčení) AND (${current('chunk_id:"doc-b:7"', "doc-b")} OR ${current('chunk_id:"doc-a:2"', "doc-a")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("passage doc-a:2");
   });
@@ -1184,49 +1205,100 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.scan.highlightRounds).toBe(0);
   });
 
-  test("a passage the index holds twice does not cost another hit its snippet", async () => {
-    // Mid-refresh: ingestion has appended doc-a's new copy and the engine has
-    // not applied the delete yet, so one clause matches two rows.
+  test("a superseded copy of a passage never supplies its snippet or anchor", async () => {
+    // Mid-refresh: ingestion has appended doc-a's new revision and the engine
+    // has not applied the delete of the old one, so the scan reaches both.
     const scanned = [
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-b", chunk_id: "doc-b:0" },
-      { document_id: "doc-c", chunk_id: "doc-c:0" },
+      { document_id: "doc-a", chunk_id: "doc-a:0", anchor_id: "a-old" },
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-current" },
+      { document_id: "doc-c", chunk_id: "doc-c:0", anchor_id: "c-current" },
     ];
     responseBody = {
       num_hits: scanned.length,
       hits: scanned,
       snippets: scanned.map(() => ({ text: ["scanned"] })),
     };
-    const highlighted = [
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-b", chunk_id: "doc-b:0" },
-      { document_id: "doc-c", chunk_id: "doc-c:0" },
+    const supersededRevision = "0b6f3a52-1d7e-4f0a-9c2b-5e8d7a6f4c31";
+    // Every physical copy the index holds, best first: the superseded copy of
+    // doc-a outranks its current one.
+    const copies = [
+      {
+        hit: { document_id: "doc-a", chunk_id: "doc-a:0", anchor_id: "a-old" },
+        revision: supersededRevision,
+        text: "doc-a superseded",
+      },
+      {
+        hit: { document_id: "doc-a", chunk_id: "doc-a:0", anchor_id: "a-new" },
+        revision: testRevisionOf("doc-a"),
+        text: "doc-a current",
+      },
+      {
+        hit: {
+          document_id: "doc-b",
+          chunk_id: "doc-b:0",
+          anchor_id: "b-current",
+        },
+        revision: testRevisionOf("doc-b"),
+        text: "doc-b current",
+      },
+      {
+        hit: {
+          document_id: "doc-c",
+          chunk_id: "doc-c:0",
+          anchor_id: "c-current",
+        },
+        revision: testRevisionOf("doc-c"),
+        text: "doc-c current",
+      },
     ];
-    snippetResponseBody = {
-      num_hits: highlighted.length,
-      hits: highlighted,
-      snippets: [
-        { text: ["doc-a current"] },
-        { text: ["doc-a superseded"] },
-        { text: ["doc-b"] },
-        { text: ["doc-c"] },
-      ],
-    };
+    const scanStub = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const body: Record<string, unknown> =
+          typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        if (body["snippet_fields"] === undefined) {
+          return await scanStub(input, init);
+        }
+        requestBodies.push(body);
+        // The engine answers a revision-narrowed clause with that copy only.
+        const query = String(body["query"]);
+        const answered = copies.filter(({ hit, revision }) =>
+          query.includes(
+            `(chunk_id:"${hit.chunk_id}" AND projection_revision:"${revision}")`,
+          ),
+        );
+        return new Response(
+          JSON.stringify({
+            num_hits: answered.length,
+            hits: answered.map(({ hit }) => hit),
+            snippets: answered.map(({ text }) => ({ text: [text] })),
+          }),
+          { status: 200 },
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
 
     const page = await readPage();
 
-    // Room for the overlap, so the duplicate does not push doc-c out of the
-    // answer, and the copy that ranked first is the one the reader sees.
-    expect(snippetRequests().at(0)?.["max_hits"]).toBe(
-      3 * HIGHLIGHT_COPIES_PER_PASSAGE,
+    // One clause per document, each narrowed to its applied revision.
+    expect(snippetRequests().at(0)?.["query"]).toBe(
+      `(text:promlčení) AND (${["doc-a", "doc-b", "doc-c"]
+        .map(
+          (id) =>
+            `(chunk_id:"${id}:0" AND projection_revision:"${testRevisionOf(id)}")`,
+        )
+        .join(" OR ")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("doc-a current");
-    expect(page.snippetById.get("doc-b")).toBe("doc-b");
-    expect(page.snippetById.get("doc-c")).toBe("doc-c");
-    for (const hit of page.pageRanked) {
-      expect(page.snippetById.get(hit.id)).toBeDefined();
-    }
+    expect(page.anchorIdById.get("doc-a")).toBe("a-new");
+    expect(page.snippetById.get("doc-b")).toBe("doc-b current");
+    expect(page.snippetById.get("doc-c")).toBe("doc-c current");
+    expect([...page.snippetById.values()]).not.toContain("doc-a superseded");
+    expect([...page.anchorIdById.values()]).not.toContain("a-old");
   });
 });
 
@@ -1435,6 +1507,7 @@ describe("folded acts stay folded across capped windows", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -1469,6 +1542,7 @@ describe("folded acts stay folded across capped windows", () => {
         );
         return {
           context: null,
+          revisionById: testRevisionsFor(candidates),
           ranked: collapsed.ranked,
           groups: collapsed.workTokens.filter(
             (token) =>

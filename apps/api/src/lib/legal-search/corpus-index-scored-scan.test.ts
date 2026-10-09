@@ -21,6 +21,7 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
 
 /**
  * The candidate scan through both engine transports.
@@ -323,6 +324,7 @@ const readFixturePage = async (
     parsedCursor,
     scanTransport,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -345,6 +347,7 @@ const readFixturePage = async (
         authorityById: fixture.authorityById,
         signals: [courtTierSignal(fixture.tierById)],
       }),
+      revisionById: testRevisionsFor(candidates),
     }),
   });
 };
@@ -370,7 +373,6 @@ const observable = (page: PageRead) => {
     pageRanked: page.pageRanked,
     nextCursor: page.nextCursor,
     passageCountById: digest(page.passageCountById),
-    anchorIdById: digest(page.anchorIdById),
     snippetById: digest(page.snippetById),
     scan,
     scanRequests: scanRequests.map(({ from, size }) => ({ from, size })),
@@ -413,7 +415,7 @@ const readGolden = async (): Promise<unknown> =>
 describe("the candidate scan pages exactly as the recorded ranking does", () => {
   /**
    * `golden.json` was recorded from the scan before it could read scores:
-   * pages, cursors, per-document breadth, anchors and snippets, the scan's own
+   * pages, cursors, per-document breadth and snippets, the scan's own
    * report, and the exact rounds it asked the engine for. Both transports must
    * reproduce it, given the engine returns the same order through both.
    */
