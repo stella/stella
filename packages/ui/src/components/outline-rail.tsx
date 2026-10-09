@@ -96,6 +96,8 @@ export type OutlineRailProps = {
 type TreeNode = { item: OutlineItem; index: number; children: TreeNode[] };
 
 export const OUTLINE_CONTROL_MIN_SIZE = 32;
+const OUTLINE_CONTROL_TARGET_CLASS =
+  "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11";
 const RAIL_WIDTH = OUTLINE_CONTROL_MIN_SIZE;
 const PANEL_GAP = 6;
 const TICK_BASE_WIDTH = 6;
@@ -528,7 +530,10 @@ export const OutlineRail = ({
             <button
               aria-expanded={!isCollapsed}
               aria-label={isCollapsed ? "Expand" : "Collapse"}
-              className="text-muted-foreground hover:text-foreground flex shrink-0 items-center justify-center"
+              className={cn(
+                "text-muted-foreground hover:text-foreground flex shrink-0 items-center justify-center",
+                OUTLINE_CONTROL_TARGET_CLASS,
+              )}
               style={{
                 minWidth: OUTLINE_CONTROL_MIN_SIZE,
                 minHeight: OUTLINE_CONTROL_MIN_SIZE,
@@ -646,7 +651,11 @@ export const OutlineRail = ({
         <button
           aria-controls={panelId}
           aria-expanded={panelOpen}
-          className="focus-visible:ring-ring bg-popover text-popover-foreground flex shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
+          className={cn(
+            "focus-visible:ring-ring bg-popover text-popover-foreground flex shrink-0 items-center justify-center self-start rounded-md focus-visible:ring-2 focus-visible:outline-none",
+            "pointer-coarse:my-1.5",
+            OUTLINE_CONTROL_TARGET_CLASS,
+          )}
           aria-label={ariaLabel}
           style={{
             minWidth: OUTLINE_CONTROL_MIN_SIZE,
@@ -663,7 +672,7 @@ export const OutlineRail = ({
           }}
           type="button"
         >
-          <PanelLeftIcon aria-hidden className="size-4" />
+          <PanelLeftIcon aria-hidden className="size-4 rtl:-scale-x-100" />
         </button>
       )}
       {presentation !== "panel" && (
@@ -833,7 +842,7 @@ export const OutlineRail = ({
 };
 
 const OUTLINE_PRESENTATION_CLASS = {
-  popover: "absolute end-0 z-20",
+  popover: "absolute end-0 z-20 flex flex-col pointer-coarse:min-w-11",
   panel: "relative flex min-h-0 w-full flex-1 flex-col",
   rail: "relative flex min-h-0 w-full flex-1 flex-col",
 } as const satisfies Record<

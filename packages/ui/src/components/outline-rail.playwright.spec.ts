@@ -185,7 +185,7 @@ for (const presentation of ["rail", "popover"] as const) {
 
     await page.getByTestId("resize-composer").click();
     await expect
-      .poll(() => readPublishedInset(page))
+      .poll(async () => readPublishedInset(page))
       .toBeGreaterThan(initialInset);
     await expect
       .poll(async () => {
@@ -217,4 +217,78 @@ test("popover trigger has a usable target and does not cover any tick", async ({
       triggerBox.y + triggerBox.height > tickBox.y;
     expect(overlaps).toBe(false);
   }
+});
+
+test.describe("coarse-pointer controls", () => {
+  test.use({ hasTouch: true });
+
+  test("disclosure and tree controls keep 32px visuals with 44px touch targets", async ({
+    page,
+  }) => {
+    await openFixture(page, "popover");
+    expect(
+      await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
+    ).toBe(true);
+    const trigger = page.getByRole("button", {
+      name: "Document outline",
+      exact: true,
+    });
+    const triggerBox = await readBox(trigger);
+    expect(triggerBox.width).toBe(OUTLINE_CONTROL_MIN_SIZE);
+    expect(triggerBox.height).toBe(OUTLINE_CONTROL_MIN_SIZE);
+    const assertTouchTarget = async (control: Locator) => {
+      const target = await control.evaluate((element) => {
+        const style = getComputedStyle(element, "::after");
+        return {
+          width: Number.parseFloat(style.width),
+          height: Number.parseFloat(style.height),
+        };
+      });
+      expect(target.width).toBeGreaterThanOrEqual(44);
+      expect(target.height).toBeGreaterThanOrEqual(44);
+    };
+    await assertTouchTarget(trigger);
+    // Four pixels beyond the painted edge must still operate the disclosure.
+    await page.mouse.click(
+      triggerBox.x + triggerBox.width + 4,
+      triggerBox.y + triggerBox.height / 2,
+    );
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const collapse = page
+      .getByRole("button", { name: "Collapse", exact: true })
+      .first();
+    await assertTouchTarget(collapse);
+    await collapse.click();
+    const expand = page
+      .getByRole("button", { name: "Expand", exact: true })
+      .first();
+    await assertTouchTarget(expand);
+    await expand.click();
+    await expect(collapse).toBeVisible();
+    const lastTickBox = await readBox(
+      page.locator("[data-outline-ticks] button").last(),
+    );
+    const composerBox = await readBox(page.getByTestId("composer"));
+    expect(lastTickBox.y + lastTickBox.height).toBeLessThanOrEqual(
+      composerBox.y,
+    );
+  });
+});
+
+test("disclosure icon mirrors with RTL chrome", async ({ page }) => {
+  await openFixture(page, "popover");
+  const icon = page
+    .getByRole("button", { name: "Document outline", exact: true })
+    .locator("svg");
+  expect(
+    await icon.evaluate((element) => getComputedStyle(element).scale),
+  ).toBe("none");
+  await page.evaluate(() => {
+    document.documentElement.dir = "rtl";
+  });
+  await expect
+    .poll(async () =>
+      icon.evaluate((element) => getComputedStyle(element).scale),
+    )
+    .toBe("-1 1");
 });

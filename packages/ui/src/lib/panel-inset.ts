@@ -10,11 +10,11 @@ export const DOCUMENT_PANEL_SAFE_BOTTOM =
  */
 export const publishDocumentPanelInset = (element: HTMLDivElement | null) => {
   if (!element) {
-    return;
+    return undefined;
   }
   const host = element.offsetParent;
   if (!(host instanceof HTMLElement)) {
-    return;
+    return undefined;
   }
   const previous = host.style.getPropertyValue(DOCUMENT_PANEL_BOTTOM_INSET);
   const measure = () => {

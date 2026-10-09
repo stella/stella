@@ -120,7 +120,7 @@ test("numeric zoom transitions to fit-width and refits when the editor viewport 
     await act(async () => {
       mounted.rerender(<Harness initialZoom="fit-width" />);
     });
-    expect(editorRef.current).toBe(editor);
+    expect(editorRef.current?.getEditorRef()?.getScrollRoot()).toBe(scrollRoot);
     const fitObservers = await waitFor(() => {
       const observers = [...ResizeObserverProbe.instances].filter((instance) =>
         instance.observed.has(scrollRoot),

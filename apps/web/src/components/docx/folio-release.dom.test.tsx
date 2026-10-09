@@ -12,6 +12,7 @@ const { IntlProvider } = await import("use-intl");
 const { createEditorRefBridge, executeFolioToolCall, FOLIO_AGENT_TOOL_NAMES } =
   await import("@stll/folio-agents");
 const { createEmptyDocument } = await import("@stll/folio-react");
+const { createDocx, parseDocx } = await import("@stll/folio-core/server");
 const { DocxEditor } = await import("./app-docx-editor");
 const { useDocxComments } = await import("./use-docx-comments");
 const { releaseUserStorage } =
@@ -29,12 +30,18 @@ afterAll(async () => {
 
 test("published editor echoes agent comments and saves applied operations for reopen", async () => {
   const editorRef = React.createRef<DocxEditorRef>();
-  const document = createEmptyDocument({ initialText: "Seed paragraph." });
+  const document = await parseDocx(
+    await createDocx(createEmptyDocument({ initialText: "Seed paragraph." })),
+  );
   const hostRef = React.createRef<{
     getComments: () => DocxComments;
     setComments: (comments: DocxComments) => void;
   }>();
   const onChange = () => {};
+  const editorErrors: Error[] = [];
+  const onError = (error: Error) => {
+    editorErrors.push(error);
+  };
   const getHostedComments = () => {
     const host = hostRef.current;
     if (!host) {
@@ -67,7 +74,10 @@ test("published editor echoes agent comments and saves applied operations for re
           comments={docxComments}
           document={document}
           onCommentsChange={handleEditorDocxCommentsChange}
+          onError={onError}
           ref={editorRef}
+          showOutline={false}
+          showToolbar={false}
         />
       </IntlProvider>
     );
@@ -75,16 +85,21 @@ test("published editor echoes agent comments and saves applied operations for re
 
   render(<Harness />);
   await waitFor(() => expect(editorRef.current).not.toBeNull());
-  const editor = editorRef.current;
-  if (!editor) {
-    throw new Error("Published editor ref did not mount");
-  }
+  const getEditor = () => {
+    const editor = editorRef.current;
+    if (!editor) {
+      throw new Error("Published editor ref did not mount");
+    }
+    return editor;
+  };
   await act(async () => {
-    editor.ensureEditorView({ focus: false });
+    getEditor().ensureEditorView({ focus: false });
   });
-  await waitFor(() => expect(editor.createAIEditSnapshot()).not.toBeNull());
+  await waitFor(() =>
+    expect(getEditor().createAIEditSnapshot()).not.toBeNull(),
+  );
 
-  const snapshot = editor.createAIEditSnapshot();
+  const snapshot = getEditor().createAIEditSnapshot();
   if (!snapshot) {
     throw new Error("Published editor snapshot is unavailable");
   }
@@ -94,7 +109,7 @@ test("published editor echoes agent comments and saves applied operations for re
   }
 
   const bridge = createEditorRefBridge({
-    ref: editor,
+    ref: getEditor(),
     author: "Test author",
     getComments: getHostedComments,
     setComments: (nextComments) => {
@@ -149,7 +164,7 @@ test("published editor echoes agent comments and saves applied operations for re
     ).toBe(true),
   );
 
-  const operationSnapshot = editor.createAIEditSnapshot();
+  const operationSnapshot = getEditor().createAIEditSnapshot();
   if (!operationSnapshot) {
     throw new Error("Operation snapshot is unavailable");
   }
@@ -157,37 +172,40 @@ test("published editor echoes agent comments and saves applied operations for re
   if (!operationBlock) {
     throw new Error("Operation target block is unavailable");
   }
-  const applied = editor.applyDocumentOperations({
-    snapshot: operationSnapshot,
-    batch: {
-      version: 1,
-      mode: "direct",
-      operations: [
-        {
-          id: "release-smoke-replace",
-          type: "replaceBlock",
-          blockId: operationBlock.id,
-          text: "Published operation saved",
-        },
-      ],
-    },
-  });
+  const applied = await act(async () =>
+    getEditor().applyDocumentOperations({
+      snapshot: operationSnapshot,
+      batch: {
+        version: 1,
+        mode: "direct",
+        operations: [
+          {
+            id: "release-smoke-replace",
+            type: "replaceBlock",
+            blockId: operationBlock.id,
+            text: "Published operation saved",
+          },
+        ],
+      },
+    }),
+  );
   expect(applied.status).toBe("committed");
   expect(applied.undoHandle).not.toBeNull();
-  const savedBuffer = await editor.save();
+  const savedBuffer = await act(async () => getEditor().save());
+  expect(editorErrors).toEqual([]);
   expect(savedBuffer).toBeInstanceOf(ArrayBuffer);
   if (!savedBuffer) {
     throw new Error("Published editor did not save a buffer");
   }
 
-  await act(async () => editor.loadDocumentBuffer(savedBuffer));
+  await act(async () => getEditor().loadDocumentBuffer(savedBuffer));
   await waitFor(() =>
-    expect(editor.createAIEditSnapshot()?.blocks.at(0)?.text).toBe(
+    expect(getEditor().createAIEditSnapshot()?.blocks.at(0)?.text).toBe(
       "Published operation saved",
     ),
   );
 
-  const undoSnapshot = editor.createAIEditSnapshot();
+  const undoSnapshot = getEditor().createAIEditSnapshot();
   if (!undoSnapshot) {
     throw new Error("Reopened editor snapshot is unavailable");
   }
@@ -195,21 +213,23 @@ test("published editor echoes agent comments and saves applied operations for re
   if (!undoBlock) {
     throw new Error("Reopened operation target is unavailable");
   }
-  const secondApply = editor.applyDocumentOperations({
-    snapshot: undoSnapshot,
-    batch: {
-      version: 1,
-      mode: "direct",
-      operations: [
-        {
-          id: "release-smoke-undo",
-          type: "replaceBlock",
-          blockId: undoBlock.id,
-          text: "Temporary replacement",
-        },
-      ],
-    },
-  });
+  const secondApply = await act(async () =>
+    getEditor().applyDocumentOperations({
+      snapshot: undoSnapshot,
+      batch: {
+        version: 1,
+        mode: "direct",
+        operations: [
+          {
+            id: "release-smoke-undo",
+            type: "replaceBlock",
+            blockId: undoBlock.id,
+            text: "Temporary replacement",
+          },
+        ],
+      },
+    }),
+  );
   expect(secondApply.status).toBe("committed");
   const undoHandle = secondApply.undoHandle;
   if (!undoHandle) {
@@ -217,11 +237,11 @@ test("published editor echoes agent comments and saves applied operations for re
   }
   let undoStatus = "";
   await act(async () => {
-    undoStatus = editor.undoDocumentOperations(undoHandle).status;
+    undoStatus = getEditor().undoDocumentOperations(undoHandle).status;
   });
   expect(undoStatus).toBe("undone");
   await waitFor(() =>
-    expect(editor.createAIEditSnapshot()?.blocks.at(0)?.text).toBe(
+    expect(getEditor().createAIEditSnapshot()?.blocks.at(0)?.text).toBe(
       "Published operation saved",
     ),
   );
