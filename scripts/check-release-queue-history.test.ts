@@ -34,21 +34,18 @@ const queueTimeline = (events: readonly string[], hasPreviousPage = false) => ({
   },
 });
 
-const heavyStatuses = (successful: boolean) => ({
-  sha: BASE_SHA,
-  statuses: !successful
-    ? []
-    : [
-        {
-          context: "main/heavy",
-          creator: { login: "github-actions[bot]", type: "Bot" },
-          state: "success",
-        },
-      ],
+const MAIN_TIP_SHA = "9999999999999999999999999999999999999999";
+
+const heavyRun = (sha: string, headSha: string) => ({
+  conclusion: "success",
+  display_title: `Main heavy suites ${sha}`,
+  event: "workflow_dispatch",
+  head_sha: headSha,
 });
 
 type FakeOptions = {
   direct?: readonly number[];
+  heavyHeadSha?: string;
   heavySha?: string | null;
   missingPullRequestFor?: readonly string[];
   removed?: readonly number[];
@@ -59,6 +56,8 @@ type FakeOptions = {
 
 const RUNS_ENDPOINT =
   /^actions\/workflows\/ci\.yml\/runs\?event=merge_group&status=success&created=([^&]+)&per_page=100&page=(\d+)$/u;
+const HEAVY_ENDPOINT =
+  /^actions\/workflows\/main-heavy\.yml\/runs\?status=success&created=([^&]+)&per_page=100&page=1$/u;
 const OLDEST_COMMIT_DATE = "2026-09-20T12:00:00+00:00";
 
 const fillerShas = (count: number, prefix: string) =>
@@ -68,6 +67,7 @@ const fillerShas = (count: number, prefix: string) =>
 
 const fakeCommand = ({
   direct = [],
+  heavyHeadSha = MAIN_TIP_SHA,
   heavySha = null,
   missingPullRequestFor = [],
   removed = [],
@@ -78,6 +78,7 @@ const fakeCommand = ({
   const pages = runPages ?? [successfulMergeGroupShas];
   const requests: string[] = [];
   const timelineRequests: string[] = [];
+  const heavyRequests: string[] = [];
   const responses = new Map<string, unknown>([
     [`commits/${FIRST_SHA}/pulls?per_page=100`, [pullRequest(101, FIRST_SHA)]],
     [
@@ -85,7 +86,6 @@ const fakeCommand = ({
       [pullRequest(202, SECOND_SHA)],
     ],
     [`commits/${THIRD_SHA}/pulls?per_page=100`, [pullRequest(303, THIRD_SHA)]],
-    [`commits/${BASE_SHA}/status`, heavyStatuses(heavySha === BASE_SHA)],
   ]);
   for (const number of [101, 202, 303]) {
     let events = ["AddedToMergeQueueEvent", "MergedEvent"];
@@ -132,6 +132,17 @@ const fakeCommand = ({
       }
     }
     const endpoint = command.at(-1)?.replace("repos/stella/stella/", "");
+    const heavyMatch = endpoint ? HEAVY_ENDPOINT.exec(endpoint) : null;
+    if (endpoint && heavyMatch) {
+      heavyRequests.push(endpoint);
+      expect(decodeURIComponent(heavyMatch[1] ?? "")).toBe(
+        ">=2026-09-20T12:00:00.000Z",
+      );
+      return JSON.stringify({
+        workflow_runs:
+          heavySha === null ? [] : [heavyRun(heavySha, heavyHeadSha)],
+      });
+    }
     const runsMatch = endpoint ? RUNS_ENDPOINT.exec(endpoint) : null;
     if (endpoint && runsMatch) {
       requests.push(endpoint);
@@ -153,7 +164,7 @@ const fakeCommand = ({
     }
     return JSON.stringify(response);
   };
-  return Object.assign(run, { requests, timelineRequests });
+  return Object.assign(run, { heavyRequests, requests, timelineRequests });
 };
 
 const check = (command: (command: readonly string[]) => string) =>
@@ -202,8 +213,20 @@ describe("release queue history", () => {
     const command = fakeCommand({ heavySha: BASE_SHA, truncated: [101] });
 
     expect(() => check(command)).not.toThrow();
+    expect(command.heavyRequests).toHaveLength(1);
     expect(command.timelineRequests).toHaveLength(0);
     expect(command.requests).toHaveLength(0);
+  });
+
+  test("accepts a push run of main heavy whose head is the base", () => {
+    const command = fakeCommand({
+      heavyHeadSha: BASE_SHA,
+      heavySha: MAIN_TIP_SHA,
+      truncated: [101],
+    });
+
+    expect(() => check(command)).not.toThrow();
+    expect(command.timelineRequests).toHaveLength(0);
   });
 
   test("fails closed on a truncated timeline without a green heavy base", () => {

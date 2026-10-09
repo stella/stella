@@ -6,11 +6,10 @@ import nodePath from "node:path";
 const REPOSITORY_NAME = "stella";
 const REPOSITORY_OWNER = "stella";
 const REPOSITORY = `${REPOSITORY_OWNER}/${REPOSITORY_NAME}`;
-const HEAVY_CONTEXT = "main/heavy";
-const GITHUB_ACTIONS_BOT = "github-actions[bot]";
+const HEAVY_RUN_TITLE_PREFIX = "Main heavy suites ";
 const MAX_MERGE_QUEUE_BATCH_SIZE = 4;
 const RUNS_PER_PAGE = 100;
-const MAX_MERGE_GROUP_RUN_PAGES = 20;
+const MAX_WORKFLOW_RUN_PAGES = 20;
 // A run is created before its merge commit lands, so the cutoff precedes the oldest commit.
 const MERGE_GROUP_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
@@ -114,28 +113,6 @@ const apiJson = (
     path,
   );
 
-const hasSuccessfulHeavyStatus = (
-  baseSha: string,
-  command: CommandRunner,
-  ghRetryScript: string,
-): boolean => {
-  const payload = apiJson(`commits/${baseSha}/status`, command, ghRetryScript);
-  if (!isRecord(payload) || !Array.isArray(payload["statuses"])) {
-    throw new ReleaseQueueHistoryError(
-      `Commit statuses for ${baseSha} returned an unexpected payload`,
-    );
-  }
-  const status = payload["statuses"].find(
-    (entry) => isRecord(entry) && entry["context"] === HEAVY_CONTEXT,
-  );
-  return (
-    isRecord(status) &&
-    status["state"] === "success" &&
-    isRecord(status["creator"]) &&
-    status["creator"]["login"] === GITHUB_ACTIONS_BOT
-  );
-};
-
 const wasMergedThroughQueue = (
   pullRequest: MergedPullRequest,
   command: CommandRunner,
@@ -207,16 +184,26 @@ const wasMergedThroughQueue = (
   );
 };
 
-const successfulMergeGroupHeads = (
-  since: Date,
-  command: CommandRunner,
-  ghRetryScript: string,
-): Set<string> => {
+type SuccessfulRunsOptions = {
+  workflow: string;
+  filters: string;
+  since: Date;
+  command: CommandRunner;
+  ghRetryScript: string;
+};
+
+const successfulRuns = ({
+  workflow,
+  filters,
+  since,
+  command,
+  ghRetryScript,
+}: SuccessfulRunsOptions): Record<string, unknown>[] => {
   const created = encodeURIComponent(`>=${since.toISOString()}`);
-  const heads = new Set<string>();
-  for (let page = 1; page <= MAX_MERGE_GROUP_RUN_PAGES; page += 1) {
+  const runs: Record<string, unknown>[] = [];
+  for (let page = 1; page <= MAX_WORKFLOW_RUN_PAGES; page += 1) {
     const payload = apiJson(
-      `actions/workflows/ci.yml/runs?event=merge_group&status=success&created=${created}&per_page=${String(RUNS_PER_PAGE)}&page=${String(page)}`,
+      `actions/workflows/${workflow}/runs?${filters}status=success&created=${created}&per_page=${String(RUNS_PER_PAGE)}&page=${String(page)}`,
       command,
       ghRetryScript,
     );
@@ -225,30 +212,77 @@ const successfulMergeGroupHeads = (
       : undefined;
     if (!Array.isArray(workflowRuns)) {
       throw new ReleaseQueueHistoryError(
-        "Successful merge-group runs returned an unexpected payload",
+        `Successful ${workflow} runs returned an unexpected payload`,
       );
     }
     for (const run of workflowRuns) {
       if (
         !isRecord(run) ||
         run["conclusion"] !== "success" ||
-        run["event"] !== "merge_group" ||
         typeof run["head_sha"] !== "string"
       ) {
         throw new ReleaseQueueHistoryError(
-          "Successful merge-group runs returned an unexpected payload",
+          `Successful ${workflow} runs returned an unexpected payload`,
         );
       }
-      heads.add(run["head_sha"]);
+      runs.push(run);
     }
     if (workflowRuns.length < RUNS_PER_PAGE) {
-      return heads;
+      return runs;
     }
   }
   throw new ReleaseQueueHistoryError(
-    `Successful merge-group runs since ${since.toISOString()} exceed ${String(MAX_MERGE_GROUP_RUN_PAGES)} pages of ${String(RUNS_PER_PAGE)}`,
+    `Successful ${workflow} runs since ${since.toISOString()} exceed ${String(MAX_WORKFLOW_RUN_PAGES)} pages of ${String(RUNS_PER_PAGE)}`,
   );
 };
+
+const commitDate = (sha: string, command: CommandRunner): Date => {
+  const date = new Date(
+    command(["git", "show", "--no-patch", "--format=%cI", sha]).trim(),
+  );
+  if (Number.isNaN(date.getTime())) {
+    throw new ReleaseQueueHistoryError(
+      `Commit date for ${sha} returned an unexpected payload`,
+    );
+  }
+  return date;
+};
+
+// Main heavy names each run "Main heavy suites <tested sha>"; a manual
+// release-candidate dispatch tests a sha other than the run's head.
+const hasSuccessfulHeavyRun = (
+  baseSha: string,
+  command: CommandRunner,
+  ghRetryScript: string,
+): boolean =>
+  successfulRuns({
+    workflow: "main-heavy.yml",
+    filters: "",
+    since: commitDate(baseSha, command),
+    command,
+    ghRetryScript,
+  }).some(
+    (run) =>
+      run["head_sha"] === baseSha ||
+      run["display_title"] === `${HEAVY_RUN_TITLE_PREFIX}${baseSha}`,
+  );
+
+const successfulMergeGroupHeads = (
+  since: Date,
+  command: CommandRunner,
+  ghRetryScript: string,
+): Set<string> =>
+  new Set(
+    successfulRuns({
+      workflow: "ci.yml",
+      filters: "event=merge_group&",
+      since,
+      command,
+      ghRetryScript,
+    }).flatMap(({ event, head_sha }) =>
+      event === "merge_group" && typeof head_sha === "string" ? [head_sha] : [],
+    ),
+  );
 
 export const assertReleaseQueueHistory = ({
   baseSha,
@@ -266,7 +300,7 @@ export const assertReleaseQueueHistory = ({
     "--verify",
     `${baseSha}^{commit}`,
   ]).trim();
-  if (hasSuccessfulHeavyStatus(resolvedBaseSha, command, ghRetryScript)) {
+  if (hasSuccessfulHeavyRun(resolvedBaseSha, command, ghRetryScript)) {
     return;
   }
   const commits = command([
@@ -314,25 +348,11 @@ export const assertReleaseQueueHistory = ({
     }
   }
   const oldestSha = commits.at(0);
-  const oldestCommittedAt = oldestSha
-    ? new Date(
-        command([
-          "git",
-          "show",
-          "--no-patch",
-          "--format=%cI",
-          oldestSha,
-        ]).trim(),
-      )
-    : undefined;
-  if (oldestCommittedAt && Number.isNaN(oldestCommittedAt.getTime())) {
-    throw new ReleaseQueueHistoryError(
-      `Commit date for ${String(oldestSha)} returned an unexpected payload`,
-    );
-  }
-  const mergeGroupHeads = oldestCommittedAt
+  const mergeGroupHeads = oldestSha
     ? successfulMergeGroupHeads(
-        new Date(oldestCommittedAt.getTime() - MERGE_GROUP_LEAD_MS),
+        new Date(
+          commitDate(oldestSha, command).getTime() - MERGE_GROUP_LEAD_MS,
+        ),
         command,
         ghRetryScript,
       )

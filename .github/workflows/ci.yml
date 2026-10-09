@@ -2376,7 +2376,6 @@ jobs:
       contents: read
       # Release PR state for the release CLI changeset hold.
       pull-requests: read
-      statuses: read
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
