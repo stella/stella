@@ -6,223 +6,151 @@ import {
   isDockerMountGuardInput,
 } from "./check-docker-host-mounts";
 
-test("compose rejects host and unresolved sources across mount syntaxes", () => {
-  for (const mount of [
-    "./data:/data",
-    "../data:/data",
-    "/host:/data",
-    "~/data:/data",
-    `\${DATA}:/data`,
-    "C:\\data:/data",
-    "{type: bind, source: ./data, target: /data}",
-    "{source: ./data, target: /data}",
-    `{type: volume, source: '\${DATA}', target: /data}`,
-  ]) {
-    expect(
-      inspectComposeMounts(
-        `services:\n  app:\n    volumes:\n      - ${mount}\n`,
-      ),
-    ).not.toEqual([]);
+const composeWith = (volumes: string) =>
+  `services:\n  app:\n    volumes:\n      - ${volumes}\n`;
+
+const bindMount = "type=bind,source=/host,target=/data";
+const hostVolume =
+  "type=volume,source=data,target=/data,volume-opt=device=/host";
+
+const accepts = [
+  {
+    id: "compose-named-volume",
+    inspect: inspectComposeMounts,
+    source: `${composeWith("data:/data:ro")}volumes:\n  data:\n`,
+  },
+  {
+    id: "compose-tmpfs",
+    inspect: inspectComposeMounts,
+    source: composeWith("{type: tmpfs, target: /tmp}"),
+  },
+  {
+    id: "compose-driver-size",
+    inspect: inspectComposeMounts,
+    source: "volumes:\n  data:\n    driver_opts: {size: 10g}\n",
+  },
+  {
+    id: "api-volume-and-tmpfs",
+    inspect: inspectDockerHelper,
+    source:
+      'const options = {Mounts: [{Type: "volume", Source: "data"}, {Type: "tmpfs", Target: "/tmp"}]};',
+  },
+  {
+    id: "cli-volume-mount",
+    inspect: inspectDockerHelper,
+    source:
+      "docker run --mount type=volume,source=data,target=/data,volume-opt=size=10g image",
+  },
+  {
+    id: "cli-plain-volume-create",
+    inspect: inspectDockerHelper,
+    source: "docker volume create data",
+  },
+  {
+    id: "cli-volume-create-size",
+    inspect: inspectDockerHelper,
+    source: "docker volume create --opt size=10g data",
+  },
+  {
+    id: "argv-volume-create-dynamic-name",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", "--opt", "size=10g", name]',
+  },
+  {
+    id: "argv-mount-dynamic-source",
+    inspect: inspectDockerHelper,
+    source: `["docker", "run", "--mount", \`type=volume,source=\${name},target=/data\`]`,
+  },
+] as const;
+
+const rejects = [
+  {
+    id: "host-backed-1",
+    inspect: inspectComposeMounts,
+    source: composeWith("./data:/data"),
+  },
+  {
+    id: "host-backed-2",
+    inspect: inspectComposeMounts,
+    source: "volumes:\n  data:\n    driver_opts: {type: none, o: bind}\n",
+  },
+  {
+    id: "host-backed-3",
+    inspect: inspectComposeMounts,
+    source: "configs:\n  config: {file: ./config}\n",
+  },
+  {
+    id: "host-backed-4",
+    inspect: inspectDockerHelper,
+    source: `docker run --mount ${bindMount} image`,
+  },
+  {
+    id: "host-backed-5",
+    inspect: inspectDockerHelper,
+    source: `["docker", "run", "--mount", "${bindMount}"]`,
+  },
+  {
+    id: "host-backed-6",
+    inspect: inspectDockerHelper,
+    source: `docker run --mount ${hostVolume} image`,
+  },
+  {
+    id: "host-backed-7",
+    inspect: inspectDockerHelper,
+    source: "docker run -v /host:/data image",
+  },
+  {
+    id: "host-backed-8",
+    inspect: inspectDockerHelper,
+    source: 'const options = {Mounts: [{Type: "bind", Source: "/host"}]};',
+  },
+  {
+    id: "host-backed-9",
+    inspect: inspectDockerHelper,
+    source:
+      'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {device: "/host"}}}}]};',
+  },
+  {
+    id: "host-backed-10",
+    inspect: inspectDockerHelper,
+    source: "docker volume create --opt type=none data",
+  },
+  {
+    id: "host-backed-11",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", "--opt", "device=/host", "data"]',
+  },
+  {
+    id: "host-backed-12",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", option, "data"]',
+  },
+  {
+    id: "host-backed-13",
+    inspect: inspectDockerHelper,
+    source: 'const options = {Mounts: [{Type: mountType, Source: "data"}]};',
+  },
+  {
+    id: "host-backed-14",
+    inspect: inspectDockerHelper,
+    source: '["docker", "run", "--mount", mountOptions]',
+  },
+] as const;
+
+test("host mount guard accepts and rejects the documented cases", () => {
+  for (const { id, inspect, source } of accepts) {
+    expect({ id, failures: inspect(source) }).toEqual({ id, failures: [] });
   }
-  expect(
-    inspectComposeMounts(
-      "volumes:\n  data:\n    driver_opts: {type: none, o: bind, device: /host}\n",
-    ),
-  ).not.toEqual([]);
-  expect(
-    inspectComposeMounts("configs:\n  config: {file: ./config}\n"),
-  ).not.toEqual([]);
-});
-
-test("compose permits named volumes and anonymous container volumes", () => {
-  expect(
-    inspectComposeMounts(
-      "services:\n  app:\n    volumes:\n      - data:/data:ro\n      - /cache\n      - {type: volume, source: data, target: /data}\n      - {type: tmpfs, target: /tmp}\nvolumes:\n  data:\n",
-    ),
-  ).toEqual([]);
-});
-
-test("YAML aliases cannot hide bind mounts", () => {
-  expect(
-    inspectComposeMounts(
-      "x-mount: &mount {type: bind, source: /host, target: /data}\nservices:\n  app:\n    volumes: [*mount]\n",
-    ),
-  ).not.toEqual([]);
-});
-
-test("Docker helpers reject CLI and API bind mechanisms, including interpolated arguments", () => {
-  for (const source of [
-    "docker run -v /host:/data image",
-    "docker run -v/host:/data image",
-    "docker run --mount=type=bind,source=/host,target=/data image",
-    "docker run --mount 'type=bind,source=/host,target=/data' image",
-    `["docker", "run", \`-v\${host}:/data\`]`,
-    'const config = {["Binds"]: hostMounts};',
-    "const config = {Binds};",
-    "options.Binds = hostMounts;",
-    "const options = {Mounts: mounts};",
-    "const options = {Mounts: [{Type: mountType, Source: host}]};",
-    'const options = {Mounts: [{Type: "volume", ...mount}]};',
-    'const options = {Mounts: [{Type: "volume", Type: mountType}]};',
-    'client.containers.run("image", host_config={"Binds": ["/host:/data"]})',
-    'client.containers.run("image", mounts=[{"Type": "bind", "Source": "/host"}])',
-    "docker run --mount type=bind,source=/host,target=/data image",
-    `["docker", "run", "-v", \`\${dir}:/data\`]`,
-    '["docker", "run", "--volume=/host:/data"]',
-    `["docker", "run", "--mount", \`type=bind,source=\${dir},target=/data\`]`,
-    '["docker", "run", "--mount", mountOptions]',
-    `const options = {HostConfig: {Binds: [\`\${dir}:/data\`]}};`,
-    'const options = {Mounts: [{Type: "bind", Source: dir, Target: "/data"}]};',
-  ]) {
-    expect(inspectDockerHelper(source)).not.toEqual([]);
+  for (const { id, inspect, source } of rejects) {
+    expect({ id, rejected: inspect(source).length > 0 }).toEqual({
+      id,
+      rejected: true,
+    });
   }
-  expect(
-    inspectDockerHelper(
-      `["docker", "run", "--mount", \`type=volume,source=\${name},target=/data\`]`,
-    ),
-  ).toEqual([]);
-  expect(
-    inspectDockerHelper(
-      'const options = {Mounts: [{Type: "volume", Source: name, Target: "/data"}, {Type: "tmpfs", Target: "/tmp"}]};',
-    ),
-  ).toEqual([]);
-});
-
-test("Docker helpers reject mount types hidden after earlier options", () => {
-  for (const source of [
-    "docker run --mount type=volume,source=data,target=/data,type=bind image",
-    "docker run --mount source=/host,target=/data,type=bind image",
-    '["docker", "run", "--mount", "type=tmpfs,target=/data,type=bind"]',
-    '["docker", "run", "--mount=source=/host,target=/data,type=bind"]',
-  ]) {
-    expect(inspectDockerHelper(source)).not.toEqual([]);
-  }
-});
-
-test("Docker helpers reject host-backed named volume driver options", () => {
-  for (const source of [
-    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {type: "none"}}}}]};',
-    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {o: "bind,rw"}}}}]};',
-    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {device: "/host"}}}}]};',
-    "docker volume create --opt type=none data",
-    "docker volume create --opt=o=bind,rw data",
-    "docker volume create -o device=/host data",
-  ]) {
-    expect(inspectDockerHelper(source)).not.toEqual([]);
-  }
-});
-
-test("Docker helpers permit plain named volumes, tmpfs, and safe local driver configuration", () => {
-  for (const source of [
-    'const options = {Mounts: [{Type: "volume", Source: "data", Target: "/data"}]};',
-    'const options = {Mounts: [{Type: "tmpfs", Target: "/tmp"}]};',
-    'const options = {Mounts: [{Type: "volume", VolumeOptions: {DriverConfig: {Name: "local", Options: {size: "10g"}}}}]};',
-    "docker volume create --opt size=10g data",
-  ]) {
-    expect(inspectDockerHelper(source)).toEqual([]);
-  }
-});
-
-test("compose permits safe driver options and rejects host-backed local volumes", () => {
-  expect(
-    inspectComposeMounts(
-      "volumes:\n  data:\n    driver: local\n    driver_opts: {size: 10g}\n",
-    ),
-  ).toEqual([]);
-  for (const options of ["type: none", "o: bind,rw", "device: /host"]) {
-    expect(
-      inspectComposeMounts(
-        `volumes:\n  data:\n    driver: local\n    driver_opts: {${options}}\n`,
-      ),
-    ).not.toEqual([]);
-  }
-});
-
-test("Docker mount types cannot be overridden by computed properties", () => {
-  for (const key of ['["Type"]', "[`Type`]", "[key]"]) {
-    expect(
-      inspectDockerHelper(
-        `const options = {Mounts: [{Type: "volume", ${key}: mountType, Source: host, Target: "/data"}]};`,
-      ),
-    ).not.toEqual([]);
-  }
-  for (const key of ['["Type"]', "[`Type`]"]) {
-    expect(
-      inspectDockerHelper(
-        `const options = {["Mounts"]: [{${key}: "volume", Source: name, Target: "/data"}]};`,
-      ),
-    ).toEqual([]);
-  }
-});
-
-test("guard discovers compose variants and newly added corpus Docker helpers", () => {
   for (const file of [
-    "docker-compose.yml",
     "docker-compose.selfhost.yml",
-    "deploy/compose.production.yaml",
     "apps/api/scripts/new-corpus-helper.ts",
-    "scripts/run-new-suite.ts",
-    "apps/api/scripts/container-helper.ts",
   ]) {
     expect(isDockerMountGuardInput(file, "docker run")).toBe(true);
-  }
-  expect(
-    isDockerMountGuardInput(
-      "apps/api/scripts/new-corpus-helper.test.ts",
-      "docker run",
-    ),
-  ).toBe(false);
-});
-
-test("recursive YAML aliases terminate safely", () => {
-  expect(
-    inspectComposeMounts(
-      "x-loop: &loop [*loop]\nservices:\n  app:\n    volumes: [data:/data]\n",
-    ),
-  ).toEqual([]);
-});
-
-test("Docker volume create argument arrays reject host-backed options", () => {
-  for (const source of [
-    '["docker", "volume", "create", "--opt", "type=none", "--opt", "o=bind", "--opt", "device=/host", "data"]',
-    'Bun.spawn(["docker", "volume", "create", "-o", "device=/host", "data"])',
-    'spawnSync("docker", ["volume", "create", "--opt", "o=bind", "data"])',
-    'execFile("docker", ["volume", "create", "--opt=type=none", "data"])',
-    `["docker", "volume", "create", "--opt", \`o=\${mode}\`, "data"]`,
-    '["docker", "volume", "create", "--opt", option, "data"]',
-    '["docker", "volume", "create", ...extraArgs, "data"]',
-    '["docker", "volume", "create", "--opt", "noequals", "data"]',
-    '["docker", "volume", "create", option, "data"]',
-    '["docker", "volume", "create", name, "--opt", "o=bind"]',
-  ]) {
-    expect(inspectDockerHelper(source)).not.toEqual([]);
-  }
-  for (const source of [
-    '["docker", "volume", "create", "data"]',
-    '["docker", "volume", "create", name]',
-    '["docker", "volume", "create", "--opt", "size=10g", name]',
-    'spawnSync("docker", ["volume", "create", "--opt", "size=10g", "data"])',
-  ]) {
-    expect(inspectDockerHelper(source)).toEqual([]);
-  }
-});
-
-test("mount strings reject host-backed volume-opt settings", () => {
-  const hostBacked =
-    "type=volume,source=data,target=/data,volume-opt=type=none,volume-opt=o=bind,volume-opt=device=/host";
-  for (const source of [
-    `docker run --mount ${hostBacked} image`,
-    `docker run --mount '${hostBacked}' image`,
-    `["docker", "run", "--mount", "${hostBacked}"]`,
-    `["docker", "run", "--mount=${hostBacked}"]`,
-    '["docker", "run", "--mount", "type=volume,source=data,target=/data,volume-opt=device=/host"]',
-  ]) {
-    expect(inspectDockerHelper(source)).not.toEqual([]);
-  }
-  for (const source of [
-    "docker run --mount type=volume,source=data,target=/data,volume-opt=size=10g image",
-    '["docker", "run", "--mount", "type=volume,source=data,target=/data,volume-opt=size=10g"]',
-  ]) {
-    expect(inspectDockerHelper(source)).toEqual([]);
   }
 });

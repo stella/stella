@@ -187,7 +187,7 @@ export const inspectComposeMounts = (source: string): string[] => {
           failures.push(`${next}: host or unresolved mount source`);
         }
       }
-      // Local volume driver options can disguise host binds as named volumes.
+      // Local volume driver options can back a volume with a host path.
       if (
         key === "driver_opts" &&
         ((value.driver !== undefined && value.driver !== "local") ||
