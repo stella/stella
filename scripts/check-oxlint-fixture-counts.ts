@@ -55,8 +55,10 @@ const DIRECTIVE_PATTERN =
   /(?<prefix>\/\/|\/\*|\{\/\*)\s*(?<kind>(?:oxlint|eslint)-disable-(?:next-)?line)\s(?<rest>.*)$/u;
 const BLOCK_END_PATTERN = /\*\/\}?$/u;
 const COUNT_PATTERN = /(?:^|\s)x(?<count>\d+)(?:\s|:|$)/u;
+// The rule list runs to the end of the line or to a block comment's `*/`;
+// each id is trimmed, so the pattern needs no trailing whitespace groups.
 const CLEAN_MARKER_PATTERN =
-  /^\s*(?:\/\/|\{?\/\*)\s*expect-clean:\s*(?<rules>[^*]+?)(?:\s*\*\/\}?)?\s*$/u;
+  /^\s*(?:\/\/|\{?\/\*)\s*expect-clean:(?<rules>[^*]*)/u;
 const NON_CODE_LINE_PATTERN = /^\s*(?:$|\/\/|\/\*|\*|\{\/\*)/u;
 
 type Expectation = { file: string; line: number; ruleId: string };
