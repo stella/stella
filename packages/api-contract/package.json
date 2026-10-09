@@ -46,6 +46,7 @@
     "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
+    "./desktop-time-entries": "./src/desktop-time-entries.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
     "./email-mime-types": "./src/email-mime-types.ts",

@@ -222,10 +222,27 @@ pub struct ActivityDaySnapshot {
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
   segments: Vec<ActivitySegment>,
+  source_app_visuals: Vec<crate::clipboard::ClipboardSourceAppVisual>,
   /// A day whose file exists but cannot be read.
   unreadable: bool,
   drafted_entries: Vec<ActivityDraftedEntry>,
   pub(crate) time_billing_enabled: bool,
+}
+
+impl ActivityDaySnapshot {
+  pub(crate) fn resolve_app_visuals(&mut self) {
+    self.source_app_visuals = crate::clipboard::cached_app_visuals(
+      self
+        .segments
+        .iter()
+        .map(|segment| segment.app_identifier.as_str())
+        .chain([
+          "com.microsoft.Word",
+          "com.microsoft.Outlook",
+          "com.google.Chrome",
+        ]),
+    );
+  }
 }
 
 /// The tray receives only status, a day total and an approved short label.
@@ -1323,6 +1340,7 @@ impl ActivityManager {
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps,
+      source_app_visuals: Vec::new(),
       segments,
       unreadable: unreadable || draft_unreadable,
       drafted_entries,
@@ -1553,6 +1571,9 @@ fn observe_now(
     .identifier
     .clone()
     .unwrap_or_else(|| foreground.name.clone());
+  if !is_excluded(&settings.excluded_apps, &identifier) {
+    crate::clipboard::foreground_app_visual(&foreground);
+  }
   let include_details = !is_excluded(&settings.excluded_apps, &identifier)
     && details_enabled(
       settings,

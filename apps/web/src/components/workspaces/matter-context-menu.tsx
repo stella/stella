@@ -38,6 +38,7 @@ import {
   Trash2Icon,
   UserPlusIcon,
 } from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
 import {
   Menu,
   MenuItem,
@@ -54,7 +55,6 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { usePinnedStore } from "@/lib/pinned-store";
 import {

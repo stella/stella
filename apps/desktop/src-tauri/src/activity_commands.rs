@@ -69,6 +69,8 @@ pub fn activity_get_day(
     other_account_history_days,
     details_access,
   );
+  drop(manager);
+  snapshot.resolve_app_visuals();
   snapshot.time_billing_enabled =
     gates.is_enabled(crate::feature_gate::DesktopFeature::TimeBilling);
   Ok(snapshot)

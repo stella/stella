@@ -1,5 +1,9 @@
+import { Type } from "@sinclair/typebox";
 import { Result } from "better-result";
 import { t } from "elysia";
+
+import { desktopMattersResponseSchema } from "@stll/api-contract/desktop-time-entries";
+import type { DesktopMattersResponse } from "@stll/api-contract/desktop-time-entries";
 
 import { readWorkspaceListRows } from "@/api/handlers/workspaces/list-query";
 import {
@@ -8,8 +12,14 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+
+const mattersResponseSchema = Type.Unsafe<DesktopMattersResponse>(
+  jsonSchemaToTypeBox(toJsonSchema(desktopMattersResponseSchema)),
+);
 
 export const createDesktopMattersEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -24,22 +34,7 @@ export const createDesktopMattersEndpoint = (
         { additionalProperties: false },
       ),
       response: safePublicHandlerResponseSchemasWithStatusText(
-        t.Object(
-          {
-            matters: t.Array(
-              t.Object(
-                {
-                  id: t.String(),
-                  name: t.String(),
-                  reference: t.Nullable(t.String()),
-                },
-                { additionalProperties: false },
-              ),
-              { maxItems: 20 },
-            ),
-          },
-          { additionalProperties: false },
-        ),
+        mattersResponseSchema,
       ),
     },
     async function* ({ request, query }) {
@@ -57,10 +52,11 @@ export const createDesktopMattersEndpoint = (
         ),
       );
       return Result.ok({
-        matters: rows.map(({ id, name, reference }) => ({
+        matters: rows.map(({ id, name, reference, color }) => ({
           id,
           name,
           reference,
+          color,
         })),
       });
     },

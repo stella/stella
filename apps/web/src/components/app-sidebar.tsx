@@ -48,6 +48,7 @@ import {
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuItem,
@@ -75,7 +76,6 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
-import { MatterIcon } from "@/components/matter-icon";
 import { SearchDialog } from "@/components/search-dialog";
 import {
   Sidebar,

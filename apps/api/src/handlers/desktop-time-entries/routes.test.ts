@@ -52,12 +52,14 @@ const exercise = async ({
   extra,
   missingMatter,
   picker,
+  color = "--option-emerald",
 }: {
   hidden?: "activity-timeline" | "time-billing";
   denied?: boolean;
   extra?: Record<string, unknown>;
   missingMatter?: boolean;
   picker?: boolean;
+  color?: string | null;
 }) => {
   const inserted: unknown[] = [];
   const { scopedDb } = createScopedDbMock(
@@ -71,6 +73,7 @@ const exercise = async ({
               id: WORKSPACE_ID,
               name: "Matter",
               reference: "M-1",
+              color,
               clientId: null,
             },
           ],
@@ -188,7 +191,14 @@ test("create permission and accessible matter are required", async () => {
   const readablePicker = await exercise({ denied: true, picker: true });
   expect(readablePicker.status).toBe(200);
   expect(readablePicker.body).toEqual({
-    matters: [{ id: WORKSPACE_ID, name: "Matter", reference: "M-1" }],
+    matters: [
+      {
+        id: WORKSPACE_ID,
+        name: "Matter",
+        reference: "M-1",
+        color: "--option-emerald",
+      },
+    ],
   });
   expect(readablePicker.inserted).toEqual([]);
   expect((await exercise({ missingMatter: true })).status).toBe(404);
@@ -222,8 +232,10 @@ test("unknown activity fields and other session-only fields are rejected", async
   }
 });
 
-test("picker projects only matter identity and display fields", async () => {
-  expect((await exercise({ picker: true })).body).toEqual({
-    matters: [{ id: WORKSPACE_ID, name: "Matter", reference: "M-1" }],
-  });
+test("picker preserves stored and fallback matter colors in its display projection", async () => {
+  for (const color of ["--option-emerald", "#A1B2C3", null]) {
+    expect((await exercise({ picker: true, color })).body).toEqual({
+      matters: [{ id: WORKSPACE_ID, name: "Matter", reference: "M-1", color }],
+    });
+  }
 });

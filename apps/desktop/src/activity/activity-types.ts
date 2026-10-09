@@ -1,3 +1,8 @@
+import {
+  type ClipboardSourceAppVisual,
+  isClipboardSourceAppVisual,
+} from "../clipboard/clipboard-types";
+
 /** Payload-free: the window re-reads the day through `activity_get_day`. */
 export const ACTIVITY_CHANGED_EVENT = "activity-timeline-changed";
 
@@ -61,6 +66,7 @@ export type ActivityDaySnapshot = {
   recordingStatus: ActivityRecordingStatus;
   retention: ActivityRetention;
   segments: ActivitySegment[];
+  sourceAppVisuals: ClipboardSourceAppVisual[];
   today: string;
   unreadable: boolean;
 };
@@ -127,6 +133,8 @@ export const isActivityDaySnapshot = (
   isOneOf(ACTIVITY_PERSISTENCE_STATUSES, value["persistence"]) &&
   isOneOf(ACTIVITY_RECORDING_STATUSES, value["recordingStatus"]) &&
   isOneOf(ACTIVITY_RETENTIONS, value["retention"]) &&
+  Array.isArray(value["sourceAppVisuals"]) &&
+  value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
   Array.isArray(value["segments"]) &&
   value["segments"].every(isSegment) &&
   Array.isArray(value["excludedApps"]) &&

@@ -57,7 +57,7 @@ describe.serial("no-hand-rolled-reference-chip", () => {
     expect(
       await lint([
         'import type { ChatMentionResourceHref } from "@stll/api-contract";',
-        'import { MatterIcon } from "@/components/matter-icon";',
+        'import { MatterIcon } from "@stll/ui/matter-icon";',
         "declare const id: string;",
         "declare const href: ChatMentionResourceHref;",
         "export const Row = () => <MatterIcon matter={{ id, color: null }} />;",

@@ -59,6 +59,7 @@ describe("activity contract", () => {
       captureDetails: false,
       appNameOnlyApps: [],
       browserApps: [],
+      sourceAppVisuals: [],
       browserTitleApps: [],
       detailsAccess: "disabled",
       persistence: "encrypted",
@@ -69,6 +70,30 @@ describe("activity contract", () => {
       unreadable: false,
     };
     expect(isActivityDaySnapshot(snapshot)).toBe(true);
+    expect(
+      isActivityDaySnapshot({
+        ...snapshot,
+        sourceAppVisuals: [
+          {
+            key: "word",
+            color: null,
+            iconDataUrl: "https://example.com/icon.png",
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isActivityDaySnapshot({
+        ...snapshot,
+        sourceAppVisuals: [
+          {
+            key: "word",
+            color: "#123abc",
+            iconDataUrl: "data:image/png;base64,QUJD",
+          },
+        ],
+      }),
+    ).toBe(true);
     for (const days of [
       -1,
       0.5,

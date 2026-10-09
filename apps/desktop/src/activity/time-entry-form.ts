@@ -14,15 +14,17 @@ export type ConfirmedTimeEntry = {
 export type LocalEntryBlock = { date: string; start: string; end: string };
 
 /** Select only editable billing fields; activity metadata never enters the entry. */
-export const initialTimeEntry = (date: string, block: ActivityBlock) =>
-  ({
-    billable: true,
-    dateWorked: date,
-    durationMinutes: block.roundedTenths * 6,
-    narrative: "",
-    timezoneId: Temporal.Now.timeZoneId(),
-    workspaceId: "",
-  }) satisfies ConfirmedTimeEntry;
+export const initialTimeEntry = (
+  date: string,
+  block: ActivityBlock,
+): ConfirmedTimeEntry => ({
+  billable: true,
+  dateWorked: date,
+  durationMinutes: block.roundedTenths * 6,
+  narrative: "",
+  timezoneId: Temporal.Now.timeZoneId(),
+  workspaceId: "",
+});
 
 export const localEntryBlock = (
   date: string,

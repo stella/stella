@@ -6,13 +6,14 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { LandmarkIcon, SkillIcon } from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { skillRefDestination } from "@/components/chat/skill-ref-link";
 import { InlinePill } from "@/components/inline-pill";
-import { MatterIcon } from "@/components/matter-icon";
 import { referenceHintOptions } from "@/components/references/reference-hints";
 import {
   referenceFromHref,
@@ -33,7 +34,6 @@ import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { organizationOptions } from "@/lib/organization/queries";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";

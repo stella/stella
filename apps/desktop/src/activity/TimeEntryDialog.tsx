@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useLocale, useTranslations } from "use-intl";
 
+import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DatePickerPopover } from "@stll/ui/date-picker-popover";
@@ -17,6 +18,7 @@ import {
 } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { SearchField } from "@stll/ui/search-field";
 import { Textarea } from "@stll/ui/textarea";
 
@@ -32,9 +34,11 @@ export const TimeEntryDialog = ({
   const t = useTranslations("activity");
   const locale = useLocale();
   const [entry, setEntry] = useState(() => initialTimeEntry(date, block));
-  const [selectedMatter, setSelectedMatter] = useState<Matter | null>(null);
+  const [selectedMatter, setSelectedMatter] = useState<DesktopMatter | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
-  const [matters, setMatters] = useState<Matter[]>([]);
+  const [matters, setMatters] = useState<DesktopMatter[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<"search" | "submit" | null>(null);
   const [state, setState] = useState<SubmitState>({ type: "editing" });
@@ -46,7 +50,7 @@ export const TimeEntryDialog = ({
     const current = ++requestId.current;
     const timer = setTimeout(() => {
       setSearching(true);
-      invoke<Matter[]>("time_entry_search_matters", { query })
+      invoke<DesktopMatter[]>("time_entry_search_matters", { query })
         .then((result) => {
           if (disposed || current !== requestId.current) {
             return null;
@@ -190,18 +194,14 @@ export const TimeEntryDialog = ({
                               : "ghost"
                           }
                         >
-                          {matter.name}
-                          {matter.reference ? ` (${matter.reference})` : ""}
+                          <MatterDisplay matter={matter} />
                         </Button>
                       </li>
                     ))}
                   </ul>
                   {selectedMatter ? (
-                    <p className="text-sm font-medium">
-                      {selectedMatter.name}
-                      {selectedMatter.reference
-                        ? ` (${selectedMatter.reference})`
-                        : ""}
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      <MatterDisplay matter={selectedMatter} />
                     </p>
                   ) : null}
                 </div>
@@ -323,7 +323,22 @@ export const TimeEntryDialog = ({
   );
 };
 
-type Matter = { id: string; name: string; reference: string | null };
+const MatterDisplay = ({ matter }: { matter: DesktopMatter }) => (
+  <>
+    <MatterIcon className="size-4 shrink-0" matter={matter} />
+    <span>
+      <bdi dir="auto">{matter.name}</bdi>
+      {matter.reference ? (
+        <>
+          {" ("}
+          <bdi dir="auto">{matter.reference}</bdi>
+          {")"}
+        </>
+      ) : null}
+    </span>
+  </>
+);
+
 type SubmitState =
   | { type: "editing" }
   | { type: "submitting" }

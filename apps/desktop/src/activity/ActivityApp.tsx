@@ -31,6 +31,8 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { PreviewPane } from "@stll/ui/preview-pane";
 import {
   Select,
   SelectItem,
@@ -39,6 +41,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -69,7 +72,7 @@ import type {
   ActivityDetailsAccess,
   ActivityRetention,
 } from "./activity-types";
-
+import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ProposedBlockAction } from "./ProposedBlockAction";
 import { TimeEntryDialog } from "./TimeEntryDialog";
 
@@ -147,6 +150,117 @@ const ErrorLine = ({ message }: { message: string }) => (
   </p>
 );
 
+const ProposedBlockSummary = ({
+  block,
+  matter,
+}: {
+  block: ActivityBlock;
+  matter?: { id: string; color: string | null; name: string };
+}) => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  const timeRange = useTimeRange();
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="text-sm font-medium tabular-nums">
+        {timeRange(block.startMs, block.endMs)} ·{" "}
+        {t("hours", {
+          hours: format.number(block.roundedTenths / 10, {
+            maximumFractionDigits: 1,
+            minimumFractionDigits: 1,
+          }),
+        })}
+      </span>
+      {matter ? (
+        <span className="flex items-center gap-2 text-sm">
+          <MatterIcon className="size-4 shrink-0" matter={matter} />
+          <bdi className="truncate">{matter.name}</bdi>
+        </span>
+      ) : null}
+      <span className="text-muted-foreground truncate text-xs">
+        {format.list(topAppNames(block), { type: "conjunction" })}
+      </span>
+      <ActivityDetails
+        document={block.document}
+        windowTitles={block.windowTitles}
+      />
+    </div>
+  );
+};
+
+const ActivityWelcomePreview = ({
+  sourceAppVisuals,
+}: {
+  sourceAppVisuals: readonly ClipboardSourceAppVisual[];
+}) => {
+  const t = useTranslations("activity");
+  const startMs = Temporal.PlainDate.from("2026-10-08").toZonedDateTime({
+    plainTime: "09:00",
+    timeZone: Temporal.Now.timeZoneId(),
+  }).epochMilliseconds;
+  const samples = [
+    {
+      appIdentifier: "com.microsoft.Word",
+      appName: "Microsoft Word",
+      minutes: 24,
+    },
+    {
+      appIdentifier: "com.microsoft.Outlook",
+      appName: "Microsoft Outlook",
+      minutes: 12,
+    },
+    {
+      appIdentifier: "com.google.Chrome",
+      appName: "Google Chrome",
+      minutes: 18,
+    },
+  ];
+  let cursor = startMs;
+  const segments = samples.map(({ appIdentifier, appName, minutes }) => {
+    const segment = {
+      appIdentifier,
+      appName,
+      document: null,
+      windowTitle: null,
+      startMs: cursor,
+      endMs: cursor + minutes * 60_000,
+    };
+    cursor = segment.endMs;
+    return segment;
+  });
+  return (
+    <PreviewPane
+      aria-hidden="true"
+      className="w-full p-0 [&>div]:h-auto [&>div]:p-4"
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">{t("proposedBlocks")}</h3>
+          {proposeBlocks(segments).map((block) => (
+            <div className="rounded-xl border px-4 py-3" key={block.startMs}>
+              <ProposedBlockSummary
+                block={block}
+                matter={{
+                  id: "riverside-lease",
+                  color: "--option-emerald",
+                  name: t("welcomePreviewMatter"),
+                }}
+              />
+            </div>
+          ))}
+        </section>
+        <AppTotals segments={segments} sourceAppVisuals={sourceAppVisuals} />
+        <div className="sm:col-span-2">
+          <SegmentList
+            segments={segments}
+            sourceAppVisuals={sourceAppVisuals}
+          />
+        </div>
+      </div>
+    </PreviewPane>
+  );
+};
+
 type ActivityWelcomeProps = {
   onStart: () => void;
   onCommand: RunCommand;
@@ -162,25 +276,32 @@ const ActivityWelcome = ({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
       <h2 className="text-base font-semibold">{t("welcomeTitle")}</h2>
-      <p className="text-muted-foreground text-sm leading-relaxed">
-        {t("welcomeDescription")}
-      </p>
-      <div className="flex gap-3">
-        <LockKeyholeIcon
-          aria-hidden="true"
-          className="text-muted-foreground mt-0.5 size-4 shrink-0"
-        />
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">{t("welcomeLocalTitle")}</h3>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            {t("welcomeLocalDescription")}
-          </p>
-        </div>
-      </div>
-      <p className="text-muted-foreground text-sm leading-relaxed">
-        {t("welcomeControlDescription")}
-      </p>
-      <CaptureDetailsControl onCommand={onCommand} snapshot={snapshot} />
+      <ActivityWelcomePreview sourceAppVisuals={snapshot.sourceAppVisuals} />
+      <ul className="text-muted-foreground flex flex-col gap-2 text-sm">
+        <li className="flex items-center gap-2">
+          <LockKeyholeIcon aria-hidden="true" className="size-4 shrink-0" />
+          {t("welcomeLocalFact")}
+        </li>
+        <li className="flex items-center gap-2">
+          <EyeOffIcon aria-hidden="true" className="size-4 shrink-0" />
+          {t("welcomePrivacyFact")}
+        </li>
+        <li className="flex items-center gap-2">
+          <PauseIcon aria-hidden="true" className="size-4 shrink-0" />
+          {t("welcomeControlFact")}
+        </li>
+      </ul>
+      <details className="text-muted-foreground text-xs">
+        <summary className="flex min-h-11 cursor-pointer items-center">
+          {t("welcomeLearnMore")}
+        </summary>
+        <p className="leading-relaxed text-pretty">{t("welcomeDetails")}</p>
+      </details>
+      <CaptureDetailsControl
+        onCommand={onCommand}
+        snapshot={snapshot}
+        description="collapsed"
+      />
       <div>
         <Button onClick={onStart}>{t("welcomeStart")}</Button>
       </div>
@@ -230,9 +351,11 @@ const DetailsAccessNotice = ({
 type CaptureDetailsControlProps = {
   onCommand: RunCommand;
   snapshot: ActivityDaySnapshot;
+  description?: "visible" | "collapsed";
 };
 
 const CaptureDetailsControl = ({
+  description = "visible",
   onCommand,
   snapshot,
 }: CaptureDetailsControlProps) => {
@@ -249,9 +372,11 @@ const CaptureDetailsControl = ({
         />
         <span>{t("captureDetails")}</span>
       </Label>
-      <p className="text-muted-foreground text-xs">
-        {t("captureDetailsDescription")}
-      </p>
+      {description === "visible" ? (
+        <p className="text-muted-foreground text-xs">
+          {t("captureDetailsDescription")}
+        </p>
+      ) : null}
       <DetailsAccessNotice
         access={snapshot.detailsAccess}
         onCommand={onCommand}
@@ -437,12 +562,18 @@ const DayContent = ({ onCommand, onExclude, snapshot }: DayContentProps) => {
         segments={segments}
       />
       <AppTotals
-        onCommand={onCommand}
-        onExclude={onExclude}
+        controls={{
+          onCommand,
+          onExclude,
+          appNameOnlyApps: snapshot.appNameOnlyApps,
+        }}
         segments={segments}
-        appNameOnlyApps={snapshot.appNameOnlyApps}
+        sourceAppVisuals={snapshot.sourceAppVisuals}
       />
-      <SegmentList segments={segments} />
+      <SegmentList
+        segments={segments}
+        sourceAppVisuals={snapshot.sourceAppVisuals}
+      />
     </>
   );
 };
@@ -517,19 +648,7 @@ const ProposedBlocks = ({
       <ul className="flex flex-col divide-y rounded-xl border">
         {blocks.map((block) => (
           <li className="flex items-center gap-3 px-4 py-3" key={block.startMs}>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-sm font-medium tabular-nums">
-                {timeRange(block.startMs, block.endMs)} ·{" "}
-                {t("hours", { hours: hours(block) })}
-              </span>
-              <span className="text-muted-foreground truncate text-xs">
-                {format.list(topAppNames(block), { type: "conjunction" })}
-              </span>
-              <ActivityDetails
-                document={block.document}
-                windowTitles={block.windowTitles}
-              />
-            </div>
+            <ProposedBlockSummary block={block} />
             <Button
               onClick={() =>
                 onCommand("activity_copy_text", { text: summary(block) }, () =>
@@ -572,17 +691,19 @@ const ProposedBlocks = ({
 };
 
 type AppTotalsProps = {
-  onCommand: RunCommand;
-  appNameOnlyApps: readonly ActivityAppExclusion[];
-  onExclude: (app: ActivityAppExclusion) => void;
+  sourceAppVisuals: readonly ClipboardSourceAppVisual[];
+  controls?: {
+    onCommand: RunCommand;
+    appNameOnlyApps: readonly ActivityAppExclusion[];
+    onExclude: (app: ActivityAppExclusion) => void;
+  };
   segments: readonly TimedSegment[];
 };
 
 const AppTotals = ({
-  onCommand,
-  appNameOnlyApps,
-  onExclude,
+  controls,
   segments,
+  sourceAppVisuals,
 }: AppTotalsProps) => {
   const t = useTranslations("activity");
   return (
@@ -594,32 +715,40 @@ const AppTotals = ({
             className="flex items-center gap-3 px-4 py-2"
             key={app.identifier}
           >
-            <span className="min-w-0 flex-1 truncate text-sm">{app.name}</span>
+            <ActivitySourceIcon
+              appIdentifier={app.identifier}
+              sourceAppVisuals={sourceAppVisuals}
+            />
+            <bdi className="min-w-0 flex-1 truncate text-sm">{app.name}</bdi>
             <span className="text-muted-foreground text-sm tabular-nums">
               <Duration durationMs={app.durationMs} />
             </span>
-            <AppDetailCaptureButton
-              app={app}
-              onCommand={onCommand}
-              mode={appDetailCaptureMode({
-                appIdentifier: app.identifier,
-                appNameOnlyApps,
-              })}
-            />
-            <Button
-              aria-label={t("excludeApp", { name: app.name })}
-              onClick={() =>
-                onExclude({
-                  identifier: app.identifier,
-                  name: app.name,
-                })
-              }
-              size="icon"
-              title={t("excludeApp", { name: app.name })}
-              variant="ghost"
-            >
-              <EyeOffIcon aria-hidden="true" />
-            </Button>
+            {controls ? (
+              <>
+                <AppDetailCaptureButton
+                  app={app}
+                  onCommand={controls.onCommand}
+                  mode={appDetailCaptureMode({
+                    appIdentifier: app.identifier,
+                    appNameOnlyApps: controls.appNameOnlyApps,
+                  })}
+                />
+                <Button
+                  aria-label={t("excludeApp", { name: app.name })}
+                  onClick={() =>
+                    controls.onExclude({
+                      identifier: app.identifier,
+                      name: app.name,
+                    })
+                  }
+                  size="icon"
+                  title={t("excludeApp", { name: app.name })}
+                  variant="ghost"
+                >
+                  <EyeOffIcon aria-hidden="true" />
+                </Button>
+              </>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -724,7 +853,13 @@ const AppDetailCaptureButton = ({
   }
 };
 
-const SegmentList = ({ segments }: { segments: readonly TimedSegment[] }) => {
+const SegmentList = ({
+  segments,
+  sourceAppVisuals,
+}: {
+  segments: readonly TimedSegment[];
+  sourceAppVisuals: readonly ClipboardSourceAppVisual[];
+}) => {
   const t = useTranslations("activity");
   const timeRange = useTimeRange();
   return (
@@ -739,8 +874,12 @@ const SegmentList = ({ segments }: { segments: readonly TimedSegment[] }) => {
             <span className="text-muted-foreground w-32 shrink-0 tabular-nums">
               {timeRange(segment.startMs, segment.endMs)}
             </span>
+            <ActivitySourceIcon
+              appIdentifier={segment.appIdentifier}
+              sourceAppVisuals={sourceAppVisuals}
+            />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate">{segment.appName}</span>
+              <bdi className="truncate">{segment.appName}</bdi>
               <ActivityDetails
                 document={segment.document}
                 windowTitles={segment.windowTitle ? [segment.windowTitle] : []}

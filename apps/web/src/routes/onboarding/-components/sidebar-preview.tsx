@@ -9,6 +9,7 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { MatterIcon, MattersNavIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
@@ -17,7 +18,6 @@ import type {
   ProviderValidationStatus,
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
-import { MatterIcon, MattersNavIcon } from "@/components/matter-icon";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";

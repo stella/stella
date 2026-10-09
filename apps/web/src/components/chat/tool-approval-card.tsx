@@ -19,6 +19,7 @@ import {
   PencilIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
@@ -56,7 +57,6 @@ import {
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
-import { MatterIcon } from "@/components/matter-icon";
 import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,

@@ -36,6 +36,7 @@ pub struct Matter {
   id: String,
   name: String,
   reference: Option<String>,
+  color: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -186,6 +187,17 @@ mod tests {
     })).unwrap();
     assert_eq!(submit(&account, &entry).await.unwrap().id, "entry_fixture");
     server.abort();
+  }
+
+  #[test]
+  fn matter_display_colors_survive_the_native_boundary() {
+    for color in [Some("--option-emerald"), Some("#A1B2C3"), None] {
+      let input = serde_json::json!({
+        "matters": [{"id": "workspace_fixture", "name": "Matter", "reference": null, "color": color}]
+      });
+      let response: MattersResponse = serde_json::from_value(input.clone()).unwrap();
+      assert_eq!(serde_json::to_value(response.matters).unwrap(), input["matters"]);
+    }
   }
 
   #[test]

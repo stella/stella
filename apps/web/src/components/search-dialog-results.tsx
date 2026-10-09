@@ -18,12 +18,12 @@ import {
   UserIcon,
   AiActionIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { MenuSection } from "@stll/ui/menu-section";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
-import { MatterIcon } from "@/components/matter-icon";
 import {
   compactMeta,
   KIND_TRANSLATION_KEYS,

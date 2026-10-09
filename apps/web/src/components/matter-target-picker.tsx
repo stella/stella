@@ -21,6 +21,7 @@ import {
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuGroupLabel,
@@ -35,7 +36,6 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
-import { MatterIcon } from "@/components/matter-icon";
 import {
   canMoveMatterFolder,
   discardPendingMatterFolder,
