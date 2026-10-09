@@ -62,11 +62,11 @@ export const deriveTestLaneCount = ({
 };
 
 /**
- * Heavy-logic batches carry the largest peak-RSS budget; running one at a time
+ * Heavy batches carry the largest peak-RSS budget; running one at a time
  * keeps the worst concurrent footprint at one heavy budget plus ordinary ones.
  */
 export const isExclusiveTestBatch = (kind: TestBatchKind): boolean =>
-  kind === TEST_BATCH_KIND.heavyLogic;
+  kind === TEST_BATCH_KIND.heavyLogic || kind === TEST_BATCH_KIND.heavyDb;
 
 type LaneBatch = { readonly kind: TestBatchKind };
 

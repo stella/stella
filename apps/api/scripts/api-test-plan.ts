@@ -53,6 +53,10 @@ const MODULE_MOCK_TEST_BATCH_SIZE = 3;
 // db via context, and module-level singletons are lazy per the side-effect
 // conventions). The path fallback catches integration suites that reach the
 // db through their own local setup.
+// Declare this comment in DB tests that retain a full-size corpus. Keeping the
+// decision beside the fixture avoids a second, path-based inventory.
+const HEAVY_DB_TEST_BATCH_SIZE = 1;
+const HEAVY_DB_SOURCE_MARKERS = [/^\s*\/\/ @api-test-heavy-db\b/mu];
 // Some protocol conformance tests intentionally load an independent client
 // implementation alongside the API server graph, while sandbox tests exercise
 // hard memory limits. Keep both classes in fresh processes so their retained
@@ -67,7 +71,7 @@ const HEAVY_LOGIC_PATH_MARKERS = [
 // readable error instead of an opaque exit-137 kill when the hosted
 // runner's memory runs out. Raising one is a reviewed product decision
 // (like the typecheck and network baselines), not a mechanical way to make
-// CI green. Two budgets, because the batch kinds have different floors:
+// CI green. The ordinary batch kinds have different floors:
 // DB-touching batches boot PGlite from the prebuilt snapshot (see below),
 // logic batches never connect at all. Measured on a full macOS run,
 // 2026-08-05: worst DB batch 2072 MB (3 snapshot-booted files; each file
@@ -81,7 +85,13 @@ const MAX_LOGIC_BATCH_PEAK_RSS_MB = 2048;
 // The sandbox's deliberate exponential-allocation test expands QuickJS/WASM
 // before the 1 MB guest limit aborts it. Its dedicated process may peak above
 // the ordinary logic ceiling, but remains bounded below the hosted 4 GB limit.
-export const MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB = 3072;
+const MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB = 3072;
+// Full-size corpus tests retain both PGlite WASM and the corpus/index graphs.
+// The Linux API runner's peak-RSS measurement reported 2583 MB when the
+// 20,000-entry refresh-event-loop suite shared a process with monitoring-drain.
+// Run corpus files alone with headroom above that observed peak, while keeping
+// this explicit ceiling below the hosted 4 GB limit and ordinary DBs at 2560 MB.
+const MAX_HEAVY_DB_BATCH_PEAK_RSS_MB = 3072;
 
 /** Every test file the runner executes, in its stable order. */
 export const listApiTestPaths = (apiRoot: string): string[] =>
@@ -192,6 +202,7 @@ export const planApiTestBatches = async ({
   const regularTests: string[] = [];
   const heavyLogicTests: string[] = [];
   const dbTests: string[] = [];
+  const heavyDbTests: string[] = [];
   const moduleMockTests: ModuleMockTest[] = [];
   for (const { source, testPath } of classifiedTests) {
     if (
@@ -203,6 +214,7 @@ export const planApiTestBatches = async ({
 
     const batchKind = classifyTestBatch({
       dbBacked: isDbTest(testPath, source),
+      heavyDb: HEAVY_DB_SOURCE_MARKERS.some((marker) => marker.test(source)),
       heavyLogic:
         HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
         HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)) ||
@@ -216,6 +228,9 @@ export const planApiTestBatches = async ({
           ...readTestModuleMockMetadata(source, testPath),
           testPath,
         });
+        break;
+      case TEST_BATCH_KIND.heavyDb:
+        heavyDbTests.push(testPath);
         break;
       case TEST_BATCH_KIND.db:
         dbTests.push(testPath);
@@ -264,6 +279,12 @@ export const planApiTestBatches = async ({
         heavyLogicTests,
         HEAVY_LOGIC_TEST_BATCH_SIZE,
       ),
+    },
+    {
+      isolate: false,
+      kind: TEST_BATCH_KIND.heavyDb,
+      maxPeakRssMb: MAX_HEAVY_DB_BATCH_PEAK_RSS_MB,
+      testBatches: composeTestBatches(heavyDbTests, HEAVY_DB_TEST_BATCH_SIZE),
     },
     {
       isolate: false,

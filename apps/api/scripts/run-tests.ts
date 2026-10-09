@@ -15,7 +15,6 @@ import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   listApiTestPaths,
-  MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
   planApiTestBatches,
   TEST_ROOTS,
   type ComposedTestBatches,
@@ -357,7 +356,9 @@ const testProcessEnv: Record<string, string | undefined> = {
 if (
   plannedBatches.some(
     ({ kind }) =>
-      kind === TEST_BATCH_KIND.db || kind === TEST_BATCH_KIND.moduleMock,
+      kind === TEST_BATCH_KIND.db ||
+      kind === TEST_BATCH_KIND.heavyDb ||
+      kind === TEST_BATCH_KIND.moduleMock,
   )
 ) {
   try {
@@ -380,7 +381,9 @@ const testLanes =
         env: process.env,
         // At most one heavy batch runs at a time, so sizing every lane for the
         // heavy budget over-reserves; that slack covers the runner's own processes.
-        laneMemoryBudgetMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
+        laneMemoryBudgetMb: Math.max(
+          ...composedBatches.map(({ maxPeakRssMb }) => maxPeakRssMb),
+        ),
         totalMemoryBytes: totalmem(),
       });
 // Concurrent children writing to the inherited terminal would interleave
