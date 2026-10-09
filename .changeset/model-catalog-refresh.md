@@ -2,4 +2,4 @@
 "@stll/ai-catalog": patch
 ---
 
-Refresh upstream model rates and request capabilities.
+Add Claude Haiku 5.5 routes with model rates and request capabilities.
