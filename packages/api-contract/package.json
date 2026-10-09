@@ -53,6 +53,7 @@
     "./email-mime-types": "./src/email-mime-types.ts",
     "./entity-views": "./src/entity-views.ts",
     "./feedback": "./src/feedback.ts",
+    "./entity-reference": "./src/entity-reference.ts",
     "./entity-options": "./src/entity-options.ts",
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",

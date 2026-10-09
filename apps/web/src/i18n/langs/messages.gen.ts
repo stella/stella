@@ -1927,6 +1927,7 @@ type Messages = {
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
     "unassigned": "Unassigned";
+    "unavailable": "Unavailable";
     "uncategorized": "Uncategorized";
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";

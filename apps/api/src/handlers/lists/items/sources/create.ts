@@ -16,6 +16,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 
 const bodySchema = t.Object({
@@ -40,6 +41,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Attach a source to one list item: the document version it comes from " +
     "plus a locator (the whole document, a DOCX block, or a PDF page) and an " +
