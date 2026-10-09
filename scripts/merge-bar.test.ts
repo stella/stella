@@ -1786,6 +1786,8 @@ describe("green result freshness", () => {
     },
     readPullFiles: () => ["scripts/shared.ts"],
     readBaseWorkflow: () => null,
+    readTestedBaseWorkflow: () => "jobs: {}",
+    readHeadWorkflow: () => "jobs: {}",
     runSelector: () => {
       throw new Error("unexpected plan run");
     },
@@ -1909,6 +1911,8 @@ describe("green result freshness", () => {
     }),
     readPullFiles: () => [PR_FILE],
     readBaseWorkflow: () => planWorkflow(rule),
+    readTestedBaseWorkflow: () => planWorkflow(rule),
+    readHeadWorkflow: () => planWorkflow(rule),
     runSelector: (input: {
       selector: string;
       files: readonly string[];
@@ -1971,6 +1975,67 @@ describe("green result freshness", () => {
       );
     }
   });
+
+  const workflowWithJobs = (...jobs: string[]) =>
+    Bun.YAML.stringify({
+      jobs: Object.fromEntries(jobs.map((job) => [job, {}])),
+    });
+
+  test("a job the PR removed does not make its green result stale", () => {
+    const result = checkGreenResultFreshness({
+      ...planReaders({ rule: SELECTING_RULE, runJobs: [guard] }),
+      readTestedBaseWorkflow: () => workflowWithJobs("e2e-production-shard"),
+      readHeadWorkflow: () => workflowWithJobs("replacement-job"),
+    });
+
+    expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
+      true,
+    );
+  });
+
+  test.each([
+    {
+      name: "main added the unrun job after the tested base",
+      testedBaseWorkflow: workflowWithJobs("existing-job"),
+      headWorkflow: workflowWithJobs("replacement-job"),
+      detail: "STALE_PLAN: main's CI plan now selects e2e-production-shard",
+    },
+    {
+      name: "the PR head keeps the unrun job",
+      testedBaseWorkflow: workflowWithJobs("e2e-production-shard"),
+      headWorkflow: workflowWithJobs("e2e-production-shard"),
+      detail: "STALE_PLAN: main's CI plan now selects e2e-production-shard",
+    },
+    {
+      name: "the tested-base workflow is unreadable",
+      testedBaseWorkflow: null,
+      headWorkflow: workflowWithJobs("replacement-job"),
+      detail: "cannot compare CI jobs at the tested base and PR head",
+    },
+    {
+      name: "the head workflow is unreadable",
+      testedBaseWorkflow: workflowWithJobs("e2e-production-shard"),
+      headWorkflow: null,
+      detail: "cannot compare CI jobs at the tested base and PR head",
+    },
+  ])(
+    "$name refuses the green result",
+    ({ testedBaseWorkflow, headWorkflow, detail }) => {
+      const result = checkGreenResultFreshness({
+        ...planReaders({ rule: SELECTING_RULE, runJobs: [guard] }),
+        readTestedBaseWorkflow: (sha) => {
+          expect(sha).toBe(OTHER_SHA);
+          return testedBaseWorkflow;
+        },
+        readHeadWorkflow: () => headWorkflow,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(detail);
+      }
+    },
+  );
 
   test("a planner main cannot evaluate refuses rather than passes", () => {
     const result = checkGreenResultFreshness({
