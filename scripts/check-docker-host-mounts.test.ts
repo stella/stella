@@ -93,7 +93,7 @@ const accepts = [
   {
     id: "argv-volume-create-dynamic-name",
     inspect: inspectDockerHelper,
-    source: '["docker", "volume", "create", "--opt", "size=10g", name]',
+    source: `${helperImport}["docker", "volume", "create", "--opt", "size=10g", dockerVolumeName(name)]`,
   },
   {
     id: "argv-mount-dynamic-source",
@@ -244,6 +244,11 @@ const rejects = [
     id: "host-backed-27",
     inspect: inspectDockerHelper,
     source: `["docker", "run", "--mount", \`type=volume,source=\${dockerVolumeName(name)},target=/data\`]`,
+  },
+  {
+    id: "host-backed-28",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", ...options]',
   },
 ] as const;
 

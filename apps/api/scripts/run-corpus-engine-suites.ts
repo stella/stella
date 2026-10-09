@@ -190,7 +190,12 @@ export const executeCorpusSuite = async ({
   const command = async (args: string[]) =>
     await run({ command: args, cwd: apiRoot, signal });
   const result = await Result.tryPromise(async () => {
-    await command(["docker", "volume", "create", suite.dataVolume]);
+    await command([
+      "docker",
+      "volume",
+      "create",
+      dockerVolumeName(suite.dataVolume),
+    ]);
     await command([
       "docker",
       "run",

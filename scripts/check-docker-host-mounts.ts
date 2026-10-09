@@ -226,12 +226,8 @@ const mountTemplateText = (
   tree: ts.SourceFile,
   helper: string | undefined,
 ): string => {
-  const calls = template.templateSpans.every(
-    ({ expression }) =>
-      helper !== undefined &&
-      ts.isCallExpression(expression) &&
-      ts.isIdentifier(expression.expression) &&
-      expression.expression.text === helper,
+  const calls = template.templateSpans.every(({ expression }) =>
+    isVolumeNameHelperCall(expression, helper),
   );
   if (!calls) {
     return template.getText(tree).slice(1, -1);
@@ -401,10 +397,26 @@ const staticArgument = (
     ? element.text
     : undefined;
 
+const isVolumeNameHelperCall = (
+  expression: ts.Expression,
+  helper: string | undefined,
+): boolean =>
+  helper !== undefined &&
+  ts.isCallExpression(expression) &&
+  ts.isIdentifier(expression.expression) &&
+  expression.expression.text === helper;
+
+const helperCallPlaceholder = (
+  element: ts.Expression,
+  helper: string | undefined,
+): string | undefined =>
+  isVolumeNameHelperCall(element, helper) ? "volume" : undefined;
+
 // Argument arrays: ["docker", "volume", "create", ...] or, when the command is
 // a separate spawn argument, ["volume", "create", ...].
 const hasSafeVolumeCreateArguments = (
   array: ts.ArrayLiteralExpression,
+  helper: string | undefined,
 ): boolean => {
   const { elements } = array;
   const start = elements.findIndex(
@@ -416,16 +428,25 @@ const hasSafeVolumeCreateArguments = (
   if (start === -1) {
     return true;
   }
-  return !isUnsafeVolumeCreate(
-    volumeCreateOptions(elements.slice(start + 2).map(staticArgument)),
+  // Every argument after create must be a literal or a validated-name call.
+  const args = elements
+    .slice(start + 2)
+    .map(
+      (element) =>
+        staticArgument(element) ?? helperCallPlaceholder(element, helper),
+    );
+  return (
+    args.every((argument) => argument !== undefined) &&
+    !isUnsafeVolumeCreate(volumeCreateOptions(args))
   );
 };
 
 const volumeCreateArrayFailures = (
   array: ts.ArrayLiteralExpression,
+  helper: string | undefined,
 ): string[] => {
   const failures: string[] = [];
-  if (!hasSafeVolumeCreateArguments(array)) {
+  if (!hasSafeVolumeCreateArguments(array, helper)) {
     failures.push("Docker volume driver options cannot configure host binds");
   }
   if (!hasSafeVolumeDriverFlags(array.elements.map(staticArgument))) {
@@ -567,7 +588,7 @@ export const inspectDockerHelper = (source: string): string[] => {
       }
     }
     if (ts.isArrayLiteralExpression(node)) {
-      failures.push(...volumeCreateArrayFailures(node));
+      failures.push(...volumeCreateArrayFailures(node, helper));
       for (const [index, element] of node.elements.entries()) {
         if (!ts.isStringLiteralLike(element) || element.text !== "--mount") {
           continue;
