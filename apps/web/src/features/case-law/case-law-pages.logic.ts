@@ -7,7 +7,10 @@
 
 import { panic } from "better-result";
 
-import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
+import {
+  CASE_LAW_RESULT_DEPTH_MAX,
+  PUBLIC_LAW_PAGE_SIZES,
+} from "@stll/api-contract/limits";
 import {
   SEARCH_PAGE_END,
   SEARCH_TOTAL_TYPE,
@@ -17,7 +20,6 @@ import {
 
 import {
   PUBLIC_LAW_PAGE_REST,
-  PUBLIC_LAW_PAGE_SIZES,
   publicLawPageNumber,
   type PublicLawPageRest,
   type PublicLawPageSize,

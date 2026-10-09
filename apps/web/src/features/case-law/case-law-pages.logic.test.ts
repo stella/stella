@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { CASE_LAW_RESULT_DEPTH_MAX } from "@stll/api-contract/limits";
+import {
+  CASE_LAW_RESULT_DEPTH_MAX,
+  PUBLIC_LAW_PAGE_SIZES,
+} from "@stll/api-contract/limits";
 import {
   SEARCH_PAGE_END,
   SEARCH_TOTAL_NOT_COUNTED,
@@ -10,7 +13,6 @@ import {
 
 import {
   PUBLIC_LAW_PAGE_REST,
-  PUBLIC_LAW_PAGE_SIZES,
   publicLawNumberedPagerModel,
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-pagination.logic";
