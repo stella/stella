@@ -68,6 +68,14 @@ class FakeRedisClient {
   }
 
   async send(command: string, args: string[]): Promise<unknown> {
+    if (command === "HDEL") {
+      const current = this.state.entries.get(requiredArg(args, 0));
+      return current?.attempts.delete(
+        requiredArg(args, 1).slice("attempt:".length),
+      )
+        ? 1
+        : 0;
+    }
     if (command === "DEL") {
       return this.state.entries.delete(requiredArg(args, 0)) ? 1 : 0;
     }
@@ -186,6 +194,63 @@ describe("RedisRateLimitContext", () => {
 
     first.kill();
     second.kill();
+  });
+
+  test("completed long-window requests retain quota counts without refund markers", async () => {
+    const state = createFakeRedisState();
+    const context = createContext(state);
+    const completed: string[] = [];
+    const complete = context.complete.bind(context);
+    context.complete = async (key) => {
+      await complete(key);
+      completed.push(key);
+    };
+    const app = new Elysia()
+      .use(
+        rateLimit({
+          context,
+          duration: 86_400_000,
+          max: 1,
+          generator: () => requestKey("daily"),
+        }),
+      )
+      .get("/resolve", () => "resolved");
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const response = await app.handle(
+        new Request("http://localhost/resolve"),
+      );
+      expect(response.status).toBe(attempt === 0 ? 200 : 429);
+    }
+    // After-response hooks finish asynchronously; wait for this observable work.
+    await Bun.sleep(0);
+    expect(completed).toHaveLength(40);
+    expect(
+      [...state.entries.values()].map(({ attempts }) => attempts.size),
+    ).toEqual([0]);
+    expect([...state.entries.values()].map(({ count }) => count)).toEqual([40]);
+    const next = requestKey("daily");
+    expect((await context.increment(next, 86_400_000)).count).toBe(41);
+    await context.decrement(next);
+    expect([...state.entries.values()].at(0)?.count).toBe(40);
+    context.kill();
+  });
+
+  test("completing one request preserves an in-flight request's refund", async () => {
+    const state = createFakeRedisState();
+    const context = createContext(state);
+    const completed = requestKey("daily");
+    const pending = requestKey("daily");
+    await context.increment(completed, 86_400_000);
+    await context.increment(pending, 86_400_000);
+    await context.complete(completed);
+    expect([...state.entries.values()].at(0)?.attempts.size).toBe(1);
+    expect([...state.entries.values()].at(0)?.count).toBe(2);
+    await context.decrement(pending);
+    expect([...state.entries.values()].at(0)?.count).toBe(1);
+    expect([...state.entries.values()].at(0)?.attempts.size).toBe(0);
+    await context.decrement(completed);
+    expect([...state.entries.values()].at(0)?.count).toBe(1);
+    context.kill();
   });
 
   test("falls back locally on malformed Redis replies", async () => {

@@ -83,7 +83,12 @@ type RedisRateLimitClient = {
   send: (command: string, args: string[]) => Promise<unknown>;
 };
 
-type RedisRateLimitOperation = "connect" | "decrement" | "increment" | "reset";
+type RedisRateLimitOperation =
+  | "connect"
+  | "decrement"
+  | "increment"
+  | "reset"
+  | "complete";
 
 type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;
@@ -277,6 +282,30 @@ export class RedisRateLimitContext implements RateLimitContext {
       });
     }
     return redisResult.value;
+  }
+
+  async complete(key: string): Promise<void> {
+    const { requestId } = parseRequestScopedKey(key);
+    if (requestId === null) {
+      return;
+    }
+    const provenance = this.refundProvenanceByRequest.get(requestId);
+    this.refundProvenanceByRequest.delete(requestId);
+    if (provenance === undefined) {
+      return;
+    }
+    // No handler refund can occur after the response is sent. The counter and
+    // its expiry survive; long budgets retain only in-flight refund identities.
+    const result = await Result.tryPromise(
+      async () =>
+        await this.sendCommand("HDEL", [
+          redisRateLimitKey(provenance.counterKey),
+          `attempt:${provenance.attemptId}`,
+        ]),
+    );
+    if (Result.isError(result)) {
+      this.onRedisError(result.error, "complete");
+    }
   }
 
   async decrement(key: string): Promise<void> {
