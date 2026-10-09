@@ -107,6 +107,16 @@ const pathsIn = (
     if (key === "parent") {
       continue;
     }
+    if (
+      key === "property" &&
+      node.type === "MemberExpression" &&
+      node.computed !== true
+    ) {
+      continue;
+    }
+    if (key === "key" && node.type === "Property" && node.computed !== true) {
+      continue;
+    }
     if (Array.isArray(value)) {
       for (const child of value) {
         pathsIn(child, { aliases, resolveBinding, paths });
@@ -460,27 +470,14 @@ export default eslintCompatPlugin({
                 resolveBinding,
                 values: expectedValues,
               });
-              const shared = [...actualPaths].find((path) =>
+              const sharedPaths = [...actualPaths].filter((path) =>
                 pathsDependOn(expectedPaths, path),
               );
-              if (shared === undefined) {
+              if (sharedPaths.length === 0) {
                 continue;
               }
               const sourceText = (node: AstNode) =>
                 context.sourceCode.getText(node);
-              if (
-                hasMirroredArrayContext({
-                  actual: parts.actual,
-                  expected: parts.expected,
-                  aliases,
-                  values: expectedValues,
-                  resolveBinding,
-                  sharedPath: shared,
-                  sourceText,
-                })
-              ) {
-                continue;
-              }
               const actualText = context.sourceCode.getText(parts.actual);
               const repeatedName = repeatedObservationName({
                 actual: parts.actual,
@@ -490,32 +487,47 @@ export default eslintCompatPlugin({
                 sourceText,
               });
               const scope = testScope(matcher);
-              const anchored = matchers.some((candidate) => {
-                if (candidate === matcher) {
-                  return false;
-                }
-                const candidateParts = matcherParts(candidate);
-                return (
-                  candidateParts !== null &&
-                  !candidateParts.negated &&
-                  testScope(candidate) === scope &&
-                  (context.sourceCode.getText(candidateParts.actual) ===
-                    actualText ||
-                    context.sourceCode.getText(candidateParts.actual) ===
-                      repeatedName) &&
-                  isIndependentAnchor(candidateParts.expected, {
+              const unanchored = sharedPaths.find((sharedPath) => {
+                if (
+                  hasMirroredArrayContext({
+                    actual: parts.actual,
+                    expected: parts.expected,
                     aliases,
                     values: expectedValues,
                     resolveBinding,
-                    sharedPath: shared,
+                    sharedPath,
+                    sourceText,
                   })
-                );
+                ) {
+                  return false;
+                }
+                return !matchers.some((candidate) => {
+                  if (candidate === matcher) {
+                    return false;
+                  }
+                  const candidateParts = matcherParts(candidate);
+                  return (
+                    candidateParts !== null &&
+                    !candidateParts.negated &&
+                    testScope(candidate) === scope &&
+                    (context.sourceCode.getText(candidateParts.actual) ===
+                      actualText ||
+                      context.sourceCode.getText(candidateParts.actual) ===
+                        repeatedName) &&
+                    isIndependentAnchor(candidateParts.expected, {
+                      aliases,
+                      values: expectedValues,
+                      resolveBinding,
+                      sharedPath,
+                    })
+                  );
+                });
               });
-              if (!anchored) {
+              if (unanchored !== undefined) {
                 context.report({
                   node: matcher,
                   messageId: "shared",
-                  data: { path: pathText(shared) },
+                  data: { path: pathText(unanchored) },
                 });
               }
             }

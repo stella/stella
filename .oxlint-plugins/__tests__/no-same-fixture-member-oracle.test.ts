@@ -41,6 +41,14 @@ const cases = [
     lines: [2],
   },
   {
+    title: "does not treat non-computed property names as variable references",
+    source: [
+      "const input = fx.input;",
+      'expect(detect(input)).toEqual({ input: "plain" });',
+    ].join("\n"),
+    lines: [],
+  },
+  {
     title: "allows literal, golden, and independent fixture expectations",
     source: [
       'expect(detect(fx.text)).toBe("plain");',
@@ -87,6 +95,12 @@ const cases = [
       "expect([detect(row.country), row.tier]).toEqual([derive(row.country), row.tier]);",
     ].join("\n"),
     lines: [2],
+  },
+  {
+    title: "checks every shared path after mirrored array context",
+    source:
+      'expect([row.name, detect(row.text), "x"]).toEqual([row.name, derive(row.text), "x"]);',
+    lines: [1],
   },
   {
     title: "allows parity anchored by a literal assertion",
