@@ -160,9 +160,9 @@ const assertPeriodic = (candidate = script, bindings = plannerEnv) => {
   ).toBe(true);
 };
 
-test("hourly main-heavy plans and runs release typechecks without a VERSION change", () => {
+test("scheduled main-heavy plans and runs release typechecks without a VERSION change", () => {
   expect(
-    caller.on.schedule.some(({ cron }) => /^\d+ \* \* \* \*$/u.test(cron)),
+    caller.on.schedule.some(({ cron }) => /^\d+ \S+ \* \* \*$/u.test(cron)),
   ).toBe(true);
   assertPeriodic();
   for (const event of ["push", "workflow_dispatch"]) {
