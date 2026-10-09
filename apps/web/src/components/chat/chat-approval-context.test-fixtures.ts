@@ -17,15 +17,15 @@ export const testChatApprovalContextValue = {
   handleAlwaysAllow: ignore,
   handleApprove: ignore,
   handleDeny: ignore,
-  continueRequestSecret: () => Promise.resolve(),
-  handleRequestSecret: () =>
-    Promise.resolve({
+  continueRequestSecret: async () => await Promise.resolve(),
+  handleRequestSecret: async () =>
+    await Promise.resolve({
       status: "declined",
       target: { type: "mcp-connector", connectorSlug: "test" },
     }),
   secretAvailabilityKey: "test-thread",
-  resolveSecretTarget: () =>
-    Promise.resolve({
+  resolveSecretTarget: async () =>
+    await Promise.resolve({
       available: false,
       connector: {
         connectionId: "sample-connection",

@@ -25,13 +25,19 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import savedSecret from "@/api/handlers/chat/saved-secret";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 
 import { validatePrivateReceipts } from "./chat-secret-validation";
 import {
@@ -179,11 +185,12 @@ const answerPendingRequest = async (
     await submitSecret.handler(
       createTestHandlerContext<Parameters<typeof submitSecret.handler>[0]>({
         safeDb,
+        scopedDb: NO_DB,
         session: { activeOrganizationId: scope.organizationId },
         user: { id: scope.userId },
         params: { threadId: scope.threadId, toolCallId },
         body,
-        recordAuditEvent: async () => {},
+        audit: auditRecorderDouble(),
       }),
     );
   const connection = (
@@ -285,17 +292,29 @@ if (!databaseUrl || !runPostgres) {
           const safeDb = safeDbFromScoped(
             async (run) => await db.transaction(run),
           );
+          const auditCalls = { count: 0 };
+          const audit = auditRecorderDouble((events) => {
+            auditCalls.count += 1;
+            expect(events).toEqual([
+              expect.objectContaining({
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+                resourceId: scope.threadId,
+              }),
+            ]);
+          });
           const submit = async (body: unknown) =>
             await submitSecret.handler(
               createTestHandlerContext<
                 Parameters<typeof submitSecret.handler>[0]
               >({
                 safeDb,
+                scopedDb: NO_DB,
                 session: { activeOrganizationId: scope.organizationId },
                 user: { id: scope.userId },
                 params: { threadId: scope.threadId, toolCallId },
                 body,
-                recordAuditEvent: async () => {},
+                audit,
               }),
             );
           const connection = (
@@ -315,6 +334,7 @@ if (!databaseUrl || !runPostgres) {
             decision: "use-saved",
             targetConnection,
           });
+          expect(auditCalls.count).toBe(1);
           const parsed = v.safeParse(requestSecretOutputSchema, first);
           if (!parsed.success) {
             panic("Expected stored receipt");
@@ -335,6 +355,7 @@ if (!databaseUrl || !runPostgres) {
             normalConnectionAction: "preserve",
           });
           expect(recovered).toEqual(first);
+          expect(auditCalls.count).toBe(1);
           expect(
             await submit({ decision: "use-saved", targetConnection }),
           ).toEqual(first);
@@ -752,10 +773,12 @@ if (!databaseUrl || !runPostgres) {
                 Parameters<typeof savedSecret.handler>[0]
               >({
                 safeDb,
+                scopedDb: NO_DB,
                 session: { activeOrganizationId: scope.organizationId },
                 user: { id: scope.userId },
                 params: { threadId },
                 query: { connectorSlug: "missing-connector" },
+                audit: NO_AUDIT,
               }),
             );
           const submitDecline = async (threadId: Fixture["threadId"]) =>
@@ -764,11 +787,12 @@ if (!databaseUrl || !runPostgres) {
                 Parameters<typeof submitSecret.handler>[0]
               >({
                 safeDb,
+                scopedDb: NO_DB,
                 session: { activeOrganizationId: scope.organizationId },
                 user: { id: scope.userId },
                 params: { threadId, toolCallId: "missing-request" },
                 body: { decision: "decline" },
-                recordAuditEvent: async () => {},
+                audit: auditRecorderDouble(),
               }),
             );
 

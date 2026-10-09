@@ -6,7 +6,11 @@ import submitSecret from "@/api/handlers/chat/submit-secret";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { authorizedMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 
 // A chat-only credential passes the declared chat permission but holds no
 // connector access, so only the handlers' own connector check refuses it.
@@ -40,6 +44,8 @@ test("refuses the saved-credential read without connector access before any data
     createTestHandlerContext<Parameters<typeof savedSecret.handler>[0]>({
       memberRole: chatOnlyMember(),
       safeDb,
+      scopedDb: NO_DB,
+      audit: NO_AUDIT,
       params: { threadId: createSafeId<"chatThread">() },
       query: { connectorSlug: "sample-connector" },
     }),
@@ -54,6 +60,8 @@ test("refuses a provided credential without connector access before any database
     createTestHandlerContext<Parameters<typeof submitSecret.handler>[0]>({
       memberRole: chatOnlyMember(),
       safeDb,
+      scopedDb: NO_DB,
+      audit: NO_AUDIT,
       params: {
         threadId: createSafeId<"chatThread">(),
         toolCallId: "sample-request",
