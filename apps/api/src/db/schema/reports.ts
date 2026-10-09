@@ -159,6 +159,12 @@ export const reportExports = p.pgTable(
       .where(
         sql`${table.notificationStatus} = 'pending' AND ${table.status} IN ('completed', 'failed')`,
       ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.resultEntityId, { target: "entities", kind: "owned-content" }],
+        [table.resultFieldId, { target: "fields", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );

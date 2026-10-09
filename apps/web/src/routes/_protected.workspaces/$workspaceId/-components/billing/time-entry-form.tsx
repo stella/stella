@@ -37,6 +37,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
+import type { QueryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
@@ -63,8 +64,32 @@ type TimeEntryFormProps = {
   onSubmit: (values: TimeEntryFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
+  contextState?: "available" | "unavailable";
 };
 
+const timeEntryFormSchema = (
+  contextState: "available" | "unavailable",
+  matterRequired: string,
+) =>
+  v.strictObject({
+    matterId: v.pipe(
+      v.string(),
+      v.check(
+        (value) => value.length > 0 || contextState === "unavailable",
+        matterRequired,
+      ),
+    ),
+    dateWorked: v.string(),
+    durationMinutes: v.number(),
+    narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
+    invoiceNarrative: v.string(),
+    billable: v.boolean(),
+    taskCode: v.string(),
+    activityCode: v.string(),
+    rateAtEntry: v.number(),
+    currency: v.string(),
+  });
 const initialRateInput = (entry: TimeEntryFormProps["defaultValues"]) =>
   (entry?.rateAtEntry ?? 0) > 0
     ? majorUnitInput(
@@ -89,20 +114,9 @@ const initialTimeEntryValues = (
   currency: entry?.currency ?? DEFAULT_CURRENCY,
 });
 
-const timeEntrySchema = (matterRequired: string) =>
-  v.strictObject({
-    matterId: v.pipe(v.string(), v.nonEmpty(matterRequired)),
-    dateWorked: v.string(),
-    durationMinutes: v.number(),
-    narrative: v.string(),
-    narrativeLanguage: v.nullable(v.string()),
-    invoiceNarrative: v.string(),
-    billable: v.boolean(),
-    taskCode: v.string(),
-    activityCode: v.string(),
-    rateAtEntry: v.number(),
-    currency: v.string(),
-  });
+const loadedItems = <TData, TError>(view: QueryView<TData, TError>) =>
+  view.type === "items" ? view.items : undefined;
+
 export const TimeEntryForm = ({
   workspaceId,
   userId,
@@ -110,6 +124,7 @@ export const TimeEntryForm = ({
   onSubmit,
   onCancel,
   submitLabel,
+  contextState = "available",
 }: TimeEntryFormProps) => {
   const t = useTranslations();
   const [rateOverride, setRateOverride] = useState(
@@ -121,18 +136,16 @@ export const TimeEntryForm = ({
 
   const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
   const taskCodesView = useQueryView(taskCodesQuery);
-  const taskCodes =
-    taskCodesView.type === "items" ? taskCodesView.items : undefined;
+  const taskCodes = loadedItems(taskCodesView);
   const activityCodesQuery = useQuery(
     billingCodesOptions(workspaceId, "activity"),
   );
   const activityCodesView = useQueryView(activityCodesQuery);
-  const activityCodes =
-    activityCodesView.type === "items" ? activityCodesView.items : undefined;
+  const activityCodes = loadedItems(activityCodesView);
 
   const form = useForm(
     schemaFormOptions({
-      schema: timeEntrySchema(t("billing.matterRequired")),
+      schema: timeEntryFormSchema(contextState, t("billing.matterRequired")),
       submitValues: "raw",
       defaultValues: initialTimeEntryValues(defaultValues),
       onSubmit: async ({ value }) => {
@@ -159,8 +172,7 @@ export const TimeEntryForm = ({
     resolvedRateOptions(workspaceId, userId, dateWorked),
   );
   const resolvedView = useQueryView(resolvedQuery);
-  const resolved =
-    resolvedView.type === "items" ? resolvedView.items : undefined;
+  const resolved = loadedItems(resolvedView);
 
   // Resolved rates are automatic defaults, not unsaved user changes.
   // Sync the external form store until the user overrides the rate.
@@ -219,6 +231,9 @@ export const TimeEntryForm = ({
               <FieldLabel>{t("common.matter")}</FieldLabel>
               <MatterCombobox
                 onChange={field.handleChange}
+                {...(contextState === "unavailable" && field.state.value === ""
+                  ? { placeholder: t("common.unavailable") }
+                  : {})}
                 value={field.state.value}
                 workspaceId={workspaceId}
               />

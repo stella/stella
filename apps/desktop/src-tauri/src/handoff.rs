@@ -141,7 +141,7 @@ struct LinkedRequestOptions<'a> {
   target: Target,
   api_base_url: &'a str,
   token: &'a str,
-  account: Option<crate::account::LinkedAccount>,
+  account: Option<&'a crate::account::AccountRequest>,
 }
 
 async fn attempt_linked<T: serde::de::DeserializeOwned>(
@@ -166,7 +166,7 @@ async fn attempt_linked<T: serde::de::DeserializeOwned>(
   })
   .await?;
   match account {
-    Some(account) => Ok((redeemed, account)),
+    Some(account) => Ok((redeemed, (**account).clone())),
     None => Err(Failure::AccountRequired),
   }
 }
@@ -257,14 +257,14 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
   .map_err(|e| e.to_string())?;
   loop {
     let account_state = app.state::<crate::account::AccountState>();
-    let result = match crate::account::current(&account_state).await {
+    let result = match crate::account::foreground_account(&account_state).await {
       Ok(account) => {
         attempt_linked(LinkedRequestOptions {
           client: &client,
           target,
           api_base_url,
           token,
-          account,
+          account: account.as_ref(),
         })
         .await
       }
@@ -439,13 +439,14 @@ mod tests {
           expires_at: "2027-01-01T00:00:00Z".into(),
         },
       };
+      let account = crate::account::AccountRequest::fixture(account).await;
       let (redeemed, linked) =
         attempt_linked::<serde_json::Value>(LinkedRequestOptions {
           client: &client,
           target,
           api_base_url: &origin,
           token: "valid",
-          account: Some(account),
+          account: Some(&account),
         })
         .await
         .unwrap();
@@ -698,12 +699,16 @@ mod tests {
           },
         }),
       ] {
+        let account = match account {
+          Some(account) => Some(crate::account::AccountRequest::fixture(account).await),
+          None => None,
+        };
         let result = attempt_linked::<serde_json::Value>(LinkedRequestOptions {
           client: &client,
           target,
           api_base_url: &origin,
           token: "token",
-          account,
+          account: account.as_ref(),
         })
         .await;
         assert!(matches!(result, Err(Failure::AccountRequired)));
