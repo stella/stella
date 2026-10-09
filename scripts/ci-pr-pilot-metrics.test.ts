@@ -249,6 +249,28 @@ print(json.dumps([fixture.windows, partial_complete, partial["baselineComplete"]
   ]);
 });
 
+test("continuation re-measures a baseline whose collection was incomplete", () => {
+  const result = execute(`
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+class Fixture:
+    def __init__(self):
+        self.completeness = [False, True]
+        self.windows = []
+    def collect(self, since, cached):
+        self.windows.append(since.isoformat())
+        return pulls, self.completeness.pop(0)
+previous = {"profile": "pilot-v1", "startedAt": dt.datetime(2000, 1, 4, 11, 20, 20, tzinfo=dt.UTC).isoformat(),
+            "generatedAt": now.isoformat(), "stopped": False, "baselineArmToMergeP50Minutes": 10}
+fixture = Fixture()
+partial_baseline, partial_complete = m.measure_baseline(previous, fixture, m.timestamp(previous["startedAt"]), set())
+partial = m.build_report([], previous, now, True, set(), partial_baseline, sampling)
+complete_baseline, complete = m.measure_baseline(partial, fixture, m.timestamp(previous["startedAt"]), set())
+print(json.dumps([len(fixture.windows), partial_complete, partial["baselineComplete"], partial["complete"],
+                  complete, complete_baseline["baselineComplete"]]))
+`);
+  expect(result).toEqual([2, false, false, false, true, true]);
+});
+
 test("missing bootstrap and incomplete pagination cannot certify an optimization", () => {
   const values = execute(`
 try:
