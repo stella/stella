@@ -269,12 +269,15 @@ test.each(SERVING_TARGET_REFUSALS)(
     // the thrown refusal, so a client cannot tell the two paths apart.
     const thrown = searchIndexUnavailableError(failure);
     expect(thrown.status).toBe(outcome.code);
-    expect({
+    // Compared as a value: the envelope's declared type is the union of every
+    // body the route may return.
+    const body: unknown = outcome.response;
+    expect(body).toEqual({
       code: thrown.code,
       message: thrown.message,
       hint: thrown.hint,
       retryable: thrown.retryable,
-    }).toEqual(outcome.response);
+    });
     expect(outcome.response).toMatchObject({
       code: SEARCH_INDEX_UNAVAILABLE_CODE,
     });
