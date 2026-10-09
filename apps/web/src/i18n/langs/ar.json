@@ -892,6 +892,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."

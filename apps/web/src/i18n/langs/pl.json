@@ -892,6 +892,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
