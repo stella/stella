@@ -71,11 +71,33 @@ const COLOR_FUNCTIONS = new Set([
 // The characters colour values in the app theme use, and no others.
 const COLOR_CHARACTERS = /^[a-z0-9#%.,+/()\s-]+$/iu;
 const COLOR_LITERAL = /^(?:#[\da-f]{3,8}|[a-z]+)$/iu;
-const CSS_FUNCTION = /([a-z-]+)\s*\(/giu;
-const LENGTH_VALUE =
-  /^(?:(?:0|(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|ch|ex|cap|ic|lh|rlh|vw|vh|vmin|vmax|%))(?:\s+|$)){1,4}$/iu;
-const FONT_FAMILY =
-  /^(?:"[a-z0-9 -]+"|'[a-z0-9 -]+'|[a-z][a-z0-9 -]*)(?:\s*,\s*(?:"[a-z0-9 -]+"|'[a-z0-9 -]+'|[a-z][a-z0-9 -]*))*$/iu;
+const LENGTH_PART =
+  /^(?:0|(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|ch|ex|cap|ic|lh|rlh|vw|vh|vmin|vmax|%))$/iu;
+// One to four lengths, as a radius shorthand allows.
+const LENGTH_PART_LIMIT = 4;
+const FONT_FAMILY_NAME = /^(?:"[a-z0-9 -]+"|'[a-z0-9 -]+'|[a-z][a-z0-9 -]*)$/iu;
+
+const isLengthValue = (value: string) => {
+  const parts = value.trim().split(/\s+/u);
+  return (
+    parts.length <= LENGTH_PART_LIMIT &&
+    parts.every((part) => LENGTH_PART.test(part))
+  );
+};
+
+const isFontFamilyValue = (value: string) =>
+  value.split(",").every((name) => FONT_FAMILY_NAME.test(name.trim()));
+
+const FUNCTION_NAME_CHARACTER = /[a-z-]/iu;
+
+const trailingFunctionName = (text: string) => {
+  const trimmed = text.trimEnd();
+  let start = trimmed.length;
+  while (start > 0 && FUNCTION_NAME_CHARACTER.test(trimmed.charAt(start - 1))) {
+    start -= 1;
+  }
+  return trimmed.slice(start).toLowerCase();
+};
 
 const isColorValue = (value: string) => {
   if (COLOR_LITERAL.test(value)) {
@@ -84,11 +106,11 @@ const isColorValue = (value: string) => {
   if (!COLOR_CHARACTERS.test(value) || !value.includes("(")) {
     return false;
   }
-  const functions = [...value.matchAll(CSS_FUNCTION)];
-  return (
-    functions.length > 0 &&
-    functions.every((match) => COLOR_FUNCTIONS.has(match.at(1) ?? ""))
-  );
+  // Every opening parenthesis must follow an allowed colour function name.
+  return value
+    .split("(")
+    .slice(0, -1)
+    .every((before) => COLOR_FUNCTIONS.has(trailingFunctionName(before)));
 };
 
 const isVisualThemeValue = (name: VisualThemeVariable, value: string) => {
@@ -96,9 +118,9 @@ const isVisualThemeValue = (name: VisualThemeVariable, value: string) => {
     case "color":
       return isColorValue(value);
     case "length":
-      return LENGTH_VALUE.test(value);
+      return isLengthValue(value);
     case "font-family":
-      return FONT_FAMILY.test(value);
+      return isFontFamilyValue(value);
     default:
       VISUAL_THEME_VALUE_KINDS[name] satisfies never;
       return panic("Unhandled visual theme value kind");

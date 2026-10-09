@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { VISUAL_PRESENTATION_CSS } from "../src/handlers/visual-sandbox/browser/presentation";
+import { VISUAL_PRESENTATION_CSS } from "../src/handlers/visual-sandbox/browser/presentation-css";
 import { buildVisualFontFaces } from "./visual-sandbox-fonts";
 
 test("visual font faces embed the app's exact font bytes and preserve typography metadata", async () => {

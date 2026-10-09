@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import path from "node:path";
 
-import { VISUAL_PRESENTATION_CSS } from "../src/handlers/visual-sandbox/browser/presentation";
+import { VISUAL_PRESENTATION_CSS } from "../src/handlers/visual-sandbox/browser/presentation-css";
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
 import {
   VISUAL_RUNTIME_BUILD_OPTIONS,
