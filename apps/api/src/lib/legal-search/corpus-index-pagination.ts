@@ -463,7 +463,7 @@ const readPageSnippets = async ({
   const fallbackResults = await mapWithConcurrency({
     items: missing,
     limit: LIMITS.corpusIndexHighlightConcurrency,
-    operation: ({ document }) => search(document, 1),
+    operation: async ({ document }) => search(document, 1),
   });
   recordResults(fallbackResults);
   rounds += missing.length;
