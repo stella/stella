@@ -11,8 +11,8 @@ const GITHUB_ACTIONS_BOT = "github-actions[bot]";
 const MAX_MERGE_QUEUE_BATCH_SIZE = 4;
 const RUNS_PER_PAGE = 100;
 const MAX_MERGE_GROUP_RUN_PAGES = 20;
-// A merge-group run is created before its merge commit lands.
-const MERGE_GROUP_LEAD_MS = 24 * 60 * 60 * 1000;
+// A run is created before its merge commit lands, so the cutoff precedes the oldest commit.
+const MERGE_GROUP_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const MERGE_QUEUE_TIMELINE_QUERY = `
   query MergeQueueTimeline($owner: String!, $name: String!, $number: Int!) {

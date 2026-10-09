@@ -129,7 +129,7 @@ const fakeCommand = ({
     if (endpoint && runsMatch) {
       requests.push(endpoint);
       expect(decodeURIComponent(runsMatch[1] ?? "")).toBe(
-        ">=2026-09-19T12:00:00.000Z",
+        ">=2026-09-13T12:00:00.000Z",
       );
       const page = pages[Number(runsMatch[2]) - 1] ?? [];
       return JSON.stringify({
