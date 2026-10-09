@@ -2940,12 +2940,12 @@ test("Playwright shard generation fails before loading an empty spec list", () =
     ({ name }) => name === "Run Playwright shard",
   )?.run;
   expect(run).toContain(
-    'specs_output=$(bun scripts/e2e-spec-shards.ts files "$E2E_SHARD")',
+    'specs_output=$(bun scripts/e2e-spec-shards-core.ts files "$E2E_SHARD")',
   );
   expect(run).toContain('[[ -n "$specs_output" ]]');
   expect(run).toContain('mapfile -t specs <<< "$specs_output"');
   expect(run).not.toContain(
-    "mapfile -t specs < <(bun scripts/e2e-spec-shards.ts",
+    "mapfile -t specs < <(bun scripts/e2e-spec-shards-core.ts",
   );
 });
 
@@ -5166,6 +5166,51 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     expect(values).toContain("api_test_shards=4");
     expect(values).toContain("api_test_files=\n");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a crashed e2e selector widens the real workflow matrix", () => {
+  const planner = jobSteps(ciJobs["ci-plan"]).find(
+    (step) => step.name === "Plan changed PR e2e shards",
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-plan-fallback-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        "-e",
+        "-c",
+        `bun() {
+          printf '%s' '{"shard":[1,2,"network-baseline"]}'
+        }
+        ${planner?.run ?? panic("Missing e2e shard planner")}`,
+      ],
+      {
+        env: {
+          PATH: Bun.env["PATH"] ?? "",
+          E2E_PRODUCTION_REQUIRED: "true",
+          EVENT_NAME: "pull_request",
+          GITHUB_OUTPUT: output,
+          RUNNER_TEMP: directory,
+          SELECTED_MATRIX: "",
+          SELECTOR_OUTCOME: "failure",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(readFileSync(output, "utf-8")).toBe(
+      [
+        'matrix={"shard":[1,2,"network-baseline"]}',
+        "selection_required=true",
+        "required=true",
+        "",
+      ].join("\n"),
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

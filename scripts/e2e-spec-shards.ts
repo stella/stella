@@ -1,55 +1,23 @@
 import { Result, panic } from "better-result";
-import { existsSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 
-import { compareCodeUnit } from "@stll/collation";
-
 import { buildImportGraph } from "./api-test-impact";
+import {
+  allE2eShards,
+  e2eShardForSpec,
+  listE2eSpecs,
+} from "./e2e-spec-shards-core";
 
-export const E2E_SHARD_COUNT = 2;
-const SPEC_ROOT = "apps/web/e2e/specs";
+export {
+  E2E_SHARD_COUNT,
+  e2eShardForSpec,
+  e2eSpecsForShard,
+  listE2eSpecs,
+} from "./e2e-spec-shards-core";
 // Runner configuration and global setup load every spec without being imported.
 const E2E_RUNNER_ROOT = "apps/web/e2e/";
 const SPEC_SUFFIX = ".spec.ts";
-
-const walk = (directory: string): string[] => {
-  const files: string[] = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const child = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walk(child));
-    } else if (entry.isFile() && child.endsWith(SPEC_SUFFIX)) {
-      files.push(child);
-    }
-  }
-  return files;
-};
-
-export const listE2eSpecs = (root = process.cwd()): string[] =>
-  walk(path.join(root, SPEC_ROOT))
-    .map((file) => path.relative(root, file))
-    .toSorted(compareCodeUnit);
-
-export const e2eShardForSpec = (
-  spec: string,
-  specs: readonly string[],
-): number => {
-  const index = specs.indexOf(spec);
-  if (index === -1) {
-    panic(`Unknown e2e spec: ${spec}`);
-  }
-  return (index % E2E_SHARD_COUNT) + 1;
-};
-
-export const e2eSpecsForShard = (
-  shard: number,
-  specs: readonly string[],
-): string[] => {
-  if (!Number.isInteger(shard) || shard < 1 || shard > E2E_SHARD_COUNT) {
-    panic(`Invalid e2e shard: ${shard}`);
-  }
-  return specs.filter((spec) => e2eShardForSpec(spec, specs) === shard);
-};
 
 type E2eSpecSelection =
   | { status: "all" }
@@ -130,7 +98,7 @@ export const selectedE2eShards = (
 ): number[] => {
   const selection = selectE2eSpecPlan(changedFiles, root);
   if (selection.status === "all") {
-    return Array.from({ length: E2E_SHARD_COUNT }, (_, index) => index + 1);
+    return allE2eShards();
   }
   const specs = listE2eSpecs(root);
   return [
@@ -143,19 +111,6 @@ if (import.meta.main) {
   if (command === "select") {
     const shards = selectedE2eShards(args);
     process.stdout.write(JSON.stringify({ shard: shards }));
-  } else if (command === "files") {
-    const shard = Number(args.at(0));
-    const specs = listE2eSpecs();
-    process.stdout.write(e2eSpecsForShard(shard, specs).join("\n"));
-  } else if (command === "all") {
-    process.stdout.write(
-      JSON.stringify({
-        shard: [
-          ...Array.from({ length: E2E_SHARD_COUNT }, (_, index) => index + 1),
-          "network-baseline",
-        ],
-      }),
-    );
   } else {
     panic(`Unknown e2e shard command: ${command ?? "missing"}`);
   }

@@ -504,7 +504,7 @@ describe("detect-e2e-changes", () => {
       `shard: ${githubExpression("fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard")}`,
     );
     expect(workflowJob("ci-plan")).toContain(
-      "matrix=$(bun scripts/e2e-spec-shards.ts all)",
+      "matrix=$(bun scripts/e2e-spec-shards-core.ts all)",
     );
     expect(workflowJob("ci-plan")).toContain(
       'echo "selection_required=true" >> "$GITHUB_OUTPUT"',

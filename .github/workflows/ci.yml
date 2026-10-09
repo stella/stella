@@ -1219,22 +1219,16 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
 
-      - name: Plan changed PR e2e shards
-        id: e2e-pr-plan
-        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+      - name: Select changed PR e2e shards
+        id: e2e-pr-selection
+        continue-on-error: true
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && github.event_name == 'pull_request'
+          && steps.api-test-deps.outcome == 'success'
         shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" != pull_request ]]; then
-            matrix=$(bun scripts/e2e-spec-shards.ts all)
-            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-            echo "selection_required=true" >> "$GITHUB_OUTPUT"
-            echo "required=$E2E_PRODUCTION_REQUIRED" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           changed_files=()
           if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
             while IFS= read -r -d '' file; do
@@ -1242,6 +1236,24 @@ jobs:
             done < "$RUNNER_TEMP/api-test-changed-paths"
           fi
           matrix=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+      - name: Plan changed PR e2e shards
+        id: e2e-pr-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
+          SELECTED_MATRIX: ${{ steps.e2e-pr-selection.outputs.matrix }}
+          SELECTOR_OUTCOME: ${{ steps.e2e-pr-selection.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != pull_request || "$SELECTOR_OUTCOME" != success || -z "$SELECTED_MATRIX" ]]; then
+            matrix=$(bun scripts/e2e-spec-shards-core.ts all)
+          else
+            matrix=$SELECTED_MATRIX
+          fi
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           if [[ "$matrix" == '{"shard":[]}' ]]; then
             echo "selection_required=false" >> "$GITHUB_OUTPUT"
@@ -5984,7 +5996,7 @@ jobs:
           E2E_SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          specs_output=$(bun scripts/e2e-spec-shards.ts files "$E2E_SHARD")
+          specs_output=$(bun scripts/e2e-spec-shards-core.ts files "$E2E_SHARD")
           [[ -n "$specs_output" ]] || {
             echo "Selected E2E shard $E2E_SHARD has no specs" >&2
             exit 1
