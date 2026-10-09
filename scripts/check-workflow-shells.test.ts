@@ -49,6 +49,7 @@ describe("workflow shell policy", () => {
     `echo ${posixDefault}`,
     "if true; then echo x; fi",
     "for x in a; do echo x; done",
+    "FOO=bar command",
   ])("detects bash syntax under pwsh: %s", (run) => {
     const source = `name: fixture\n${defaults}on: push\njobs:\n  check:\n    runs-on: windows-latest\n    steps:\n      - name: Broken\n        shell: pwsh\n        run: |\n          ${run}\n`;
     expect(checkWorkflowSource("fixture.yml", source)).toEqual([
@@ -95,6 +96,18 @@ describe("workflow shell policy", () => {
     },
   );
 
+  test.each(["bash -c {0}", "bash --noprofile {0}"])(
+    "rejects custom workflow default shells: %s",
+    (shell) => {
+      const source = `name: fixture\ndefaults:\n  run:\n    shell: ${shell}\non: push\njobs: {}\n`;
+      expect(checkWorkflowSource("fixture.yml", source)).toContainEqual(
+        expect.objectContaining({
+          message: "workflow must define defaults.run.shell: bash",
+        }),
+      );
+    },
+  );
+
   test("catches the historical release desktop copy step", () => {
     const run = `|\n          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"\n          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"`;
     const source = `name: release\non: push\njobs:\n  build:\n    runs-on: windows-latest\n    steps:\n      - name: Preserve GitHub API tooling across source checkouts\n        run: |\n          ${run}\n`;
@@ -134,4 +147,17 @@ describe("workflow shell policy", () => {
       }),
     ]);
   });
+
+  test.each(["", '""'])(
+    "composite actions reject empty shells: %s",
+    (shell) => {
+      const source = `name: fixture\nruns:\n  using: composite\n  steps:\n    - name: Copy\n      shell: ${shell}\n      run: cp a b\n`;
+      expect(checkCompositeSource("action.yml", source)).toEqual([
+        expect.objectContaining({
+          line: 5,
+          message: expect.stringContaining("declare shell"),
+        }),
+      ]);
+    },
+  );
 });

@@ -45,6 +45,7 @@ const BASH_ONLY_SYNTAX = [
   /<<<|\$\{[^}]+:-[^}]*\}/u,
   /\bif\b[^\n;]*;\s*then\b/u,
   /\bfor\b[^\n;]*;\s*do\b/u,
+  /^\s*[A-Za-z_][A-Za-z0-9_]*=\S+\s+\S/mu,
 ] as const;
 
 // Valid PowerShell too (subexpressions and the cp/mkdir aliases), so these
@@ -65,6 +66,8 @@ const hasBashSyntax = (command: string, shell: unknown): boolean =>
 
 const isBash = (shell: unknown): boolean =>
   typeof shell === "string" && /^bash(?:\s|$)/u.test(shell);
+
+const isDefaultBash = (shell: unknown): boolean => shell === "bash";
 
 const matrixValues = (job: Record<string, unknown>): unknown[] => {
   const strategy = record(job["strategy"]) ? job["strategy"] : undefined;
@@ -110,7 +113,7 @@ export const checkWorkflowSource = (
     });
   }
   const workflowShell = workflowDefaults.shell;
-  if (!isBash(workflowShell)) {
+  if (!isDefaultBash(workflowShell)) {
     errors.push({
       file,
       line: 1,
@@ -133,6 +136,13 @@ export const checkWorkflowSource = (
       });
     }
     const jobShell = jobDefaults.shell;
+    if (jobShell !== undefined && !isDefaultBash(jobShell)) {
+      errors.push({
+        file,
+        line: lineOf(source, "defaults:"),
+        message: `${jobName}: defaults.run.shell must be exactly bash`,
+      });
+    }
     const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
     for (const rawStep of steps) {
       if (!record(rawStep)) {
@@ -189,7 +199,7 @@ export const checkCompositeSource = (
     }
     const name = typeof step["name"] === "string" ? step["name"] : "run step";
     const line = lineOf(source, `name: ${name}`);
-    if (step["shell"] === undefined) {
+    if (typeof step["shell"] !== "string" || step["shell"].trim() === "") {
       return [
         {
           file,

@@ -3418,7 +3418,7 @@ jobs:
           bash scripts/detect-tauri-rust-changes.test.sh
 
       - name: Check workflow shell policy
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: |
           bun test scripts/check-workflow-shells.test.ts
           bun scripts/check-workflow-shells.ts
@@ -7228,7 +7228,20 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 3
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
+        env:
+          BUN_INSTALL_GLOBAL_STORE: "0"
+          NPM_TOKEN: ""
+
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
