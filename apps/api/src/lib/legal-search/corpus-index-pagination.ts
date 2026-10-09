@@ -6,7 +6,6 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
-import { mapWithConcurrency } from "@stll/concurrency";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -279,16 +278,15 @@ export type CorpusIndexScanReport = {
   rounds: number;
   /** Hits the engine returned across those rounds. */
   passagesScanned: number;
-  /** Summed wall time of every engine call the read made. */
+  /** Scan call durations plus wall time of the concurrent highlight phase. */
   indexMs: number;
   /** Stopped because no unseen candidate could out-blend the page. */
   earlyStopped: boolean;
   /** Stopped at `LIMITS.corpusIndexSearchMaxRounds` instead. */
   roundCapHit: boolean;
   /**
-   * Engine round trips spent highlighting the page: one, or none when the
-   * page is empty. Separate from `rounds` because it reaches a page's worth
-   * of passages rather than the scan's, and a reader waits through both.
+   * Highlight requests: one per emitted document, dispatched concurrently.
+   * Separate from sequential scan `rounds`; an empty page makes no requests.
    */
   highlightRounds: number;
 };
@@ -404,10 +402,10 @@ const readPageSnippets = async ({
 
   const startedAt = performance.now();
   const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
-  const results = await mapWithConcurrency({
-    items: clauses,
-    limit: LIMITS.corpusIndexHighlightConcurrency,
-    operation: async (clause) => {
+  // Quickwit 0.9 msearch ignores highlighting; top_hits cannot return snippets.
+  // Dispatch the bounded page in one wave, with one shared search deadline.
+  const results = await Promise.all(
+    clauses.map(async (clause) => {
       const remainingMs = deadline - performance.now();
       const result =
         remainingMs <= 0
@@ -431,8 +429,8 @@ const readPageSnippets = async ({
         throw corpusIndexSearchFailure(result.error);
       }
       return result.value;
-    },
-  });
+    }),
+  );
   const indexMs = performance.now() - startedAt;
 
   // Best-first, so the first hit a document gets is its best-scoring passage

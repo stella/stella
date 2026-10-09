@@ -1279,23 +1279,26 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.anchorIdById.get("doc-b")).toBe("b-0");
   });
 
-  test("per-document highlights refill only within the concurrency bound", async () => {
-    requestDelayMs = 10;
-    engineHits = Array.from({ length: 6 }, (_, index) => ({
-      document_id: `doc-${index}`,
-      chunk_id: `doc-${index}:0`,
-      anchor_id: `anchor-${index}`,
-    }));
-    const page = await readPage(6);
-    expect(peakHighlightInFlight).toBe(LIMITS.corpusIndexHighlightConcurrency);
-    expect(highlightInFlight).toBe(0);
-    expect(snippetRequests()).toHaveLength(6);
-    expect(page.scan.highlightRounds).toBe(6);
-    expect(page.snippetById.size).toBe(6);
-    expect(page.anchorIdById.size).toBe(6);
-  });
+  test.each([25, 100])(
+    "a page of %i documents highlights in one concurrent wave",
+    async (pageSize) => {
+      requestDelayMs = 20;
+      engineHits = Array.from({ length: pageSize }, (_, index) => ({
+        document_id: `doc-${index}`,
+        chunk_id: `doc-${index}:0`,
+        anchor_id: `anchor-${index}`,
+      }));
+      const page = await readPage(pageSize);
+      expect(peakHighlightInFlight).toBe(pageSize);
+      expect(highlightInFlight).toBe(0);
+      expect(snippetRequests()).toHaveLength(pageSize);
+      expect(page.scan.highlightRounds).toBe(pageSize);
+      expect(page.snippetById.size).toBe(pageSize);
+      expect(page.anchorIdById.size).toBe(pageSize);
+    },
+  );
 
-  test("an expired shared highlight deadline prevents further document requests", async () => {
+  test("an expired shared highlight deadline prevents further dispatch", async () => {
     engineHits = Array.from({ length: 6 }, (_, index) => ({
       document_id: `doc-${index}`,
     }));
@@ -1308,24 +1311,24 @@ describe("only the passages a page emits are highlighted", () => {
     ): Promise<Response> => {
       const body: Record<string, unknown> =
         typeof init?.body === "string" ? JSON.parse(init.body) : {};
-      const result = await engine(input, init);
-      if (body["snippet_fields"] !== undefined) {
+      if (
+        body["snippet_fields"] !== undefined &&
+        snippetRequests().length === 3
+      ) {
         now = CORPUS_INDEX_SEARCH_TIMEOUT_MS + 1;
       }
-      return result;
+      return engine(input, init);
     };
     globalThis.fetch = Object.assign(stub, {
       preconnect: originalFetch.preconnect,
     });
-    // First wave starts within the budget; its completion exhausts the
-    // deadline before the remaining documents can start another wave.
+    // Synchronous dispatch work can also exhaust the common deadline.
+    // Later documents do not receive a fresh timeout.
     expect(await rejectionOf(readPage(6))).toMatchObject({
       status: 503,
       code: "search_index_unavailable",
     });
-    expect(snippetRequests()).toHaveLength(
-      LIMITS.corpusIndexHighlightConcurrency,
-    );
+    expect(snippetRequests()).toHaveLength(4);
     clock.mockRestore();
   });
 
