@@ -3,6 +3,11 @@ import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
+import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
+import {
+  decisionCaseName,
+  visibleDecisionBlocks,
+} from "@stll/decision-reader/decision-text.logic";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -19,6 +24,7 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
@@ -41,14 +47,8 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
-import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
 import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import {
-  decisionCaseName,
-  visibleDecisionBlocks,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
