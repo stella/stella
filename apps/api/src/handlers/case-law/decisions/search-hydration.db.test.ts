@@ -850,6 +850,7 @@ test("index search hits carry source text disposition and retain human excerpts"
     byId,
     courtWeights,
     facets: null,
+    headnotePresentation: undefined,
     nextCursor: null,
     pageRanked: [czechId, withheldId].map((id) => ({
       id,
