@@ -2350,12 +2350,10 @@ const main = async () => {
   let cleanupPromise: Promise<boolean> | undefined;
   let ownsDockerProject = false;
 
-  const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) => {
-    if (result.isErr()) {
-      throw result.error;
-    }
-    return result.value;
-  };
+  // `unwrap` panics with the group error as its cause, which
+  // `formatErrorChain` reports; a throwing `match` err arm would not.
+  const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
+    result.unwrap("Dev process group operation failed");
 
   const cleanup = async () => {
     if (cleanupPromise) {
