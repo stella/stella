@@ -622,17 +622,19 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     [minDate, maxDate, isDateDisabled],
   );
 
+  const dateDraft = useDatePickerDraft({ value, isDayDisabled, onChange });
+
   const displayLabel =
     formatSelection(locale, selection) ?? placeholderLabel ?? "\u2014";
 
   const selectDay = (date: string) => {
     switch (selection.mode) {
       case DATE_PICKER_MODE.date: {
-        onChange(date);
+        dateDraft.apply(date);
         return;
       }
       case DATE_PICKER_MODE.dateTime: {
-        onChange(
+        dateDraft.apply(
           formatDateTimeValue({
             date,
             time: selection.time ?? DEFAULT_PICKER_TIME,
@@ -651,7 +653,9 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     if (value === "") {
       return;
     }
-    onChange(formatDateTimeValue({ date: value, time: joinPickerTime(clock) }));
+    dateDraft.apply(
+      formatDateTimeValue({ date: value, time: joinPickerTime(clock) }),
+    );
   };
 
   const formatDayLabel = useCallback(
@@ -867,6 +871,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
         )}
       </PopoverTrigger>
       <PopoverPopup
+        onBlur={dateDraft.handleBlur}
         initialFocus={
           focusTriggerOnOpen
             ? false
@@ -1022,13 +1027,13 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
           )}
 
           <TypedDateField
-            key={value}
             mode={selection.mode}
             label={dateInputLabel}
-            value={value}
-            isDayDisabled={isDayDisabled}
+            value={dateDraft.value}
+            invalid={dateDraft.invalid}
             errorLabel={outOfRangeLabel}
-            onChange={onChange}
+            onDraftChange={dateDraft.edit}
+            onCommit={dateDraft.submit}
           />
 
           {/* Bottom row: today + clear */}
@@ -1036,6 +1041,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
             <Button
               className="flex-1"
               onClick={() => {
+                dateDraft.discard();
                 const todayDate = Temporal.PlainDate.from(today);
                 setViewMonthOverride({
                   month: todayDate.month - 1,
@@ -1051,7 +1057,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
             {value && !hideClear && (
               <Button
                 className="flex-1"
-                onClick={() => onChange(null)}
+                onClick={() => dateDraft.apply(null)}
                 size="xs"
                 variant="ghost"
               >
@@ -1388,31 +1394,87 @@ const YearGrid = ({
   );
 };
 
+type DatePickerDraftOptions = {
+  value: string;
+  isDayDisabled: (date: string) => boolean;
+  onChange: (date: string | null) => void;
+};
+
+const useDatePickerDraft = ({
+  value,
+  isDayDisabled,
+  onChange,
+}: DatePickerDraftOptions) => {
+  const [draft, setDraft] = useState<{
+    baseValue: string;
+    value: string;
+  } | null>(null);
+  // Applying can move focus before React renders the cleared draft. Disarm that stale blur synchronously.
+  const commitStatus = useRef<"pending" | "consumed">("consumed");
+  const inputValue = draft?.baseValue === value ? draft.value : value;
+  const parsed = Result.try(() => Temporal.PlainDate.from(inputValue));
+  const invalid =
+    inputValue !== "" &&
+    (parsed.isErr() ||
+      parsed.value.toString() !== inputValue ||
+      isDayDisabled(inputValue));
+  const discard = () => {
+    commitStatus.current = "consumed";
+    setDraft(null);
+  };
+  const apply = (next: string | null) => {
+    discard();
+    onChange(next);
+  };
+  const commit = () => {
+    if (commitStatus.current !== "pending" || invalid || inputValue === value) {
+      return;
+    }
+    apply(inputValue || null);
+  };
+  return {
+    value: inputValue,
+    invalid,
+    edit: (next: string) => {
+      commitStatus.current = "pending";
+      setDraft({ baseValue: value, value: next });
+    },
+    discard,
+    apply,
+    submit: () => {
+      if (!invalid) {
+        apply(inputValue || null);
+      }
+    },
+    handleBlur: (event: React.FocusEvent<HTMLDivElement>) => {
+      if (event.currentTarget.contains(event.relatedTarget)) {
+        return;
+      }
+      commit();
+    },
+  };
+};
+
 type TypedDateFieldProps = {
   mode: DatePickerMode;
   label: string | undefined;
   value: string;
-  isDayDisabled: (date: string) => boolean;
+  invalid: boolean;
   errorLabel: string | undefined;
-  onChange: (date: string | null) => void;
+  onDraftChange: (date: string) => void;
+  onCommit: () => void;
 };
 
 const TypedDateField = ({
   mode,
   label,
   value,
-  isDayDisabled,
+  invalid,
   errorLabel = "Choose a date within the allowed range.",
-  onChange,
+  onDraftChange,
+  onCommit,
 }: TypedDateFieldProps) => {
   const id = useId();
-  const [draft, setDraft] = useState(value);
-  const parsed = Result.try(() => Temporal.PlainDate.from(draft));
-  const invalid =
-    draft !== "" &&
-    (parsed.isErr() ||
-      parsed.value.toString() !== draft ||
-      isDayDisabled(draft));
   if (!label || mode !== DATE_PICKER_MODE.date) {
     return null;
   }
@@ -1423,32 +1485,18 @@ const TypedDateField = ({
       </label>
       <Input
         id={id}
-        value={draft}
+        value={value}
         placeholder="YYYY-MM-DD"
         dir="ltr"
         aria-invalid={invalid}
         aria-describedby={invalid ? `${id}-error` : undefined}
-        onChange={(event) => setDraft(event.currentTarget.value)}
-        onBlur={(event) => {
-          // Popup controls apply their own value; a blur commit can unmount them before click.
-          const popup = event.currentTarget.closest(
-            '[data-slot="date-picker-popup"]',
-          );
-          if (popup?.contains(event.relatedTarget)) {
-            return;
-          }
-          if (!invalid && draft !== value) {
-            onChange(draft || null);
-          }
-        }}
+        onChange={(event) => onDraftChange(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key !== "Enter") {
             return;
           }
           event.preventDefault();
-          if (!invalid) {
-            onChange(draft || null);
-          }
+          onCommit();
         }}
       />
       {invalid && (

@@ -255,3 +255,54 @@ for (const bound of ["From", "To"]) {
     await expect(range.getByLabel(`${bound} value`)).toHaveText("2026-03-07");
   });
 }
+
+for (const bound of ["From", "To"]) {
+  test(`a typed ${bound} date commits after Tab traverses the footer and leaves the popup`, async ({
+    page,
+  }) => {
+    const range = page.getByRole("region", { name: "Any range" });
+    await range
+      .getByRole("button", { name: new RegExp(`^${bound}`, "u") })
+      .click();
+    const popup = page.locator('[data-slot="popover-popup"][data-open]');
+    await popup.locator("input").fill("2026-03-07");
+    await page.keyboard.press("Tab");
+    await expect(
+      popup.getByRole("button", { name: "Today", exact: true }),
+    ).toBeFocused();
+    await expect(range.getByLabel("Applied range changes")).toHaveText("");
+    await page.keyboard.press("Tab");
+    await expect(
+      popup.getByRole("button", { name: "Clear date", exact: true }),
+    ).toBeFocused();
+    await expect(range.getByLabel("Applied range changes")).toHaveText("");
+    await page.keyboard.press("Tab");
+    await expect(range.getByLabel(`${bound} value`)).toHaveText("2026-03-07");
+    await expect(range.getByLabel("Applied range changes")).toHaveText(
+      `${bound}:2026-03-07`,
+    );
+    if (bound === "From") {
+      await expect(range.getByRole("button", { name: /^To/u })).toBeFocused();
+      await expect(
+        page.locator('[data-slot="popover-popup"][data-open] input'),
+      ).toHaveValue("2026-03-10");
+    }
+  });
+
+  test(`Today navigation discards an edited ${bound} draft before popup exit`, async ({
+    page,
+  }) => {
+    const range = page.getByRole("region", { name: "Any range" });
+    await range
+      .getByRole("button", { name: new RegExp(`^${bound}`, "u") })
+      .click();
+    const popup = page.locator('[data-slot="popover-popup"][data-open]');
+    await popup.locator("input").fill("2026-03-07");
+    await popup.getByRole("button", { name: "Today", exact: true }).click();
+    await page.locator("#single-apply").focus();
+    await expect(range.getByLabel("Applied range changes")).toHaveText("");
+    await expect(range.getByLabel(`${bound} value`)).toHaveText(
+      bound === "From" ? "2026-03-05" : "2026-03-10",
+    );
+  });
+}
