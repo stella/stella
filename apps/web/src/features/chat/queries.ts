@@ -1,5 +1,10 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
+import type {
+  DataTag,
+  InvalidateQueryFilters,
+  QueryClient,
+  QueryKey,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
@@ -1797,18 +1802,23 @@ export const matchesChatThreadAcrossScopes = (
  * different cache key (the scope is part of the key), so the old
  * scope's entry would otherwise serve stale data on the next
  * visit. Scoped by `threadId` only because that's the durable
- * identity; scope+workspace are surface-bound.
+ * identity; scope+workspace are surface-bound. `refetchType: "none"`
+ * marks the entries stale without refetching a still-observed one, so a
+ * cache seed survives until the destination surface reads it.
  */
 export const invalidateChatThreadAcrossScopes = async ({
   queryClient,
+  refetchType,
   threadId,
 }: {
   queryClient: QueryClient;
+  refetchType?: InvalidateQueryFilters["refetchType"];
   threadId: ChatThreadId;
 }) =>
   await queryClient.invalidateQueries({
     predicate: (query) =>
       matchesChatThreadAcrossScopes(query.queryKey, threadId),
+    ...(refetchType === undefined ? {} : { refetchType }),
   });
 
 /**

@@ -1,6 +1,8 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 import { beforeEach, describe, expect, test } from "bun:test";
+
+import { sleep } from "@stll/concurrency/sleep";
 
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
@@ -99,5 +101,32 @@ describe("move a chat tab to the main view", () => {
     expect(queryClient.getQueryData(pageThreadKey)?.contextMatterIds).toEqual([
       "m1",
     ]);
+  });
+
+  // The inspector tab still observes the thread when the move runs, and
+  // the server knows nothing of an unsent chat's picked matters.
+  test("keeps the seeded matters while the tab still observes the thread", async () => {
+    const threadRef = { scope: "global", threadId: chatTab().id } as const;
+    const queryClient = new QueryClient();
+    const threadOptions = chatThreadOptions({
+      activeOrganizationId: ACTIVE_ORGANIZATION_ID,
+      context: { allowMissingThread: true },
+      key: threadRef,
+    });
+    queryClient.setQueryData(threadOptions.queryKey, unsentThread());
+    const inspectorObserver = new QueryObserver(queryClient, {
+      ...threadOptions,
+      queryFn: async () => unsentThread(),
+    });
+    const unsubscribe = inspectorObserver.subscribe(() => {});
+
+    moveToMain(chatTab({ contextMatterIds: ["m1"] }), queryClient);
+    await sleep(0);
+
+    const state = queryClient.getQueryState(threadOptions.queryKey);
+    expect(state?.isInvalidated).toBe(true);
+    expect(state?.fetchStatus).toBe("idle");
+    expect(state?.data?.contextMatterIds).toEqual(["m1"]);
+    unsubscribe();
   });
 });

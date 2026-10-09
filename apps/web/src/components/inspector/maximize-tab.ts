@@ -68,7 +68,11 @@ export const buildMaximizeTabAction = (
     // moved to main loses its picked scope because the server hasn't
     // persisted the thread row yet and would respond with an empty
     // `contextMatterIds`. The tab's skill is stored first because the
-    // page derives its contextKind from the store.
+    // page derives its contextKind from the store. The invalidation
+    // only marks the entries stale: the inspector tab still observes
+    // this one until it unmounts, and a refetch now would replace the
+    // seed with the server's empty set before the page reads it. The
+    // page refetches in the background after it has seeded its picker.
     if (tab.activeSkill !== undefined) {
       setThreadActiveSkill(threadRef, tab.activeSkill);
     }
@@ -85,6 +89,7 @@ export const buildMaximizeTabAction = (
     detached(
       invalidateChatThreadAcrossScopes({
         queryClient,
+        refetchType: "none",
         threadId: tab.id,
       }),
       "maximize-tab.invalidate-chat-thread-across-scopes",
