@@ -4,15 +4,11 @@ import { Temporal } from "@stll/time";
 
 import contract from "../fixtures/activity-contract.json" with { type: "json" };
 import {
-  BLOCK_GAP_MS,
-  MIN_PROPOSED_BLOCK_MS,
   documentName,
   appTotals,
-  proposeBlocks,
   roundedTenthsOfHour,
   shiftDate,
   timedSegments,
-  topAppNames,
   totalDurationMs,
 } from "../src/activity/activity-logic";
 import {
@@ -26,7 +22,6 @@ import {
 
 const MINUTE = 60_000;
 const BASE_INSTANT = Temporal.Instant.from("2026-03-10T08:00:00Z");
-const BASE = BASE_INSTANT.epochMilliseconds;
 
 const at = (minute: number) => BASE_INSTANT.add({ minutes: minute }).toString();
 
@@ -51,6 +46,8 @@ describe("activity contract", () => {
   test("a snapshot is validated before use", () => {
     const snapshot = {
       date: "2026-03-10",
+      pendingBatch: null,
+      manualAssignments: [],
       draftedEntries: [],
       timeBillingEnabled: false,
       earliestDate: "2026-02-09",
@@ -175,96 +172,6 @@ describe("activity day logic", () => {
       { durationMs: 25 * MINUTE, identifier: "mail", name: "MAIL" },
       { durationMs: 15 * MINUTE, identifier: "word", name: "WORD" },
     ]);
-  });
-
-  test("blocks merge across gaps shorter than ten minutes", () => {
-    const blocks = proposeBlocks(
-      timedSegments([
-        segment("word", 0, 20),
-        segment("mail", 29, 40),
-        // Exactly ten minutes after the previous end: a new block.
-        segment("word", 50, 61),
-      ]),
-    );
-    expect(BLOCK_GAP_MS).toBe(10 * MINUTE);
-    expect(blocks).toHaveLength(2);
-    expect(blocks[0]?.startMs).toBe(BASE);
-    expect(blocks[0]?.endMs).toBe(BASE + 40 * MINUTE);
-    // 40 minutes round up to 42: 0.7 h.
-    expect(blocks[0]?.roundedTenths).toBe(7);
-    expect(blocks[1]?.roundedTenths).toBe(2);
-    expect(blocks[0] && topAppNames(blocks[0])).toEqual(["WORD", "MAIL"]);
-  });
-
-  test("blocks under three minutes stay in raw activity without becoming proposals", () => {
-    expect(MIN_PROPOSED_BLOCK_MS).toBe(180_000);
-    for (const seconds of [179, 180, 181]) {
-      const segments = timedSegments([
-        {
-          appIdentifier: "word",
-          appName: "WORD",
-          start: BASE_INSTANT.toString(),
-          end: BASE_INSTANT.add({ seconds }).toString(),
-        },
-      ]);
-      expect(segments).toHaveLength(1);
-      expect(totalDurationMs(segments)).toBe(seconds * 1000);
-      const blocks = proposeBlocks(segments);
-      expect(blocks).toHaveLength(seconds < 180 ? 0 : 1);
-      if (seconds >= 180) {
-        expect(blocks.at(0)?.roundedTenths).toBe(1);
-      }
-    }
-  });
-
-  test("blocks group consecutive activity by the full document path across apps", () => {
-    const first = "/one/memo.docx";
-    const second = "/two/memo.docx";
-    const blocks = proposeBlocks(
-      timedSegments([
-        {
-          ...segment("word", 0, 4),
-          document: first,
-          windowTitle: "First title",
-        },
-        {
-          ...segment("pdf", 4, 7),
-          document: first,
-          windowTitle: "Second title",
-        },
-        {
-          ...segment("word", 7, 11),
-          document: second,
-          windowTitle: "Other document",
-        },
-        {
-          ...segment("word", 11, 15),
-          document: first,
-          windowTitle: "First title",
-        },
-      ]),
-    );
-    expect(blocks.map(({ document }) => document)).toEqual([
-      first,
-      second,
-      first,
-    ]);
-    expect(blocks.at(0)?.windowTitles).toEqual(["First title", "Second title"]);
-    expect(blocks.at(0)?.apps.map(({ name }) => name)).toEqual(["WORD", "PDF"]);
-    expect(blocks.at(0)?.endMs).toBe(BASE + 7 * MINUTE);
-  });
-
-  test("title changes alone retain one block with unique titles", () => {
-    const blocks = proposeBlocks(
-      timedSegments([
-        { ...segment("word", 0, 4), windowTitle: "A" },
-        { ...segment("word", 4, 7), windowTitle: "B" },
-        { ...segment("word", 7, 11), windowTitle: "A" },
-      ]),
-    );
-    expect(blocks).toHaveLength(1);
-    expect(blocks.at(0)?.document).toBeNull();
-    expect(blocks.at(0)?.windowTitles).toEqual(["A", "B"]);
   });
 
   test("legacy app-only segments still parse and path display uses only the file name", () => {

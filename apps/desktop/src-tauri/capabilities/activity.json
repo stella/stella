@@ -14,7 +14,6 @@
     "allow-activity-set-app-detail-capture",
     "allow-activity-open-accessibility-settings",
     "allow-time-entry-search-matters",
-    "allow-time-entry-submit-confirmed",
     "allow-activity-set-recording-status",
     "allow-activity-set-retention",
     "allow-activity-exclude-app",
@@ -22,6 +21,9 @@
     "allow-activity-delete-day",
     "allow-activity-delete-all",
     "allow-activity-delete-other-account-history",
-    "allow-activity-copy-text"
+    "allow-activity-copy-text",
+    "allow-time-entry-candidates",
+    "allow-time-entry-submit-batch-confirmed",
+    "allow-activity-assign-ranges"
   ]
 }

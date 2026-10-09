@@ -242,3 +242,17 @@ pub fn activity_set_browser_title_capture(
     manager.set_browser_title_capture(&identifier, &name, enabled, Utc::now())
   })
 }
+
+#[tauri::command]
+pub fn activity_assign_ranges(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  date: String,
+  ranges: Vec<activity::ActivityManualAssignment>,
+) -> Result<(), String> {
+  let date = activity::parse_date(&date)?;
+  update(&app, &state, &caller, |manager| {
+    manager.assign_ranges(date, ranges)
+  })
+}

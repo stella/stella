@@ -8,12 +8,12 @@ use crate::{
 };
 
 const FAILURE: &str = "draft time entry request failed";
-const MAX_RESPONSE_BYTES: usize = 32 * 1024;
+const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmedTimeEntry {
-  pub workspace_id: String,
+  pub matter_id: String,
   pub date_worked: String,
   pub timezone_id: String,
   pub duration_minutes: u32,
@@ -21,19 +21,16 @@ pub struct ConfirmedTimeEntry {
   pub billable: bool,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct EntryBody<'a> {
-  date_worked: &'a str,
-  timezone_id: &'a str,
-  duration_minutes: u32,
-  narrative: &'a str,
-  billable: bool,
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfirmedBatch {
+  pub idempotency_key: String,
+  pub entries: Vec<ConfirmedTimeEntry>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct Matter {
-  id: String,
+  pub id: String,
   name: String,
   reference: Option<String>,
   color: Option<String>,
@@ -44,9 +41,38 @@ struct MattersResponse {
   matters: Vec<Matter>,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CandidateSignals {
+  last_worked_at: Option<String>,
+  newly_assigned_at: Option<String>,
+  upcoming_deadline: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatterCandidate {
+  #[serde(flatten)]
+  matter: Matter,
+  client_name: Option<String>,
+  signals: CandidateSignals,
+}
+
 #[derive(Deserialize)]
+struct CandidatesResponse {
+  matters: Vec<MatterCandidate>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreatedEntry {
   pub id: String,
+  pub matter_id: String,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct CreatedBatch {
+  pub entries: Vec<CreatedEntry>,
 }
 
 fn client() -> Result<DesktopHttpClient, String> {
@@ -104,40 +130,120 @@ pub async fn search_matters(
   Ok(response.matters)
 }
 
-pub async fn submit(
+pub async fn candidates(
   account: &LinkedAccount,
-  entry: &ConfirmedTimeEntry,
-) -> Result<CreatedEntry, String> {
-  // A path identifier must never become a route or query fragment.
-  if entry.workspace_id.is_empty()
-    || !entry
-      .workspace_id
-      .bytes()
-      .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+) -> Result<Vec<MatterCandidate>, String> {
+  let body = response_body(
+    client()?
+      .get(format!(
+        "{}/v1/desktop/matter-candidates",
+        account.api_base_url
+      ))
+      .bearer_auth(&account.credential.key),
+  )
+  .await?;
+  let result: CandidatesResponse =
+    serde_json::from_slice(&body).map_err(|_| FAILURE.to_string())?;
+  if result.matters.len() > 100
+    || result.matters.iter().any(|candidate| {
+      candidate.matter.id.is_empty()
+        || candidate.matter.id.len() > 200
+        || candidate.matter.name.len() > 1024
+        || candidate
+          .client_name
+          .as_ref()
+          .is_some_and(|name| name.len() > 1024)
+    })
   {
     return Err(FAILURE.to_string());
   }
-  let body = EntryBody {
-    date_worked: &entry.date_worked,
-    timezone_id: &entry.timezone_id,
-    duration_minutes: entry.duration_minutes,
-    narrative: &entry.narrative,
-    billable: entry.billable,
-  };
-  let response = response_body(
-    client()?
-      .put(format!(
-        "{}/v1/desktop/time-entries/{}",
-        account.api_base_url, entry.workspace_id
-      ))
-      .bearer_auth(&account.credential.key)
-      .json(&body),
-  )
-  .await?;
-  let created: CreatedEntry =
-    serde_json::from_slice(&response).map_err(|_| FAILURE.to_string())?;
-  if created.id.is_empty() || created.id.len() > 200 {
-    return Err(FAILURE.to_string());
+  Ok(result.matters)
+}
+
+impl ConfirmedBatch {
+  pub fn validate(&self) -> Result<(), String> {
+    if self.idempotency_key.is_empty()
+      || self.idempotency_key.len() > 128
+      || self.entries.is_empty()
+      || self.entries.len() > 100
+      || self.entries.iter().any(|entry| {
+        entry.matter_id.is_empty()
+          || entry.matter_id.len() > 128
+          || entry.date_worked.len() != 10
+          || entry.timezone_id.is_empty()
+          || entry.timezone_id.len() > 64
+          || entry.duration_minutes == 0
+          || entry.duration_minutes > 1440
+          || entry.narrative.len() > 40000
+      })
+    {
+      return Err(FAILURE.to_string());
+    }
+    Ok(())
+  }
+}
+
+#[derive(Debug)]
+pub enum SubmitFailure {
+  Rejected,
+  Uncertain,
+}
+
+pub async fn submit_batch(
+  account: &LinkedAccount,
+  batch: &ConfirmedBatch,
+) -> Result<CreatedBatch, SubmitFailure> {
+  batch.validate().map_err(|_| SubmitFailure::Rejected)?;
+  let mut response = client()
+    .map_err(|_| SubmitFailure::Rejected)?
+    .put(format!(
+      "{}/v1/desktop/time-entries/batch",
+      account.api_base_url
+    ))
+    .bearer_auth(&account.credential.key)
+    .json(batch)
+    .send()
+    .await
+    .map_err(|_| SubmitFailure::Uncertain)?;
+  if !response.status().is_success() {
+    // A conflict or timeout can follow a committed earlier request; retain its
+    // durable key. Other client errors are definitive only on the first attempt.
+    return Err(
+      if response.status().is_client_error()
+        && response.status().as_u16() != 409
+        && response.status().as_u16() != 408
+      {
+        SubmitFailure::Rejected
+      } else {
+        SubmitFailure::Uncertain
+      },
+    );
+  }
+  let mut body = Vec::new();
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(|_| SubmitFailure::Uncertain)?
+  {
+    if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
+      return Err(SubmitFailure::Uncertain);
+    }
+    body.extend_from_slice(&chunk);
+  }
+  let created: CreatedBatch =
+    serde_json::from_slice(&body).map_err(|_| SubmitFailure::Uncertain)?;
+  if created.entries.len() != batch.entries.len()
+    || created
+      .entries
+      .iter()
+      .zip(&batch.entries)
+      .any(|(created, confirmed)| {
+        created.id.is_empty()
+          || created.id.len() > 200
+          || created.matter_id != confirmed.matter_id
+      })
+  {
+    return Err(SubmitFailure::Uncertain);
   }
   Ok(created)
 }
@@ -145,7 +251,7 @@ pub async fn submit(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use axum::{Json, Router, http::HeaderMap, routing::put};
+  use axum::{http::HeaderMap, routing::put, Json, Router};
 
   fn fixture(api_base_url: String) -> LinkedAccount {
     serde_json::from_value(serde_json::json!({
@@ -162,7 +268,7 @@ mod tests {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let account = fixture(format!("http://{}", listener.local_addr().unwrap()));
     let router = Router::new().route(
-      "/v1/desktop/time-entries/workspace_fixture",
+      "/v1/desktop/time-entries/batch",
       put(
         |headers: HeaderMap, Json(body): Json<serde_json::Value>| async move {
           assert_eq!(headers.get("authorization").unwrap(), "Bearer fixture_key");
@@ -170,11 +276,11 @@ mod tests {
           assert_eq!(
             body,
             serde_json::json!({
-              "dateWorked": "2026-10-07", "timezoneId": "Europe/Prague",
-              "durationMinutes": 12, "narrative": "Confirmed work", "billable": true
+              "idempotencyKey": "batch_fixture", "entries": [{"matterId": "workspace_fixture", "dateWorked": "2026-10-07", "timezoneId": "Europe/Prague",
+              "durationMinutes": 12, "narrative": "Confirmed work", "billable": true}]
             })
           );
-          Json(serde_json::json!({"id": "entry_fixture"}))
+          Json(serde_json::json!({"entries": [{"id": "entry_fixture", "matterId": "workspace_fixture"}]}))
         },
       ),
     );
@@ -182,10 +288,17 @@ mod tests {
       axum::serve(listener, router).await.unwrap();
     });
     let entry: ConfirmedTimeEntry = serde_json::from_value(serde_json::json!({
-      "workspaceId": "workspace_fixture", "dateWorked": "2026-10-07", "timezoneId": "Europe/Prague",
+      "matterId": "workspace_fixture", "dateWorked": "2026-10-07", "timezoneId": "Europe/Prague",
       "durationMinutes": 12, "narrative": "Confirmed work", "billable": true
     })).unwrap();
-    assert_eq!(submit(&account, &entry).await.unwrap().id, "entry_fixture");
+    let batch = ConfirmedBatch {
+      idempotency_key: "batch_fixture".into(),
+      entries: vec![entry],
+    };
+    assert_eq!(
+      submit_batch(&account, &batch).await.unwrap().entries[0].id,
+      "entry_fixture"
+    );
     server.abort();
   }
 
@@ -196,13 +309,16 @@ mod tests {
         "matters": [{"id": "workspace_fixture", "name": "Matter", "reference": null, "color": color}]
       });
       let response: MattersResponse = serde_json::from_value(input.clone()).unwrap();
-      assert_eq!(serde_json::to_value(response.matters).unwrap(), input["matters"]);
+      assert_eq!(
+        serde_json::to_value(response.matters).unwrap(),
+        input["matters"]
+      );
     }
   }
 
   #[test]
   fn unknown_confirmation_fields_are_refused() {
-    let valid = serde_json::json!({"workspaceId":"w", "dateWorked":"2026-10-07", "timezoneId":"UTC",
+    let valid = serde_json::json!({"matterId":"w", "dateWorked":"2026-10-07", "timezoneId":"UTC",
       "durationMinutes":6, "narrative":"", "billable":true});
     for forbidden in ["segments", "apps", "summary", "block", "source"] {
       let mut input = valid.clone();
