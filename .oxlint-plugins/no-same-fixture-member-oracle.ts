@@ -72,6 +72,7 @@ type PathsInOptions = {
   resolveBinding: ResolveBinding;
   paths?: Set<string>;
   values?: ValueMap;
+  expanded?: Set<unknown>;
 };
 
 const pathsIn = (
@@ -81,6 +82,7 @@ const pathsIn = (
     resolveBinding,
     paths = new Set<string>(),
     values,
+    expanded = new Set<unknown>(),
   }: PathsInOptions,
 ) => {
   if (!isAstNode(node)) {
@@ -99,8 +101,17 @@ const pathsIn = (
   }
   if (isIdentifier(node)) {
     const binding = resolveBinding(node);
-    if (binding !== null && values?.has(binding)) {
-      pathsIn(values.get(binding), { aliases, resolveBinding, paths });
+    // Expand each initializer once: chained aliases resolve, self-referencing
+    // initializers terminate.
+    if (binding !== null && values?.has(binding) && !expanded.has(binding)) {
+      expanded.add(binding);
+      pathsIn(values.get(binding), {
+        aliases,
+        resolveBinding,
+        paths,
+        values,
+        expanded,
+      });
     }
   }
   for (const [key, value] of Object.entries(node)) {
@@ -119,10 +130,10 @@ const pathsIn = (
     }
     if (Array.isArray(value)) {
       for (const child of value) {
-        pathsIn(child, { aliases, resolveBinding, paths });
+        pathsIn(child, { aliases, resolveBinding, paths, values, expanded });
       }
     } else if (isAstNode(value)) {
-      pathsIn(value, { aliases, resolveBinding, paths });
+      pathsIn(value, { aliases, resolveBinding, paths, values, expanded });
     }
   }
   return paths;

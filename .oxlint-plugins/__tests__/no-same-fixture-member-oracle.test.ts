@@ -30,6 +30,18 @@ const cases = [
     lines: [1],
   },
   {
+    title: "follows an expected-value alias inside an object assertion",
+    source:
+      "const expected = derive(fx.input);\nexpect({ value: detect(fx.input) }).toEqual({ value: expected });",
+    lines: [2],
+  },
+  {
+    title: "follows chained expected-value aliases inside an array assertion",
+    source:
+      "const derived = derive(fx.input);\nconst expected = derived;\nexpect([detect(fx.input)]).toEqual([expected]);",
+    lines: [3],
+  },
+  {
     title: "reports a detector compared with an oracle over the same member",
     source: "expect(detect(fx.text)).toBe(derive(fx.text));",
     lines: [1],
