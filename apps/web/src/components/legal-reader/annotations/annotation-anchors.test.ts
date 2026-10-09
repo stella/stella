@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -20,10 +21,13 @@ import type { AnnotationAnchorSource } from "@/components/legal-reader/annotatio
 const annotationArbitrary = fc.record({
   blockAnchorId: fc.constantFrom("p-1", "p-2", "p-3", "cl_7", "priloha-1"),
   color: fc.constantFrom("yellow", "red", null),
-  endOffset: fc.integer({ min: 1, max: 40 }),
+  endOffset: fc.integer({ min: 1, max: READER_ANNOTATION_QUOTE_MAX_LENGTH }),
   id: fc.uuid(),
   kind: fc.constantFrom("highlight" as const, "comment" as const),
-  startOffset: fc.integer({ min: 0, max: 39 }),
+  startOffset: fc.integer({
+    min: 0,
+    max: READER_ANNOTATION_QUOTE_MAX_LENGTH - 1,
+  }),
   style: fc.constantFrom(
     "highlight" as const,
     "underline" as const,
@@ -34,7 +38,6 @@ const annotationArbitrary = fc.record({
 });
 
 const marksArbitrary = fc.uniqueArray(annotationArbitrary, {
-  maxLength: 8,
   selector: (annotation) => annotation.id,
 });
 

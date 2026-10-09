@@ -1,12 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
+import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
 import { parseStatuteEliIdentity } from "@stll/api-contract/statute-identity";
 
-import { legislationSources } from "@/api/db/schema";
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { buildListStatutesQuery } from "@/api/handlers/legislation/list";
 import { createSafeId } from "@/api/lib/branded-types";
+import { actYearCondition } from "@/api/lib/legal-search/legislation-act-number";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
@@ -230,7 +232,7 @@ describe.skipIf(!enabled)(
             const year =
               parseStatuteEliIdentity(fixture.eli).year ??
               panic("The fixture has no identity year");
-            const statement = buildListStatutesQuery(
+            const publicStatement = buildListStatutesQuery(
               asTestRaw<LegislationReadTransaction>(db),
               {
                 country: fixture.country,
@@ -240,6 +242,30 @@ describe.skipIf(!enabled)(
                 asOf: sql`DATE '2020-01-01'`,
               },
             );
+            const admitted = isPublicLegislationCountry(fixture.country);
+            if (!admitted) {
+              expect(await publicStatement).toEqual([]);
+            }
+            // Public admission intentionally excludes some stored jurisdictions.
+            // Their year predicate must still agree with the identity and use
+            // the same index, without bypassing admission in the public query.
+            const statement = admitted
+              ? publicStatement
+              : db
+                  .select({ eli: legislationDocuments.eli })
+                  .from(legislationDocuments)
+                  .where(
+                    and(
+                      eq(legislationDocuments.country, fixture.country),
+                      eq(legislationDocuments.language, "cs"),
+                      eq(
+                        legislationDocuments.versionValidFrom,
+                        sql`DATE '2010-01-01' + ${VERSIONS - 1}::integer`,
+                      ),
+                      actYearCondition(Number(year)),
+                    ),
+                  )
+                  .limit(PAGE_SIZE + 1);
             const explained = await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) ${statement.getSQL()}`,
             );
