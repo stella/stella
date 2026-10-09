@@ -156,6 +156,7 @@ export const resolveView = (data: ResolveResults) => {
         status: data.status,
         candidates: data.candidates.map(
           ({ decisionId, identifier, label, readerUrl }) => ({
+            type: "resolve" as const,
             decisionId,
             identifier,
             label,

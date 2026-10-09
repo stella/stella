@@ -562,13 +562,9 @@ for (const locale of ["en-GB", "ar"]) {
     expect(await hostHistory(page, "appCalls")).toEqual([]);
     await candidate.click();
     await expect
-      .poll(async () => hostHistory(page, "appCalls"))
-      .toEqual([
-        {
-          name: "open_case_law_decision",
-          arguments: { decision_id: APP_RESOLVE_FIXTURE.document.decisionId },
-        },
-      ]);
+      .poll(async () => hostHistory(page, "openLinks"))
+      .toEqual([{ url: APP_RESOLVE_FIXTURE.document.readerUrl }]);
+    expect(await hostHistory(page, "appCalls")).toEqual([]);
   });
 }
 

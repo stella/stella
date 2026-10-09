@@ -97,7 +97,7 @@ const embeddedReaderBridge = createEmbeddedReaderBridge(caseLawBridge);
 const embeddedReader = createReaderController(embeddedReaderBridge);
 type CaseLawBridge = typeof caseLawBridge;
 type OpenReader = (
-  row: Pick<ResultRow, "decisionId" | "appUrl">,
+  row: Pick<ResultRow, "decisionId" | "appUrl" | "type">,
   trigger: HTMLElement,
 ) => void;
 type SearchPage = Extract<CaseLawView, { type: "search" }>;
@@ -175,7 +175,10 @@ const ResultTableRow = ({
                   type="button"
                   variant="link"
                   className="h-auto min-w-0 p-0 text-start font-semibold tabular-nums"
-                  disabled={!bridge.supportsTools() && url === null}
+                  disabled={
+                    (row.type === "resolve" || !bridge.supportsTools()) &&
+                    url === null
+                  }
                   onClick={(event) => onOpen(row, event.currentTarget)}
                 />
               }
@@ -312,7 +315,10 @@ const ResultTableRow = ({
             size="icon-sm"
             aria-label={t("open")}
             tooltip={t("open")}
-            disabled={!bridge.supportsTools() && url === null}
+            disabled={
+              (row.type === "resolve" || !bridge.supportsTools()) &&
+              url === null
+            }
             onClick={(event) => onOpen(row, event.currentTarget)}
           >
             <ChevronRightIcon />
@@ -915,7 +921,7 @@ const App = ({ bridge }: { bridge: CaseLawBridge }) => {
     scrollY: number;
   } | null>(null);
   const onOpen: OpenReader = (row, trigger) => {
-    if (!bridge.supportsTools()) {
+    if (row.type === "resolve" || !bridge.supportsTools()) {
       if (row.appUrl !== null) {
         bridge.detached(bridge.openLink(row.appUrl), "open case-law decision");
       }
