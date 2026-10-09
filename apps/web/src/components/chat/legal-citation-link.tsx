@@ -9,6 +9,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { ExternalLinkIcon, FileTextIcon, ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -23,7 +24,6 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { env } from "@/env";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
 type InternalLegalCitationLinks = Exclude<

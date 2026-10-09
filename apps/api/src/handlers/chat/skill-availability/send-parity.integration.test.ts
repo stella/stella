@@ -187,7 +187,6 @@ type Chat = {
 };
 
 // Only its shape matters: no tool built here runs.
-const FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
 
 const workspaces = (): AccessibleWorkspace[] => [
   { id: ids.wsA1, status: "active" },
@@ -227,7 +226,7 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<string>> => {
           : {
               document: CHAT_SKILL_DOCUMENT.file,
               documentId: ids.entityA1,
-              ...(chat.file.withField ? { fileFieldId: FILE_FIELD_ID } : {}),
+              ...(chat.file.withField ? { fileFieldId: ids.fieldA1 } : {}),
             }),
         ...(chat.matter ? { workspaceId: ids.wsA1 } : {}),
         ...(chat.pinned === true ? { contextMatterIds: [ids.wsA2] } : {}),
@@ -295,7 +294,7 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
             entityId: ids.entityA1,
             fileName: "entityA1.docx",
             supportsDocxEdits: true,
-            ...(chat.file.withField ? { fileFieldId: FILE_FIELD_ID } : {}),
+            ...(chat.file.withField ? { fileFieldId: ids.fieldA1 } : {}),
           },
         }),
     ...(workspaceId === null ? {} : { workspaceId }),

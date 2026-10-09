@@ -4,32 +4,6 @@ import { cn } from "@stll/ui/utils";
 
 import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";
 
-type CourtTierBadgeProps = {
-  abbreviation: string;
-  tier: CourtTier;
-  className?: string;
-};
-
-/**
- * The chip alone, weighted by tier: for a place that already names the court
- * beside it, or that stands for the decision as a whole (an inspector tab).
- */
-export const CourtTierBadge = ({
-  abbreviation,
-  className,
-  tier,
-}: CourtTierBadgeProps) => (
-  <span className={cn(className)}>
-    <DocumentIdentityBadge
-      identity={{
-        kind: "decision",
-        courtAbbreviation: abbreviation,
-        courtTier: tier,
-      }}
-    />
-  </span>
-);
-
 type CourtNameProps = {
   /**
    * The court's short form as the API derived it, or nothing where the corpus

@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
   DECISION_TEXT_FIELD_KEYS,
+  DECISION_TEXT_SOURCE,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -25,7 +26,7 @@ import {
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
-  SEARCH_TOTAL_TYPE,
+  SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -138,6 +139,7 @@ import {
 } from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
+import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
 import {
   decisionOutline,
   locateDecisionBlocks,
@@ -221,6 +223,7 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "./apps/resource-uri";
+import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -927,7 +930,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(LIMITS.caseLawIdentifierMaxLength),
         v.description(
-          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full.",
+          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full.",
         ),
       ),
     ),
@@ -1207,19 +1210,17 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read decisions by `decision_ids[]`, in input order. `page` N is the " +
-      "Nth window of `max_chars`; entries give page/pageCount. Pass a " +
-      "page's textVersion back as text_version; versionChanged flags a " +
-      "changed text. `full: true` (whole text, up to " +
-      `${READ_DECISION_FULL_MAX_TEXT_CHARS} chars) for reasoning or citation work; pages for skimming. ` +
-      "`query` returns matching paragraphs with neighbours. Page 1 adds " +
-      "details (`url` the reader, `source_url` the publisher), metadata, " +
-      "published textFields and a citation summary: citedBy count of citing " +
-      "references, polarity counts, top 5 citers, what it cites (decisionId " +
-      "where held). All citations: read_case_law_citations ({ decision_id: " +
-      "'<uuid>', direction: 'cited_by' }). One id gets an outline with " +
-      "pages; outline and query entries deep-link. `include` picks fields; " +
-      "[] returns text and identity only.",
+      "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
+      "entries give page/pageCount and textSource (ast or fulltext). Pass " +
+      "textVersion as text_version; versionChanged flags changed text. " +
+      `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
+      "`query` returns matches and neighbours with position, publisher label, " +
+      "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
+      "`source_url` publisher), metadata, textFields and citation summaries " +
+      "(citedBy count, polarity, top 5 citers; cites with held decisionIds). " +
+      "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
+      "direction: 'cited_by' }). One id gets an outline with pages and links. " +
+      "`include` picks fields; [] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -2315,6 +2316,9 @@ const caseLawSearchResult = ({
     language: hit.language,
     matchingPassages: hit.matchingPassages,
     snippet: toPlainTextSnippet(hit.headline),
+    keywords: hit.keywords,
+    headnote:
+      hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
     sourceUrl: hit.sourceUrl,
   };
 };
@@ -2393,10 +2397,8 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const search =
     context.testDependencies?.searchDecisionsHandler ??
     defaultSearchDecisionsHandler;
-  // One request per phrasing, assembled once. A phrasing whose cursor says it
-  // is exhausted runs nothing, and still has to report which of its words the
-  // search required, so the request it would have made is what answers that
-  // rather than a second reading of the filters.
+  // Exhausted phrasings echo their required words from the request without
+  // running the search again.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
   const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const requests = queries.map((query, index) => {
@@ -2407,6 +2409,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const body = {
       query,
       sentenceAlignedExcerpt: true,
+      headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
       ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
@@ -2493,10 +2496,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     ({ interpretation, query, subCursor }, index) => {
       const outcome = pages.at(index);
       if (outcome === undefined || outcome.exhausted) {
-        // A phrasing its cursor declared exhausted ran nothing this call, so it
-        // carries no warning about a page. What it required is still what it
-        // required on the page that exhausted it, which is why `queryUsed`
-        // comes from the interpretation rather than from the phrasing as sent.
+        // Exhausted phrasings echo the prior interpretation without new warnings.
         return {
           query,
           queryUsed: interpretation.queryUsed,
@@ -2536,26 +2536,23 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     },
   );
 
-  return toolDataResult(
-    projectionPayload(SEARCH_CASE_LAW_PROJECTION, {
-      facets: first.exhausted ? null : first.page.facets,
-      searches,
-      nextCursor: single === undefined ? mergedCursor : single.nextCursor,
-      paginationOutcome: pages.some(
-        (outcome) =>
-          !outcome.exhausted &&
-          outcome.page.paginationOutcome.type === "truncated",
-      )
-        ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
-        : SEARCH_PAGINATION_COMPLETE,
-      results: merged.map(caseLawSearchResult),
-      total:
-        single === undefined
-          ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
-          : single.total,
-      ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
-    }),
-  );
+  const payload = boundCaseLawSearchHeadnotes({
+    headnotes: "included",
+    facets: first.exhausted ? null : first.page.facets,
+    searches,
+    nextCursor: single === undefined ? mergedCursor : single.nextCursor,
+    paginationOutcome: pages.some(
+      (outcome) =>
+        !outcome.exhausted &&
+        outcome.page.paginationOutcome.type === "truncated",
+    )
+      ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
+      : SEARCH_PAGINATION_COMPLETE,
+    results: merged.map(caseLawSearchResult),
+    total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
+    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+  });
+  return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
 
 type GatedDecisionRead = Awaited<
@@ -2672,12 +2669,6 @@ const decisionIncludedFields = ({
   );
 };
 
-/** The reader's address for one block: the decision's page and its fragment. */
-const deepLink = (appUrl: string | null, anchorId: string | null) =>
-  appUrl === null || anchorId === null
-    ? {}
-    : { url: `${appUrl}#${encodeURIComponent(anchorId)}` };
-
 const caseLawDecisionAppUrlOf = (decision: {
   caseNumber: string;
   country: string;
@@ -2751,10 +2742,12 @@ const decisionTextPart = ({
       matches: {
         hitCount: found.hitCount,
         paragraphs: found.paragraphs.map((paragraph) => ({
-          paragraph: paragraph.paragraph,
+          position: paragraph.position,
+          label: paragraph.label,
+          headingPath: paragraph.headingPath,
           text: paragraph.text,
           ...(paragraph.hit ? { hit: true as const } : {}),
-          ...deepLink(appUrl, paragraph.anchorId),
+          ...decisionBlockDeepLink({ appUrl, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),
       },
@@ -2926,12 +2919,18 @@ const decisionItemResult = ({
   // readable; allowsDerivedAi additionally gates feeding full text to a
   // model, which is exactly this tool's context.
   const aiTextAllowed = read.source.allowsDerivedAi;
-  const blocks = aiTextAllowed
+  const parsedBlocks = aiTextAllowed
     ? (parseUsableDocumentAst(read.documentAst)?.blocks ?? null)
     : null;
-  const plainText = aiTextAllowed
-    ? toPlainCorpusText({ blocks, fulltext: read.fulltext })
-    : null;
+  const astText =
+    parsedBlocks === null
+      ? null
+      : toPlainCorpusText({ blocks: parsedBlocks, fulltext: null });
+  const blocks = astText !== null && astText.length > 0 ? parsedBlocks : null;
+  // The reader renders AST blocks: use that same text for passage anchors
+  // and every verbatim outline heading. Empty AST text falls back to fulltext.
+  const readableText = blocks === null ? read.fulltext : astText;
+  const plainText = aiTextAllowed ? readableText : null;
   const text = plainText === null || plainText.length === 0 ? null : plainText;
   const appUrl = caseLawDecisionAppUrlOf(read);
 
@@ -2960,6 +2959,14 @@ const decisionItemResult = ({
           windowChars,
         });
 
+  const navigation =
+    outline === "include" &&
+    text !== null &&
+    starts !== null &&
+    includedFields.has("outline")
+      ? decisionOutline({ blocks, text })
+      : null;
+
   return {
     decisionId,
     ...(messages.length === 0 ? {} : { message: messages.join(" ") }),
@@ -2970,16 +2977,24 @@ const decisionItemResult = ({
       ...nonDocketReference(read),
       ...decisionStaticFields({ appUrl, digest, includedFields, read }),
       ...textPart,
-      ...(outline === "include" &&
-      text !== null &&
-      starts !== null &&
-      includedFields.has("outline")
+      ...(text === null
+        ? {}
+        : {
+            textSource:
+              blocks === null
+                ? DECISION_TEXT_SOURCE.FULLTEXT
+                : DECISION_TEXT_SOURCE.AST,
+          }),
+      ...(navigation !== null && starts !== null
         ? {
-            outline: decisionOutline({ blocks, text }).map((entry) => ({
+            outline: navigation.entries.map((entry) => ({
               title: entry.title,
               page: pageOfOffset(starts, entry.start),
-              ...deepLink(appUrl, entry.anchorId),
+              ...decisionBlockDeepLink({ appUrl, ...entry }),
             })),
+            ...(navigation.numberedEntriesTruncated
+              ? { outlineNumberedEntriesTruncated: true as const }
+              : {}),
           }
         : {}),
       ...decisionTextAbsence(read, readsSharedCorpus),
