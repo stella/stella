@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertReleaseQueueHistory,
+  formatReleaseQueueHistoryNotice,
   parseOptions,
   ReleaseQueueHistoryError,
+  runReleaseQueueHistoryCli,
 } from "./check-release-queue-history";
 
 const BASE_SHA = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -230,14 +232,23 @@ describe("release queue history", () => {
     ]);
   });
 
-  test("refuses when the dispatch listing exceeds the page limit", () => {
+  test("CLI warns when the dispatch listing exceeds the page limit", () => {
     const command = fakeCommand({
       dispatchPages: Array.from({ length: 25 }, () => fillerRuns(100)),
     });
+    const warnings: string[] = [];
 
-    expect(() => check(command)).toThrow(ReleaseQueueHistoryError);
-    expect(() => check(command)).toThrow("exceed 20 pages of 100");
-    expect(command.dispatchRequests).toHaveLength(40);
+    const exitCode = runReleaseQueueHistoryCli(
+      ["--from", "v1.2.3", "--base", BASE_SHA],
+      (message) => warnings.push(message),
+      () => check(command),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(warnings).toEqual([
+      "::warning::Release queue history could not be checked: Successful main-heavy.yml dispatch runs exceed 20 pages of 100",
+    ]);
+    expect(command.dispatchRequests).toHaveLength(20);
   });
 
   test("accepts a green heavy base without inspecting queue history", () => {
@@ -282,36 +293,46 @@ describe("release queue history", () => {
     );
   });
 
-  test("refuses queued merges with no successful merge-group run", () => {
-    const run = () => check(fakeCommand({ successfulMergeGroupShas: [] }));
+  test("reports queued merges with no successful merge-group run", () => {
+    const report = check(fakeCommand({ successfulMergeGroupShas: [] }));
 
-    expect(run).toThrow("#101 Change 101");
-    expect(run).toThrow("#202 Change 202");
-    expect(run).toThrow("#303 Change 303");
+    expect(report.validated).toBeFalse();
+    expect(report.bypassingPullRequests.map(({ number }) => number)).toEqual([
+      101, 202, 303,
+    ]);
   });
 
   test("does not carry merge-group validation across a direct push", () => {
-    const run = () =>
-      check(fakeCommand({ missingPullRequestFor: [SECOND_SHA] }));
+    const report = check(fakeCommand({ missingPullRequestFor: [SECOND_SHA] }));
 
-    expect(run).toThrow("#101 Change 101");
-    expect(run).toThrow("2222222 Direct release adjustment");
+    expect(report.validated).toBeFalse();
+    expect(report.bypassingPullRequests.map(({ number }) => number)).toEqual([
+      101,
+    ]);
+    expect(report.commitsWithoutPullRequest).toEqual([
+      "2222222 Direct release adjustment",
+    ]);
   });
 
-  test("refuses a pull request removed from the queue before a direct merge", () => {
-    const run = () => check(fakeCommand({ removed: [202] }));
+  test("reports a pull request removed from the queue before a direct merge", () => {
+    const report = check(fakeCommand({ removed: [202] }));
 
-    expect(run).toThrow(ReleaseQueueHistoryError);
-    expect(run).toThrow("#202 Change 202");
-    expect(run).toThrow(
-      `gh workflow run main-heavy.yml --repo stella/stella --ref main -f sha=${BASE_SHA} -f release_candidate=true`,
+    expect(report.validated).toBeFalse();
+    expect(report.bypassingPullRequests.map(({ number }) => number)).toEqual([
+      101, 202,
+    ]);
+    expect(formatReleaseQueueHistoryNotice(report)).toContain(
+      "gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -f release_candidate=true",
     );
   });
 
-  test("refuses an administrator merge with no queue events", () => {
-    expect(() => check(fakeCommand({ direct: [303] }))).toThrow(
-      "#303 Change 303",
-    );
+  test("reports an administrator merge with no queue events", () => {
+    const report = check(fakeCommand({ direct: [303] }));
+
+    expect(report.validated).toBeFalse();
+    expect(report.bypassingPullRequests.map(({ number }) => number)).toEqual([
+      101, 202, 303,
+    ]);
   });
 
   test("allows a direct merge after the base passed main heavy", () => {
@@ -320,10 +341,13 @@ describe("release queue history", () => {
     ).not.toThrow();
   });
 
-  test("refuses a commit without an associated merged pull request", () => {
-    expect(() =>
-      check(fakeCommand({ missingPullRequestFor: [SECOND_SHA] })),
-    ).toThrow("2222222 Direct release adjustment");
+  test("reports a commit without an associated merged pull request", () => {
+    const report = check(fakeCommand({ missingPullRequestFor: [SECOND_SHA] }));
+
+    expect(report.validated).toBeFalse();
+    expect(report.commitsWithoutPullRequest).toEqual([
+      "2222222 Direct release adjustment",
+    ]);
   });
 
   test("allows a commit without a pull request after the base passed main heavy", () => {
@@ -337,12 +361,28 @@ describe("release queue history", () => {
     ).not.toThrow();
   });
 
-  test("refuses when main heavy succeeded only on an older commit", () => {
+  test("reports when main heavy succeeded only on an older commit", () => {
     const olderSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-    expect(() =>
-      check(fakeCommand({ direct: [202], heavySha: olderSha })),
-    ).toThrow("#202 Change 202");
+    const report = check(fakeCommand({ direct: [202], heavySha: olderSha }));
+    expect(report.validated).toBeFalse();
+    expect(report.bypassingPullRequests.map(({ number }) => number)).toEqual([
+      101, 202,
+    ]);
+  });
+
+  test("CLI exits successfully and warns for unvalidated history", () => {
+    const warnings: string[] = [];
+    const exitCode = runReleaseQueueHistoryCli(
+      ["--from", "v1.2.3", "--base", BASE_SHA],
+      (message) => warnings.push(message),
+      () => check(fakeCommand({ direct: [303] })),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(warnings).toHaveLength(1);
+    expect(warnings.at(0)).toContain("::warning::Release history");
+    expect(warnings.at(0)).toContain("#303 Change 303");
   });
 });
 

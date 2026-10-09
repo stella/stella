@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+// The tag gate (check-release-main-health.sh) enforces; this check reports.
+
 import nodePath from "node:path";
 
 const REPOSITORY_NAME = "stella";
@@ -46,6 +48,12 @@ type MergedPullRequest = PullRequest & {
 type QueueHistoryOptions = {
   baseSha: string;
   previousTag: string;
+};
+
+export type ReleaseQueueHistoryReport = {
+  validated: boolean;
+  bypassingPullRequests: PullRequest[];
+  commitsWithoutPullRequest: string[];
 };
 
 type CommandRunner = (command: readonly string[]) => string;
@@ -293,7 +301,7 @@ export const assertReleaseQueueHistory = ({
 }: QueueHistoryOptions & {
   command?: CommandRunner;
   ghRetryScript?: string;
-}): void => {
+}): ReleaseQueueHistoryReport => {
   const resolvedBaseSha = command([
     "git",
     "rev-parse",
@@ -301,7 +309,11 @@ export const assertReleaseQueueHistory = ({
     `${baseSha}^{commit}`,
   ]).trim();
   if (hasSuccessfulHeavyRun(resolvedBaseSha, command, ghRetryScript)) {
-    return;
+    return {
+      validated: true,
+      bypassingPullRequests: [],
+      commitsWithoutPullRequest: [],
+    };
   }
   const commits = command([
     "git",
@@ -394,27 +406,35 @@ export const assertReleaseQueueHistory = ({
     }
   }
   if (skipped.length === 0 && commitsWithoutPullRequests.length === 0) {
-    return;
+    return {
+      validated: true,
+      bypassingPullRequests: [],
+      commitsWithoutPullRequest: [],
+    };
   }
 
-  const unvalidatedChanges = [
-    ...skipped.map(
+  return {
+    validated: false,
+    bypassingPullRequests: skipped,
+    commitsWithoutPullRequest: commitsWithoutPullRequests,
+  };
+};
+
+export const formatReleaseQueueHistoryNotice = (
+  report: ReleaseQueueHistoryReport,
+): string =>
+  [
+    "Release history includes changes not validated through the merge queue:",
+    ...report.bypassingPullRequests.map(
       ({ html_url, number, title }) =>
         `  #${String(number)} ${title} (${html_url})`,
     ),
-    ...commitsWithoutPullRequests.map(
+    ...report.commitsWithoutPullRequest.map(
       (commit) => `  ${commit} (no associated merged pull request)`,
     ),
+    "The tag requires main/heavy success on the release commit:",
+    "  gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -f release_candidate=true",
   ].join("\n");
-  throw new ReleaseQueueHistoryError(
-    [
-      `Release history ${previousTag}..${resolvedBaseSha} includes changes not validated through the merge queue:`,
-      unvalidatedChanges,
-      `Validate the base commit, then retry:`,
-      `  gh workflow run main-heavy.yml --repo ${REPOSITORY} --ref main -f sha=${resolvedBaseSha} -f release_candidate=true`,
-    ].join("\n"),
-  );
-};
 
 export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
   const previousTagIndex = args.indexOf("--from");
@@ -437,11 +457,27 @@ export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
   return { baseSha, previousTag };
 };
 
-if (import.meta.main) {
+export const runReleaseQueueHistoryCli = (
+  args: readonly string[],
+  writeWarning = (message: string) => process.stdout.write(`${message}\n`),
+  check = assertReleaseQueueHistory,
+): number => {
+  const warning = (message: string) =>
+    writeWarning(
+      `::warning::${message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`,
+    );
   try {
-    assertReleaseQueueHistory(parseOptions(process.argv.slice(2)));
+    const report = check(parseOptions(args));
+    if (!report.validated) {
+      warning(formatReleaseQueueHistoryNotice(report));
+    }
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    const reason = error instanceof Error ? error.message : String(error);
+    warning(`Release queue history could not be checked: ${reason}`);
   }
+  return 0;
+};
+
+if (import.meta.main) {
+  process.exitCode = runReleaseQueueHistoryCli(process.argv.slice(2));
 }
