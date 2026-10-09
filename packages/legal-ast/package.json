@@ -67,6 +67,10 @@
       "types": "./src/fixtures/statute-viewer.ts",
       "import": "./src/fixtures/statute-viewer.ts"
     },
+    "./fixtures/cz-262-2006-section-51": {
+      "types": "./src/__fixtures__/cz-262-2006-section-51.json",
+      "import": "./src/__fixtures__/cz-262-2006-section-51.json"
+    },
     "./paragraph-range": {
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"

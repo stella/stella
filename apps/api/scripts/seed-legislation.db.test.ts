@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
+import section51StatuteAst from "@stll/legal-ast/fixtures/cz-262-2006-section-51" with { type: "json" };
+
 import {
   caseLawFtsConfigs,
   legislationDocuments,
@@ -13,7 +15,7 @@ import { readNamedLegislationWorks } from "@/api/lib/legal-search/legislation-wo
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { seedLegislation } from "./seed-legislation";
+import { seedLegislation, SECTION_51_VERSION_DATE } from "./seed-legislation";
 
 test("local seeding creates searchable Czech statute versions and converges on replay", async () => {
   const client = await createTestPglite();
@@ -41,7 +43,13 @@ test("local seeding creates searchable Czech statute versions and converges on r
       const versions = rows.filter((row) => row.eli === eli);
       expect(
         new Set(versions.map(({ versionValidFrom }) => versionValidFrom)),
-      ).toEqual(new Set(["2020-01-01", "2024-01-01"]));
+      ).toEqual(
+        new Set(
+          eli === "/eli/cz/sb/2006/262"
+            ? ["2020-01-01", SECTION_51_VERSION_DATE]
+            : ["2020-01-01", "2024-01-01"],
+        ),
+      );
       expect(
         versions.every(
           ({ publisherExpressionId, slug }) =>
@@ -49,6 +57,21 @@ test("local seeding creates searchable Czech statute versions and converges on r
         ),
       ).toBe(true);
     }
+    const currentWorkVersion = rows.find(
+      ({ eli, versionValidFrom }) =>
+        eli === "/eli/cz/sb/2006/262" &&
+        versionValidFrom === SECTION_51_VERSION_DATE,
+    );
+    const historicalWorkVersion = rows.find(
+      ({ eli, versionValidFrom }) =>
+        eli === "/eli/cz/sb/2006/262" && versionValidFrom === "2020-01-01",
+    );
+    expect(currentWorkVersion?.documentAst).toEqual(section51StatuteAst);
+    expect(currentWorkVersion?.effectiveDate).toBe(SECTION_51_VERSION_DATE);
+    expect(currentWorkVersion?.fulltext).toBe(
+      section51StatuteAst.blocks.map(({ plainText }) => plainText).join("\n\n"),
+    );
+    expect(historicalWorkVersion?.versionValidTo).toBe(SECTION_51_VERSION_DATE);
     expect(await db.select().from(legislationSearchDocuments)).toHaveLength(4);
     const named = await scopedDb(async (tx) =>
       readNamedLegislationWorks(tx, { query: "89/2012", country: "CZE" }),
