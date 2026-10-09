@@ -51,11 +51,9 @@ for (const skewMs of [-3_600_000, 0, 3_600_000]) {
     } as const;
     const message = {
       id: "duration",
-      role: "assistant",
-      parts: [],
       metadata: { turnTiming: running },
     } as const;
-    observe([{ ...message, parts: [] }], monotonicNow);
+    observe([message], monotonicNow);
     const label = (
       timing: Parameters<typeof ChatTurnDuration>[0]["timing"],
     ) => (
@@ -93,10 +91,7 @@ for (const skewMs of [-3_600_000, 0, 3_600_000]) {
       startedAt: "2026-01-01T01:00:00.000Z",
       observedAt: "2026-01-01T01:00:00.000Z",
     };
-    observe(
-      [{ ...message, parts: [], metadata: { turnTiming: resumed } }],
-      monotonicNow,
-    );
+    observe([{ ...message, metadata: { turnTiming: resumed } }], monotonicNow);
     remounted.rerender(label(resumed));
     await act(async () => {
       monotonicNow += 1000;

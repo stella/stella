@@ -24,8 +24,6 @@ const renderDuration = (
     [
       {
         id: "duration",
-        role: "assistant",
-        parts: [],
         metadata: { turnTiming: timing },
       },
     ],
@@ -71,8 +69,6 @@ describe("assistant turn duration", () => {
       [
         {
           id: "duration",
-          role: "assistant",
-          parts: [],
           metadata: { turnTiming: timing },
         },
       ],
@@ -110,24 +106,19 @@ describe("assistant turn duration", () => {
     } as const;
     const message = {
       id: "duration",
-      role: "assistant",
-      parts: [],
       metadata: { turnTiming: timing },
     } as const;
     // Separate JSON observations from the same server read must share one anchor.
-    observe([{ ...message, parts: [] }], 100);
+    observe([message], 100);
     const repeated = { ...timing };
-    observe(
-      [{ ...message, parts: [], metadata: { turnTiming: repeated } }],
-      1100,
-    );
+    observe([{ ...message, metadata: { turnTiming: repeated } }], 1100);
     expect(getChatTurnDurationMs(repeated, 2100)).toBe(7000);
     const fresh = {
       ...timing,
       elapsedMs: 3000,
       observedAt: "2026-01-01T00:02:16.000Z",
     };
-    observe([{ ...message, parts: [], metadata: { turnTiming: fresh } }], 2100);
+    observe([{ ...message, metadata: { turnTiming: fresh } }], 2100);
     expect(getChatTurnDurationMs(fresh, 3100)).toBe(8000);
   });
 

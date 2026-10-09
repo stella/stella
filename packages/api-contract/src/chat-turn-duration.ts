@@ -16,10 +16,7 @@ export const createChatTurnTimingObserver = () => {
     string,
     { observedAt: string; receivedAt: number }
   >();
-  return <Message extends TimingMessage>(
-    messages: readonly Message[],
-    now: number,
-  ) => {
+  return (messages: readonly TimingMessage[], now: number) => {
     const messageIds = new Set<string>();
     for (const message of messages) {
       messageIds.add(message.id);

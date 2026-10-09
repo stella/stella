@@ -245,8 +245,6 @@ describe("active timing at iteration and snapshot boundaries", () => {
               [
                 {
                   id: "answer",
-                  role: "assistant",
-                  parts: [],
                   metadata: { turnTiming: deliveredTiming },
                 },
               ],
