@@ -11,5 +11,10 @@
   {
     "source": "mcr.microsoft.com/playwright:v1.63.0-noble",
     "name": "playwright"
-  }
+  },
+  {
+    "source": "docker.io/library/node:24-bookworm-slim",
+    "name": "node-24-bookworm"
+  },
+  { "source": "docker.io/library/rust:1.97.1-bookworm", "name": "rust" }
 ]
