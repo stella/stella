@@ -6,7 +6,7 @@ import type { ContactImportField, ContactType } from "@stll/api-contract";
  * flow, and the retry-identity helper together instead of leaving one holding
  * a stale copy.
  */
-import { stripUnicodeMarks } from "@stll/text-normalize";
+import { stripDiacritics } from "@stll/text-normalize";
 
 import type { api } from "@/lib/api";
 
@@ -193,7 +193,7 @@ const CUSTOM_FIELD_ID_MAX_LENGTH = 64;
 const CUSTOM_FIELD_ID_SUFFIX_BUDGET = 8;
 
 const normalizeCustomFieldToken = (label: string): string =>
-  stripUnicodeMarks(label, { form: "NFD", markClass: "diacritic" })
+  stripDiacritics(label)
     .toLowerCase()
     .replaceAll(/[^a-z0-9]/gu, "")
     .slice(0, CUSTOM_FIELD_ID_MAX_LENGTH - CUSTOM_FIELD_ID_SUFFIX_BUDGET);

@@ -593,8 +593,8 @@
       "name": "@stll/anonymize-chat",
       "version": "0.1.8",
       "dependencies": {
-        "@stll/text-normalize": "workspace:*",
         "@stll/anonymize-wasm": "catalog:",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -663,9 +663,9 @@
       "name": "@stll/business-registries",
       "version": "0.12.1",
       "dependencies": {
-        "@stll/text-normalize": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "fast-xml-parser": "^5.11.2",
         "saxes": "catalog:",
@@ -919,8 +919,8 @@
       "name": "@stll/invoicing",
       "version": "0.1.0",
       "dependencies": {
-        "@stll/text-normalize": "workspace:*",
         "@stll/money": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -949,10 +949,10 @@
       "name": "@stll/legal-atlas",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/text-normalize": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -1065,9 +1065,9 @@
       "name": "@stll/sanctions",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/text-normalize": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/fuzzy-search": "catalog:",
+        "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "saxes": "catalog:",
@@ -1089,7 +1089,6 @@
         "i18n-typegen": "src/i18n-typegen.ts",
       },
       "dependencies": {
-        "@stll/text-normalize": "workspace:*",
         "@formatjs/icu-messageformat-parser": "3.5.20",
         "@stll/ai-catalog": "workspace:*",
         "@stll/api-contract": "workspace:*",
@@ -1097,6 +1096,7 @@
         "@stll/locales": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "typescript": "catalog:",

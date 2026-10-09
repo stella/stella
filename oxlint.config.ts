@@ -57,6 +57,7 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) =>
     entry.enforcement.kind !== "none" &&
+    entry.enforcement.kind !== "custom-rule" &&
     entry.enforcement.kind !== "status-set",
 );
 

@@ -1,14 +1,32 @@
 // Keep Unicode normalization semantics at @stll/text-normalize. This rule is
-// intentionally syntax-based: a member call with an explicit Unicode form, or
-// the conventional `normalization` form variable, is unambiguously the native
-// String normalization API. Node path.normalize calls are not member calls
-// with one of these forms and remain outside this rule's scope.
+// intentionally syntax-based because the native operation and the equivalent
+// mark-removal expressions must remain visible even without type information.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isAstNode, isStringLiteral } from "./utils.ts";
+import { filenameForContext, getPropertyName, isAstNode } from "./utils.ts";
 
-const FORMS = new Set(["NFC", "NFD", "NFKC", "NFKD"]);
+const NODE_PATH_SPECIFIERS = new Set([
+  "node:path",
+  "node:path/posix",
+  "node:path/win32",
+  "path",
+  "path/posix",
+  "path/win32",
+]);
+
+const isMarkRemovalPattern = (source: string): boolean => {
+  const lastSlash = source.lastIndexOf("/");
+  if (!source.startsWith("/") || lastSlash === 0) {
+    return false;
+  }
+  const pattern = source.slice(1, lastSlash);
+  return (
+    /\\p\{(?:M|Mn|Diacritic)\}/u.test(pattern) ||
+    pattern.includes("[\\u0300-\\u036f]") ||
+    pattern.includes("[̀-ͯ]")
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-direct-unicode-normalize" },
@@ -20,11 +38,33 @@ export default eslintCompatPlugin({
           direct:
             "Use normalizeUnicode() from @stll/text-normalize so Unicode normalization has one owner.",
           markStrip:
-            "Use stripUnicodeMarks() from @stll/text-normalize so mark-removal semantics stay explicit.",
+            "Use stripUnicodeMarks() or stripDiacritics() from @stll/text-normalize so mark-removal semantics stay explicit.",
         },
       },
       create(context) {
+        if (filenameForContext(context).includes("packages/text-normalize/")) {
+          return {};
+        }
+        const nodePathBindings = new Set<string>();
+
         return {
+          ImportDeclaration(node) {
+            if (
+              typeof node.source.value !== "string" ||
+              !NODE_PATH_SPECIFIERS.has(node.source.value)
+            ) {
+              return;
+            }
+            for (const specifier of node.specifiers) {
+              if (
+                isAstNode(specifier) &&
+                specifier.type !== "ImportSpecifier" &&
+                isAstNode(specifier.local)
+              ) {
+                nodePathBindings.add(specifier.local.name);
+              }
+            }
+          },
           CallExpression(node) {
             if (
               !isAstNode(node.callee) ||
@@ -35,30 +75,30 @@ export default eslintCompatPlugin({
             const property = getPropertyName(node.callee.property);
             if (
               (property === "replace" || property === "replaceAll") &&
-              node.arguments.length >= 1
+              node.arguments.length >= 1 &&
+              isMarkRemovalPattern(
+                context.sourceCode.getText(node.arguments[0]),
+              )
             ) {
-              const pattern = context.sourceCode.getText(node.arguments[0]);
-              if (
-                pattern === "/\\p{M}/gu" ||
-                pattern === "/\\p{M}+/gu" ||
-                pattern === "/\\p{Diacritic}/gu" ||
-                pattern === "/[\\u0300-\\u036f]/gu"
-              ) {
-                context.report({ node, messageId: "markStrip" });
-              }
+              context.report({ node, messageId: "markStrip" });
               return;
             }
-            if (property !== "normalize" || node.arguments.length !== 1) {
+            if (property !== "normalize") {
               return;
             }
-            const form = node.arguments[0];
-            const isKnownLiteral =
-              isStringLiteral(form) && FORMS.has(form.value);
-            const isConventionalVariable =
-              isAstNode(form) &&
-              form.type === "Identifier" &&
-              form.name === "normalization";
-            if (isKnownLiteral || isConventionalVariable) {
+            const receiver = node.callee.object;
+            if (isAstNode(receiver) && receiver.type === "ObjectExpression") {
+              return;
+            }
+            const isNodePath =
+              isAstNode(receiver) &&
+              ((receiver.type === "Identifier" &&
+                nodePathBindings.has(receiver.name)) ||
+                (receiver.type === "MemberExpression" &&
+                  isAstNode(receiver.object) &&
+                  receiver.object.type === "Identifier" &&
+                  nodePathBindings.has(receiver.object.name)));
+            if (!isNodePath) {
               context.report({ node, messageId: "direct" });
             }
           },
