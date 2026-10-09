@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   ENTITY_PRIORITY,
@@ -19,6 +19,8 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { createSiblingNamePlan } from "@/api/lib/entities/sibling-name-insert";
+import { insertEntityBatch } from "@/api/lib/entity-versions/insert-entity-batch";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { DEFAULT_USER_ID, seedId } from "./seed-utils";
@@ -77,6 +79,9 @@ export const seedLegalLists = async (
     const facts = SYNTHETIC_FACTS.map((fact) => ({
       ...fact,
       id: seedId<"entity">(`legal-list-fact-${workspaceId}-${fact.position}`),
+      versionId: seedId<"entityVersion">(
+        `legal-list-fact-version-${workspaceId}-${fact.position}`,
+      ),
     }));
     const firstFact = facts.at(0);
     if (!firstFact) {
@@ -92,24 +97,52 @@ export const seedLegalLists = async (
         createdBy: userId,
       })
       .onConflictDoNothing();
-    await tx
-      .insert(entities)
-      .values(
-        facts.map(({ id, name }) => ({
+    const existingFactIds = new Set(
+      (
+        await tx
+          .select({ id: entities.id })
+          .from(entities)
+          .where(
+            inArray(
+              entities.id,
+              facts.map(({ id }) => id),
+            ),
+          )
+      ).map(({ id }) => id),
+    );
+    const newFacts = facts.filter(({ id }) => !existingFactIds.has(id));
+    const resolveName = await createSiblingNamePlan({ tx, workspaceId });
+    await insertEntityBatch({
+      tx,
+      entityRows: newFacts.map(({ id, name }) => {
+        const resolved = resolveName({ name, kind: "task", parentId: null });
+        return {
           id,
           workspaceId,
           kind: "task" as const,
           listItemType: LIST_ITEM_TYPE.FACT,
-          name,
-          displayName: name,
+          name: resolved.name,
+          displayName: resolved.name,
           createdBy: userId,
           agendaKind: "task" as const,
           status: TASK_STATUS.OPEN,
           priority: ENTITY_PRIORITY.NONE,
           agendaSource: "manual" as const,
-        })),
-      )
-      .onConflictDoNothing();
+        };
+      }),
+      versionRows: newFacts.map(({ id, versionId }) => ({
+        id: versionId,
+        entityId: id,
+        workspaceId,
+        createdBy: userId,
+      })),
+      stampOrigin: "issued",
+      currentVersions: newFacts.map(({ id, versionId }) => ({
+        entityId: id,
+        versionId,
+      })),
+      fieldRows: [],
+    });
     await tx
       .insert(legalListItems)
       .values(

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -128,6 +128,19 @@ test("legal list fixtures keep live in-matter provenance and converge on replay"
         .from(entities)
         .where(eq(entities.workspaceId, workspaceId))
         .orderBy(entities.id),
+      currentVersions: await db
+        .select({ entityId: entities.id, versionId: entityVersions.id })
+        .from(entities)
+        .innerJoin(
+          entityVersions,
+          and(
+            eq(entities.currentVersionId, entityVersions.id),
+            eq(entities.id, entityVersions.entityId),
+            eq(entities.workspaceId, entityVersions.workspaceId),
+          ),
+        )
+        .where(eq(entities.workspaceId, workspaceId))
+        .orderBy(entities.id),
     });
     const first = await readFixture();
     expect(first.lists).toHaveLength(1);
@@ -136,6 +149,7 @@ test("legal list fixtures keep live in-matter provenance and converge on replay"
     );
     expect(first.facts).toHaveLength(3);
     expect(first.entities).toHaveLength(5);
+    expect(first.currentVersions).toHaveLength(first.entities.length);
     expect(first.sources).toEqual([
       expect.objectContaining({
         id: fixture.sourceId,
