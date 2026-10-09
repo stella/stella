@@ -1,5 +1,7 @@
 name: Tag verified release
 
+# release-chain-alert
+
 on:
   workflow_dispatch:
     inputs:
@@ -7,11 +9,6 @@ on:
         description: "Commit SHA (blank selects the newest staging/verified success on main)"
         required: false
         type: string
-      accept_npm_lag:
-        description: "Tag even though the previous release's packages are missing from npm (only when this release carries the publish fix)"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -70,21 +67,9 @@ jobs:
       # A release whose npm publish failed or never ran leaves users on an
       # older CLI and libraries while everything else moves on. The previous
       # stable tag's packages must be on npm before the next tag is cut; fix
-      # the publish (publish-npm.yml) first. When the fix itself has to ship
-      # in this release (the CLI publishes only from a stable tag), dispatch
-      # with accept_npm_lag to tag anyway; the table stays in the log as a
-      # warning. Runs without an install.
+      # the publish (publish-npm.yml) first. Runs without an install.
       - name: Refuse a tag while the previous release is missing from npm
-        env:
-          ACCEPT_NPM_LAG: ${{ inputs.accept_npm_lag }}
-        run: |
-          status=0
-          bun scripts/check-npm-publish-lag.ts --previous-release-of HEAD || status=$?
-          if [[ "$status" -eq 1 && "$ACCEPT_NPM_LAG" == "true" ]]; then
-            echo "::warning::Tagging over the npm lag above (accept_npm_lag)."
-          elif [[ "$status" -ne 0 ]]; then
-            exit "$status"
-          fi
+        run: bun scripts/check-npm-publish-lag.ts --previous-release-of HEAD
 
       # The API deploys from this tag; the CLI publishes from the same commit
       # only after production serves it. A stable tag is refused while a

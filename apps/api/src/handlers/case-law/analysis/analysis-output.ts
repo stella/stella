@@ -28,6 +28,7 @@ import {
   CURRENT_ANALYSIS_VERSION,
 } from "@stll/legal-ast/analysis";
 
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
@@ -88,11 +89,17 @@ const usableAnchors = (
   anchorIds: readonly string[],
 ): AnalysisOutput["holding"]["anchors"] => {
   const positions = new Map(anchorIds.map((id, index) => [id, index]));
-  return anchors.filter((anchor) => {
+  const usable = anchors.filter((anchor) => {
     const start = positions.get(anchor.startAnchorId);
     const end = positions.get(anchor.endAnchorId);
     return start !== undefined && end !== undefined && start <= end;
   });
+  reportCaseLawIncompleteAnswer({
+    surface: "analysis",
+    reason: "invalid_output",
+    count: anchors.length - usable.length,
+  });
+  return usable;
 };
 
 /**

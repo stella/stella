@@ -892,6 +892,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
@@ -3876,6 +3877,16 @@
       "citationWithQuote": "Odesłanie z cytatem",
       "quoteWithCitation": "Cytat z odesłaniem",
       "textOnly": "Tylko tekst"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Dodaj źródło",
+      "documentRequired": "Wybierz dokument.",
+      "invalidPage": "Wpisz całkowity numer strony nie mniejszy niż 1.",
+      "page": "Strona PDF (opcjonalnie)",
+      "quote": "Cytowany fragment (opcjonalnie)",
+      "quoteTooLong": "Użyj maksymalnie {limit} znaków."
     }
   },
   "markdownEditor": {
