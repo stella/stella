@@ -107,6 +107,12 @@ const rejects = [
     source:
       'docker.createContainer({Image: "app", HostConfig: {VolumesFrom: ["other"]}});',
   },
+  {
+    id: "api-volume-options",
+    inspect: inspectDockerHelper,
+    source:
+      'docker.createVolume({Name: "data", Driver: "local", DriverOpts: {type: "none"}});',
+  },
 ] as const;
 
 test("host mount guard accepts and rejects the documented cases", () => {

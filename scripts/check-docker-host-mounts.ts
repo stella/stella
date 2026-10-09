@@ -744,6 +744,68 @@ const apiCreateConfigFailures = (node: ts.Node): string[] => {
   return failures;
 };
 
+const calleeName = (call: ts.CallExpression): string | undefined => {
+  if (ts.isIdentifier(call.expression)) {
+    return call.expression.text;
+  }
+  return ts.isPropertyAccessExpression(call.expression)
+    ? call.expression.name.text
+    : undefined;
+};
+
+const hasSafeApiVolumeCreateBody = (body: ts.Expression): boolean =>
+  ts.isObjectLiteralExpression(body) &&
+  body.properties.every((property) => {
+    if (!ts.isPropertyAssignment(property)) {
+      return false;
+    }
+    const name = staticPropertyName(property.name);
+    if (name === "Driver") {
+      return (
+        ts.isStringLiteralLike(property.initializer) &&
+        !isUnsafeDriverName(property.initializer.text)
+      );
+    }
+    if (name === "DriverOpts") {
+      return (
+        ts.isObjectLiteralExpression(property.initializer) &&
+        property.initializer.properties.every(
+          (option) =>
+            ts.isPropertyAssignment(option) &&
+            isSafeDriverOptionKey(staticPropertyName(option.name)),
+        )
+      );
+    }
+    return name !== undefined;
+  });
+
+// Docker API volume creation: createVolume(...) bodies and any object with
+// Driver/DriverOpts next to a Name. Same driver predicates as every other path.
+const apiVolumeCreateFailures = (node: ts.Node): string[] => {
+  const failures: string[] = [];
+  if (ts.isCallExpression(node) && calleeName(node) === "createVolume") {
+    const body = node.arguments.at(-1);
+    if (!body || !hasSafeApiVolumeCreateBody(body)) {
+      failures.push("Docker API volume creation allows only the local driver");
+    }
+  }
+  if (ts.isObjectLiteralExpression(node)) {
+    const names = node.properties.map((property) =>
+      ts.isPropertyAssignment(property)
+        ? staticPropertyName(property.name)
+        : undefined,
+    );
+    if (
+      (names.includes("DriverOpts") ||
+        (names.includes("Driver") && names.includes("Name"))) &&
+      !hasSafeApiVolumeCreateBody(node)
+    ) {
+      failures.push("Docker API volume creation allows only the local driver");
+    }
+  }
+  return failures;
+};
+
 export const inspectDockerHelper = (source: string): string[] => {
   const failures: string[] = [];
   // Shell helpers are also discovered. Join continuations before checking
@@ -843,7 +905,10 @@ export const inspectDockerHelper = (source: string): string[] => {
         );
       }
     }
-    failures.push(...apiCreateConfigFailures(node));
+    failures.push(
+      ...apiCreateConfigFailures(node),
+      ...apiVolumeCreateFailures(node),
+    );
     if (ts.isArrayLiteralExpression(node)) {
       failures.push(...volumeCreateArrayFailures(node, helpers));
       for (const [index, element] of node.elements.entries()) {
