@@ -678,7 +678,7 @@ mechanics, and similar), not gaps in coverage.
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| health_infra | 1 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
