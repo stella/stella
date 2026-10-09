@@ -49,48 +49,57 @@ test("translation insertion and audit keep checked values when the original body
   const inserted: (typeof documentTranslationRuns.$inferInsert)[] = [];
   const auditMetadata: unknown[] = [];
   let handoffs = 0;
-  const { safeDb, scopedDb } = createScopedDbMock({
-    query: {
-      entities: {
-        findFirst: async () => ({
-          currentVersionId: entityVersionId,
-          readOnly: false,
-        }),
-      },
-      entityVersions: {
-        findFirst: async () => ({
-          id: entityVersionId,
-          fields: [
-            {
-              id: fieldId,
-              propertyId: toSafeId<"property">("translation_property"),
-              content: {
-                type: "file",
-                id: sourceFileId,
-                fileName: "agreement.docx",
-                mimeType: DOCX_MIME_TYPE,
-                sizeBytes: 1024,
-                encrypted: false,
-              },
-            },
-          ],
-        }),
-      },
-    },
-    insert: (table: unknown) => {
-      expect(table).toBe(documentTranslationRuns);
-      return {
-        values: (value: typeof documentTranslationRuns.$inferInsert) => {
-          inserted.push(value);
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () => [{ id: value.id }],
-            }),
-          };
+  const { safeDb, scopedDb } = createScopedDbMock(
+    {
+      query: {
+        entities: {
+          findFirst: async () => ({
+            currentVersionId: entityVersionId,
+            readOnly: false,
+          }),
         },
-      };
+        entityVersions: {
+          findFirst: async () => ({
+            id: entityVersionId,
+            fields: [
+              {
+                id: fieldId,
+                propertyId: toSafeId<"property">("translation_property"),
+                content: {
+                  type: "file",
+                  id: sourceFileId,
+                  fileName: "agreement.docx",
+                  mimeType: DOCX_MIME_TYPE,
+                  sizeBytes: 1024,
+                  encrypted: false,
+                },
+              },
+            ],
+          }),
+        },
+      },
+      insert: (table: unknown) => {
+        expect(table).toBe(documentTranslationRuns);
+        return {
+          values: (value: typeof documentTranslationRuns.$inferInsert) => {
+            inserted.push(value);
+            return {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: value.id }],
+              }),
+            };
+          },
+        };
+      },
     },
-  });
+    {
+      visibleResources: {
+        entity: [entityId],
+        entityVersion: [entityVersionId],
+        field: [fieldId],
+      },
+    },
+  );
   const endpoint = createDocumentTranslationRunHandler({
     authorizeUsage: async (input) => {
       // The public handler clones its context; mutate the actual binding passed
