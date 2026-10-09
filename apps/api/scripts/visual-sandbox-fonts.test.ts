@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import path from "node:path";
 
 import { VISUAL_PRESENTATION_CSS } from "../src/handlers/visual-sandbox/browser/presentation-css";
 import { buildVisualFontFaces } from "./visual-sandbox-fonts";
@@ -31,16 +32,22 @@ test("visual font faces embed the app's exact font bytes and preserve typography
     withoutUrls(selectedFaces.map((face) => face[0]).join("\n")),
   );
 
-  for (const face of selectedFaces) {
-    const url = /url\("([^"]+)"\)/u.exec(face[0])?.at(1);
-    if (!url) {
+  const selectedNames = new Set(
+    selectedFaces.map(
+      (face) => /url\("\/fonts\/([^"]+)"\)/u.exec(face[0])?.at(1) ?? "",
+    ),
+  );
+  const repoRoot = path.resolve(import.meta.dirname, "../../..");
+  let embeddedFonts = 0;
+  for await (const fontPath of new Bun.Glob(
+    "apps/web/public/fonts/*.woff2",
+  ).scan({ cwd: repoRoot, absolute: true })) {
+    if (!selectedNames.has(path.basename(fontPath))) {
       continue;
     }
-    const bytes = Buffer.from(
-      await Bun.file(
-        new URL(`../../web/public${url}`, import.meta.url),
-      ).arrayBuffer(),
-    );
+    const bytes = Buffer.from(await Bun.file(fontPath).arrayBuffer());
     expect(embedded).toContain(bytes.toString("base64"));
+    embeddedFonts += 1;
   }
+  expect(embeddedFonts).toBe(selectedNames.size);
 });
