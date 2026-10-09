@@ -718,6 +718,13 @@
         "procedural-history": "Procedural history",
         "reasoning": "Reasoning"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
+        "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}",
+        "unavailable": "AI analysis is not available for this decision."
+      },
       "generate": "Generate AI headnotes",
       "holdingAnchor": "Go to paragraph",
       "invitation": "With a free account, AI drafts working notes on this decision.",

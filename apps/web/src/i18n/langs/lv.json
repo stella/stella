@@ -718,6 +718,13 @@
         "procedural-history": "Procesa gaita",
         "reasoning": "Argumentācija"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Jūsu organizācijas {provider} atslēga atgrieza nepilnīgu atbildi.} other {AI modelis atgrieza nepilnīgu atbildi.}}",
+        "providerRefused": "{source, select, organization {{provider} noraidīja pieprasījumu, kas veikts ar jūsu organizācijas atslēgu. Pārbaudiet atslēgu, tās kvotu un norēķinus organizācijas iestatījumos.} other {AI pakalpojumu sniedzējs noraidīja pieprasījumu.}}",
+        "providerUnavailable": "{source, select, organization {{provider} pašlaik nav pieejams ar jūsu organizācijas atslēgu.} other {AI pakalpojumu sniedzējs pašlaik nav pieejams.}}",
+        "timedOut": "{source, select, organization {{provider} neatbildēja laikā, izmantojot jūsu organizācijas atslēgu.} other {AI modelis neatbildēja laikā.}}",
+        "unavailable": "Šim nolēmumam AI analīze nav pieejama."
+      },
       "generate": "Sagatavot AI kopsavilkumus",
       "holdingAnchor": "Pāriet uz rindkopu",
       "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",

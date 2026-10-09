@@ -31,6 +31,7 @@ import {
   AiHeadnotes,
   hasAiHeadnotes,
 } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
+import { AnalysisErrorNotice } from "@/features/case-law/components/case-viewer/analysis/analysis-error-notice";
 import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import {
@@ -605,24 +606,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                       />
                     )}
                   {showAiNotes && analysisState.status === "error" && (
-                    <div
-                      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
-                      role="alert"
-                    >
-                      <p className="text-muted-foreground text-xs leading-snug">
-                        {t("errors.api.server")}
-                      </p>
-                      <Button
-                        onClick={() => {
-                          detached(generate(), "decision-workspace.generate");
-                        }}
-                        size="sm"
-                        variant="muted"
-                      >
-                        <SparklesIcon className="size-3" />
-                        {t("common.retry")}
-                      </Button>
-                    </div>
+                    <AnalysisErrorNotice
+                      error={analysisState.error}
+                      onRetry={() => {
+                        detached(generate(), "decision-workspace.generate");
+                      }}
+                    />
                   )}
 
                   {/* The notes are painted absolutely inside this region, so they

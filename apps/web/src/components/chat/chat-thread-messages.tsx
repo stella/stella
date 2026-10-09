@@ -937,6 +937,12 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
   model_unavailable: "chat.sendErrorModelUnavailable",
   provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
   provider_stream_incomplete: "chat.sendErrorStreamIncomplete",
+  // A chat turn keeps a `length` answer and carries no schema or deadline of
+  // its own, so these reach it only through a structured side call; each
+  // reads as its nearest chat outcome.
+  output_incomplete: "chat.sendErrorStreamIncomplete",
+  output_invalid: "chat.sendError",
+  deadline_exceeded: "chat.sendErrorProviderUnavailable",
   provider_unavailable: "chat.sendErrorProviderUnavailable",
   quota_exhausted: "chat.sendErrorQuotaExhausted",
 } as const satisfies Record<MappedChatErrorKind, TranslationKey>;

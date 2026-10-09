@@ -718,6 +718,13 @@
         "procedural-history": "Antecedentes procesales",
         "reasoning": "Razonamiento"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {La clave de {provider} de tu organización devolvió una respuesta incompleta.} other {El modelo de IA devolvió una respuesta incompleta.}}",
+        "providerRefused": "{source, select, organization {{provider} rechazó la solicitud hecha con la clave de tu organización. Revisa la clave, su cuota y la facturación en la configuración de la organización.} other {El proveedor de IA rechazó la solicitud.}}",
+        "providerUnavailable": "{source, select, organization {{provider} no está disponible ahora mismo para la clave de tu organización.} other {El proveedor de IA no está disponible ahora mismo.}}",
+        "timedOut": "{source, select, organization {{provider} no respondió a tiempo con la clave de tu organización.} other {El modelo de IA no respondió a tiempo.}}",
+        "unavailable": "El análisis con IA no está disponible para esta resolución."
+      },
       "generate": "Generar sumarios con IA",
       "holdingAnchor": "Ir al párrafo",
       "invitation": "Con una cuenta gratuita, la IA prepara notas de trabajo sobre esta resolución.",
