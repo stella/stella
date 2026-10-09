@@ -29,14 +29,14 @@ const rendersNothing = (child: unknown) => {
   if (!isAstNode(child)) {
     return false;
   }
-  const { value } = child;
+  const { expression, value } = child;
   return (
     (child.type === "JSXText" &&
       typeof value === "string" &&
       value.trim() === "") ||
     (child.type === "JSXExpressionContainer" &&
-      isAstNode(child.expression) &&
-      child.expression.type === "JSXEmptyExpression")
+      isAstNode(expression) &&
+      expression.type === "JSXEmptyExpression")
   );
 };
 
