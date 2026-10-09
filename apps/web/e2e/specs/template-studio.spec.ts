@@ -11,6 +11,56 @@ const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");
 const TEMPLATE_STUDIO_TEST_TIMEOUT_MS = 120_000;
 
 test.describe("Template Studio", () => {
+  test("fits the page to the viewport when the outline opens and the window narrows", async ({
+    page,
+  }) => {
+    test.setTimeout(TEMPLATE_STUDIO_TEST_TIMEOUT_MS);
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.goto("/knowledge/templates", { waitUntil: "domcontentloaded" });
+    const template = page.getByRole("button", {
+      name: /^Supply Agreement(?: |$)/u,
+    });
+    await expect(template).toBeVisible({ timeout: 45_000 });
+    await template.click();
+    const editor = page.getByTestId("folio-editor");
+    await expect(editor.locator("[data-page-number]").first()).toBeVisible({
+      timeout: 45_000,
+    });
+
+    const expectPageFits = async () => {
+      await expect
+        .poll(async () => {
+          const viewport = await editor
+            .locator("[data-folio-scroll]")
+            .boundingBox();
+          const documentPage = await editor
+            .locator("[data-page-number]")
+            .first()
+            .boundingBox();
+          return viewport && documentPage
+            ? documentPage.width <= viewport.width
+            : false;
+        })
+        .toBe(true);
+    };
+    await expectPageFits();
+    await page.getByTestId("toolbar-outline-toggle").click();
+    await expect(
+      page.getByTestId("folio-outline").locator("select"),
+    ).toBeVisible();
+    await expectPageFits();
+
+    await page.mouse.move(0, 0);
+    await page.setViewportSize({ width: 600, height: 1000 });
+    const inspectorBack = page
+      .locator('[data-slot="inspector"]')
+      .getByRole("button", { name: "Back", exact: true });
+    if (await inspectorBack.isVisible()) {
+      await inspectorBack.click();
+    }
+    await expectPageFits();
+  });
+
   test("persists document edits and conditions across reload", async ({
     page,
     request,
