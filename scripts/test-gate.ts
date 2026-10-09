@@ -39,6 +39,7 @@ type NonGatingScenario = {
 
 export type RegistrationFinding = {
   readonly identity: string;
+  readonly managedServiceGate?: (typeof SERVICE_GATES)[number];
   readonly type: "disabled" | "only";
 };
 
@@ -225,8 +226,49 @@ export const parseTestRegistrations = (
   };
   discoverAliases(source);
 
+  const gateAliases = new Map<string, (typeof SERVICE_GATES)[number]>();
+  const discoverGateAliases = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      const initializer = node.initializer.getText();
+      const gate = SERVICE_GATES.find(
+        (candidate) =>
+          initializer.includes(candidate) ||
+          [...gateAliases.entries()].some(
+            ([alias, aliasedGate]) =>
+              aliasedGate === candidate &&
+              new RegExp(`\\b${alias}\\b`, "u").test(initializer),
+          ),
+      );
+      if (gate !== undefined) {
+        gateAliases.set(node.name.text, gate);
+      }
+    }
+    ts.forEachChild(node, discoverGateAliases);
+  };
+  discoverGateAliases(source);
+
+  const referencedServiceGate = (
+    node: ts.Node,
+  ): (typeof SERVICE_GATES)[number] | undefined => {
+    const text = node.getText();
+    return SERVICE_GATES.find(
+      (gate) =>
+        text.includes(gate) ||
+        [...gateAliases.entries()].some(
+          ([alias, aliasedGate]) =>
+            aliasedGate === gate &&
+            new RegExp(`\\b${alias}\\b`, "u").test(text),
+        ),
+    );
+  };
+
   const findings: RegistrationFinding[] = [];
   const suites: string[] = [];
+  const suiteGates: ((typeof SERVICE_GATES)[number] | undefined)[] = [];
   const isConditionallyRegistered = (node: ts.CallExpression): boolean => {
     let ancestor = node.parent;
     while (!ts.isSourceFile(ancestor)) {
@@ -240,6 +282,24 @@ export const parseTestRegistrations = (
     }
     return false;
   };
+  const enclosingServiceGate = (
+    node: ts.CallExpression,
+  ): (typeof SERVICE_GATES)[number] | undefined => {
+    let ancestor = node.parent;
+    while (!ts.isSourceFile(ancestor)) {
+      if (ts.isIfStatement(ancestor)) {
+        return referencedServiceGate(ancestor.expression);
+      }
+      if (ts.isConditionalExpression(ancestor)) {
+        return referencedServiceGate(ancestor.condition);
+      }
+      if (ts.isFunctionLike(ancestor)) {
+        return undefined;
+      }
+      ancestor = ancestor.parent;
+    }
+    return undefined;
+  };
   const visit = (node: ts.Node): void => {
     if (!ts.isCallExpression(node)) {
       ts.forEachChild(node, visit);
@@ -249,13 +309,31 @@ export const parseTestRegistrations = (
     const hook =
       name !== undefined && /^(?:after|before)(?:All|Each)$/u.test(name);
     const title = hook ? `hook:${name}` : literalTitle(node.arguments.at(0));
-    if (name === undefined || title === undefined) {
+    if (name === undefined) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+    const isOnly = name.split(".").includes("only");
+    if (title === undefined) {
+      if (isOnly) {
+        const { line, character } = source.getLineAndCharacterOfPosition(
+          node.getStart(source),
+        );
+        findings.push({
+          identity: `${file}::<dynamic title at ${line + 1}:${character + 1}>`,
+          type: "only",
+        });
+      }
       ts.forEachChild(node, visit);
       return;
     }
     const identity = `${file}::${[...suites, title].join(" > ")}`;
     const callback = node.arguments.at(-1);
-    const isOnly = name.split(".").includes("only");
+    const managedServiceGate =
+      referencedServiceGate(node.expression) ??
+      (callback === undefined ? undefined : referencedServiceGate(callback)) ??
+      enclosingServiceGate(node) ??
+      suiteGates.at(-1);
     const isDisabled =
       name.includes("|conditional") ||
       isConditionallyRegistered(node) ||
@@ -269,14 +347,20 @@ export const parseTestRegistrations = (
       findings.push({ identity, type: "only" });
     }
     if (isDisabled) {
-      findings.push({ identity, type: "disabled" });
+      findings.push(
+        managedServiceGate === undefined
+          ? { identity, type: "disabled" }
+          : { identity, managedServiceGate, type: "disabled" },
+      );
     }
 
     if (name.startsWith("describe")) {
       suites.push(title);
+      suiteGates.push(managedServiceGate);
       if (callback !== undefined) {
         ts.forEachChild(callback, visit);
       }
+      suiteGates.pop();
       suites.pop();
       return;
     }
@@ -303,17 +387,171 @@ const nearestPackage = (file: string): string | undefined => {
   return undefined;
 };
 
-const hasPackageTestTask = (packageFile: string): boolean => {
+type PackageScripts = Readonly<Record<string, unknown>>;
+
+const packageScripts = (packageFile: string): PackageScripts | undefined => {
   const parsed: unknown = readJson(packageFile);
   if (typeof parsed !== "object" || parsed === null || !("scripts" in parsed)) {
-    return false;
+    return undefined;
   }
   const scripts = parsed.scripts;
-  return typeof scripts === "object" && scripts !== null && "test" in scripts;
+  return typeof scripts === "object" && scripts !== null ? scripts : undefined;
+};
+
+const shellWords = (command: string): string[] =>
+  [
+    ...command.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|([^\s;&|()]+)/gu),
+  ].map((match) => match[1] ?? match[2] ?? match[3] ?? "");
+
+type PackageTestCollectionOptions = {
+  readonly candidate: string;
+  readonly packageDirectory: string;
+  readonly scriptName?: string;
+  readonly scripts: PackageScripts;
+  readonly visited?: ReadonlySet<string>;
+};
+
+export const packageTestCollectionFailure = ({
+  candidate,
+  packageDirectory,
+  scriptName = "test",
+  scripts,
+  visited = new Set(),
+}: PackageTestCollectionOptions): string | undefined => {
+  if (visited.has(scriptName)) {
+    return `runner command: package script cycle at ${scriptName}`;
+  }
+  const command = scripts[scriptName];
+  if (typeof command !== "string") {
+    return `runner command: package script ${scriptName} is missing`;
+  }
+  const words = shellWords(command);
+  for (let index = 0; index < words.length; index += 1) {
+    if (words[index] !== "bun") {
+      continue;
+    }
+    if (words[index + 1] === "run" && words[index + 2]?.startsWith("test:")) {
+      return packageTestCollectionFailure({
+        candidate,
+        packageDirectory,
+        scriptName: words[index + 2],
+        scripts,
+        visited: new Set([...visited, scriptName]),
+      });
+    }
+    if (words[index + 1]?.endsWith("scripts/run-tests.ts")) {
+      if (packageDirectory === "apps/api") {
+        return ["src", "evals", "scripts"].some((root) =>
+          candidate.startsWith(`${packageDirectory}/${root}/`),
+        )
+          ? undefined
+          : "runner glob: API wrapper does not collect the file";
+      }
+      if (packageDirectory === "apps/web") {
+        return /\.test\.[cm]?[jt]sx?$/u.test(candidate)
+          ? undefined
+          : "runner glob: web wrapper does not collect the file";
+      }
+      return "runner command: unrecognized test wrapper";
+    }
+    if (words[index + 1] !== "test") {
+      continue;
+    }
+    const arguments_ = words.slice(index + 2);
+    const ignorePatternIndex = arguments_.indexOf("--path-ignore-patterns");
+    const relativeCandidate = path.posix.relative(packageDirectory, candidate);
+    if (
+      ignorePatternIndex !== -1 &&
+      arguments_[ignorePatternIndex + 1] !== undefined &&
+      new Bun.Glob(arguments_[ignorePatternIndex + 1]).match(relativeCandidate)
+    ) {
+      return "runner glob: test command excludes the file";
+    }
+    const positional = arguments_.filter(
+      (argument, argumentIndex) =>
+        !argument.startsWith("-") &&
+        (ignorePatternIndex === -1 ||
+          argumentIndex !== ignorePatternIndex + 1) &&
+        argument !== "true" &&
+        argument !== "false",
+    );
+    if (
+      positional.length === 0 ||
+      positional.some(
+        (entry) =>
+          relativeCandidate === entry ||
+          relativeCandidate.startsWith(`${entry}/`) ||
+          new Bun.Glob(entry).match(relativeCandidate),
+      )
+    ) {
+      return undefined;
+    }
+    return "runner glob: test command does not collect the file";
+  }
+  return "runner command: test script does not invoke a test runner";
 };
 
 const isTypeScriptTest = (file: string): boolean =>
   /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file);
+
+const isCollectedByGatingPlaywright = (
+  file: string,
+  packageFile: string,
+  scripts: PackageScripts,
+): boolean => {
+  const parsed = readJson(packageFile);
+  if (typeof parsed !== "object" || parsed === null || !("name" in parsed)) {
+    return false;
+  }
+  const packageName = parsed.name;
+  if (typeof packageName !== "string") {
+    return false;
+  }
+  const workflow = readFileSync(
+    path.join(ROOT, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const packageDirectory = path.posix.dirname(packageFile);
+  for (const [scriptName, command] of Object.entries(scripts)) {
+    if (
+      typeof command !== "string" ||
+      !command.includes("playwright test") ||
+      (!workflow.includes(`--filter ${packageName} ${scriptName}`) &&
+        !workflow.includes(
+          `cd ${packageDirectory}\n          bun run ${scriptName}`,
+        ))
+    ) {
+      continue;
+    }
+    const words = shellWords(command);
+    const configFlag = words.findIndex(
+      (word) => word === "--config" || word === "-c",
+    );
+    const configName =
+      configFlag === -1 ? "playwright.config.ts" : words[configFlag + 1];
+    if (configName === undefined) {
+      continue;
+    }
+    const configFile = path.join(ROOT, packageDirectory, configName);
+    if (!existsSync(configFile)) {
+      continue;
+    }
+    const config = readFileSync(configFile, "utf-8");
+    const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(config)?.at(1) ?? ".";
+    const testMatch = /\btestMatch:\s*["']([^"']+)["']/u.exec(config)?.at(1);
+    const relative = path.posix.relative(
+      path.posix.normalize(path.posix.join(packageDirectory, testDir)),
+      file,
+    );
+    if (
+      !relative.startsWith("../") &&
+      (testMatch === undefined || new Bun.Glob(testMatch).match(relative))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const e2eRunnerDirectories = (): ReadonlySet<string> => {
   const directories = new Set<string>();
@@ -370,10 +608,49 @@ export const firstCollectionFailure = (
   if (packageFile === undefined) {
     return "package task: no owning package.json";
   }
-  if (!hasPackageTestTask(packageFile)) {
+  const scripts = packageScripts(packageFile);
+  if (scripts === undefined || !("test" in scripts)) {
     return `package task: ${packageFile} has no test script`;
   }
-  return undefined;
+  const collectionFailure = packageTestCollectionFailure({
+    candidate: file,
+    packageDirectory: path.posix.dirname(packageFile),
+    scripts,
+  });
+  if (
+    collectionFailure !== undefined &&
+    isCollectedByGatingPlaywright(file, packageFile, scripts)
+  ) {
+    return undefined;
+  }
+  if (collectionFailure !== undefined) {
+    const parsed = readJson(packageFile);
+    if (typeof parsed === "object" && parsed !== null && "name" in parsed) {
+      const packageName = parsed.name;
+      const workflow = readFileSync(
+        path.join(ROOT, ".github/workflows/ci.yml"),
+        "utf-8",
+      );
+      if (typeof packageName === "string") {
+        for (const scriptName of Object.keys(scripts).toSorted(
+          compareCodeUnit,
+        )) {
+          if (
+            workflow.includes(`--filter ${packageName} ${scriptName}`) &&
+            packageTestCollectionFailure({
+              candidate: file,
+              packageDirectory: path.posix.dirname(packageFile),
+              scriptName,
+              scripts,
+            }) === undefined
+          ) {
+            return undefined;
+          }
+        }
+      }
+    }
+  }
+  return collectionFailure;
 };
 
 const validateCanonicalOrder = (
@@ -490,13 +767,13 @@ const run = (): void => {
   const actualDisabled: string[] = [];
   for (const file of files) {
     const source = readFileSync(path.join(ROOT, file), "utf-8");
-    const managed = SERVICE_GATES.some(
-      (gate) => source.includes(gate) && managedGates.has(gate),
-    );
     for (const finding of parseTestRegistrations(file, source)) {
       if (finding.type === "only") {
         errors.push(`${finding.identity}: .only is forbidden`);
-      } else if (!managed) {
+      } else if (
+        finding.managedServiceGate === undefined ||
+        !managedGates.has(finding.managedServiceGate)
+      ) {
         actualDisabled.push(finding.identity);
       }
     }
