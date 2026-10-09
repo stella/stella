@@ -1,0 +1,110 @@
+name: Record query measurements
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        type: string
+        default: ""
+      heavy_only:
+        type: boolean
+        default: false
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: query-perf-${{ github.event_name }}-${{ github.ref }}-${{ inputs.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  DB_LOAD_GATE_EBS_SIGNAL: disabled
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+
+jobs:
+  query-perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Resolve query performance baseline
+        if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
+        id: base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          HEAVY_ONLY: ${{ inputs.heavy_only }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$HEAVY_ONLY" == true ]]; then
+            tested_sha="$SHA"
+            base_sha="$(git rev-parse "$tested_sha^")"
+          else
+            test -n "$BASE_SHA"
+            git fetch --no-tags origin "$BASE_SHA"
+            tested_sha="$GITHUB_SHA"
+            base_sha="$(git merge-base "$BASE_SHA" "$tested_sha")"
+          fi
+          echo "QUERY_PERF_BASE_REF=$base_sha" >> "$GITHUB_ENV"
+          echo "tested_sha=$tested_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check query performance allowances
+        if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
+        run: bun scripts/query-perf-baseline.ts "$QUERY_PERF_BASE_REF"
+
+      - name: Apply database migrations
+        run: bun --filter @stll/api db:migrate
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+
+      - name: Run query performance suite
+        run: bun run test:perf
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          QUERY_PERF_RECORD_BASELINE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'true' || 'false' }}
+
+      - name: Validate recorded baseline
+        if: github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')
+        run: bun scripts/query-perf-baseline.ts --validate
+
+      - name: Upload recorded baseline
+        if: github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: query-perf-baseline-record-${{ github.sha }}
+          path: apps/api/src/tests/query-perf/baseline.json
+          if-no-files-found: error
+          retention-days: 7

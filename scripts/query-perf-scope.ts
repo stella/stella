@@ -95,6 +95,7 @@ export const queryPerfRequired = (
           "apps/api/src/tests/explain-as-stella.ts",
           "apps/api/scripts/run-perf-tests.ts",
           ".github/workflows/ci.yml",
+          ".github/workflows/query-perf.yml",
           "bun.lock",
           "package.json",
           "bunfig.toml",

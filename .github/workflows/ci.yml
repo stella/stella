@@ -41,11 +41,6 @@ on:
         required: false
   workflow_dispatch:
     inputs:
-      query_perf_mode:
-        description: Compare query budgets or record a baseline artifact
-        type: choice
-        options: [compare, record]
-        default: compare
       allow_full:
         description: Explicitly permit a full suite on a feature branch
         type: boolean
@@ -102,8 +97,7 @@ jobs:
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
-      postgres_pr_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true') || 'false' }}
+      postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
@@ -127,39 +121,25 @@ jobs:
       pr_depth_source_run_id: ${{ steps.completed-depth.outputs.pr_depth_source_run_id }}
       patch_id: ${{ steps.patch-id.outputs.patch_id }}
       pr_depth_workflow_version: ${{ steps.patch-id.outputs.workflow_version }}
-      heavy_web_build_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (inputs.heavy_only == true && 'true' || 'false') || 'false' }}
-      agent_sandbox_docker_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.agent_sandbox_docker_required) || 'false' }}
-      api_image_deps_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.api_image_deps_required) || 'false' }}
-      docker_checks_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.docker_checks_required) || 'false' }}
-      docker_checks_pr_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.docker_checks_pr_required) || 'false' }}
+      heavy_web_build_required: ${{ inputs.heavy_only == true && 'true' || 'false' }}
+      agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
+      api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
+      docker_checks_required: ${{ steps.changed-files.outputs.docker_checks_required }}
+      docker_checks_pr_required: ${{ steps.changed-files.outputs.docker_checks_pr_required }}
       # JSON matrix `include` list for api-image-smoke.
       api_image_platforms: ${{ steps.changed-files.outputs.api_image_platforms }}
-      api_image_smoke_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.api_image_smoke_required) || 'false' }}
-      collab_redis_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.collab_redis_required) || 'false' }}
-      desktop_rust_checks_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.desktop_rust_checks_required) || 'false' }}
-      e2e_core_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.e2e_core_required) || 'false' }}
-      e2e_production_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.e2e_production_required) || 'false' }}
-      e2e_landing_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.e2e_landing_required) || 'false' }}
-      fix_tests_on_base_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.fix_tests_on_base_required) || 'false' }}
-      landing_build_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.landing_build_required) || 'false' }}
-      desktop_browser_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.desktop_browser_required) || 'false' }}
+      api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
+      collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
+      desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
+      e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
+      e2e_production_required: ${{ steps.changed-files.outputs.e2e_production_required }}
+      e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
+      fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
+      landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
+      desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.completed-depth.outputs.run_required != 'false'
+        ${{ steps.completed-depth.outputs.run_required != 'false'
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
         && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
@@ -168,59 +148,34 @@ jobs:
         || (github.event_name == 'merge_group'
         && steps.completed-depth.outputs.normal_completion != 'complete'
         && contains(fromJSON(steps.pilot-queue-plan.outputs.queue_jobs || '[]'), 'ci-browser')))
-        && 'true' || 'false') || 'false' }}
-      legal_atlas_image_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.legal_atlas_image_required) || 'false' }}
-      legal_atlas_image_pr_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.legal_atlas_image_pr_required) || 'false' }}
-      dependency_malware_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.dependency_malware_required) || 'false' }}
-      lockfile_ages_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.lockfile_ages_required) || 'false' }}
-      marketing_screenshots_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.marketing-release.outputs.required) || 'false' }}
-      migration_rehearsal_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.migration_rehearsal_required) || 'false' }}
-      mobile_build_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.mobile_build_required) || 'false' }}
-      model_catalog_drift_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.model_catalog_drift_required) || 'false' }}
-      package_checks_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.package_checks_required) || 'false' }}
-      docs_checks_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.docs_checks_required) || 'false' }}
+        && 'true' || 'false' }}
+      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
+      dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
+      lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
+      marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
+      migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
+      mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
+      model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
+      package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
       docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
-      postgres_suites_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.postgres_suites_required) || 'false' }}
+      postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
       query_perf_required: ${{ steps.query-perf-scope.outputs.query_perf_required }}
-      corpus_suites_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.corpus_suites_required) || 'false' }}
-      valkey_suites_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.valkey_suites_required) || 'false' }}
-      collaboration_suite_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.collaboration_suite_required) || 'false' }}
-      service_suites_pr_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.service_suites_pr_required) || 'false' }}
-      service_suites_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true') || 'false' }}
-      published_exports_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.published_exports_required) || 'false' }}
-      release_typecheck_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.release_typecheck_required) || 'false' }}
-      route_smoke_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.route_smoke_required) || 'false' }}
-      route_tree_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.route_tree_required) || 'false' }}
-      stack_redaction_browsers_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.stack_redaction_browsers_required) || 'false' }}
-      web_api_types_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.web_api_types_required) || 'false' }}
-      web_build_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.web_build_required) || 'false' }}
-      web_image_smoke_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.web_image_smoke_required) || 'false' }}
-      windows_scripts_required: >-
-        ${{ !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record') && (steps.changed-files.outputs.windows_scripts_required) || 'false' }}
+      corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
+      valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
+      collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
+      service_suites_pr_required: ${{ steps.changed-files.outputs.service_suites_pr_required }}
+      service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
+      published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
+      release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
+      route_smoke_required: ${{ steps.changed-files.outputs.route_smoke_required }}
+      route_tree_required: ${{ steps.changed-files.outputs.route_tree_required }}
+      stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
+      web_api_types_required: ${{ steps.changed-files.outputs.web_api_types_required }}
+      web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
+      web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
+      windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
       - name: Resolve PR coverage pilot
         id: pilot
@@ -1455,8 +1410,7 @@ jobs:
     name: Sandbox Docker and image dependency checks
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -1470,7 +1424,7 @@ jobs:
               && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
       )
       )
-      ))
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
@@ -1723,8 +1677,7 @@ jobs:
   parser-version-guard:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && (
       needs.ci-plan.outputs.run_required != 'false'
@@ -1736,7 +1689,7 @@ jobs:
       )
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -1820,8 +1773,7 @@ jobs:
   ci-generated-sources:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (needs.ci-plan.outputs.pr_depth_reused != 'true'
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && (
       needs.ci-plan.outputs.run_required != 'false'
@@ -1830,7 +1782,7 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1928,15 +1880,14 @@ jobs:
   ci-checks-docs:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
       && needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.docs_checks_required == 'true'
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -2015,8 +1966,7 @@ jobs:
   ci-checks-generated:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (needs.ci-plan.outputs.pr_depth_reused != 'true'
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -2026,7 +1976,7 @@ jobs:
         || github.event_name == 'workflow_dispatch'
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
-      ))
+      )
     runs-on: ubuntu-latest
     # Include uncached API generation and its two-pass determinism check.
     timeout-minutes: 105
@@ -2326,8 +2276,7 @@ jobs:
   ci-checks-policy:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (needs.ci-plan.outputs.pr_depth_reused != 'true'
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -2337,7 +2286,7 @@ jobs:
         || github.event_name == 'workflow_dispatch'
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
-      ))
+      )
     runs-on: ubuntu-latest
     # 25m, matching code-quality.
     timeout-minutes: 25
@@ -2622,8 +2571,7 @@ jobs:
   ci-checks-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (needs.ci-plan.outputs.pr_depth_reused != 'true'
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -2633,7 +2581,7 @@ jobs:
         || github.event_name == 'workflow_dispatch'
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
-      ))
+      )
     runs-on: ubuntu-latest
     # 25m, matching code-quality.
     timeout-minutes: 25
@@ -3868,8 +3816,7 @@ jobs:
   ci-tests:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -3880,7 +3827,7 @@ jobs:
         || github.event_name == 'workflow_dispatch'
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
-      ))
+      )
     runs-on: ubuntu-latest
     # 25m per shard, the budget the serial job carried for the whole suite. It
     # was bumped from 20m after a PR affected-flagged across apps/api,
@@ -4131,15 +4078,14 @@ jobs:
   api-test-durations:
     needs: [ci-plan, ci-tests]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && github.ref == 'refs/heads/main'
       && github.event_name != 'pull_request'
       && github.event_name != 'merge_group'
       && needs.ci-tests.result == 'success'
-      && needs.ci-plan.outputs.api_test_shards != '0')
+      && needs.ci-plan.outputs.api_test_shards != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -4203,11 +4149,10 @@ jobs:
   ci-browser:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
-      && needs.ci-plan.outputs.ci_browser_required == 'true')
+      && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
@@ -4453,8 +4398,7 @@ jobs:
   code-quality-api:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (needs.ci-plan.outputs.pr_depth_reused != 'true'
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -4464,7 +4408,7 @@ jobs:
         && (needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch')
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -4590,8 +4534,7 @@ jobs:
   code-quality-web-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (needs.ci-plan.outputs.pr_depth_reused != 'true'
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -4601,7 +4544,7 @@ jobs:
         && (needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch')
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 50
     permissions:
@@ -4811,100 +4754,19 @@ jobs:
       inputs.pr_depth_only != true
       && needs.ci-plan.outputs.run_required != 'false'
       && (inputs.heavy_only == true
-      || (github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
       || ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
       && needs.ci-plan.outputs.query_perf_required == 'true'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
     permissions:
       contents: read
-    services:
-      postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
-        env:
-          POSTGRES_USER: stella_owner
-          POSTGRES_PASSWORD: stella
-          POSTGRES_DB: stella
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - name: Checkout tested revision
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
-      - name: Resolve query performance baseline
-        if: github.event_name != 'workflow_dispatch' || inputs.query_perf_mode != 'record'
-        id: base
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
-          HEAVY_ONLY: ${{ inputs.heavy_only }}
-          SHA: ${{ inputs.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "$HEAVY_ONLY" == true ]]; then
-            tested_sha="$SHA"
-            base_sha="$(git rev-parse "$tested_sha^")"
-          else
-            test -n "$BASE_SHA"
-            git fetch --no-tags origin "$BASE_SHA"
-            tested_sha="$GITHUB_SHA"
-            base_sha="$(git merge-base "$BASE_SHA" "$tested_sha")"
-          fi
-          echo "QUERY_PERF_BASE_REF=$base_sha" >> "$GITHUB_ENV"
-          echo "tested_sha=$tested_sha" >> "$GITHUB_OUTPUT"
-
-      - name: Check query performance allowances
-        if: github.event_name != 'workflow_dispatch' || inputs.query_perf_mode != 'record'
-        run: bun scripts/query-perf-baseline.ts "$QUERY_PERF_BASE_REF"
-
-      - name: Apply database migrations
-        run: bun --filter @stll/api db:migrate
-        env:
-          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-
-      - name: Run query performance suite
-        run: bun run test:perf
-        working-directory: apps/api
-        env:
-          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-          QUERY_PERF_RECORD_BASELINE: ${{ github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record' && 'true' || 'false' }}
-
-      - name: Validate recorded baseline
-        if: github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record'
-        run: bun scripts/query-perf-baseline.ts --validate
-
-      - name: Upload recorded baseline
-        if: github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: query-perf-baseline-record-${{ github.sha }}
-          path: apps/api/src/tests/query-perf/baseline.json
-          if-no-files-found: error
-          retention-days: 7
+    uses: ./.github/workflows/query-perf.yml
+    with:
+      sha: ${{ inputs.sha || '' }}
+      heavy_only: ${{ inputs.heavy_only == true }}
 
   service-suites:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.service_suites_required == 'true'
@@ -4917,7 +4779,7 @@ jobs:
               && (needs.ci-plan.outputs.suite_depth == 'full'
                   || (needs.ci-plan.outputs.suite_depth == 'fast'
                       && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -5124,8 +4986,7 @@ jobs:
     # parity. See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5137,7 +4998,7 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -5275,8 +5136,7 @@ jobs:
   release-typecheck:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5289,7 +5149,7 @@ jobs:
       && needs.ci-plan.outputs.trusted == 'true'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -5370,8 +5230,7 @@ jobs:
   fix-tests-on-base:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'fix-tests-on-base')) && (
       needs.ci-plan.outputs.run_required != 'false'
@@ -5381,7 +5240,7 @@ jobs:
       && needs.ci-plan.outputs.fix_tests_on_base_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -5459,8 +5318,7 @@ jobs:
   web-build:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5472,7 +5330,7 @@ jobs:
         && needs.ci-plan.outputs.web_build_required == 'true'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -5631,8 +5489,7 @@ jobs:
   web-image-smoke:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5643,7 +5500,7 @@ jobs:
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -5757,8 +5614,7 @@ jobs:
   mobile-build:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5770,7 +5626,7 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -5855,8 +5711,7 @@ jobs:
   landing-build:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5867,7 +5722,7 @@ jobs:
       && needs.ci-plan.outputs.landing_build_required == 'true'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -5951,8 +5806,7 @@ jobs:
   heavy-web-build:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5962,7 +5816,7 @@ jobs:
       && needs.ci-plan.outputs.heavy_web_build_required == 'true'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -5998,8 +5852,7 @@ jobs:
     # A thin merge group still runs the browser suites when the change needs
     # them; QUEUE_BROWSER_SUITES=off turns that off without a commit.
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -6013,7 +5866,7 @@ jobs:
       && (github.event_name == 'merge_group' || inputs.heavy_only == true)
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -6153,8 +6006,7 @@ jobs:
     needs: [ci-plan, web-build, heavy-web-build]
     # Admitted to thin merge groups like route-smoke (see there).
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -6168,7 +6020,7 @@ jobs:
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     # Longest leg: 13m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
     timeout-minutes: 28
@@ -6388,8 +6240,7 @@ jobs:
   stack-redaction-browsers:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -6401,7 +6252,7 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -6493,8 +6344,7 @@ jobs:
   e2e-vite-canary:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -6506,7 +6356,7 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -6740,8 +6590,7 @@ jobs:
   e2e-landing:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -6753,7 +6602,7 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -6897,8 +6746,7 @@ jobs:
     # declare the producer so artifact consumers start only after it succeeds.
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -6913,7 +6761,7 @@ jobs:
           || (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success'))
       )
       )
-      ))
+      )
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read
@@ -6932,9 +6780,7 @@ jobs:
   # this call fails, without a runner waiting or polling for its result.
   marketing-screenshots-cancel:
     needs: marketing-screenshots
-    if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (failure() && github.event_name == 'merge_group')
+    if: failure() && github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:
@@ -6993,8 +6839,7 @@ jobs:
   e2e-report:
     needs: [ci-plan, e2e-production-shard, e2e-vite-canary]
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -7004,7 +6849,7 @@ jobs:
       && (needs.e2e-production-shard.result == 'failure'
           || needs.e2e-vite-canary.result == 'failure')
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -7100,8 +6945,7 @@ jobs:
     name: API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -7112,7 +6956,7 @@ jobs:
       && needs.ci-plan.outputs.api_image_smoke_required == 'true'
       )
       )
-      ))
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -7260,8 +7104,7 @@ jobs:
   legal-atlas-image:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -7275,7 +7118,7 @@ jobs:
               && needs.ci-plan.outputs.legal_atlas_image_pr_required == 'true'))
       )
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -7370,8 +7213,7 @@ jobs:
   windows-scripts:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -7382,7 +7224,7 @@ jobs:
       && needs.ci-plan.outputs.windows_scripts_required == 'true'
       )
       )
-      ))
+      )
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -7490,8 +7332,7 @@ jobs:
     name: Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -7502,7 +7343,7 @@ jobs:
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
       )
       )
-      ))
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -7704,8 +7545,7 @@ jobs:
   dependency-malware:
     needs: ci-plan
     if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (inputs.pr_depth_only != true
+      inputs.pr_depth_only != true
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'dependency-malware')) && (
       needs.ci-plan.outputs.run_required != 'false'
@@ -7713,7 +7553,7 @@ jobs:
       (needs.ci-plan.outputs.queue_depth != 'thin' || contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), 'dependency-malware'))
       && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true')
       )
-      ))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -7797,9 +7637,7 @@ jobs:
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
     name: ci-result
-    if: >-
-      !(github.event_name == 'workflow_dispatch' && inputs.query_perf_mode == 'record')
-      && (always())
+    if: always()
     needs:
       [
         ci-plan,
@@ -7942,7 +7780,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "query-perf"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1

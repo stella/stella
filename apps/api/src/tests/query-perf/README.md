@@ -25,8 +25,8 @@ The baseline records each profile and entry separately and binds the seed and pl
 settings. To record a reviewed new baseline locally, run
 `QUERY_PERF_RECORD_BASELINE=true bun run test:perf`. Recording does not perform
 the planted-policy check; run normal `test:perf` afterward.
-For a hosted recording, dispatch `ci.yml` on the reviewed branch with
-`query_perf_mode=record`; this schedules only `ci-plan` and `query-perf`.
+For a hosted recording, dispatch `query-perf.yml` on the reviewed branch;
+this schedules only `query-perf`.
 Download the `query-perf-baseline-record-<sha>`
 artifact, commit its JSON, then run the comparison suite against that commit.
 PR and merge-group runs always compare against the committed baseline.

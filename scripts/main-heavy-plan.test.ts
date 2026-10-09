@@ -38,6 +38,11 @@ const workflowSchema = v.object({
   ),
 });
 const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+const querySource = readFileSync(
+  new URL("../.github/workflows/query-perf.yml", import.meta.url),
+  "utf-8",
+);
+const queryWorkflow = v.parse(workflowSchema, Bun.YAML.parse(querySource));
 const planOutputs = v.parse(
   v.record(v.string(), v.string()),
   workflow.jobs["ci-plan"]?.outputs,
@@ -140,36 +145,66 @@ const heavyPlan = {
 
 const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
 
-test("query recording schedules only its planner and measurement job", () => {
-  for (const depth of ["fast", "full"]) {
-    const value = {
-      ...context("workflow_dispatch", false, heavyPlan),
-      inputs: {
-        heavy_only: false,
-        pr_depth_only: false,
-        query_perf_mode: "record",
-        depth,
-        allow_full: true,
-      },
-    };
-    const scheduled = Object.entries(workflow.jobs)
-      .filter(([, job]) => selected(job.if ?? "true", value))
-      .map(([name]) => name);
-    expect(scheduled).toEqual(["ci-plan", "query-perf"]);
-    expect(workflow.jobs["query-perf"]?.needs).toEqual("ci-plan");
-    for (const [name, expression] of Object.entries(planOutputs)) {
-      if (
-        !name.endsWith("_required") ||
-        name === "query_perf_required" ||
-        name === "run_required"
-      ) {
-        continue;
-      }
-      expect(
-        evaluateExpression(expression, contextFromNested(value)),
-        name,
-      ).toBe("false");
-    }
+test("dedicated query recording dispatch schedules one measurement job", () => {
+  const parsed = v.parse(
+    v.object({ on: v.record(v.string(), v.unknown()) }),
+    Bun.YAML.parse(querySource),
+  );
+  expect(Object.keys(parsed.on)).toEqual([
+    "workflow_call",
+    "workflow_dispatch",
+  ]);
+  expect(parsed.on["workflow_dispatch"]).toBeNull();
+  expect(JSON.stringify(parsed.on["workflow_call"])).not.toContain("record");
+  expect(Object.keys(queryWorkflow.jobs)).toEqual(["query-perf"]);
+  expect(queryWorkflow.jobs["query-perf"]?.needs).toBeUndefined();
+  const caller = v.parse(
+    v.object({ uses: v.string(), with: v.record(v.string(), v.string()) }),
+    v.parse(
+      v.object({ jobs: v.record(v.string(), v.unknown()) }),
+      Bun.YAML.parse(source),
+    ).jobs["query-perf"],
+  );
+  expect(caller.uses).toBe("./.github/workflows/query-perf.yml");
+  expect(Object.keys(caller.with)).toEqual(["sha", "heavy_only"]);
+  const serviceSchema = v.object({
+    jobs: v.record(
+      v.string(),
+      v.looseObject({
+        services: v.optional(
+          v.record(v.string(), v.looseObject({ image: v.string() })),
+        ),
+      }),
+    ),
+  });
+  const services = v.parse(serviceSchema, Bun.YAML.parse(source));
+  const queryServices = v.parse(serviceSchema, Bun.YAML.parse(querySource));
+  expect(queryServices.jobs["query-perf"]?.services?.["postgres"]?.image).toBe(
+    services.jobs["service-suites"]?.services?.["postgres"]?.image,
+  );
+  const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
+  const recording =
+    steps.find(({ name }) => name === "Run query performance suite")?.env?.[
+      "QUERY_PERF_RECORD_BASELINE"
+    ] ?? panic("Missing recording mode");
+  const value = {
+    github: {
+      event_name: "workflow_dispatch",
+      repository: "stella/stella",
+      workflow_ref:
+        "stella/stella/.github/workflows/query-perf.yml@refs/heads/test",
+    },
+  };
+  expect(evaluateExpression(recording, contextFromNested(value))).toBe("true");
+  expect(selected(queryWorkflow.jobs["query-perf"]?.if ?? "true", value)).toBe(
+    true,
+  );
+  for (const step of steps.filter(
+    ({ name }) =>
+      name === "Validate recorded baseline" ||
+      name === "Upload recorded baseline",
+  )) {
+    expect(selected(step.if ?? "true", value)).toBe(true);
   }
 });
 
@@ -177,7 +212,7 @@ test("query budgets select affected changes and explicit recordings", () => {
   const condition =
     workflow.jobs["query-perf"]?.if ?? panic("Missing query performance job");
   const steps =
-    workflow.jobs["query-perf"]?.steps ??
+    queryWorkflow.jobs["query-perf"]?.steps ??
     panic("Missing query performance steps");
   const recording =
     steps.find(({ name }) => name === "Run query performance suite")?.env?.[
@@ -208,16 +243,22 @@ test("query budgets select affected changes and explicit recordings", () => {
           },
         };
         expect(selected(condition, value), `${event}/${required}/${mode}`).toBe(
-          event === "workflow_dispatch"
-            ? mode === "record"
-            : (event === "pull_request" || event === "merge_group") &&
-                required === "true",
+          (event === "pull_request" || event === "merge_group") &&
+            required === "true",
         );
-        const records = event === "workflow_dispatch" && mode === "record";
-        expect(evaluateExpression(recording, contextFromNested(value))).toBe(
-          records ? "true" : "false",
+        const called = {
+          ...value,
+          github: {
+            ...value.github,
+            repository: "stella/stella",
+            workflow_ref:
+              "stella/stella/.github/workflows/ci.yml@refs/heads/test",
+          },
+        };
+        expect(evaluateExpression(recording, contextFromNested(called))).toBe(
+          "false",
         );
-        expect(selected(validation.if ?? "true", value)).toBe(records);
+        expect(selected(validation.if ?? "true", called)).toBe(false);
         const reused = {
           ...context(event, false, {
             ...heavyPlan,
