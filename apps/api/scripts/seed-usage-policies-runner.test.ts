@@ -1,7 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
-import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import { eq, is, sql } from "drizzle-orm";
+import { getTableConfig, IndexedColumn, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,11 +31,25 @@ const withDatabase = async (
     (column) =>
       sql`${sql.identifier(column.name)} ${sql.raw(column.getSQLType())} ${column.notNull ? sql`NOT NULL` : sql``} ${column.default === undefined ? sql`` : sql`DEFAULT ${column.default}`}`,
   );
-  const query = new PgDialect().sqlToQuery(
-    sql`CREATE TABLE usage_policies (${sql.join(columns, sql`, `)}, UNIQUE (policy_key), UNIQUE (hosted_policy_ref))`.inlineParams(),
-  );
+  // Unique indexes come from the schema too, so the fixture enforces the same
+  // one-active-free-policy rule the database does.
+  const uniqueIndexes = getTableConfig(usagePolicies)
+    .indexes.filter(({ config }) => config.unique)
+    .map(({ config: { name, columns: indexColumns, where } }) => {
+      const names = indexColumns.map((column) =>
+        is(column, IndexedColumn)
+          ? sql.identifier(column.name)
+          : panic("usage policy fixture supports column indexes only"),
+      );
+      return sql`CREATE UNIQUE INDEX ${sql.identifier(name ?? panic("unnamed usage policy index"))} ON usage_policies (${sql.join(names, sql`, `)}) ${where === undefined ? sql`` : sql`WHERE ${where}`}`;
+    });
+  const dialect = new PgDialect();
+  const statements = [
+    sql`CREATE TABLE usage_policies (${sql.join(columns, sql`, `)})`,
+    ...uniqueIndexes,
+  ].map((statement) => dialect.sqlToQuery(statement.inlineParams()).sql);
   try {
-    await client.exec(query.sql);
+    await client.exec(statements.join(";\n"));
     await check(drizzle({ client }), dir);
   } finally {
     await client.close();
@@ -53,6 +68,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
   await withDatabase(async (db, dir) => {
     const seeds = [policy("retained"), policy("retired")];
     const first = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify(seeds),
       resultsPath: nodePath.join(dir, "first.jsonl"),
@@ -67,6 +83,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       })),
     );
     const replay = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify(seeds),
       resultsPath: nodePath.join(dir, "replay.jsonl"),
@@ -91,12 +108,13 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
           billingInterval: "month",
           priceBasis: "per_seat",
           storageBytesPerAssignment: 100,
-          serviceActionsPerPeriod: 10,
+          serviceActionsPerPeriod: 3,
           maxMembers: 2,
           visibility: "hidden",
           sortOrder: 1,
         },
       ]),
+      "off",
     ).at(0);
     expect(changes).toBeDefined();
     for (const [field, value] of Object.entries(changes ?? {})) {
@@ -116,6 +134,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       };
       const path = nodePath.join(dir, `${field}.jsonl`);
       const report = await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([changed]),
         resultsPath: path,
@@ -128,6 +147,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
         outcome: "updated",
       });
       await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([policy("retained")]),
         resultsPath: nodePath.join(dir, `${field}-reset.jsonl`),
@@ -141,6 +161,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       billingInterval: "month",
     };
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([priced]),
       resultsPath: nodePath.join(dir, "priced.jsonl"),
@@ -152,6 +173,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
     })) {
       const path = nodePath.join(dir, `${field}.jsonl`);
       const report = await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([{ ...priced, [field]: value }]),
         resultsPath: path,
@@ -161,6 +183,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
         { policyKey: "retained", mode: "apply", outcome: "updated" },
       ]);
       await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([priced]),
         resultsPath: nodePath.join(dir, `${field}-reset.jsonl`),
@@ -168,6 +191,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       });
     }
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("retained")]),
       resultsPath: nodePath.join(dir, "unpriced.jsonl"),
@@ -187,6 +211,7 @@ test("reports inserted, updated, unchanged and omitted public rows, then reaches
       .from(usagePolicies);
     expect(rows).toContainEqual({ key: "retired", visibility: "hidden" });
     const final = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("retained")]),
       resultsPath: nodePath.join(dir, "final.jsonl"),
@@ -209,6 +234,7 @@ test("writes attempted rows and the failing row after rollback, without private 
   await withDatabase(async (db, dir) => {
     const path = nodePath.join(dir, "failed.jsonl");
     const report = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([
         policy("first"),
@@ -238,27 +264,27 @@ test("writes attempted rows and the failing row after rollback, without private 
   });
 });
 
-test("empty and invalid configurations produce empty files without opening the database", async () => {
+test("an invalid configuration produces an empty file without opening the database", async () => {
   const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-empty-"));
   try {
-    for (const [index, input] of ["[]", "invalid JSON"].entries()) {
-      const path = nodePath.join(dir, `${index}.jsonl`);
-      const report = await runSeedReport({
-        mode: "apply",
-        input,
-        resultsPath: path,
-        openDb: () => {
-          throw new TypeError("Unexpected database access");
-        },
-      });
-      expect(report.status).toBe(index === 0 ? "complete" : "failed");
-      expect(readFileSync(path, "utf-8")).toBe("");
-    }
+    const path = nodePath.join(dir, "invalid.jsonl");
+    const report = await runSeedReport({
+      freeTier: "off",
+      mode: "apply",
+      input: "invalid JSON",
+      resultsPath: path,
+      openDb: () => {
+        throw new TypeError("Unexpected database access");
+      },
+    });
+    expect(report.status).toBe("failed");
+    expect(readFileSync(path, "utf-8")).toBe("");
     let opened = false;
     const rejection = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: "[]",
-      resultsPath: nodePath.join(dir, "0.jsonl"),
+      resultsPath: path,
       openDb: () => {
         opened = true;
         throw new TypeError("Unexpected database access");
@@ -279,6 +305,7 @@ test("empty and invalid configurations produce empty files without opening the d
 test("retirement failure rolls back seeded rows and reports failure", async () => {
   await withDatabase(async (db, dir) => {
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("retired")]),
       resultsPath: nodePath.join(dir, "before.jsonl"),
@@ -292,6 +319,7 @@ test("retirement failure rolls back seeded rows and reports failure", async () =
     );
     const path = nodePath.join(dir, "failure.jsonl");
     const report = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify([policy("added")]),
       resultsPath: path,
@@ -328,19 +356,19 @@ test.each(["apply", "dry_run"] as const)(
   async (mode) => {
     await withDatabase(async (db, dir) => {
       await runSeedReport({
+        freeTier: "off",
         mode: "apply",
         input: JSON.stringify([policy("retired")]),
         resultsPath: nodePath.join(dir, "before.jsonl"),
         openDb: () => db,
       });
-      await db.execute(
-        sql`ALTER TABLE usage_policies DROP CONSTRAINT usage_policies_hosted_policy_ref_key`,
-      );
+      await db.execute(sql`DROP INDEX usage_policies_hosted_policy_ref_uidx`);
       await db.execute(
         sql`ALTER TABLE usage_policies ADD UNIQUE (hosted_policy_ref) DEFERRABLE INITIALLY DEFERRED`,
       );
       const path = nodePath.join(dir, "commit-failure.jsonl");
       const report = await runSeedReport({
+        freeTier: "off",
         mode,
         input: JSON.stringify([
           policy("first"),
@@ -373,6 +401,7 @@ test.each(["apply", "dry_run"] as const)(
 test("dry run writes nothing and reports the outcomes the following real run produces", async () => {
   await withDatabase(async (db, dir) => {
     await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input: JSON.stringify(
         ["retained", "retired", "stable"].map((key) => policy(key)),
@@ -390,6 +419,7 @@ test("dry run writes nothing and reports the outcomes the following real run pro
     const before = await snapshot();
     const dryRunPath = nodePath.join(dir, "dry-run.jsonl");
     const dryRun = await runSeedReport({
+      freeTier: "off",
       mode: "dry_run",
       input,
       resultsPath: dryRunPath,
@@ -406,6 +436,7 @@ test("dry run writes nothing and reports the outcomes the following real run pro
     );
 
     const apply = await runSeedReport({
+      freeTier: "off",
       mode: "apply",
       input,
       resultsPath: nodePath.join(dir, "apply.jsonl"),
@@ -429,6 +460,7 @@ test("dry run reports a failing write with the real run's outcomes and rolls bac
     for (const mode of ["dry_run", "apply"] as const) {
       const path = nodePath.join(dir, `${mode}.jsonl`);
       const report = await runSeedReport({
+        freeTier: "off",
         mode,
         input,
         resultsPath: path,
@@ -441,4 +473,203 @@ test("dry run reports a failing write with the real run's outcomes and rolls bac
     expect(reports.at(0)).toEqual(reports.at(1));
     expect(await db.select().from(usagePolicies)).toEqual([]);
   });
+});
+
+const freePolicy = (key: string) => ({
+  key,
+  displayName: "Free",
+  kind: "free",
+  monthlyUsageUnits: 0,
+  priceAmountCents: 0,
+  priceCurrency: "EUR",
+  billingInterval: "month",
+  maxMembers: 1,
+  storageBytesPerAssignment: 1_073_741_824,
+  serviceActionsPerPeriod: 3,
+  visibility: "public",
+});
+
+const readPolicyRows = async (db: ReturnType<typeof drizzle>) =>
+  await db
+    .select({
+      policyKey: usagePolicies.policyKey,
+      kind: usagePolicies.kind,
+      active: usagePolicies.active,
+    })
+    .from(usagePolicies)
+    .orderBy(usagePolicies.policyKey);
+
+test("a free policy is seeded only while the deployment serves the free floor", async () => {
+  await withDatabase(async (db, dir) => {
+    const refused = await runSeedReport({
+      mode: "apply",
+      freeTier: "off",
+      input: JSON.stringify([freePolicy("free")]),
+      resultsPath: nodePath.join(dir, "refused.jsonl"),
+      openDb: () => db,
+    });
+    expect(refused.status).toBe("failed");
+    expect(await readPolicyRows(db)).toEqual([]);
+
+    const seeded = await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free"), policy("team")]),
+      resultsPath: nodePath.join(dir, "seeded.jsonl"),
+      openDb: () => db,
+    });
+    expect(seeded.status).toBe("complete");
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: true },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+  });
+});
+
+test("a free policy absent from the seeds stops applying", async () => {
+  await withDatabase(async (db, dir) => {
+    await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free"), policy("team")]),
+      resultsPath: nodePath.join(dir, "first.jsonl"),
+      openDb: () => db,
+    });
+    const report = await runSeedReport({
+      mode: "apply",
+      freeTier: "off",
+      input: JSON.stringify([policy("team")]),
+      resultsPath: nodePath.join(dir, "second.jsonl"),
+      openDb: () => db,
+    });
+    expect(report.status).toBe("complete");
+    expect(report.rows).toContainEqual({
+      policyKey: "free",
+      mode: "apply",
+      outcome: "deactivated",
+    });
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: false },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+  });
+});
+
+test("replacing the seeded free key retires the previous free policy first", async () => {
+  await withDatabase(async (db, dir) => {
+    await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free-a")]),
+      resultsPath: nodePath.join(dir, "first.jsonl"),
+      openDb: () => db,
+    });
+    const report = await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free-b")]),
+      resultsPath: nodePath.join(dir, "second.jsonl"),
+      openDb: () => db,
+    });
+    expect(report.rows).toEqual([
+      { policyKey: "free-a", mode: "apply", outcome: "deactivated" },
+      { policyKey: "free-b", mode: "apply", outcome: "inserted" },
+      { policyKey: "free-a", mode: "apply", outcome: "hidden" },
+    ]);
+    expect(report.status).toBe("complete");
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free-a", kind: "free", active: false },
+      { policyKey: "free-b", kind: "free", active: true },
+    ]);
+  });
+});
+
+test("re-seeding a retired free policy makes it apply again", async () => {
+  await withDatabase(async (db, dir) => {
+    const apply = async (name: string, input: unknown[]) =>
+      await runSeedReport({
+        mode: "apply",
+        freeTier: "on",
+        input: JSON.stringify(input),
+        resultsPath: nodePath.join(dir, `${name}.jsonl`),
+        openDb: () => db,
+      });
+    await apply("seeded", [freePolicy("free"), policy("team")]);
+    await apply("retired", [policy("team")]);
+    expect(await readPolicyRows(db)).toContainEqual({
+      policyKey: "free",
+      kind: "free",
+      active: false,
+    });
+    const restored = await apply("restored", [
+      freePolicy("free"),
+      policy("team"),
+    ]);
+    expect(restored.rows).toEqual([
+      { policyKey: "free", mode: "apply", outcome: "updated" },
+      { policyKey: "team", mode: "apply", outcome: "unchanged" },
+    ]);
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: true },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+  });
+});
+
+test("an empty configuration retires the free policy and keeps the public catalog", async () => {
+  await withDatabase(async (db, dir) => {
+    await runSeedReport({
+      mode: "apply",
+      freeTier: "on",
+      input: JSON.stringify([freePolicy("free"), policy("team")]),
+      resultsPath: nodePath.join(dir, "first.jsonl"),
+      openDb: () => db,
+    });
+    const report = await runSeedReport({
+      mode: "apply",
+      freeTier: "off",
+      input: "[]",
+      resultsPath: nodePath.join(dir, "empty.jsonl"),
+      openDb: () => db,
+    });
+    expect(report.rows).toEqual([
+      { policyKey: "free", mode: "apply", outcome: "deactivated" },
+    ]);
+    expect(report.status).toBe("complete");
+    expect(await readPolicyRows(db)).toEqual([
+      { policyKey: "free", kind: "free", active: false },
+      { policyKey: "team", kind: "subscription", active: true },
+    ]);
+    const [team] = await db
+      .select({ visibility: usagePolicies.visibility })
+      .from(usagePolicies)
+      .where(eq(usagePolicies.policyKey, "team"));
+    expect(team?.visibility).toBe("public");
+  });
+});
+
+test("seeds reject a second free policy and every incomplete or priced free shape", () => {
+  expect(() =>
+    parseSeeds(JSON.stringify([freePolicy("free")]), "on"),
+  ).not.toThrow();
+  expect(() =>
+    parseSeeds(
+      JSON.stringify([freePolicy("free"), freePolicy("free-two")]),
+      "on",
+    ),
+  ).toThrow("at most one free policy may be seeded");
+  for (const invalid of [
+    { hostedPolicyRef: "free-ref" },
+    { priceAmountCents: 100 },
+    { maxMembers: null },
+    { storageBytesPerAssignment: null },
+    { serviceActionsPerPeriod: null },
+  ]) {
+    expect(() =>
+      parseSeeds(JSON.stringify([{ ...freePolicy("free"), ...invalid }]), "on"),
+    ).toThrow("a free policy has no hosted reference");
+  }
+  expect(() => parseSeeds(JSON.stringify([freePolicy("free")]), "off")).toThrow(
+    "A free policy requires FEATURE_FREE_TIER",
+  );
 });

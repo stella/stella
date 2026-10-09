@@ -228,10 +228,46 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
+      }
+    },
+    "open_case_law_decision": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "read_case_law_decision_blocks": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "preview_cited_provision": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
@@ -312,36 +348,36 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "May contact an external public-data provider or a selected external capability, while keeping resulting workspace changes private.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "create_template": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "configure_template_fields": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "preview_template_conditions": {
@@ -384,24 +420,24 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "upload_document_version": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Starts or completes a private document-version upload in the user’s stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "open_document_version_upload": {
@@ -411,7 +447,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Starts or completes a private document-version upload in the user’s stella workspace.",
+        "read_only_justification": "Validates document access and returns upload panel metadata without modifying any document or version.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
@@ -420,12 +456,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "prepare_file_comparison": {
@@ -435,7 +471,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "read_only_justification": "Creates temporary comparison upload reservations without modifying existing stored documents or versions.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
@@ -447,7 +483,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "read_only_justification": "Stages linked files in temporary uploads without modifying existing stored documents or versions.",
         "open_world_justification": "May contact an external public-data provider or a selected external capability, while keeping resulting workspace changes private.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
@@ -459,7 +495,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "read_only_justification": "Returns file-comparison panel metadata without uploading files or modifying stored documents.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
@@ -492,24 +528,24 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "save_matter": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "delete_matter": {
@@ -540,12 +576,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "delete_contact": {
@@ -600,12 +636,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "delete_task": {
@@ -624,12 +660,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "list_clauses": {
@@ -648,12 +684,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "delete_clause": {
@@ -684,24 +720,24 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "run_playbook": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "list_reader_annotations": {
@@ -732,12 +768,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "delete_reader_annotation": {
@@ -768,12 +804,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+        "destructive_justification": "Can modify or replace existing stored data in the user’s private stella workspace."
       }
     },
     "delete_time_entry": {
@@ -908,7 +944,19 @@
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
     },
-    "invoke_capability": {
+    "read_capability": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "May contact an external public-data provider or a selected external capability, while keeping resulting workspace changes private.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "write_capability": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,

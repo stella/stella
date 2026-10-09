@@ -21,7 +21,7 @@ const placeholderStyle = (
     : undefined;
 
 /** Where a matter file field's generated preview image is served. */
-export const matterFileThumbnailUrl = (workspaceId: string, fieldId: string) =>
+const matterFileThumbnailUrl = (workspaceId: string, fieldId: string) =>
   apiUrl(
     `/files/${encodeURIComponent(workspaceId)}/thumbnail/${encodeURIComponent(fieldId)}`,
   );

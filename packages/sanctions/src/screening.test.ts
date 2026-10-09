@@ -11,7 +11,12 @@ import {
   hasExcessQueryTokens,
   nameReading,
 } from "./normalise";
-import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "./screening";
+import {
+  DEFAULT_CUTOFF,
+  buildScreeningIndex,
+  buildScreeningIndexCooperatively,
+  screen,
+} from "./screening";
 import type { ScreeningQuery } from "./screening";
 import { parseUnList } from "./un";
 
@@ -88,6 +93,23 @@ const scoreOf = (query: ScreeningQuery, key: string) =>
   matches(query, 0).find(
     ({ entry }) => `${entry.source}:${entry.sourceId}` === key,
   )?.score ?? 0;
+
+test("a cooperative build pauses between entries and builds the same index", async () => {
+  const entryCount = lists.reduce(
+    (total, list) => total + list.entries.length,
+    0,
+  );
+  let pauses = 0;
+  const cooperative = await buildScreeningIndexCooperatively(
+    lists,
+    async () => {
+      pauses += 1;
+    },
+  );
+  expect(cooperative).toEqual(index);
+  // The identifier pass and the alias pass each pause after every entry.
+  expect(pauses).toBeGreaterThanOrEqual(2 * entryCount);
+});
 
 describe("name screening", () => {
   test("does not penalise an unknown-quality alias and keeps strong duplicate quality", () => {
@@ -369,7 +391,7 @@ describe("name screening", () => {
       name: "Completely Different",
       identifiers: [` ${passport.number.toLowerCase()} `],
     });
-    expect(match?.entry).toBe(withPassport);
+    expect(match?.entry).toEqual(withPassport);
     expect(match?.score).toBe(1);
     expect(match?.evidence.identifier).toBe("match");
   });

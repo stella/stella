@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/scripts/seed-case-law.ts",
+    "from": "896e8ee201568e3a88f09d4bf6aa53fc068b5f41bac0c7640845358f4dcb1e4f",
+    "to": "8755477f4c724d507cca15dfb1ad2d285ca9378b148757897e378a6afc8ae420",
+    "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
+  },
+  {
+    "file": "apps/api/scripts/seed-case-law.ts",
+    "from": "7c10f92b7b3dc20bf9f622b195904f374f6f28a2dcbf662ef81729961beadfb3",
+    "to": "4144ff311f6619bb3cb10410aa2dacffc7e9f3fba082c2bcd590ab4965a9f65b",
+    "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
+  }
+]

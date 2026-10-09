@@ -77,7 +77,7 @@ export type LatestDecisionsByCourt = {
   decisions: LatestDecision[];
 };
 
-export type LatestDecisions = {
+type LatestDecisions = {
   country: string;
   courts: LatestDecisionsByCourt[];
 };

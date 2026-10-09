@@ -31,10 +31,13 @@ if (
 ) {
   panic(`Unknown extension build target: ${buildTarget}`);
 }
-const manifestPath = new URL(
-  `../.output/${BUILD_OUTPUT_DIRECTORIES[buildTarget]}/manifest.json`,
-  import.meta.url,
-);
+const expectedReleaseVersion = process.argv.at(3);
+const manifestPath =
+  process.argv.at(4) ??
+  new URL(
+    `../.output/${BUILD_OUTPUT_DIRECTORIES[buildTarget]}/manifest.json`,
+    import.meta.url,
+  );
 const manifest = await Bun.file(manifestPath).json();
 const expectedTrust = createStellaOriginTrust({
   hostedOrigins: parseTrustedOriginList(rawStellaOrigins, buildTarget),
@@ -45,6 +48,18 @@ const exactSet = (value: unknown, expected: readonly string[]): boolean =>
   Array.isArray(value) &&
   value.length === expected.length &&
   expected.every((entry) => value.includes(entry));
+
+if (expectedReleaseVersion !== undefined) {
+  if (
+    buildTarget !== "production" ||
+    !/^\d+\.\d+\.\d+$/u.test(expectedReleaseVersion)
+  ) {
+    panic("Store releases require a stable production version");
+  }
+  if (manifest.version !== expectedReleaseVersion) {
+    panic("Extension manifest version must equal the release version");
+  }
+}
 
 if (manifest.manifest_version !== 3) {
   panic("Extension build must produce Manifest V3");
@@ -127,7 +142,8 @@ if (buildTarget === "production") {
     }
   }
   if (
-    (rawStellaOrigins ?? "").trim() === "" &&
+    (expectedReleaseVersion !== undefined ||
+      (rawStellaOrigins ?? "").trim() === "") &&
     !exactSet(contentScripts.at(0)?.matches, RELEASE_CONTENT_SCRIPT_MATCHES)
   ) {
     panic("Production extension must trust exactly the production origins");

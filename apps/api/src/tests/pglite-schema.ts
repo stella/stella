@@ -647,13 +647,15 @@ export const installPgliteWorkspaceContactCapacity = async (
 
 const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
+  "CREATE OR REPLACE FUNCTION",
   "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
   "CREATE TRIGGER",
 ] as const;
 
 /**
- * Install membership capacity, ownership and matter-membership reference
- * guards omitted by schema push.
+ * Install membership capacity, ownership, matter-membership reference and
+ * effective-policy functions omitted by schema push.
  */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
@@ -671,6 +673,15 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261004001000_matter_membership_organization_membership",
+        "migration.sql",
+      ),
+    ),
+    // The effective-policy owner replaces the capacity function above and
+    // adds the storage capacity read.
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261005090300_organization_effective_policy",
         "migration.sql",
       ),
     ),

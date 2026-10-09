@@ -23,6 +23,7 @@ import { decisionCitationSummaryOptions } from "@/features/case-law/queries/cita
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type CitationHeaderProps = {
   /** The compact inspector shows counts beside the chart in its own row. */
@@ -73,9 +74,10 @@ export const CitationHeader = ({
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow();
-  const { data: summary } = useQuery(
-    decisionCitationSummaryOptions(decisionId),
-  );
+  const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
+  const summaryView = useQueryView(summaryQuery);
+  useQueryViewError(summaryView);
+  const summary = summaryView.type === "items" ? summaryView.items : undefined;
   // Prefetched without blocking the route: known on one side of hydration
   // and not the other, so the strip waits for hydration to stay identical.
   const hydrated = useHydrated();

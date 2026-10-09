@@ -12,7 +12,7 @@
  * citing decisions' text, so it cannot invent a treatment the graph does
  * not record, and the layer is therefore in-app only: an external producer
  * of a document analysis has not seen the corpus and is never asked to
- * guess at it (`case-law.analysis.update` rejects the layer).
+ * guess at it (`src/scripts/decision-analysis-save.ts` rejects the layer).
  */
 
 import { and, eq } from "drizzle-orm";

@@ -18,6 +18,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -323,6 +324,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
       dataClass: "public_corpus",
       role: "fast",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
     });
     return {
       id: overrideModel,
@@ -340,6 +342,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     orgAIConfig: null,
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
   });
   return {
     id: info.modelId,

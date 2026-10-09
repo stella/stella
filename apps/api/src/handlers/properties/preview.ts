@@ -5,7 +5,11 @@ import { t } from "elysia";
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -48,6 +52,7 @@ const previewBodySchema = t.Object({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "properties.preview" },
   contentDelivery: {
     type: "none",
     reason:
@@ -86,6 +91,7 @@ type PreviewResponse =
 const previewProperty = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     safeDb,
     scopedDb,
     session,
@@ -231,6 +237,7 @@ const previewProperty = createSafeHandler(
     const generateFn = getBatchGenerator();
 
     const generateResult = await generateFn({
+      admission: configuredModelAdmission({ modelAdmission }),
       abortSignal: AbortSignal.any([
         request.signal,
         AbortSignal.timeout(PREVIEW_TIMEOUT_MS),

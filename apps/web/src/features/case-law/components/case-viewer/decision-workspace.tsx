@@ -2,6 +2,12 @@ import { useCallback, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
+import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
+import {
+  decisionCaseName,
+  visibleDecisionBlocks,
+} from "@stll/decision-reader/decision-text.logic";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -18,6 +24,7 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
@@ -40,12 +47,8 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
-import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import {
-  decisionCaseName,
-  visibleDecisionBlocks,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
+import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
+import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
@@ -183,13 +186,18 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const provisionAnchors = useDecisionProvisionAnchors({
     court: decision.court,
     caseNumber: decision.caseNumber,
-    blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
+    surface: "full-reader",
+    blocks: visibleDecisionBlocks(
+      ast,
+      decision.caseNumberType,
+      decision.fulltext,
+    ),
     country: decision.country,
     decisionId,
     decisionDate: decision.decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast, decision.caseNumberType),
+    visibleDecisionBlocks(ast, decision.caseNumberType, decision.fulltext),
     decision.decisionDate,
   );
 
@@ -240,12 +248,23 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
   const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
-  const [landingAnchorId, setLandingAnchorId] = useState(initialAnchorId);
+  const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
+  const resolvedLandingAnchorId =
+    paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
+  const [landingAnchorId, setLandingAnchorId] = useState(
+    resolvedLandingAnchorId,
+  );
   const [landingFor, setLandingFor] = useState(landingRoute);
   if (landingFor !== landingRoute) {
     setLandingFor(landingRoute);
-    setLandingAnchorId(initialAnchorId);
+    setLandingAnchorId(resolvedLandingAnchorId);
   }
+
+  useDecisionParagraphLanding({
+    containerRef: mainRef,
+    documentAst: decision.documentAst,
+    fragment: initialAnchorId,
+  });
 
   const jumpToAnchor = (anchorId: string) => {
     setLandingAnchorId(undefined);
@@ -502,6 +521,39 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             className="h-full"
           >
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+              {(paragraphLanding.type === "range" ||
+                paragraphLanding.type === "not-found") && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className={cn(
+                    paragraphLanding.type === "range"
+                      ? "sr-only"
+                      : "bg-muted text-muted-foreground px-4 py-2 text-sm",
+                  )}
+                >
+                  {paragraphLanding.type === "range"
+                    ? t("caseLaw.paragraphRangeSelected", {
+                        range: formatDecisionParagraphRange(
+                          paragraphLanding.range,
+                        ),
+                        count:
+                          paragraphLanding.range.to -
+                          paragraphLanding.range.from +
+                          1,
+                      })
+                    : t("caseLaw.paragraphRangeNotFound", {
+                        range: formatDecisionParagraphRange(
+                          paragraphLanding.range,
+                        ),
+                        count:
+                          paragraphLanding.range.to -
+                          paragraphLanding.range.from +
+                          1,
+                      })}
+                </p>
+              )}
               <div
                 className="grid max-lg:!grid-cols-[1fr]"
                 style={{
@@ -625,6 +677,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   data-slot="reader-document-column"
                 >
                   <DecisionText
+                    surface="full-reader"
                     aiHeadnotes={aiHeadnotes}
                     annotationAnchors={annotations.anchors}
                     citationAnchors={citationAnchors}

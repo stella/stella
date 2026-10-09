@@ -60,7 +60,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { LoaderCircleIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -810,14 +810,17 @@ const hasPersistedActiveDraftChatBinding = ({
     );
   });
 
-const fallback = (
-  <div
-    aria-hidden="true"
-    className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-  >
-    <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-  </div>
-);
+const FileChatFallback = () => {
+  const t = useTranslations("common");
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+      aria-busy="true"
+    >
+      <Loader label={t("loading")} size="sm" />
+    </div>
+  );
+};
 
 export const FileChatOverlay = ({
   workspaceId,
@@ -848,7 +851,7 @@ export const FileChatOverlay = ({
     }
 
     return (
-      <Suspense fallback={fallback}>
+      <Suspense fallback={<FileChatFallback />}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
           draftPersistence={draftPersistence}
@@ -866,7 +869,7 @@ export const FileChatOverlay = ({
   }
 
   return (
-    <Suspense fallback={fallback}>
+    <Suspense fallback={<FileChatFallback />}>
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}
@@ -1557,6 +1560,7 @@ const FileChatOverlayInner = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -1569,6 +1573,7 @@ const FileChatOverlayInner = ({
     getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId,
   });
@@ -2538,6 +2543,7 @@ const FileChatOverlayInner = ({
               onLoadOlder={loadOlder}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

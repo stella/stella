@@ -10,7 +10,6 @@
 // below, exactly as the spec pins them.
 
 import { Result } from "better-result";
-import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
@@ -20,6 +19,7 @@ import {
 } from "./generated/mcp-contract.js";
 import type { RegistryToolListing } from "./route-types.js";
 import { compileSchemaPattern } from "./schema-pattern.js";
+import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 // --- Size / depth caps (spec S5.5 rule 3), named constants, not literals. ---
 /** Reject a whole fetched body larger than this (bytes). */
@@ -496,7 +496,7 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
     listings.push(validated.listing);
   }
 
-  const toolsListHash = createHash("sha256").update(rawBody).digest("hex");
+  const toolsListHash = hashSha256Hex(rawBody);
 
   const featureAccessRaw = extractFeatureAccess(parsed.value);
   if (featureAccessRaw === undefined) {

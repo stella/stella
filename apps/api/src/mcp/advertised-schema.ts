@@ -43,7 +43,7 @@ const coercionUnionScalar = (schema: TSchema): TSchema | null => {
 
 /**
  * One input part's schema as every agent-facing surface advertises and
- * enforces it: `describe_capability` renders it, `invoke_capability` validates
+ * enforces it: `describe_capability` renders it, capability executors validate
  * against it, and the committed capability catalog (hence the CLI's generated
  * commands) embeds it, so what an agent reads and what the gate applies
  * cannot diverge.

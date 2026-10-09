@@ -12,6 +12,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
@@ -104,9 +105,20 @@ export const persistManualOcrRun = async ({
   db,
 }: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
   await db.transaction(async (tx) => {
-    // Re-check and lock the mutable entity under the root write. The scoped
-    // validation above authorizes the request; this prevents a concurrent
-    // version replacement from queuing OCR for a no-longer-current file.
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(organizationId) ||
+      !parents.workspaceIds.has(workspaceId)
+    ) {
+      return null;
+    }
+
+    // Parent KEY SHARE locks precede entity -> workspace status fence -> run.
+    // The entity lock prevents a version replacement from queuing OCR for a
+    // no-longer-current file; the workspace fence serializes status changes.
     const currentRows = await tx
       .select({ id: entities.id })
       .from(entities)
@@ -134,7 +146,7 @@ export const persistManualOcrRun = async ({
         ),
       )
       .limit(1)
-      .for("update");
+      .for("no key update");
     if (!workspaceRows.at(0)) {
       return null;
     }

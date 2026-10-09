@@ -927,6 +927,18 @@ export const buildVersionedApiUrl = (
   `${origin.endsWith("/") ? origin.slice(0, -1) : origin}${STELLA_API_VERSION_PREFIX}${path}`;
 
 export {
+  decisionParagraphFragment,
+  decisionParagraphRangeSchema,
+  formatDecisionParagraphRange,
+  parseDecisionParagraphFragment,
+  parseDecisionParagraphRange,
+  DecisionParagraphRangeError,
+} from "./decision-paragraph-range";
+export type {
+  DecisionParagraphRange,
+  DecisionParagraphRangeErrorReason,
+} from "./decision-paragraph-range";
+export {
   RULING_IDENTITY_VERSION,
   foldRulingIdentity,
   rulingKeysOf,

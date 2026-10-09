@@ -9,6 +9,8 @@
 
 import { panic } from "better-result";
 
+import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
@@ -18,6 +20,7 @@ import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/co
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
+import { printedParagraphLabel } from "@/api/mcp/case-law-decision-outline";
 import type { LocatedDecisionBlock } from "@/api/mcp/case-law-decision-outline";
 import { resolveTextWindowBounds } from "@/api/mcp/tool-utils";
 
@@ -260,13 +263,31 @@ export const citationSummaryOutput = (
   const cited = new Map<
     string,
     | { caseNumber: string; decisionId: string; url?: string }
-    | { citation: string }
+    | { citation: string; textWithheldReason: null }
+    | { citation: null; textWithheldReason: DecisionTextWithheldReason }
   >();
   for (const row of digest.cites) {
     if (row.decision === null) {
-      const key = `text:${row.citationText.trim().toLowerCase()}`;
+      if (row.textWithheldReason !== null) {
+        const key = `withheld:${row.textWithheldReason}`;
+        if (!cited.has(key)) {
+          cited.set(key, {
+            citation: null,
+            textWithheldReason: row.textWithheldReason,
+          });
+        }
+        continue;
+      }
+      const citationText = row.citationText;
+      if (citationText === null) {
+        return panic("Available citation text must be present");
+      }
+      const key = `text:${citationText.trim().toLowerCase()}`;
       if (!cited.has(key)) {
-        cited.set(key, { citation: row.citationText.trim() });
+        cited.set(key, {
+          citation: citationText.trim(),
+          textWithheldReason: null,
+        });
       }
       continue;
     }
@@ -310,6 +331,9 @@ export const citationSummaryOutput = (
 /** One paragraph of the served text, numbered from 1 in document order. */
 export type DecisionParagraph = {
   anchorId: string | null;
+  number?: number | undefined;
+  headingPath: string[];
+  label: string | null;
   text: string;
 };
 
@@ -325,10 +349,27 @@ export const decisionParagraphs = ({
   text: string;
 }): DecisionParagraph[] =>
   located !== null && located.length > 0
-    ? located.map((block) => ({ anchorId: block.anchorId, text: block.text }))
+    ? located.map(
+        ({ anchorId, headingPath, label, number, text: blockText }) => ({
+          anchorId,
+          headingPath,
+          label,
+          text: blockText,
+          ...(number === undefined ? {} : { number }),
+        }),
+      )
     : text.split(/\r?\n/u).flatMap((line) => {
         const trimmed = line.trim();
-        return trimmed === "" ? [] : [{ anchorId: null, text: trimmed }];
+        return trimmed === ""
+          ? []
+          : [
+              {
+                anchorId: null,
+                headingPath: [],
+                label: printedParagraphLabel(trimmed),
+                text: trimmed,
+              },
+            ];
       });
 
 /** Matched paragraphs one call returns; `hitCount` says how many there were. */
@@ -350,7 +391,7 @@ const termMatcher = (language: string) => {
 
 export type QueryParagraph = DecisionParagraph & {
   /** 1-based position among the decision's paragraphs. */
-  paragraph: number;
+  position: number;
   /** True on a matching paragraph; a neighbour shown for context has none. */
   hit: boolean;
 };
@@ -430,7 +471,12 @@ export const paragraphsMatching = ({
         return {
           anchorId: paragraph.anchorId,
           text: paragraph.text.slice(0, length),
-          paragraph: index + 1,
+          ...(paragraph.number === undefined
+            ? {}
+            : { number: paragraph.number }),
+          position: index + 1,
+          label: paragraph.label,
+          headingPath: paragraph.headingPath,
           hit: hitSet.has(index),
         };
       }),

@@ -10,6 +10,7 @@ import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-se
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   discoverOAuthMetadataForApproval,
@@ -90,7 +91,12 @@ export const createApproveMcpAuthorizationHandler = (
           }),
         );
       }
-      const metadata = yield* Result.await(discoverMetadata(connector.url));
+      const metadata = yield* Result.await(
+        discoverMetadata({
+          rawMcpUrl: connector.url,
+          permit: grantThirdPartyOutboundPermit(),
+        }),
+      );
       const issuer = metadata.authorizationServer.issuer;
       const endpointOrigins = getOAuthEndpointOrigins(metadata);
       if (

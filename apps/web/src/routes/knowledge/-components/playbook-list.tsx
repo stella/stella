@@ -29,6 +29,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type PlaybookListProps = {
   playbooks: PlaybookListItem[];
@@ -63,7 +64,11 @@ export const PlaybookList = ({
   const canCreate = usePermissions({ playbook: ["create"] });
   const { isPending: rolePending } = useQuery(roleOptions);
   const { id: userId } = useAuthenticatedUser();
-  const { data: organizations } = useQuery(organizationListOptions(userId));
+  const organizationsQuery = useQuery(organizationListOptions(userId));
+  const organizationsView = useQueryView(organizationsQuery);
+  useQueryViewError(organizationsView);
+  const organizations =
+    organizationsView.type === "items" ? organizationsView.items : undefined;
   const organizationName =
     organizations?.find(({ id }) => id === organizationId)?.name ?? "";
   const recent = memberKnowledgeSource.useRecentPlaybooks(organizationId);

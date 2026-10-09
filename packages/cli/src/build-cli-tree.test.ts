@@ -1,12 +1,13 @@
 import type { Application, Command } from "@stricli/core";
 import { describe, expect, test } from "bun:test";
 
-import { buildApp, buildFlag, DISABLED_MARKER } from "./build-cli-tree.js";
+import { buildApp, buildFlag } from "./build-cli-tree.js";
 import type { Context } from "./context.js";
+import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import { flagKey } from "./flag-name.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
-import type { DisabledCommands, FlagSpec, RouteNode } from "./route-types.js";
+import type { FlagSpec, RouteNode } from "./route-types.js";
 
 const flagSpec = (overrides: Partial<FlagSpec>): FlagSpec => ({
   flag: "example",
@@ -134,7 +135,7 @@ describe("generated flag parser conformance", () => {
   });
 });
 
-describe("buildApp: disabled commands", () => {
+describe("buildApp: deployment command projection", () => {
   type Target = Application<Context>["root"];
   const isRouteMap = (
     target: Target,
@@ -156,8 +157,20 @@ describe("buildApp: disabled commands", () => {
         ]
       : [[path.join(" "), target.brief]];
 
-  const briefsFor = (disabled: DisabledCommands) =>
-    new Map(briefs(buildApp(generatedRouteMap, disabled).root, []));
+  const briefsFor = (
+    attestation: Omit<Parameters<typeof projectDeploymentCommands>[0], "tree">,
+  ) =>
+    new Map(
+      briefs(
+        buildApp(
+          projectDeploymentCommands({
+            tree: generatedRouteMap,
+            ...attestation,
+          }),
+        ).root,
+        [],
+      ),
+    );
 
   const capabilityIdsUnder = (domain: string): string[] => {
     const capability =
@@ -173,50 +186,70 @@ describe("buildApp: disabled commands", () => {
       : [];
   };
 
-  test("a server-attested gated-off tool is marked in its --help brief, not its siblings", () => {
-    const marked = briefsFor({ tools: ["list_matters"], capabilities: [] });
-    expect(marked.get("matter list")).toContain(DISABLED_MARKER);
-    expect(marked.get("matter save")).not.toContain(DISABLED_MARKER);
-  });
+  const assertNoDisabledMarker = (projected: ReadonlyMap<string, string>) => {
+    expect(
+      [...projected.values()].some((brief) =>
+        brief.includes("disabled on this server"),
+      ),
+    ).toBe(false);
+  };
 
-  test("a gated-off capability is marked by id, independent of a same-named tool", () => {
-    const marked = briefsFor({
-      tools: [],
-      capabilities: ["usage.entitlement.get"],
+  test("an explicitly refused tool is absent from the assembled tree while siblings remain", () => {
+    const projected = briefsFor({
+      featureOmittedTools: ["list_matters"],
+      featureOmittedCapabilities: [],
     });
-    expect(marked.get("capability usage entitlement-get")).toContain(
-      DISABLED_MARKER,
-    );
-    expect(marked.get("usage get")).not.toContain(DISABLED_MARKER);
+    expect(projected.has("matter list")).toBe(false);
+    expect(projected.has("matter save")).toBe(true);
+    expect(projected.has("matter")).toBe(true);
+    assertNoDisabledMarker(projected);
   });
 
-  test("a partly gated group names the gated-off children in its brief", () => {
-    const marked = briefsFor({
-      tools: ["list_matters"],
-      capabilities: ["time-entries.csv.export"],
+  test("an explicitly refused capability is absent independently of a same-named tool", () => {
+    const projected = briefsFor({
+      featureOmittedTools: [],
+      featureOmittedCapabilities: ["usage.entitlement.get"],
     });
-    expect(marked.get("matter")).toEndWith("[disabled on this server: list]");
-    expect(marked.get("capability time-entries")).toEndWith(
-      "[disabled on this server: csv-export]",
-    );
+    expect(projected.has("capability usage entitlement-get")).toBe(false);
+    expect(projected.has("usage get")).toBe(true);
+    assertNoDisabledMarker(projected);
   });
 
-  test("a fully gated group carries the plain marker, and its parent names it", () => {
+  test("partly refused groups retain eligible children and clean briefs", () => {
+    const projected = briefsFor({
+      featureOmittedTools: ["list_matters"],
+      featureOmittedCapabilities: ["time-entries.csv.export"],
+    });
+    expect(projected.has("matter list")).toBe(false);
+    expect(projected.has("matter save")).toBe(true);
+    expect(projected.has("capability time-entries csv-export")).toBe(false);
+    expect(projected.has("capability time-entries")).toBe(true);
+    expect(projected.has("capability time-entries list")).toBe(true);
+    assertNoDisabledMarker(projected);
+  });
+
+  test("fully refused generated groups disappear without removing sibling groups", () => {
     const usageIds = capabilityIdsUnder("usage");
     expect(usageIds.length).toBeGreaterThan(0);
-    const marked = briefsFor({ tools: ["get_usage"], capabilities: usageIds });
-    // Root --help lists these group briefs under COMMANDS.
-    expect(marked.get("usage")).toEndWith(DISABLED_MARKER);
-    expect(marked.get("capability usage")).toEndWith(DISABLED_MARKER);
-    expect(marked.get("capability")).toEndWith(
-      "[disabled on this server: usage]",
-    );
+    const projected = briefsFor({
+      featureOmittedTools: ["get_usage"],
+      featureOmittedCapabilities: usageIds,
+    });
+    expect(projected.has("usage")).toBe(false);
+    expect(projected.has("capability usage")).toBe(false);
+    expect(projected.has("capability")).toBe(true);
+    expect(projected.has("matter list")).toBe(true);
+    expect(projected.has("capability time-entries list")).toBe(true);
+    assertNoDisabledMarker(projected);
   });
 
-  test("without attestation nothing is marked", () => {
-    const all = briefs(buildApp(generatedRouteMap).root, []);
-    expect(all.some(([, brief]) => brief.includes("disabled on this"))).toBe(
-      false,
-    );
+  test("explicit empty omissions preserve all generated command paths without markers", () => {
+    const projected = briefsFor({
+      featureOmittedTools: [],
+      featureOmittedCapabilities: [],
+    });
+    const all = new Map(briefs(buildApp(generatedRouteMap).root, []));
+    expect([...projected.keys()]).toEqual([...all.keys()]);
+    assertNoDisabledMarker(projected);
   });
 });
