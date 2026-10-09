@@ -47,4 +47,7 @@ test("unknown model identities cannot inherit reasoning replay capabilities", ()
   expect(getModelReasoningCapabilities("claude-sonnet-5-unknown")).toBeNull();
   expect(getModelReasoningCapabilities("gpt-unknown")).toBeNull();
   expect(getModelReasoningCapabilities("gemini-unknown")).toBeNull();
+  for (const inherited of ["constructor", "toString", "__proto__"]) {
+    expect(getModelReasoningCapabilities(inherited)).toBeNull();
+  }
 });

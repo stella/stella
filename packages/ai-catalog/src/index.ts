@@ -1405,5 +1405,9 @@ const MODEL_REASONING_CAPABILITIES_BY_ID: Readonly<
   Record<string, ModelReasoningCapabilities>
 > = MODEL_REASONING_CAPABILITIES;
 
-export const getModelReasoningCapabilities = (modelId: string) =>
-  MODEL_REASONING_CAPABILITIES_BY_ID[normalizeModelCatalogId(modelId)] ?? null;
+export const getModelReasoningCapabilities = (modelId: string) => {
+  const normalized = normalizeModelCatalogId(modelId);
+  return Object.hasOwn(MODEL_REASONING_CAPABILITIES_BY_ID, normalized)
+    ? (MODEL_REASONING_CAPABILITIES_BY_ID[normalized] ?? null)
+    : null;
+};
