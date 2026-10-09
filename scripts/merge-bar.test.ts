@@ -2383,7 +2383,20 @@ env:
       expect(evidence(VALIDATION_RUN)).toEqual({ profile: "queue-validation" });
       expect(evidence(COVERAGE_RUN)).toEqual({
         profile: "pilot-fast-v1",
-        jobs: fastJobs,
+        jobs: [
+          "ci-checks-docs",
+          "ci-checks-generated",
+          "ci-checks-policy",
+          "ci-checks-rest",
+          "ci-generated-sources",
+          "ci-plan",
+          "ci-result",
+          "ci-tests",
+          "code-quality-api",
+          "code-quality-rest",
+          "code-quality-web",
+          "typecheck-baseline",
+        ],
       });
     });
 

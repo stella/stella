@@ -7,9 +7,7 @@ export const PILOT_FAST_ROOTS = [
   "ci-checks-rest",
   "ci-tests",
   "code-quality-api",
-  "code-quality-web",
-  "code-quality-rest",
-  "typecheck-baseline",
+  "code-quality-web-rest",
 ] as const;
 export const PILOT_DEFERRED = [
   "docker-checks",
