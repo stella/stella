@@ -652,6 +652,47 @@ describe("chat thread messages", () => {
     expect(html).toContain("Here is the answer.");
   });
 
+  test("shows an approval-gated call as a card while its input streams", () => {
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          { type: "thinking", content: "Drafting the positions." },
+          {
+            type: "tool-call",
+            id: "tool-call-save",
+            name: "save_playbook",
+            arguments: '{"name":"Mutual NDA","positions":[',
+            state: "input-streaming",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        isGenerating
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    // The save always ends in a question for the user, so it renders as its
+    // own card with a running indicator from the first input byte; only the
+    // reasoning stays folded, and as a settled step rather than a live one.
+    expect(html).toContain("1 step");
+    expect(html).toContain(">Save playbook<");
+    expect(html).toContain('data-slot="loader"');
+    expect(html).not.toContain("animate-skeleton");
+  });
+
   test("keeps streaming reasoning visible and immediately collapsible", async () => {
     const chatMessages: ChatUIMessage[] = [
       {

@@ -33,6 +33,7 @@ import type {
   ApprovalToolName,
   ApprovalToolPart,
   ChatUITools,
+  PendingApprovalToolPart,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
@@ -50,6 +51,11 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
+import {
+  getToolOutputError,
+  ToolCallFailureDetails,
+  toolFailureLabelKey,
+} from "@/components/chat/tool-call-card";
 import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { MatterIcon } from "@/components/matter-icon";
@@ -415,6 +421,63 @@ type ToolApprovalCardProps = {
   part: ApprovalToolPart;
 };
 
+// Connector reads only decorate the card with an icon; the approval stays
+// usable without them.
+const useMcpApprovalIconHref = ({
+  activeOrganizationId,
+  name,
+}: {
+  activeOrganizationId: string;
+  name: ApprovalToolName;
+}): string | undefined => {
+  const connectorSlug = getExternalMcpConnectorSlug(name);
+  const mcpConnectorsQuery = useQuery({
+    ...mcpConnectorsOptions(activeOrganizationId),
+    enabled: connectorSlug !== null,
+  });
+  const connectorsView = useQueryView(mcpConnectorsQuery);
+  const availableConnectors =
+    connectorsView.type === "items" ? connectorsView.items.connectors : [];
+  return connectorSlug === null
+    ? undefined
+    : findMcpConnectorIconHref({
+        connectorSlug,
+        connectors: availableConnectors,
+      });
+};
+
+/**
+ * An approval-gated call whose input is still streaming. The request itself
+ * arrives only once the input is complete; until then the card frame shows
+ * what is being prepared, so the question the user is about to get is never
+ * hidden behind the folded process steps.
+ */
+export const PendingToolApprovalCard = ({
+  part,
+}: {
+  part: PendingApprovalToolPart;
+}) => {
+  const { activeOrganizationId } = useChatApproval();
+  const t = useTranslations();
+  const name = part.name;
+  const mcpIconHref = useMcpApprovalIconHref({ activeOrganizationId, name });
+  return (
+    <div className="bg-muted/40 my-1 rounded-lg border border-transparent text-sm">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
+        <span className="font-medium">
+          {getExternalMcpProviderName(name) ?? t(getChatToolTitleKey(name))}
+        </span>
+        <Loader
+          className="ms-auto size-3.5 shrink-0"
+          label={t("common.preparing")}
+          size="sm"
+        />
+      </div>
+    </div>
+  );
+};
+
 const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
   useMountEffect(() => {
     respond();
@@ -449,11 +512,11 @@ export const ToolApprovalCard = ({
     canAllowInConversation,
     canAlwaysAllow,
     externalInput,
-    externalMcpConnectorSlug,
     externalMcpProviderName,
     isApprovalRequested,
     isApproved,
     isBlocked,
+    isFailed,
     isProcessing,
     isPublicOfficialApproval,
     isDenied,
@@ -467,21 +530,13 @@ export const ToolApprovalCard = ({
     isTurnActive,
     responded,
   });
-  const mcpConnectorsQuery = useQuery({
-    ...mcpConnectorsOptions(activeOrganizationId),
-    enabled: externalMcpConnectorSlug !== null,
-  });
-  const connectorsView = useQueryView(mcpConnectorsQuery);
-  // Connector reads only decorate sources with icons; the source and approval stay usable without them.
-  const availableConnectors =
-    connectorsView.type === "items" ? connectorsView.items.connectors : [];
-  const mcpIconHref =
-    externalMcpConnectorSlug === null
-      ? undefined
-      : findMcpConnectorIconHref({
-          connectorSlug: externalMcpConnectorSlug,
-          connectors: availableConnectors,
-        });
+  const mcpIconHref = useMcpApprovalIconHref({ activeOrganizationId, name });
+  const rawErrorDetails = isFailed
+    ? getToolOutputError(part.output)
+    : undefined;
+  const failureLabelKey = isFailed
+    ? toolFailureLabelKey(rawErrorDetails, part.state)
+    : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
   const browserApprovalMode = useBrowserApprovalMode();
@@ -574,6 +629,12 @@ export const ToolApprovalCard = ({
             role="img"
           />
         )}
+        {isFailed && (
+          <XIcon
+            aria-hidden
+            className="text-destructive ms-auto size-3.5 shrink-0"
+          />
+        )}
         {action !== undefined && (
           <Button
             className="-me-1 shrink-0"
@@ -594,6 +655,14 @@ export const ToolApprovalCard = ({
         part={part}
         providerName={externalMcpProviderName ?? label}
       />
+      {failureLabelKey !== undefined && (
+        <div className="px-3">
+          <ToolCallFailureDetails
+            errorMessage={t(failureLabelKey)}
+            rawErrorDetails={rawErrorDetails}
+          />
+        </div>
+      )}
       {isAwaitingDecision &&
         browserCommand !== null &&
         browserApprovalMode === BROWSER_APPROVAL_MODE.autoApproveReads && (
@@ -876,13 +945,15 @@ const getToolApprovalState = ({
       showsExternalInput && part.state !== "input-streaming"
         ? getApprovalPartInput(part)
         : undefined,
-    externalMcpConnectorSlug: getExternalMcpConnectorSlug(name),
     externalMcpProviderName,
     isApprovalRequested,
     isApprovalResponded,
     isApproved,
     isBlocked,
     isDenied,
+    // Approved, then the tool threw (or its stream died): neither allowed
+    // nor denied, so the card says so instead of showing no status.
+    isFailed: part.state === "error",
     isExternalMcpApproval,
     // Working only while the turn runs: a denied call runs nothing, and an
     // answer inside a batch waits, idle, for the rest of the batch.

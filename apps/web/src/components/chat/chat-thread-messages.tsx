@@ -72,6 +72,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  isPendingApprovalPart,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -86,7 +87,10 @@ import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
+import {
+  PendingToolApprovalCard,
+  ToolApprovalCard,
+} from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
@@ -1444,7 +1448,8 @@ const toAssistantPartRenderEntries = (
 // transport companions, so they stay inside a process run without becoming
 // visible steps or splitting the run. Interactive tool cards (ask-user,
 // create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure.
+// they stay outside the folded process disclosure; an approval-gated call
+// is one of them from its first input byte, before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
@@ -1461,7 +1466,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
     part.name !== "ask-user" &&
     part.name !== "create-document" &&
     part.name !== "spawn_subagents" &&
-    !isApprovalPart(part)
+    !isApprovalPart(part) &&
+    !isPendingApprovalPart(part)
   );
 };
 
@@ -1751,6 +1757,10 @@ const AssistantMessageParts = ({
             part={part}
           />
         );
+      }
+
+      if (isPendingApprovalPart(part)) {
+        return <PendingToolApprovalCard key={part.id} part={part} />;
       }
 
       return (

@@ -650,6 +650,48 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
   );
 };
 
+/**
+ * Tools the server asks the user about before running them: external MCP
+ * tools as a class, and the built-in tools with a grant policy (total over
+ * the approval-gated policy kinds).
+ */
+const isApprovalGatedChatToolName = (
+  toolName: string,
+): toolName is ApprovalToolName =>
+  isExternalMcpToolName(toolName) || isChatToolWithGrantPolicy(toolName);
+
+export type PendingApprovalToolPart = RegisteredChatUIToolCallPart & {
+  name: ApprovalToolName;
+  state: "input-complete" | "input-streaming";
+};
+
+/**
+ * An approval-gated call whose input is still arriving. The server requests
+ * approval only once the input is complete, so until then the part carries
+ * no `approval` and `isApprovalPart` is false. The DOCX surfaces' document
+ * tools stay out: in manual mode `suggest_changes` runs through the
+ * suggestion queue without an approval card.
+ */
+export const isPendingApprovalPart = (
+  part: unknown,
+): part is PendingApprovalToolPart => {
+  const toolName = getToolNameFromPart(part);
+  if (
+    toolName === null ||
+    !isApprovalGatedChatToolName(toolName) ||
+    Object.hasOwn(FOLIO_AGENT_DOC_TOOL_NAMES, toolName)
+  ) {
+    return false;
+  }
+
+  return (
+    typeof part === "object" &&
+    part !== null &&
+    "state" in part &&
+    (part.state === "input-streaming" || part.state === "input-complete")
+  );
+};
+
 export const isApprovalRespondedPart = (
   part: ChatPart,
 ): part is ApprovalToolPart & {
