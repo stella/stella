@@ -358,8 +358,21 @@ describe.skipIf(!enabled)(
         limit: HIT_LIMIT,
       };
       let seeded = false;
-      // Cleanup runs in the suite hook, so a failed budget reports before teardown.
+      const finished = Promise.withResolvers<undefined>();
+      const startedAt = performance.now();
+      const reportStage = (stage: string) => {
+        console.info(
+          JSON.stringify({
+            event: "search_budget_stage",
+            stage,
+            elapsedMs: performance.now() - startedAt,
+          }),
+        );
+      };
+      // Bun can start suite teardown while a timed-out callback is still running.
+      // Wait for that callback before deleting the rows it is measuring.
       fixture.cleanUp(async () => {
+        await finished.promise;
         if (seeded) {
           let cleanupIndexCreated = false;
           try {
@@ -387,17 +400,19 @@ describe.skipIf(!enabled)(
         await client`DELETE FROM organization WHERE id = ${organizationId}`;
         await client`DELETE FROM "user" WHERE id = ${userId}`;
       });
-      await client`INSERT INTO organization (id, name, slug, created_at)
+      try {
+        await client`INSERT INTO organization (id, name, slug, created_at)
             VALUES (${organizationId}, 'Search budget organization', ${organizationId}, now())`;
-      await client`INSERT INTO "user" (id, name, email)
+        await client`INSERT INTO "user" (id, name, email)
             VALUES (${userId}, 'Search budget user', ${`${userId}@example.test`})`;
-      await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
+        await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
             VALUES (${memberId}, ${organizationId}, ${userId}, 'owner', now())`;
-      await client`INSERT INTO workspaces (id, organization_id, name, reference)
+        await client`INSERT INTO workspaces (id, organization_id, name, reference)
             VALUES (${workspaceId}, ${organizationId}, 'Search budget matter', ${reference})`;
-      seeded = true;
+        seeded = true;
+        reportStage("scope-seeded");
 
-      await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
+        await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
             SELECT
               (${entityIdPrefix} || lpad(n::text, 12, '0'))::uuid,
               ${workspaceId},
@@ -405,20 +420,23 @@ describe.skipIf(!enabled)(
               CASE WHEN n % 10 = 0 THEN 'fact' ELSE NULL END,
               'Search budget entity ' || n::text
             FROM generate_series(1, ${ENTITY_COUNT}) AS series(n)`;
-      await client`INSERT INTO entity_versions (id, workspace_id, entity_id)
+        reportStage("entities-seeded");
+        await client`INSERT INTO entity_versions (id, workspace_id, entity_id)
             SELECT
               (${versionIdPrefix} || lpad(n::text, 12, '0'))::uuid,
               ${workspaceId},
               (${entityIdPrefix} || lpad(n::text, 12, '0'))::uuid
             FROM generate_series(1, ${ENTITY_COUNT}) AS series(n)`;
-      await client`UPDATE entities e
+        reportStage("versions-seeded");
+        await client`UPDATE entities e
             SET current_version_id = v.id
             FROM entity_versions v
             WHERE e.workspace_id = ${workspaceId}
               AND v.workspace_id = e.workspace_id
               AND v.entity_id = e.id
               AND e.current_version_id IS DISTINCT FROM v.id`;
-      await client`WITH population AS (
+        reportStage("current-versions-linked");
+        await client`WITH population AS (
               SELECT n, n % 10 = 0 AS is_fact,
                 row_number() OVER (
                   PARTITION BY n % 10 = 0 ORDER BY md5(n::text)
@@ -442,165 +460,173 @@ describe.skipIf(!enabled)(
               to_tsvector('simple', CASE WHEN has_needle
                 THEN ${`${QUERY_TEXT} body text`} ELSE 'ordinary body text' END)
             FROM documents`;
-      await client`VACUUM (ANALYZE) entities`;
-      await client`VACUUM (ANALYZE) entity_versions`;
-      await client`VACUUM (ANALYZE) search_documents`;
+        reportStage("search-documents-seeded");
+        await client`VACUUM (ANALYZE) entities`;
+        await client`VACUUM (ANALYZE) entity_versions`;
+        await client`VACUUM (ANALYZE) search_documents`;
 
-      await db.transaction(async (tx) => await assertSearchFencePolicies(tx));
+        await db.transaction(async (tx) => await assertSearchFencePolicies(tx));
 
-      const queries = await captureSearchQueries(searchQuery);
-      const sample = async (
-        policyMode: "on" | "off",
-        featureCase: FeatureCase,
-        jit: "off" | "on",
-        verifyRows: boolean,
-      ): Promise<{ hits: QueryMetrics; count: QueryMetrics }> => {
-        const run = async (
-          tx: TestTransaction,
+        reportStage("fixture-analyzed");
+        const queries = await captureSearchQueries(searchQuery);
+        const sample = async (
+          policyMode: "on" | "off",
+          featureCase: FeatureCase,
+          jit: "off" | "on",
+          verifyRows: boolean,
         ): Promise<{ hits: QueryMetrics; count: QueryMetrics }> => {
-          const hitsPlan = await planFor({
-            tx,
-            organizationId,
-            userId,
-            workspaceId,
-            featureIds: featureCase.featureIds,
-            jit,
-            query: queries.hits,
-          });
-          const countPlan = await planFor({
-            tx,
-            organizationId,
-            userId,
-            workspaceId,
-            featureIds: featureCase.featureIds,
-            jit,
-            query: queries.count,
-          });
-          if (verifyRows) {
-            if (jit === "off") {
-              console.info(
-                JSON.stringify({
-                  event: "search_budget_count_plan",
-                  policyMode,
-                  featureLabel: featureCase.label,
-                  planningTime: countPlan["Planning Time"],
-                  executionTime: countPlan["Execution Time"],
-                  plan: summarizePlanNode(countPlan.Plan),
-                }),
-              );
-            }
-            const hitRows = executedRows(await tx.execute(queries.hits));
-            const countRow = executedRows(await tx.execute(queries.count)).at(
-              0,
-            );
-            if (!isRecord(countRow) || typeof countRow["total"] !== "number") {
-              return panic("Search count query returned no numeric total");
-            }
-            expect(hitRows).toHaveLength(HIT_LIMIT + 1);
-            expect(countRow["total"]).toBe(
-              policyMode === "off"
-                ? MATCHES_PER_KIND * 2
-                : featureCase.expectedMatches,
-            );
-          }
-          return {
-            hits: metricsFromPlan(hitsPlan),
-            count: metricsFromPlan(countPlan),
-          };
-        };
-        return policyMode === "off"
-          ? await policyOffSample(db, run)
-          : await db.transaction(async (tx) => await run(tx));
-      };
-
-      const comparisons: {
-        jit: "off" | "on";
-        featureLabel: FeatureCase["label"];
-        queryName: "hits" | "count";
-        offBuffers: number;
-        onBuffers: number;
-        offTime: number;
-        onTime: number;
-      }[] = [];
-      for (const jit of ["off", "on"] as const) {
-        for (const featureCase of FEATURE_CASES) {
-          await sample("off", featureCase, jit, true);
-          await sample("on", featureCase, jit, true);
-
-          const samples = {
-            hits: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
-            count: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
-          };
-          for (let index = 0; index < SAMPLE_COUNT; index++) {
-            const order =
-              index % 2 === 0
-                ? (["off", "on"] as const)
-                : (["on", "off"] as const);
-            for (const policyMode of order) {
-              const measured = await sample(
-                policyMode,
-                featureCase,
-                jit,
-                false,
-              );
-              samples.hits[policyMode].push(measured.hits);
-              samples.count[policyMode].push(measured.count);
-            }
-          }
-
-          for (const queryName of ["hits", "count"] as const) {
-            const off = samples[queryName].off;
-            const on = samples[queryName].on;
-            const offBuffers = median(
-              off.map(({ sharedBlocks }) => sharedBlocks),
-            );
-            const onBuffers = median(
-              on.map(({ sharedBlocks }) => sharedBlocks),
-            );
-            const offTime = median(
-              off.map(({ executionTimeMs }) => executionTimeMs),
-            );
-            const onTime = median(
-              on.map(({ executionTimeMs }) => executionTimeMs),
-            );
-            comparisons.push({
+          const run = async (
+            tx: TestTransaction,
+          ): Promise<{ hits: QueryMetrics; count: QueryMetrics }> => {
+            const hitsPlan = await planFor({
+              tx,
+              organizationId,
+              userId,
+              workspaceId,
+              featureIds: featureCase.featureIds,
               jit,
-              featureLabel: featureCase.label,
-              queryName,
-              offBuffers,
-              onBuffers,
-              offTime,
-              onTime,
+              query: queries.hits,
             });
+            const countPlan = await planFor({
+              tx,
+              organizationId,
+              userId,
+              workspaceId,
+              featureIds: featureCase.featureIds,
+              jit,
+              query: queries.count,
+            });
+            if (verifyRows) {
+              if (jit === "off") {
+                console.info(
+                  JSON.stringify({
+                    event: "search_budget_count_plan",
+                    policyMode,
+                    featureLabel: featureCase.label,
+                    planningTime: countPlan["Planning Time"],
+                    executionTime: countPlan["Execution Time"],
+                    plan: summarizePlanNode(countPlan.Plan),
+                  }),
+                );
+              }
+              const hitRows = executedRows(await tx.execute(queries.hits));
+              const countRow = executedRows(await tx.execute(queries.count)).at(
+                0,
+              );
+              if (
+                !isRecord(countRow) ||
+                typeof countRow["total"] !== "number"
+              ) {
+                return panic("Search count query returned no numeric total");
+              }
+              expect(hitRows).toHaveLength(HIT_LIMIT + 1);
+              expect(countRow["total"]).toBe(
+                policyMode === "off"
+                  ? MATCHES_PER_KIND * 2
+                  : featureCase.expectedMatches,
+              );
+            }
+            return {
+              hits: metricsFromPlan(hitsPlan),
+              count: metricsFromPlan(countPlan),
+            };
+          };
+          return policyMode === "off"
+            ? await policyOffSample(db, run)
+            : await db.transaction(async (tx) => await run(tx));
+        };
+
+        const comparisons: {
+          jit: "off" | "on";
+          featureLabel: FeatureCase["label"];
+          queryName: "hits" | "count";
+          offBuffers: number;
+          onBuffers: number;
+          offTime: number;
+          onTime: number;
+        }[] = [];
+        for (const jit of ["off", "on"] as const) {
+          for (const featureCase of FEATURE_CASES) {
+            await sample("off", featureCase, jit, true);
+            await sample("on", featureCase, jit, true);
+
+            const samples = {
+              hits: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
+              count: { off: emptyQueryMetrics(), on: emptyQueryMetrics() },
+            };
+            for (let index = 0; index < SAMPLE_COUNT; index++) {
+              const order =
+                index % 2 === 0
+                  ? (["off", "on"] as const)
+                  : (["on", "off"] as const);
+              for (const policyMode of order) {
+                const measured = await sample(
+                  policyMode,
+                  featureCase,
+                  jit,
+                  false,
+                );
+                samples.hits[policyMode].push(measured.hits);
+                samples.count[policyMode].push(measured.count);
+              }
+            }
+
+            for (const queryName of ["hits", "count"] as const) {
+              const off = samples[queryName].off;
+              const on = samples[queryName].on;
+              const offBuffers = median(
+                off.map(({ sharedBlocks }) => sharedBlocks),
+              );
+              const onBuffers = median(
+                on.map(({ sharedBlocks }) => sharedBlocks),
+              );
+              const offTime = median(
+                off.map(({ executionTimeMs }) => executionTimeMs),
+              );
+              const onTime = median(
+                on.map(({ executionTimeMs }) => executionTimeMs),
+              );
+              comparisons.push({
+                jit,
+                featureLabel: featureCase.label,
+                queryName,
+                offBuffers,
+                onBuffers,
+                offTime,
+                onTime,
+              });
+            }
           }
         }
-      }
-      console.info(
-        JSON.stringify({
-          event: "search_budget_comparisons",
-          maxTimeRatio: MAX_TIME_RATIO,
-          maxBufferRatio: MAX_BUFFER_RATIO,
-          comparisons,
-        }),
-      );
-      for (const comparison of comparisons) {
-        const {
-          jit,
-          featureLabel,
-          queryName,
-          offBuffers,
-          onBuffers,
-          offTime,
-          onTime,
-        } = comparison;
-        expect(
-          onBuffers,
-          `JIT ${jit}, ${featureLabel} ${queryName} shared buffers: on=${onBuffers}, off=${offBuffers}`,
-        ).toBeLessThanOrEqual(offBuffers * MAX_BUFFER_RATIO);
-        expect(
-          onTime,
-          `JIT ${jit}, ${featureLabel} ${queryName} execution time: on=${onTime}ms, off=${offTime}ms`,
-        ).toBeLessThanOrEqual(offTime * MAX_TIME_RATIO);
+        console.info(
+          JSON.stringify({
+            event: "search_budget_comparisons",
+            maxTimeRatio: MAX_TIME_RATIO,
+            maxBufferRatio: MAX_BUFFER_RATIO,
+            comparisons,
+          }),
+        );
+        for (const comparison of comparisons) {
+          const {
+            jit,
+            featureLabel,
+            queryName,
+            offBuffers,
+            onBuffers,
+            offTime,
+            onTime,
+          } = comparison;
+          expect(
+            onBuffers,
+            `JIT ${jit}, ${featureLabel} ${queryName} shared buffers: on=${onBuffers}, off=${offBuffers}`,
+          ).toBeLessThanOrEqual(offBuffers * MAX_BUFFER_RATIO);
+          expect(
+            onTime,
+            `JIT ${jit}, ${featureLabel} ${queryName} execution time: on=${onTime}ms, off=${offTime}ms`,
+          ).toBeLessThanOrEqual(offTime * MAX_TIME_RATIO);
+        }
+      } finally {
+        finished.resolve(undefined);
       }
     }, 240_000);
   },

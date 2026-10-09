@@ -666,8 +666,8 @@ CREATE OR REPLACE FUNCTION public.entity_feature_gate_value(table_name text, row
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog SET row_security = on AS $function$
 DECLARE
-  graph jsonb := public.entity_feature_gate_graph();
-  descriptor jsonb := graph -> table_name;
+  graph jsonb;
+  descriptor jsonb;
   reference jsonb;
   parent_descriptor jsonb;
   parent_row jsonb;
@@ -676,13 +676,15 @@ DECLARE
   workspace_ids uuid[] := '{}';
   organization_ids text[] := '{}';
 BEGIN
-  IF descriptor IS NULL THEN
-    RAISE EXCEPTION 'Unregistered entity feature relation: %', table_name;
-  END IF;
   IF table_name = 'entities' THEN
     RETURN jsonb_build_object('state', CASE WHEN row_data->>'list_item_type' IS NULL
       OR row_data->>'list_item_type' = 'task' THEN 'open' ELSE 'legal-lists' END,
       'workspaceIds', '[]'::jsonb, 'organizationIds', '[]'::jsonb);
+  END IF;
+  graph := public.entity_feature_gate_graph();
+  descriptor := graph -> table_name;
+  IF descriptor IS NULL THEN
+    RAISE EXCEPTION 'Unregistered entity feature relation: %', table_name;
   END IF;
   -- References are ordered by parent relation and column; concurrent child
   -- writers take compatible SHARE locks, which exclude parent reclassification.
@@ -710,25 +712,35 @@ BEGIN
     ELSIF parent_value->>'state' NOT IN ('open', 'legal-lists') THEN
       RAISE EXCEPTION 'Invalid parent entity feature gate';
     END IF;
-    workspace_ids := workspace_ids || ARRAY(SELECT value::uuid
-      FROM jsonb_array_elements_text(parent_value->'workspaceIds'));
-    organization_ids := organization_ids || ARRAY(SELECT value
-      FROM jsonb_array_elements_text(parent_value->'organizationIds'));
-    IF (parent_descriptor->>'ownWorkspace')::boolean THEN
-      workspace_ids := array_append(workspace_ids, (parent_row->>'workspace_id')::uuid);
+    -- Paired row scope already enforces these requirements. Only inherited
+    -- scope needs array accumulation and normalization.
+    IF (descriptor->>'needsWorkspace')::boolean THEN
+      workspace_ids := workspace_ids || ARRAY(SELECT value::uuid
+        FROM jsonb_array_elements_text(parent_value->'workspaceIds'));
+      IF (parent_descriptor->>'ownWorkspace')::boolean THEN
+        workspace_ids := array_append(workspace_ids, (parent_row->>'workspace_id')::uuid);
+      END IF;
     END IF;
-    IF (parent_descriptor->>'ownOrganization')::boolean THEN
-      organization_ids := array_append(organization_ids, parent_row->>'organization_id');
+    IF (descriptor->>'needsOrganization')::boolean THEN
+      organization_ids := organization_ids || ARRAY(SELECT value
+        FROM jsonb_array_elements_text(parent_value->'organizationIds'));
+      IF (parent_descriptor->>'ownOrganization')::boolean THEN
+        organization_ids := array_append(organization_ids, parent_row->>'organization_id');
+      END IF;
     END IF;
   END LOOP;
-  SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO workspace_ids
-    FROM unnest(workspace_ids) id
-    WHERE NOT ((descriptor->>'ownWorkspace')::boolean
-      AND id = (row_data->>'workspace_id')::uuid);
-  SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO organization_ids
-    FROM unnest(organization_ids) id
-    WHERE NOT ((descriptor->>'ownOrganization')::boolean
-      AND id = row_data->>'organization_id');
+  IF (descriptor->>'needsWorkspace')::boolean THEN
+    SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO workspace_ids
+      FROM unnest(workspace_ids) id
+      WHERE NOT ((descriptor->>'ownWorkspace')::boolean
+        AND id = (row_data->>'workspace_id')::uuid);
+  END IF;
+  IF (descriptor->>'needsOrganization')::boolean THEN
+    SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO organization_ids
+      FROM unnest(organization_ids) id
+      WHERE NOT ((descriptor->>'ownOrganization')::boolean
+        AND id = row_data->>'organization_id');
+  END IF;
   RETURN jsonb_build_object('state', state, 'workspaceIds', workspace_ids,
     'organizationIds', organization_ids);
 END
@@ -741,21 +753,41 @@ CREATE OR REPLACE FUNCTION public.entity_feature_gate_write()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog SET row_security = on AS $function$
 DECLARE
-  descriptor jsonb := public.entity_feature_gate_graph()->TG_TABLE_NAME;
-  gate jsonb := public.entity_feature_gate_value(TG_TABLE_NAME, to_jsonb(NEW));
-  patch jsonb := jsonb_build_object('entity_feature_gate', gate->>'state');
+  row_data jsonb;
+  gate jsonb;
+  patch jsonb;
+  version_gate text;
 BEGIN
+  -- The root gate depends only on this row, including updates to cached input.
+  IF TG_TABLE_NAME = 'entities' THEN
+    NEW.entity_feature_gate := CASE WHEN NEW.list_item_type IS NULL
+      OR NEW.list_item_type = 'task' THEN 'open' ELSE 'legal-lists' END;
+    RETURN NEW;
+  END IF;
+  -- The version's paired FK and own workspace policy enforce row scope.
+  -- Its only inherited gate comes from the entity, read under the same lock.
+  row_data := to_jsonb(NEW);
+  IF TG_TABLE_NAME = 'entity_versions' THEN
+    SELECT CASE WHEN p.list_item_type IS NULL OR p.list_item_type = 'task'
+      THEN 'open' ELSE 'legal-lists' END INTO version_gate
+      FROM public.entities p WHERE p.id = NEW.entity_id FOR SHARE;
+    gate := jsonb_build_object('state', coalesce(version_gate, 'missing'));
+  ELSE
+    gate := public.entity_feature_gate_value(TG_TABLE_NAME, row_data);
+  END IF;
+  patch := jsonb_build_object('entity_feature_gate', gate->>'state');
   -- A scoped child write may wait for a parent that moved or disappeared.
   -- Preserve the FK-shaped refusal its caller already handles; maintenance
   -- can still persist denied gates for historical missing-parent rows.
-  IF gate->>'state' = 'missing' AND current_setting('role', true) = 'stella' THEN
+  IF TG_OP = 'INSERT' AND gate->>'state' = 'missing'
+    AND current_setting('role', true) = 'stella' THEN
     RAISE EXCEPTION 'The referenced entity feature parent no longer exists'
       USING ERRCODE = '23503', TABLE = TG_TABLE_NAME;
   END IF;
-  IF (descriptor->>'needsWorkspace')::boolean THEN
+  IF row_data ? 'entity_feature_workspace_ids' THEN
     patch := patch || jsonb_build_object('entity_feature_workspace_ids', gate->'workspaceIds');
   END IF;
-  IF (descriptor->>'needsOrganization')::boolean THEN
+  IF row_data ? 'entity_feature_organization_ids' THEN
     patch := patch || jsonb_build_object('entity_feature_organization_ids', gate->'organizationIds');
   END IF;
   -- A paired scope is enforced by its FK after this BEFORE trigger. Invalid
@@ -817,17 +849,22 @@ BEGIN
   -- Nullable companion keys, deferred/unvalidated FKs, and references without FKs
   -- keep their repair path; UPDATE and DELETE still refresh every descendant.
   IF TG_OP = 'INSERT' THEN
+    WITH matching_fks AS MATERIALIZED (
+      SELECT conrelid, conkey, confkey, confrelid
+      FROM pg_catalog.pg_constraint
+      WHERE contype = 'f' AND convalidated AND NOT condeferrable
+        AND confrelid = TG_RELID
+    )
     SELECT coalesce(jsonb_object_agg(reference_key, true), '{}'::jsonb) INTO insert_proof
     FROM (
       SELECT DISTINCT child_table.relname || ':' || child_column.attname AS reference_key
-      FROM pg_catalog.pg_constraint fk
+      FROM matching_fks fk
       JOIN pg_catalog.pg_class child_table ON child_table.oid = fk.conrelid
       JOIN pg_catalog.pg_attribute child_column
         ON child_column.attrelid = fk.conrelid AND child_column.attnum = ANY(fk.conkey)
       JOIN pg_catalog.pg_attribute parent_column
         ON parent_column.attrelid = fk.confrelid AND parent_column.attnum = ANY(fk.confkey)
-      WHERE fk.contype = 'f' AND fk.convalidated AND NOT fk.condeferrable
-        AND fk.confrelid = TG_RELID AND child_table.relnamespace = 'public'::regnamespace
+      WHERE child_table.relnamespace = 'public'::regnamespace
         AND parent_column.attname = 'id'
         AND array_position(fk.conkey, child_column.attnum) = array_position(fk.confkey, parent_column.attnum)
         AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute companion
@@ -872,7 +909,7 @@ CREATE OR REPLACE FUNCTION public.entity_feature_gate_repair_missing()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog SET row_security = on AS $function$
 DECLARE
-  descriptor jsonb := public.entity_feature_gate_graph()->TG_TABLE_NAME;
+  descriptor jsonb;
   predicate text;
   gate jsonb;
 BEGIN
@@ -881,6 +918,7 @@ BEGIN
   -- have waited there for a parent that its BEFORE trigger could not see.
   gate := public.entity_feature_gate_value(TG_TABLE_NAME, to_jsonb(NEW));
   IF gate->>'state' = 'missing' THEN RETURN NULL; END IF;
+  descriptor := public.entity_feature_gate_graph()->TG_TABLE_NAME;
   SELECT string_agg(format('t.%I = k.%I', value, value), ' AND ')
     INTO predicate FROM jsonb_array_elements_text(descriptor->'primaryKey');
   EXECUTE format('UPDATE public.%I t SET entity_feature_gate = t.entity_feature_gate

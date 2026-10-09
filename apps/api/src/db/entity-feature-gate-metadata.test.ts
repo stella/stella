@@ -586,3 +586,27 @@ test("migration maintenance grants match each descriptor's read and write column
     expect(actual?.update.toSorted()).toEqual(expectedUpdate);
   }
 });
+
+test("the version gate's direct parent lookup covers its complete inherited scope", () => {
+  const descriptors = entityFeatureGateMetadata(
+    Object.values(schema).filter((table) => is(table, PgTable)),
+  );
+  const versions = descriptors.find(
+    ({ tableName }) => tableName === "entity_versions",
+  );
+  expect(versions).toMatchObject({
+    ownWorkspace: true,
+    needsWorkspace: false,
+    needsOrganization: false,
+    refs: [
+      {
+        column: "entity_id",
+        parent: "entities",
+        hasForeignKey: true,
+        sameWorkspace: true,
+        sameOrganization: false,
+      },
+    ],
+  });
+  expect(versions?.refs).toHaveLength(1);
+});

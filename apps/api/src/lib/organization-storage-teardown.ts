@@ -183,7 +183,7 @@ export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "user_files.thumbnail_file_id": "cleanup-request",
 } as const;
 
-export const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
+const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
   "account_deletion_requests.workspace_ids": "retain-history",
   "ai_memories.source_data_workspace_ids": "delete-derived-row-and-trigger",
   "chat_thread_compactions.memory_extraction_data_workspace_ids":
