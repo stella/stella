@@ -27,6 +27,15 @@ import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-colu
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
 import { decisionReferenceColumnKind } from "@/features/case-law/decision-columns.logic";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
+import type { api } from "@/lib/api";
+import type { PublicLawData } from "@/lib/public-law-api";
+
+type SearchHit = PublicLawData<
+  typeof api.case.decisions.search.post
+>["hits"][number];
+type BenchDecision = Pick<SearchHit, Exclude<keyof Decision, "id">> & {
+  id: SearchHit["decisionId"];
+};
 
 /** A bench has no organization, so it draws no question columns. */
 const NO_QUESTION_COLUMNS: QuestionColumnSurface = { type: "hidden" };
@@ -88,8 +97,11 @@ const benchDecisions = (): Decision[] =>
         text: BENCH_HEADNOTES[(index + 2) % BENCH_HEADNOTES.length] ?? "",
         truncated: false,
       },
+      identifiers: [],
+      anchorId: null,
+      sourceUrl: null,
       citationCount: index % 17,
-    } satisfies Decision;
+    } satisfies BenchDecision;
   });
 
 export const WorkspaceTablePlayground = () => {

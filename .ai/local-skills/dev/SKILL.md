@@ -99,6 +99,20 @@ after pair is the evidence for a performance claim.
 
 ## 6. Screenshots in pull requests
 
+Screenshots of changed web UI use an entry in the shared `/dev` visual
+registry (`apps/web/src/routes/dev/-visual-registry.ts`). Add a named entry
+with a label and a lazy component loader; visit `/dev?visual=<entry-name>`.
+Do not add a separate playground route. The search schema and renderer derive
+from the registry, and the shared section frame displays `Fixture: <label>`.
+Keep existing geometry selectors inside the fixture.
+
+Fixture data must use the real API/contract or component prop types: import
+the producing type and check literals with `satisfies`, rather than defining
+a parallel shape. Add the fixture to the registry; its label/render check
+runs for every entry automatically. Production route generation excludes the
+visual route and fixture directory; the build guard rejects fixture modules
+in emitted chunks.
+
 `bun run agent:attach <pr number> <screenshot.png>...` is the only way to add
 images to a pull request; the command guard blocks `gh ... --attach`. It
 accepts an image only when it is an unaltered `agent:drive` capture taken while
