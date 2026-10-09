@@ -128,7 +128,7 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
       memberRole: sessionMemberRole("member"),
     }),
   );
-  const app = new Elysia({ normalize: false }).put("/batch", endpoint.handler, {
+  const app = new Elysia().put("/batch", endpoint.handler, {
     body: endpoint.config.body,
     response: endpoint.config.response,
   });
@@ -174,5 +174,38 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
   } finally {
     env.API_FEATURE_ACCESS_GRANTS = previous;
     env.FEATURE_TIME_BILLING = previousDeployment;
+  }
+});
+
+test("batch rejects unknown fields before authorization under default normalization", async () => {
+  const endpoint = createDesktopTimeEntryBatchEndpoint(async () =>
+    panic("Invalid batch must fail validation before authorization"),
+  );
+  const app = new Elysia().put("/batch", endpoint.handler, {
+    body: endpoint.config.body,
+    response: endpoint.config.response,
+  });
+  for (const extra of [
+    { appName: "private" },
+    { rawSegments: [] },
+    { summary: "private" },
+    { taskCode: "private" },
+  ]) {
+    for (const body of [
+      { ...BODY, ...extra },
+      {
+        ...BODY,
+        entries: BODY.entries.map((entry) => ({ ...entry, ...extra })),
+      },
+    ]) {
+      const response = await app.handle(
+        new Request("http://localhost/batch", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(response.status).toBe(422);
+    }
   }
 });
