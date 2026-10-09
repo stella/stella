@@ -2330,7 +2330,7 @@ test(
       const expected = baseline.at(0) ?? panic("All-source outcome missing");
       expect(
         expected.lists.map(({ source: listSource }) => listSource),
-      ).toEqual(sources);
+      ).toEqual([...sources]);
       expect(
         expected.lists.every(
           (list) =>
@@ -2445,7 +2445,9 @@ test(
           signal: new AbortController().signal,
         }),
       ).toEqual({ claimed: 1, terminal: 1, hasMore: false });
-      expect(get.mock.calls.map(([props]) => props.source)).toEqual(sources);
+      expect(get.mock.calls.map(([props]) => props.source)).toEqual([
+        ...sources,
+      ]);
       const coverage = await scoped(
         async (tx) => await tx.select().from(sanctionsContactScreenings),
       );
