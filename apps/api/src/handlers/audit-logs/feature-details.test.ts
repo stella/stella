@@ -5,11 +5,12 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditResourceType } from "@/api/lib/audit-log.constants";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
@@ -126,14 +127,22 @@ const contextFor = ({
                   ? decideFeatureAccess({
                       ...PRINCIPAL,
                       registry: FEATURE_REGISTRY,
-                      grants: {
-                        [featureId]: [
-                          {
-                            type: "organization",
-                            organizationId: PRINCIPAL.organizationId,
-                          },
-                        ],
-                      },
+                      grants: Object.fromEntries(
+                        [
+                          ...featurePrerequisiteClosure(
+                            FEATURE_REGISTRY,
+                            featureId,
+                          ),
+                        ].map((id) => [
+                          id,
+                          [
+                            {
+                              type: "organization" as const,
+                              organizationId: PRINCIPAL.organizationId,
+                            },
+                          ],
+                        ]),
+                      ),
                       featureId,
                       user: { email: "test@example.test", emailVerified: true },
                       membership: true,

@@ -17,10 +17,14 @@
  */
 
 import { DECISION_TEXT_FIELD } from "@stll/api-contract/case-law-text-field";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
+import {
+  FIXTURE_SOURCE_KEYS,
+  type FixtureSourceKey,
+} from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
 import type { CaseLawFixture, FixtureDecision } from "./seed-case-law";
@@ -64,7 +68,7 @@ type SyntheticTopic = {
 type SyntheticJurisdictionSpec = {
   country: SyntheticJurisdiction;
   language: string;
-  adapterKey: string;
+  adapterKey: FixtureSourceKey;
   sourceName: string;
   decisionCount: number;
   firstYear: number;
@@ -110,6 +114,11 @@ const CZ_REGIONAL: SyntheticCourt = {
   register: "Co",
   decisionTypes: ["rozsudek", "usnesení"],
 };
+const CZ_DISTRICT: SyntheticCourt = {
+  name: "Okresní soud v Ostravě",
+  register: "C",
+  decisionTypes: ["rozsudek", "usnesení"],
+};
 const CZ_ADMINISTRATIVE: SyntheticCourt = {
   name: "Nejvyšší správní soud",
   register: "As",
@@ -128,7 +137,7 @@ const czAdministrativeParties = (first: string) =>
 
 const CZ_TOPICS = [
   {
-    courts: [CZ_SUPREME, CZ_REGIONAL],
+    courts: [CZ_SUPREME, CZ_REGIONAL, CZ_DISTRICT],
     parties: czCivilParties,
     subject: "o náhradu škody z vadně provedeného díla",
     ruling:
@@ -300,7 +309,7 @@ const JURISDICTIONS = [
   {
     country: "CZE",
     language: "cs",
-    adapterKey: "synthetic-cz",
+    adapterKey: FIXTURE_SOURCE_KEYS.SYNTHETIC_CZ,
     sourceName: "Synthetic decisions (CZ, local development)",
     // Three pages at the smallest page size, the third one partial.
     decisionCount: 56,
@@ -314,7 +323,7 @@ const JURISDICTIONS = [
   {
     country: "SVK",
     language: "sk",
-    adapterKey: "synthetic-sk",
+    adapterKey: FIXTURE_SOURCE_KEYS.SYNTHETIC_SK,
     sourceName: "Synthetic decisions (SK, local development)",
     decisionCount: 8,
     firstYear: 2020,
@@ -329,6 +338,49 @@ const JURISDICTIONS = [
 /** Pick by index from a non-empty list, wrapping around. */
 const cycle = <T>(items: readonly [T, ...T[]], index: number): T =>
   items[index % items.length] ?? items[0];
+
+const syntheticDocumentAst = ({
+  caseNumber,
+  court,
+  decisionDate,
+  decisionType,
+  fulltext,
+}: {
+  caseNumber: string;
+  court: string;
+  decisionDate: string;
+  decisionType: string;
+  fulltext: string;
+}): DocumentAst => ({
+  version: 1,
+  source: {
+    system: "stella-synthetic-seed",
+    documentId: caseNumber,
+    webUrl: "",
+    printUrl: "",
+  },
+  metadata: {
+    caseNumber,
+    ecli: null,
+    court,
+    decisionDate,
+    decisionType,
+    keywords: [],
+    statutes: [],
+  },
+  blocks: fulltext.split("\n\n").map((plainText, index) => {
+    const number = index + 1;
+    const anchorId = `p${String(number)}`;
+    return {
+      id: anchorId,
+      anchorId,
+      type: "paragraph",
+      number,
+      inlines: [{ type: "text", text: plainText }],
+      plainText,
+    };
+  }),
+});
 
 const syntheticDecision = (
   spec: SyntheticJurisdictionSpec,
@@ -363,6 +415,11 @@ const syntheticDecision = (
     facts: topic.facts,
     headnote,
   });
+  const decisionDate = Temporal.PlainDate.from({
+    year,
+    month: ((index * 5) % 12) + 1,
+    day: ((index * 11) % 28) + 1,
+  }).toString();
 
   return {
     case_number: caseNumber,
@@ -372,15 +429,17 @@ const syntheticDecision = (
     country: spec.country,
     language: spec.language,
     language_group_key: `${spec.adapterKey}:${caseNumber}`,
-    decision_date: Temporal.PlainDate.from({
-      year,
-      month: ((index * 5) % 12) + 1,
-      day: ((index * 11) % 28) + 1,
-    }).toString(),
+    decision_date: decisionDate,
     decision_type: decisionType,
     fulltext,
     sections: segmentDecision(fulltext),
-    document_ast: EMPTY_AST,
+    document_ast: syntheticDocumentAst({
+      caseNumber,
+      court: court.name,
+      decisionDate,
+      decisionType,
+      fulltext,
+    }),
     analysis: null,
     parser_version: null,
     source_raw: null,

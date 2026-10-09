@@ -6,10 +6,13 @@ import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/c
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   NO_AUDIT,
-  NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 type SaveEmailAttachmentContext = Parameters<
   typeof saveEmailAttachmentEndpoint.handler
@@ -25,7 +28,6 @@ test("rejects an inaccessible target matter before reading source bytes", async 
   });
   const context = createTestHandlerContext<SaveEmailAttachmentContext>({
     audit: NO_AUDIT,
-    safeDb: NO_DB,
     body: { destinationWorkspaceId, parentId: null },
     getWorkspaceAccess: async () => null,
     params: {
@@ -34,6 +36,8 @@ test("rejects an inaccessible target matter before reading source bytes", async 
       workspaceId: sourceWorkspaceId,
     },
     scopedDb: asTestRaw(scopedDb),
+    safeDb: createScopedDbMock({ select: () => createSelectQueryMock([]) })
+      .safeDb,
     workspaceId: sourceWorkspaceId,
   });
 
@@ -41,7 +45,7 @@ test("rejects an inaccessible target matter before reading source bytes", async 
 
   expect(result).toEqual({
     code: 404,
-    response: { message: "Target matter not found" },
+    response: { message: "Not found" },
   });
   expect(scopedDb).not.toHaveBeenCalled();
 });

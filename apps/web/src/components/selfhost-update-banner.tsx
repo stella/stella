@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { DAY_IN_MS } from "@stll/time";
@@ -16,7 +17,6 @@ import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import { deviceStorage } from "@/lib/account/browser-storage";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { compareSemver } from "@/lib/semver-compare";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 

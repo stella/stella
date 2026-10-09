@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
+import { Result, panic, TaggedError } from "better-result";
+import { createHash, randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -19,6 +20,7 @@ import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
+import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
 import {
   type DevProcessGroupError,
   spawnDevProcess,
@@ -33,10 +35,14 @@ import {
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {
+  DEV_OWNER_PID_ENV,
   devStatePath,
+  isPidAlive,
+  parseOwnerPid,
   readOrCreateDevContentEncryptionKey,
   removeDevRuntime,
   SEAL_FILE,
+  stackShutdownReason,
   writeDevRuntime,
 } from "./dev-runtime";
 
@@ -1173,11 +1179,18 @@ const migrateEnvFileIfNeeded = (filePath: string, specPath: string) => {
   }
 };
 
+class WorktreeEnvLinkError extends TaggedError("WorktreeEnvLinkError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export const ensureWorktreeEnvLinks = ({
+  createSymlink = symlinkSync,
   currentRoot,
   isWorktree,
   mainRoot,
 }: {
+  createSymlink?: typeof symlinkSync;
   currentRoot: string;
   isWorktree: boolean;
   mainRoot: string;
@@ -1186,22 +1199,65 @@ export const ensureWorktreeEnvLinks = ({
 
   for (const spec of ENV_FILE_SPECS) {
     const targetPath = path.resolve(currentRoot, spec.path);
-    if (existsSync(targetPath)) {
+    const mainEnvPath = path.resolve(mainRoot, spec.path);
+    const targetExists = existsSync(targetPath);
+    if (
+      targetExists &&
+      (!isWorktree || lstatSync(targetPath).isSymbolicLink())
+    ) {
       migrateEnvFileIfNeeded(targetPath, spec.path);
       continue;
     }
 
-    const mainEnvPath = path.resolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
+      if (
+        targetExists &&
+        (!lstatSync(targetPath).isFile() ||
+          !readFileSync(targetPath).equals(readFileSync(mainEnvPath)))
+      ) {
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Refusing to replace environment file ${targetPath}: it differs from ${mainEnvPath} or is not a regular file.`,
+          }),
+        );
+      }
+      // Compare before migration so an identical older file can become a link.
       migrateEnvFileIfNeeded(mainEnvPath, spec.path);
       mkdirSync(path.dirname(targetPath), { recursive: true });
-      try {
-        symlinkSync(mainEnvPath, targetPath);
-      } catch {
-        copyFileSync(mainEnvPath, targetPath);
+      const linkPath = targetExists
+        ? `${targetPath}.link-${randomUUID()}`
+        : targetPath;
+      const linked = Result.try(() => {
+        createSymlink(mainEnvPath, linkPath);
+        if (targetExists) {
+          renameSync(linkPath, targetPath);
+        }
+      });
+      if (linked.isErr()) {
+        const reason =
+          linked.error.cause instanceof Error
+            ? linked.error.cause.message
+            : linked.error.message;
+        const cleanup = targetExists
+          ? Result.try(() => rmSync(linkPath, { force: true }))
+          : Result.ok(undefined);
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${reason}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
+            cause: linked.error,
+          }),
+        );
       }
       preparedFiles++;
       continue;
+    }
+
+    if (targetExists) {
+      return Result.err(
+        new WorktreeEnvLinkError({
+          message: `Refusing to replace environment file ${targetPath}: source ${mainEnvPath} is missing.`,
+        }),
+      );
     }
 
     const examplePath = path.resolve(currentRoot, spec.example);
@@ -1214,7 +1270,7 @@ export const ensureWorktreeEnvLinks = ({
     preparedFiles++;
   }
 
-  return preparedFiles;
+  return Result.ok(preparedFiles);
 };
 
 const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
@@ -1528,6 +1584,8 @@ const validateDesktopBridgeHealth =
 // checks this so a child killed as part of an intentional shutdown during
 // startup is treated as a clean exit, not a crash.
 let isShuttingDown = false;
+
+const OWNER_POLL_INTERVAL_MS = 5000;
 
 // Thrown when a shutdown interrupts an in-progress startup step (a readiness
 // wait, or spawning the next batch of persistent children). main()'s startup
@@ -1930,7 +1988,10 @@ export const buildPersistentSteps = ({
     rootDir,
   });
   const apiEnv = seeded
-    ? withSeededStackSearch(configuredApiEnv)
+    ? {
+        ...withSeededStackSearch(configuredApiEnv),
+        SCHEDULED_JOBS_MODE: "disabled",
+      }
     : configuredApiEnv;
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
@@ -1948,6 +2009,10 @@ export const buildPersistentSteps = ({
   };
   const primary: Step[] = [];
   const secondary: Step[] = [];
+  // bun --watch holds a descriptor per imported file and directory, node_modules
+  // included, and cannot exclude paths. Seeded stacks are driven by agents that
+  // restart them explicitly, so only interactive dev pays for hot reload.
+  const watchArgs = seeded ? [] : ["--watch"];
 
   if (modeIncludesApi(mode)) {
     primary.push({
@@ -1957,7 +2022,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/server.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -1997,7 +2062,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/scripts/document-processing-worker.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -2279,11 +2344,15 @@ const main = async () => {
   }
   const parsedArgs = config.value;
   const gitContext = createGitContext(process.cwd());
-  const preparedEnvFiles = ensureWorktreeEnvLinks({
+  const preparedEnvFilesResult = ensureWorktreeEnvLinks({
     currentRoot: gitContext.currentRoot,
     isWorktree: gitContext.isWorktree,
     mainRoot: gitContext.mainRoot,
   });
+  if (Result.isError(preparedEnvFilesResult)) {
+    panic(preparedEnvFilesResult.error.message);
+  }
+  const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
   // Offsets resolve before any process or container starts, so a signal
@@ -2384,7 +2453,7 @@ const main = async () => {
     process.exit(cleanupSucceeded ? exitCode : 1);
   };
 
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(signal, () => {
       shutdown(0).catch((error: unknown) => {
         console.error("Dev runner shutdown failed:", error);
@@ -2436,6 +2505,34 @@ const main = async () => {
     });
     return;
   }
+
+  const probe = probeHostFileUsage();
+  const admission = decideHostAdmission({
+    usage: probe.isOk() ? probe.value : null,
+  });
+  if (admission.type === "refuse") {
+    panic(admission.message);
+  }
+  if (admission.type === "admit-unverified") {
+    console.warn(admission.reason);
+  }
+
+  const ownerPid = parseOwnerPid(process.env[DEV_OWNER_PID_ENV]);
+  const ownerWatch = setInterval(() => {
+    const reason = stackShutdownReason({
+      checkoutExists: existsSync(gitContext.currentRoot),
+      ownerAlive: ownerPid === null ? null : isPidAlive(ownerPid),
+    });
+    if (reason === null || isShuttingDown) {
+      return;
+    }
+    console.error(`Stopping the dev stack: ${reason}.`);
+    shutdown(0).catch((error: unknown) => {
+      console.error("Dev runner shutdown failed:", error);
+      process.exit(1);
+    });
+  }, OWNER_POLL_INTERVAL_MS);
+  ownerWatch.unref();
 
   const startSteps = (steps: readonly Step[]): RunningStep[] => {
     if (isShuttingDown) {
@@ -2575,6 +2672,7 @@ const main = async () => {
       dockerProject: modeIncludesApi(mode) ? dockerProject : null,
       infraOffset,
       mode,
+      ownerPid,
       pid: process.pid,
       seeded: seeds,
       startedAt: Temporal.Now.instant().toString(),

@@ -15,7 +15,6 @@ test("case-law reads use their generation's declared schema", () => {
     openingPassageQuery: "is_opening:true",
     yearFacetField: "decision_year",
     stemFields: null,
-    positionalFields: new Set(["title", "text"]),
     searchableFields: [],
     keywordFields: [],
   });
@@ -27,13 +26,6 @@ test("case-law reads use their generation's declared schema", () => {
     openingPassageQuery: "is_opening:true",
     yearFacetField: "decision_year",
     stemFields: { text: "text_stem", publisherSummary: "headnote_stem" },
-    positionalFields: new Set([
-      "title",
-      "text",
-      "headnote",
-      "text_stem",
-      "headnote_stem",
-    ]),
     searchableFields: ["headnote"],
     keywordFields: [],
   });
@@ -45,33 +37,8 @@ test("case-law reads use their generation's declared schema", () => {
     openingPassageQuery: "is_opening:true",
     yearFacetField: "decision_year",
     stemFields: { text: "text_stem", publisherSummary: "headnote_stem" },
-    positionalFields: new Set([
-      "title",
-      "text",
-      "headnote",
-      "text_stem",
-      "headnote_stem",
-      "keywords",
-    ]),
     searchableFields: ["headnote"],
     // Its own list, because the leaf budget pays for it last.
-    keywordFields: ["keywords"],
-  });
-  // v8 records the text stem without positions, so it can no longer answer a
-  // phrase; every other field keeps what v7 has.
-  expect(corpusIndexReadContract("case_law", "case_law_v8")).toEqual({
-    family: "case_law",
-    openingPassageQuery: "is_opening:true",
-    yearFacetField: "decision_year",
-    stemFields: { text: "text_stem", publisherSummary: "headnote_stem" },
-    positionalFields: new Set([
-      "title",
-      "text",
-      "headnote",
-      "headnote_stem",
-      "keywords",
-    ]),
-    searchableFields: ["headnote"],
     keywordFields: ["keywords"],
   });
 });
@@ -94,11 +61,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: [],
     functionWords: FUNCTION_WORDS.cs,
-    stemming: {
-      language: "cs",
-      fields: ["text_stem", "headnote_stem"],
-      positionlessFields: [],
-    },
+    stemming: { language: "cs", fields: ["text_stem", "headnote_stem"] },
   });
   expect(
     caseLawCorpusQueryFields({
@@ -110,11 +73,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: ["keywords"],
     functionWords: FUNCTION_WORDS.cs,
-    stemming: {
-      language: "cs",
-      fields: ["text_stem", "headnote_stem"],
-      positionlessFields: [],
-    },
+    stemming: { language: "cs", fields: ["text_stem", "headnote_stem"] },
   });
   // Slovak has a stemmer but no published expansion dictionary; the two are
   // separate questions and only the dictionary one is answered elsewhere.
@@ -124,24 +83,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
       jurisdiction: "SVK",
       language: undefined,
     }).stemming,
-  ).toEqual({
-    language: "sk",
-    fields: ["text_stem", "headnote_stem"],
-    positionlessFields: [],
-  });
-  // v8 stems into the same fields, and names the one a stemmed phrase may not
-  // reach.
-  expect(
-    caseLawCorpusQueryFields({
-      generation: "case_law_v8",
-      jurisdiction: "CZE",
-      language: undefined,
-    }).stemming,
-  ).toEqual({
-    language: "cs",
-    fields: ["text_stem", "headnote_stem"],
-    positionlessFields: ["text_stem"],
-  });
+  ).toEqual({ language: "sk", fields: ["text_stem", "headnote_stem"] });
   // A generation whose indexes never mapped the fields: naming one would be
   // an invalid query against a strict mapping, not a narrower one.
   expect(
@@ -194,7 +136,6 @@ test("the language filter, not the jurisdiction, decides how words stem", () => 
   expect(stemmingOf(undefined, "cs")).toEqual({
     language: "cs",
     fields: ["text_stem", "headnote_stem"],
-    positionlessFields: [],
   });
   // Agreeing: the same answer either way.
   expect(stemmingOf("CZE", "cs")).toEqual(stemmingOf("CZE", undefined));
@@ -203,7 +144,6 @@ test("the language filter, not the jurisdiction, decides how words stem", () => 
   expect(stemmingOf("EU", "cs")).toEqual({
     language: "cs",
     fields: ["text_stem", "headnote_stem"],
-    positionlessFields: [],
   });
   expect(stemmingOf("CZE", "pl")?.language).toBe("pl");
   // Austria publishes in German, so an unfiltered Austrian search stems the

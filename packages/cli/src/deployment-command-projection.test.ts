@@ -165,6 +165,10 @@ describe("deployment command census", () => {
   test("every static tool deployment feature survives generation and hides off or unknown", () => {
     const declared = new Map<string, string>();
     for (const { name, cli } of registrySnapshot) {
+      // An excluded tool generates no command, so it has no feature to carry.
+      if ("excluded" in cli && cli.excluded) {
+        continue;
+      }
       if ("feature" in cli && typeof cli.feature === "string") {
         declared.set(name, cli.feature);
       }

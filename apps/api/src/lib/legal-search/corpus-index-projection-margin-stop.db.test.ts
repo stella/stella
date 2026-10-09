@@ -177,7 +177,7 @@ test("a lease inside the start margin appends once and stops", async () => {
   const result = await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async ({ ndjson }) => {
+      ingestCommittedBatch: async (_indexId: string, ndjson: string) => {
         const lines = ndjson.split("\n");
         ingested.push(lines.length);
         for (const line of lines) {

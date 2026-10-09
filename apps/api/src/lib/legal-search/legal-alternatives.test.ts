@@ -115,11 +115,7 @@ describe("legalAlternativesExpander", () => {
       legalAlternatives: legalAlternativesExpander([
         { term: "kauce", alternatives: ["jistota"] },
       ]),
-      stemming: {
-        language: "cs",
-        fields: ["text_stem"],
-        positionlessFields: [],
-      },
+      stemming: { language: "cs", fields: ["text_stem"] },
     });
 
     expect(clause).toContain('("kauce" OR ');

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import fc from "fast-check";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,9 +8,11 @@ import { Script } from "node:vm";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 import * as v from "valibot";
 
+import { assertProperty } from "@stll/property-testing";
+
 import { pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
-import { thinJobs } from "./main-heavy-plan";
+import { prDepthJobs, thinJobs } from "./main-heavy-plan";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -37,6 +40,8 @@ const workflow = v.parse(
   ),
 );
 const jobs = workflow.jobs;
+const prDepth = prDepthJobs({ jobs });
+const patchId = "d".repeat(40);
 const planner = jobs["ci-plan"];
 const result = jobs["ci-result"];
 if (!planner || !result) {
@@ -62,8 +67,8 @@ const pr = {
 const scope = createHash("sha256")
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
-const marker = (depth: string, profile = "normal-v1", version = 5) =>
-  `ci-completed-v${version}-${profile}-123-456-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
+const marker = (depth: string, profile = "normal-v1", version = 6) =>
+  `ci-completed-v${version}-${profile}-123-456-${pr.head.sha}-${depth}-${scope}`;
 const artifact = (depth: string, profile = "normal-v1") => ({
   id: 7,
   size_in_bytes: 400,
@@ -83,7 +88,7 @@ const successfulRun = {
 };
 // The evidence ci-result records for a run whose planned jobs all succeeded.
 const evidenceFor = (depth: string, profile = "normal-v1") => ({
-  version: 5,
+  version: 6,
   marker: marker(depth, profile),
   event: "pull_request",
   run_id: 99,
@@ -92,13 +97,17 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   head_repo_id: 456,
   head_sha: pr.head.sha,
   base_sha: pr.base.sha,
+  patch_id: patchId,
+  workflow_version: pr.head.sha,
+  pr_depth_jobs: prDepth,
   suite_depth: depth,
   coverage_profile: profile,
-  planned: ["ci-tests", "typecheck-baseline"],
+  planned: ["ci-tests", "ci-checks-generated"],
   jobs: {
     "ci-plan": "success",
+    ...Object.fromEntries(prDepth.map((job) => [job, "success"])),
     "ci-tests": "success",
-    "typecheck-baseline": "success",
+    "ci-checks-generated": "success",
     "web-build": "skipped",
   },
 });
@@ -140,6 +149,8 @@ const zipEvidence = (
   return Buffer.concat([entries, central, fileName, end]);
 };
 type LookupOptions = {
+  /** This run's patch id; empty for a pull request without a net change. */
+  currentPatchId?: string;
   depth?: string;
   profile?: string;
   action?: string;
@@ -178,6 +189,7 @@ const decide = async ({
     : evidenceFor(depth, profile),
   archive = zipEvidence(JSON.stringify(evidence)),
   downloadFailure = false,
+  currentPatchId = patchId,
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
@@ -198,6 +210,9 @@ const decide = async ({
         COVERAGE_PROFILE: profile,
         QUEUE_DEPTH: queueDepth,
         GITHUB_RUN_ATTEMPT: "1",
+        PATCH_ID: currentPatchId,
+        WORKFLOW_VERSION: pr.head.sha,
+        PR_DEPTH_JOBS: JSON.stringify(prDepth),
       },
     },
     context: {
@@ -348,6 +363,7 @@ test("missing, expired, mismatched or failed evidence runs CI", async () => {
   expect((await decide({ failure: true })).outputs.get("run_required")).toBe(
     "true",
   );
+  // A whole pull request run is reused only on the base it ran against.
   expect(
     (
       await decide({ pull: { ...pr, base: { sha: "c".repeat(40) } } })
@@ -370,7 +386,6 @@ test("push, dispatch and queue events always run without querying evidence", asy
   for (const options of [
     { action: "opened" },
     { action: "synchronize" },
-    { event: "merge_group" },
     { event: "workflow_dispatch" },
   ]) {
     const { outputs, requests } = await decide(options);
@@ -527,6 +542,9 @@ const recordEvidence = (
         BASE_SHA: pr.base.sha,
         SUITE_DEPTH: depth,
         COVERAGE_PROFILE: "normal-v1",
+        PATCH_ID: patchId,
+        WORKFLOW_VERSION: pr.head.sha,
+        PR_DEPTH_JOBS: JSON.stringify(prDepth),
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
@@ -587,7 +605,7 @@ test("recorded evidence lets an unchanged head skip, and only that head", async 
   }
   const recorded: unknown = JSON.parse(text);
   expect(recorded).toMatchObject({
-    version: 5,
+    version: 6,
     run_id: 99,
     head_sha: pr.head.sha,
     marker: marker("fast"),
@@ -615,15 +633,81 @@ test("recorded evidence lets an unchanged head skip, and only that head", async 
   ).toBe("true");
 });
 
+test("only exact green PR-depth evidence reuses checks", async () => {
+  const valid = evidenceFor("fast");
+  const mutations = {
+    head: { ...valid, head_sha: "e".repeat(40) },
+    patch: { ...valid, patch_id: "e".repeat(40) },
+    workflow: { ...valid, workflow_version: "e".repeat(40) },
+    run: { ...valid, run_id: 98 },
+    emptySet: { ...valid, pr_depth_jobs: [] },
+    otherSet: { ...valid, pr_depth_jobs: prDepth.slice(1) },
+    missingJob: {
+      ...valid,
+      jobs: Object.fromEntries(
+        Object.entries(valid.jobs).filter(([job]) => job !== prDepth.at(0)),
+      ),
+    },
+    failedJob: {
+      ...valid,
+      jobs: { ...valid.jobs, [prDepth.at(0) ?? "missing"]: "failure" },
+    },
+  } as const;
+  await assertProperty(
+    "only exact green PR-depth evidence reuses checks",
+    fc.asyncProperty(
+      fc.constantFrom(["valid", valid] as const, ...Object.entries(mutations)),
+      async ([variant, evidence]) => {
+        const outputs = (
+          await decide({
+            event: "merge_group",
+            queueDepth: "full",
+            artifacts: [artifact("fast")],
+            evidence,
+          })
+        ).outputs;
+        expect(outputs.get("pr_depth_reused")).toBe(
+          variant === "valid" ? "true" : undefined,
+        );
+      },
+    ),
+  );
+  // The identical change on a moved base still reuses its PR-depth checks.
+  const moved = await decide({
+    event: "merge_group",
+    queueDepth: "full",
+    artifacts: [artifact("fast")],
+    evidence: valid,
+    pull: { ...pr, base: { sha: "c".repeat(40) } },
+  });
+  expect(moved.outputs.get("pr_depth_reused")).toBe("true");
+});
+
+test("a change without a patch id never reuses, even against empty evidence", async () => {
+  const empty = { ...evidenceFor("fast"), patch_id: "" };
+  const group = await decide({
+    event: "merge_group",
+    queueDepth: "full",
+    artifacts: [artifact("fast")],
+    evidence: empty,
+    currentPatchId: "",
+  });
+  expect(group.outputs.get("pr_depth_reused")).toBeUndefined();
+  const pull = await decide({
+    evidence: { ...evidenceFor("full"), patch_id: "" },
+    currentPatchId: "",
+  });
+  expect(pull.outputs.get("run_required")).toBe("true");
+});
+
 test("a marker whose contents do not prove a complete run is ignored", async () => {
   const valid = evidenceFor("full");
   expect((await decide({ evidence: valid })).outputs.get("run_required")).toBe(
     "false",
   );
   const variants: [string, unknown][] = [
-    ["v4 contents", { ...valid, version: 4 }],
+    ["v5 contents", { ...valid, version: 5 }],
     ["other head", { ...valid, head_sha: "c".repeat(40) }],
-    ["other base", { ...valid, base_sha: "c".repeat(40) }],
     ["other run", { ...valid, run_id: 98 }],
     ["other pr", { ...valid, pr_number: 124 }],
     ["other repo", { ...valid, head_repo_id: 789 }],
@@ -632,6 +716,15 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
     ["other marker", { ...valid, marker: marker("fast") }],
     ["other event", { ...valid, event: "workflow_dispatch" }],
     ["bad attempt", { ...valid, run_attempt: 0 }],
+    ["other patch", { ...valid, patch_id: "e".repeat(40) }],
+    ["other workflow", { ...valid, workflow_version: "e".repeat(40) }],
+    [
+      "failed PR-depth job",
+      {
+        ...valid,
+        jobs: { ...valid.jobs, [prDepth.at(0) ?? "missing"]: "failure" },
+      },
+    ],
     [
       "cancelled job",
       { ...valid, jobs: { ...valid.jobs, "web-build": "cancelled" } },
@@ -667,7 +760,7 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
   }
   for (const [label, archive] of [
     [
-      "legacy v4 file",
+      "legacy v5 file",
       zipEvidence("validated\n", { name: "ci-completed-depth.txt" }),
     ],
     ["not json", zipEvidence("validated\n")],
@@ -702,7 +795,7 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
 
 test("old-version markers are never looked up or trusted", async () => {
   const { outputs, requests } = await decide({
-    artifacts: [{ ...artifact("full"), name: marker("full", "normal-v1", 4) }],
+    artifacts: [{ ...artifact("full"), name: marker("full", "normal-v1", 5) }],
   });
   expect(outputs.get("run_required")).toBe("true");
   expect(outputs.get("marker")).toBe(marker("full"));
@@ -1023,6 +1116,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth": "full",
           "needs.ci-plan.outputs.queue_depth": "thin",
+          "inputs.pr_depth_only": false,
           ...Object.fromEntries(
             Object.entries(allScopes).map(([name, value]) => [
               `needs.ci-plan.outputs.${name}`,
@@ -1065,6 +1159,9 @@ test("thin groups run and require every deferred normal PR check unless normal c
           SUITE_DEPTH: "full",
           HEAVY_ONLY: "false",
           COVERAGE_PROFILE: "normal-v1",
+          PATCH_ID: patchId,
+          WORKFLOW_VERSION: pr.head.sha,
+          PR_DEPTH_JOBS: JSON.stringify(prDepth),
           QUEUE_VALIDATION: "false",
           PLAN_RESULT: "success",
           TRUSTED: "true",

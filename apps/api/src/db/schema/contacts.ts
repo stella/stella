@@ -393,7 +393,7 @@ export const workspaceMembers = p.pgTable(
       .uniqueIndex("workspace_members_workspace_user_uidx")
       .on(table.workspaceId, table.userId),
     p.index("workspace_members_user_id_idx").on(table.userId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -435,7 +435,7 @@ export const workspaceContacts = p.pgTable(
     p
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
-    ...wsOrganizationPolicies("workspace_contacts"),
+    ...wsOrganizationPolicies("workspace_contacts", { columns: table }),
   ],
 );
 
@@ -793,7 +793,7 @@ export const infoSoudTrackedCases = p.pgTable(
     p
       .uniqueIndex("infosoud_tracked_cases_workspace_case_uidx")
       .on(table.workspaceId, table.courtCode, table.spisZn),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

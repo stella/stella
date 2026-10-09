@@ -7,6 +7,7 @@ import {
   type CaseLawCourtYear,
 } from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
@@ -19,7 +20,10 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
-import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import {
+  decisionHeadnotePreviewSchema,
+  decisionKeywordsPreviewSchema,
+} from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
@@ -252,7 +256,12 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           decisionType: nullableBoundedString(bytes.decisionType),
           sourceUrl: nullableBoundedString(bytes.sourceUrl),
           headnote: decisionHeadnotePreviewSchema,
+          keywords: t.Union([decisionKeywordsPreviewSchema, t.Null()]),
           headline: nullableBoundedString(bytes.headline),
+          textWithheldReason: t.Union([
+            t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+            t.Null(),
+          ]),
           anchorId: nullableBoundedString(bytes.anchorId),
           citationCount: t.Number(),
           // The stored `ln(1 + weighted citations)` score search ranks by, so

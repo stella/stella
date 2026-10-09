@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { buttonVariants } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
@@ -12,7 +13,6 @@ import { useReferenceActivation } from "@/components/references/reference-chip";
 import Tooltip from "@/components/tooltip";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import type { ChatThreadAttachedFiles } from "@/features/chat/queries";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { userFileContentUrl } from "@/lib/user-files";
 
 import { layoutFileStack } from "./chat-file-stack.logic";

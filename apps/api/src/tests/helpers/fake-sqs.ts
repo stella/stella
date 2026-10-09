@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 // An in-memory queue behind a real `SQSClient`: the SDK serializes each
 // command, signs it and validates response checksums, and this request
-// handler answers the AWS JSON protocol for ReceiveMessage and DeleteMessage.
+// handler answers the AWS JSON protocol for receive, delete and visibility changes.
 // Leases are explicit: a received message stays invisible until the test
 // calls `expireLeases`, which models its visibility timeout ending.
 
@@ -21,6 +21,10 @@ type FakeSqsQueue = {
   readonly expireLeases: () => void;
   /** Make the next `count` DeleteMessage requests fail with a server error. */
   readonly failDeletes: (count: number) => void;
+  /** Make the next `count` visibility release entries fail. */
+  readonly failReleases: (count: number) => void;
+  readonly deletedMessageIds: readonly string[];
+  readonly releasedMessageIds: readonly string[];
   /** Messages still on the queue, leased or not. */
   readonly remaining: () => readonly { id: string; receiveCount: number }[];
   readonly receiveRequests: readonly ReceiveRequest[];
@@ -36,6 +40,16 @@ type ReceiveRequest = v.InferOutput<typeof receiveRequestSchema>;
 const deleteRequestSchema = v.object({
   QueueUrl: v.string(),
   ReceiptHandle: v.string(),
+});
+const visibilityRequestSchema = v.object({
+  QueueUrl: v.string(),
+  Entries: v.array(
+    v.object({
+      Id: v.string(),
+      ReceiptHandle: v.string(),
+      VisibilityTimeout: v.literal(0),
+    }),
+  ),
 });
 
 type FakeHttpRequest = {
@@ -66,7 +80,10 @@ export const createFakeSqsQueue = (): FakeSqsQueue => {
   const messages: FakeSqsMessage[] = [];
   const receiveRequests: ReceiveRequest[] = [];
   let deleteFailures = 0;
+  let releaseFailures = 0;
   let sequence = 0;
+  const deletedMessageIds: string[] = [];
+  const releasedMessageIds: string[] = [];
 
   const receive = (body: string) => {
     const request = v.parse(receiveRequestSchema, JSON.parse(body));
@@ -106,9 +123,32 @@ export const createFakeSqsQueue = (): FakeSqsQueue => {
       ({ receiptHandle }) => receiptHandle === request.ReceiptHandle,
     );
     if (index !== -1) {
-      messages.splice(index, 1);
+      const [deleted] = messages.splice(index, 1);
+      if (deleted !== undefined) {
+        deletedMessageIds.push(deleted.id);
+      }
     }
     return jsonResponse(200, {});
+  };
+
+  const release = (body: string) => {
+    const request = v.parse(visibilityRequestSchema, JSON.parse(body));
+    const failed = [];
+    for (const entry of request.Entries) {
+      if (releaseFailures > 0) {
+        releaseFailures -= 1;
+        failed.push({ Id: entry.Id, Code: "InternalError" });
+        continue;
+      }
+      const message = messages.find(
+        ({ receiptHandle }) => receiptHandle === entry.ReceiptHandle,
+      );
+      if (message !== undefined) {
+        message.receiptHandle = null;
+        releasedMessageIds.push(message.id);
+      }
+    }
+    return jsonResponse(200, { Successful: [], Failed: failed });
   };
 
   const client = new SQSClient({
@@ -130,6 +170,8 @@ export const createFakeSqsQueue = (): FakeSqsQueue => {
             return await Promise.resolve(receive(body));
           case "AmazonSQS.DeleteMessage":
             return await Promise.resolve(remove(body));
+          case "AmazonSQS.ChangeMessageVisibilityBatch":
+            return await Promise.resolve(release(body));
           default:
             return panic(`Fake SQS does not implement ${target}`);
         }
@@ -153,6 +195,11 @@ export const createFakeSqsQueue = (): FakeSqsQueue => {
     failDeletes: (count) => {
       deleteFailures += count;
     },
+    failReleases: (count) => {
+      releaseFailures += count;
+    },
+    deletedMessageIds,
+    releasedMessageIds,
     remaining: () =>
       messages.map(({ id, receiveCount }) => ({ id, receiveCount })),
     receiveRequests,

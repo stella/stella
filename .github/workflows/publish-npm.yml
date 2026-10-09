@@ -1,5 +1,7 @@
 name: Publish npm packages
 
+# release-chain-alert
+
 # Keep this filename stable: npm trusted publishing authorizes the calling
 # repository workflow, even though the privileged release transaction is
 # implemented by stella/.github.

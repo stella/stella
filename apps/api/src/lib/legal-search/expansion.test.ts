@@ -318,7 +318,6 @@ test("a dictionary that changed nothing is not the dictionary a page reports", (
   const stemming = {
     language: "cs",
     fields: ["text_stem"],
-    positionlessFields: [],
   } as const satisfies CorpusStemming;
   const clauseOf = (text: string, expand?: CorpusTermExpander) =>
     corpusFreeTextClause(text, { expand, stemming }) ?? "";
