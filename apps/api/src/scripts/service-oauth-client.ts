@@ -3,10 +3,10 @@ import { parseArgs } from "node:util";
 import * as v from "valibot";
 
 import {
-  ServiceClientOperatorError,
   createServiceOAuthClient,
   changeServiceOAuthClient,
-} from "@/api/lib/auth/service-client-operator";
+} from "@/api/db/root";
+import { ServiceClientOperatorError } from "@/api/lib/auth/service-client-operator";
 import { SERVICE_CLIENT_BUDGET_CEILINGS } from "@/api/lib/auth/service-client-policy";
 
 const { positionals, values } = parseArgs({

@@ -2,12 +2,9 @@ import { Result } from "better-result";
 import { decodeJwt } from "jose";
 
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
-import {
-  authenticateLegalResolveToken,
-  isServiceResolveSession,
-} from "@/api/handlers/legal-resolve/authentication";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import { captureRequestError } from "@/api/lib/analytics/capture";
+import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
@@ -18,6 +15,8 @@ import {
   McpOrganizationAccessError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+
+import { authenticateLegalResolveToken } from "./authentication";
 
 export type LegalResolveAuthorizationDependencies = {
   authenticate?: typeof authenticateLegalResolveToken;

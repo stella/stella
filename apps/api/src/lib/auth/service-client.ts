@@ -1,20 +1,8 @@
 import type { OAuthClaimExtensionInput } from "@better-auth/oauth-provider";
-import { APIError } from "better-auth/api";
-import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { Result, TaggedError } from "better-result";
 import type { JWTPayload } from "jose";
 
-import { oauthClient } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
-import { serviceOAuthClients } from "@/api/db/schema";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createBackgroundAuditRecorder,
-} from "@/api/lib/audit-log";
-import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
-import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
+import { readServiceOAuthClientBinding } from "@/api/db/root";
 
 import {
   SERVICE_CLIENT_PRINCIPAL,
@@ -26,33 +14,12 @@ import {
 } from "./service-client-policy";
 import type { ServiceOAuthPrincipal } from "./service-client-policy";
 
-/** Auth control-plane records are read by the owner connection, never scopedDb. */
-const readOAuthClientBinding = async (clientId: string) =>
-  (
-    await rootDb
-      .select({
-        clientId: oauthClient.clientId,
-        organizationId: serviceOAuthClients.organizationId,
-        disabled: oauthClient.disabled,
-        type: oauthClient.type,
-        userId: oauthClient.userId,
-        clientCredentialsScopes: oauthClient.clientCredentialsScopes,
-        requestsPerMinute: serviceOAuthClients.requestsPerMinute,
-        dailyBudget: serviceOAuthClients.dailyBudget,
-        credentialVersion: serviceOAuthClients.credentialVersion,
-        clientSecret: oauthClient.clientSecret,
-      })
-      .from(oauthClient)
-      .leftJoin(
-        serviceOAuthClients,
-        eq(oauthClient.clientId, serviceOAuthClients.clientId),
-      )
-      .where(eq(oauthClient.clientId, clientId))
-      .limit(1)
-  ).at(0) ?? null;
+class ServiceClientUnavailableError extends TaggedError(
+  "ServiceClientUnavailableError",
+)<{ message: string }> {}
 
 export const readServiceOAuthClient = async (clientId: string) => {
-  const client = await readOAuthClientBinding(clientId);
+  const client = await readServiceOAuthClientBinding(clientId);
   if (
     !client ||
     client.organizationId === null ||
@@ -82,7 +49,7 @@ export const getServiceOAuthClaims = async ({
   scopes,
   grantType,
 }: OAuthClaimExtensionInput) => {
-  const binding = await readOAuthClientBinding(client.clientId);
+  const binding = await readServiceOAuthClientBinding(client.clientId);
   if (binding?.type !== SERVICE_CLIENT_TYPE) {
     return Result.ok({});
   }
@@ -105,8 +72,7 @@ export const getServiceOAuthClaims = async ({
     )
   ) {
     return Result.err(
-      new APIError("FORBIDDEN", {
-        error: "unauthorized_client",
+      new ServiceClientUnavailableError({
         message: "Service client is unavailable",
       }),
     );
@@ -131,42 +97,4 @@ export const resolveServiceOAuthToken = async (
   }
   const binding = await readServiceOAuthClient(clientId);
   return binding ? servicePrincipalFromClaims(payload, binding) : null;
-};
-
-type ServiceClientOperatorAudit = {
-  tx: Transaction;
-  organizationId: string;
-  clientId: string;
-  operation: "create" | "rotate" | "disable";
-  operatorUid: number;
-};
-
-export const recordServiceClientOperatorAuditEvent = async ({
-  tx,
-  organizationId,
-  clientId,
-  operation,
-  operatorUid,
-}: ServiceClientOperatorAudit): Promise<void> => {
-  const recordAuditEvent = createBackgroundAuditRecorder({
-    organizationId:
-      parseAuthProviderId<"organization">(organizationId) ??
-      panic("Invalid service organization identity"),
-    workspaceId: null,
-    userId: TENANT_SYSTEM_ACTOR.serviceClientOperator,
-    execution: {
-      performer: {
-        type: "service",
-        id: TENANT_SYSTEM_ACTOR.serviceClientOperator,
-        name: null,
-      },
-      trigger: { type: "system", source: "service-client-operator" },
-    },
-  });
-  await recordAuditEvent(tx, {
-    action: operation === "create" ? AUDIT_ACTION.CREATE : AUDIT_ACTION.UPDATE,
-    resourceType: AUDIT_RESOURCE_TYPE.SERVICE_OAUTH_CLIENT,
-    resourceId: clientId,
-    metadata: { operation, operatorUid },
-  });
 };

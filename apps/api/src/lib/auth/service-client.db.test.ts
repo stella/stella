@@ -7,14 +7,18 @@ import * as v from "valibot";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { oauthClient, organization } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import {
+  createServiceOAuthClient,
+  changeServiceOAuthClient,
+  rootDb,
+  recordLegalResolveAudit,
+} from "@/api/db/root";
 import { auditLogs, serviceOAuthClients } from "@/api/db/schema";
 import { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
 import { meRoute } from "@/api/handlers/me/routes";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
-import { recordLegalResolveAudit } from "@/api/lib/auth/legal-resolve-audit";
 import { extractMcpSession } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -27,10 +31,6 @@ import {
   readServiceOAuthClient,
   resolveServiceOAuthToken,
 } from "./service-client";
-import {
-  createServiceOAuthClient,
-  changeServiceOAuthClient,
-} from "./service-client-operator";
 
 beforeAll(initAgentAuthTestDb);
 afterAll(releaseAgentAuthTestDb);

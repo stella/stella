@@ -1957,7 +1957,11 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                 accessToken: async (input) => {
                   const claims = await getServiceOAuthClaims(input);
                   if (Result.isError(claims)) {
-                    throw claims.error;
+                    const error = new APIError("FORBIDDEN", {
+                      error: "unauthorized_client",
+                      message: claims.error.message,
+                    });
+                    throw error;
                   }
                   return claims.value;
                 },

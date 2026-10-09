@@ -2,20 +2,19 @@ import { panic } from "better-result";
 
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
-import { rootDb } from "@/api/db/root";
-import { isServiceResolveSession } from "@/api/handlers/legal-resolve/authentication";
-import type { LegalResolveSession } from "@/api/handlers/legal-resolve/authentication";
+import type { Transaction } from "@/api/db/root";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
+import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 
-type LegalResolveAudit = {
+export type LegalResolveAudit = {
   principal: LegalResolveSession;
   credentialKey: string;
   route: "law" | "case";
@@ -30,13 +29,14 @@ type LegalResolveAudit = {
 };
 
 /** Only identifiers and the typed response outcome enter the audit trail. */
-export const recordLegalResolveAudit = async ({
+export const recordLegalResolveAuditInTransaction = async ({
+  tx,
   principal,
   credentialKey,
   route,
   country,
   outcome,
-}: LegalResolveAudit): Promise<void> => {
+}: LegalResolveAudit & { tx: Transaction }): Promise<void> => {
   const performer = isServiceResolveSession(principal)
     ? ({ type: "service", id: principal.clientId, name: null } as const)
     : ({
@@ -55,28 +55,26 @@ export const recordLegalResolveAudit = async ({
     performer.type === "service"
       ? TENANT_SYSTEM_ACTOR.serviceClient
       : performer.id;
-  await withAggregateTransaction(rootDb, async (tx) => {
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      organizationId:
-        parseAuthProviderId<"organization">(principal.organizationId) ??
-        panic("Invalid resolve organization identity"),
-      workspaceId: null,
-      userId,
-      execution,
-    });
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.ACCESS,
-      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_RESOLVE,
-      resourceId: credentialKey,
-      metadata: {
-        credentialKey,
-        ...(isServiceResolveSession(principal)
-          ? { clientId: principal.clientId }
-          : {}),
-        route,
-        country,
-        outcome,
-      },
-    });
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    organizationId:
+      parseAuthProviderId<"organization">(principal.organizationId) ??
+      panic("Invalid resolve organization identity"),
+    workspaceId: null,
+    userId,
+    execution,
+  });
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.ACCESS,
+    resourceType: AUDIT_RESOURCE_TYPE.LEGAL_RESOLVE,
+    resourceId: credentialKey,
+    metadata: {
+      credentialKey,
+      ...(isServiceResolveSession(principal)
+        ? { clientId: principal.clientId }
+        : {}),
+      route,
+      country,
+      outcome,
+    },
   });
 };

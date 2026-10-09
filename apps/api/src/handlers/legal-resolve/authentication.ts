@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import { resolveServiceOAuthToken } from "@/api/lib/auth/service-client";
@@ -7,7 +8,6 @@ import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/auth/service-client-policy";
-import type { ServiceOAuthPrincipal } from "@/api/lib/auth/service-client-policy";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
 import {
   authenticateMcpRequest,
@@ -15,16 +15,8 @@ import {
   extractMcpSession,
   verifyMcpAccessToken,
 } from "@/api/mcp/auth";
-import type { McpSession, McpAuthenticationFailure } from "@/api/mcp/auth";
+import type { McpAuthenticationFailure } from "@/api/mcp/auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
-
-/** Service principals exist only at this public-law boundary. */
-export type LegalResolveSession = McpSession | ServiceOAuthPrincipal;
-
-export const isServiceResolveSession = (
-  session: LegalResolveSession,
-): session is ServiceOAuthPrincipal =>
-  "type" in session && session.type === SERVICE_CLIENT_PRINCIPAL;
 
 type LegalResolveAuthenticationDependencies = {
   mode?: "default" | "law";
@@ -58,7 +50,11 @@ export const authenticateLegalResolveToken = async (
     );
   }
   if (mode !== "law") {
-    return Result.err(new McpAuthenticationError({ message: "Service clients require the law resource" }));
+    return Result.err(
+      new McpAuthenticationError({
+        message: "Service clients require the law resource",
+      }),
+    );
   }
   const service = await Result.tryPromise({
     try: async () => await resolveService(verified.value),

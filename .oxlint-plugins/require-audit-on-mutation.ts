@@ -89,7 +89,7 @@ const AUDIT_RECORDER_NAME =
 // Imported helpers that write their own audit row.
 const AUDITED_HELPERS = [
   {
-    module: "apps/api/src/lib/auth/service-client",
+    module: "apps/api/src/lib/db/service-client-audit",
     names: new Set(["recordServiceClientOperatorAuditEvent"]),
   },
   {

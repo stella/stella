@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
+import type { recordLegalResolveAudit } from "@/api/db/root";
 import { authorizeLegalResolveRequest } from "@/api/handlers/legal-resolve/authorization";
 import {
   createLegalResolveRoute,
   createLegalResolveRateLimitOptions,
 } from "@/api/handlers/legal-resolve/routes";
-import type { recordLegalResolveAudit } from "@/api/lib/auth/legal-resolve-audit";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { OrganizationAccessReadError } from "@/api/lib/usage/organization-access-state";
 

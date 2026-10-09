@@ -323,7 +323,9 @@ export const rateLimit = ({
     const requestMax = typeof max === "number" ? max : await max(request);
     const budgets = [
       { key, max: requestMax, duration },
-      ...((await additionalBudgets?.(request)) ?? []),
+      ...(additionalBudgets === undefined
+        ? []
+        : await additionalBudgets(request)),
     ];
     const keys: string[] = [];
     // Rejected attempts consume earlier windows; later windows are untouched.

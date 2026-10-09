@@ -100,7 +100,7 @@ export const save = () => {
     expect(
       await lintSingleRule(
         RULE,
-        `import { recordServiceClientOperatorAuditEvent } from "@/api/lib/auth/service-client";${mutation}`,
+        `import { recordServiceClientOperatorAuditEvent } from "@/api/lib/db/service-client-audit";${mutation}`,
         { sourcePath: SOURCE_PATH },
       ),
     ).toEqual([]);
