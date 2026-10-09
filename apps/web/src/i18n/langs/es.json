@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "No consta ninguna versión de este precepto.",
     "provisionHistoryLoadOlder": "Cargue versiones anteriores para compararlas.",
     "provisionHistoryUnavailable": "No se ha podido cargar el historial de este precepto.",
+    "provisionPartTextUnavailable": "El texto de {provisionLabel} no está disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
     "provisionTextUnavailable": "Texto no disponible para esta versión",

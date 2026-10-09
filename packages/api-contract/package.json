@@ -88,6 +88,7 @@
     "./statute-route": "./src/statute-route.ts",
     "./workspace-contacts": "./src/workspace-contacts.ts",
     "./workflow-status": "./src/workflow-status.ts",
+    "./statute-act-number": "./src/statute-act-number.ts",
     "./statute-gazette": "./src/statute-gazette.ts",
     "./statute-acts": "./src/statute-acts.ts",
     "./statute-aliases": "./src/statute-aliases.ts",

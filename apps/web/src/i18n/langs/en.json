@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "No wording of this provision is on record.",
     "provisionHistoryLoadOlder": "Load older versions to compare wordings.",
     "provisionHistoryUnavailable": "This provision's history could not be loaded.",
+    "provisionPartTextUnavailable": "Text of {provisionLabel} is not available",
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}",
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})",
     "provisionTextUnavailable": "Text not available for this version",

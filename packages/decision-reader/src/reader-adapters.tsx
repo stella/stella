@@ -22,6 +22,7 @@ export type ReaderMessages = Record<ReaderMessageKey, string> & {
     link: (children: ReactNode) => ReactNode,
   ) => ReactNode;
   dissentByline: (names: readonly string[]) => ReactNode;
+  provisionPartTextUnavailable: (provisionLabel: string) => string;
   provisionEffectiveFrom: (date: string) => string;
   formatValidityDate: (date: string | null) => string | null;
   /** The cited act by number and title, e.g. `89/2012 Sb., Občanský zákoník`. */
@@ -68,7 +69,7 @@ export type DecisionReaderAdapters = ReaderPresentationAdapters & {
   openProvision: (provision: ProvisionViewPayload) => void;
   loadProvisionPreview: (
     ref: ProvisionPreviewRef,
-  ) => Promise<ProvisionPreviewData>;
+  ) => Promise<ProvisionPreviewData | null>;
 };
 
 const ReaderPresentationContext =

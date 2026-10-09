@@ -136,7 +136,9 @@ const { QueryClient, QueryClientProvider } =
 const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
-const { DecisionText } = await import("./decision-text");
+const { WebDecisionReader } =
+  await import("@/components/legal-reader/web-decision-reader");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { InspectorFindBar, useInspectorFind } =
   await import("@/components/inspector/inspector-find");
 const { ReaderProvisionModeToggle } =
@@ -256,7 +258,7 @@ const decision = {
     legalSentence: { text: HEADNOTE, type: TEXT_FIELD_TYPE.PRESENT },
     summary: absent,
   },
-} satisfies ComponentProps<typeof DecisionText>["decision"];
+} satisfies ComponentProps<typeof WebDecisionReader>["decision"];
 
 const provisionAnchor = ({
   blockId,
@@ -383,7 +385,7 @@ const Reader = ({ name }: { name: string }) => {
         }}
       >
         <div ref={contentRef}>
-          <DecisionText
+          <WebDecisionReader
             surface="development"
             decision={decision}
             decisionId={decision.id}
@@ -421,9 +423,11 @@ const renderReaders = async () => {
   await router.load();
   const view = render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
+      <FormattingProvider locale="en" timeZone="UTC">
+        <QueryClientProvider client={client}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
   appRoot = view.baseElement;

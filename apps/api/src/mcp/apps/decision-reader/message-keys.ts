@@ -24,5 +24,6 @@ export const READER_TEMPLATE_KEYS = [
   "caseLaw.reader.documentUpdated",
   "caseLaw.reader.sourceAttribution",
   "caseLaw.viewer.dissentByline",
-  "statutes.wordingValidFrom",
+  "statutes.provisionEffectiveFrom",
+  "statutes.provisionPartTextUnavailable",
 ] as const;

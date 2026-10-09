@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { CitedProvisionExpansion } from "./cited-provision";
 import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
 import {
@@ -16,7 +17,7 @@ import {
   ReaderPresentationProvider,
 } from "./reader-adapters";
 import type { DecisionReaderAdapters } from "./reader-adapters";
-import type { ReaderDecision } from "./reader-types";
+import type { CitedProvisionTarget, ReaderDecision } from "./reader-types";
 
 export const fakeReaderAdapters = {
   messages: {
@@ -38,6 +39,8 @@ export const fakeReaderAdapters = {
     "statutes.showFullProvision": "Show full provision",
     sourceAttribution: (source, link) => <>Source: {link(source)}</>,
     dissentByline: (names) => names.join(", "),
+    provisionPartTextUnavailable: (provisionLabel) =>
+      `Text of ${provisionLabel} is not available`,
     provisionEffectiveFrom: (date) => `in force since ${date}`,
     formatValidityDate: (date) => date,
     provisionActText: ({ statuteTitle }) => statuteTitle,
@@ -296,4 +299,73 @@ test("a supplied copy adapter preserves existing permalink markup", () => {
       Array.from(markup.match(/<a aria-label="Copy link"[^>]*>¶<\/a>/gu) ?? []),
     ).toEqual(previousControls);
   }
+});
+
+test("a provision card visibly identifies unavailable parts beside available wording", () => {
+  const provision = (part: string) =>
+    ({
+      document: {
+        country: "cz",
+        eli: "/eli/cz/sb/2012/89",
+        id: "act",
+        slug: null,
+        versionValidFrom: null,
+      },
+      payload: {
+        anchorId: "par_5",
+        documentId: "act",
+        eli: "/eli/cz/sb/2012/89",
+        highlightAnchorId: `par_5-odst_${part}`,
+        jurisdiction: "CZE",
+        provisionLabel: `§ 5 odst. ${part}`,
+        statuteTitle: "Občanský zákoník",
+        versionCount: 1,
+        versionValidFrom: null,
+      },
+      preview: null,
+    }) satisfies CitedProvisionTarget;
+  const available = provision("1");
+  const missing = provision("2");
+  const wording = {
+    anchorId: "par_5",
+    blocks: [
+      {
+        anchorId: "par_5-odst_1",
+        id: "part-1",
+        text: "Odborná péče se posuzuje podle povolání.",
+      },
+    ],
+    citedAnchorId: "par_5-odst_1",
+    documentId: "act",
+    heading: null,
+    headings: [],
+    language: "cs",
+  };
+  const render = (availableWording: typeof wording | null) =>
+    renderReaderFixture(
+      <CitedProvisionExpansion
+        citations={[available, missing]}
+        full={{ isPending: false, whole: null }}
+        onToggleFull={() => undefined}
+        showsFull={false}
+        wordings={[
+          { target: available, wording: availableWording },
+          { target: missing, wording: null },
+        ]}
+      />,
+    );
+  const markup = render(wording);
+  expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
+  expect(markup).toMatch(
+    /data-slot="provision-card-unavailable-part"[^>]*><bdi[^>]*>Text of § 5 odst\. 2 is not available<\/bdi>/u,
+  );
+  expect(markup.indexOf("Odborná péče")).toBeLessThan(
+    markup.indexOf("Text of § 5 odst. 2"),
+  );
+  expect(markup).not.toContain('data-slot="provision-card-unavailable"');
+  const allUnavailable = render(null);
+  expect(allUnavailable).toContain('data-slot="provision-card-unavailable"');
+  expect(allUnavailable).not.toContain(
+    'data-slot="provision-card-unavailable-part"',
+  );
 });

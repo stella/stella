@@ -181,6 +181,7 @@ describe("a provision card's passage", () => {
     if (passage.type !== "passage") {
       panic(`Expected a passage, got ${passage.type}`);
     }
+    expect(passage.unavailable).toEqual(["par_226-odst_3"]);
     expect(passage.blocks.map(({ id }) => id)).toEqual([
       "odst_2",
       "odst_1",
@@ -210,5 +211,46 @@ describe("a provision card's passage", () => {
       "odst_3",
     ]);
     expect([...passage.cited]).toEqual(["odst_2"]);
+  });
+  test("identifies unavailable parts once in citation order beside available wording", () => {
+    const passage = provisionCardPassage([
+      { target: target({ part: "1" }), wording: wording(["odst_1"]) },
+      { target: target({ part: "2" }), wording: null },
+    ]);
+    expect(passage).toMatchObject({
+      type: "passage",
+      blocks: [{ id: "odst_1" }],
+      unavailable: ["par_226-odst_2"],
+    });
+    expect(
+      provisionCardPassage([
+        { target: target({ part: "3" }), wording: null },
+        { target: target({ part: "2" }), wording: null },
+        { target: target({ part: "3" }), wording: null },
+      ]),
+    ).toMatchObject({
+      blocks: [],
+      unavailable: ["par_226-odst_3", "par_226-odst_2"],
+    });
+  });
+
+  test("only whole-provision wording determines availability when it is cited", () => {
+    for (const partWording of [null, wording(["odst_1"])]) {
+      expect(
+        provisionCardPassage([
+          { target: target({ part: "1" }), wording: partWording },
+          {
+            target: target({ part: null }),
+            wording: wording(["odst_1", "odst_2"]),
+          },
+        ]),
+      ).toMatchObject({ unavailable: [] });
+      expect(
+        provisionCardPassage([
+          { target: target({ part: "1" }), wording: partWording },
+          { target: target({ part: null }), wording: null },
+        ]),
+      ).toMatchObject({ blocks: [], unavailable: ["par_226"] });
+    }
   });
 });

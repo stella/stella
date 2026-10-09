@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "Aucune version de cette disposition n'est disponible.",
     "provisionHistoryLoadOlder": "Charger des versions antérieures pour les comparer.",
     "provisionHistoryUnavailable": "Impossible de charger l'historique de cette disposition.",
+    "provisionPartTextUnavailable": "Le texte de {provisionLabel} n’est pas disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), dans sa rédaction en vigueur depuis le {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
     "provisionTextUnavailable": "Texte indisponible pour cette version",

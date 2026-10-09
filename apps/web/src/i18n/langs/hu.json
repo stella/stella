@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "Ehhez a rendelkezéshez nincs nyilvántartott szövegváltozat.",
     "provisionHistoryLoadOlder": "Töltsön be korábbi változatokat az összehasonlításhoz.",
     "provisionHistoryUnavailable": "A rendelkezés története nem tölthető be.",
+    "provisionPartTextUnavailable": "A(z) {provisionLabel} szövege nem érhető el",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",

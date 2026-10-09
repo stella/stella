@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
 import { BidiText } from "@stll/ui/bidi-text";
 
-import { statuteActLabel } from "@/features/statutes/statute-act-number";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 
@@ -38,6 +38,8 @@ export const useWebReaderMessages = (): ReaderMessages => {
         bdi: (chunks) => <BidiText>{chunks}</BidiText>,
         names: format.list([...names]),
       }),
+    provisionPartTextUnavailable: (provisionLabel) =>
+      t("statutes.provisionPartTextUnavailable", { provisionLabel }),
     provisionEffectiveFrom: (date) =>
       t("statutes.provisionEffectiveFrom", { date }),
     formatValidityDate: (date) => formatValidityDate(date, format),

@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "K tomuto ustanovení není dochováno žádné znění.",
     "provisionHistoryLoadOlder": "Načtěte starší znění a porovnejte je.",
     "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
+    "provisionPartTextUnavailable": "Znění {provisionLabel} není k dispozici",
     "provisionPromptSubject": "{provision} předpisu {statute} ({eli}) ve znění účinném od {date}",
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
     "provisionTextUnavailable": "Text není pro toto znění k dispozici",

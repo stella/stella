@@ -218,6 +218,7 @@ const ProvisionWording = ({
 );
 
 const PassageBody = ({ passage }: { passage: ProvisionCardPassage }) => {
+  const messages = useReaderMessages();
   switch (passage.type) {
     case "pending":
       return <ProvisionWordingSkeleton />;
@@ -225,11 +226,24 @@ const PassageBody = ({ passage }: { passage: ProvisionCardPassage }) => {
       return passage.blocks.length === 0 ? (
         <ProvisionTextUnavailable />
       ) : (
-        <ProvisionWording
-          blocks={passage.blocks}
-          cited={passage.cited}
-          language={passage.language}
-        />
+        <>
+          <ProvisionWording
+            blocks={passage.blocks}
+            cited={passage.cited}
+            language={passage.language}
+          />
+          {passage.unavailable.map((provisionLabel) => (
+            <span
+              className="reader-chrome text-muted-foreground block text-xs"
+              data-slot="provision-card-unavailable-part"
+              key={provisionLabel}
+            >
+              <BidiText>
+                {messages.provisionPartTextUnavailable(provisionLabel)}
+              </BidiText>
+            </span>
+          ))}
+        </>
       );
     default:
       passage satisfies never;

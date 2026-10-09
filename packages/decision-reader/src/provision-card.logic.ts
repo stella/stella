@@ -152,13 +152,17 @@ export type ProvisionCardPassage =
       blocks: ProvisionWordingBlock[];
       cited: ReadonlySet<string>;
       language: string | null;
+      /** Distinct labels of quoted citations whose wording is unavailable. */
+      unavailable: string[];
     };
 
 /**
  * The quoted passage of one card. A whole-provision citation quotes the
  * provision as it stands; otherwise the parts follow each other in citation
  * order, a block two of them share drawn once. Pending until every citation
- * has its answer, so the passage never reflows part by part.
+ * has its answer, so the passage never reflows part by part. Unavailable
+ * parts keep their distinct labels in citation order. When a whole provision
+ * is cited, only its wording determines availability.
  */
 export const provisionCardPassage = (
   wordings: readonly CitedWording[],
@@ -168,6 +172,13 @@ export const provisionCardPassage = (
   }
   const whole = wordings.find(({ target }) => citesWholeProvision(target));
   const quoted = whole === undefined ? wordings : [whole];
+  const unavailable = [
+    ...new Set(
+      quoted
+        .filter(({ wording }) => wording === null)
+        .map(({ target }) => target.payload.provisionLabel),
+    ),
+  ];
   const blocks: ProvisionWordingBlock[] = [];
   const seen = new Set<string>();
   let language: string | null = null;
@@ -196,5 +207,5 @@ export const provisionCardPassage = (
       cited.add(block.id);
     }
   }
-  return { type: "passage", blocks, cited, language };
+  return { type: "passage", blocks, cited, language, unavailable };
 };

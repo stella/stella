@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "Šios nuostatos redakcijų nėra.",
     "provisionHistoryLoadOlder": "Įkelkite senesnes redakcijas palyginimui.",
     "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
+    "provisionPartTextUnavailable": "{provisionLabel} tekstas neprieinamas",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
     "provisionTextUnavailable": "Šios redakcijos tekstas nepasiekiamas",

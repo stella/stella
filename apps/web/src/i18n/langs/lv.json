@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "Šai normai nav nevienas redakcijas.",
     "provisionHistoryLoadOlder": "Ielādējiet vecākas redakcijas, lai tās salīdzinātu.",
     "provisionHistoryUnavailable": "Neizdevās ielādēt šīs normas vēsturi.",
+    "provisionPartTextUnavailable": "{provisionLabel} teksts nav pieejams",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redakcijā, kas ir spēkā kopš {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
     "provisionTextUnavailable": "Šīs redakcijas teksts nav pieejams",

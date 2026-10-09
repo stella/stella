@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
     "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
+    "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
     "provisionTextUnavailable": "النص غير متاح لهذه النسخة",

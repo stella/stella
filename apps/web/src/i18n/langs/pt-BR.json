@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "Não há nenhuma versão deste dispositivo.",
     "provisionHistoryLoadOlder": "Carregue versões anteriores para comparar.",
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
+    "provisionPartTextUnavailable": "O texto de {provisionLabel} não está disponível",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
     "provisionTextUnavailable": "Texto indisponível para esta versão",

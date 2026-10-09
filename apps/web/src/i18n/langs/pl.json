@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "Brak zapisanych wersji tego przepisu.",
     "provisionHistoryLoadOlder": "Wczytaj starsze wersje, aby je porównać.",
     "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
+    "provisionPartTextUnavailable": "Treść {provisionLabel} jest niedostępna",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
     "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",

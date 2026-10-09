@@ -4775,6 +4775,7 @@
     "provisionHistoryEmpty": "Selle sätte kohta ei ole ühtegi redaktsiooni.",
     "provisionHistoryLoadOlder": "Laadi vanemad redaktsioonid võrdlemiseks.",
     "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
+    "provisionPartTextUnavailable": "{provisionLabel} tekst ei ole saadaval",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
     "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",

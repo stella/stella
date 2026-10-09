@@ -16,6 +16,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   CalendarClockIcon,
@@ -50,7 +51,6 @@ import {
   useOpenStatuteTab,
 } from "@/features/statutes/open-statute-tab";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { statuteActLabel } from "@/features/statutes/statute-act-number";
 import {
   STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,

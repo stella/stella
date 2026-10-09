@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { statuteActLabel } from "@/features/statutes/statute-act-number";
+import { statuteActLabel } from "./statute-act-number";
 
 const numberOf = (eli: string) => statuteActLabel({ eli, title: "x" }).number;
 
