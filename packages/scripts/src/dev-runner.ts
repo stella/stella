@@ -1988,7 +1988,9 @@ export const buildPersistentSteps = ({
     ports,
     rootDir,
   });
-  const apiEnv = seeded
+  // Widened to the env map the steps take, so any key reads the same way on
+  // both branches.
+  const apiEnv: NodeJS.ProcessEnv = seeded
     ? {
         ...withSeededStackSearch(configuredApiEnv),
         SCHEDULED_JOBS_MODE: "disabled",
