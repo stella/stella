@@ -16,6 +16,7 @@ const items: OutlineItem[] = Array.from({ length: 64 }, (_, index) => ({
   label: index % 3 === 0 ? `Section ${index + 1}` : `§ ${index + 1}`,
   title: `Long heading title for the synthetic legal provision ${index + 1}, covering jurisdiction, filing requirements, and the supporting record`,
   level: index % 4 === 0 ? 1 : 2,
+  meta: String(Math.floor(index / 8) + 1),
 }));
 
 const OutlineRailFixture = () => {
@@ -45,6 +46,7 @@ const OutlineRailFixture = () => {
         )}
         <OutlineRail
           ariaLabel="Document outline"
+          formatMetaLabel={(page) => `Page ${page}`}
           items={items}
           onJump={() => undefined}
           presentation={presentation}

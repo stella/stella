@@ -79,6 +79,8 @@ export type OutlineRailProps = {
    *  filter that narrows the tree to nothing cannot take its own control
    *  away; the caller decides whether the document has an outline at all. */
   header?: ReactNode;
+  /** Name a trailing annotation for assistive technology and its tooltip. */
+  formatMetaLabel?: (meta: string) => string;
   /** Depth from which entries start collapsed. Their ancestors still open on
    *  their own while one of their descendants is active, so a deep outline
    *  reads as the chain down to where the reader is rather than as every
@@ -199,6 +201,7 @@ export const OutlineRail = ({
   onJump,
   activeId,
   header,
+  formatMetaLabel,
   collapsedFromLevel,
   presentation = "popover",
   bottomInset,
@@ -592,11 +595,28 @@ export const OutlineRail = ({
             </TooltipTrigger>
             <TooltipPopup>{outlineEntryText(node.item)}</TooltipPopup>
           </Tooltip>
-          {node.item.meta !== undefined && (
-            <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
-              {node.item.meta}
-            </span>
-          )}
+          {node.item.meta !== undefined &&
+            (formatMetaLabel ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      aria-label={formatMetaLabel(node.item.meta)}
+                      className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums"
+                      onClick={() => jumpTo(node.item.id)}
+                      type="button"
+                    />
+                  }
+                >
+                  {node.item.meta}
+                </TooltipTrigger>
+                <TooltipPopup>{formatMetaLabel(node.item.meta)}</TooltipPopup>
+              </Tooltip>
+            ) : (
+              <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
+                {node.item.meta}
+              </span>
+            ))}
         </div>
         {hasChildren && !isCollapsed && (
           <ul className="m-0 list-none p-0">{node.children.map(renderNode)}</ul>

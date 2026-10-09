@@ -48,6 +48,24 @@ const readPublishedInset = async (page: Page) =>
       ),
     );
 
+test("heading page numbers expose their meaning and a shared tooltip", async ({
+  page,
+}) => {
+  await openFixture(page, "panel");
+  const pageNumber = page
+    .getByRole("button", { name: "Page 1", exact: true })
+    .first();
+  await expect(pageNumber).toHaveText("1");
+  await pageNumber.hover();
+  const tooltip = page.locator('[data-slot="tooltip-popup"]');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText("Page 1");
+  await page.mouse.move(0, 0);
+  await pageNumber.focus();
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText("Page 1");
+});
+
 test("panel tracks the published composer inset and keeps its last row reachable", async ({
   page,
 }) => {
