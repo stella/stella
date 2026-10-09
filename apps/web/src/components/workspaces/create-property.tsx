@@ -1,6 +1,6 @@
 import { Suspense, useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -55,6 +55,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import type { ActionDescriptor } from "@/lib/organization/feature-access/action-capabilities.logic";
 import {
   CapabilityAction,
   useActionCapabilities,
@@ -65,6 +66,7 @@ import type {
   WorkspaceProperty,
   SelectPropertyOption,
 } from "@/lib/types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   useCreateProperty,
   useSuggestPrompt,
@@ -153,7 +155,23 @@ export const CreateProperty = ({
   const t = useTranslations();
   const isLimitReached = usePropertiesCountLimit(workspaceId);
   const isEditMode = propertyId !== undefined;
-  const { capabilities } = useActionCapabilities("ai");
+  const editingPropertyQuery = useQuery({
+    ...propertiesOptions(workspaceId),
+    enabled: isEditMode,
+    select: (properties) =>
+      properties.find((property) => property.id === propertyId),
+  });
+  const editingProperty = useQueryView(editingPropertyQuery);
+  useQueryViewError(editingProperty);
+  const action = {
+    capability:
+      editingProperty.type === "items" &&
+      editingProperty.refetchError === undefined &&
+      editingProperty.items?.tool.type === "manual-input"
+        ? null
+        : "ai",
+  } as const satisfies ActionDescriptor;
+  const { capabilities } = useActionCapabilities(action.capability);
   // Both mutations are lifted out of the dialog body so an in-flight
   // request survives a close/reopen cycle. Whichever one applies is
   // chosen inside the body based on edit mode.
@@ -162,7 +180,11 @@ export const CreateProperty = ({
   const [uncontrolledDialogOpen, setUncontrolledDialogOpen] = useState(false);
   const dialogOpen = open ?? uncontrolledDialogOpen;
   const setDialogOpen = (nextOpen: boolean) => {
-    if (nextOpen && !isEditMode && capabilities.ai.type !== "available") {
+    if (
+      nextOpen &&
+      action.capability === "ai" &&
+      capabilities.ai.type !== "available"
+    ) {
       return;
     }
     onOpenChange?.(nextOpen);
@@ -195,7 +217,7 @@ export const CreateProperty = ({
       {(() => {
         if (triggerVariant === "labelled") {
           return (
-            <CapabilityAction action={{ capability: "ai" }} surface="control">
+            <CapabilityAction action={action} surface="control">
               {(capabilityProps) => (
                 <DialogTrigger
                   render={
@@ -217,7 +239,7 @@ export const CreateProperty = ({
         }
         if (triggerVariant === "panel") {
           return (
-            <CapabilityAction action={{ capability: "ai" }} surface="control">
+            <CapabilityAction action={action} surface="control">
               {(capabilityProps) => (
                 <DialogTrigger
                   render={
@@ -243,10 +265,7 @@ export const CreateProperty = ({
             <Tooltip
               content={t("workspaces.properties.newColumn")}
               render={(triggerProps) => (
-                <CapabilityAction
-                  action={{ capability: "ai" }}
-                  surface="control"
-                >
+                <CapabilityAction action={action} surface="control">
                   {(capabilityProps) => (
                     <DialogTrigger
                       {...triggerProps}
@@ -274,7 +293,7 @@ export const CreateProperty = ({
         }
         if (triggerVariant === "blank-cell") {
           return (
-            <CapabilityAction action={{ capability: "ai" }} surface="control">
+            <CapabilityAction action={action} surface="control">
               {(capabilityProps) => (
                 <DialogTrigger
                   render={
@@ -300,10 +319,7 @@ export const CreateProperty = ({
             <Tooltip
               content={t("workspaces.properties.newColumn")}
               render={(triggerProps) => (
-                <CapabilityAction
-                  action={{ capability: "ai" }}
-                  surface="control"
-                >
+                <CapabilityAction action={action} surface="control">
                   {(capabilityProps) => (
                     <DialogTrigger
                       {...triggerProps}
