@@ -1,0 +1,19 @@
+{
+  "total_count": 2,
+  "jobs": [
+    {
+      "id": 9001,
+      "name": "api-check",
+      "check_run_url": "https://example.invalid/repos/stella/stella/check-runs/9001",
+      "steps": [
+        { "number": 7, "name": "Query GitHub", "conclusion": "failure" }
+      ]
+    },
+    {
+      "id": 9002,
+      "name": "ci-result",
+      "check_run_url": "https://example.invalid/repos/stella/stella/check-runs/9002",
+      "steps": [{ "number": 1, "name": "Report", "conclusion": "failure" }]
+    }
+  ]
+}

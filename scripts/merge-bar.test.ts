@@ -33,9 +33,13 @@ import annotations2_0 from "./fixtures/merge-group-ejections/37728096499-1131507
 import annotations2_1 from "./fixtures/merge-group-ejections/37728096499-113151718553-annotations.json" with { type: "json" };
 import realJobs2 from "./fixtures/merge-group-ejections/37728096499-jobs.json" with { type: "json" };
 import realRun2 from "./fixtures/merge-group-ejections/37728096499-run.json" with { type: "json" };
+import rateLimitAnnotations from "./fixtures/merge-group-ejections/rate-limit-9001-annotations.json" with { type: "json" };
+import rateLimitResultAnnotations from "./fixtures/merge-group-ejections/rate-limit-9002-annotations.json" with { type: "json" };
+import rateLimitJobs from "./fixtures/merge-group-ejections/rate-limit-jobs.json" with { type: "json" };
 import {
   armAndVerify,
   checkEjectedHead,
+  classifyFailedStepEvidence,
   checkMergeHold,
   checkGreenResultFreshness,
   MergeHoldReadError,
@@ -4593,6 +4597,296 @@ describe("failed merge group evidence", () => {
     expect(result.isErr() && result.error.message).toContain(
       "Push a fix, or merge main",
     );
+  });
+});
+
+describe("infrastructure merge group ejections", () => {
+  const infraGroup = (
+    cause: "rate-limit" | "runner-lost" | "network",
+    evidence: string,
+    resetAt: string | null = null,
+  ): Ejection["group"] => ({
+    type: "found",
+    baseSha: BASE_SHA,
+    runUrl: RUN_URL,
+    cause: {
+      type: "failed-steps",
+      steps: [`api-check / 7: Query GitHub (${RUN_URL}/job/9001)`],
+      failure: { type: "infra", cause, evidence, resetAt },
+    },
+  });
+
+  const checkInfra = ({
+    group,
+    removals = [failedRemoval()],
+    now = new Date("2026-10-02T13:00:00Z"),
+  }: {
+    group: Ejection["group"];
+    removals?: readonly MergeQueueRemoval[];
+    now?: Date;
+  }) =>
+    checkEjectedHead({
+      gateway: {
+        readMergeQueueRemovals: () => removals,
+        readMergeGroup: () => group,
+        readBranchTip: () => ({ sha: BASE_SHA, committedAt: REMOVED_AT }),
+      },
+      pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+      now,
+    });
+
+  test("rate-limit fixture reads documented REST and GraphQL evidence", () => {
+    const annotations = new Map([
+      [
+        "https://example.invalid/repos/stella/stella/check-runs/9001",
+        rateLimitAnnotations,
+      ],
+      [
+        "https://example.invalid/repos/stella/stella/check-runs/9002",
+        rateLimitResultAnnotations,
+      ],
+    ]);
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => rateLimitJobs,
+      readAnnotations: (url) => annotations.get(url) ?? [],
+    });
+    expect(group.type === "found" && group.cause.type).toBe("failed-steps");
+    if (group.type !== "found" || group.cause.type !== "failed-steps") {
+      return;
+    }
+    expect(group.cause.failure).toEqual({
+      type: "infra",
+      cause: "rate-limit",
+      evidence:
+        "API rate limit exceeded for installation. Rate limit resets at 2000-01-01T01:00:00Z",
+      resetAt: "2000-01-01T01:00:00Z",
+    });
+  });
+
+  test.each([
+    ["API rate limit exceeded", "rate-limit"],
+    ["You hit a secondary rate limit", "rate-limit"],
+    ['GraphQL type "RATE_LIMITED"', "rate-limit"],
+    ["HTTP 429: rate-limit reached", "rate-limit"],
+    ["lost communication with the server", "runner-lost"],
+    ["runner has received a shutdown signal", "runner-lost"],
+    ["connection reset by peer", "network"],
+    ["connection refused", "network"],
+    ["could not resolve host github.com", "network"],
+    ["github.com returned HTTP 502", "network"],
+  ] as const)("classifies %s as %s", (evidence, cause) => {
+    expect(classifyFailedStepEvidence([evidence])).toMatchObject({
+      type: "infra",
+      cause,
+      evidence,
+    });
+  });
+
+  test("an unmatched failure and a cancellation without a lost runner fail closed", () => {
+    expect(classifyFailedStepEvidence(["assertion failed"])).toEqual({
+      type: "code",
+      evidence: "assertion failed",
+    });
+    expect(classifyFailedStepEvidence(["operation was canceled"])).toEqual({
+      type: "code",
+      evidence: "operation was canceled",
+    });
+    expect(
+      classifyFailedStepEvidence([
+        "operation was canceled",
+        "lost communication with the server",
+      ]),
+    ).toMatchObject({
+      type: "infra",
+      cause: "runner-lost",
+      evidence: "operation was canceled",
+    });
+  });
+
+  test("one unexplained failure line makes a step a code failure", () => {
+    expect(
+      classifyFailedStepEvidence([
+        "API rate limit exceeded",
+        "(fail) parses calendar dates",
+      ]),
+    ).toEqual({ type: "code", evidence: "(fail) parses calendar dates" });
+    expect(
+      classifyFailedStepEvidence(["Process completed with exit code 1."]),
+    ).toEqual({ type: "code", evidence: "no failure evidence" });
+  });
+
+  const groupFor = (
+    annotations: unknown,
+    readJobLog: (jobId: number) => string = () => "",
+  ) =>
+    readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => rateLimitJobs,
+      readAnnotations: (url) =>
+        url.endsWith("/9001") ? annotations : rateLimitResultAnnotations,
+      readJobLog,
+    });
+  const failureOf = (group: ReturnType<typeof groupFor>) =>
+    group.type === "found" && group.cause.type === "failed-steps"
+      ? group.cause.failure
+      : undefined;
+
+  test("a recovered rate-limit warning never excuses a real failure", () => {
+    const failure = failureOf(
+      groupFor([
+        { annotation_level: "warning", message: "API rate limit exceeded" },
+        {
+          annotation_level: "failure",
+          message: "(fail) parses calendar dates",
+        },
+      ]),
+    );
+    expect(failure).toEqual({
+      type: "code",
+      evidence: "(fail) parses calendar dates",
+    });
+  });
+
+  test("a step that names no cause is classified from its log error lines", () => {
+    const logs: number[] = [];
+    const failure = failureOf(
+      groupFor(
+        [
+          {
+            annotation_level: "failure",
+            message: "Process completed with exit code 1.",
+          },
+        ],
+        (jobId) => {
+          logs.push(jobId);
+          return "2026-10-09T15:00:00Z some output\n2026-10-09T15:00:01Z ##[error]API rate limit exceeded";
+        },
+      ),
+    );
+    expect(failure).toMatchObject({ type: "infra", cause: "rate-limit" });
+    expect(logs).toHaveLength(1);
+  });
+
+  test("rate limiting refuses before reset and permits one retry after reset", () => {
+    const group = infraGroup(
+      "rate-limit",
+      "API rate limit exceeded",
+      "2026-10-02T12:00:00Z",
+    );
+    const early = checkInfra({
+      group,
+      now: new Date("2026-10-02T11:59:59Z"),
+    });
+    expect(early.isErr() && early.error.message).toContain(
+      "EJECTED_INFRA_RATE_LIMIT_ACTIVE: rate-limit: API rate limit exceeded",
+    );
+    expect(early.isErr() && early.error.message).toContain(
+      "Earliest re-arm: 2026-10-02 14:00:00 CEST",
+    );
+    const cleared = checkInfra({ group });
+    expect(cleared.isOk() && cleared.value).toContain(
+      "infrastructure failure rate-limit: API rate limit exceeded; one recovery attempt permitted",
+    );
+  });
+
+  test.each([
+    ["runner-lost", "lost communication with the server"],
+    ["network", "connection reset by peer"],
+  ] as const)(
+    "permits one %s retry and prints its evidence",
+    (cause, evidence) => {
+      const result = checkInfra({ group: infraGroup(cause, evidence) });
+      expect(result.isOk() && result.value).toContain(`${cause}: ${evidence}`);
+    },
+  );
+
+  test("a second infrastructure ejection of the same head is refused", () => {
+    const group = infraGroup("network", "connection refused");
+    const result = checkInfra({
+      group,
+      removals: [
+        failedRemoval({
+          removedAt: "2026-10-02T10:00:00Z",
+          groupSha: OTHER_SHA,
+        }),
+        failedRemoval(),
+      ],
+    });
+    expect(result.isErr() && result.error.message).toContain(
+      "EJECTED_INFRA_RETRY_USED: network: connection refused",
+    );
+    expect(result.isErr() && result.error.message).toContain(
+      "already re-armed after an infrastructure ejection",
+    );
+  });
+
+  test("a mixed infrastructure and code group is a code failure", () => {
+    const jobs = {
+      jobs: [
+        ...rateLimitJobs.jobs,
+        {
+          id: 9003,
+          name: "unit-test",
+          check_run_url:
+            "https://example.invalid/repos/stella/stella/check-runs/9003",
+          steps: [{ number: 4, name: "Test", conclusion: "failure" }],
+        },
+      ],
+    };
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => jobs,
+      readAnnotations: (url) => {
+        if (url.endsWith("9001")) {
+          return rateLimitAnnotations;
+        }
+        if (url.endsWith("9002")) {
+          return rateLimitResultAnnotations;
+        }
+        return [{ message: "assertion failed" }];
+      },
+    });
+    const result = checkInfra({ group });
+    expect(result.isErr() && result.error.message).toContain(
+      "EJECTED_FAILED_STEP",
+    );
+  });
+
+  test("reads at most one job log when annotations have no evidence", () => {
+    let logReads = 0;
+    const jobs = {
+      jobs: [
+        ...rateLimitJobs.jobs,
+        {
+          id: 9003,
+          name: "second-failure",
+          check_run_url:
+            "https://example.invalid/repos/stella/stella/check-runs/9003",
+          steps: [{ number: 4, name: "Test", conclusion: "failure" }],
+        },
+      ],
+    };
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => jobs,
+      readAnnotations: (url) =>
+        url.endsWith("9002") ? rateLimitResultAnnotations : [],
+      readJobLog: () => {
+        logReads += 1;
+        return "connection refused";
+      },
+    });
+    expect(logReads).toBe(1);
+    expect(
+      group.type === "found" &&
+        group.cause.type === "failed-steps" &&
+        group.cause.failure.type,
+    ).toBe("code");
   });
 });
 

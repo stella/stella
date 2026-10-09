@@ -1,0 +1,14 @@
+[
+  {
+    "annotation_level": "failure",
+    "message": "API rate limit exceeded for installation. Rate limit resets at 2000-01-01T01:00:00Z"
+  },
+  {
+    "annotation_level": "failure",
+    "message": "You have exceeded a secondary rate limit. Please wait before retrying."
+  },
+  {
+    "annotation_level": "failure",
+    "message": "GraphQL request failed with type RATE_LIMITED"
+  }
+]

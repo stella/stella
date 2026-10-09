@@ -1540,10 +1540,169 @@ export const latestEjection = (
   );
 
 type MergeGroupCause =
-  | { type: "failed-steps"; steps: readonly string[] }
+  | {
+      type: "failed-steps";
+      steps: readonly string[];
+      failure: FailedStepFailure;
+    }
   | { type: "stale-cancel" }
   | { type: "unknown" }
   | { type: "read-error"; message: string };
+
+const INFRA_FAILURE_PATTERNS = [
+  // GitHub REST primary rate-limit response.
+  {
+    cause: "rate-limit",
+    pattern: /(?:^|\b)API rate limit exceeded(?:\b|$)/iu,
+    requiresRunnerLost: false,
+  },
+  // GitHub REST secondary rate-limit response.
+  {
+    cause: "rate-limit",
+    pattern: /(?:^|\b)secondary rate limit(?:\b|$)/iu,
+    requiresRunnerLost: false,
+  },
+  // GitHub GraphQL error type.
+  {
+    cause: "rate-limit",
+    pattern: /(?:^|[\s"'])RATE_LIMITED(?:$|[\s"'])/u,
+    requiresRunnerLost: false,
+  },
+  // HTTP throttling response when the diagnostic identifies rate limiting.
+  {
+    cause: "rate-limit",
+    pattern: /^(?=.*\bHTTP (?:403|429)\b)(?=.*\brate[- ]?limit\b).*$/imu,
+    requiresRunnerLost: false,
+  },
+  // Hosted or self-hosted runner disconnected from Actions.
+  {
+    cause: "runner-lost",
+    pattern: /(?:^|\b)lost communication with the server(?:\b|$)/iu,
+    requiresRunnerLost: false,
+  },
+  // Actions asked the runner process to terminate.
+  {
+    cause: "runner-lost",
+    pattern: /(?:^|\b)runner has received a shutdown signal(?:\b|$)/iu,
+    requiresRunnerLost: false,
+  },
+  // Cancellation is infrastructure only when another line proves runner loss.
+  {
+    cause: "runner-lost",
+    pattern: /(?:^|\b)operation was canceled(?:\b|$)/iu,
+    requiresRunnerLost: true,
+  },
+  // Transport failures connecting to a remote host.
+  {
+    cause: "network",
+    pattern: /(?:^|\b)connection (?:reset|refused)(?:\b|$)/iu,
+    requiresRunnerLost: false,
+  },
+  // DNS failures emitted by curl and common package clients.
+  {
+    cause: "network",
+    pattern: /(?:^|\b)could not resolve host(?:\b|$)/iu,
+    requiresRunnerLost: false,
+  },
+  // GitHub endpoint server failures, excluding unrelated application HTTP errors.
+  {
+    cause: "network",
+    pattern: /^(?=.*\bgithub(?:\.com|apis?\.com)?\b)(?=.*\bHTTP 5\d\d\b).*$/imu,
+    requiresRunnerLost: false,
+  },
+] as const;
+
+type InfraFailureCause = (typeof INFRA_FAILURE_PATTERNS)[number]["cause"];
+type FailedStepFailure =
+  | { type: "code"; evidence: string }
+  | {
+      type: "infra";
+      cause: InfraFailureCause;
+      evidence: string;
+      resetAt: string | null;
+    };
+
+const annotationMessages = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) {
+    return panic("Expected check-run annotations array");
+  }
+  return raw.map((value) =>
+    readString(readRecord(value, "check-run annotation"), "message"),
+  );
+};
+
+/** Failure-level annotation messages; warnings (e.g. a retried, recovered call) never classify a step. */
+const failureMessages = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) {
+    return panic("Expected check-run annotations array");
+  }
+  return raw.flatMap((value) => {
+    const annotation = readRecord(value, "check-run annotation");
+    return annotation["annotation_level"] === "failure"
+      ? [readString(annotation, "message")]
+      : [];
+  });
+};
+
+/** The `##[error]` lines of a job log, without their prefix. */
+const logErrorLines = (log: string): string[] =>
+  log.split("\n").flatMap((line) => {
+    const marker = line.indexOf("##[error]");
+    return marker === -1 ? [] : [line.slice(marker + "##[error]".length)];
+  });
+
+// A failed step whose annotations name no cause; its log is read instead.
+const NO_FAILURE_EVIDENCE = "no failure evidence";
+
+// Every failed step ends with this line; it says nothing about the cause.
+const GENERIC_STEP_FAILURE = /^Process completed with exit code \d+\.?$/u;
+
+const rateLimitReset = (line: string): string | null => {
+  const value =
+    /(?:resets? at|reset|retry after)[: ]+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d\d:\d\d))/iu.exec(
+      line,
+    )?.[1];
+  return value !== undefined && !Number.isNaN(Date.parse(value)) ? value : null;
+};
+
+/**
+ * Infrastructure only when every substantive failure line matches an
+ * infrastructure pattern: one unexplained line makes the step a code failure.
+ */
+export const classifyFailedStepEvidence = (
+  lines: readonly string[],
+): FailedStepFailure => {
+  const substantive = lines
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !GENERIC_STEP_FAILURE.test(line));
+  const runnerLost = substantive.some((line) =>
+    /(?:^|\b)(?:lost communication with the server|runner has received a shutdown signal)(?:\b|$)/iu.test(
+      line,
+    ),
+  );
+  const classified = substantive.map((line) => ({
+    line,
+    match: INFRA_FAILURE_PATTERNS.find(
+      ({ pattern, requiresRunnerLost }) =>
+        pattern.test(line) && (!requiresRunnerLost || runnerLost),
+    ),
+  }));
+  const unexplained = classified.find(({ match }) => match === undefined);
+  const first = classified.at(0);
+  if (unexplained !== undefined || first?.match === undefined) {
+    return {
+      type: "code",
+      evidence: unexplained?.line ?? NO_FAILURE_EVIDENCE,
+    };
+  }
+  return {
+    type: "infra",
+    cause: first.match.cause,
+    evidence: first.line,
+    resetAt:
+      first.match.cause === "rate-limit" ? rateLimitReset(first.line) : null,
+  };
+};
 
 type MergeGroupRecord =
   | { type: "found"; baseSha: string; runUrl: string; cause: MergeGroupCause }
@@ -1551,15 +1710,9 @@ type MergeGroupRecord =
 
 /** Keep the producer's diagnostic intact, including step numbers and job URLs. */
 export const parseMergeGroupAnnotations = (raw: unknown): MergeGroupCause => {
-  if (!Array.isArray(raw)) {
-    return panic("Expected check-run annotations array");
-  }
+  const messages = annotationMessages(raw);
   let stale = false;
-  for (const value of raw) {
-    const message = readString(
-      readRecord(value, "check-run annotation"),
-      "message",
-    );
+  for (const message of messages) {
     const diagnostic =
       /cancelling failed merge group; failed steps: (.+)/u.exec(message)?.[1];
     if (
@@ -1574,7 +1727,11 @@ export const parseMergeGroupAnnotations = (raw: unknown): MergeGroupCause => {
       ) {
         return panic("Invalid failed merge group step diagnostic");
       }
-      return { type: "failed-steps", steps };
+      return {
+        type: "failed-steps",
+        steps,
+        failure: { type: "code", evidence: message },
+      };
     }
     stale ||= message.includes(
       "The run was canceled forcefully by @github-actions[bot].",
@@ -1588,6 +1745,7 @@ type ReadMergeGroupRecordOptions = {
   pullNumber: number;
   readJobs: (runId: number) => unknown;
   readAnnotations: (checkRunUrl: string) => unknown;
+  readJobLog?: (jobId: number) => string;
 };
 
 export const readMergeGroupRecord = ({
@@ -1595,6 +1753,7 @@ export const readMergeGroupRecord = ({
   pullNumber,
   readJobs,
   readAnnotations,
+  readJobLog,
 }: ReadMergeGroupRecordOptions): MergeGroupRecord => {
   const runs = readRecord(raw, "merge group runs")["workflow_runs"];
   if (!Array.isArray(runs)) {
@@ -1643,19 +1802,55 @@ export const readMergeGroupRecord = ({
       fallback.push(...jobs.filter((job) => job !== resultJob));
     }
     let cause: MergeGroupCause = { type: "unknown" };
+    let diagnostic: Extract<MergeGroupCause, { type: "failed-steps" }> | null =
+      null;
+    const failures: FailedStepFailure[] = [];
+    let logRead = false;
     for (const job of [
       ...(resultJob === undefined ? [] : [resultJob]),
       ...fallback,
     ]) {
-      const next = parseMergeGroupAnnotations(
-        readAnnotations(readString(job, "check_run_url")),
-      );
+      const annotations = readAnnotations(readString(job, "check_run_url"));
+      const next = parseMergeGroupAnnotations(annotations);
       if (next.type === "failed-steps") {
-        return next;
+        diagnostic = next;
+        continue;
       }
       if (next.type === "stale-cancel") {
         cause = next;
       }
+      if (job !== resultJob && hasFailedStep(job)) {
+        const messages = failureMessages(annotations);
+        let failure = classifyFailedStepEvidence(messages);
+        if (
+          failure.type === "code" &&
+          failure.evidence === NO_FAILURE_EVIDENCE &&
+          readJobLog !== undefined &&
+          !logRead
+        ) {
+          const jobId = job["id"];
+          if (typeof jobId !== "number") {
+            return panic("Expected numeric job id");
+          }
+          logRead = true;
+          failure = classifyFailedStepEvidence(
+            logErrorLines(readJobLog(jobId)),
+          );
+        }
+        failures.push(failure);
+      }
+    }
+    if (diagnostic !== null) {
+      const code = failures.find((failure) => failure.type === "code");
+      return {
+        type: "failed-steps",
+        steps: diagnostic.steps,
+        failure: code ??
+          failures.at(0) ?? {
+            type: "code",
+            evidence: diagnostic.failure.evidence,
+          },
+      } satisfies MergeGroupCause;
     }
     return cause;
   });
@@ -1679,7 +1874,18 @@ export type Ejection = {
 type EjectedHeadVerdict =
   | { type: "retry-allowed"; changed: "head" | "main" }
   | { type: "unchanged-retry" }
-  | { type: "failed-step"; steps: readonly string[]; runUrl: string }
+  | {
+      type: "failed-step";
+      steps: readonly string[];
+      runUrl: string;
+      evidence: string;
+    }
+  | {
+      type: "infra-failure";
+      cause: InfraFailureCause;
+      evidence: string;
+      resetAt: string | null;
+    }
   | { type: "evidence-unavailable"; message: string };
 
 type EvaluateEjectedHeadOptions = {
@@ -1711,10 +1917,19 @@ export const evaluateEjectedHead = ({
   switch (group.type) {
     case "found":
       if (group.cause.type === "failed-steps") {
+        if (group.cause.failure.type === "infra") {
+          return {
+            type: "infra-failure",
+            cause: group.cause.failure.cause,
+            evidence: group.cause.failure.evidence,
+            resetAt: group.cause.failure.resetAt,
+          };
+        }
         return {
           type: "failed-step",
           steps: group.cause.steps,
           runUrl: group.runUrl,
+          evidence: group.cause.failure.evidence,
         };
       }
       return group.baseSha === mainTip.sha
@@ -1770,6 +1985,7 @@ type CheckEjectedHeadOptions = {
   >;
   pullRequest: Pick<PullRequestSnapshot, "headSha" | "baseRefName">;
   readReset?: () => JumpResetClassification;
+  now?: Date;
 };
 
 /**
@@ -1782,8 +1998,10 @@ export const checkEjectedHead = ({
   gateway,
   pullRequest,
   readReset,
+  now = new Date(),
 }: CheckEjectedHeadOptions) => {
-  const removal = latestEjection(gateway.readMergeQueueRemovals());
+  const removals = gateway.readMergeQueueRemovals();
+  const removal = latestEjection(removals);
   if (removal === undefined) {
     return Result.ok(null);
   }
@@ -1812,10 +2030,59 @@ export const checkEjectedHead = ({
       return Result.err(
         new UnchangedEjectedHeadError({
           message:
-            `${printed}\nverdict: NOT ARMED — EJECTED_FAILED_STEP: ${verdict.steps.join("; ")} (${verdict.runUrl}). ` +
+            `${printed}\nverdict: NOT ARMED — EJECTED_FAILED_STEP: code: ${verdict.evidence}; ${verdict.steps.join("; ")} (${verdict.runUrl}). ` +
             `Push a fix, or merge ${pullRequest.baseRefName} into the head if the failure is a semantic conflict with it.`,
         }),
       );
+    case "infra-failure": {
+      const priorInfraEjection = removals
+        .filter(
+          (candidate) =>
+            candidate !== removal &&
+            removalDisposition(candidate.reason) === "ejected" &&
+            candidate.headSha === pullRequest.headSha &&
+            candidate.groupSha !== null,
+        )
+        .find((candidate) => {
+          if (candidate.groupSha === null) {
+            return false;
+          }
+          const prior = gateway.readMergeGroup(candidate.groupSha);
+          return (
+            prior.type === "found" &&
+            prior.cause.type === "failed-steps" &&
+            prior.cause.failure.type === "infra"
+          );
+        });
+      const evidence = `${verdict.cause}: ${verdict.evidence}`;
+      if (priorInfraEjection !== undefined) {
+        return Result.err(
+          new UnchangedEjectedHeadError({
+            message:
+              `${printed}\nverdict: NOT ARMED — EJECTED_INFRA_RETRY_USED: ${evidence}. ` +
+              `This head was already re-armed after an infrastructure ejection at ${ejectionTimeFormat.format(new Date(priorInfraEjection.removedAt))}.`,
+          }),
+        );
+      }
+      if (verdict.cause === "rate-limit") {
+        const earliest =
+          verdict.resetAt === null
+            ? new Date(Date.parse(removal.removedAt) + 60 * 60_000)
+            : new Date(verdict.resetAt);
+        if (now < earliest) {
+          return Result.err(
+            new UnchangedEjectedHeadError({
+              message:
+                `${printed}\nverdict: NOT ARMED — EJECTED_INFRA_RATE_LIMIT_ACTIVE: ${evidence}. ` +
+                `Earliest re-arm: ${ejectionTimeFormat.format(earliest)}.`,
+            }),
+          );
+        }
+      }
+      return Result.ok(
+        `${printed}; infrastructure failure ${evidence}; one recovery attempt permitted`,
+      );
+    }
     case "evidence-unavailable":
       return Result.err(
         new UnchangedEjectedHeadError({
@@ -3421,6 +3688,16 @@ const createGhGateway = ({
           }
           return pages.flat();
         },
+        readJobLog: (jobId) =>
+          runGh([
+            "run",
+            "view",
+            "--repo",
+            repo,
+            "--job",
+            String(jobId),
+            "--log",
+          ]),
       });
     },
 

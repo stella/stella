@@ -1,0 +1,6 @@
+[
+  {
+    "annotation_level": "failure",
+    "message": "ci-result: cancelling failed merge group; failed steps: api-check / 7: Query GitHub (https://example.invalid/stella/stella/actions/runs/37727028977/job/9001)"
+  }
+]
