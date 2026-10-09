@@ -669,11 +669,13 @@ const resultJob = v.parse(
 );
 
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
+const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
   "fix-tests-on-base",
   "heavy-web-build",
   "marketing-screenshots",
   CANCEL_REUSABLE_JOB,
+  ...MAIN_ONLY_JOBS,
 ]);
 const cancellationJobSchema = v.looseObject({
   if: v.optional(v.string()),
@@ -705,7 +707,7 @@ test("every eligible CI job cancels a failed merge group in its final step with 
   for (const [id, value] of Object.entries(ciJobs)) {
     const body = v.parse(cancellationJobSchema, value);
     expect(body.permissions?.["actions"] === "write", id).toBe(
-      eligible.has(id) || id === CANCEL_REUSABLE_JOB,
+      eligible.has(id) || id === CANCEL_REUSABLE_JOB || MAIN_ONLY_JOBS.has(id),
     );
     const cancellations =
       body.steps?.filter(({ name }) => name === CANONICAL_CANCEL_STEP.name) ??
@@ -877,7 +879,12 @@ type EvaluateResultOptions = {
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
   suiteResults?: Record<string, string>;
-  cancellationEvidence?: "superseded" | "timeout" | "missing" | "wrong-group";
+  cancellationEvidence?:
+    | "superseded"
+    | "timeout"
+    | "step-timeout"
+    | "missing"
+    | "wrong-group";
   apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
   newerRun?:
     | "same-group"
@@ -892,8 +899,12 @@ type EvaluateResultOptions = {
   missingJob?: boolean;
   matrixTimeoutSibling?: boolean;
   embeddedStepFailure?: boolean;
+  jobConclusion?: "cancelled" | "failure" | "timed_out";
+  heavyOnly?: boolean;
   outcomeScript?: string;
 };
+
+const mainHeavyJobNames = mainHeavyJobs({ jobs: ciJobs });
 
 const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
 
@@ -957,6 +968,8 @@ const resultGateCase = ({
   missingJob = false,
   matrixTimeoutSibling = false,
   embeddedStepFailure = false,
+  jobConclusion,
+  heavyOnly = false,
   outcomeScript = resultStep.run,
   newerRun = "same-group",
   queuedCancellation,
@@ -991,6 +1004,12 @@ const resultGateCase = ({
   const annotations = {
     superseded: supersessionAnnotations,
     timeout: timeoutAnnotations,
+    "step-timeout": [
+      {
+        message:
+          "The action 'Run Playwright shard' has timed out after 7 minutes.",
+      },
+    ],
     missing: [],
     "wrong-group": supersessionAnnotations.map(({ message }) => ({
       message: message.replace(group, "a different concurrency group"),
@@ -999,7 +1018,11 @@ const resultGateCase = ({
   const jobs = [];
   const checkAnnotations: Record<string, unknown> = {};
   for (const [job, result] of Object.entries(needs)) {
-    if (result.result !== "cancelled") {
+    if (
+      result.result !== "cancelled" &&
+      result.result !== "failure" &&
+      result.result !== "timed_out"
+    ) {
       continue;
     }
     const name =
@@ -1010,7 +1033,7 @@ const resultGateCase = ({
       name:
         name.replace(/\$\{\{[^}]+\}\}/gu, "fixture") +
         (job === "ci-tests" ? " (api-1)" : ""),
-      conclusion: "cancelled",
+      conclusion: jobConclusion ?? result.result,
       html_url: `https://example.test/jobs/${checkId}`,
       steps: embeddedStepFailure
         ? [{ name: "Validate contract", number: 3, conclusion: "failure" }]
@@ -1085,6 +1108,8 @@ const resultGateCase = ({
       QUEUE_REQUIRED_JOBS: "[]",
       PR_ACTION: "synchronize",
       QUEUE_DEPTH: "full",
+      HEAVY_ONLY: String(heavyOnly),
+      HEAVY_JOBS: JSON.stringify(mainHeavyJobNames),
       THIN_JOBS: "[]",
       GITHUB_RUN_ID: "123",
       GITHUB_RUN_ATTEMPT: "1",
@@ -1181,6 +1206,7 @@ test("the result gate evaluates every job in the workflow", () => {
           // It only shortens a failing run; gating on it would let a failed
           // cancellation request block the result (bound above).
           job !== CANCEL_REUSABLE_JOB &&
+          !MAIN_ONLY_JOBS.has(job) &&
           !reportOnlyJobs.includes(job) &&
           !diagnosticJobs.includes(job),
       ),
@@ -1197,6 +1223,11 @@ test("the result gate evaluates every job in the workflow", () => {
     expect(jobIf(ciJobs[job]), job).not.toContain("always()");
   }
   expect(reportOnlyJobs).toEqual([]);
+  for (const job of MAIN_ONLY_JOBS) {
+    expect(jobIf(ciJobs[job]), job).toContain(
+      "github.ref == 'refs/heads/main'",
+    );
+  }
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
@@ -1302,10 +1333,11 @@ test("CI result rejects a failed check leg after independent guards finish", () 
   }
 });
 
-test("a failed dependency cannot pass with cancelled siblings or supersession evidence", () => {
-  const gates: ExpectedResultGate[] = [];
-  for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
-    for (const failedJob of resultJob.needs) {
+test.each(resultJob.needs)(
+  "failed %s cannot pass with cancelled siblings or supersession evidence",
+  (failedJob) => {
+    const gates: ExpectedResultGate[] = [];
+    for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
       for (const cancellationEvidence of ["missing", "superseded"] as const) {
         const results = Object.fromEntries(
           resultJob.needs.map((job) => [job, "cancelled"]),
@@ -1319,9 +1351,9 @@ test("a failed dependency cannot pass with cancelled siblings or supersession ev
         });
       }
     }
-  }
-  expectResultGates(gates);
-});
+    expectResultGates(gates);
+  },
+);
 
 test("a self-cancelled merge group fails even when GitHub marks the failing job cancelled", () => {
   for (const cancellationEvidence of ["missing", "superseded"] as const) {
@@ -1364,6 +1396,114 @@ test.each(resultJob.needs)(
     }
   },
 );
+
+test("ci-result diagnoses timeouts before main-heavy cancellation or supersession", () => {
+  const cases = [false, true].flatMap((heavyOnly) => [
+    {
+      label: `annotation timeout, heavy_only=${heavyOnly}`,
+      heavyOnly,
+      cancellationEvidence: "timeout" as const,
+      jobConclusion: undefined,
+      embeddedStepFailure: false,
+      expectedExit: 1,
+      expectedDiagnostic: true,
+    },
+    {
+      label: `step timeout, heavy_only=${heavyOnly}`,
+      heavyOnly,
+      cancellationEvidence: "step-timeout" as const,
+      jobConclusion: "failure" as const,
+      embeddedStepFailure: true,
+      expectedExit: 1,
+      expectedDiagnostic: true,
+    },
+    {
+      label: `timed_out conclusion, heavy_only=${heavyOnly}`,
+      heavyOnly,
+      cancellationEvidence: "superseded" as const,
+      jobConclusion: "timed_out" as const,
+      embeddedStepFailure: false,
+      expectedExit: 1,
+      expectedDiagnostic: true,
+    },
+    {
+      label: `ordinary supersession, heavy_only=${heavyOnly}`,
+      heavyOnly,
+      cancellationEvidence: "superseded" as const,
+      jobConclusion: undefined,
+      embeddedStepFailure: false,
+      expectedExit: heavyOnly ? 1 : 0,
+      expectedDiagnostic: false,
+    },
+    {
+      label: `failed job, heavy_only=${heavyOnly}`,
+      heavyOnly,
+      cancellationEvidence: "superseded" as const,
+      jobConclusion: "failure" as const,
+      embeddedStepFailure: false,
+      expectedExit: 1,
+      expectedDiagnostic: false,
+    },
+    {
+      label: `failed step, heavy_only=${heavyOnly}`,
+      heavyOnly,
+      cancellationEvidence: "superseded" as const,
+      jobConclusion: undefined,
+      embeddedStepFailure: true,
+      expectedExit: 1,
+      expectedDiagnostic: false,
+    },
+  ]);
+  for (const { item, exitCode, stdout } of evaluateResults(
+    cases,
+    ({
+      heavyOnly,
+      cancellationEvidence,
+      jobConclusion,
+      embeddedStepFailure,
+    }) => ({
+      event: EVENT.workflowDispatch,
+      suiteDepth: heavyOnly ? SUITE_DEPTH.full : SUITE_DEPTH.fast,
+      results: {
+        "e2e-production-shard":
+          jobConclusion === "failure" ? "failure" : "cancelled",
+      },
+      heavyOnly,
+      cancellationEvidence,
+      ...(jobConclusion === undefined ? {} : { jobConclusion }),
+      embeddedStepFailure,
+    }),
+  )) {
+    expect(exitCode, item.label).toBe(item.expectedExit);
+    if (item.expectedDiagnostic) {
+      expect(stdout, item.label).toContain(
+        "CI job timed out: e2e-production-shard",
+      );
+    } else {
+      expect(stdout, item.label).not.toContain("CI job timed out:");
+      if (item.heavyOnly && item.label.startsWith("ordinary supersession")) {
+        expect(stdout).toContain("Main heavy suites were cancelled.");
+      }
+    }
+  }
+
+  const timeoutDetectionDisabled = resultStep.run.replace(
+    'contains("has exceeded the maximum execution time")',
+    "false",
+  );
+  expect(timeoutDetectionDisabled).not.toBe(resultStep.run);
+  const mutated = onlyOutcome(
+    evaluateResults([null], () => ({
+      event: EVENT.workflowDispatch,
+      results: { "e2e-production-shard": "cancelled" },
+      heavyOnly: false,
+      suiteDepth: SUITE_DEPTH.fast,
+      cancellationEvidence: "timeout",
+      outcomeScript: timeoutDetectionDisabled,
+    })),
+  );
+  expect(mutated.stdout).not.toContain("CI job timed out:");
+});
 
 test("a run that passes as superseded records no completion evidence", () => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-result-evidence-"));
@@ -1449,6 +1589,7 @@ ${resultStep.run}`;
     evaluateResults([EVENT.mergeGroup], (event) => ({
       event,
       results: { "ci-tests": "cancelled" },
+      cancellationEvidence: "missing",
       embeddedStepFailure: true,
       outcomeScript,
     })),
@@ -4752,7 +4893,18 @@ test("nightly full tests retain the unrestricted API suite and selection enters 
     new URL("../turbo.json", import.meta.url),
     "utf-8",
   );
-  expect(turbo).toContain('"env": ["API_TEST_SHARD", "API_TEST_FILES"]');
+  const tasks = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.looseObject({ env: v.optional(v.array(v.string())) }),
+      ),
+    }),
+    Bun.JSONC.parse(turbo),
+  ).tasks;
+  expect(tasks["@stll/api#test"]?.env).toEqual(
+    expect.arrayContaining(["API_TEST_SHARD", "API_TEST_FILES"]),
+  );
 });
 
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {

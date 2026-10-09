@@ -1145,6 +1145,7 @@ describe("dev env factories", () => {
       mode: "dev:api",
       ports: portsForOffset(0),
       rootDir,
+      seeded: false,
     });
     for (const step of steps.primary) {
       expect(step.env?.["CONTENT_ENCRYPTION_KEY"] === configuredKey).toBe(true);
@@ -1171,6 +1172,7 @@ describe("dev env factories", () => {
       mode: "dev:api",
       ports: portsForOffset(0),
       rootDir,
+      seeded: false,
     });
     for (const step of steps.primary) {
       expect(step.env?.["CONTENT_ENCRYPTION_KEY"] === key).toBe(true);
@@ -1212,6 +1214,48 @@ describe("dev env factories", () => {
     );
   });
 
+  test("a seeded stack searches its own Postgres corpus whatever apps/api/.env names", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      "LEGAL_SEARCH_PROVIDER=corpus-index\n",
+    );
+    const apiProviders = (seeded: boolean) =>
+      buildPersistentSteps({
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
+        mode: "dev:api",
+        ports: portsForOffset(0),
+        rootDir,
+        seeded,
+      }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
+
+    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
+    expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
+  });
+
+  test("seeded stacks disable scheduled writes while normal dev keeps schedules enabled", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      "SCHEDULED_JOBS_MODE=enabled\n",
+    );
+    const scheduledJobsModes = (seeded: boolean) =>
+      buildPersistentSteps({
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
+        mode: "dev:api",
+        ports: portsForOffset(0),
+        rootDir,
+        seeded,
+      }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
+
+    expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
+    expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
+  });
+
   test("keeps scheduled jobs inside the API process", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
@@ -1222,6 +1266,7 @@ describe("dev env factories", () => {
       mode: "dev:api",
       ports: portsForOffset(0),
       rootDir,
+      seeded: false,
     });
     const webSteps = buildPersistentSteps({
       infraOffset: 0,
@@ -1229,6 +1274,7 @@ describe("dev env factories", () => {
       mode: "dev:web",
       ports: portsForOffset(0),
       rootDir,
+      seeded: false,
     });
 
     expect(apiSteps.secondary).toEqual([]);
@@ -1245,6 +1291,7 @@ describe("dev env factories", () => {
         mode,
         ports: portsForOffset(10),
         rootDir,
+        seeded: false,
       });
 
     const devLabels = build("dev").primary.map((step) => step.label);
