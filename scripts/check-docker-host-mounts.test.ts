@@ -96,6 +96,11 @@ const rejects = [
     inspect: inspectDockerHelper,
     source: "docker run -dv data:/data image",
   },
+  {
+    id: "inherited-volumes",
+    inspect: inspectComposeMounts,
+    source: "services:\n  app:\n    volumes_from: [other]\n",
+  },
 ] as const;
 
 test("host mount guard accepts and rejects the documented cases", () => {

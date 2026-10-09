@@ -353,6 +353,10 @@ export const inspectComposeMounts = (source: string): string[] => {
     }
     for (const [key, entry] of Object.entries(value)) {
       const next = `${location}.${key}`;
+      // Inherits another container's mounts, bind mounts included.
+      if (key === "volumes_from") {
+        failures.push(`${next}: inherited volumes are forbidden`);
+      }
       if (key === "volumes" && Array.isArray(entry)) {
         for (const mount of entry) {
           if (isContainerVolumeMount(mount)) {
