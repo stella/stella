@@ -116,9 +116,16 @@ enum TrackingState {
   Unavailable,
 }
 
+#[derive(Clone, Copy)]
+enum PreviousCrashDisposition {
+  Capture,
+  Discard,
+}
+
 struct CrashState {
   lifecycle: RunLifecycle,
   tracking: TrackingState,
+  previous_crash: PreviousCrashDisposition,
 }
 
 enum Acquisition {
@@ -161,6 +168,11 @@ impl DesktopCrashMonitor {
       state: Arc::new(Mutex::new(CrashState {
         lifecycle: RunLifecycle::Running,
         tracking,
+        previous_crash: if telemetry.is_enabled() {
+          PreviousCrashDisposition::Capture
+        } else {
+          PreviousCrashDisposition::Discard
+        },
       })),
     };
     // The hook can retain a redacted panic while ownership is pending; it
@@ -217,6 +229,10 @@ impl DesktopCrashMonitor {
     let (mode, previous) = match mode {
       MonitoringMode::Enabled(run) => {
         let previous = begin_run(&lock, run.start_time_secs, run.pid)?;
+        let previous = match state.previous_crash {
+          PreviousCrashDisposition::Capture => previous,
+          PreviousCrashDisposition::Discard => None,
+        };
         // A caught panic may have arrived while startup awaited ownership.
         if run.panic.is_some() {
           write_marker(&lock.path, &run)?;
@@ -303,6 +319,64 @@ impl DesktopCrashMonitor {
     }));
   }
 
+  pub fn set_reporting(&self, enabled: bool) {
+    let Ok(mut state) = self.state.lock() else {
+      tracing::warn!("desktop crash marker lock unavailable");
+      return;
+    };
+    // Once discarded, old crash diagnostics must stay discarded even if
+    // reporting is re-enabled before the previous owner releases its lock.
+    if !enabled {
+      state.previous_crash = PreviousCrashDisposition::Discard;
+    }
+    let now = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .map_or(0, |time| time.as_secs());
+    match &mut state.tracking {
+      TrackingState::Waiting { mode, .. } => {
+        *mode = if enabled {
+          MonitoringMode::Enabled(new_marker(now, std::process::id()))
+        } else {
+          MonitoringMode::Disabled
+        };
+      }
+      TrackingState::Owned { lock, mode } => {
+        if enabled {
+          if matches!(mode, MonitoringMode::Disabled) {
+            let run = new_marker(now, std::process::id());
+            if write_marker(&lock.path, &run).is_err() {
+              tracing::warn!("desktop crash marker enablement failed");
+              return;
+            }
+            *mode = MonitoringMode::Enabled(run);
+          }
+        } else {
+          *mode = MonitoringMode::Disabled;
+          if let Err(error) = fs::remove_file(&lock.path)
+            && error.kind() != io::ErrorKind::NotFound
+          {
+            tracing::warn!(kind = ?error.kind(), "desktop crash marker opt-out cleanup failed");
+          }
+        }
+      }
+      TrackingState::Unavailable => {}
+    }
+  }
+
+  #[cfg(test)]
+  pub(crate) fn at(path: PathBuf) -> Self {
+    Self {
+      state: Arc::new(Mutex::new(CrashState {
+        lifecycle: RunLifecycle::Running,
+        tracking: TrackingState::Waiting {
+          path,
+          mode: MonitoringMode::Disabled,
+        },
+        previous_crash: PreviousCrashDisposition::Discard,
+      })),
+    }
+  }
+
   pub fn clean_exit(&self) {
     let Ok(mut state) = self.state.lock() else {
       tracing::warn!("desktop crash marker lock unavailable");
@@ -353,7 +427,7 @@ fn capture_previous(telemetry: &DesktopTelemetry, previous: Option<RunMarker>) {
       None => CrashReport::Unknown,
     },
   };
-  telemetry.capture_crash(report);
+  telemetry.capture_startup_crash(report);
 }
 
 pub fn clean_exit(app: &tauri::AppHandle) {
@@ -507,6 +581,7 @@ mod tests {
           },
           mode: MonitoringMode::Enabled(run),
         },
+        previous_crash: PreviousCrashDisposition::Capture,
       })),
     }
   }
@@ -519,6 +594,7 @@ mod tests {
           path,
           mode: MonitoringMode::Enabled(run),
         },
+        previous_crash: PreviousCrashDisposition::Capture,
       })),
     }
   }
@@ -617,6 +693,30 @@ mod tests {
     assert_eq!(read_marker(&path).unwrap().unwrap().pid, 42);
     replacement.clean_exit();
     drop(replacement);
+    fs::remove_file(path.with_extension("lock")).unwrap();
+    fs::remove_dir(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn opt_out_discards_stale_crashes_even_if_reenabled_before_acquiring_ownership() {
+    let path = path();
+    let previous = lock_run(&path).unwrap().unwrap();
+    begin_run(&previous, 100, 41).unwrap();
+    let monitor = waiting_monitor(path.clone(), new_marker(200, 42));
+    monitor.set_reporting(false);
+    monitor.set_reporting(true);
+    drop(previous);
+    assert!(matches!(
+      monitor.try_acquire().unwrap(),
+      Acquisition::Complete(None)
+    ));
+    assert_eq!(read_marker(&path).unwrap().unwrap().pid, std::process::id());
+    monitor.set_reporting(false);
+    assert!(read_marker(&path).unwrap().is_none());
+    monitor.set_reporting(true);
+    assert!(read_marker(&path).unwrap().is_some());
+    monitor.clean_exit();
+    drop(monitor);
     fs::remove_file(path.with_extension("lock")).unwrap();
     fs::remove_dir(path.parent().unwrap()).unwrap();
   }

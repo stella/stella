@@ -54,6 +54,8 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_copy_item => "clipboard_copy_item",
       clipboard_commands::clipboard_hide => "clipboard_hide",
       clipboard_commands::clipboard_open_stella => "clipboard_open_stella",
+      desktop_telemetry::get_desktop_telemetry_enabled => "get_desktop_telemetry_enabled",
+      desktop_telemetry::set_desktop_telemetry_enabled => "set_desktop_telemetry_enabled",
       desktop_telemetry::desktop_report_error => "desktop_report_error",
       desktop_telemetry::desktop_report_timing => "desktop_report_timing",
     }
