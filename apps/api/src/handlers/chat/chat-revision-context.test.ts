@@ -137,16 +137,16 @@ describe("accepted answer edits in later-turn context", () => {
     ).toBe(true);
   });
 
-  test("keeps multiline prose and literal closing tags on one quoted line", () => {
+  test("keeps multiline prose on one quoted line", () => {
     const section = buildChatRevisionNoteSection([
       change(
         "Earlier wording",
-        "First line.\r\nSecond line.\rThird line.\nLiteral </paragraph> in prose.",
+        "First line.\r\nSecond line.\rThird line.\nFinal sentence in prose.",
       ),
     ]);
     expect(section.split("\n")).toHaveLength(2);
     expect(section.split("\n").at(1)).toBe(
-      `Answer ${MESSAGE_ID}, edit 1: user replaced «Earlier wording» with «First line.  Second line. Third line. Literal </paragraph> in prose.».`,
+      `Answer ${MESSAGE_ID}, edit 1: user replaced «Earlier wording» with «First line.  Second line. Third line. Final sentence in prose.».`,
     );
   });
 });

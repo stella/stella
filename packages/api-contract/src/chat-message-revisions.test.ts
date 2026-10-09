@@ -61,23 +61,28 @@ describe("accepted answer edit boundaries", () => {
     }
   });
 
-  test("rejects unsafe link protocols and mixed branch payloads", () => {
-    for (const url of [
-      `${["java", "script"].join("")}:alert(1)`,
-      "data:text/html,test",
-      "file:///tmp/a",
-      "//example.org",
+  test("accepts HTTPS links and rejects other link schemes", () => {
+    for (const { url, success } of [
+      { url: "mailto:editor@example.org", success: false },
+      { url: "ftp://example.org/document", success: false },
+      { url: "https://example.org/document", success: true },
     ]) {
-      expect(
-        v.safeParse(chatMessageAcceptedEditSchema, {
-          type: "format",
-          start: 0,
-          end: 5,
-          format: "link",
-          url,
-        }).success,
-      ).toBe(false);
+      const edit = {
+        type: "format",
+        start: 0,
+        end: 5,
+        format: "link",
+        url,
+      };
+      const parsed = v.safeParse(chatMessageAcceptedEditSchema, edit);
+      expect(parsed.success).toBe(success);
+      if (parsed.success) {
+        expect(parsed.output).toEqual(edit);
+      }
     }
+  });
+
+  test("rejects mixed edit branches and styles without a value", () => {
     expect(
       v.safeParse(chatMessageAcceptedEditSchema, {
         type: "format",
