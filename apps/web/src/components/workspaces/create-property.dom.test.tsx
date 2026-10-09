@@ -207,12 +207,9 @@ for (const triggerVariant of Object.values(triggerVariants)) {
           tool: property.tool,
         },
       ]);
-      const cachedProperties = client.getQueryData(
-        propertiesOptions("matter").queryKey,
-      );
-      if (cachedProperties === undefined) {
+      const cachedProperties =
+        client.getQueryData(propertiesOptions("matter").queryKey) ??
         panic("Updated properties are missing from the cache");
-      }
       expect(cachedProperties).toEqual([
         { ...property, name: "Updated manual notes" },
         aiProperty,
