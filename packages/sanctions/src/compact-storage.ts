@@ -1,8 +1,13 @@
 import { panic } from "better-result";
 
+/* oxlint-disable no-bitwise -- Power-of-two columns and shards use masks on screening hot paths. */
+
 // Fixed-size allocations avoid copying a growing column on the serving loop.
 const COLUMN_CHUNK_SIZE = 4096;
+const COLUMN_CHUNK_SHIFT = 12;
+const COLUMN_CHUNK_MASK = COLUMN_CHUNK_SIZE - 1;
 const MAP_SHARDS = 256;
+const MAP_SHARD_MASK = MAP_SHARDS - 1;
 const MAP_CHUNK_SIZE = 4096;
 
 export class NumberColumn {
@@ -38,25 +43,31 @@ export class NumberColumn {
       return panic("Missing compact column value");
     }
     return (
-      this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)]?.[
-        index % COLUMN_CHUNK_SIZE
-      ] ?? panic("Missing compact column chunk")
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT]?.[index & COLUMN_CHUNK_MASK] ??
+      panic("Missing compact column chunk")
     );
   }
 
+  getUnchecked(index: number): number {
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- Paired compact columns emit every id passed here.
+    return this.chunks[index >>> COLUMN_CHUNK_SHIFT]![
+      index & COLUMN_CHUNK_MASK
+    ]!;
+  }
+
   byteChunk(index: number): Uint8Array {
-    const chunk = this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)];
+    const chunk = this.chunks[index >>> COLUMN_CHUNK_SHIFT];
     return chunk instanceof Uint8Array
       ? chunk
       : panic("Missing compact byte chunk");
   }
 
   bytes(from: number, to: number): Uint8Array {
-    const chunk = this.chunks[Math.floor(from / COLUMN_CHUNK_SIZE)];
+    const chunk = this.chunks[from >>> COLUMN_CHUNK_SHIFT];
     if (!(chunk instanceof Uint8Array)) {
       return panic("Missing compact byte chunk");
     }
-    const localFrom = from % COLUMN_CHUNK_SIZE;
+    const localFrom = from & COLUMN_CHUNK_MASK;
     if (to - from <= chunk.length - localFrom) {
       return chunk.subarray(localFrom, localFrom + to - from);
     }
@@ -67,9 +78,9 @@ export class NumberColumn {
 
   set(index: number, value: number): void {
     const chunk =
-      this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)] ??
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT] ??
       panic("Missing compact column chunk");
-    chunk[index % COLUMN_CHUNK_SIZE] = value;
+    chunk[index & COLUMN_CHUNK_MASK] = value;
   }
 }
 
@@ -105,9 +116,7 @@ export class ObjectColumn<T> {
       return panic("Missing compact object value");
     }
     const value =
-      this.chunks[Math.floor(index / COLUMN_CHUNK_SIZE)]?.[
-        index % COLUMN_CHUNK_SIZE
-      ];
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT]?.[index & COLUMN_CHUNK_MASK];
     // A stored null is a valid value (nullable entry fields); only an absent
     // slot is a broken column.
     if (value === undefined) {
@@ -125,18 +134,21 @@ export class StringMap<T> {
 
   private bucket(key: string): Map<string, T>[] {
     let hash = 0;
-    for (const character of key) {
-      hash =
-        (hash * 31 +
-          (character.codePointAt(0) ?? panic("Missing shard code point"))) %
-        MAP_SHARDS;
+    for (let index = 0; index < key.length; index += 1) {
+      // oxlint-disable-next-line unicorn/prefer-code-point -- UTF-16 code units are a stable, faster shard hash; equality remains Map-owned.
+      hash = (hash * 31 + key.charCodeAt(index)) & MAP_SHARD_MASK;
     }
     return this.shards[hash] ?? panic("Missing compact map shard");
   }
 
   get(key: string): T | undefined {
-    for (const map of this.bucket(key)) {
-      const value = map.get(key);
+    const maps = this.bucket(key);
+    const first = maps[0]?.get(key);
+    if (first !== undefined) {
+      return first;
+    }
+    for (let index = 1; index < maps.length; index += 1) {
+      const value = maps[index]?.get(key);
       if (value !== undefined) {
         return value;
       }
@@ -309,7 +321,7 @@ export class UnsignedReader {
     this.bytes = bytes;
     this.offset = from;
     this.to = to;
-    this.localOffset = from % COLUMN_CHUNK_SIZE;
+    this.localOffset = from & COLUMN_CHUNK_MASK;
     this.chunk = from === to ? new Uint8Array(0) : bytes.byteChunk(from);
   }
   get done(): boolean {

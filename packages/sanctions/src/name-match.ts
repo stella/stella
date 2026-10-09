@@ -95,6 +95,7 @@ type Spellings = {
   gramCounts: NumberColumn;
   characterOffsets: NumberColumn;
   characterCounts: NumberColumn;
+  characterCache: (Uint32Array | undefined)[];
 };
 
 class VocabularyStrings {
@@ -127,6 +128,14 @@ type Vocabulary = {
   postings: ReadonlyPostings;
   joinPostings: ReadonlyPostings;
   lookupScratch?: LookupScratch;
+  exactSimilarityCache: Map<
+    number,
+    {
+      readonly matches: Map<number, number>;
+      readonly cost: number;
+      readonly partial: boolean;
+    }
+  >;
 };
 
 type BuildingVocabulary = Omit<
@@ -320,6 +329,7 @@ const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
     gramPostings: new PostingColumn(),
     postings: new PostingColumn(),
     joinPostings: new PostingColumn(),
+    exactSimilarityCache: new Map(),
   };
 };
 
@@ -461,6 +471,7 @@ export function* nameIndexSteps(
     gramCounts: new NumberColumn(),
     characterOffsets: new NumberColumn(),
     characterCounts: new NumberColumn("byte"),
+    characterCache: [],
   };
   spellings.characterOffsets.push(0);
   const spellingIds = new StringMap<number>();
@@ -605,28 +616,52 @@ export const buildNameIndex = (entries: readonly SanctionsEntry[]): NameIndex =>
  */
 type CharacterDistanceOptions = {
   query: ReadonlyMap<number, number>;
-  candidate: { counts: NumberColumn; from: number; to: number };
+  candidate: Uint32Array;
   lengthDifference: number;
 };
 
 // Transpositions preserve counts; other edits repair at most one deficit per side.
 const characterDistanceLowerBound = ({
   query,
-  candidate: { counts, from, to },
+  candidate,
   lengthDifference,
 }: CharacterDistanceOptions): number => {
   let missing = 0;
   for (const count of query.values()) {
     missing += count;
   }
-  const reader = new UnsignedReader({ bytes: counts, from, to });
-  let codePoint = 0;
-  while (!reader.done) {
-    codePoint += reader.read();
-    const count = reader.read();
+  for (let offset = 0; offset < candidate.length; offset += 2) {
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- Compact character pairs are constructed and traversed together.
+    const codePoint = candidate[offset]!;
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- Compact character pairs are constructed and traversed together.
+    const count = candidate[offset + 1]!;
     missing -= Math.min(count, query.get(codePoint) ?? 0);
   }
   return Math.max(missing, lengthDifference + missing);
+};
+
+const spellingCharacterCounts = (
+  spellings: Spellings,
+  spelling: number,
+): Uint32Array => {
+  const known = spellings.characterCache[spelling];
+  if (known !== undefined) {
+    return known;
+  }
+  const reader = new UnsignedReader({
+    bytes: spellings.characterCounts,
+    from: spellings.characterOffsets.get(spelling),
+    to: spellings.characterOffsets.get(spelling + 1),
+  });
+  const counts: number[] = [];
+  let codePoint = 0;
+  while (!reader.done) {
+    codePoint += reader.read();
+    counts.push(codePoint, reader.read());
+  }
+  const decoded = Uint32Array.from(counts);
+  spellings.characterCache[spelling] = decoded;
+  return decoded;
 };
 
 type SimilarStringsOptions = {
@@ -639,6 +674,8 @@ const similarStrings = ({
   text,
   work,
 }: SimilarStringsOptions): Map<number, number> => {
+  const initialWork = work.remaining;
+  const initialSelection = work.selection;
   const similar = new Map<number, number>();
   if (!spendScreeningWork(work, text.length + 1)) {
     return similar;
@@ -646,6 +683,17 @@ const similarStrings = ({
   const exact = vocabulary.ids.get(text);
   if (exact !== undefined) {
     similar.set(exact, 1);
+    const cached = vocabulary.exactSimilarityCache.get(exact);
+    if (cached !== undefined) {
+      const remainingCost = cached.cost - (text.length + 1);
+      if (!spendScreeningWork(work, remainingCost)) {
+        return similar;
+      }
+      if (cached.partial) {
+        work.selection = "partial";
+      }
+      return cached.matches;
+    }
   }
   const length = Array.from(text).length;
   const budget = editBudget(length);
@@ -683,9 +731,8 @@ const similarStrings = ({
     if (!spendScreeningWork(work)) {
       return similar;
     }
-    const candidateLength = vocabulary.spellings.lengths.get(
-      vocabulary.spellingIds.get(id),
-    );
+    const spelling = vocabulary.spellingIds.getUnchecked(id);
+    const candidateLength = vocabulary.spellings.lengths.getUnchecked(spelling);
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (
       id === exact ||
@@ -694,22 +741,16 @@ const similarStrings = ({
       (sharedCounts[id] ?? 0) <
         Math.max(
           grams.size,
-          vocabulary.spellings.gramCounts.get(vocabulary.spellingIds.get(id)),
+          vocabulary.spellings.gramCounts.getUnchecked(spelling),
         ) -
           3 * pairBudget
     ) {
       continue;
     }
-    const spelling = vocabulary.spellingIds.get(id);
-    const otherCounts = {
-      counts: vocabulary.spellings.characterCounts,
-      from: vocabulary.spellings.characterOffsets.get(spelling),
-      to: vocabulary.spellings.characterOffsets.get(spelling + 1),
-    };
     if (
       characterDistanceLowerBound({
         query: counts,
-        candidate: otherCounts,
+        candidate: spellingCharacterCounts(vocabulary.spellings, spelling),
         lengthDifference: candidateLength - length,
       }) > pairBudget
     ) {
@@ -730,15 +771,15 @@ const similarStrings = ({
       (sharedCounts[right] ?? 0) /
         Math.max(
           grams.size,
-          vocabulary.spellings.gramCounts.get(
-            vocabulary.spellingIds.get(right),
+          vocabulary.spellings.gramCounts.getUnchecked(
+            vocabulary.spellingIds.getUnchecked(right),
           ),
         ) -
         (sharedCounts[left] ?? 0) /
           Math.max(
             grams.size,
-            vocabulary.spellings.gramCounts.get(
-              vocabulary.spellingIds.get(left),
+            vocabulary.spellings.gramCounts.getUnchecked(
+              vocabulary.spellingIds.getUnchecked(left),
             ),
           ) || left - right,
   );
@@ -751,8 +792,8 @@ const similarStrings = ({
     index += 1
   ) {
     const id = candidates.at(index) ?? panic("Missing fuzzy candidate");
-    const candidateLength = vocabulary.spellings.lengths.get(
-      vocabulary.spellingIds.get(id),
+    const candidateLength = vocabulary.spellings.lengths.getUnchecked(
+      vocabulary.spellingIds.getUnchecked(id),
     );
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (!spendScreeningWork(work, length * candidateLength)) {
@@ -762,6 +803,13 @@ const similarStrings = ({
     if (edits <= pairBudget) {
       similar.set(id, 1 - edits / Math.max(length, candidateLength));
     }
+  }
+  if (exact !== undefined && !screeningWorkExhausted(work)) {
+    vocabulary.exactSimilarityCache.set(exact, {
+      matches: similar,
+      cost: initialWork - work.remaining,
+      partial: work.selection !== initialSelection,
+    });
   }
   return similar;
 };
