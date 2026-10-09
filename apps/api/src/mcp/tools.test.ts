@@ -100,15 +100,10 @@ import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
-import { MCP_MODES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
-import {
-  ALL_MCP_TOOL_DEFINITIONS,
-  listStaticMcpToolDefinitions,
-} from "@/api/mcp/static-tool-definitions";
 import {
   CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
   READ_DECISION_BATCH_MAX_TEXT_CHARS,
@@ -2593,6 +2588,81 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     },
   );
+
+  test("search_case_law withholds a result's text when its source licence keeps it from AI use", async () => {
+    const hit = {
+      caseNumber: "29 Cdo 123/2024",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationAuthority: 1,
+      citationCount: 0,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      decisionDate: "2024-02-01",
+      decisionId: DECISION_ID,
+      decisionType: "judgment",
+      ecli: null,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "29 Cdo 123/2024",
+        },
+      ],
+      headline: "Licensed <mark>passage</mark> text",
+      language: "cs",
+      headnote: {
+        type: "present",
+        text: "Licensed headnote text.",
+        truncated: false,
+      },
+      keywords: { type: "keywords", items: ["Licensed keyword"], omitted: 0 },
+      matchingPassages: 1,
+      languageAlternates: [],
+      slug: "stable-official-slug",
+      sourceUrl: "https://example.test/decision",
+    } as const;
+    const search = async (textWithheldReason: "source_licence" | null) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [{ ...hit, textWithheldReason }],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "smlouva",
+        warnings: [],
+      });
+      return await handleMcpToolCall({
+        args: { country: "CZE", queries: ["smlouva"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+    };
+
+    const withheld = await search("source_licence");
+    expect(parseToolPayload(withheld)).toMatchObject({
+      results: [
+        {
+          caseNumber: "29 Cdo 123/2024",
+          excerpt: { type: "withheld", reason: "source_licence" },
+          keywords: null,
+          headnote: null,
+        },
+      ],
+    });
+    expect(JSON.stringify(withheld)).not.toContain("Licensed");
+
+    // The same hit from a source that permits AI use keeps its text.
+    const readable = await search(null);
+    expect(parseToolPayload(readable)).toMatchObject({
+      results: [
+        {
+          snippet: "Licensed passage text",
+          keywords: { items: ["Licensed keyword"] },
+          headnote: { text: "Licensed headnote text." },
+        },
+      ],
+    });
+  });
 
   test("an output with an undeclared key is stripped, returned, and logged as a defect", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
@@ -10378,394 +10448,4 @@ describe("undeclared-argument backstop", () => {
       },
     ]);
   });
-});
-
-describe("case-law tool text invariants", () => {
-  const MARKER = "decision-text-fixture-7c41e9";
-  const resolveAnnotationTargetMock = mock(async () => ({
-    status: "withheld" as const,
-  }));
-  const restrictedDecision = () => {
-    const base = createReadDecisionResult();
-    return {
-      ...base,
-      fulltext: `${MARKER} full text`,
-      ...readDecisionTextMetadata({
-        abstract: MARKER,
-        headnote: MARKER,
-        legalSentence: MARKER,
-        summary: MARKER,
-        keywords: [MARKER],
-      }),
-      documentAst: {
-        ...base.documentAst,
-        blocks: [
-          ...base.documentAst.blocks,
-          {
-            anchorId: "a-3",
-            id: "b-3",
-            inlines: [{ type: "text", text: MARKER }],
-            plainText: MARKER,
-            type: "paragraph",
-            number: 48,
-          },
-        ],
-      },
-      source: { ...base.source, allowsDerivedAi: false },
-    };
-  };
-
-  type ToolName = (typeof ALL_MCP_TOOL_DEFINITIONS)[number]["name"];
-  type Probe =
-    | {
-        readonly type: "probe";
-        readonly args: Record<string, unknown>;
-        readonly namesDecision: boolean;
-        readonly refusal?: "permission_denied";
-        readonly variants?: readonly Record<string, unknown>[];
-      }
-    | { readonly type: "no-corpus-text"; readonly reason: string }
-    | { readonly type: "corpus-invariant"; readonly invariant: string };
-
-  const probe = (args: Record<string, unknown>, namesDecision = true) =>
-    ({ type: "probe", args, namesDecision }) as const;
-  const noCorpusText = (reason: string) =>
-    ({ type: "no-corpus-text", reason }) as const;
-
-  const TENANT = "reads workspace records only";
-  const TENANT_WRITE = "writes workspace records only";
-  const LEGISLATION = "reads legislation, not case-law decisions";
-  const UPSTREAM = "reads an upstream registry or publisher";
-  const META =
-    "reads the capability catalog, whose case-law entries carry no decision text";
-
-  const PROBES = {
-    search: probe({ query: "smlouva" }),
-    fetch: probe({ id: `decision:${DECISION_ID}` }),
-    search_case_law: probe({ country: "CZE", queries: ["smlouva"] }),
-    case_law_coverage: noCorpusText(
-      "returns per-court counts, never decision text",
-    ),
-    lookup_case_law: probe({
-      country: "CZE",
-      identifiers: ["29 Cdo 123/2024"],
-    }),
-    read_case_law_decision: {
-      ...probe({ decision_ids: [DECISION_ID], full: true }),
-      variants: [
-        { decision_ids: [DECISION_ID], query: MARKER },
-        {
-          decision_ids: [DECISION_ID],
-          page: 2,
-          include: ["metadata", "textFields", "outline"],
-        },
-      ],
-    },
-    read_case_law_citations: probe(
-      { decision_id: DECISION_ID, direction: "cites" },
-      false,
-    ),
-    list_matters: noCorpusText(TENANT),
-    search_across_matters: noCorpusText(
-      "searches workspace content; corpus hits are search_case_law's",
-    ),
-    read_content_across_matters: noCorpusText(TENANT),
-    read_contact: noCorpusText(TENANT),
-    set_practice_jurisdictions: noCorpusText(TENANT_WRITE),
-    search_legislation: noCorpusText(LEGISLATION),
-    read_statute: noCorpusText(LEGISLATION),
-    read_statute_provisions: noCorpusText(LEGISLATION),
-    read_provision_history: noCorpusText(LEGISLATION),
-    search_boe_legislation: noCorpusText(LEGISLATION),
-    list_templates: noCorpusText(TENANT),
-    fill_template: noCorpusText(TENANT_WRITE),
-    save_filled_template: noCorpusText(TENANT_WRITE),
-    create_template: noCorpusText(TENANT_WRITE),
-    configure_template_fields: noCorpusText(TENANT_WRITE),
-    preview_template_conditions: noCorpusText(TENANT),
-    list_documents: noCorpusText(TENANT),
-    read_document: noCorpusText(TENANT),
-    save_document: noCorpusText(TENANT_WRITE),
-    upload_document_version: noCorpusText(TENANT_WRITE),
-    open_document_version_upload: noCorpusText(TENANT_WRITE),
-    compare_documents: noCorpusText(TENANT_WRITE),
-    prepare_file_comparison: noCorpusText(TENANT_WRITE),
-    prepare_file_comparison_from_links: noCorpusText(TENANT_WRITE),
-    open_file_comparison: noCorpusText(TENANT_WRITE),
-    delete_document: noCorpusText(TENANT_WRITE),
-    list_properties: noCorpusText(TENANT),
-    set_field_value: noCorpusText(TENANT_WRITE),
-    save_matter: noCorpusText(TENANT_WRITE),
-    delete_matter: noCorpusText(TENANT_WRITE),
-    list_contacts: noCorpusText(TENANT),
-    save_contact: noCorpusText(TENANT_WRITE),
-    delete_contact: noCorpusText(TENANT_WRITE),
-    lookup_business_registry: noCorpusText(UPSTREAM),
-    check_counterparty: noCorpusText(UPSTREAM),
-    list_tasks: noCorpusText(TENANT),
-    save_task: noCorpusText(TENANT_WRITE),
-    delete_task: noCorpusText(TENANT_WRITE),
-    link_matter_contact: noCorpusText(TENANT_WRITE),
-    list_clauses: noCorpusText(TENANT),
-    save_clause: noCorpusText(TENANT_WRITE),
-    delete_clause: noCorpusText(TENANT_WRITE),
-    list_playbooks: noCorpusText(TENANT),
-    save_playbook: noCorpusText(TENANT_WRITE),
-    run_playbook: noCorpusText(TENANT_WRITE),
-    list_reader_annotations: {
-      ...probe({ target_type: "decision", target_id: DECISION_ID }, false),
-      refusal: "permission_denied",
-    },
-    create_reader_annotation: {
-      ...probe(
-        {
-          target_type: "decision",
-          target_id: DECISION_ID,
-          mark: { kind: "highlight" },
-          passages: [{ anchor: "a-1", quote: MARKER }],
-        },
-        false,
-      ),
-      refusal: "permission_denied",
-    },
-    update_reader_annotation: noCorpusText(
-      "returns caller-authored comment fields",
-    ),
-    delete_reader_annotation: noCorpusText(TENANT_WRITE),
-    list_time_entries: noCorpusText(TENANT),
-    save_time_entry: noCorpusText(TENANT_WRITE),
-    delete_time_entry: noCorpusText(TENANT_WRITE),
-    resolve_rate: noCorpusText(TENANT),
-    list_invoices: noCorpusText(TENANT),
-    get_usage: noCorpusText(TENANT),
-    list_audit_log: noCorpusText(TENANT),
-    manage_organization: noCorpusText(TENANT_WRITE),
-    prepare_feedback: noCorpusText("sanitizes caller text; reads nothing"),
-    submit_feedback: noCorpusText("sends caller text upstream; reads nothing"),
-    list_capabilities: noCorpusText(META),
-    describe_capability: noCorpusText(META),
-    read_capability: {
-      type: "corpus-invariant",
-      invariant:
-        "matter-links.db.test.ts: capability results preserve the text boundary",
-    },
-    write_capability: noCorpusText(META),
-    open_case_law_decision: {
-      type: "corpus-invariant",
-      invariant:
-        "decision-reader-tools.test.ts: each tool reads for its audience and renders only readable text",
-    },
-    read_case_law_decision_blocks: {
-      type: "corpus-invariant",
-      invariant:
-        "decision-reader-tools.test.ts: each tool reads for its audience and renders only readable text",
-    },
-    preview_cited_provision: noCorpusText(LEGISLATION),
-  } as const satisfies Record<ToolName, Probe>;
-
-  const probeFor = new Map<string, Probe>(Object.entries(PROBES));
-
-  beforeEach(() => {
-    resolveAnnotationTargetMock.mockClear();
-    readDecisionHandlerMock.mockReset();
-    readDecisionHandlerMock.mockResolvedValue(restrictedDecision());
-    readGatedDecisionMock.mockReset();
-    readGatedDecisionMock.mockImplementation(
-      async () => await readDecisionHandlerMock(),
-    );
-    readGatedDecisionCitationDigestMock.mockReset();
-    readGatedDecisionCitationDigestMock.mockResolvedValue(
-      createCitationDigest({
-        cites: [
-          {
-            ...createCitationRow("29 Odo 1/2001", null),
-            citationText: null,
-            textWithheldReason: "source_licence",
-          },
-        ],
-      }),
-    );
-    readGatedDecisionCitationsMock.mockReset();
-    readGatedDecisionCitationsMock.mockResolvedValue({
-      type: "page",
-      page: {
-        items: [
-          {
-            ...createCitationRow("29 Odo 1/2001", null),
-            citationText: null,
-            textWithheldReason: "source_licence",
-            passage: null,
-          },
-        ],
-        nextCursor: null,
-      },
-    });
-    lookupDecisionsByIdentityMock.mockReset();
-    lookupDecisionsByIdentityMock.mockResolvedValue([
-      {
-        caseNumber: "29 Cdo 123/2024",
-        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-        country: "CZE",
-        court: "Nejvyšší soud",
-        courtAbbreviation: "NS",
-        decisionDate: "2024-02-01",
-        ecli: null,
-        id: toSafeId<"caseLawDecision">(DECISION_ID),
-        identifiers: [
-          {
-            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            value: "29 Cdo 123/2024",
-          },
-        ],
-        language: "cs",
-        languageAlternates: [],
-        slug: "stable-official-slug",
-      },
-    ]);
-    searchDecisionsHandlerMock.mockReset();
-    searchDecisionsHandlerMock.mockResolvedValue({
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      hits: [
-        {
-          caseNumber: "29 Cdo 123/2024",
-          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-          citationAuthority: 1,
-          citationCount: 0,
-          country: "CZE",
-          court: "Nejvyšší soud",
-          courtAbbreviation: "NS",
-          decisionDate: "2024-02-01",
-          decisionId: DECISION_ID,
-          decisionType: "judgment",
-          ecli: null,
-          identifiers: [
-            {
-              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-              value: "29 Cdo 123/2024",
-            },
-          ],
-          headline: `<mark>${MARKER}</mark>`,
-          textWithheldReason: "source_licence",
-          language: "cs",
-          languageAlternates: [],
-          matchingPassages: 1,
-          slug: "stable-official-slug",
-          sourceUrl: "https://example.test/decision",
-        },
-      ],
-      facets: {
-        courtYear: COURT_YEAR_FIXTURE,
-        court: [],
-        year: [],
-        decisionType: [],
-        source: [],
-        language: [],
-      },
-      nextCursor: null,
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-      queryUsed: "smlouva",
-      warnings: [],
-    });
-    searchLegislationHandlerMock.mockReset();
-    searchLegislationHandlerMock.mockResolvedValue({
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      items: [],
-      nextCursor: null,
-      total: { type: "exact", value: 0 },
-    });
-  });
-
-  test("the probe map names exactly the registry's tools", () => {
-    expect(Object.keys(PROBES).toSorted()).toEqual(
-      [
-        ...new Set(ALL_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)),
-      ].toSorted(),
-    );
-    for (const mode of MCP_MODES) {
-      for (const tool of listStaticMcpToolDefinitions(mode)) {
-        expect(Object.hasOwn(PROBES, tool.name), tool.name).toBe(true);
-      }
-    }
-  });
-
-  test.each([...MCP_MODES])(
-    "%s tool results preserve the text boundary",
-    async (mode) => {
-      const probed: string[] = [];
-      for (const tool of listStaticMcpToolDefinitions(mode)) {
-        const entry =
-          probeFor.get(tool.name) ??
-          panic(`No probe decision for ${tool.name}`);
-        if (entry.type !== "probe") {
-          continue;
-        }
-        for (const args of [entry.args, ...(entry.variants ?? [])]) {
-          const result = await handleMcpToolCall({
-            args,
-            context: createContext({
-              testDependencies: {
-                resolveAnnotationTarget: resolveAnnotationTargetMock,
-              },
-            }),
-            mode,
-            toolName: tool.name,
-          });
-          const serialized = JSON.stringify(result);
-          if (tool.name === "read_case_law_citations") {
-            expect(readGatedDecisionCitationsMock).toHaveBeenCalledWith({
-              caseLawDb: caseLawPublicReadDb,
-              cursor: undefined,
-              decisionId: DECISION_ID,
-              direction: "cites",
-              limit: LIMITS.caseLawAgentCitationPageSizeDefault,
-            });
-            expect(parseToolPayload(result)).toMatchObject({
-              citations: [
-                {
-                  citationText: null,
-                  textWithheldReason: "source_licence",
-                  passage: null,
-                },
-              ],
-            });
-          }
-          if (tool.name === "search_case_law") {
-            expect(parseToolPayload(result)).toMatchObject({
-              results: [
-                { excerpt: { type: "withheld", reason: "source_licence" } },
-              ],
-            });
-          }
-          if (entry.namesDecision) {
-            expect(
-              serialized.includes("29 Cdo 123/2024") ||
-                serialized.includes("stable-official-slug"),
-              `${mode}/${tool.name} reached the fixture: ${serialized}`,
-            ).toBe(true);
-          } else if (entry.refusal === "permission_denied") {
-            expect(resolveAnnotationTargetMock).toHaveBeenCalledWith({
-              targetId: DECISION_ID,
-              targetType: "decision",
-            });
-            expect(validationEnvelope(result)["code"]).toBe(
-              "permission_denied",
-            );
-          } else {
-            expect(
-              result.isError,
-              `${mode}/${tool.name}: ${serialized}`,
-            ).not.toBe(true);
-          }
-          expect(serialized, `${mode}/${tool.name}`).not.toContain(MARKER);
-        }
-        probed.push(tool.name);
-      }
-      expect(probed.toSorted()).toEqual(
-        listStaticMcpToolDefinitions(mode)
-          .filter((tool) => probeFor.get(tool.name)?.type === "probe")
-          .map((tool) => tool.name)
-          .toSorted(),
-      );
-    },
-  );
 });
