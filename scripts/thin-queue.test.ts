@@ -718,16 +718,22 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  const collapsedJobs = new Map([
+    ["code-quality-web", "code-quality-web-rest"],
+    ["code-quality-rest", "code-quality-web-rest"],
+    ["typecheck-baseline", "ci-checks-generated"],
+  ]);
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
-          (id) => id !== "merge-group-fail-fast",
+          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
         ),
         "api-test-durations",
         "marketing-screenshots-cancel",
         "ci-generated-sources",
         "ci-checks-docs",
+        "code-quality-web-rest",
       ]),
     ].toSorted(),
   );
@@ -749,10 +755,14 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection({ job, baseline: expected, value });
+          expected = expectedPrSelection({
+            job: collapsedJobs.get(job) ?? job,
+            baseline: expected,
+            value,
+          });
         }
         expect(
-          selected(ci.jobs[job]?.if, value),
+          selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value),
           `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
         ).toBe(expected);
       }

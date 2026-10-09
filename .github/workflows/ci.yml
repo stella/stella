@@ -2018,6 +2018,7 @@ jobs:
         run: bun scripts/check-published-exports.ts packages/mcp-kit
 
       - name: Load merge base measurement
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bash scripts/prepare-typecheck-base.sh
         env:
           STELLA_VERIFY: prepare
@@ -2026,6 +2027,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Generated API type review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The main recording includes the generated base files.
         # Both files were generated from their own revision above.
         run: |
@@ -2052,6 +2054,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generated route tree review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           patch="$RUNNER_TEMP/route-tree.patch"
           base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
@@ -2076,6 +2079,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload generated route tree review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: generated-route-tree-diff
@@ -2083,6 +2087,7 @@ jobs:
           retention-days: 14
 
       - name: Upload generated API type review diff
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: generated-web-api-types-diff
@@ -2090,6 +2095,7 @@ jobs:
           retention-days: 14
 
       - name: Typecheck-cost baseline guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           STELLA_VERIFY: check
         # The --self-test run first proves the parser and comparison logic,
@@ -4430,7 +4436,7 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Code quality
+      - name: Code quality (web)
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4443,7 +4449,7 @@ jobs:
           fi
           bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
 
-      - name: Result consumption
+      - name: Result consumption (web)
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -4471,7 +4477,7 @@ jobs:
           bun scripts/typecheck-coverage.ts --self-test
           bun scripts/typecheck-coverage.ts
 
-      - name: Code quality
+      - name: Code quality (rest)
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4524,7 +4530,7 @@ jobs:
           bun test scripts/check-api-timeout-mutations.test.ts
           bun run check:api-timeout-mutations
 
-      - name: Result consumption
+      - name: Result consumption (rest)
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}

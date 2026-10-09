@@ -788,8 +788,14 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     }
     expect(originalSetup).toHaveLength(setupPrerequisites.size);
     expectScope({ current: scope, base: originalScope });
+    const mergedBaselineTimeout = v.parse(
+      v.looseObject({ "timeout-minutes": v.number() }),
+      baseJobs["typecheck-baseline"],
+    )["timeout-minutes"];
     expect(timeout).toBe(
-      partitionIds.at(index) === "ci-checks-generated" ? 60 : originalTimeout,
+      partitionIds.at(index) === "ci-checks-generated"
+        ? originalTimeout + mergedBaselineTimeout
+        : originalTimeout,
     );
     expect(setupSteps(steps)).toEqual(originalSetup);
     const installIndex = steps.findIndex(
