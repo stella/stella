@@ -3,6 +3,7 @@
   "description": "Local activity timeline through restricted native commands",
   "windows": ["activity"],
   "permissions": [
+    "allow-account-record-use",
     "allow-get-desktop-language",
     "allow-set-desktop-language",
     "allow-desktop-report-error",

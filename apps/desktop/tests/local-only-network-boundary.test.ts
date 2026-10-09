@@ -67,7 +67,7 @@ describe("local-only network boundary", () => {
         ...(await nativeFiles()).filter((file) =>
           isFeatureModule(feature, file),
         ),
-        ...feature.nativeModules,
+        ...feature.nativeModules.map(({ file }) => file),
       ];
       expect(files.length).toBeGreaterThan(0);
       for (const file of files) {
@@ -111,7 +111,7 @@ describe("local-only network boundary", () => {
         ...(await nativeFiles()).filter((name) =>
           isFeatureModule(feature, name),
         ),
-        ...feature.nativeModules,
+        ...feature.nativeModules.map(({ file }) => file),
       ];
       expect(featureFiles.length).toBeGreaterThan(0);
       for (const file of featureFiles) {
@@ -123,7 +123,11 @@ describe("local-only network boundary", () => {
       for (const file of featureFiles) {
         const source = await readNative(file);
         expectFixedMessageLogs(file, source);
-        if (feature.nativeModules.some((module) => module === file)) {
+        if (
+          feature.nativeModules.some(
+            (module) => module.file === file && module.logging === "none",
+          )
+        ) {
           expect(source, file).not.toMatch(
             /\b(?:println|eprintln|dbg)!|\b(?:tracing|log)::/u,
           );

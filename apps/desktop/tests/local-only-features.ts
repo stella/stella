@@ -42,9 +42,9 @@ export const LOCAL_ONLY_FEATURES = [
     id: "activity",
     telemetry: "fixedCodes",
     nativeModules: [
-      "tray.rs",
-      "../crates/macos-park/src/focused_window.rs",
-      "../crates/macos-park/src/windows_window.rs",
+      { file: "tray.rs", logging: "fixedMessages" },
+      { file: "../crates/macos-park/src/focused_window.rs", logging: "none" },
+      { file: "../crates/macos-park/src/windows_window.rs", logging: "none" },
     ],
     windowModules: {
       "src-tauri/capabilities/activity.json": ["src/activity/ActivityApp.tsx"],
