@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_MODEL_PROVIDERS } from "@stll/api-contract/ai-decision-provider";
+
 import {
+  DECISION_PROVIDER_KEYS,
   createDecisionModelState,
   createDefaultRoleModels,
   createProviderCredentialDraft,
@@ -563,5 +566,81 @@ describe("decision model configuration", () => {
         stored,
       }),
     ).toBe(false);
+  });
+});
+
+describe("OpenAI decision settings", () => {
+  test("offers every decision provider the API accepts", () => {
+    expect(DECISION_PROVIDER_KEYS).toEqual(DECISION_MODEL_PROVIDERS);
+  });
+  test("provider switch resets to the provider's default model and reused OpenAI key", () => {
+    const state = createDecisionModelState("openai");
+    expect(state).toEqual({
+      kind: "set",
+      provider: "openai",
+      apiKey: "",
+      modelId: "gpt-6-luna",
+      region: "eu",
+      keyMode: "reuse",
+    });
+    expect(serializeDecisionModel(state)).toEqual({
+      provider: "openai",
+      apiKey: null,
+      modelId: "gpt-6-luna",
+      region: "eu",
+    });
+    expect(
+      hasUsableDecisionModel({ state, stored: null, hasOpenAIKey: true }),
+    ).toBe(true);
+    expect(
+      hasUsableDecisionModel({ state, stored: null, hasOpenAIKey: false }),
+    ).toBe(false);
+  });
+  test("a separate override is required when no OpenAI key is configured", () => {
+    expect(createDecisionModelState("openai", false)).toEqual({
+      kind: "set",
+      provider: "openai",
+      apiKey: "",
+      modelId: "gpt-6-luna",
+      region: "eu",
+      keyMode: "override",
+    });
+    expect(
+      serializeDecisionModel({
+        kind: "set",
+        provider: "openai",
+        apiKey: " override ",
+        modelId: "gpt-6-luna",
+        region: "global",
+        keyMode: "override",
+      }),
+    ).toEqual({
+      provider: "openai",
+      apiKey: "override",
+      modelId: "gpt-6-luna",
+      region: "global",
+    });
+  });
+  test("read-back keeps key mode and region without borrowing another provider's key", () => {
+    const stored = {
+      provider: "openai",
+      modelId: "gpt-6-luna",
+      region: "global",
+      apiKeyMasked: undefined,
+    } as const satisfies StoredDecisionModel;
+    expect(
+      decisionModelDraft({ state: { kind: "untouched" }, stored }),
+    ).toEqual({
+      provider: "openai",
+      apiKey: "",
+      apiKeyMasked: undefined,
+      modelId: "gpt-6-luna",
+      region: "global",
+      keyMode: "reuse",
+    });
+    const state = createDecisionModelState("openai", false);
+    expect(hasUsableDecisionModel({ state, stored, hasOpenAIKey: true })).toBe(
+      false,
+    );
   });
 });

@@ -15,6 +15,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import {
   hasInstanceDecisionModel,
+  probeDecisionModel,
   resolveDecisionModel,
 } from "@/api/lib/workflow/decisions/decision-model";
 import { noul } from "@/api/lib/workflow/decisions/system-one";
@@ -188,6 +189,146 @@ describe("decision model request policy", () => {
           questions,
         }),
       });
+    },
+  );
+});
+
+describe("OpenAI decision credentials", () => {
+  test.each(["customer", "public_corpus"] as const)(
+    "missing reused credentials fall back for %s and report one config defect",
+    async (dataClass) => {
+      const config = {
+        ...organization,
+        providers: [{ provider: "anthropic", apiKey: "other-key" }],
+        decision: {
+          provider: "openai",
+          modelId: "gpt-6-luna",
+          region: "eu",
+        },
+      } as const satisfies OrgAIConfig;
+      expect(resolveDecisionModel(config, dataClass)).toBeNull();
+      const result = await decideMany({
+        id: "test.missing-decision-key",
+        orgAIConfig: config,
+        dataClass,
+        state: "eligible",
+        questions,
+      });
+      expect(result).toEqual({
+        decisions: {
+          eligible: {
+            state: "undecided",
+            reason: "no-backend",
+            confidence: null,
+          },
+        },
+        model: null,
+      });
+      expect(runtime.analytics.exceptions()).toHaveLength(1);
+      expect(runtime.analytics.exceptions().at(0)?.properties).toMatchObject({
+        "error.class": "ConfigurationError",
+        source: "resolveDecisionModel",
+        "failure.grade": "defect",
+      });
+      expect(runtime.fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([undefined, "separate-key"])(
+    "uses the org OpenAI key unless overridden (%s)",
+    async (override) => {
+      runtime.fetch.mockImplementation(
+        Object.assign(
+          async () =>
+            Response.json({
+              model: "gpt-6-luna",
+              answers: [
+                { type: "predicate", name: "eligible", probability: 0.99 },
+              ],
+              usage: { input_tokens: 42, output_tokens: 0 },
+            }),
+          { preconnect: globalThis.fetch.preconnect },
+        ),
+      );
+      const client = resolveDecisionModel(
+        {
+          ...organization,
+          providers: [
+            { provider: "anthropic", apiKey: "other-key" },
+            { provider: "openai", apiKey: "generative-key" },
+          ],
+          decision: {
+            provider: "openai",
+            apiKey: override,
+            modelId: "gpt-6-luna",
+            region: "eu",
+          },
+        },
+        "customer",
+      );
+      if (client === null) {
+        panic("Expected org decision client");
+      }
+      const result = await client.ask({ state: "eligible", questions });
+      expect(Result.isOk(result)).toBe(true);
+      expect(client).toMatchObject({
+        provider: "openai",
+        region: "eu",
+        keySource: "byok",
+      });
+      const request = runtime.fetch.mock.calls.at(-1)?.[1];
+      expect(request?.headers).toMatchObject({
+        authorization: `Bearer ${override ?? "generative-key"}`,
+      });
+    },
+  );
+
+  test.each([200, 401, 403, 400, 500])(
+    "probes candidates over an injected fetch for HTTP %s",
+    async (status) => {
+      const { createOpenAIDecisionsClient } =
+        await import("./openai-decisions");
+      let calls = 0;
+      const result = await probeDecisionModel({
+        config: {
+          provider: "openai",
+          apiKey: "candidate-key",
+          modelId: "gpt-6-luna",
+          region: "eu",
+        },
+        timeoutMs: 1000,
+        createClient: (config) =>
+          createOpenAIDecisionsClient({
+            apiKey: config.apiKey,
+            fetcher: async (_url, init) => {
+              calls += 1;
+              expect(init?.headers).toMatchObject({
+                authorization: "Bearer candidate-key",
+              });
+              return status === 200
+                ? Response.json({
+                    model: "gpt-6-luna",
+                    answers: [
+                      { type: "predicate", name: "probe", probability: 1 },
+                    ],
+                    usage: { input_tokens: 2, output_tokens: 0 },
+                  })
+                : new Response("failure", { status });
+            },
+          }),
+      });
+      expect(calls).toBe(1);
+      expect(result).toEqual(
+        status === 200
+          ? { valid: true }
+          : {
+              valid: false,
+              error:
+                status === 401 || status === 403
+                  ? "The decision model rejected the API key"
+                  : `OpenAI Decisions responded with HTTP ${String(status)}`,
+            },
+      );
     },
   );
 });

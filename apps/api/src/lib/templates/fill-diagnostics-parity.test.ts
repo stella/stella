@@ -21,6 +21,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -198,7 +199,7 @@ const conditionDecision: fc.Arbitrary<ResolvedAiCondition> = fc.oneof(
     path: word,
     label: word,
     state: fc.constant("undecided"),
-    reason: fc.constantFrom("no-backend", "below-floor", "failed"),
+    reason: fc.constantFrom(...DECISION_UNDECIDED_REASONS),
   }),
 );
 

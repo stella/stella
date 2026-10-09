@@ -21,6 +21,8 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createFetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
 
+import type { DecisionModelProvider } from "@/api/lib/ai-config";
+
 const SYSTEM_ONE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 export const DEFAULT_SYSTEM_ONE_MODEL = "jev-latest";
 /** Jev's documented maximum cardinality for one Choice question. */
@@ -89,6 +91,8 @@ export type NoulAnswer = {
 
 export type SystemOneAnswer = ChoiceAnswer | NoulAnswer;
 
+export type RefusalAnswer = { type: "refusal" };
+
 export type SystemOneAnswerFor<TQuestion extends SystemOneQuestion> =
   TQuestion extends ChoiceQuestion<infer TOption>
     ? ChoiceAnswer<TOption>
@@ -99,7 +103,7 @@ export type SystemOneAnswerFor<TQuestion extends SystemOneQuestion> =
 export type SystemOneQuestions = Record<string, SystemOneQuestion>;
 
 type SystemOneAnswers<TQuestions extends SystemOneQuestions> = {
-  [K in keyof TQuestions]: SystemOneAnswerFor<TQuestions[K]>;
+  [K in keyof TQuestions]: SystemOneAnswerFor<TQuestions[K]> | RefusalAnswer;
 };
 
 type SystemOneUsage = { inputTokens: number; outputTokens: number };
@@ -179,28 +183,32 @@ export const isSystemOneAnswerForQuestion = <
   );
 };
 
-const hasEveryAnswer = <TQuestions extends SystemOneQuestions>(
+export const hasEveryAnswer = <TQuestions extends SystemOneQuestions>(
   questions: TQuestions,
-  answers: Record<string, SystemOneAnswer>,
+  answers: Record<string, SystemOneAnswer | RefusalAnswer>,
 ): answers is SystemOneAnswers<TQuestions> =>
   Object.entries(questions).every(([id, question]) => {
     const answer = answers[id];
     return (
-      answer !== undefined && isSystemOneAnswerForQuestion(question, answer)
+      Object.hasOwn(answers, id) &&
+      answer !== undefined &&
+      (answer.type === "refusal" ||
+        isSystemOneAnswerForQuestion(question, answer))
     );
   });
 
-/**
- * An answer is accepted only in the shape its question promised: the same
- * type, and for a choice an option from its own criteria with a probability
- * for every option. The typed answer is the wire answer after these checks,
- * which is what the cast at the end asserts.
- */
-const bindAnswer = (
-  id: string,
-  question: SystemOneQuestion,
-  answer: WireAnswer,
-): Result<ChoiceAnswer | NoulAnswer, SystemOneError> => {
+type BindAnswerOptions = {
+  id: string;
+  question: SystemOneQuestion;
+  answer: WireAnswer;
+};
+
+/** Both transports bind choices against the same complete distribution. */
+export const bindAnswer = ({
+  id,
+  question,
+  answer,
+}: BindAnswerOptions): Result<ChoiceAnswer | NoulAnswer, SystemOneError> => {
   if (answer.type !== question.type) {
     return Result.err(
       new SystemOneError({
@@ -274,11 +282,23 @@ export const serializeSystemOneRequest = ({
   JSON.stringify({ state, model, questions });
 
 export type SystemOneClient = {
+  provider: DecisionModelProvider;
+  region?: "eu" | "global" | undefined;
   model: string;
   ask: <TQuestions extends SystemOneQuestions>(
     request: SystemOneRequest<TQuestions>,
   ) => Promise<Result<SystemOneResult<TQuestions>, SystemOneError>>;
 };
+
+/** Tests inject a fake transport; production uses the runtime's fetch. */
+export type DecisionFetcher = Fetcher;
+
+/**
+ * The one transport every decision provider client sends through, so the
+ * decision module acquires raw network access in a single place.
+ */
+export const createDecisionFetch = (fetcher: Fetcher | undefined) =>
+  createFetchWithTimeout(fetcher ?? globalThis.fetch);
 
 export type SystemOneClientOptions = {
   apiKey: string;
@@ -340,7 +360,7 @@ export const createSystemOneClient = ({
   fetcher,
   sleep = abortableSleep,
 }: SystemOneClientOptions): SystemOneClient => {
-  const fetchWithTimeout = createFetchWithTimeout(fetcher ?? globalThis.fetch);
+  const fetchWithTimeout = createDecisionFetch(fetcher);
   const send = async (
     body: string,
     abortSignal: AbortSignal | undefined,
@@ -411,6 +431,7 @@ export const createSystemOneClient = ({
   };
 
   return {
+    provider: "typesafe",
     model,
     ask: async <TQuestions extends SystemOneQuestions>({
       state,
@@ -478,7 +499,7 @@ export const createSystemOneClient = ({
           }),
         );
       }
-      const answers: Record<string, ChoiceAnswer | NoulAnswer> = {};
+      const answerMap = new Map<string, SystemOneAnswer>();
       for (const [id, question] of Object.entries(questions)) {
         const answer = parsed.output.answers[id];
         if (answer === undefined) {
@@ -489,12 +510,13 @@ export const createSystemOneClient = ({
             }),
           );
         }
-        const bound = bindAnswer(id, question, answer);
+        const bound = bindAnswer({ id, question, answer });
         if (Result.isError(bound)) {
           return bound;
         }
-        answers[id] = bound.value;
+        answerMap.set(id, bound.value);
       }
+      const answers = Object.fromEntries(answerMap);
       if (!hasEveryAnswer(questions, answers)) {
         return panic("TypeSafe answer binding lost a question");
       }
@@ -510,6 +532,3 @@ export const createSystemOneClient = ({
     },
   };
 };
-
-/** Per-input-token price on the public price list, for the cost a caller logs. */
-export const SYSTEM_ONE_USD_PER_INPUT_TOKEN = 0.042 / 1_000_000;

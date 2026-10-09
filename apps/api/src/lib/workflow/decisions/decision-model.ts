@@ -8,7 +8,7 @@
  * self-hosted instance without a decision model.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
 import type {
@@ -18,6 +18,10 @@ import type {
 } from "@/api/lib/ai-config";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { createOpenAIDecisionsClient } from "@/api/lib/workflow/decisions/openai-decisions";
 import {
   createSystemOneClient,
   noul,
@@ -25,17 +29,35 @@ import {
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 import { getSystemOneClient } from "@/api/lib/workflow/decisions/system-one-runtime";
 
+type ResolvedDecisionModelConfig = OrgDecisionModelConfig & { apiKey: string };
+
 /** One client constructor per provider; a provider without one cannot be added. */
 const CLIENT_BY_PROVIDER = {
   typesafe: (config) =>
     createSystemOneClient({ apiKey: config.apiKey, model: config.modelId }),
-} as const satisfies Record<
-  DecisionModelProvider,
-  (config: OrgDecisionModelConfig) => SystemOneClient
->;
+  openai: (config) =>
+    createOpenAIDecisionsClient({
+      apiKey: config.apiKey,
+      model: config.modelId,
+      region: config.region,
+    }),
+} as const satisfies {
+  [P in DecisionModelProvider]: (
+    config: Extract<ResolvedDecisionModelConfig, { provider: P }>,
+  ) => SystemOneClient;
+};
 
-const orgClient = (config: OrgDecisionModelConfig): SystemOneClient =>
-  CLIENT_BY_PROVIDER[config.provider](config);
+const orgClient = (config: ResolvedDecisionModelConfig): SystemOneClient => {
+  switch (config.provider) {
+    case "typesafe":
+      return CLIENT_BY_PROVIDER.typesafe(config);
+    case "openai":
+      return CLIENT_BY_PROVIDER.openai(config);
+    default:
+      config satisfies never;
+      return panic("Unhandled decision model provider");
+  }
+};
 
 /** Funding belongs to the resolved credential, including injected clients. */
 export type DecisionModel = SystemOneClient & {
@@ -48,13 +70,31 @@ export const hasInstanceDecisionModel = (dataClass: AIDataClass): boolean =>
   env.TYPESAFE_API_KEY !== undefined &&
   isManagedProviderAvailable("typesafe", dataClass);
 
+const DECISION_KEY_SINK = failureSink({
+  event: "decision.model_key_missing",
+  expected: [],
+});
+
 export const resolveDecisionModel = (
   orgAIConfig: OrgAIConfig | null | undefined,
   dataClass: AIDataClass,
 ): DecisionModel | null => {
   const decision = orgAIConfig?.decision ?? null;
   if (decision !== null) {
-    return { ...orgClient(decision), keySource: "byok" };
+    const apiKey =
+      decision.apiKey ??
+      orgAIConfig?.providers.find((provider) => provider.provider === "openai")
+        ?.apiKey;
+    if (apiKey === undefined) {
+      observeFailure(
+        new ConfigurationError({
+          message: "Configured OpenAI decision model has no organization key",
+        }),
+        { sink: DECISION_KEY_SINK, ctx: { source: "resolveDecisionModel" } },
+      );
+      return null;
+    }
+    return { ...orgClient({ ...decision, apiKey }), keySource: "byok" };
   }
   if (!hasInstanceDecisionModel(dataClass)) {
     return null;
@@ -73,11 +113,18 @@ type DecisionModelProbeResult =
  * as such; every other failure carries the transport's own message, so a
  * wrong model id or an unreachable endpoint is not read as a bad key.
  */
-export const probeDecisionModel = async (
-  config: OrgDecisionModelConfig,
-  timeoutMs: number,
-): Promise<DecisionModelProbeResult> => {
-  const asked = await orgClient(config).ask({
+type ProbeDecisionModelOptions = {
+  config: ResolvedDecisionModelConfig;
+  timeoutMs: number;
+  createClient?: typeof orgClient | undefined;
+};
+
+export const probeDecisionModel = async ({
+  config,
+  timeoutMs,
+  createClient = orgClient,
+}: ProbeDecisionModelOptions): Promise<DecisionModelProbeResult> => {
+  const asked = await createClient(config).ask({
     state: "probe",
     questions: { probe: noul("Is `state` the word probe?") },
     abortSignal: AbortSignal.timeout(timeoutMs),

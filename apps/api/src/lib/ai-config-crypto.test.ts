@@ -308,6 +308,27 @@ describe("decision model in the stored blob", () => {
     expect(config.decision).toBeNull();
   });
 
+  test("round-trips OpenAI reuse and separate keys without changing endpoint selection", async () => {
+    for (const region of ["eu", "global"] as const) {
+      for (const apiKey of [undefined, "separate-key"]) {
+        const decision = {
+          provider: "openai",
+          modelId: "gpt-6-luna",
+          region,
+          ...(apiKey ? { apiKey } : {}),
+        } as const;
+        const { ciphertext, iv } = await encryptAIConfig(organizationId, {
+          providers,
+          overrideModels,
+          decision,
+        });
+        expect(
+          (await decryptAIConfig(organizationId, ciphertext, iv)).decision,
+        ).toEqual(decision);
+      }
+    }
+  });
+
   test("round-trips a configured decision model", async () => {
     const decision = {
       provider: "typesafe",

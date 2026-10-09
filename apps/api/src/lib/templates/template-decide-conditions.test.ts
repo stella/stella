@@ -399,6 +399,7 @@ describe("templateDecideConditionsLogic access", () => {
     let modelSignal: AbortSignal | undefined;
     const modelStarted = Promise.withResolvers<undefined>();
     const client: DecisionModel = {
+      provider: "typesafe",
       keySource: "byok",
       model: "jev-test",
       ask: async ({ abortSignal }) => {

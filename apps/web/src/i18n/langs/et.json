@@ -4061,7 +4061,10 @@
         "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
         "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
         "label": "Otsustusmudel",
-        "modelId": "Mudeli ID"
+        "modelId": "Mudeli ID",
+        "regionEu": "Euroopa Liit",
+        "reuseOpenAIKey": "Kasuta minu OpenAI võtit",
+        "separateKey": "Kasuta eraldi võtit"
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",

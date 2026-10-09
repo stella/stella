@@ -21,13 +21,11 @@
 import { panic } from "better-result";
 
 import { normalizeDateValue, normalizeNumber } from "@stll/agent-input";
+import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
-import type {
-  Decisions,
-  DecisionUndecidedReason,
-} from "@/api/lib/workflow/decisions/decide";
+import type { Decisions } from "@/api/lib/workflow/decisions/decide";
 import {
   choice,
   DEFAULT_SYSTEM_ONE_MODEL,

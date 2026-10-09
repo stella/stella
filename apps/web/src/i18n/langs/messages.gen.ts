@@ -4065,6 +4065,9 @@ type Messages = {
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.";
         "label": "Decision model";
         "modelId": "Model ID";
+        "regionEu": "European Union";
+        "reuseOpenAIKey": "Use my OpenAI key";
+        "separateKey": "Use a separate key";
       };
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";

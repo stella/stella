@@ -670,7 +670,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     'condition with `path`, `label`, and either `state: "decided"`, its ' +
     "`value`, `decided_by` (`user` or `decision_model`), and `probability` " +
     'for model answers; or `state: "undecided"` and `reason` ' +
-    "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
+    "(`no_decision_model`, `below_floor`, `failed`, `refusal`). Only the decision " +
     "model runs; fill may later use the generative model. A boolean in " +
     "`values` wins. Nothing is written.",
   inputSchema: previewTemplateConditionsArgsSchema,

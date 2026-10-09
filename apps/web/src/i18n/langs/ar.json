@@ -4061,7 +4061,10 @@
         "incomplete": "أدخل مفتاح API ونموذجًا لنموذج القرار، أو أزِله.",
         "instanceProvided": "توفّر stella بالفعل نموذج قرار؛ أضف نموذجك الخاص فقط لاستخدام نموذج آخر.",
         "label": "نموذج القرار",
-        "modelId": "معرّف النموذج"
+        "modelId": "معرّف النموذج",
+        "regionEu": "الاتحاد الأوروبي",
+        "reuseOpenAIKey": "استخدام مفتاح OpenAI الخاص بي",
+        "separateKey": "استخدام مفتاح منفصل"
       },
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",

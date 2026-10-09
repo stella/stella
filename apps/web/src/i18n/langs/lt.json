@@ -4061,7 +4061,10 @@
         "incomplete": "Įveskite sprendimų modelio API raktą ir modelį arba jį pašalinkite.",
         "instanceProvided": "stella jau teikia sprendimų modelį; savo pridėkite tik tada, jei norite naudoti kitą.",
         "label": "Sprendimų modelis",
-        "modelId": "Modelio ID"
+        "modelId": "Modelio ID",
+        "regionEu": "Europos Sąjunga",
+        "reuseOpenAIKey": "Naudoti mano OpenAI raktą",
+        "separateKey": "Naudoti atskirą raktą"
       },
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",

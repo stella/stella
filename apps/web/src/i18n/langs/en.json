@@ -4061,7 +4061,10 @@
         "incomplete": "Enter an API key and a model for the decision model, or remove it.",
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.",
         "label": "Decision model",
-        "modelId": "Model ID"
+        "modelId": "Model ID",
+        "regionEu": "European Union",
+        "reuseOpenAIKey": "Use my OpenAI key",
+        "separateKey": "Use a separate key"
       },
       "defaultModel": "Default: {model}",
       "defaultModelOption": "Default",

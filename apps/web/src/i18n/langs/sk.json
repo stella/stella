@@ -4061,7 +4061,10 @@
         "incomplete": "Zadajte kľúč API a model pre rozhodovací model alebo ho odstráňte.",
         "instanceProvided": "stella už rozhodovací model poskytuje; vlastný pridajte len vtedy, ak chcete použiť iný.",
         "label": "Rozhodovací model",
-        "modelId": "ID modelu"
+        "modelId": "ID modelu",
+        "regionEu": "Európska únia",
+        "reuseOpenAIKey": "Použiť môj kľúč OpenAI",
+        "separateKey": "Použiť samostatný kľúč"
       },
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",

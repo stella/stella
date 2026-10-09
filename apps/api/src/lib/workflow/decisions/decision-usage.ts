@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { DecisionModelProvider } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
@@ -16,16 +17,22 @@ type RecordDecisionUsageOptions = {
   metering: DecisionUsageMetering;
   keySource: DecisionModel["keySource"];
   inputTokens: number;
+  provider: DecisionModelProvider;
+  region?: "eu" | "global" | undefined;
 };
 
 export const recordDecisionUsage = async ({
   metering,
   keySource,
   inputTokens,
+  provider,
+  region,
 }: RecordDecisionUsageOptions): Promise<void> => {
   const isByok = keySource === "byok";
   const { rawUsageMicroUnits, unitsConsumed } = decisionUsageUnitsFromTokens({
     inputTokens,
+    provider,
+    region,
     actionType: metering.actionType,
     isByok,
   });

@@ -305,6 +305,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
   const decisionReady = hasUsableDecisionModel({
     state: decisionState,
     stored: storedDecision,
+    hasOpenAIKey: providers.some(({ provider }) => provider === "openai"),
   });
   const canSave = rolesReady && decisionReady;
 
@@ -364,6 +365,9 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
             <div className="border-t" />
 
             <AIConfigDecisionModel
+              hasOpenAIKey={providers.some(
+                ({ provider }) => provider === "openai",
+              )}
               disabled={saveMutation.isPending}
               instanceProvisioned={config.decisionInstanceProvisioned}
               onStateChange={setDecisionState}
