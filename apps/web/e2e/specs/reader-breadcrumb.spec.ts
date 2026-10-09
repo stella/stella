@@ -317,7 +317,12 @@ for (const view of views) {
             "u",
           ),
         );
-        await expect(inspector).not.toBeVisible();
+        await expect(
+          page.locator('[data-slot="inspector-dock"]'),
+        ).toHaveAttribute("data-state", "collapsed");
+        await expect(
+          inspector.locator('[data-slot="reader-breadcrumb"]'),
+        ).toHaveCount(0);
       }
     }
   });
