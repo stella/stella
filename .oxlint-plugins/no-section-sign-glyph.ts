@@ -21,7 +21,8 @@ import { isAstNode } from "./utils.ts";
 const LONE_SECTION_SIGN =
   /^\s*(?:§|\\u00a7|\\u\{a7\}|&sect;|&#167;|&#x0*a7;)+\s*$/iu;
 
-const isLoneSectionSign = (value: string) => LONE_SECTION_SIGN.test(value);
+export const isLoneSectionSign = (value: string) =>
+  LONE_SECTION_SIGN.test(value);
 
 // Whitespace text and JSX comments render nothing next to the glyph.
 const rendersNothing = (child: unknown) =>
