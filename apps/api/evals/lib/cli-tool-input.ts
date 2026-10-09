@@ -57,7 +57,8 @@ export const composeCliToolInput = async ({
       continue;
     }
     const raw = flags.get(name);
-    const entries = repeatedFlags.get(name) ?? [];
+    const entries =
+      repeatedFlags.get(name) ?? (typeof raw === "string" ? [raw] : []);
     if (
       entries.some((entry) => entry.startsWith("@") && !entry.startsWith("@@"))
     ) {

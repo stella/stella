@@ -1,9 +1,10 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 
+import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { LAW_READ_SCOPE } from "@/api/handlers/legal-resolve/scope";
@@ -16,6 +17,9 @@ import {
   countryInputSchema,
   countryNormalization,
   nullAsAbsent,
+  structuredErrorResult,
+  featureDisabledHint,
+  MCP_UPSTREAM_UNAVAILABLE_HINT,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";
@@ -23,6 +27,40 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
+
+const defaultAdmitLawRead: typeof admitLawRead = async (input) =>
+  await (
+    await import("@/api/handlers/legal-resolve/admission")
+  ).admitLawRead(input);
+
+type AdmissionFailure = Extract<
+  Awaited<ReturnType<typeof admitLawRead>>,
+  { error: unknown }
+>["error"];
+
+const ADMISSION_ERRORS = {
+  missing_scope: {
+    code: "feature_disabled",
+    message: "Public law is not enabled on this deployment.",
+    hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
+    retryable: false,
+  },
+  not_entitled: {
+    code: "permission_denied",
+    message: "This organization does not have public-law access.",
+    hint: "Ask an organization administrator to enable public-law access, then retry.",
+    retryable: false,
+  },
+  access_unavailable: {
+    code: "upstream_unavailable",
+    message: "Public-law access could not be checked.",
+    hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
+    retryable: true,
+  },
+} as const satisfies Record<
+  AdmissionFailure["type"],
+  Parameters<typeof structuredErrorResult>[0]
+>;
 
 const defaultResolveDecision: typeof resolveDecision = async (...input) =>
   await (
@@ -147,7 +185,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one statute provision from a written citation or structured gazette identity and a section. Czech statutes are supported; other countries return country_unavailable. Omit as_of for the current expression. Returns the same status envelope as the legal resolve API: resolved carries a typed provision document, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates. Supply missing parts and retry this tool; for unknown_document call search_legislation; for unknown_section call read_statute_provisions with the document found by search_legislation.",
+      "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     inputSchema: resolveLawArgsSchema,
     inputNormalization: {
       ...common.inputNormalization,
@@ -165,11 +203,16 @@ const handleResolveDecision: TypedMcpToolHandler<ResolveData> = async ({
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
+  const admission = await (
+    context.testDependencies?.admitLawRead ?? defaultAdmitLawRead
+  )({ organizationId: context.organizationId });
+  if (Result.isError(admission)) {
+    return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
+  }
   const { country, identifier } = parsed.output;
   return toolDataResult(
     await (context.testDependencies?.resolveDecision ?? defaultResolveDecision)(
-      country,
-      identifier,
+      { admission: admission.value, country, identifier },
     ),
   );
 };
@@ -181,6 +224,12 @@ const handleResolveLaw: TypedMcpToolHandler<ResolveData> = async ({
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
+  const admission = await (
+    context.testDependencies?.admitLawRead ?? defaultAdmitLawRead
+  )({ organizationId: context.organizationId });
+  if (Result.isError(admission)) {
+    return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
+  }
   const { country, source, section, as_of: asOf } = parsed.output;
   switch (source.type) {
     case "citation":
@@ -188,19 +237,27 @@ const handleResolveLaw: TypedMcpToolHandler<ResolveData> = async ({
         await (
           context.testDependencies?.resolveLawCitation ??
           defaultResolveLawCitation
-        )(country, { citation: source.citation, section, asOf }),
+        )({
+          admission: admission.value,
+          country,
+          input: { citation: source.citation, section, asOf },
+        }),
       );
     case "structured":
       return toolDataResult(
         await (
           context.testDependencies?.resolveLawCitation ??
           defaultResolveLawCitation
-        )(country, {
-          collection: source.collection,
-          year: source.year,
-          number: source.number,
-          section,
-          asOf,
+        )({
+          admission: admission.value,
+          country,
+          input: {
+            collection: source.collection,
+            year: source.year,
+            number: source.number,
+            section,
+            asOf,
+          },
         }),
       );
     default:

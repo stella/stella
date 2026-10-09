@@ -1,9 +1,12 @@
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import type { McpRequestContext } from "./context";
@@ -12,9 +15,27 @@ import { normalizeObjectInputAtBoundary } from "./input-normalization";
 import { LEGAL_RESOLVE_TOOL_SET } from "./legal-resolve-tools";
 import { serializeToolResult } from "./tool-utils";
 
+const organizationId = toSafeId<"organization">(
+  "00000000-0000-4000-8000-0000000d0091",
+);
+const admitted = await admitLawRead({
+  organizationId,
+  publicLawEnabled: () => true,
+  mayReadPublicLaw: async () => Result.ok(true),
+});
+if (Result.isError(admitted)) {
+  panic("expected fixture admission");
+}
 const contextWith = (
   testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
-) => asTestRaw<McpRequestContext>({ testDependencies });
+) =>
+  asTestRaw<McpRequestContext>({
+    organizationId,
+    testDependencies: {
+      admitLawRead: async () => admitted,
+      ...testDependencies,
+    },
+  });
 
 const identity = {
   kind: "decision",
@@ -162,7 +183,15 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
         },
       }),
     });
-    expect(calls).toEqual([["CZE", input.identifier]]);
+    expect(calls).toEqual([
+      [
+        {
+          admission: admitted.value,
+          country: "CZE",
+          identifier: input.identifier,
+        },
+      ],
+    ]);
   });
 
   test("structured and citation inputs dispatch to the same statute service", async () => {
@@ -184,21 +213,27 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
     }
     expect(calls).toEqual([
       [
-        "CZE",
         {
-          citation: "zákon č. 89/2012 Sb.",
-          section: "1729",
-          asOf: "2020-01-01",
+          admission: admitted.value,
+          country: "CZE",
+          input: {
+            citation: "zákon č. 89/2012 Sb.",
+            section: "1729",
+            asOf: "2020-01-01",
+          },
         },
       ],
       [
-        "CZE",
         {
-          collection: "sb",
-          year: "2012",
-          number: "89",
-          section: "1729",
-          asOf: "2020-01-01",
+          admission: admitted.value,
+          country: "CZE",
+          input: {
+            collection: "sb",
+            year: "2012",
+            number: "89",
+            section: "1729",
+            asOf: "2020-01-01",
+          },
         },
       ],
     ]);
@@ -207,6 +242,8 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
   test("contradictory statute sources and batch decision identities are rejected before reading", async () => {
     const calls: unknown[] = [];
     const context = contextWith({
+      admitLawRead: async () =>
+        panic("invalid inputs must not request admission"),
       resolveDecision: async (...input) => {
         calls.push(input);
         return { status: "country_unavailable" };
@@ -253,4 +290,46 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
     }
     expect(hasGrantedScope(["stella:law_read"], "stella:read")).toBe(false);
   });
+});
+
+describe("legal resolve organization admission", () => {
+  for (const definition of LEGAL_RESOLVE_TOOL_SET.definitions) {
+    test.each([
+      { type: "not_entitled", code: "permission_denied", retryable: false },
+      {
+        type: "access_unavailable",
+        code: "upstream_unavailable",
+        retryable: true,
+      },
+      { type: "missing_scope", code: "feature_disabled", retryable: false },
+    ] as const)(
+      `${definition.name} maps $type without calling the resolver`,
+      async ({ type, code, retryable }) => {
+        const calls: unknown[] = [];
+        const result = await LEGAL_RESOLVE_TOOL_SET.handlers[definition.name]({
+          args:
+            definition.name === "resolve_case_law_decision"
+              ? { country: "CZE", identifier: "1 Cdo 1/2026" }
+              : {
+                  country: "CZE",
+                  source: { type: "citation", citation: "89/2012 Sb." },
+                  section: "1729",
+                },
+          context: contextWith({
+            admitLawRead: async (options) => {
+              calls.push(options);
+              return Result.err({ type });
+            },
+            resolveDecision: async () => panic("resolver must not run"),
+            resolveLawCitation: async () => panic("resolver must not run"),
+          }),
+        });
+        expect(calls).toEqual([{ organizationId }]);
+        expect(result).toMatchObject({
+          status: "error",
+          error: { code, retryable },
+        });
+      },
+    );
+  }
 });

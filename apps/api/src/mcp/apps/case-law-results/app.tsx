@@ -886,6 +886,7 @@ const ResolveResults = ({
               <li key={candidate.decisionId}>
                 <Button
                   variant="link"
+                  disabled={candidate.appUrl === null}
                   onClick={(event) => onOpen(candidate, event.currentTarget)}
                 >
                   <bdi>{candidate.identifier}</bdi>

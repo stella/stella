@@ -75,6 +75,20 @@ describe("CLI evaluation input composition", () => {
       false,
     );
   });
+  test.each(["@-", "@/not-read.txt"])(
+    "rejects a flag file reference %s",
+    async (country) => {
+      const result = await composeCliToolInput({
+        spec,
+        flags: new Map([
+          ["country", country],
+          ["section", "1729"],
+        ]),
+        repeatedFlags: new Map(),
+      });
+      expect(result.ok).toBe(false);
+    },
+  );
   test.each(["-", "@/not-read.json", "[]", "{"])(
     "rejects non-inline or invalid input %s",
     async (input) => {
