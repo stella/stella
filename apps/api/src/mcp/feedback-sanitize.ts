@@ -1,4 +1,4 @@
-import { sanitizeFeedbackSecrets } from "@/api/lib/credential-text";
+import { sanitizeFeedbackSecrets } from "@/api/lib/observability/credential-text";
 
 /**
  * Deterministic, regex-based redaction for agent-authored feedback text.

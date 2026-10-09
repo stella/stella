@@ -4185,7 +4185,6 @@ type Messages = {
       "member": "Member";
       "owner": "Owner";
     };
-    "settings": "Organization settings";
     "settingsDescription": "Edit your organization name and slug";
     "switchOrganization": "Switch organization";
   };

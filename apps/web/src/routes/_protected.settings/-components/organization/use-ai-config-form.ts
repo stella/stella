@@ -19,6 +19,7 @@ import type {
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { api } from "@/lib/api";
 import { APIError, unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
   aiAvailabilityOptions,
@@ -136,11 +137,13 @@ export const useAIConfigForm = ({
       overrides: nextRoles,
     });
     if (serialized.kind === "invalid") {
-      throw new APIError({
-        code: "ai_config_model_invalid",
-        status: 400,
-        message: t("aiConfig.selectModelForEachRole"),
-      });
+      return Result.err(
+        new APIError({
+          code: "ai_config_model_invalid",
+          status: 400,
+          message: t("aiConfig.selectModelForEachRole"),
+        }),
+      );
     }
     const decision = serializeDecisionModel(decisionState);
     const response = await api["organization-settings"]["ai-config"].post({
@@ -160,7 +163,7 @@ export const useAIConfigForm = ({
     setStoredDecision(data.decision);
     setDecisionState({ kind: "untouched" });
     await refresh(true);
-    return saved;
+    return Result.ok(saved);
   };
 
   const aiMutation = useSettingsMutation({
@@ -178,10 +181,12 @@ export const useAIConfigForm = ({
         await refresh(false);
         return;
       }
-      const saved = await persist({
-        nextProviders: providers,
-        nextRoles: roleModels,
-      });
+      const saved = readQueryResult(
+        await persist({
+          nextProviders: providers,
+          nextRoles: roleModels,
+        }),
+      );
       setProviders(saved);
     },
     onSuccess: () => setFeedback({ status: "saved" }),
@@ -207,7 +212,7 @@ export const useAIConfigForm = ({
     setSaveState("saving");
     await Promise.all([
       ...(isAIDirty ? [saveAI()] : []),
-      ...dirtyAuxiliarySections.map((section) => section.save()),
+      ...dirtyAuxiliarySections.map(async (section) => await section.save()),
     ]);
     setSaveState("idle");
   };

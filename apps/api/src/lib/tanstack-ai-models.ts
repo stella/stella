@@ -51,13 +51,13 @@ import {
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
-import { anthropicClientOptions } from "@/api/lib/anthropic-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AIDataClass,
   AIRequestPolicy,
   ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
+import { anthropicClientOptions } from "@/api/lib/chat/anthropic-config";
 import {
   getManagedOpenRouterConfiguration,
   type ManagedOpenRouterCredential,

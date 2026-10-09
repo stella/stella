@@ -290,9 +290,9 @@ const mount = async (
     name: messages.translate.settings.title,
   });
   await deeplQueries().findByLabelText(messages.translate.settings.apiKeyLabel);
-  await screen.findByLabelText(
-    messages.settings.organization.promptCaching.toggleLabel,
-  );
+  await screen.findByRole("checkbox", {
+    name: messages.settings.organization.promptCaching.toggleLabel,
+  });
   await waitFor(() => {
     expect(document.querySelector("#web-search-key-search")).not.toBeNull();
     expect(document.querySelector("#web-search-key-fetch")).not.toBeNull();
@@ -480,7 +480,7 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
     screen
       .getAllByRole("group")
       .filter((row) =>
-        row.textContent?.includes(messages.organization.aiConfig.usingDefaults),
+        row.textContent.includes(messages.organization.aiConfig.usingDefaults),
       ),
   ).toHaveLength(5);
   expect(
@@ -1119,18 +1119,18 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   fireEvent.change(search, { target: { value: "fixture-search-key" } });
   fireEvent.change(fetch, { target: { value: "fixture-reader-key" } });
   fireEvent.click(
-    screen.getByLabelText(
-      messages.settings.organization.promptCaching.toggleLabel,
-    ),
+    screen.getByRole("checkbox", {
+      name: messages.settings.organization.promptCaching.toggleLabel,
+    }),
   );
   fireEvent.click(
-    screen.getByLabelText(
-      messages.settings.organization.documentProcessing.toggleLabel,
-    ),
+    screen.getByRole("checkbox", {
+      name: messages.settings.organization.documentProcessing.toggleLabel,
+    }),
   );
-  const memory = screen.queryByLabelText(
-    messages.settings.organization.memoryExtraction.toggleLabel,
-  );
+  const memory = screen.queryByRole("checkbox", {
+    name: messages.settings.organization.memoryExtraction.toggleLabel,
+  });
   if (memory !== null) {
     fireEvent.click(memory);
   }
@@ -1224,9 +1224,9 @@ test("a failed auxiliary section retains its draft while successful sections cle
   fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
   fireEvent.change(search, { target: { value: "fixture-search-key" } });
   fireEvent.click(
-    screen.getByLabelText(
-      messages.settings.organization.promptCaching.toggleLabel,
-    ),
+    screen.getByRole("checkbox", {
+      name: messages.settings.organization.promptCaching.toggleLabel,
+    }),
   );
   auxiliaryFailure = {
     path: "/deepl",
@@ -1305,9 +1305,9 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
       fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
     } else {
       fireEvent.click(
-        screen.getByLabelText(
-          messages.settings.organization.promptCaching.toggleLabel,
-        ),
+        screen.getByRole("checkbox", {
+          name: messages.settings.organization.promptCaching.toggleLabel,
+        }),
       );
     }
     expect(hasUnsavedWork()).toBe(true);

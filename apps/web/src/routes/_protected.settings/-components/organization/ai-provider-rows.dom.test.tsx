@@ -114,7 +114,7 @@ describe("BYOK provider rows", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
   test("pending persistence disables draft controls", () => {
-    mount({ disabled: true });
+    const { changes, removed } = mount({ disabled: true });
     expect(screen.getByLabelText(labels.apiKey)).toHaveProperty(
       "disabled",
       true,
@@ -122,9 +122,13 @@ describe("BYOK provider rows", () => {
     expect(
       screen.getByRole("button", { name: labels.addProvider }),
     ).toHaveProperty("disabled", true);
-    expect(
-      screen.getByRole("button", { name: labels.removeProvider }),
-    ).toHaveProperty("disabled", true);
+    const remove = screen.getByRole("button", { name: labels.removeProvider });
+    expect(remove.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(remove);
+    fireEvent.keyDown(remove, { key: "Enter", code: "Enter" });
+    fireEvent.keyDown(remove, { key: " ", code: "Space" });
+    expect(changes).toEqual([]);
+    expect(removed).toEqual([]);
   });
   test("Replace reopens a saved row with an empty concealed input", () => {
     const { changes } = mount({

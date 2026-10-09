@@ -4,9 +4,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { env } from "@/api/env";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
+import { createTanStackTextAdapterFactory } from "../tanstack-ai-models";
 import { anthropicWorkspaceHeaders } from "./anthropic-config";
-import { createTanStackTextAdapterFactory } from "./tanstack-ai-models";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const ANTHROPIC_ADAPTER_PACKAGE = "@tanstack/ai-anthropic";
 
@@ -34,7 +37,7 @@ const unownedAnthropicTransport = (file: string, source: string) => {
 
 describe("Anthropic request configuration", () => {
   test("all production Anthropic transports are owned by the canonical stream factory", () => {
-    const root = path.resolve(import.meta.dir, "..");
+    const root = path.resolve(import.meta.dir, "../..");
     const violations: string[] = [];
     for (const file of new Bun.Glob("**/*.ts").scanSync({ cwd: root })) {
       if (
@@ -81,7 +84,7 @@ describe("Anthropic request configuration", () => {
 
   test("the census rejects a constructor that omits shared client options", () => {
     const source = readFileSync(
-      new URL("tanstack-ai-models.ts", import.meta.url),
+      new URL("../tanstack-ai-models.ts", import.meta.url),
       "utf-8",
     );
     expect(unownedAnthropicTransport("lib/tanstack-ai-models.ts", source)).toBe(
@@ -125,8 +128,7 @@ describe("Anthropic request configuration", () => {
           { preconnect: globalThis.fetch.preconnect },
         ),
       );
-      const originalMockMode = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
+      testState.setConfig("USE_MOCK_AI", false);
       try {
         const adapter = createTanStackTextAdapterFactory({
           provider: "anthropic",
@@ -147,7 +149,6 @@ describe("Anthropic request configuration", () => {
         );
       } finally {
         fetchSpy.mockRestore();
-        env.USE_MOCK_AI = originalMockMode;
       }
     });
   }

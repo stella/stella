@@ -25,13 +25,13 @@ import {
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
 import { captureError } from "@/api/lib/analytics/capture";
-import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/anthropic-config";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
+import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
 import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";

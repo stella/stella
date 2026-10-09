@@ -4182,7 +4182,6 @@
       "member": "Mitglied",
       "owner": "Eigentümer"
     },
-    "settings": "Organisationseinstellungen",
     "settingsDescription": "Name und Slug der Organisation bearbeiten",
     "switchOrganization": "Organisation wechseln"
   },

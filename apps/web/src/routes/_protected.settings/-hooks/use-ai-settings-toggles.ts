@@ -12,6 +12,7 @@ import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/queries/organization-settings";
+import type { OrganizationSettings } from "@/queries/organization-settings";
 
 import type { SectionFeedback } from "../-components/organization/ai-settings-section";
 import { useSettingsMutation } from "./use-settings-mutation";
@@ -82,7 +83,7 @@ const useToggleSection = (section: ToggleSection) => {
             return {
               ...current,
               documentProcessingMode: next ? SEARCHABLE_TEXT : PROCESSING_OFF,
-            };
+            } satisfies OrganizationSettings;
           case "memoryExtraction":
             return { ...current, memoryExtractionEnabled: next };
           default:
