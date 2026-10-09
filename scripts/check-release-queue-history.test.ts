@@ -240,7 +240,10 @@ describe("release queue history", () => {
 
     const exitCode = runReleaseQueueHistoryCli(
       ["--from", "v1.2.3", "--base", BASE_SHA],
-      (message) => warnings.push(message),
+      (message) => {
+        warnings.push(message);
+        return true;
+      },
       () => check(command),
     );
 
@@ -375,7 +378,10 @@ describe("release queue history", () => {
     const warnings: string[] = [];
     const exitCode = runReleaseQueueHistoryCli(
       ["--from", "v1.2.3", "--base", BASE_SHA],
-      (message) => warnings.push(message),
+      (message) => {
+        warnings.push(message);
+        return true;
+      },
       () => check(fakeCommand({ direct: [303] })),
     );
 
