@@ -471,11 +471,7 @@ export const packageTestCollectionFailure = ({
       continue;
     }
     const delegatedScript = words[index + 2];
-    if (
-      words[index + 1] === "run" &&
-      delegatedScript !== undefined &&
-      delegatedScript.startsWith("test:")
-    ) {
+    if (words[index + 1] === "run" && delegatedScript?.startsWith("test:")) {
       return packageTestCollectionFailure({
         candidate,
         packageDirectory,
