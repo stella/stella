@@ -8,6 +8,7 @@ import {
   spellingColumnSteps,
   stringIdsSteps,
   UnsignedReader,
+  BoundedCache,
   NumberColumn,
   ObjectColumn,
   PostingColumn,
@@ -43,6 +44,11 @@ const screeningWorkExhausted = (budget: ScreeningWorkBudget): boolean =>
 
 const MAX_SCORED_PATTERNS = 256;
 const MAX_FUZZY_STRINGS = 64;
+// Screening caches are bounded so a long-lived index cannot grow with every
+// distinct query token: about 65 matches per exact-similarity entry, and one
+// short histogram per decoded spelling.
+const EXACT_SIMILARITY_CACHE_LIMIT = 2048;
+const CHARACTER_CACHE_LIMIT = 16_384;
 
 const METRIC = "damerau-levenshtein";
 
@@ -95,7 +101,7 @@ type Spellings = {
   gramCounts: NumberColumn;
   characterOffsets: NumberColumn;
   characterCounts: NumberColumn;
-  characterCache: (Uint32Array | undefined)[];
+  characterCache: BoundedCache<number, Uint32Array>;
 };
 
 class VocabularyStrings {
@@ -128,7 +134,7 @@ type Vocabulary = {
   postings: ReadonlyPostings;
   joinPostings: ReadonlyPostings;
   lookupScratch?: LookupScratch;
-  exactSimilarityCache: Map<
+  exactSimilarityCache: BoundedCache<
     number,
     {
       readonly matches: Map<number, number>;
@@ -329,7 +335,7 @@ const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
     gramPostings: new PostingColumn(),
     postings: new PostingColumn(),
     joinPostings: new PostingColumn(),
-    exactSimilarityCache: new Map(),
+    exactSimilarityCache: new BoundedCache(EXACT_SIMILARITY_CACHE_LIMIT),
   };
 };
 
@@ -471,7 +477,7 @@ export function* nameIndexSteps(
     gramCounts: new NumberColumn(),
     characterOffsets: new NumberColumn(),
     characterCounts: new NumberColumn("byte"),
-    characterCache: [],
+    characterCache: new BoundedCache(CHARACTER_CACHE_LIMIT),
   };
   spellings.characterOffsets.push(0);
   const spellingIds = new StringMap<number>();
@@ -644,7 +650,7 @@ const spellingCharacterCounts = (
   spellings: Spellings,
   spelling: number,
 ): Uint32Array => {
-  const known = spellings.characterCache[spelling];
+  const known = spellings.characterCache.get(spelling);
   if (known !== undefined) {
     return known;
   }
@@ -660,7 +666,7 @@ const spellingCharacterCounts = (
     counts.push(codePoint, reader.read());
   }
   const decoded = Uint32Array.from(counts);
-  spellings.characterCache[spelling] = decoded;
+  spellings.characterCache.set(spelling, decoded);
   return decoded;
 };
 

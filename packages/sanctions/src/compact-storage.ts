@@ -486,3 +486,45 @@ export class PostingColumn {
     }
   }
 }
+
+/**
+ * A cache with a fixed entry cap that evicts the least recently used entry.
+ * Screening caches live as long as the index, so an unbounded one would grow
+ * with every distinct query token and undo the compact layout.
+ */
+export class BoundedCache<K, V> {
+  private readonly entries = new Map<K, V>();
+  private readonly limit: number;
+
+  constructor(limit: number) {
+    if (!Number.isSafeInteger(limit) || limit <= 0) {
+      panic("A bounded cache needs a positive entry limit");
+    }
+    this.limit = limit;
+  }
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  get(key: K): V | undefined {
+    const value = this.entries.get(key);
+    if (value === undefined) {
+      return undefined;
+    }
+    this.entries.delete(key);
+    this.entries.set(key, value);
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    this.entries.delete(key);
+    this.entries.set(key, value);
+    if (this.entries.size > this.limit) {
+      const oldest = this.entries.keys().next();
+      if (!oldest.done) {
+        this.entries.delete(oldest.value);
+      }
+    }
+  }
+}
