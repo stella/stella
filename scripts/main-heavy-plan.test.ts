@@ -87,6 +87,12 @@ const context = (
     pr_depth_only: false,
     query_perf_mode: "compare",
   },
+  steps: {
+    "changed-files": { outputs: plan },
+    "marketing-release": {
+      outputs: { required: plan["marketing_screenshots_required"] },
+    },
+  },
   needs: Object.fromEntries(
     ciNeeds.map((job) => [
       job,
@@ -133,6 +139,39 @@ const heavyPlan = {
 };
 
 const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
+
+test("query recording schedules only its planner and measurement job", () => {
+  for (const depth of ["fast", "full"]) {
+    const value = {
+      ...context("workflow_dispatch", false, heavyPlan),
+      inputs: {
+        heavy_only: false,
+        pr_depth_only: false,
+        query_perf_mode: "record",
+        depth,
+        allow_full: true,
+      },
+    };
+    const scheduled = Object.entries(workflow.jobs)
+      .filter(([, job]) => selected(job.if ?? "true", value))
+      .map(([name]) => name);
+    expect(scheduled).toEqual(["ci-plan", "query-perf"]);
+    expect(workflow.jobs["query-perf"]?.needs).toEqual("ci-plan");
+    for (const [name, expression] of Object.entries(planOutputs)) {
+      if (
+        !name.endsWith("_required") ||
+        name === "query_perf_required" ||
+        name === "run_required"
+      ) {
+        continue;
+      }
+      expect(
+        evaluateExpression(expression, contextFromNested(value)),
+        name,
+      ).toBe("false");
+    }
+  }
+});
 
 test("query budgets select affected changes and explicit recordings", () => {
   const condition =
