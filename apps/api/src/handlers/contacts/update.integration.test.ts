@@ -6,7 +6,10 @@ import { contacts } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -36,6 +39,7 @@ const update = async (body: UpdateContactContext["body"]) => {
   const auditFields: unknown[] = [];
   const result = await updateContact.handler(
     createTestHandlerContext<UpdateContactContext>({
+      scopedDb: NO_DB,
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -43,7 +47,7 @@ const update = async (body: UpdateContactContext["body"]) => {
       safeDb: asTestRaw<SafeDb>(
         createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       ),
-      recordAuditEvent: async (_tx, events) => {
+      audit: async (_tx, events) => {
         for (const event of Array.isArray(events) ? events : [events]) {
           auditFields.push(event.changes);
         }
