@@ -11,6 +11,7 @@ import { composerText } from "@/components/chat-editor-source";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useChatDraftStore } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
@@ -89,7 +90,9 @@ const SentMessage = ({ state }: { state: "collapsed" | "expanded" }) => (
         onCreateDocumentResolve={noop}
         onOpenCreatedDocument={noop}
         streamdownComponents={{
-          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          a: (props) => (
+            <StreamdownMentionLink {...props} interactive={false} />
+          ),
         }}
       />
     </ChatApprovalContext>
