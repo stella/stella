@@ -47,7 +47,13 @@ export const observeReaderBreadcrumb = ({
   let timer: ReturnType<typeof setTimeout> | undefined;
   const update = () => {
     timer = undefined;
-    const top = readerBreadcrumbCutoff(viewport);
+    // At the end, short final sections cannot reach the usual heading cutoff.
+    const atEnd =
+      Math.ceil(viewport.scrollTop) >=
+      viewport.scrollHeight - viewport.clientHeight;
+    const top = atEnd
+      ? viewport.getBoundingClientRect().bottom
+      : readerBreadcrumbCutoff(viewport);
     let start = 0;
     let end = headings.length;
     while (start < end) {
@@ -55,7 +61,9 @@ export const observeReaderBreadcrumb = ({
       const heading = headings.at(middle);
       if (
         heading !== undefined &&
-        heading.element.getBoundingClientRect().top <= top
+        (atEnd
+          ? heading.element.getBoundingClientRect().top < top
+          : heading.element.getBoundingClientRect().top <= top)
       ) {
         start = middle + 1;
       } else {

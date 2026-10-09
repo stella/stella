@@ -107,6 +107,10 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
     content.append(heading);
   }
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 1000 },
+  });
   const changes: (string | null)[] = [];
   const stop = observeReaderBreadcrumb({
     viewport,
@@ -133,87 +137,141 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
 });
 
 for (const jump of ["contents", "ancestor"]) {
-  for (const fraction of [0.0625, 0.4375, 0.9375]) {
-    test(`${jump} jumps activate their selected heading with fractional geometry ${fraction}`, async () => {
-      const { LegalReaderBreadcrumb } =
-        await import("./legal-reader-breadcrumb");
-      const viewport = document.createElement("div");
-      const content = document.createElement("article");
-      const viewportTop = 17.375;
-      viewport.scrollTop = jump === "ancestor" ? 400 : 0;
-      viewport.getBoundingClientRect = () =>
-        new DOMRect(0, viewportTop, 400, 300);
-      // Model the browser's integer scroll position without rounding the headings.
-      viewport.scrollTo = (options?: ScrollToOptions | number) => {
-        if (options === undefined || typeof options === "number") {
-          throw new Error("Expected breadcrumb scroll options");
-        }
-        viewport.scrollTop = Math.max(0, Math.round(options.top ?? 0));
-        viewport.dispatchEvent(new Event("scroll"));
-      };
-      for (const [index, { anchorId }] of path.entries()) {
-        const heading = document.createElement("h2");
-        heading.dataset["anchor"] = anchorId;
-        heading.getBoundingClientRect = () =>
-          new DOMRect(
+  for (const scrollHeight of jump === "contents" ? [1000, 500] : [1000]) {
+    for (const fraction of [0.0625, 0.4375, 0.9375]) {
+      test(`${jump} jumps activate their selected heading with fractional geometry ${fraction} and document height ${scrollHeight}`, async () => {
+        const { LegalReaderBreadcrumb } =
+          await import("./legal-reader-breadcrumb");
+        const viewport = document.createElement("div");
+        const content = document.createElement("article");
+        const viewportTop = 17.375;
+        viewport.scrollTop = jump === "ancestor" ? 400 : 0;
+        viewport.getBoundingClientRect = () =>
+          new DOMRect(0, viewportTop, 400, 300);
+        Object.defineProperties(viewport, {
+          clientHeight: { value: 300 },
+          scrollHeight: { value: scrollHeight },
+        });
+        // Model the browser's integer scroll position without rounding the headings.
+        viewport.scrollTo = (options?: ScrollToOptions | number) => {
+          if (options === undefined || typeof options === "number") {
+            throw new Error("Expected breadcrumb scroll options");
+          }
+          viewport.scrollTop = Math.max(
             0,
-            viewportTop + index * 100 + fraction - viewport.scrollTop,
-            200,
-            24,
-          );
-        content.append(heading);
-      }
-      viewport.append(content);
-      document.body.append(viewport);
-      try {
-        render(
-          <IntlProvider locale="en" messages={messages}>
-            <TooltipProvider>
-              <LegalReaderBreadcrumb
-                blocks={path.map(({ anchorId, title }, index) => ({
-                  type: "heading",
-                  id: anchorId,
-                  anchorId,
-                  level: index + 1,
-                  plainText: title,
-                  inlines: [{ type: "text", text: title }],
-                }))}
-                viewportRef={{ current: viewport }}
-                contentRef={{ current: content }}
-              />
-            </TooltipProvider>
-          </IntlProvider>,
-        );
-        const target = path.at(jump === "ancestor" ? 3 : 4);
-        if (target === undefined) {
-          throw new Error("Jump target is missing from fixture");
-        }
-        if (jump === "contents") {
-          await act(async () =>
-            fireEvent.click(
-              screen.getByRole("button", { name: /^Contents:/u }),
+            Math.min(
+              viewport.scrollHeight - viewport.clientHeight,
+              Math.round(options.top ?? 0),
             ),
           );
+          viewport.dispatchEvent(new Event("scroll"));
+        };
+        for (const [index, { anchorId }] of path.entries()) {
+          const heading = document.createElement("h2");
+          heading.dataset["anchor"] = anchorId;
+          heading.getBoundingClientRect = () =>
+            new DOMRect(
+              0,
+              viewportTop + index * 100 + fraction - viewport.scrollTop,
+              200,
+              24,
+            );
+          content.append(heading);
         }
-        await act(async () => {
-          fireEvent.click(
-            screen.getByRole("button", { name: target.title, exact: true }),
+        viewport.append(content);
+        document.body.append(viewport);
+        try {
+          render(
+            <IntlProvider locale="en" messages={messages}>
+              <TooltipProvider>
+                <LegalReaderBreadcrumb
+                  blocks={path.map(({ anchorId, title }, index) => ({
+                    type: "heading",
+                    id: anchorId,
+                    anchorId,
+                    level: index + 1,
+                    plainText: title,
+                    inlines: [{ type: "text", text: title }],
+                  }))}
+                  viewportRef={{ current: viewport }}
+                  contentRef={{ current: content }}
+                />
+              </TooltipProvider>
+            </IntlProvider>,
           );
-          await sleep(220);
-        });
-        expect(
-          screen.getByRole("button", {
-            name: `Contents: ${target.title}`,
-            exact: true,
-          }),
-        ).toBeTruthy();
-      } finally {
-        cleanup();
-        viewport.remove();
-      }
-    });
+          const target = path.at(jump === "ancestor" ? 3 : 4);
+          if (target === undefined) {
+            throw new Error("Jump target is missing from fixture");
+          }
+          if (jump === "contents") {
+            await act(async () =>
+              fireEvent.click(
+                screen.getByRole("button", { name: /^Contents:/u }),
+              ),
+            );
+          }
+          await act(async () => {
+            fireEvent.click(
+              screen.getByRole("button", { name: target.title, exact: true }),
+            );
+            await sleep(220);
+          });
+          expect(
+            screen.getByRole("button", {
+              name: `Contents: ${target.title}`,
+              exact: true,
+            }),
+          ).toBeTruthy();
+        } finally {
+          cleanup();
+          viewport.remove();
+        }
+      });
+    }
   }
 }
+
+test("plain scrolling selects the last visible heading at maximum scroll", async () => {
+  const { observeReaderBreadcrumb } =
+    await import("./reader-breadcrumb-scroll");
+  const viewport = document.createElement("div");
+  const content = document.createElement("article");
+  viewport.getBoundingClientRect = () => new DOMRect(0, 17.375, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 500 },
+  });
+  for (const [index, { anchorId }] of path.entries()) {
+    const heading = document.createElement("h2");
+    heading.dataset["anchor"] = anchorId;
+    heading.getBoundingClientRect = () =>
+      new DOMRect(
+        0,
+        17.375 + index * 100 + 0.4375 - viewport.scrollTop,
+        200,
+        24,
+      );
+    content.append(heading);
+  }
+  const changes: (string | null)[] = [];
+  const stop = observeReaderBreadcrumb({
+    viewport,
+    content,
+    anchors: path.map(({ anchorId }) => anchorId),
+    onAnchorChange: (id) => {
+      changes.push(id);
+    },
+  });
+  try {
+    expect(changes).toEqual(["heading-0"]);
+    viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight;
+    viewport.dispatchEvent(new Event("scroll"));
+    await sleep(220);
+    expect(changes).toEqual(["heading-0", "heading-4"]);
+  } finally {
+    stop();
+  }
+});
 
 test("reader breadcrumb uses translated Arabic chrome and isolates source titles", async () => {
   const { default: arabic } = await import("@/i18n/langs/ar.json");
@@ -316,6 +374,10 @@ test("Contents remains reachable while introductory paragraphs precede the first
   heading.dataset["anchor"] = "first";
   heading.getBoundingClientRect = () => new DOMRect(0, 200, 200, 24);
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 1000 },
+  });
   content.append(intro, heading);
   viewport.append(content);
   document.body.append(viewport);
