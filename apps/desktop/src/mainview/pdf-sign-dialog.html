@@ -10,24 +10,20 @@
         margin: 0;
         padding: 0;
       }
-      /* The dialog centres while it fits and scrolls from its top when a
-         long name or translation makes it taller than the window. */
       body {
         background: #1c1c1e;
         color: #f5f5f7;
         display: flex;
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-        height: 100vh;
-        overflow-y: auto;
+        overflow: hidden;
         justify-content: center;
         -webkit-user-select: none;
         user-select: none;
       }
       .dialog {
-        margin: auto;
-        max-width: 390px;
-        padding: 28px 24px 20px;
+        flex-shrink: 0;
+        padding: 56px 24px 20px;
         width: 100%;
       }
       .mark {
@@ -241,7 +237,8 @@
         <button class="sign" hidden id="signBtn"></button>
       </div>
     </main>
-    <script>
+    <script type="module">
+      import { fitStaticDialog } from "./static-dialog-fit.js";
       // Everything the dialog renders arrives in the URL hash, set by Rust
       // when it opens the window: the certificates to choose from, the
       // document it is about, and the wording, so the dialog carries no
@@ -464,6 +461,11 @@
         element("signBtn").disabled = true;
         respond({ action: "cancel" });
       });
+      fitStaticDialog((size) =>
+        window.__TAURI_INTERNALS__
+          ? window.__TAURI_INTERNALS__.invoke("fit_static_dialog", size)
+          : Promise.resolve(null),
+      );
     </script>
   </body>
 </html>
