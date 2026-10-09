@@ -1,8 +1,11 @@
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
 
-import { recordAuditGroups } from "./audit-log-core";
-import type { AuditExecutionContext, AuditRecorder } from "./audit-log-core";
+import { recordAuditGroups } from "./db/audit-recording";
+import type {
+  AuditExecutionContext,
+  AuditRecorder,
+} from "./db/audit-recording";
 
 export {
   AUDIT_ACTION,
@@ -12,7 +15,7 @@ export {
   auditEventChanges,
   recordAuditGroups,
   createBackgroundAuditRecorder,
-} from "./audit-log-core";
+} from "./db/audit-recording";
 export type {
   AuditAction,
   AuditResourceType,
@@ -22,7 +25,7 @@ export type {
   AuditExecutionContext,
   AuditEvent,
   AuditRecorder,
-} from "./audit-log-core";
+} from "./db/audit-recording";
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;

@@ -3,14 +3,14 @@ import { panic } from "better-result";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
 import type { Transaction } from "@/api/db/root";
+import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
+import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
-} from "@/api/lib/audit-log-core";
-import type { AuditExecutionContext } from "@/api/lib/audit-log-core";
-import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
-import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
+} from "@/api/lib/db/audit-recording";
+import type { AuditExecutionContext } from "@/api/lib/db/audit-recording";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 

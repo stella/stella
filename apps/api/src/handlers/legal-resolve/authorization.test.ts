@@ -69,7 +69,14 @@ test("one request is authorized once, whoever asks first", async () => {
   const first = new Request("https://api.test/v1/law/cz/citations/resolve");
   const second = new Request("https://api.test/v1/law/cz/citations/resolve");
 
+  expect(authorize.getExistingAuthorization(first)).toBeUndefined();
+  expect(seen).toEqual([]);
   await Promise.all([authorize(first), authorize(first)]);
+  expect(await authorize.getExistingAuthorization(first)).toEqual({
+    status: 403,
+    body: { error: "missing_scope" },
+  });
+  expect(authorize.getExistingAuthorization(second)).toBeUndefined();
   await authorize(first);
   await authorize(second);
 

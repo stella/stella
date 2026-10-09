@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { decodeJwt } from "jose";
 
+import { mayReadPublicLawForOrganization } from "@/api/db/root";
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import { captureRequestError } from "@/api/lib/analytics/capture";
@@ -8,7 +9,6 @@ import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal"
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
-import { mayReadPublicLawForOrganization } from "@/api/db/root";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
@@ -173,7 +173,7 @@ export const authorizeOncePerRequest = (
       body: { error: "access_unavailable" as const },
     };
   };
-  return async (request: Request) => {
+  const authorizeRequest = async (request: Request) => {
     const existing = byRequest.get(request);
     if (existing !== undefined) {
       return await existing;
@@ -182,6 +182,9 @@ export const authorizeOncePerRequest = (
     byRequest.set(request, authorization);
     return await authorization;
   };
+  return Object.assign(authorizeRequest, {
+    getExistingAuthorization: (request: Request) => byRequest.get(request),
+  });
 };
 
 /** The production authorization, shared by the endpoints and the limiter. */

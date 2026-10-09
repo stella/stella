@@ -11,18 +11,18 @@ import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import {
   auditChangesForResource,
   auditMetadataForResource,
-} from "./audit-log-details";
+} from "../audit-log-details";
 import type {
   ChatAuditChanges,
   ChatAuditResourceType,
   NonChatAuditResourceType,
-} from "./audit-log-details";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
-import type { AuditAction, AuditResourceType } from "./audit-log.constants";
+} from "../audit-log-details";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
+import type { AuditAction, AuditResourceType } from "../audit-log.constants";
 
-export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
-export type { AuditAction, AuditResourceType } from "./audit-log.constants";
-export type { NonChatAuditResourceType } from "./audit-log-details";
+export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
+export type { AuditAction, AuditResourceType } from "../audit-log.constants";
+export type { NonChatAuditResourceType } from "../audit-log-details";
 
 export const ORGANIZATION_AUDIT_LOG_RESOURCE_ID = "organization-logs";
 /** The directory itself, for events about the whole contact set (exports). */

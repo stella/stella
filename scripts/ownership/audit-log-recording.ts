@@ -3,12 +3,12 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 export default {
   id: "audit-log-recording",
   capability: "Environment-free audit event recording",
-  owner: ["apps/api/src/lib/audit-log-core.ts"],
+  owner: ["apps/api/src/lib/db/audit-recording.ts"],
   summary:
     "One insertion owner applies audit projection and provenance; the HTTP wrapper binds request metadata while background operations require no API environment.",
   enforcement: {
     kind: "import",
-    specifiers: ["@/api/lib/audit-log-core"],
+    specifiers: ["@/api/lib/db/audit-recording"],
     names: ["recordAuditGroups", "createBackgroundAuditRecorder"],
     allowed: [
       {

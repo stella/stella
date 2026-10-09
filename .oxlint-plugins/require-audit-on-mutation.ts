@@ -89,7 +89,7 @@ const AUDIT_RECORDER_NAME =
 // Imported helpers that write their own audit row.
 const AUDITED_HELPERS = [
   {
-    module: "apps/api/src/lib/audit-log-core",
+    module: "apps/api/src/lib/db/audit-recording",
     names: new Set(["recordAuditGroups"]),
   },
   {
@@ -124,7 +124,7 @@ const MEMBER_RUN_MODULE_FILES: ReadonlySet<string> = new Set(
 );
 const AUDIT_LOG_MODULES = [
   "apps/api/src/lib/audit-log",
-  "apps/api/src/lib/audit-log-core",
+  "apps/api/src/lib/db/audit-recording",
 ];
 const AUDIT_RECORDER_FACTORIES: ReadonlySet<string> = new Set([
   "createAuditRecorder",

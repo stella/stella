@@ -112,7 +112,7 @@ export const save = () => {
       ),
     ).toEqual([4]);
   });
-  test.each(["@/api/lib/audit-log", "@/api/lib/audit-log-core"])(
+  test.each(["@/api/lib/audit-log", "@/api/lib/db/audit-recording"])(
     "recognizes tenant group auditing from %s",
     async (module) => {
       const mutation = `

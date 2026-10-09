@@ -5,7 +5,7 @@ import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
-} from "@/api/lib/audit-log-core";
+} from "@/api/lib/db/audit-recording";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 

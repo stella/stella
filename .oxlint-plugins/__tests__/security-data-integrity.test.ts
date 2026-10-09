@@ -90,7 +90,7 @@ describe.serial("security and data-integrity lint boundaries", () => {
           'import { auditLogs } from "@/api/db/schema";',
           "tx.insert(auditLogs).values(input);",
         ),
-        { sourcePath: "apps/api/src/lib/audit-log-core.ts" },
+        { sourcePath: "apps/api/src/lib/db/audit-recording.ts" },
       ),
     ).toEqual([]);
   });
