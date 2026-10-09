@@ -359,10 +359,38 @@ test("CI selects the merge base on PRs and the event base on merge groups", () =
   });
 }, 30_000);
 
-test("removed writer options fail explicitly", () => {
-  const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", "--write"]);
-  expect(result.code).not.toBe(0);
-  expect(result.output).toContain("unsupported ratchet option: --write");
+describe("ratchet command-line usage", () => {
+  for (const flag of ["--help", "-h"]) {
+    test(`${flag} prints usage successfully`, () => {
+      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      expect(result.code).toBe(0);
+      expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
+      expect(result.output).toContain("--check");
+      expect(result.output).toContain("scripts/ratchet-allowances/<slug>.json");
+      expect(result.output).toContain('"delta": <positive integer>');
+    });
+  }
+
+  test("an unknown flag prints usage and fails", () => {
+    const result = run(ROOT, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--write",
+    ]);
+    expect(result.code).not.toBe(0);
+    expect(result.output).toContain("unsupported ratchet option: --write");
+    expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
+  });
+
+  test("the supported self-test mode retains its behavior", () => {
+    const result = run(ROOT, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--self-test",
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain("ratchet --self-test: PASS");
+  });
 });
 
 test("the lint planner inherits only result-boundary debt measured in the base tree", () => {
