@@ -131,6 +131,40 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     return { browser, client, grant };
   };
 
+  type ResourceRefreshOptions = Parameters<typeof refreshOAuthGrant>[0] & {
+    resource: string;
+  };
+  let resourceRequests = 0;
+  const refreshResourceGrant = async ({
+    client,
+    refreshToken,
+    scope,
+    resource,
+  }: ResourceRefreshOptions) => {
+    resourceRequests += 1;
+    const address = `203.0.113.${String(resourceRequests)}`;
+    return await auth.handler(
+      new Request(getAuthEndpointUrl("oauth2/token"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-forwarded-for": address,
+          [AUTH_CLIENT_ADDRESS_HEADER]: address,
+        },
+        body: new URLSearchParams({
+          client_id: client.clientId,
+          ...(client.clientSecret === undefined
+            ? {}
+            : { client_secret: client.clientSecret }),
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+          resource,
+          ...(scope === undefined ? {} : { scope }),
+        }),
+      }),
+    );
+  };
+
   describe("OAuth refresh scope policy (postgres)", () => {
     for (const clientKind of ["registered", "metadata"] as const) {
       for (const requestScopes of ["omitted", "authorized"] as const) {
@@ -194,23 +228,11 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           .returning({ resources: oauthRefreshToken.resources });
         expect(changed).toEqual([{ resources: [resource] }]);
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const address = `198.51.100.${String(attempt + 1)}`;
-          const response = await auth.handler(
-            new Request(getAuthEndpointUrl("oauth2/token"), {
-              method: "POST",
-              headers: {
-                "content-type": "application/x-www-form-urlencoded",
-                "x-forwarded-for": address,
-                [AUTH_CLIENT_ADDRESS_HEADER]: address,
-              },
-              body: new URLSearchParams({
-                client_id: client.clientId,
-                grant_type: "refresh_token",
-                refresh_token: grant.refreshToken,
-                resource,
-              }),
-            }),
-          );
+          const response = await refreshResourceGrant({
+            client,
+            refreshToken: grant.refreshToken,
+            resource,
+          });
           expect(response.status).toBe(400);
           expect(await response.json()).toMatchObject({
             error: "invalid_grant",
@@ -218,6 +240,63 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         }
       });
     }
+
+    test("refuses a scope reduction outside resource policy and rotates an allowed retry", async () => {
+      const { client, grant } = await fixture();
+      expect(grant.scope.split(" ")).toContain("stella:templates");
+      const resource = `https://resource.example.test/${Bun.randomUUIDv7()}`;
+      await rootDb.insert(oauthResource).values({
+        id: Bun.randomUUIDv7(),
+        identifier: resource,
+        name: "Refresh scope",
+        allowedScopes: ["offline_access", "stella:read"],
+      });
+      cleanup.push(
+        async () =>
+          await rootDb
+            .delete(oauthResource)
+            .where(eq(oauthResource.identifier, resource)),
+      );
+      await rootDb.insert(oauthClientResource).values({
+        id: Bun.randomUUIDv7(),
+        clientId: client.clientId,
+        resourceId: resource,
+      });
+      const scopes = ["offline_access", "stella:read", "stella:templates"];
+      const changed = await rootDb
+        .update(oauthRefreshToken)
+        .set({ scopes, resources: [resource] })
+        .where(eq(oauthRefreshToken.clientId, client.clientId))
+        .returning({ scopes: oauthRefreshToken.scopes });
+      expect(changed).toEqual([{ scopes }]);
+      const refused = await refreshResourceGrant({
+        client,
+        refreshToken: grant.refreshToken,
+        resource,
+        scope: "stella:templates",
+      });
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({ error: "invalid_scope" });
+      const accepted = await refreshResourceGrant({
+        client,
+        refreshToken: grant.refreshToken,
+        resource,
+        scope: "stella:read",
+      });
+      expect(accepted.status).toBe(200);
+      const successor = v.parse(tokenSchema, await accepted.json());
+      expect(successor.refresh_token === grant.refreshToken).toBe(false);
+      expect(
+        (
+          await refreshResourceGrant({
+            client,
+            refreshToken: successor.refresh_token,
+            resource,
+            scope: "stella:read",
+          })
+        ).status,
+      ).toBe(200);
+    });
 
     test("rotates three successive grants and replays each previous response", async () => {
       const { client, grant } = await fixture();

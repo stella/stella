@@ -95,19 +95,17 @@ index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..97396e144dc3316c85ddc12f5776a71a
  * redirect_uri when it matches a registered entry. Returns null whenever the
  * RP cannot be safely reached, so callers can fall back to the server error
 diff --git a/dist/introspect-CbYi2MJT.mjs b/dist/introspect-CbYi2MJT.mjs
-index c41408fff2544b24d5e2666209f45b0833fe0853..3279c3193e4ee1e108713cf0d1d67ddfbef5a7d2 100644
+index c41408fff2544b24d5e2666209f45b0833fe0853..5a374e48b44a6fb3b04c363a0dfff227b3413151 100644
 --- a/dist/introspect-CbYi2MJT.mjs
 +++ b/dist/introspect-CbYi2MJT.mjs
-@@ -486,7 +486,7 @@
- 		const allowed = new Set(row.allowedScopes);
- 		const intersection = effectiveScopes.filter((s) => allowed.has(s));
- 		if (intersection.length === 0) throw new APIError("BAD_REQUEST", {
--			error: "invalid_scope",
-+			error: params.refreshToken ? "invalid_grant" : "invalid_scope",
- 			error_description: `none of the requested scopes are allowed for resource ${row.identifier}`
- 		});
- 		effectiveScopes = intersection;
-@@ -806,6 +806,7 @@
+@@ -1,5 +1,5 @@
+ import { t as __exportAll } from "./rolldown-runtime-wcPFST8Q.mjs";
+-import { A as collectExtensionAccessTokenClaims, C as storeToken, E as validateClientCredentials, F as getExtensionGrantHandler, L as getSupportedGrantTypes, M as collectExtensionUserInfoClaims, R as hasUserInfoClaimExtension, T as toResourceList, a as getClient, b as resolveSubjectIdentifier, c as getStoredToken, h as parseClientMetadata, i as extractClientCredentials, j as collectExtensionIdTokenClaims, l as isPKCERequired, n as decryptStoredClientSecret, o as getJwtPlugin, p as normalizeTimestampValue, r as destructureCredentials, t as clientAllowsGrant, w as toAudienceClaim, y as resolveSessionAuthTime } from "./utils-CoqjzHuU.mjs";
++import { A as collectExtensionAccessTokenClaims, C as storeToken, D as validateClientScopes, E as validateClientCredentials, F as getExtensionGrantHandler, L as getSupportedGrantTypes, M as collectExtensionUserInfoClaims, R as hasUserInfoClaimExtension, T as toResourceList, a as getClient, b as resolveSubjectIdentifier, c as getStoredToken, h as parseClientMetadata, i as extractClientCredentials, j as collectExtensionIdTokenClaims, l as isPKCERequired, n as decryptStoredClientSecret, o as getJwtPlugin, p as normalizeTimestampValue, r as destructureCredentials, t as clientAllowsGrant, w as toAudienceClaim, y as resolveSessionAuthTime } from "./utils-CoqjzHuU.mjs";
+ import { APIError } from "better-auth/api";
+ import { generateRandomString, symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
+ import { APIError as APIError$1 } from "better-call";
+@@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
  	const inputs = collectResourceInputs(opts);
  	if (inputs.length === 0) return;
  	const mode = opts.resourceSeedMode ?? "insertOnly";
@@ -115,7 +113,7 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..3279c3193e4ee1e108713cf0d1d67ddf
  	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
  	for (const rawInput of inputs) {
  		const check = await checkIdentifier(opts, rawInput.identifier);
-@@ -1088,7 +1089,15 @@
+@@ -1088,7 +1089,15 @@ const clientRegistrationRequestSchema = z.object({
  	client_name: z.string().refine((value) => value.trim().length > 0, "client_name cannot be empty").optional(),
  	client_uri: z.string().optional(),
  	logo_uri: z.string().optional(),
@@ -141,17 +139,7 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..3279c3193e4ee1e108713cf0d1d67ddf
  		resources,
  		createdAt: /* @__PURE__ */ new Date(iat * 1e3),
  		expiresAt: /* @__PURE__ */ new Date(exp * 1e3)
-@@ -1604,7 +1613,8 @@
- 	const resourcePolicy = await resolveResourcePolicy(ctx, opts, {
- 		resource: params.resources,
- 		clientId: params.clientId,
--		requestedScopes: params.requestedScopes
-+		requestedScopes: params.requestedScopes,
-+		refreshToken: params.refreshToken
- 	});
- 	const resourceExpiresAtSeconds = resourcePolicy.accessTokenTtl !== null ? params.iat + resourcePolicy.accessTokenTtl : params.scopeExpiresAtSeconds;
- 	const refreshTokenDefaultTtl = opts.refreshTokenExpiresIn ?? 2592e3;
-@@ -2134,6 +2144,35 @@
+@@ -2134,6 +2143,31 @@
  		error: "invalid_target"
  	});
  	const scopes = refreshToken?.scopes;
@@ -161,15 +149,11 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..3279c3193e4ee1e108713cf0d1d67ddf
 +		error_description: "stored grant cannot refresh",
 +		error: "invalid_grant"
 +	});
-+	if (client.scopes && !scopes.every((scope) => client.scopes.includes(scope))) throw new APIError("BAD_REQUEST", {
-+		error_description: "stored grant scopes are not allowed for this client",
-+		error: "invalid_grant"
-+	});
 +	// Validate the stored grant independently of any scope reduction in this request.
 +	let storedPolicy;
 +	try {
 +		storedPolicy = await resolveResourcePolicy(ctx, opts, {
-+			resource: resources ?? refreshToken.resources,
++			resource: refreshToken.resources,
 +			clientId: client.clientId,
 +			requestedScopes: scopes
 +		});
@@ -187,11 +171,12 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..3279c3193e4ee1e108713cf0d1d67ddf
  	const requestedScopes = scope?.split(" ");
  	if (requestedScopes) {
  		const validScopes = new Set(scopes);
-@@ -2142,7 +2181,6 @@
+@@ -2142,7 +2176,7 @@
  			error: "invalid_scope"
  		});
  	}
 -	const client = await validateClientCredentials(ctx, opts, client_id, client_secret, requestedScopes ?? scopes, preVerified, "refresh_token", authMethod);
++	validateClientScopes(client, requestedScopes ?? scopes);
  	if (refreshToken.revoked) {
  		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
  			const replay = await getRefreshTokenRotationReplay(ctx, refreshToken, await resolveRefreshTokenRotationReplayRequest(ctx, opts, {
