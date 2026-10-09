@@ -133,6 +133,7 @@ const plan = {
   service_suites_pr_required: "false",
   fix_tests_on_base_required: "false",
   api_test_shards: "4",
+  pr_depth_reused: "false",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -184,7 +185,7 @@ const context = ({
     QUEUE_BROWSER_SUITES: queueBrowserSuites,
     CI_POSTGRES_PR_SELECTION: "",
   },
-  inputs: { heavy_only: false },
+  inputs: { heavy_only: false, pr_depth_only: false },
   needs: Object.fromEntries(
     needs.map((job) => {
       const outputs: Record<string, string> =
@@ -993,6 +994,12 @@ const evaluate = ({
       QUEUE_DEPTH: queueDepth,
       THIN_JOBS: JSON.stringify(THIN_JOBS),
       HEAVY_JOBS: JSON.stringify(heavy),
+      PATCH_ID: "fixture-patch-id",
+      WORKFLOW_VERSION: "fixture-workflow-version",
+      PR_DEPTH_JOBS: "[]",
+      PR_DEPTH_REUSED: "false",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_SOURCE_RUN_ID: "",
       PLAN: JSON.stringify({ ...plan, queue_depth: queueDepth }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -1088,7 +1095,7 @@ test("invalid configuration blocks ordinary heavy selection and publishes no com
     job: "validate",
     name: "Validate merge queue depth",
   });
-  expect(main.jobs["validate"]?.steps?.at(1)).toEqual(validation);
+  expect(main.jobs["validate"]?.steps).toContainEqual(validation);
   expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );

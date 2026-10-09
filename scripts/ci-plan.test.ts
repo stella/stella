@@ -38,9 +38,28 @@ import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
-import { evaluate } from "./github-expression";
-import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
+import {
+  type Context,
+  evaluate as evaluateExpression,
+} from "./github-expression";
+import {
+  mainHeavyJobs,
+  prDepthJobs,
+  queueAdmittedJobs,
+} from "./main-heavy-plan";
 import { flattenWorkflowSteps } from "./workflow-steps";
+
+// Ordinary events never run the main PR-depth caller and reuse nothing unless
+// a case says so; cases that exercise either set the value explicitly.
+const ORDINARY_EVENT_VALUES = {
+  "inputs.pr_depth_only": false,
+  "needs.ci-plan.outputs.pr_depth_reused": "false",
+};
+const evaluate = (source: string, context: Context) =>
+  evaluateExpression(source, {
+    ...context,
+    values: { ...ORDINARY_EVENT_VALUES, ...context.values },
+  });
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -1107,6 +1126,10 @@ const resultGateCase = ({
       QUEUE_VALIDATION: "false",
       QUEUE_REQUIRED_JOBS: "[]",
       PR_ACTION: "synchronize",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
+      PR_DEPTH_SOURCE_RUN_ID: plannedOutputs["pr_depth_source_run_id"] ?? "99",
+      PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
       QUEUE_DEPTH: "full",
       HEAVY_ONLY: String(heavyOnly),
       HEAVY_JOBS: JSON.stringify(mainHeavyJobNames),
@@ -1312,6 +1335,45 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
+
+test("ci-result accepts only PR-depth skips backed by this run's reuse decision", () => {
+  const depthJobs = prDepthJobs({ jobs: ciJobs });
+  const skipped = Object.fromEntries(depthJobs.map((job) => [job, "skipped"]));
+  expect(
+    evaluateResult({
+      event: EVENT.mergeGroup,
+      results: skipped,
+      plannedOutputs: {
+        pr_depth_reused: "true",
+        pr_depth_source_run_id: "99",
+      },
+    }),
+  ).toBe(0);
+  for (const outcome of ["skipped", "failure", "cancelled"] as const) {
+    expect(
+      evaluateResult({
+        event: EVENT.mergeGroup,
+        results: { ...skipped, [depthJobs.at(0) ?? "missing"]: outcome },
+      }),
+    ).toBe(1);
+  }
+  const ignoredReuse = resultStep.run.replace(
+    'elif $pr_reused == "true" and ($pr_jobs | index($job)) then',
+    "elif false then",
+  );
+  expect(ignoredReuse).not.toBe(resultStep.run);
+  expect(
+    evaluateResult({
+      event: EVENT.mergeGroup,
+      results: skipped,
+      plannedOutputs: {
+        pr_depth_reused: "true",
+        pr_depth_source_run_id: "99",
+      },
+      outcomeScript: ignoredReuse,
+    }),
+  ).toBe(1);
+});
 
 test("CI result rejects a failed check leg after independent guards finish", () => {
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
@@ -1531,6 +1593,9 @@ test("a run that passes as superseded records no completion evidence", () => {
           HEAD_SHA: "a".repeat(40),
           BASE_SHA: "b".repeat(40),
           HEAD_REPO_ID: "456",
+          PATCH_ID: "c".repeat(40),
+          WORKFLOW_VERSION: "d".repeat(40),
+          PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
         },
       };
     })) {
@@ -4208,6 +4273,7 @@ const runsAtDepth = (
           ? ["prove-fix"]
           : [],
         "inputs.heavy_only": heavyOnly === true,
+        "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
         "needs.ci-plan.outputs.suite_depth": depth,
@@ -4662,6 +4728,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     const values = {
       "github.event_name": event,
       "inputs.heavy_only": false,
+      "inputs.pr_depth_only": false,
       "github.event.pull_request.labels.*.name": [],
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
@@ -4755,6 +4822,7 @@ test("mixed documentation and code changes retain the complete code plan", () =>
     const values = {
       "github.event_name": event,
       "inputs.heavy_only": false,
+      "inputs.pr_depth_only": false,
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
       "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -5157,6 +5225,7 @@ test("full Postgres failures trigger selector replay only on main-heavy", () => 
           evaluate(missCheck?.if ?? "false", {
             values: {
               "inputs.heavy_only": heavyOnly,
+              "inputs.pr_depth_only": false,
               "steps.postgres-tests.outcome": outcome,
             },
             status: { always: true, success: false, failure: true, cancelled },
