@@ -1429,7 +1429,14 @@ const TypedDateField = ({
         aria-invalid={invalid}
         aria-describedby={invalid ? `${id}-error` : undefined}
         onChange={(event) => setDraft(event.currentTarget.value)}
-        onBlur={() => {
+        onBlur={(event) => {
+          // Popup controls apply their own value; a blur commit can unmount them before click.
+          const popup = event.currentTarget.closest(
+            '[data-slot="date-picker-popup"]',
+          );
+          if (popup?.contains(event.relatedTarget)) {
+            return;
+          }
           if (!invalid && draft !== value) {
             onChange(draft || null);
           }

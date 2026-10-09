@@ -207,3 +207,51 @@ test("a valid typed date applies on Enter and hands off to To", async ({
   await expect(range.getByLabel("From value")).toHaveText("2026-03-06");
   await expect(range.getByRole("button", { name: /^To/u })).toBeFocused();
 });
+
+for (const bound of ["From", "To"]) {
+  for (const action of ["day", "clear"]) {
+    test(`an edited ${bound} draft yields to the clicked ${action} action`, async ({
+      page,
+    }) => {
+      const range = page.getByRole("region", { name: "Any range" });
+      await range
+        .getByRole("button", { name: new RegExp(`^${bound}`, "u") })
+        .click();
+      const popup = page.locator('[data-slot="popover-popup"][data-open]');
+      const input = popup.locator("input");
+      await input.fill("2026-03-07");
+      await expect(input).toBeFocused();
+      if (action === "day") {
+        await popup.locator('[data-date="2026-03-08"]').click();
+      } else {
+        await popup
+          .getByRole("button", { name: "Clear date", exact: true })
+          .click();
+      }
+      await expect(range.getByLabel("Applied range changes")).toHaveText(
+        `${bound}:${action === "day" ? "2026-03-08" : "empty"}`,
+      );
+      await expect(range.getByLabel(`${bound} value`)).toHaveText(
+        action === "day" ? "2026-03-08" : "empty",
+      );
+      await expect(
+        range.getByLabel(`${bound === "From" ? "To" : "From"} value`),
+      ).toHaveText(bound === "From" ? "2026-03-10" : "2026-03-05");
+    });
+  }
+}
+
+for (const bound of ["From", "To"]) {
+  test(`an edited ${bound} draft still applies when focus leaves the popup`, async ({
+    page,
+  }) => {
+    const range = page.getByRole("region", { name: "Any range" });
+    await range
+      .getByRole("button", { name: new RegExp(`^${bound}`, "u") })
+      .click();
+    const input = page.locator('[data-slot="popover-popup"][data-open] input');
+    await input.fill("2026-03-07");
+    await page.locator("#single-apply").focus();
+    await expect(range.getByLabel(`${bound} value`)).toHaveText("2026-03-07");
+  });
+}

@@ -12,6 +12,7 @@ const noop = () => undefined;
 const RangeFixture = ({ noFuture }: { noFuture: boolean }) => {
   const [from, setFrom] = useState<string | null>("2026-03-05");
   const [to, setTo] = useState<string | null>("2026-03-10");
+  const [applied, setApplied] = useState<string[]>([]);
   return (
     <section aria-label={noFuture ? "Past range" : "Any range"}>
       <DateRangeFilter
@@ -19,14 +20,21 @@ const RangeFixture = ({ noFuture }: { noFuture: boolean }) => {
         to={to}
         fromLabel="From"
         toLabel="To"
-        onFromChange={setFrom}
-        onToChange={setTo}
+        onFromChange={(next) => {
+          setFrom(next);
+          setApplied((current) => current.concat(`From:${next ?? "empty"}`));
+        }}
+        onToChange={(next) => {
+          setTo(next);
+          setApplied((current) => current.concat(`To:${next ?? "empty"}`));
+        }}
         noFuture={noFuture}
         locale="en-US"
         outOfRangeLabel="Choose a date within the allowed range."
       />
       <output aria-label="From value">{from ?? "empty"}</output>
       <output aria-label="To value">{to ?? "empty"}</output>
+      <output aria-label="Applied range changes">{applied.join(" | ")}</output>
     </section>
   );
 };
