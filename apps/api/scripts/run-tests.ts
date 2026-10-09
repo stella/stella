@@ -59,6 +59,8 @@ import {
 } from "./test-process-supervisor";
 import {
   API_TEST_DURATIONS_FILE_ENV,
+  API_TEST_DURATIONS_HASH_ENV,
+  assertTestDurationsIdentity,
   loadTestDurationWeights,
   testFileDurationWeights,
 } from "./test-timings";
@@ -92,6 +94,10 @@ const { testPaths, shard } = selectApiTestFiles({
   shardValue: process.env[API_TEST_SHARD_ENV],
 });
 if (shard !== null) {
+  assertTestDurationsIdentity({
+    path: process.env[API_TEST_DURATIONS_FILE_ENV],
+    hash: process.env[API_TEST_DURATIONS_HASH_ENV],
+  });
   console.log(
     `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
   );

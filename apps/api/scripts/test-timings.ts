@@ -2,6 +2,8 @@ import { Result, panic } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 export const API_TEST_DURATIONS_FILE_ENV = "API_TEST_DURATIONS_FILE";
 
 export const TEST_DURATION_SOURCE = {
@@ -48,6 +50,38 @@ export const testFileDurationWeights = (
   return Object.fromEntries(
     files.map((file) => [file, durations[file] ?? fallback]),
   );
+};
+
+export const API_TEST_DURATIONS_HASH_ENV = "API_TEST_DURATIONS_HASH";
+export const MISSING_TEST_DURATIONS_HASH = "missing";
+
+type AssertTestDurationsIdentityOptions = {
+  path: string | undefined;
+  hash: string | undefined;
+};
+
+/**
+ * Weights decide which files a shard runs, and Turbo keys shard results by the
+ * declared hash: a sharded run must read exactly the weights its key names, or
+ * a cached pass could stand in for files it never ran.
+ */
+export const assertTestDurationsIdentity = ({
+  path,
+  hash,
+}: AssertTestDurationsIdentityOptions) => {
+  const contents =
+    path === undefined || path === ""
+      ? undefined
+      : Result.try(() => readFileSync(path)).unwrapOr(undefined);
+  const actual =
+    contents === undefined ? MISSING_TEST_DURATIONS_HASH : sha256Hex(contents);
+  const declared =
+    hash === undefined || hash === "" ? MISSING_TEST_DURATIONS_HASH : hash;
+  if (declared !== actual) {
+    panic(
+      `${API_TEST_DURATIONS_HASH_ENV} must be the sha256 of ${API_TEST_DURATIONS_FILE_ENV} (expected ${actual}, got ${declared})`,
+    );
+  }
 };
 
 type LoadTestDurationWeightsOptions = {
