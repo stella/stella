@@ -49,10 +49,10 @@ export class NumberColumn {
   }
 
   getUnchecked(index: number): number {
-    // oxlint-disable-next-line typescript/no-non-null-assertion -- Paired compact columns emit every id passed here.
-    return this.chunks[index >>> COLUMN_CHUNK_SHIFT]![
-      index & COLUMN_CHUNK_MASK
-    ]!;
+    return (
+      this.chunks[index >>> COLUMN_CHUNK_SHIFT]?.[index & COLUMN_CHUNK_MASK] ??
+      panic("Missing compact column value")
+    );
   }
 
   byteChunk(index: number): Uint8Array {

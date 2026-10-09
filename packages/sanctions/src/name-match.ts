@@ -637,10 +637,10 @@ const characterDistanceLowerBound = ({
     missing += count;
   }
   for (let offset = 0; offset < candidate.length; offset += 2) {
-    // oxlint-disable-next-line typescript/no-non-null-assertion -- Compact character pairs are constructed and traversed together.
-    const codePoint = candidate[offset]!;
-    // oxlint-disable-next-line typescript/no-non-null-assertion -- Compact character pairs are constructed and traversed together.
-    const count = candidate[offset + 1]!;
+    const codePoint =
+      candidate[offset] ?? panic("Missing compact character code point");
+    const count =
+      candidate[offset + 1] ?? panic("Missing compact character count");
     missing -= Math.min(count, query.get(codePoint) ?? 0);
   }
   return Math.max(missing, lengthDifference + missing);
