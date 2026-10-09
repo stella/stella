@@ -56,6 +56,9 @@ test("heading page numbers expose their meaning and a shared tooltip", async ({
     .getByRole("button", { name: "Page 1", exact: true })
     .first();
   await expect(pageNumber).toHaveText("1");
+  const pageNumberBox = await readBox(pageNumber);
+  expect(pageNumberBox.width).toBeGreaterThanOrEqual(OUTLINE_CONTROL_MIN_SIZE);
+  expect(pageNumberBox.height).toBeGreaterThanOrEqual(OUTLINE_CONTROL_MIN_SIZE);
   await pageNumber.hover();
   const tooltip = page.locator('[data-slot="tooltip-popup"]');
   await expect(tooltip).toBeVisible();
@@ -276,6 +279,9 @@ test.describe("coarse-pointer controls", () => {
       .getByRole("button", { name: "Collapse", exact: true })
       .first();
     await assertTouchTarget(collapse);
+    await assertTouchTarget(
+      page.getByRole("button", { name: "Page 1", exact: true }).first(),
+    );
     await collapse.click();
     const expand = page
       .getByRole("button", { name: "Expand", exact: true })

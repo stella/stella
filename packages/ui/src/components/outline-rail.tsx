@@ -602,7 +602,14 @@ export const OutlineRail = ({
                   render={
                     <button
                       aria-label={formatMetaLabel(node.item.meta)}
-                      className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums"
+                      className={cn(
+                        "text-foreground-placeholder text-2xs shrink-0 tabular-nums",
+                        OUTLINE_CONTROL_TARGET_CLASS,
+                      )}
+                      style={{
+                        minWidth: OUTLINE_CONTROL_MIN_SIZE,
+                        minHeight: OUTLINE_CONTROL_MIN_SIZE,
+                      }}
                       onClick={() => jumpTo(node.item.id)}
                       type="button"
                     />
