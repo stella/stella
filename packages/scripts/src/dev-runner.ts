@@ -39,6 +39,7 @@ import {
   SEAL_FILE,
   writeDevRuntime,
 } from "./dev-runtime";
+import { formatErrorChain } from "./error-chain";
 
 const ENV_FILE_SPECS = [
   {
@@ -1684,6 +1685,19 @@ const startBackgroundStep = (step: Step, rootDir: string) => {
   }));
 };
 
+// Cleanup runs while the startup failure is still unreported, so a failed
+// group stop is reported here instead of thrown over the original error.
+export const reportGroupStopFailure = (
+  groupStop: Result<string[], DevProcessGroupError>,
+  report: (message: string) => void = console.error,
+) => {
+  if (groupStop.isOk()) {
+    return true;
+  }
+  report(`Dev process group stop failed: ${formatErrorChain(groupStop.error)}`);
+  return false;
+};
+
 const finishBackgroundStep = async (step: BackgroundStep) => {
   const exitCode = await step.child.exited;
   if (exitCode !== 0) {
@@ -1797,11 +1811,19 @@ const buildApiEnv = ({
     ...env,
     CONTENT_ENCRYPTION_KEY:
       env["CONTENT_ENCRYPTION_KEY"] ||
-      readOrCreateDevContentEncryptionKey(rootDir).match({
-        ok: (key) => key,
-        err: (error) => panic(error.message),
-      }),
+      unwrapContentEncryptionKey(readOrCreateDevContentEncryptionKey(rootDir)),
   };
+};
+
+// A throwing match err arm is rewrapped by better-result as an opaque
+// "match err handler threw" panic; branch outside `match` to keep the cause.
+const unwrapContentEncryptionKey = (
+  result: ReturnType<typeof readOrCreateDevContentEncryptionKey>,
+) => {
+  if (result.isErr()) {
+    return panic(result.error.message, result.error);
+  }
+  return result.value;
 };
 
 type ApiScriptStepOptions = BuildApiEnvOptions & {
@@ -2328,13 +2350,12 @@ const main = async () => {
   let cleanupPromise: Promise<boolean> | undefined;
   let ownsDockerProject = false;
 
-  const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
-    result.match({
-      ok: (value) => value,
-      err: (error) => {
-        throw error;
-      },
-    });
+  const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) => {
+    if (result.isErr()) {
+      throw result.error;
+    }
+    return result.value;
+  };
 
   const cleanup = async () => {
     if (cleanupPromise) {
@@ -2355,9 +2376,9 @@ const main = async () => {
         );
       }
 
+      const groupStopped = reportGroupStopFailure(groupStop);
       if (!ownsDockerProject) {
-        processGroupValue(groupStop);
-        return true;
+        return groupStopped;
       }
 
       const stopped = Result.try({
@@ -2375,8 +2396,7 @@ const main = async () => {
           `Docker cleanup failed for ${dockerProject}: ${stopped.error}`,
         );
       }
-      processGroupValue(groupStop);
-      return stopped.isOk();
+      return stopped.isOk() && groupStopped;
     })();
 
     return cleanupPromise;
@@ -2390,7 +2410,7 @@ const main = async () => {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
       shutdown(0).catch((error: unknown) => {
-        console.error("Dev runner shutdown failed:", error);
+        console.error(`Dev runner shutdown failed: ${formatErrorChain(error)}`);
         process.exit(1);
       });
     });
@@ -2623,11 +2643,25 @@ const main = async () => {
   }
 };
 
-if (import.meta.main) {
+type RunMainOptions = {
+  exit: (code: number) => void;
+  report: (message: string) => void;
+  run: () => Promise<void>;
+};
+
+export const runMainAndExit = async ({ exit, report, run }: RunMainOptions) => {
   try {
-    await main();
+    await run();
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    report(formatErrorChain(error));
+    exit(1);
   }
+};
+
+if (import.meta.main) {
+  await runMainAndExit({
+    exit: process.exit,
+    report: console.error,
+    run: main,
+  });
 }

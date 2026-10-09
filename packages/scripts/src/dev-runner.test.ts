@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -40,7 +41,9 @@ import {
   requiredPortsForMode,
   resolveAutoInfraOffset,
   resolveMainRootFromCommonDir,
+  reportGroupStopFailure,
   resolveOffset,
+  runMainAndExit,
   shouldAutoOpenBrowser,
 } from "./dev-runner";
 import {
@@ -54,6 +57,7 @@ import {
   devStatePath,
   readOrCreateDevContentEncryptionKey,
 } from "./dev-runtime";
+import { formatErrorChain } from "./error-chain";
 
 const tempDirs: string[] = [];
 
@@ -1593,5 +1597,51 @@ describe("loadEnvFile and expandEnvMap", () => {
       B: "nested-value",
       C: "nested-value",
     });
+  });
+});
+
+describe("startup failure reporting", () => {
+  test("reports a seed failure and its cause chain, then exits non-zero", async () => {
+    const reports: string[] = [];
+    const exits: number[] = [];
+    const failure = new Error("Seed step failed", {
+      cause: new Error("relation does not exist", {
+        cause: { pgCode: "42P01" },
+      }),
+    });
+
+    await runMainAndExit({
+      exit: (code) => exits.push(code),
+      report: (message) => reports.push(message),
+      run: () => Promise.reject(failure),
+    });
+
+    expect(exits).toEqual([1]);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toContain("Seed step failed");
+    expect(reports[0]).toContain("caused by: Error: relation does not exist");
+    expect(reports[0]).toContain("42P01");
+  });
+
+  test("a failed group stop during cleanup is reported without throwing", () => {
+    const reports: string[] = [];
+    const groupStop = Result.err(
+      new Error("Could not signal process group", { cause: "ESRCH" }),
+    );
+
+    expect(reportGroupStopFailure(groupStop, (m) => reports.push(m))).toBe(
+      false,
+    );
+    expect(reports.join("\n")).toContain("Could not signal process group");
+    expect(reports.join("\n")).toContain("caused by: ESRCH");
+  });
+
+  test("formatting survives cyclic, empty and non-Error values", () => {
+    const cyclic = new Error("a");
+    cyclic.cause = cyclic;
+    expect(formatErrorChain(cyclic)).toBe("Error: a");
+    expect(formatErrorChain(undefined)).toBe("");
+    expect(formatErrorChain(null)).toContain("null");
+    expect(formatErrorChain(Object.create(null))).toBeString();
   });
 });
