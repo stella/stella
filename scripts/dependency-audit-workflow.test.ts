@@ -75,9 +75,6 @@ test("full audits run on main and every six hours with one stable remediation id
   expect(remediation.env?.["FIX_BRANCH"]).toBe(
     "automation/dependency-audit-fix",
   );
-  expect(remediation.env?.["ISSUE_TITLE"]).toBe(
-    "Dependency audit has an unpatched advisory",
-  );
   expect(remediation.run).toBe("bash scripts/remediate-dependency-audit.sh");
 });
 

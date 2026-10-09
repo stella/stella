@@ -18,7 +18,8 @@ on:
       # previous build serving, and nobody would learn the new one never
       # landed.
       - Deploy Landing
-      # Its full run fails when a temporary advisory acceptance lapses.
+      # Full audits keep failing without a lockfile fix or a current acceptance;
+      # temporary acceptances lapse on expiry or when a fix is published.
       - Dependency Audit
       - Mirror CI service images
       - Publish npm packages

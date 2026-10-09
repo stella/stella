@@ -88,7 +88,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: write
       pull-requests: write
     steps:
       - name: Checkout
@@ -110,5 +109,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FIX_BRANCH: automation/dependency-audit-fix
-          ISSUE_TITLE: "Dependency audit has an unpatched advisory"
         run: bash scripts/remediate-dependency-audit.sh
