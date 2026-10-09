@@ -246,6 +246,7 @@ const detects = (
   files: string[],
 ) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
+    cwd: path.resolve(import.meta.dirname, ".."),
     stdout: "pipe",
   })
     .stdout.toString()
