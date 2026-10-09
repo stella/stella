@@ -41,13 +41,52 @@ fi
 if [[ "$api_path" == "$latest_api_path" ]]; then
   if [[ -z "$expected_tag" ]]; then
     stable_tags="$(bash "$gh_retry_script" api --paginate "repos/${repo}/git/matching-refs/tags/v")" || { echo "::error::Desktop stable tag metadata unavailable" >&2; exit 1; }
-    newest_tag="$(jq -ser '
-      [ .[][] | .ref | sub("^refs/tags/"; "")
-        | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) ]
-      | sort_by(ltrimstr("v") | split(".") | map(tonumber))
-      | last | strings
+    newest_tag_ref="$(jq -ser '
+      [ .[][] | select(.ref | test("^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$")) ]
+      | sort_by(.ref | sub("^refs/tags/v"; "") | split(".") | map(tonumber))
+      | last // empty
     ' <<< "$stable_tags")"
+    newest_tag="$(jq -r '.ref | sub("^refs/tags/"; "")' <<< "$newest_tag_ref")"
     if [[ "$tag" != "$newest_tag" ]]; then
+      newest_release="$(bash "$gh_retry_script" api "repos/${repo}/releases/tags/${newest_tag}")" || { echo "::error::Newest desktop release metadata unavailable" >&2; exit 1; }
+      tag_object_type="$(jq -r '.object.type // empty' <<< "$newest_tag_ref")"
+      tag_object_sha="$(jq -r '.object.sha // empty' <<< "$newest_tag_ref")"
+      case "$tag_object_type" in
+        tag) tag_api_path="repos/${repo}/git/tags/${tag_object_sha}"; tag_date_filter='.tagger.date // empty' ;;
+        commit) tag_api_path="repos/${repo}/git/commits/${tag_object_sha}"; tag_date_filter='.committer.date // empty' ;;
+        *) echo "::error::Newest stable application tag has an invalid Git object" >&2; exit 1 ;;
+      esac
+      tag_object="$(bash "$gh_retry_script" api "$tag_api_path")" || { echo "::error::Newest stable application tag metadata unavailable" >&2; exit 1; }
+      tag_created_at="$(jq -r "$tag_date_filter" <<< "$tag_object")"
+      now_epoch="${STELLA_DESKTOP_NOW_EPOCH:-$(date +%s)}"
+      tag_age_seconds="$(jq -nr --arg created_at "$tag_created_at" --argjson now "$now_epoch" '
+        if ($created_at | fromdateiso8601?) == null then empty
+        else ($now - ($created_at | fromdateiso8601) | floor)
+        end
+      ')"
+      if [[ -z "$tag_age_seconds" ]]; then
+        echo "::error::Newest stable application tag has no valid creation time" >&2
+        exit 1
+      fi
+
+      publishing=false
+      [[ "$(jq -r '.draft // false' <<< "$newest_release")" == true ]] && publishing=true
+      for workflow in release.yml release-desktop.yml; do
+        runs="$(bash "$gh_retry_script" api "repos/${repo}/actions/workflows/${workflow}/runs?branch=${newest_tag}&per_page=10")" || { echo "::error::Desktop release workflow metadata unavailable" >&2; exit 1; }
+        if jq -e '(.workflow_runs | sort_by(.created_at) | last // {}) | .conclusion == "failure"' >/dev/null <<< "$runs"; then
+          echo "::error::Desktop release workflow failed for the newest stable application tag" >&2
+          exit 1
+        fi
+        if jq -e '(.workflow_runs | sort_by(.created_at) | last // {}) | (.status == "queued" or .status == "in_progress")' >/dev/null <<< "$runs"; then
+          publishing=true
+        fi
+      done
+
+      publishing_window_seconds=10800
+      if [[ "$publishing" == true ]] && (( tag_age_seconds < publishing_window_seconds )); then
+        echo "desktop-release-policy: publishing"
+        exit 0
+      fi
       echo "::error::Desktop latest must match the newest stable application tag" >&2
       exit 1
     fi
