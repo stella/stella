@@ -300,7 +300,8 @@ describe("decision reader tool contracts", () => {
     }
   });
   test("whole decision pagination emits blocks and each anchor stream exactly once", async () => {
-    const source = sourceOf(astOf(80));
+    const ast = astOf(80);
+    const source = sourceOf(ast);
     let calls = 0;
     const phases: string[] = [];
     const context = contextWith({
@@ -349,7 +350,7 @@ describe("decision reader tool contracts", () => {
       cursors.add(result.data.content.nextCursor);
       cursor = result.data.content.nextCursor;
     }
-    expect(ids).toEqual(source.ast.blocks.map((block) => block.id));
+    expect(ids).toEqual(ast.blocks.map((block) => block.id));
     expect(new Set(ids).size).toBe(80);
     expect(citationIds).toEqual(["citation"]);
     expect(provisionIds).toEqual([documentId]);
