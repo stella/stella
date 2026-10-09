@@ -1344,6 +1344,30 @@ describe("dev env factories", () => {
     );
   });
 
+  test("a developer env that disables background workers starts no document-processing worker", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      "SCHEDULED_JOBS_MODE=disabled\n",
+    );
+    const { primary } = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+      seeded: false,
+    });
+
+    expect(primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"])).toEqual([
+      "disabled",
+    ]);
+    expect(primary.map((step) => step.label)).not.toContain(
+      "Document processing worker",
+    );
+  });
+
   test("keeps scheduled jobs inside the API process", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
