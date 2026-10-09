@@ -27,7 +27,13 @@ describe("maskApiKey", () => {
     expect(maskApiKey("0123456789abcdef")).toBe("****cdef");
   });
   test("short credentials reveal nothing", () => {
-    for (const key of ["", "x", "abcd1234"]) {
+    for (const key of [
+      "",
+      "x",
+      "abcd1234",
+      "sk-ant-api03-1234",
+      "sk-or-v1-abcd1234",
+    ]) {
       expect(maskApiKey(key)).toBe("****");
     }
   });

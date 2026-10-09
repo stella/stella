@@ -116,14 +116,18 @@ export const decryptAIConfig = async (
   return normalizeOrgAIConfig(v.parse(orgAIConfigSchema, parsed));
 };
 
-/** Reveal only a recognized provider prefix and the final four characters. */
+/**
+ * Reveal only a recognized provider prefix and the final four characters.
+ * The length threshold applies to the secret after the prefix, so a short
+ * secret behind a long prefix is never shown in full.
+ */
 export const maskApiKey = (key: string): string => {
-  if (key.length < 16) {
-    return "****";
-  }
   const prefix =
     /^(sk-ant-(?:api\d+|usr)-|sk-or-v1-|sk-proj-|sk-svcacct-|sk-|AIza|ABSK|hf_)/u
       .exec(key)
       ?.at(0) ?? "";
+  if (key.length - prefix.length < 16) {
+    return "****";
+  }
   return `${prefix}****${key.slice(-4)}`;
 };
