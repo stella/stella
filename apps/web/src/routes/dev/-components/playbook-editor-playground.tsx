@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 
 import { PlaybookEditor } from "@/features/knowledge/playbook-editor/playbook-editor";
 import { createPlaybookBaseline } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
@@ -16,6 +16,7 @@ import {
   documentTypesOptions,
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
+import { createAppQueryClient } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -38,14 +39,13 @@ const UPDATED_AT = "2026-10-08T08:00:00.000Z";
 const tabId = (state: string) => `visual-playbook-${state}`;
 
 export const PlaybookEditorPlayground = () => {
-  const [client] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { enabled: false, retry: false, gcTime: Infinity },
-        },
-      }),
-  );
+  const [client] = useState(() => {
+    const queryClient = createAppQueryClient();
+    queryClient.setDefaultOptions({
+      queries: { enabled: false, retry: false, gcTime: Infinity },
+    });
+    return queryClient;
+  });
   const [ready, setReady] = useState(false);
 
   useMountEffect(() => {
