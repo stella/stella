@@ -20,6 +20,19 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
     await expect(
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
+    const sharesPageScrollFlow = await section.evaluate((fixture) => {
+      const main = fixture.closest("main");
+      const header = fixture.querySelector("header");
+      if (!(main instanceof HTMLElement) || header === null) {
+        return false;
+      }
+      if (header.closest("main") !== main) {
+        return false;
+      }
+      const overflowY = getComputedStyle(main).overflowY;
+      return overflowY === "auto" || overflowY === "scroll";
+    });
+    expect(sharesPageScrollFlow).toBe(true);
     expect(errors).toEqual([]);
   });
 }
