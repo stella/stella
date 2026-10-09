@@ -89,7 +89,23 @@ fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
 /// Rebuilds the tray menu from `snapshot`. The menu is the one native string
 /// the app caches, so both state changes and a language change come through
 /// here. A failed rebuild leaves the previous menu in place.
+///
+/// Callers run on async workers, but AppKit status items may only be touched
+/// on the main thread: dropping the last tray handle elsewhere removes the
+/// status item off the main thread and aborts the process. The work hops to
+/// the main thread instead.
 pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
+  let handle = app.clone();
+  let snapshot = snapshot.clone();
+  if app
+    .run_on_main_thread(move || refresh_on_main_thread(&handle, &snapshot))
+    .is_err()
+  {
+    tracing::warn!("tray refresh skipped: the event loop is gone");
+  }
+}
+
+fn refresh_on_main_thread(app: &AppHandle, snapshot: &AppSnapshot) {
   if let Ok(menu) = build_tray_menu(app, snapshot)
     && let Some(tray) = app.tray_by_id("main")
   {
