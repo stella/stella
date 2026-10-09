@@ -1198,6 +1198,7 @@ describe("composed rate-limit response policies", () => {
               duration: 60_000,
               generator: () => "fixture",
               context: {
+                complete: () => undefined,
                 init: () => undefined,
                 decrement: () => undefined,
                 kill: () => undefined,
