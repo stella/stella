@@ -13,7 +13,8 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { validateManualCheckInput } from "./manual-check-input";
+import { MANUAL_CHECKS, validateManualCheckInput } from "./manual-check-input";
+import { groupTestFiles } from "./run-manual-test-files";
 
 const workflowFile = new URL(
   "../.github/workflows/manual-checks.yml",
@@ -54,16 +55,7 @@ const workflowProblems = (text: string): string[] => {
     }),
     workflow.on["workflow_dispatch"],
   ).inputs.check.options;
-  if (
-    JSON.stringify(options) !==
-    JSON.stringify([
-      "typecheck-repo",
-      "typecheck-package",
-      "lint",
-      "test-files",
-      "verify-affected",
-    ])
-  ) {
+  if (JSON.stringify(options) !== JSON.stringify(MANUAL_CHECKS)) {
     problems.push("enum");
   }
   if (
@@ -268,52 +260,75 @@ test("result writer reports a check that never ran as a failure", () => {
   });
 });
 
-const runTestFiles = (script: string) => {
+const runner = new URL("run-manual-test-files.ts", import.meta.url).pathname;
+const testFile = (marker: string) =>
+  `import { test } from "bun:test";\nimport { writeFileSync } from "node:fs";\ntest("ran", () => writeFileSync(${JSON.stringify(marker)}, ""));\n`;
+
+test("test-files runs exactly the listed files, not files sharing a path suffix", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "manual-check-run-"));
   const marker = (dir: string) => path.join(directory, dir, "ran");
   for (const dir of ["apps", "fixtures/apps"]) {
     mkdirSync(path.join(directory, dir), { recursive: true });
     writeFileSync(
       path.join(directory, dir, "x.test.ts"),
-      `import { test } from "bun:test";\nimport { writeFileSync } from "node:fs";\ntest("ran", () => writeFileSync(${JSON.stringify(marker(dir))}, ""));\n`,
+      testFile(marker(dir)),
     );
   }
-  const run = Bun.spawnSync(["bash", "-e", "-c", script], {
+  const run = Bun.spawnSync(["bun", runner], {
     cwd: directory,
-    env: {
-      ...process.env,
-      CHECK_CHECK: "test-files",
-      CHECK_TARGET: "apps/x.test.ts",
-      CHECK_LOG_FILE: path.join(directory, "check.log"),
-      CHECK_EXIT_FILE: path.join(directory, "check.exit"),
-      CHECK_START_FILE: path.join(directory, "check.start"),
-    },
+    env: { ...process.env, CHECK_TARGET: "apps/x.test.ts" },
   });
   expect(run.exitCode, run.stderr.toString()).toBe(0);
-  return {
-    requested: existsSync(marker("apps")),
-    suffixTwin: existsSync(marker("fixtures/apps")),
-  };
-};
-
-test("test-files runs exactly the listed files, not files sharing a path suffix", () => {
-  const script = v.parse(
-    v.string(),
-    parseWorkflow(workflowText).jobs.check.steps.find(
-      (step) => step.name === "Run check",
-    )?.run,
-  );
-  expect(runTestFiles(script)).toEqual({ requested: true, suffixTwin: false });
-  // Without the ./ prefix bun treats the path as a filter and runs both.
-  const unprefixed = script.replace(
-    `"\${test_files[@]/#/./}"`,
-    `"\${test_files[@]}"`,
-  );
-  expect(unprefixed).not.toBe(script);
-  expect(runTestFiles(unprefixed)).toEqual({
-    requested: true,
-    suffixTwin: true,
+  expect(existsSync(marker("apps"))).toBe(true);
+  expect(existsSync(marker("fixtures/apps"))).toBe(false);
+  // The hazard the ./ prefix avoids: a bare path filters by suffix.
+  const bare = Bun.spawnSync(["bun", "test", "apps/x.test.ts"], {
+    cwd: directory,
   });
+  expect(bare.exitCode).toBe(0);
+  expect(existsSync(marker("fixtures/apps"))).toBe(true);
+});
+
+test("test-files runs package tests through the owning package's test script", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "manual-check-package-"));
+  const pkg = path.join(directory, "packages", "fixture");
+  mkdirSync(path.join(pkg, "src"), { recursive: true });
+  writeFileSync(
+    path.join(pkg, "package.json"),
+    JSON.stringify({ scripts: { test: "bun test --preload ./setup.ts" } }),
+  );
+  const setupRan = path.join(directory, "setup-ran");
+  writeFileSync(
+    path.join(pkg, "setup.ts"),
+    `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(setupRan)}, "");\n`,
+  );
+  const ran = path.join(directory, "ran");
+  writeFileSync(path.join(pkg, "src", "one.test.ts"), testFile(ran));
+  expect(
+    groupTestFiles(directory, [
+      "packages/fixture/src/one.test.ts",
+      "root.test.ts",
+    ]),
+  ).toEqual([
+    { directory: "packages/fixture", files: ["./src/one.test.ts"] },
+    { directory: ".", files: ["./root.test.ts"] },
+  ]);
+  const run = Bun.spawnSync(["bun", runner], {
+    cwd: directory,
+    env: { ...process.env, CHECK_TARGET: "packages/fixture/src/one.test.ts" },
+  });
+  expect(run.exitCode, run.stderr.toString()).toBe(0);
+  expect(existsSync(ran)).toBe(true);
+  expect(existsSync(setupRan)).toBe(true);
+});
+
+test("the repository typecheck covers root scripts as CI does", () => {
+  const runCheck = parseWorkflow(workflowText).jobs.check.steps.find(
+    (step) => step.name === "Run check",
+  )?.run;
+  expect(runCheck).toContain(
+    "typecheck-repo) bun run typecheck --concurrency=1 && bun run typecheck:repo ;;",
+  );
 });
 
 test("every result step runs whenever input validation ran", () => {

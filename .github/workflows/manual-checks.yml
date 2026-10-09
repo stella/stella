@@ -103,15 +103,10 @@ jobs:
           date +%s > "$CHECK_START_FILE"
           set +e
           case "$CHECK_CHECK" in
-            typecheck-repo) bun run typecheck ;;
+            typecheck-repo) bun run typecheck --concurrency=1 && bun run typecheck:repo ;;
             typecheck-package) bun --filter "$CHECK_TARGET" typecheck ;;
             lint) bun run lint ;;
-            test-files)
-              IFS=' ' read -r -a test_files <<< "$CHECK_TARGET"
-              # bun test reads a bare argument as a path filter; ./ makes each
-              # validated path match exactly that file.
-              bun test "${test_files[@]/#/./}"
-              ;;
+            test-files) bun scripts/run-manual-test-files.ts ;;
             verify-affected) bun run verify ;;
           esac 2>&1 | tee "$CHECK_LOG_FILE"
           echo "${PIPESTATUS[0]}" > "$CHECK_EXIT_FILE"

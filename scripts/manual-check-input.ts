@@ -40,7 +40,7 @@ export const validateManualCheckInput = (
       : [`unknown workspace package: ${target}`];
   }
   if (check === "test-files") {
-    // Split exactly as the workflow's `IFS=' ' read -r -a` does: a newline or
+    // Split exactly as the test-file runner does: a newline or
     // tab stays inside a token and fails the path check, so no listed file
     // can be validated here yet skipped at execution.
     const files = target.split(" ").filter(Boolean);
