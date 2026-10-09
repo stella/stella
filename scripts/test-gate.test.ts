@@ -3,6 +3,7 @@ import { describe as context, expect, test as check } from "bun:test";
 import {
   firstCollectionFailure,
   gatingWorkflowJobs,
+  managedServiceRunnerFailure,
   packageTestCollectionFailure,
   packageTestExecutionFailure,
   parseTestRegistrations,
@@ -276,5 +277,60 @@ jobs:
         shardedPackages: new Set(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  const managedRunnerFailure = (workflow: string) =>
+    managedServiceRunnerFailure({
+      command: "bun run test:postgres",
+      gate: "STELLA_RUN_POSTGRES_TESTS",
+      gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+    });
+
+  check("ignores a managed runner in a statically disabled step", () => {
+    expect(
+      managedRunnerFailure(`
+jobs:
+  service-suites:
+    steps:
+      - if: \${{ false }}
+        run: bun run test:postgres
+  ci-result:
+    needs: [service-suites]
+`),
+    ).toBe(
+      "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
+    );
+  });
+
+  check("ignores a managed runner in a push-only job", () => {
+    expect(
+      managedRunnerFailure(`
+jobs:
+  service-suites:
+    if: github.event_name == 'push'
+    steps:
+      - run: bun run test:postgres
+  ci-result:
+    needs: [service-suites]
+`),
+    ).toBe(
+      "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
+    );
+  });
+
+  check("ignores a managed runner that continues on error", () => {
+    expect(
+      managedRunnerFailure(`
+jobs:
+  service-suites:
+    steps:
+      - continue-on-error: true
+        run: bun run test:postgres
+  ci-result:
+    needs: [service-suites]
+`),
+    ).toBe(
+      "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
+    );
   });
 });

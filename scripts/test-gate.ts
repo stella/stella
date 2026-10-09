@@ -462,6 +462,21 @@ type PackageTestExecutionOptions = {
   readonly shardedPackages: ReadonlySet<string>;
 };
 
+type GatingCommandExecutionOptions = {
+  readonly commandMatches: (command: string) => boolean;
+  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+  readonly missingMessage: string;
+};
+
+const gatingCommandExecutionFailure = ({
+  commandMatches,
+  gatingJobs,
+  missingMessage,
+}: GatingCommandExecutionOptions): string | undefined =>
+  [...gatingJobs.values()].some((commands) => commands.some(commandMatches))
+    ? undefined
+    : missingMessage;
+
 export const packageTestExecutionFailure = ({
   gatingJobs,
   packageDirectory,
@@ -506,11 +521,12 @@ export const packageTestExecutionFailure = ({
       )
     );
   };
-  if (
-    [...gatingJobs.values()].some((commands) =>
-      commands.some((command) => invokesPackageScript(command)),
-    )
-  ) {
+  const directExecutionFailure = gatingCommandExecutionFailure({
+    commandMatches: invokesPackageScript,
+    gatingJobs,
+    missingMessage: `job condition: no gating job executes ${packageName} ${scriptName}`,
+  });
+  if (directExecutionFailure === undefined) {
     return undefined;
   }
   const testJob = gatingJobs.get("ci-tests");
@@ -527,8 +543,25 @@ export const packageTestExecutionFailure = ({
   ) {
     return undefined;
   }
-  return `job condition: no gating job executes ${packageName} ${scriptName}`;
+  return directExecutionFailure;
 };
+
+type ManagedServiceRunnerOptions = {
+  readonly command: string;
+  readonly gate: (typeof SERVICE_GATES)[number];
+  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+};
+
+export const managedServiceRunnerFailure = ({
+  command,
+  gate,
+  gatingJobs,
+}: ManagedServiceRunnerOptions): string | undefined =>
+  gatingCommandExecutionFailure({
+    commandMatches: (candidate) => candidate.includes(command),
+    gatingJobs,
+    missingMessage: `job condition: no gating job executes the ${gate} runner`,
+  });
 
 const packageScripts = (packageFile: string): PackageScripts | undefined => {
   const parsed: unknown = readJson(packageFile);
@@ -965,6 +998,7 @@ const validateExecutionTopology = (errors: string[]): void => {
     path.join(ROOT, ".github/workflows/ci.yml"),
     "utf-8",
   );
+  const gatingJobs = gatingWorkflowJobs(Bun.YAML.parse(workflow));
   for (const event of ["pull_request:", "merge_group:"]) {
     if (!workflow.includes(event)) {
       errors.push(`job condition: ci.yml does not run for ${event}`);
@@ -1018,8 +1052,13 @@ const validateExecutionTopology = (errors: string[]): void => {
         `package task: apps/api/package.json does not declare ${gate}`,
       );
     }
-    if (!workflow.includes(gateCommands[gate])) {
-      errors.push(`job condition: no gating job executes the ${gate} runner`);
+    const runnerFailure = managedServiceRunnerFailure({
+      command: gateCommands[gate],
+      gate,
+      gatingJobs,
+    });
+    if (runnerFailure !== undefined) {
+      errors.push(runnerFailure);
     }
   }
 };
