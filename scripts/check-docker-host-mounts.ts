@@ -412,77 +412,57 @@ const isVolumeNameHelperCall = (
   ts.isIdentifier(expression.expression) &&
   helpers.has(expression.expression.text);
 
+const RUN_OPTIONS_MESSAGE =
+  "Docker run options must be allowlisted, resolved flags (--volumes-from is not allowed)";
+
+// Default-deny allowlist of docker run/create flags. Any other flag, such as
+// --volumes-from (inherits another container's mounts), fails closed.
 const runValueFlags = new Set([
-  "--add-host",
-  "--cap-add",
-  "--cap-drop",
-  "--cgroupns",
-  "--cidfile",
-  "--cpus",
-  "--device",
-  "--dns",
   "--entrypoint",
   "--env",
-  "--env-file",
-  "--expose",
-  "--group-add",
   "--health-cmd",
   "--health-interval",
   "--health-retries",
   "--health-start-period",
   "--health-timeout",
-  "--hostname",
-  "--ip",
-  "--ipc",
   "--label",
-  "--log-driver",
-  "--log-opt",
-  "--memory",
   "--mount",
   "--name",
-  "--net",
   "--network",
-  "--pid",
-  "--platform",
   "--publish",
-  "--pull",
-  "--restart",
-  "--security-opt",
-  "--shm-size",
-  "--stop-signal",
-  "--stop-timeout",
-  "--sysctl",
-  "--tmpfs",
-  "--ulimit",
-  "--user",
   "--volume",
   "--volume-driver",
   "--workdir",
-  "-e",
-  "-h",
-  "-l",
-  "-m",
-  "-p",
-  "-u",
-  "-v",
-  "-w",
 ]);
-const runBooleanFlags = new Set([
-  "--detach",
-  "--init",
-  "--interactive",
-  "--privileged",
-  "--publish-all",
-  "--read-only",
-  "--rm",
-  "--tty",
-  "--no-healthcheck",
-  "--oom-kill-disable",
-]);
+const runBooleanFlags = new Set(["--detach", "--rm"]);
+const runShortValueFlags = new Set(["e", "l", "p", "v", "w"]);
+const runShortBooleanFlags = new Set(["d"]);
 
-// Every word before the image must be a resolved literal; the image and the
-// command after it may be dynamic. An unknown flag could take a value, so it
-// fails closed.
+// Words consumed by a docker run flag: 0 for an unknown flag, 2 when the
+// value is the next word.
+const runFlagWidth = (arg: string): number => {
+  if (arg.startsWith("--")) {
+    const separator = arg.indexOf("=");
+    const name = separator === -1 ? arg : arg.slice(0, separator);
+    if (runValueFlags.has(name)) {
+      return separator === -1 ? 2 : 1;
+    }
+    return runBooleanFlags.has(name) ? 1 : 0;
+  }
+  for (let at = 1; at < arg.length; at += 1) {
+    const flag = arg.charAt(at);
+    if (runShortValueFlags.has(flag)) {
+      return at === arg.length - 1 ? 2 : 1;
+    }
+    if (!runShortBooleanFlags.has(flag)) {
+      return 0;
+    }
+  }
+  return arg.length > 1 ? 1 : 0;
+};
+
+// Every word before the image must be a resolved, allowlisted flag; the image
+// and the command after it may be dynamic.
 const hasResolvedRunOptions = (
   args: readonly (string | undefined)[],
 ): boolean => {
@@ -494,16 +474,11 @@ const hasResolvedRunOptions = (
     if (!arg.startsWith("-")) {
       return true;
     }
-    if (
-      arg.includes("=") ||
-      runBooleanFlags.has(arg) ||
-      /^-[ditP]+$/u.test(arg)
-    ) {
-      continue;
-    }
-    if (!runValueFlags.has(arg) || args[(index += 1)] === undefined) {
+    const width = runFlagWidth(arg);
+    if (width === 0 || (width === 2 && args[index + 1] === undefined)) {
       return false;
     }
+    index += width - 1;
   }
   return true;
 };
@@ -653,7 +628,7 @@ const volumeCreateArrayFailures = (
   } else if (command?.kind === "volume-create") {
     failures.push(...volumeCreateFailures(command.args));
   } else if (command?.kind === "run" && !hasResolvedRunOptions(command.args)) {
-    failures.push("Docker run options must be statically resolvable");
+    failures.push(RUN_OPTIONS_MESSAGE);
   }
   if (!hasSafeVolumeDriverFlags(array.elements.map(staticArgument))) {
     failures.push("Only the local volume driver is allowed");
@@ -682,6 +657,9 @@ const shellLineFailures = (line: string): string[] => {
     if (command?.kind !== "run") {
       continue;
     }
+    if (!hasResolvedRunOptions(command.args)) {
+      failures.push(RUN_OPTIONS_MESSAGE);
+    }
     const mountArguments = [
       ...line.matchAll(
         /(?:^|\s)--mount(?:\s|=)(?:"([^"]*)"|'([^']*)'|`([^`]*)`|([^\s"'`]+))/gu,
@@ -691,7 +669,6 @@ const shellLineFailures = (line: string): string[] => {
       /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(line) ||
       (mountArguments.length === 0 && /(?:^|\s)--mount(?:\s|=)/u.test(line)) ||
       /--mount(?:\s+|=)\S*[$`]/u.test(line) ||
-      !hasResolvedRunOptions(command.args) ||
       !hasSafeVolumeDriverFlags(shellWords(line)) ||
       mountArguments.some(
         (match) =>

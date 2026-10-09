@@ -86,6 +86,11 @@ const rejects = [
     inspect: inspectDockerHelper,
     source: '["docker", "run", ...options, image]',
   },
+  {
+    id: "unknown-run-option",
+    inspect: inspectDockerHelper,
+    source: '["docker", "run", "--volumes-from=other", "image"]',
+  },
 ] as const;
 
 test("host mount guard accepts and rejects the documented cases", () => {
