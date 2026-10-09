@@ -22,7 +22,7 @@ const GRANTED_EMAIL = "granted@example.test";
 type Caller = { email: string; emailVerified: boolean } | null;
 const testState = createTestState({ file: import.meta.path, config: env });
 
-const readAs = async (caller: Caller) => {
+const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
   const { scopedDb } = createScopedDbMock(
     {},
     { featureAccess: { identity: caller } },
@@ -30,7 +30,7 @@ const readAs = async (caller: Caller) => {
   const endpoint = createDesktopFeatureAccessReadEndpoint({
     authorizeAccount: async () =>
       Result.ok({
-        organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+        organizationId: toSafeId<"organization">(organizationId),
         userId: toSafeId<"user">("user_test"),
         keyId: "key_test",
         scopedDb,
@@ -78,6 +78,16 @@ test("a granted member sees the feature enabled", async () => {
   const body = await readAs({ email: GRANTED_EMAIL, emailVerified: true });
   expect(body).toStrictEqual({
     features: { "activity-timeline": { status: "enabled" } },
+  });
+});
+
+test("a member grant does not cross the desktop account organization", async () => {
+  const caller = { email: GRANTED_EMAIL, emailVerified: true };
+  expect(await readAs(caller)).toMatchObject({
+    features: { "activity-timeline": { status: "enabled" } },
+  });
+  expect(await readAs(caller, "org_other")).toMatchObject({
+    features: { "activity-timeline": { status: "hidden" } },
   });
 });
 
