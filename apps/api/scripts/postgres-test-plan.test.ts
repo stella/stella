@@ -30,6 +30,26 @@ describe("PostgreSQL shared-table DDL isolation", () => {
     ]);
   });
 
+  test("detects every target of TRUNCATE and DROP TABLE lists, with or without TABLE", () => {
+    for (const statement of [
+      "TRUNCATE contacts",
+      "TRUNCATE TABLE fixture, contacts RESTART IDENTITY CASCADE",
+      'TRUNCATE ONLY fixture, "public"."contacts"',
+      "DROP TABLE IF EXISTS fixture, public.contacts",
+    ]) {
+      expect(
+        findSharedTableDdlViolations({
+          sources: new Map([["src/example.postgres.test.ts", statement]]),
+          sharedTables: SHARED_TABLES,
+          isolatedPaths: new Set(),
+        }),
+        statement,
+      ).toEqual([
+        { testPath: "src/example.postgres.test.ts", tables: ["contacts"] },
+      ]);
+    }
+  });
+
   test("accepts shared-table DDL only when its file is isolated", () => {
     const testPath =
       "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts";

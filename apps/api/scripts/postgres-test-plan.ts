@@ -33,7 +33,18 @@ export const isolateSharedTableDdlTests = (
 
 const TABLE_HEADING = /^## ([a-z][a-z0-9_]*) ·/gmu;
 const TABLE_DDL =
-  /\b(?:ALTER|DROP|TRUNCATE)\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
+  /\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
+// DROP TABLE and TRUNCATE (TABLE is optional) take comma-separated target lists.
+const TABLE_LIST_DDL =
+  /\b(?:DROP\s+TABLE(?:\s+IF\s+EXISTS)?|TRUNCATE(?:\s+TABLE)?)\s+([^;`]+)/giu;
+const LIST_ITEM_TABLE =
+  /^(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/iu;
+
+const tableListTargets = (list: string): string[] =>
+  list.split(",").flatMap((item) => {
+    const table = LIST_ITEM_TABLE.exec(item.trim())?.at(1)?.toLowerCase();
+    return table === undefined ? [] : [table];
+  });
 const TRIGGER_DDL =
   /\b(?:CREATE|DROP)\s+TRIGGER\b[^;]*?\bON\s+(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
 const INDEX_DDL =
@@ -66,6 +77,13 @@ export const sharedTableDdlTargets = (
     for (const match of source.matchAll(pattern)) {
       const table = match.at(1)?.toLowerCase();
       if (table !== undefined && sharedTables.has(table)) {
+        targets.add(table);
+      }
+    }
+  }
+  for (const match of source.matchAll(TABLE_LIST_DDL)) {
+    for (const table of tableListTargets(match.at(1) ?? "")) {
+      if (sharedTables.has(table)) {
         targets.add(table);
       }
     }
