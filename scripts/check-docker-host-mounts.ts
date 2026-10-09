@@ -8,7 +8,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const volumeName = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/u;
 const safeMountTypes = new Set(["volume", "tmpfs"]);
-const hostBackedDriverOptions = new Set(["type", "o", "device"]);
+// Default-deny: local volume driver options outside this list can select a
+// host path (type, o, device) or an unknown backend.
+const safeDriverOptions = new Set(["size"]);
+const isSafeDriverOptionKey = (key: string | undefined): boolean =>
+  key !== undefined && safeDriverOptions.has(key.toLowerCase());
 
 const staticPropertyName = (name: ts.PropertyName): string | undefined => {
   if (ts.isComputedPropertyName(name)) {
@@ -48,19 +52,108 @@ const isContainerVolumeMount = (mount: unknown): boolean => {
 };
 
 const hasSafeDriverOptions = (options: unknown): boolean =>
-  isRecord(options) &&
-  Object.keys(options).every(
-    (key) => !hostBackedDriverOptions.has(key.toLowerCase()),
-  );
+  isRecord(options) && Object.keys(options).every(isSafeDriverOptionKey);
 
-// A driver option is host-backed when its key selects a bind, or when it is
-// not a static key=value pair.
-const isHostBackedDriverOption = (option: string): boolean => {
+// A driver option is unsafe unless it is a static key=value pair whose key is
+// allowlisted.
+const isUnsafeDriverOption = (option: string): boolean => {
   const separator = option.indexOf("=");
-  if (separator === -1) {
-    return true;
+  return separator === -1 || !isSafeDriverOptionKey(option.slice(0, separator));
+};
+
+// Normalizes every Docker spelling of the volume create driver option flag
+// (--opt X, --opt=X, -o X, -o=X, -oX, and short flag clusters) into key=value
+// strings. Arguments are static strings; only the last may be undefined (the
+// volume name). Returns undefined when an option value cannot be resolved.
+const volumeCreateOptions = (
+  args: readonly (string | undefined)[],
+): string[] | undefined => {
+  const options: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) {
+      if (index < args.length - 1) {
+        return undefined;
+      }
+      continue;
+    }
+    if (arg === "--") {
+      break;
+    }
+    if (arg.startsWith("--")) {
+      const separator = arg.indexOf("=");
+      const name = separator === -1 ? arg.slice(2) : arg.slice(2, separator);
+      if (name !== "opt") {
+        continue;
+      }
+      const value =
+        separator === -1 ? args[(index += 1)] : arg.slice(separator + 1);
+      if (value === undefined) {
+        return undefined;
+      }
+      options.push(value);
+      continue;
+    }
+    if (!arg.startsWith("-")) {
+      continue;
+    }
+    for (let at = 1; at < arg.length; at += 1) {
+      const flag = arg[at];
+      if (flag !== "o" && flag !== "d") {
+        continue;
+      }
+      const rest = arg.slice(at + 1);
+      const value = rest === "" ? args[(index += 1)] : rest.replace(/^=/u, "");
+      if (flag === "o") {
+        if (value === undefined) {
+          return undefined;
+        }
+        options.push(value);
+      }
+      break;
+    }
   }
-  return hostBackedDriverOptions.has(option.slice(0, separator).toLowerCase());
+  return options;
+};
+
+// Splits the remainder of a shell command line into words, joining adjacent
+// quoted and unquoted parts; stops at a control operator.
+const shellWords = (text: string): (string | undefined)[] => {
+  const words: (string | undefined)[] = [];
+  let current: string | undefined;
+  let quote: string | undefined;
+  let dynamic = false;
+  const flush = () => {
+    if (current !== undefined) {
+      words.push(dynamic && current.startsWith("$") ? undefined : current);
+    }
+    current = undefined;
+    dynamic = false;
+  };
+  for (const char of text) {
+    if (quote !== undefined) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current = (current ?? "") + char;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current ??= "";
+    } else if (/\s/u.test(char)) {
+      flush();
+    } else if (/[;&|)<>]/u.test(char)) {
+      flush();
+      return words;
+    } else {
+      current = (current ?? "") + char;
+      dynamic ||= char === "$" || char === "`";
+    }
+  }
+  flush();
+  return words;
 };
 
 const inspectMountOptions = (mount: string): boolean => {
@@ -85,8 +178,7 @@ const inspectMountOptions = (mount: string): boolean => {
   }
   if (
     options.some(
-      ({ key, value }) =>
-        key === "volume-opt" && isHostBackedDriverOption(value),
+      ({ key, value }) => key === "volume-opt" && isUnsafeDriverOption(value),
     )
   ) {
     return false;
@@ -145,9 +237,7 @@ const hasSafeApiDriverConfig = (volumeOptions: ts.Expression): boolean => {
           driverProperty.initializer.properties.every(
             (option) =>
               ts.isPropertyAssignment(option) &&
-              !hostBackedDriverOptions.has(
-                staticPropertyName(option.name)?.toLowerCase() ?? "type",
-              ),
+              isSafeDriverOptionKey(staticPropertyName(option.name)),
           )
         );
       }) && propertyAssignment(driverConfig, "Name") !== undefined
@@ -219,8 +309,7 @@ const staticArgument = (
     : undefined;
 
 // Argument arrays: ["docker", "volume", "create", ...] or, when the command is
-// a separate spawn argument, ["volume", "create", ...]. Every argument but
-// the last must be a static string; fails closed otherwise.
+// a separate spawn argument, ["volume", "create", ...].
 const hasSafeVolumeCreateArguments = (
   array: ts.ArrayLiteralExpression,
 ): boolean => {
@@ -234,31 +323,10 @@ const hasSafeVolumeCreateArguments = (
   if (start === -1) {
     return true;
   }
-  for (let index = start + 2; index < elements.length; index += 1) {
-    const element = elements[index];
-    if (element === undefined) {
-      continue;
-    }
-    const argument = staticArgument(element);
-    // Only the final element (the volume name) may be unresolved.
-    if (argument === undefined && index < elements.length - 1) {
-      return false;
-    }
-    if (argument === "--opt" || argument === "-o") {
-      const option = staticArgument(elements[index + 1]);
-      if (option === undefined || isHostBackedDriverOption(option)) {
-        return false;
-      }
-      index += 1;
-      continue;
-    }
-    const inline =
-      argument === undefined ? null : /^(?:--opt|-o)=(.*)$/su.exec(argument);
-    if (inline !== null && isHostBackedDriverOption(inline[1] ?? "")) {
-      return false;
-    }
-  }
-  return true;
+  const options = volumeCreateOptions(
+    elements.slice(start + 2).map(staticArgument),
+  );
+  return options !== undefined && !options.some(isUnsafeDriverOption);
 };
 
 const volumeCreateArrayFailures = (
@@ -274,24 +342,12 @@ export const inspectDockerHelper = (source: string): string[] => {
   // Docker command lines; TypeScript parsing alone does not see shell flags.
   const commands = source.replaceAll(/\\\r?\n/gu, " ");
   for (const line of commands.split("\n")) {
-    if (/\bdocker\s+volume\s+create\b/u.test(line)) {
-      const volumeOptions = [
-        ...line.matchAll(
-          /(?:^|\s)(?:--opt|-o)(?:\s|=)(?:"([^"]*)"|'([^']*)'|([^\s"']+))/gu,
-        ),
-      ];
-      if (
-        volumeOptions.some((match) => {
-          const option = match[1] ?? match[2] ?? match[3] ?? "";
-          const separator = option.indexOf("=");
-          if (separator === -1) {
-            return true;
-          }
-          return hostBackedDriverOptions.has(
-            option.slice(0, separator).toLowerCase(),
-          );
-        })
-      ) {
+    const create = /\bdocker\s+volume\s+create\b/u.exec(line);
+    if (create !== null) {
+      const options = volumeCreateOptions(
+        shellWords(line.slice(create.index + create[0].length)),
+      );
+      if (options === undefined || options.some(isUnsafeDriverOption)) {
         failures.push(
           "Docker volume driver options cannot configure host binds",
         );

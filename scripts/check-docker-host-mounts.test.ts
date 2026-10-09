@@ -52,6 +52,16 @@ const accepts = [
     source: "docker volume create --opt size=10g data",
   },
   {
+    id: "cli-volume-create-attached-size",
+    inspect: inspectDockerHelper,
+    source: "docker volume create -osize=10g data",
+  },
+  {
+    id: "argv-volume-create-attached-size",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", "-osize=10g", "data"]',
+  },
+  {
     id: "argv-volume-create-dynamic-name",
     inspect: inspectDockerHelper,
     source: '["docker", "volume", "create", "--opt", "size=10g", name]',
@@ -134,6 +144,22 @@ const rejects = [
     id: "host-backed-14",
     inspect: inspectDockerHelper,
     source: '["docker", "run", "--mount", mountOptions]',
+  },
+  {
+    id: "host-backed-15",
+    inspect: inspectDockerHelper,
+    source: "docker volume create -otype=none -odevice=/host -oo=bind data",
+  },
+  {
+    id: "host-backed-16",
+    inspect: inspectDockerHelper,
+    source:
+      '["docker", "volume", "create", "-otype=none", "-odevice=/host", "data"]',
+  },
+  {
+    id: "host-backed-17",
+    inspect: inspectDockerHelper,
+    source: '["docker", "volume", "create", "--opt", "uid=0", "data"]',
   },
 ] as const;
 
