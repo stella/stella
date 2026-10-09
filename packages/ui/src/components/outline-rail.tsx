@@ -633,15 +633,12 @@ export const OutlineRail = ({
       aria-label={ariaLabel}
       className={OUTLINE_PRESENTATION_CLASS[presentation]}
       role="group"
-      style={
-        presentation === "popover"
-          ? {
-              top: topOffset,
-              bottom: bottomInset ?? DOCUMENT_PANEL_SAFE_BOTTOM,
-              width: RAIL_WIDTH,
-            }
-          : undefined
-      }
+      style={{
+        marginBlockEnd: bottomInset ?? DOCUMENT_PANEL_SAFE_BOTTOM,
+        ...(presentation === "popover"
+          ? { top: topOffset, bottom: 0, width: RAIL_WIDTH }
+          : {}),
+      }}
     >
       {/* The disclosure owns a normal-size row above the ticks; a host-owned
           rail supplies its own toggle in that same flow. */}
@@ -814,7 +811,7 @@ export const OutlineRail = ({
                   width: `min(${panelWidth}px, calc(100vw - ${RAIL_WIDTH + PANEL_GAP + 16}px))`,
                   height: "calc(100% - 24px)",
                 }
-              : { paddingBottom: bottomInset ?? DOCUMENT_PANEL_SAFE_BOTTOM }
+              : undefined
           }
         >
           {header !== undefined && (

@@ -164,6 +164,39 @@ test("rail fills the host below its host-owned toggle", async ({ page }) => {
   expect(ticksBox.y).toBeGreaterThanOrEqual(toggleBox.y + toggleBox.height);
 });
 
+for (const presentation of ["rail", "popover"] as const) {
+  test(`${presentation} keeps its last tick above the composer as it grows`, async ({
+    page,
+  }) => {
+    await openFixture(page, presentation);
+    const track = page.locator("[data-outline-ticks]");
+    const lastTick = track.locator("button").last();
+    const composer = page.getByTestId("composer");
+    await expect(lastTick).toBeVisible();
+    const initialInset = await readPublishedInset(page);
+    expect(initialInset).toBeGreaterThanOrEqual(80);
+    await expect
+      .poll(async () => {
+        const tickBox = await readBox(lastTick);
+        const composerBox = await readBox(composer);
+        return tickBox.y + tickBox.height <= composerBox.y;
+      })
+      .toBe(true);
+
+    await page.getByTestId("resize-composer").click();
+    await expect
+      .poll(() => readPublishedInset(page))
+      .toBeGreaterThan(initialInset);
+    await expect
+      .poll(async () => {
+        const tickBox = await readBox(lastTick);
+        const composerBox = await readBox(composer);
+        return tickBox.y + tickBox.height <= composerBox.y;
+      })
+      .toBe(true);
+  });
+}
+
 test("popover trigger has a usable target and does not cover any tick", async ({
   page,
 }) => {
