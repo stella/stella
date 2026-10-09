@@ -23,7 +23,7 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {
@@ -38,6 +38,7 @@ import {
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -59,9 +60,11 @@ export const StatuteInspectorView = ({
   } = useQuery(statuteOptions(payload.documentId));
   // A provision opened from a heading offers its drafting history only where
   // the work has more than one consolidation, and the count is what says so.
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -121,7 +124,11 @@ export const StatuteInspectorView = ({
         onClose={onClose}
       />
       <InspectorFindBar find={find} />
-      <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
+      <LegalReaderAIChat
+        activeLegal={activeLegal}
+        aiMode="enabled"
+        className="min-h-0 flex-1"
+      >
         <ScrollArea axis="vertical" className="h-full">
           {/* The gutter and the room the composer needs belong to the column;
               the text root inside it carries the reader's own scale. */}

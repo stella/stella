@@ -18,6 +18,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteDecisionAliases,
+  installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
@@ -30,6 +31,7 @@ import {
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPgliteWorkspaceContactCapacity,
+  installPgliteListVerificationBudgets,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
@@ -214,6 +216,8 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "checkpoint_observation_order",
   "ingestion_lease_token",
   "ingestion_lease_expires_at",
+  "ingestion_lease_purpose",
+  "decision_merge_epoch",
   "reported_total",
   "reported_total_as_of",
   "reported_total_origin",
@@ -667,9 +671,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteWorkspaceContactCapacity(db);
+  await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);

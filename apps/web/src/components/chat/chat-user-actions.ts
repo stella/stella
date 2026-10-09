@@ -55,6 +55,7 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "open-draft": { handler: "handleOpenCreateDocumentDraft", via: "session" },
+  "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
   "rename-thread": { via: "request" },
   /** The error's resend after the anonymization boundary refused a turn. */
@@ -68,6 +69,11 @@ export const CHAT_USER_ACTIONS = {
   "select-matters": { via: "page" },
   "select-model": { via: "request" },
   send: { handler: "sendMessage", via: "session" },
+  /** Moves a queued message to the front and stops the running turn. */
+  "send-queued-message-now": {
+    handler: "sendQueuedMessageNow",
+    via: "session",
+  },
   stop: { handler: "stop", via: "session" },
   "toggle-anonymization": { via: "page" },
   "toggle-web-search": { via: "request" },

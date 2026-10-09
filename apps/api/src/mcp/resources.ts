@@ -45,6 +45,11 @@ import {
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import { unlistedToolNames } from "@/api/mcp/tool-mentions";
 
+import { isMcpAppAvailable } from "./app-policy";
+import caseLawResultsAppHtml from "./apps/case-law-results/generated/app.html.txt" with { type: "text" };
+import decisionReaderAppHtml from "./apps/decision-reader/generated/app.html.txt" with { type: "text" };
+import { CASE_LAW_RESULTS_APP, DECISION_READER_APP } from "./apps/manifest";
+
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
  * resource rather than a tool). The product identity gives agents a canonical
@@ -111,7 +116,7 @@ const servedWhereItsToolsAreListed = (
 
 const PRODUCT_IDENTITY_URI = "stella://about";
 
-export const STELLA_PRODUCT_IDENTITY = {
+const STELLA_PRODUCT_IDENTITY = {
   name: "stella",
   display_name: "stella",
   preferred_casing: "lowercase",
@@ -127,6 +132,37 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: DECISION_READER_APP.uri,
+    name: "decision-reader",
+    title: "Decision reader",
+    description: "Read a case-law decision and its cited provisions.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => decisionReaderAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
+  {
+    uri: CASE_LAW_RESULTS_APP.uri,
+    name: "case-law-results",
+    title: "Case-law results",
+    description:
+      "Interactive results for case-law searches and identifier lookups.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => caseLawResultsAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: PRODUCT_IDENTITY_URI,
     name: "stella-product-identity",
@@ -293,6 +329,9 @@ const isResourceServedInMode = (
     })
   ) {
     return false;
+  }
+  if (resource.uri.startsWith("ui://")) {
+    return isMcpAppAvailable({ uri: resource.uri, mode, context });
   }
   const served = MCP_RESOURCE_URIS_BY_MODE[mode];
   if (served !== "all" && !served.some((entry) => entry === resource.uri)) {

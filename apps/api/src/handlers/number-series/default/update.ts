@@ -12,6 +12,7 @@ const config = {
   description: "Set the default active series for its document type.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: numberSeriesParams,
 } satisfies HandlerConfig;

@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import {
   createTimestampIdCursorCodec,
   parsePgTimestampCursorValue,
@@ -40,7 +41,10 @@ export const fetchExplicitWorkflowTargetRows = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<WorkflowTargetEntityRow[]> => {
   const entityRows: WorkflowTargetEntityRow[] = [];
-  for (const chunk of chunked(inputEntityIds, LIMITS.workflowEntityBatchSize)) {
+  for (const chunk of chunkItems(
+    inputEntityIds,
+    LIMITS.workflowEntityBatchSize,
+  )) {
     const rows = await scopedDb((tx) =>
       tx
         .select({ id: entities.id, kind: entities.kind })

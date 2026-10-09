@@ -35,6 +35,7 @@ import {
 } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import {
   Select,
   SelectItem,
@@ -55,7 +56,7 @@ import {
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
-import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
+import { forgetUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -70,6 +71,7 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
+import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -284,10 +286,13 @@ function ProfilePageBody() {
       }[];
     }) => {
       setOtpError(null);
+      // Named before the delete: afterwards the session may name no one.
+      const deletedUserId = authenticatedUser.id;
       const res = await api.me.delete.verify.post(payload);
-      return unwrapEden(res);
+      unwrapEden(res);
+      return { deletedUserId };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ deletedUserId }) => {
       stellaToast.add({
         title: t("settings.account.deleteAccountSuccess"),
         type: "success",
@@ -297,7 +302,7 @@ function ProfilePageBody() {
       } catch {
         // Session might already be invalidated on the server
       }
-      releaseUserStorage();
+      forgetUserStorage(deletedUserId);
       signalSessionChange();
       hideSessionDocument();
       window.location.href = "/auth";
@@ -581,6 +586,8 @@ function ProfilePageBody() {
 
       <LocalePreferences />
 
+      <ChatNotificationsCard />
+
       <TwoFactorCard />
 
       <SessionsCard />
@@ -645,7 +652,11 @@ function ProfilePageBody() {
               )}
               {dialogStep === "loading" && (
                 <div className="flex justify-center py-4">
-                  <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+                  <Loader
+                    className="size-6"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 </div>
               )}
               {dialogStep === "pendingTasksError" && (

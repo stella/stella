@@ -93,9 +93,7 @@ export const PUBLIC_TOOL_GROUPS = [
 
 export type PublicToolGroup = (typeof PUBLIC_TOOL_GROUPS)[number];
 
-export const publicToolGroup = (
-  entry: PublicToolBrowseEntry,
-): PublicToolGroup => {
+const publicToolGroup = (entry: PublicToolBrowseEntry): PublicToolGroup => {
   if (entry.kind === "skill") {
     return "skills";
   }

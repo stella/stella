@@ -1,41 +1,55 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { formattedLikeRepository } from "../../../scripts/generated-artifacts";
 import { listApiTestPaths } from "./api-test-plan";
-import durations from "./test-durations.json";
 import {
-  assertTestDurations,
   readDurationWeights,
   readTimingArtifact,
   TEST_DURATION_SOURCE,
 } from "./test-timings";
 
-// Bootstrap estimates allocate a batch's unreported setup equally across its
-// files, added to each file's reported body time. New files reserve the median
-// live setup-inclusive weight (at least one second) until CI measures them.
-// Native timing artifacts replace estimates with measured whole-file seconds.
-// Download api-test-timings-* artifacts from a successful merge-group/main run,
-// then run --write <downloaded-artifact-directory>... and commit the result.
-// CI reports measured drift as warnings; it never refreshes committed weights.
-
 /** Later artifacts replace earlier measurements; output order is canonical. */
 export const refreshedTestDurations = (
-  previous: unknown,
+  liveFiles: readonly string[],
+  base: string | undefined,
   artifacts: readonly string[],
 ) => {
-  const refreshed = readDurationWeights(previous);
+  const live = new Set(liveFiles);
+  // An unreadable base (for example an older cache schema) must not block
+  // every later refresh; fresh measurements rebuild the weights.
+  const previous =
+    base === undefined
+      ? {}
+      : Result.try(() => readDurationWeights(JSON.parse(base))).unwrapOr(
+          undefined,
+        );
+  if (previous === undefined) {
+    console.log("::notice::Ignoring unreadable previous API test durations");
+  }
+  const refreshed = new Map<string, number>(
+    Object.entries(previous ?? {}).map(([file, { seconds }]) => [
+      file,
+      seconds,
+    ]),
+  );
   for (const artifact of artifacts) {
     for (const [file, seconds] of Object.entries(
       readTimingArtifact(artifact),
     )) {
-      refreshed[file] = { seconds, source: TEST_DURATION_SOURCE.measured };
+      refreshed.set(file, seconds);
     }
   }
-  return refreshed;
+  return Object.fromEntries(
+    Array.from(refreshed)
+      .filter(([file]) => live.has(file))
+      .map(([file, seconds]) => [
+        file,
+        { seconds, source: TEST_DURATION_SOURCE.measured },
+      ]),
+  );
 };
 
 export const serializeTestDurations = (
@@ -54,37 +68,18 @@ export const serializeTestDurations = (
     2,
   )}\n`;
 
-type EstimateMissingTestDurationsOptions = {
-  files: readonly string[];
-  previous: ReturnType<typeof readDurationWeights>;
-};
-
-export const estimateMissingTestDurations = ({
-  files,
-  previous,
-}: EstimateMissingTestDurationsOptions) => {
-  const weights = files
-    .flatMap((file) =>
-      previous[file] === undefined ? [] : [previous[file].seconds],
-    )
-    .toSorted((a, b) => a - b);
-  const estimate = Math.max(1, weights.at(Math.floor(weights.length / 2)) ?? 1);
-  return Object.fromEntries(
-    files.map((file) => [
-      file,
-      previous[file] ?? {
-        seconds: estimate,
-        source: TEST_DURATION_SOURCE.estimated,
-      },
-    ]),
-  );
-};
-
 if (import.meta.main) {
-  const [mode, ...inputs] = process.argv.slice(2);
-  if (mode !== "--write" && mode !== "--check") {
+  const [mode, destination, baseFlag, basePath, ...inputs] =
+    process.argv.slice(2);
+  if (
+    mode !== "--write" ||
+    destination === undefined ||
+    baseFlag !== "--base" ||
+    basePath === undefined ||
+    inputs.length === 0
+  ) {
     panic(
-      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write|--check [timings.json|directory]...",
+      "Usage: bun apps/api/scripts/refresh-test-durations.ts --write <destination.json> --base <base.json|missing> <timings.json|directory>...",
     );
   }
   const artifacts = inputs.flatMap((input) =>
@@ -99,39 +94,13 @@ if (import.meta.main) {
               compareCodeUnit(a, b),
           ),
   );
-  const measurements = refreshedTestDurations(
-    {},
+  const durations = refreshedTestDurations(
+    listApiTestPaths(path.resolve(import.meta.dir, "..")),
+    basePath === "missing" ? undefined : readFileSync(basePath, "utf-8"),
     artifacts.map((file) => readFileSync(file, "utf-8")),
   );
-  const files = listApiTestPaths(path.resolve(import.meta.dirname, ".."));
-  if (mode === "--check") {
-    assertTestDurations({
-      files,
-      durations: readDurationWeights(durations),
-      measurements: Object.fromEntries(
-        Object.entries(measurements).map(([file, entry]) => [
-          file,
-          entry.seconds,
-        ]),
-      ),
-    });
-    console.log(
-      `API test durations cover ${files.length} files; reviewed available measurements`,
-    );
-  } else {
-    const liveDurations = estimateMissingTestDurations({
-      files,
-      previous: { ...readDurationWeights(durations), ...measurements },
-    });
-    writeFileSync(
-      new URL("test-durations.json", import.meta.url),
-      await formattedLikeRepository(
-        serializeTestDurations(liveDurations),
-        "json",
-      ),
-    );
-    console.log(
-      `Refreshed API test durations from ${artifacts.length} artifacts`,
-    );
-  }
+  writeFileSync(destination, serializeTestDurations(durations));
+  console.log(
+    `Aggregated API test durations from ${artifacts.length} artifacts`,
+  );
 }

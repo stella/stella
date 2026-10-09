@@ -120,7 +120,7 @@ const isDeclaredRoute = (
 ): path is keyof typeof ROUTE_CACHE_CLASSES =>
   Object.hasOwn(ROUTE_CACHE_CLASSES, path);
 
-export const routeCacheClass = (path: string): CacheClass => {
+const routeCacheClass = (path: string): CacheClass => {
   if (!isDeclaredRoute(path)) {
     return panic("Route response policy is missing.");
   }

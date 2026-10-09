@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.42.1",
+  "version": "0.44.1",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -64,6 +64,9 @@
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
     "./input": "./src/components/input.tsx",
+    "./inline-rename": "./src/components/inline-rename.tsx",
+    "./inline-reorder": "./src/lib/inline-reorder.ts",
+    "./inline-drop-indicator": "./src/components/inline-drop-indicator.tsx",
     "./input-group": "./src/components/input-group.tsx",
     "./initials": "./src/lib/initials.ts",
     "./input-otp": "./src/components/input-otp.tsx",
@@ -96,6 +99,8 @@
     "./file-input": "./src/components/file-input.tsx",
     "./segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./select": "./src/components/select.tsx",
+    "./split-button": "./src/components/split-button.tsx",
+    "./switch": "./src/components/switch.tsx",
     "./separator": "./src/components/separator.tsx",
     "./sheet": "./src/components/sheet.tsx",
     "./sidebar": "./src/components/sidebar.tsx",
@@ -208,8 +213,8 @@
     "temporal-polyfill": "catalog:"
   },
   "devDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "catalog:",
     "@playwright/test": "^1.63.0",
     "@stll/typescript-config": "workspace:*",
@@ -225,8 +230,8 @@
     "vite": "catalog:"
   },
   "peerDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "^1.7.0",
     "@tanstack/react-virtual": "^3.14.13",
     "@types/react": ">=19",

@@ -5,6 +5,7 @@ import {
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
   MCP_LAW_HTTP_PATH,
+  MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
 
 /**
@@ -17,7 +18,7 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
   "stella:documents_write",
   // The canonical presigned-upload lifecycle currently owns one scope across
   // entity-create and entity-version purposes. The documents MCP audience
-  // restricts invoke_capability to the three lifecycle IDs, so this grant does
+  // restricts write_capability to the three lifecycle IDs, so this grant does
   // not expose unrelated matter mutations through that endpoint.
   "stella:matters_write",
 ] as const;
@@ -105,7 +106,8 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
  * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to it.
+ * every existing client registration to it. It also upgrades the exact
+ * predecessor policy that omitted protocol scopes from token issuance.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
  * the refusal to overwrite a conflicting definition.
  */
@@ -113,7 +115,10 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
   MCP_MODES.map((mode) => {
     const config = getMcpResourceModeConfig(mode);
     return {
-      allowedScopes: [...config.resourceScopes],
+      // Better Auth intersects the entire grant with this list and persists
+      // that result on refresh tokens. Protocol scopes must survive issuance;
+      // protected-resource metadata still advertises only resourceScopes.
+      allowedScopes: [...config.resourceScopes, ...MCP_OAUTH_PROTOCOL_SCOPES],
       identifier: new URL(
         config.httpPath,
         `${baseUrl.replace(/\/$/u, "")}/`,
@@ -121,6 +126,26 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
       name: config.resourceName,
     };
   });
+
+/**
+ * The allowed scopes a stored resource row carried before protocol scopes
+ * joined the issuance policy: the configured set minus
+ * `MCP_OAUTH_PROTOCOL_SCOPES`.
+ *
+ * Contract step of an expand/contract rollout. The previous release accepts
+ * both this set and the configured set at boot, so the deploy repair now
+ * upgrades rows holding exactly this set to the configured set, and the boot
+ * census accepts only the configured set.
+ */
+export const predecessorOAuthResourceScopes = (
+  allowedScopes: readonly string[],
+): string[] =>
+  allowedScopes.filter(
+    (scope) =>
+      !MCP_OAUTH_PROTOCOL_SCOPES.some(
+        (protocolScope) => protocolScope === scope,
+      ),
+  );
 
 export const normalizeBetterAuthOAuthBaseUrl = (value: string) => {
   const parsed = URL.parse(value);

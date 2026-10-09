@@ -23,6 +23,7 @@ const config = {
     "reverted; the return value says which of the two happened.",
   permissions: { expense: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: deleteExpenseBodySchema,

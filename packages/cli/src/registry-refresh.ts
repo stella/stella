@@ -10,6 +10,7 @@ import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
+import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import {
   hasFeatureCommands,
   projectFeatureCommands,
@@ -39,12 +40,10 @@ import {
   type RegistryDelta,
 } from "./registry-cache.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
-import {
-  type DisabledCommands,
-  NO_DISABLED_COMMANDS,
-  type RegistryToolListing,
-  type RouteNode,
-  type ToolAnnotation,
+import type {
+  RegistryToolListing,
+  RouteNode,
+  ToolAnnotation,
 } from "./route-types.js";
 
 const SNAPSHOT_URL = new URL(
@@ -110,29 +109,23 @@ const isCompoundTool = (name: string): boolean => {
 /**
  * A `tools/list` response is a projection, not proof that a baked tool was
  * removed from the server. Restore a baked listing the response attested it
- * omitted, so the command stays in the tree and the server answers the call:
- * - `feature`: gated off in this deployment, so invoking it returns the
- *   server's `feature_disabled` with its real message instead of the CLI
- *   claiming the command does not exist.
- * - `scope`: only compound tools, whose local all-scopes preflight must stay
- *   reachable. Single-scope tools follow the live projection.
+ * omitted for scope, so compound tools' local all-scopes preflight stays
+ * reachable. Single-scope tools follow the live projection.
  *
  * Attestation is required: grants alone are insufficient, because an older
  * server may lack the tool entirely while echoing the same limited grants.
  * Unknown live tools survive either way.
  */
-const retainAttestedOmittedListings = ({
+const retainAttestedScopeListings = ({
   fetched,
   baked,
-  featureOmittedTools,
   scopeOmittedTools,
 }: {
   fetched: readonly RegistryToolListing[];
   baked: readonly RegistryToolListing[];
-  featureOmittedTools: readonly string[] | undefined;
   scopeOmittedTools: readonly string[] | undefined;
 }): readonly RegistryToolListing[] => {
-  const retainable = new Set(featureOmittedTools);
+  const retainable = new Set<string>();
   for (const name of scopeOmittedTools ?? []) {
     if (isCompoundTool(name)) {
       retainable.add(name);
@@ -172,15 +165,15 @@ export type ResolvedCommandTree = {
    * so it states the fact and leaves who-hears-about-it to the shell.
    */
   drift?: RegistryDelta;
-  /** Commands the server attested are gated off in this deployment. */
-  disabled: DisabledCommands;
 };
 
 /**
  * Resolve this invocation without network. A current same-origin response can
  * rebuild and prune the tree by caller scope; disk supplies deployment metadata
- * only. Missing or invalid live data uses the baked-in baseline with feature
- * commands hidden.
+ * only. Caller feature admission projects the resolved tree using only the
+ * current response; missing or invalid live data hides caller-feature commands.
+ * Deployment features require current same-origin omission evidence or a
+ * same-origin cache still within its TTL. Each projection can hide a command.
  */
 export const resolveCommandTree = async ({
   serverOrigin,
@@ -190,6 +183,7 @@ export const resolveCommandTree = async ({
   bakedTree = generatedRouteMap,
   loadCatalog = loadBakedCapabilityCatalog,
   annotations = TOOL_ANNOTATIONS,
+  now = Temporal.Now.instant().epochMilliseconds,
 }: {
   serverOrigin: string | undefined;
   env: CacheEnv;
@@ -201,35 +195,33 @@ export const resolveCommandTree = async ({
     | null
     | Promise<readonly CapabilityCatalogEntry[] | null>;
   annotations?: Readonly<Record<string, ToolAnnotation>>;
+  now?: number;
 }): Promise<ResolvedCommandTree> => {
   const file =
     serverOrigin !== undefined && registry?.serverOrigin === serverOrigin
       ? registry
       : undefined;
   const currentAccess = file === undefined ? undefined : featureAccess;
+  const cached =
+    file === undefined && serverOrigin !== undefined
+      ? await readCacheFile(cachePathFor(serverOrigin, env))
+      : undefined;
+  const deployment =
+    file ??
+    (cached !== undefined &&
+    cached.serverOrigin === serverOrigin &&
+    !isCacheStale(cached, now)
+      ? cached
+      : undefined);
   const project = (tree: RouteNode) =>
-    projectFeatureCommands({ tree, featureAccess: currentAccess });
-  if (serverOrigin === undefined) {
-    return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
-  }
-  const cached = await readCacheFile(cachePathFor(serverOrigin, env));
-  const deployment = cached?.serverOrigin === serverOrigin ? cached : undefined;
+    projectDeploymentCommands({
+      tree: projectFeatureCommands({ tree, featureAccess: currentAccess }),
+      featureOmittedTools: deployment?.featureOmittedTools,
+      featureOmittedCapabilities: deployment?.featureOmittedCapabilities,
+    });
   if (file === undefined) {
-    return {
-      tree: project(bakedTree),
-      disabled: {
-        tools: deployment?.featureOmittedTools ?? [],
-        capabilities: deployment?.featureOmittedCapabilities ?? [],
-      },
-    };
+    return { tree: project(bakedTree) };
   }
-  // Tools and capabilities the server attested it omits because a deployment
-  // feature is off. They stay in the tree (the server answers a call with its
-  // own feature_disabled), and help/tools list mark them so nobody has to try.
-  const disabled: DisabledCommands = {
-    tools: file.featureOmittedTools ?? [],
-    capabilities: file.featureOmittedCapabilities ?? [],
-  };
   const prunedByScope = (file.scopeOmittedTools ?? []).some(
     (name) => !isCompoundTool(name),
   );
@@ -255,7 +247,7 @@ export const resolveCommandTree = async ({
     changed: file.delta.changed.filter((name) => !hiddenTools.has(name)),
   };
   if (isDeltaEmpty(file.delta) && !prunedByScope && !featureListings) {
-    return { tree: project(bakedTree), disabled };
+    return { tree: project(bakedTree) };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
   // the current listings + the baked capability merge), so a diverged registry
@@ -263,12 +255,11 @@ export const resolveCommandTree = async ({
   // a tree that fails to build falls back to the baked-in tree (rule 6).
   const entries = await loadCatalog();
   if (entries === null) {
-    return { tree: project(bakedTree), disabled };
+    return { tree: project(bakedTree) };
   }
-  const listings = retainAttestedOmittedListings({
+  const listings = retainAttestedScopeListings({
     fetched: file.listings,
     baked: await loadBakedListings(),
-    featureOmittedTools: file.featureOmittedTools,
     scopeOmittedTools: file.scopeOmittedTools,
   });
   const built = Result.try(
@@ -280,11 +271,14 @@ export const resolveCommandTree = async ({
       }).tree,
   );
   if (Result.isError(built)) {
-    return { tree: project(bakedTree), disabled };
+    return { tree: project(bakedTree) };
   }
   return isDeltaEmpty(delta)
-    ? { tree: project(built.value), disabled }
-    : { tree: project(built.value), drift: delta, disabled };
+    ? { tree: project(built.value) }
+    : {
+        tree: project(built.value),
+        drift: delta,
+      };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */

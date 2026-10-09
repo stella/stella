@@ -5,8 +5,11 @@ import type {
 import { Panic, panic, Result } from "better-result";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -19,7 +22,10 @@ import {
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  isMcpDescriptorFeatureEnabled,
+  isMcpFeatureInputEnabled,
+} from "@/api/mcp/feature-access";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getGatewayMcpToolDefinition,
@@ -53,6 +59,8 @@ import {
   featureDisabledHint,
   MCP_INTERNAL_ERROR_HINT,
   McpOutputContractError,
+  notFoundResult,
+  searchIndexUnavailableResult,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -286,7 +294,10 @@ const featureUnavailableToolResult = ({
   context,
   mode,
   toolName,
-}: McpToolSurface & { toolName: string }): CallToolResult | undefined => {
+  args,
+}: McpToolSurface & { toolName: string; args: Record<string, unknown> }):
+  | CallToolResult
+  | undefined => {
   const definition = getStaticMcpToolDefinition(toolName, mode);
   if (
     isMcpDescriptorFeatureEnabled({
@@ -296,6 +307,14 @@ const featureUnavailableToolResult = ({
       featureId: definition?.featureId,
     })
   ) {
+    if (
+      definition !== undefined &&
+      !isMcpFeatureInputEnabled({ context, definition, args })
+    ) {
+      return createSurfaceSerializer({ context, mode })(
+        notFoundResult("Not found"),
+      );
+    }
     return undefined;
   }
   return createSurfaceSerializer({ context, mode })(
@@ -365,6 +384,55 @@ const callGatewayTool = async ({
   return undefined;
 };
 
+const staticToolReferenceRefusal = async ({
+  context,
+  definition,
+  args,
+  mode,
+  toolName,
+}: {
+  context: McpRequestContext;
+  definition: McpToolDefinition;
+  args: Record<string, unknown>;
+  mode: McpMode;
+  toolName: string;
+}) => {
+  if (
+    !(await resourcesAreVisible({
+      inputs: [
+        {
+          schema:
+            "inputSchemaSource" in definition
+              ? definition.inputSchemaSource
+              : definition.inputSchema,
+          value: args,
+        },
+      ],
+      scopedDb: context.scopedDb,
+    }))
+  ) {
+    return notFoundResult("Not found");
+  }
+  // Before confirmation: asking a human to approve a call that cannot run
+  // would only defer the same answer.
+  const needsMatter = matterRequiredResult({
+    args,
+    context,
+    saveMatterCallable: isStaticToolCallable({
+      context,
+      grantedScopes: context.grantedScopes,
+      mode,
+      toolName: "save_matter",
+    }),
+    toolName,
+  });
+  if (needsMatter !== null) {
+    return needsMatter;
+  }
+
+  return null;
+};
+
 const dispatchMcpToolCall = async ({
   args,
   context,
@@ -373,7 +441,21 @@ const dispatchMcpToolCall = async ({
   dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const serializeForSurface = createSurfaceSerializer({ context, mode });
+  const staticTool = getStaticMcpToolDefinition(toolName, mode);
+  if (staticTool) {
+    // Role and credential refusals are independent of the caller's enrolment.
+    const toolRefusal = mcpToolAuthorityRefusal({
+      authority: context,
+      definition: staticTool,
+      toolName,
+      userEmail: context.userEmail,
+    });
+    if (toolRefusal !== null) {
+      return serializeForSurface(structuredErrorResult(toolRefusal));
+    }
+  }
   const unavailableResult = featureUnavailableToolResult({
+    args,
     context,
     mode,
     toolName,
@@ -393,7 +475,6 @@ const dispatchMcpToolCall = async ({
     return gatewayResult;
   }
 
-  const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
     return serializeForSurface(unknownToolResult(toolName));
   }
@@ -404,7 +485,7 @@ const dispatchMcpToolCall = async ({
 
   if (
     mode === "documents" &&
-    toolName === "invoke_capability" &&
+    toolName === MCP_CAPABILITY_EXECUTORS.write &&
     !isDocumentsMcpCapabilityAllowed(args)
   ) {
     return serializeForSurface(
@@ -428,18 +509,6 @@ const dispatchMcpToolCall = async ({
         hint: featureDisabledHint(staticTool.feature),
       }),
     );
-  }
-
-  // Discovery withholds the tool; a call by name resolves it and is refused
-  // here, naming the member role, the credential, or the account.
-  const toolRefusal = mcpToolAuthorityRefusal({
-    authority: context,
-    definition: staticTool,
-    toolName,
-    userEmail: context.userEmail,
-  });
-  if (toolRefusal !== null) {
-    return serializeForSurface(structuredErrorResult(toolRefusal));
   }
 
   const unknownArgs = findUndeclaredArguments({
@@ -477,7 +546,6 @@ const dispatchMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
-
   // With the input: the exact grant of the operation it selects.
   const inputDenial = mcpToolInputAuthorityDenial(
     context,
@@ -492,55 +560,11 @@ const dispatchMcpToolCall = async ({
     return serializeForSurface(structuredErrorResult(refusal));
   }
 
-  // Before confirmation: asking a human to approve a call that cannot run
-  // would only defer the same answer.
-  const needsMatter = matterRequiredResult({
-    args: normalizedArgs,
-    context,
-    saveMatterCallable: isStaticToolCallable({
-      context,
-      grantedScopes: context.grantedScopes,
-      mode,
-      toolName: "save_matter",
-    }),
-    toolName,
-  });
-  if (needsMatter !== null) {
-    return serializeForSurface(needsMatter);
-  }
-
-  // Resolve confirmation from the registry's canonical behavior.
-  // Capability-catalog and upstream tools defer the final decision to their
-  // owning dispatch boundary because the selected target determines risk.
-  const confirmation = transportConfirmation(staticTool, normalizedArgs);
-  const requiresConfirmation = confirmation.required;
-  const unconfirmable = confirmation.required
-    ? confirmationUnavailableResult({
-        toolConfirmation: context.toolConfirmation,
-        subject: toolName,
-      })
-    : null;
-  if (unconfirmable !== null) {
-    return serializeForSurface(unconfirmable);
-  }
-  if (confirmation.required && normalizedArgs["confirm"] !== true) {
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "confirmation_required",
-        message: confirmation.message,
-        hint: confirmation.hint,
-      }),
-    );
-  }
-
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler) {
     return serializeForSurface(unknownToolResult(toolName));
   }
 
-  const executionContext = requiresConfirmation
-    ? bindApprovedMcpAuditContext(context)
-    : context;
   // Handlers never see the mode: they return either a finished result or an
   // egress plan. The central pipeline applies anonymization (anonymized mode)
   // before windowing; this transport boundary then serializes. Both steps run
@@ -548,6 +572,44 @@ const dispatchMcpToolCall = async ({
   // any handler failure.
   const finished = await Result.tryPromise({
     try: async () => {
+      const referenceRefusal = await staticToolReferenceRefusal({
+        context,
+        definition: staticTool,
+        args: normalizedArgs,
+        mode,
+        toolName,
+      });
+      if (referenceRefusal !== null) {
+        return serializeForSurface(referenceRefusal);
+      }
+
+      // Resolve confirmation from the registry's canonical behavior.
+      // Capability-catalog and upstream tools defer the final decision to their
+      // owning dispatch boundary because the selected target determines risk.
+      const confirmation = transportConfirmation(staticTool, normalizedArgs);
+      const requiresConfirmation = confirmation.required;
+      const unconfirmable = confirmation.required
+        ? confirmationUnavailableResult({
+            toolConfirmation: context.toolConfirmation,
+            subject: toolName,
+          })
+        : null;
+      if (unconfirmable !== null) {
+        return serializeForSurface(unconfirmable);
+      }
+      if (confirmation.required && normalizedArgs["confirm"] !== true) {
+        return serializeForSurface(
+          structuredErrorResult({
+            code: "confirmation_required",
+            message: confirmation.message,
+            hint: confirmation.hint,
+          }),
+        );
+      }
+
+      const executionContext = requiresConfirmation
+        ? bindApprovedMcpAuditContext(context)
+        : context;
       const response = await handler({
         args: normalizedArgs,
         context: executionContext,
@@ -597,7 +659,9 @@ const MCP_OUTPUT_CONTRACT_SINK = failureSink({
  * message: never leak internals to the caller. `captureError` keeps the real
  * exception for observability. An output-contract violation goes through the
  * failure owner instead, which grades it a defect and logs it at ERROR: the
- * caller sees an ordinary tool error, so nothing else would surface it.
+ * caller sees an ordinary tool error, so nothing else would surface it. A
+ * search index that could not be reached is not a defect of the call, so it
+ * keeps its own retryable `search_index_unavailable` envelope.
  */
 const internalErrorResult = ({
   mode,
@@ -614,6 +678,14 @@ const internalErrorResult = ({
     Panic.is(error) && McpOutputContractError.is(error.cause)
       ? error.cause
       : undefined;
+  if (isSearchIndexUnavailable(error)) {
+    return serializeToolResult(
+      scopeToolResultToSurface(searchIndexUnavailableResult(error), {
+        mode,
+        context,
+      }),
+    );
+  }
   if (contractViolation !== undefined) {
     observeFailure(contractViolation, {
       sink: MCP_OUTPUT_CONTRACT_SINK,

@@ -50,7 +50,7 @@ export const createPostHogNodeAnalytics = (
         properties: params.properties,
       });
     },
-    // oxlint-disable-next-line promise-function-async -- forwards client.flush()'s promise directly; async would add a redundant wrapper
+    // oxlint-disable-next-line typescript/promise-function-async -- forwards client.flush()'s promise directly; async would add a redundant wrapper
     flush: () => client.flush(),
   };
 };

@@ -3,7 +3,10 @@ import { and, eq } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
-import { timeEntryReadColumns } from "@/api/handlers/time-entries/time-entry-columns";
+import {
+  timeEntryContextColumns,
+  timeEntryReadColumns,
+} from "@/api/handlers/time-entries/time-entry-columns";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canManageTimeEntry } from "@/api/lib/billing/time-entry-authorization";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -23,6 +26,7 @@ const readTimeEntryById = createSafeHandler(
       "user's entry is reported as not found.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "covered", by: "list_time_entries" },
     access: "read",
     params: readTimeEntryByIdParamsSchema,
@@ -38,7 +42,7 @@ const readTimeEntryById = createSafeHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select(timeEntryReadColumns)
+          .select({ ...timeEntryReadColumns, ...timeEntryContextColumns })
           .from(timeEntries)
           .where(
             and(

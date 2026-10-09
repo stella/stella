@@ -9,12 +9,19 @@
   "scripts/db-await-in-loop.ts",
   "scripts/generated-artifacts.ts",
   "scripts/lint-suppressions.ts",
+  "scripts/outbound-transport-census.ts",
+  "scripts/outbound-transport-ownership.ts",
   "scripts/ownership.ts",
+  "scripts/ownership/*.ts",
+  "scripts/ownership-loader.ts",
+  "scripts/ownership-types.ts",
   "scripts/parse-memo.ts",
   "scripts/ratchet.ts",
   "scripts/result-boundary-globs.ts",
   "scripts/root-connection-shapes.ts",
   "scripts/schema-introspection.ts",
+  "scripts/sha256-owners.ts",
   "scripts/source-globs.ts",
-  "scripts/status-write-shapes.ts"
+  "scripts/status-write-shapes.ts",
+  "scripts/unsignalled-skip.ts"
 ]

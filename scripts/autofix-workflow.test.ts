@@ -5,6 +5,7 @@ import {
   GENERATORS,
   orderGenerators,
 } from "./generated-files";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
@@ -26,6 +27,27 @@ const RESOLUTION_SCRIPTS = [
 const RESOLUTION_SOURCE_URLS = RESOLUTION_SCRIPTS.map(
   (script) => new URL(script.replace("scripts/", ""), import.meta.url),
 );
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const namedCiStep = (workflow: unknown, name: string) => {
+  if (!isRecord(workflow)) {
+    throw new TypeError("CI workflow must declare jobs");
+  }
+  const jobs = workflow["jobs"];
+  if (!isRecord(jobs)) {
+    throw new TypeError("CI workflow must declare jobs");
+  }
+  const steps = Object.keys(jobs).flatMap((jobId) => {
+    const job = jobs[jobId];
+    if (!isRecord(job) || !Array.isArray(job["steps"])) {
+      return [];
+    }
+    return workflowJobSteps(workflow, jobId);
+  });
+  return workflowStepByName(steps, name);
+};
 
 describe("Dependabot Bun autofix boundary", () => {
   test("keeps the runner read-only and hands off only verified autofixes", async () => {
@@ -216,11 +238,39 @@ describe("changed-file autofix boundary", () => {
     expect(job.indexOf("autofix-ci/action@")).toBeGreaterThan(pushStep);
   });
 
+  test("finds a named CI guard inside a nested parallel group", () => {
+    const workflow = {
+      jobs: {
+        generated: {
+          steps: [
+            {
+              parallel: [
+                {
+                  parallel: [
+                    {
+                      name: "Generated files manifest guard",
+                      run: "bun scripts/generated-files-guard.ts --guard-b",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    expect(namedCiStep(workflow, "Generated files manifest guard")["run"]).toBe(
+      "bun scripts/generated-files-guard.ts --guard-b",
+    );
+  });
+
   test("runs the manifest plan and keeps the generated diff restricted", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
+    const ciWorkflow = Bun.YAML.parse(ci);
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const fetchStep = job.indexOf("- name: Fetch changed paths");
     const checkoutStep = job.indexOf("- name: Checkout pull request head");
@@ -273,12 +323,15 @@ describe("changed-file autofix boundary", () => {
     );
     for (const generator of ordered) {
       if (generator.check) {
-        expect(ci).toContain("- name: Generated files manifest guard");
-        expect(ci).toContain("bun scripts/generated-files-guard.ts --guard-b");
+        expect(
+          namedCiStep(ciWorkflow, "Generated files manifest guard")["run"],
+        ).toContain("bun scripts/generated-files-guard.ts --guard-b");
       } else {
         // The null-check families use the named CI guard paired in the manifest.
         expect(generator.checkedBy).toBeDefined();
-        expect(ci).toContain(`- name: ${generator.checkedBy ?? ""}`);
+        expect(
+          namedCiStep(ciWorkflow, generator.checkedBy ?? ""),
+        ).toBeDefined();
       }
     }
   });
@@ -287,23 +340,17 @@ describe("changed-file autofix boundary", () => {
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
+    const ciWorkflow = Bun.YAML.parse(ci);
     for (const generator of orderGenerators(GENERATORS)) {
       if (!generator.checkedBy) {
         continue;
       }
-      const marker = `- name: ${generator.checkedBy}\n`;
-      const start = ci.indexOf(marker);
-      expect(start, generator.id).toBeGreaterThanOrEqual(0);
-      const next = ci.indexOf("\n      - name:", start + marker.length);
-      const step = ci.slice(start, next === -1 ? undefined : next);
-      const runStart = step.indexOf("\n        run:");
-      expect(runStart, generator.id).toBeGreaterThanOrEqual(0);
-      const commands = new Set(
-        step
-          .slice(runStart)
-          .split("\n")
-          .map((line) => line.trim().replace(/^run: /u, "")),
-      );
+      const step = namedCiStep(ciWorkflow, generator.checkedBy);
+      const run = step["run"];
+      if (typeof run !== "string") {
+        throw new TypeError(`${generator.checkedBy} has no run command`);
+      }
+      const commands = new Set(run.split("\n").map((line) => line.trim()));
       if (commands.has("bun scripts/ci-generated-sources.ts prepare")) {
         for (const command of CI_GENERATION_COMMANDS) {
           commands.add(command.join(" "));
@@ -365,25 +412,32 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain(
       'git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"',
     );
-    expect(fix).toContain(
-      "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
-    );
+    expect(fix).toContain("while IFS= read -r -d '' path; do");
     expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
     expect(fix).toContain(
       'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(fix).toContain(
-      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
+    // The Astro project has no native-compiler type graph to fix against.
+    expect(fix).toContain(
+      `if [[ "$path" =~ \\.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then`,
+    );
+    const prepare = fix.indexOf("bun scripts/ci-generated-sources.ts prepare");
+    const typecheck = fix.indexOf(
+      "bun scripts/typecheck-coverage.ts --autofix",
+    );
+    const autofix = fix.indexOf("--type-aware --fix");
+    expect(prepare).toBeGreaterThan(0);
+    expect(typecheck).toBeGreaterThan(prepare);
+    expect(autofix).toBeGreaterThan(typecheck);
+    expect(fix).toContain("set -euo pipefail");
     expect(fix).toContain(
       `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,
     );
-    for (const unsafe of [
-      "--fix-suggestions",
-      "--fix-dangerously",
-      "--type-aware",
-    ]) {
+    for (const unsafe of ["--fix-suggestions", "--fix-dangerously"]) {
       expect(fix).not.toContain(unsafe);
     }
     expect(job.slice(restrictionStep, pushStep)).toContain(
@@ -409,7 +463,7 @@ describe("changed-file autofix boundary", () => {
     expect(plan).toBeGreaterThan(availability);
     expect(job).toContain(`ready: \${{ steps.planner.outputs.ready }}`);
     expect(scope).toContain(
-      "scripts/autofix-plan.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
+      "scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
     );
     expect(scope).toContain('git cat-file -e "HEAD:$path"');
     expect(scope).toContain('echo "ready=false" >> "$GITHUB_OUTPUT"');
@@ -419,4 +473,26 @@ describe("changed-file autofix boundary", () => {
     );
     expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
   });
+});
+
+test("type-aware autofix fixtures require a successful dependency install", async () => {
+  const ci = await Bun.file(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+  ).text();
+  const start = ci.indexOf("      - name: Test type-aware autofix\n");
+  expect(start).toBeGreaterThanOrEqual(0);
+  const step = ci.slice(start, ci.indexOf("\n      - name:", start + 1));
+  expect(step).toContain("steps.install.outcome == 'success'");
+  expect(step).toContain(
+    "needs.ci-plan.outputs.package_checks_required == 'true'",
+  );
+  expect(step).toContain("bun test scripts/autofix-type-aware.test.ts");
+  const invariants = ci.slice(
+    ci.indexOf("      - name: Test CI workflow invariants\n"),
+    start,
+  );
+  expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
+  expect(invariants).not.toContain(
+    "apps/api/scripts/refresh-test-durations.test.ts",
+  );
 });

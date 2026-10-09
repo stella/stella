@@ -1,3 +1,5 @@
+import type { AppliedProvisionVersion } from "@stll/api-contract/provision-applied-version";
+
 /**
  * A jurisdiction profile: what a citation reader needs to know about a legal
  * culture, as data.
@@ -196,7 +198,22 @@ export type AnchorScheme = {
   render: Readonly<Record<AnchorLevel, (value: string) => string>>;
 };
 
+/** Explicit version language; generic as-amended wording has no entry. */
+export type VersionGrammar = {
+  dateStatements: readonly {
+    prefix: string;
+    relation: Extract<
+      AppliedProvisionVersion,
+      { type: "stated_date" }
+    >["relation"];
+  }[];
+  amendmentPrefixes: readonly string[];
+  /** Inflected month spellings, mapped to calendar month numbers. */
+  monthNames: Readonly<Record<string, number>>;
+};
+
 export type JurisdictionProfile = {
+  versionGrammar: VersionGrammar;
   jurisdiction: ProvisionCitationJurisdiction;
   /** BCP-47 primary subtag of the language the profile's vocabulary is in. */
   language: string;

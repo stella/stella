@@ -68,7 +68,7 @@ export const CORPUS_SCHEMA_LANE_RETRY_MS = 250;
  * upgrade of the corpus tables takes, shorter than a stuck upgrade would
  * hold the lane before somebody notices.
  */
-export const CORPUS_SCHEMA_LANE_DEFAULT_WAIT_MS = 20 * 60 * 1000;
+const CORPUS_SCHEMA_LANE_DEFAULT_WAIT_MS = 20 * 60 * 1000;
 
 /**
  * Take the lane exclusive for the session. Blocks until every shared holder
@@ -119,7 +119,7 @@ export type CorpusSchemaLaneTransaction = {
 };
 
 /** Anything that runs a transaction: a drizzle database, or a stand-in. */
-export type CorpusSchemaLaneDatabase<
+type CorpusSchemaLaneDatabase<
   TTransaction extends CorpusSchemaLaneTransaction,
 > = {
   transaction: <TResult>(

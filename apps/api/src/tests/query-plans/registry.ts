@@ -12,22 +12,26 @@ import {
   decisionCitationPageQuery,
   decisionCitationSummaryQuery,
 } from "@/api/handlers/case-law/decisions/citation-graph";
+import { caseLawArrivalsSnapshotQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
   decisionRecordQuery,
   decisionTextPresenceQuery,
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import {
-  candidateDecisionRowsQuery,
-  caseLawSearchRowFilters,
+  candidateDecisionRowsStatement,
   decisionIdsByIdentityQuery,
-  pageDecisionRowsQuery,
+  pageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
 import {
   getShardConditions,
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
-import { buildLegislationFacetsQuery } from "@/api/handlers/legislation/facets";
+import { LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT } from "@/api/handlers/legislation/catalog-response";
+import {
+  buildLegislationFacetsQuery,
+  legislationFacetSnapshotQuery,
+} from "@/api/handlers/legislation/facets";
 import { buildListStatutesQuery } from "@/api/handlers/legislation/list";
 import {
   statuteSitemapIndexQuery,
@@ -41,8 +45,10 @@ import {
   SITEMAP_REFRESH_PAGE_SIZE,
   sitemapRefreshPageSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
+import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
-import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";
+import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
+import { legislationFacetRefreshQuery } from "@/api/lib/legal-search/legislation-facet-refresh";
 import {
   pendingDocumentPresenceQuery,
   remainingDocumentCandidateQuery,
@@ -88,6 +94,8 @@ if (!Array.isArray(shardConditions)) {
 const sampleCountry =
   publicCaseLawCountry("CZE") ?? panic("The query-plan country must be public");
 const citationPageSize = 10;
+/** A generous bound for a heavy ingest week. */
+const SOURCE_ARRIVALS_REFRESH_HEAP_FETCH_BUDGET = 1_000_000;
 
 /** A raw `$1` statement with its one parameter bound, as a Drizzle query. */
 const withFirstParameter = (text: string, value: string): SQLWrapper => {
@@ -317,11 +325,8 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      candidateDecisionRowsQuery(tx, {
-        filters: caseLawSearchRowFilters(
-          { country: sampleCountry },
-          QUERY_PLAN_SAMPLE.caseLaw.generation,
-        ),
+      candidateDecisionRowsStatement(tx, {
+        body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
       }),
@@ -337,7 +342,7 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      rehydrateCorpusIndexProviderCandidatesQuery(tx, {
+      rehydrateCorpusIndexProviderCandidatesStatement(tx, {
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
       }),
@@ -354,11 +359,8 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      pageDecisionRowsQuery(tx, {
-        filters: caseLawSearchRowFilters(
-          { country: sampleCountry },
-          QUERY_PLAN_SAMPLE.caseLaw.generation,
-        ),
+      pageDecisionRowsStatement(tx, {
+        body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
       }),
@@ -450,12 +452,74 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["legislation.list"],
   },
   {
+    // The request path: a sum over the refreshed snapshot, never a walk of
+    // the legislation corpus. A guarded-table scan here fails the contract.
     id: "legislation.facets",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      legislationFacetSnapshotQuery(
+        tx,
+        "CZE",
+        LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT + 1,
+      ),
+    seed: "legislation",
+    heapFetchMitigation: {
+      type: "snapshot",
+      relation: "legislation_facet_counts",
+    },
+    contract: planContracts["legislation.facets"],
+  },
+  {
+    // Served only by a database the scheduler has never refreshed.
+    id: "legislation.facets-unrefreshed",
     class: "aggregate",
     role: "public-law-reader",
     build: (tx) => buildLegislationFacetsQuery(tx, "CZE"),
     seed: "legislation",
-    contract: planContracts["legislation.facets"],
+    contract: planContracts["legislation.facets-unrefreshed"],
+  },
+  {
+    id: "legislation.facets-refresh",
+    class: "aggregate",
+    role: "root",
+    build: (tx) => legislationFacetRefreshQuery(tx),
+    seed: "legislation",
+    contract: planContracts["legislation.facets-refresh"],
+  },
+  {
+    // The coverage page's weekly figure: one stored row per source.
+    id: PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      caseLawArrivalsSnapshotQuery(tx, {
+        sourceIds: [QUERY_PLAN_SAMPLE.caseLaw.sourceId],
+        now: new Date(QUERY_PLAN_SAMPLE.systemAudit.now),
+      }),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "snapshot",
+      relation: "case_law_source_arrivals",
+    },
+    contract: planContracts[PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals],
+  },
+  {
+    // The scheduler's recount: a per-source created_at range, never a scan
+    // of the decision table.
+    id: "case-law.source-arrivals-refresh",
+    class: "aggregate",
+    role: "root",
+    build: () =>
+      sourceArrivalsRefreshQuery(new Date(QUERY_PLAN_SAMPLE.systemAudit.now)),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: SOURCE_ARRIVALS_REFRESH_HEAP_FETCH_BUDGET,
+      reason:
+        "Scheduler-only recount off the request path: one week of each source's published arrivals, read off the partial arrivals index; heap visits only for pages not yet all-visible.",
+    },
+    contract: planContracts["case-law.source-arrivals-refresh"],
   },
   {
     id: "corpus-index.projection-erasure-claim",
@@ -504,8 +568,8 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
     reason: "Reads the small court-weight configuration table.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals]: {
-    type: "excluded",
-    reason: "Coverage arrival windows need their own seeded profile.",
+    type: "registered",
+    id: PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources]: {
     type: "excluded",

@@ -1,153 +1,114 @@
-import { panic } from "better-result";
 import { expect, spyOn, test } from "bun:test";
-import fc from "fast-check";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { assertProperty } from "@stll/property-testing";
+import { sha256Hex } from "@stll/sha256/bun";
 
-import { selectApiTestFiles } from "./test-file-shards";
-import { assertTestDurations, readTimingArtifact } from "./test-timings";
+import {
+  assertTestDurationsIdentity,
+  loadTestDurationWeights,
+  MISSING_TEST_DURATIONS_HASH,
+  readTimingArtifact,
+} from "./test-timings";
 
-test("every selected shard file needs a weight before execution", () => {
-  expect(() =>
-    selectApiTestFiles({
-      files: ["new.test.ts"],
-      durations: {},
-      shardValue: "1/1",
-    }),
-  ).toThrow("Missing API test duration: new.test.ts");
-  assertTestDurations({
-    files: ["one.test.ts"],
-    durations: { "one.test.ts": { seconds: 0, source: "measured" } },
-  });
-});
-
-test("removing any live weight prevents every shard from starting", () => {
-  assertProperty(
-    "removing any live weight prevents every shard from starting",
-    fc.property(
-      fc.uniqueArray(fc.stringMatching(/^[a-z]{1,8}$/u), {
-        minLength: 1,
-        maxLength: 20,
-      }),
-      fc.nat(),
-      (files, offset) => {
-        const missing =
-          files.at(offset % files.length) ??
-          panic("Nonempty file generator must select an existing file");
-        const durations = Object.fromEntries(
-          files
-            .filter((file) => file !== missing)
-            .map((file) => [
-              file,
-              { seconds: 1, source: "estimated" as const },
-            ]),
-        );
-        for (const index of [1, 2]) {
-          expect(() =>
-            selectApiTestFiles({ files, durations, shardValue: `${index}/2` }),
-          ).toThrow(`Missing API test duration: ${missing}`);
-        }
-      },
-    ),
-  );
-});
-
-test("measured drift warns only above both noise floors and never rejects execution", () => {
-  const warning = spyOn(console, "warn").mockImplementation(() => undefined);
+test("a sharded run reads exactly the weights its cache key declares", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "api-test-identity-"));
   try {
-    for (const [recorded, measured] of [
-      [2, 12],
-      [12, 2],
-      [0, 10],
-    ] as const) {
-      warning.mockClear();
-      assertTestDurations({
-        files: ["one"],
-        durations: { one: { seconds: recorded, source: "measured" } },
-        measurements: { one: measured },
-      });
-      expect(warning).toHaveBeenCalledTimes(1);
-      expect(warning.mock.calls.at(0)?.at(0)).toContain(
-        "::warning::Stale API test duration: one",
-      );
-      expect(warning.mock.calls.at(0)?.at(0)).toContain(
-        "--write <timing-artifact-directory>",
+    const filename = path.join(directory, "durations.json");
+    const contents = '{"a":{"seconds":2,"source":"measured"}}';
+    writeFileSync(filename, contents);
+    const hash = sha256Hex(contents);
+    expect(() =>
+      assertTestDurationsIdentity({ path: filename, hash }),
+    ).not.toThrow();
+    // Weights present but undeclared, or declared for other contents.
+    for (const declared of [
+      undefined,
+      "",
+      MISSING_TEST_DURATIONS_HASH,
+      "0".repeat(64),
+    ]) {
+      expect(() =>
+        assertTestDurationsIdentity({ path: filename, hash: declared }),
+      ).toThrow("must be the sha256");
+    }
+    // No weights: only an absent or explicitly missing declaration matches.
+    for (const absent of [undefined, "", path.join(directory, "none.json")]) {
+      for (const declared of [undefined, "", MISSING_TEST_DURATIONS_HASH]) {
+        expect(() =>
+          assertTestDurationsIdentity({ path: absent, hash: declared }),
+        ).not.toThrow();
+      }
+      expect(() => assertTestDurationsIdentity({ path: absent, hash })).toThrow(
+        "must be the sha256",
       );
     }
-    for (const [recorded, measured] of [
-      [1, 6],
-      [6, 1],
-      [10, 40],
-      [0, 0.9],
-    ] as const) {
-      warning.mockClear();
-      assertTestDurations({
-        files: ["one"],
-        durations: { one: { seconds: recorded, source: "measured" } },
-        measurements: { one: measured },
-      });
-      expect(warning).not.toHaveBeenCalled();
-    }
-    warning.mockClear();
-    assertTestDurations({
-      files: ["one"],
-      durations: { one: { seconds: 1, source: "estimated" } },
-      measurements: { one: 100, deleted: 999 },
-    });
-    expect(warning).not.toHaveBeenCalled();
   } finally {
-    warning.mockRestore();
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("a sixfold measured drift exits zero with a warning while a missing weight fails", async () => {
-  const cases = [
-    {
-      durations: { one: { seconds: 2, source: "measured" } },
-      exitCode: 0,
-      message: "::warning::Stale API test duration: one",
-    },
-    { durations: {}, exitCode: 1, message: "Missing API test duration: one" },
-  ];
-  for (const { durations, exitCode, message } of cases) {
-    const child = Bun.spawn(
-      [
-        process.execPath,
-        "-e",
-        `import { assertTestDurations } from "./test-timings.ts"; assertTestDurations(${JSON.stringify({ files: ["one"], durations, measurements: { one: 12 } })});`,
-      ],
-      { cwd: import.meta.dirname, stdout: "pipe", stderr: "pipe" },
-    );
-    const [code, stderr] = await Promise.all([
-      child.exited,
-      new Response(child.stderr).text(),
-      new Response(child.stdout).text(),
+test("unknown live tests use the median cached weight with a notice", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "api-test-durations-"));
+  const filename = path.join(directory, "weights.json");
+  writeFileSync(
+    filename,
+    JSON.stringify({
+      a: { seconds: 2, source: "measured" },
+      b: { seconds: 8, source: "measured" },
+      deleted: { seconds: 10_000, source: "measured" },
+    }),
+  );
+  const notices: string[] = [];
+  try {
+    expect(
+      loadTestDurationWeights({
+        files: ["a", "b", "new"],
+        path: filename,
+        notice: (message) => {
+          notices.push(message);
+        },
+      }),
+    ).toEqual({ a: 2, b: 8, new: 8 });
+    expect(notices).toEqual([
+      "::notice::1 API test file(s) use the median duration weight",
     ]);
-    expect(code).toBe(exitCode);
-    expect(stderr).toContain(message);
-    expect(stderr).toContain(
-      "bun apps/api/scripts/refresh-test-durations.ts --write",
-    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("invalid recorded weights and measurements remain hard failures for both sources", () => {
-  for (const source of ["measured", "estimated"] as const) {
-    for (const invalid of [-1, Infinity, Number.NaN]) {
-      expect(() =>
-        assertTestDurations({
-          files: ["one"],
-          durations: { one: { seconds: invalid, source } },
-        }),
-      ).toThrow("Invalid duration");
-      expect(() =>
-        assertTestDurations({
-          files: ["one"],
-          durations: { one: { seconds: 1, source } },
-          measurements: { one: invalid },
-        }),
-      ).toThrow("Invalid measurement");
+test("unusable duration caches fall back uniformly without throwing", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "api-test-durations-"));
+  const filename = path.join(directory, "weights.json");
+  const notice = spyOn(console, "log").mockImplementation(() => undefined);
+  try {
+    for (const contents of [
+      "not json",
+      JSON.stringify([]),
+      JSON.stringify({ a: { seconds: "wrong", source: "measured" } }),
+      JSON.stringify({}),
+      JSON.stringify({ deleted: { seconds: 9, source: "measured" } }),
+    ]) {
+      writeFileSync(filename, contents);
+      notice.mockClear();
+      expect(
+        loadTestDurationWeights({ files: ["live"], path: filename }),
+      ).toEqual({ live: 1 });
+      expect(notice.mock.calls.at(0)?.at(0)).toContain("::notice::");
     }
+    notice.mockClear();
+    expect(
+      loadTestDurationWeights({
+        files: ["live"],
+        path: path.join(directory, "missing.json"),
+      }),
+    ).toEqual({ live: 1 });
+    expect(notice.mock.calls.at(0)?.at(0)).toContain("::notice::");
+  } finally {
+    notice.mockRestore();
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
@@ -155,11 +116,6 @@ test("native milliseconds normalize to seconds and malformed artifacts fail", ()
   expect(
     readTimingArtifact('{"version":1,"files":{"./src/one.test.ts":2300}}'),
   ).toEqual({ "src/one.test.ts": 2.3 });
-  for (const files of [{ one: -1 }, { one: "10" }]) {
-    expect(() =>
-      readTimingArtifact(JSON.stringify({ version: 1, files })),
-    ).toThrow("Invalid");
-  }
   expect(() => readTimingArtifact('{"version":2,"files":{}}')).toThrow(
     "Invalid",
   );

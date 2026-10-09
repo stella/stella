@@ -52,7 +52,6 @@ jobs:
       - name: Build production web
         env:
           VITE_FEATURE_INBOX: "true"
-          VITE_FEATURE_TIME_BILLING: "true"
           VITE_PUBLIC_LAW_ENABLED: "true"
           VITE_PUBLIC_TOOLS_ENABLED: "true"
           VITE_WORKFLOWS_ENABLED: "true"
@@ -128,11 +127,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  full-test-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.ci_tests_matrix }}
+      api-shards: ${{ steps.plan.outputs.api_test_shards }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Plan full test shards
+        id: plan
+        run: bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
+
   full-test:
+    needs: full-test-plan
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.full-test-plan.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -163,9 +191,23 @@ jobs:
           cp .env.example .env
 
       - name: Full test suite
-        run: bun run test -- --concurrency=2
         env:
+          API_TEST_SHARD_COUNT: ${{ needs.full-test-plan.outputs.api-shards }}
+          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           TURBO_FORCE: "true"
+        run: |
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
+          export API_TEST_SHARD
+          bun run test -- --concurrency=2 "${shard_args[@]}"
+      - name: Full web test suite
+        if: matrix.shard == 'rest-web'
+        env:
+          SHARD: web
+          TURBO_FORCE: "true"
+        run: |
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          bun run test -- --concurrency=2 "${shard_args[@]}"
 
   # The production client build is the remaining browser-CI setup hotspot.
   # Profile it nightly rather than taxing every PR; retain TanStack Start's

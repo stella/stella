@@ -11,10 +11,8 @@ import {
   ENV_REQUIREMENT,
 } from "./env-catalog";
 import {
-  deploymentFlagPairingIssues,
   exampleValueForCatalogEntry,
   parseEnvText,
-  readDoctorInput,
   renderEnvironmentEntries,
   validateDoctorEnvironment,
 } from "./env-tool";
@@ -439,26 +437,6 @@ const check = async () => {
   return false;
 };
 
-type SelfhostDoctorIssuesOptions = {
-  ambientEnvironment: NodeJS.ProcessEnv;
-  text: string;
-  /** The web build's variables; the web reads its flags from apps/web. */
-  webEnvironment: Record<string, string | undefined>;
-};
-
-export const selfhostDoctorIssues = ({
-  ambientEnvironment,
-  text,
-  webEnvironment,
-}: SelfhostDoctorIssuesOptions) => [
-  ...productionEnvironmentIssues(text),
-  ...ambientComposeOverrideIssues(text, ambientEnvironment),
-  ...deploymentFlagPairingIssues({
-    api: parseEnvText(text, {}),
-    web: webEnvironment,
-  }),
-];
-
 const doctor = (envPath = SELFHOST_ENV_PATH) => {
   const absolutePath = path.resolve(REPO_ROOT, envPath);
   if (!existsSync(absolutePath)) {
@@ -466,11 +444,10 @@ const doctor = (envPath = SELFHOST_ENV_PATH) => {
     return false;
   }
   const text = readFileSync(absolutePath, "utf-8");
-  const issues = selfhostDoctorIssues({
-    ambientEnvironment: process.env,
-    text,
-    webEnvironment: readDoctorInput({ app: "web", mode: "production" }).input,
-  });
+  const issues = [
+    ...productionEnvironmentIssues(text),
+    ...ambientComposeOverrideIssues(text, process.env),
+  ];
   if (issues.length === 0) {
     console.log(`${envPath}: valid production self-host configuration.`);
     return true;

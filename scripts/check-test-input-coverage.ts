@@ -415,11 +415,9 @@ type OutsideRead = {
 const outsideReads = ({
   packageDir,
   root,
-  skippedDirs,
 }: {
   readonly packageDir: string;
   readonly root: string;
-  readonly skippedDirs: ReadonlySet<string>;
 }): readonly OutsideRead[] => {
   const reads: OutsideRead[] = [];
   for (const relative of testFiles(root, packageDir)) {
@@ -443,10 +441,7 @@ const outsideReads = ({
         if (
           TURBO_GLOBAL_INPUTS.has(target) ||
           target === packageDir ||
-          target.startsWith(`${packageDir}/`) ||
-          [...skippedDirs].some(
-            (dir) => target === dir || target.startsWith(`${dir}/`),
-          )
+          target.startsWith(`${packageDir}/`)
         ) {
           continue;
         }
@@ -467,10 +462,10 @@ export const checkTestInputCoverage = (root: string): readonly string[] => {
 
   for (const workspace of workspaces) {
     const inputs = declared.get(workspace.name) ?? [];
+    const dependencyDirs = dependencyClosure(workspace, byName);
     const reads = outsideReads({
       packageDir: workspace.dir,
       root,
-      skippedDirs: dependencyClosure(workspace, byName),
     });
     const matched = new Set<string>();
 
@@ -478,6 +473,11 @@ export const checkTestInputCoverage = (root: string): readonly string[] => {
       const input = inputs.find((entry) => matchesRootInput(target, entry));
       if (input !== undefined) {
         matched.add(input);
+        continue;
+      }
+      // Dependency reads need no extra input, but an explicit input still
+      // counts as used when the test reads it.
+      if ([...dependencyDirs].some((dir) => isInside(target, dir))) {
         continue;
       }
       errors.push(

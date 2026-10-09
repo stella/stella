@@ -286,6 +286,7 @@ describe("flags", () => {
   test("tags, catalog entries and sanctioned env reads are readers", () => {
     for (const source of [
       `export const tool = { feature: "FEATURE_B" };`,
+      `export const feature = { deploymentFeature: "FEATURE_B" };`,
       `import { env } from "@/api/env";\nexport const on = env.FEATURE_B;`,
       `import { env } from "@/api/env";\nconst { FEATURE_B } = env;`,
     ]) {
@@ -467,4 +468,37 @@ describe("real tree", () => {
       Array.isArray(committed) ? committed : [],
     );
   });
+});
+
+test("list routes and task admission read the same deployment owner", () => {
+  const actual = loadRealInput();
+  const required = [
+    "apps/api/src/handlers/lists/routes.ts",
+    "apps/api/src/lib/tasks/deployment-features.ts",
+  ];
+  const ownerReaders = (source: ScanInput) =>
+    scanDeploymentFeatures(source, createParseCache())
+      .reads.filter(
+        (read) =>
+          read.flag === "FEATURE_LEGAL_LISTS" && read.form === "owner-call",
+      )
+      .map((read) => read.file);
+  for (const file of required) {
+    expect(ownerReaders(actual)).toContain(file);
+    const divergent = {
+      ...actual,
+      readerFiles: actual.readerFiles.map((record) =>
+        record.file === file
+          ? {
+              ...record,
+              source: record.source.replaceAll(
+                /isDeploymentFeatureEnabled\(\s*"FEATURE_LEGAL_LISTS",?\s*\)/gu,
+                "env.FEATURE_LEGAL_LISTS",
+              ),
+            }
+          : record,
+      ),
+    };
+    expect(ownerReaders(divergent)).not.toContain(file);
+  }
 });

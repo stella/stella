@@ -18,7 +18,9 @@ import type {
   ClaimReviewEventPayload,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
+import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
+import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   jsonb,
   organization,
@@ -32,11 +34,13 @@ import {
   timestamptz,
   user,
   workspaceCheck,
+  orgPolicies,
   wsOrganizationPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
+import { entities } from "./entities";
 
 const quoted = (values: readonly string[]) =>
   sql.join(
@@ -56,13 +60,66 @@ const REVIEW_EVENT_KIND_SQL_VALUES = quoted(CLAIM_REVIEW_EVENT_KINDS);
 const NOTVERIFIABLE_SQL = sql.raw(`'${CLAIM_STATE.NOTVERIFIABLE}'`);
 const RECORDCONFLICT_SQL = sql.raw(`'${CLAIM_STATE.RECORDCONFLICT}'`);
 
+const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
+  FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass)`;
+
+export const legalListVerificationBudgets = p.pgTable.withRLS(
+  "legal_list_verification_budgets",
+  {
+    organizationId: safeOrganizationId("organization_id").primaryKey(),
+    activeRuns: p.integer("active_runs").notNull().default(0),
+    startsDay: p
+      .date("starts_day", { mode: "string" })
+      .notNull()
+      .default(sql`stella_list_verification_day(CURRENT_TIMESTAMP)`),
+    startsToday: p.integer("starts_today").notNull().default(0),
+    activeLimit: p
+      .integer("active_limit")
+      .notNull()
+      .default(DEFAULT_VERIFICATION_RUN_CAPS.active),
+    dailyLimit: p
+      .integer("daily_limit")
+      .notNull()
+      .default(DEFAULT_VERIFICATION_RUN_CAPS.startsPerDay),
+  },
+  (table) => [
+    ...orgPolicies(),
+    p
+      .foreignKey({
+        name: "legal_list_verification_budgets_org_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p.pgPolicy("legal_list_verification_budgets_owner_access", {
+      for: "all",
+      to: "public",
+      using: verificationBudgetOwner,
+      withCheck: verificationBudgetOwner,
+    }),
+    p.pgPolicy("legal_list_verification_budgets_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.check(
+      "legal_list_verification_budgets_nonnegative",
+      sql`${table.activeRuns} >= 0 AND ${table.startsToday} >= 0`,
+    ),
+    p.check(
+      "legal_list_verification_budgets_limits",
+      sql`${table.activeLimit} BETWEEN 1 AND 100 AND ${table.dailyLimit} BETWEEN 1 AND 1000`,
+    ),
+  ],
+);
+
 /**
  * One immutable verification of a document against a matter's anchor facts.
  *
  * The target and the evidence are pinned by value: `evidence` embeds every
- * fact the run read, and there is no foreign key to the document or the list.
- * A finished verification therefore stays readable after the list is edited
- * or the document moves on. Workspace deletion still cascades everything.
+ * fact the run read. History survives list edits and document versions;
+ * deleting the document or its workspace cascades the pinned content.
  */
 export const legalListVerificationRuns = p.pgTable(
   "legal_list_verification_runs",
@@ -76,8 +133,7 @@ export const legalListVerificationRuns = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    // Target pin. No foreign keys: a deleted document must not take its
-    // verification history with it.
+    // Version and field pins survive edits; the document owns the run lifecycle.
     entityId: safeUuid<"entity">("entity_id").notNull(),
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
@@ -100,6 +156,19 @@ export const legalListVerificationRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
+    p
+      .foreignKey({
+        name: "legal_list_verification_runs_entity_fk",
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
     p
       .unique("legal_list_verification_runs_id_ws_unq")
       .on(table.id, table.workspaceId),
@@ -154,7 +223,9 @@ export const legalListVerificationRuns = p.pgTable(
         name: "legal_list_verification_runs_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("legal_list_verification_runs"),
+    ...wsOrganizationPolicies("legal_list_verification_runs", {
+      columns: table,
+    }),
     p.pgPolicy("legal_list_verification_runs_owner_access", {
       for: "all",
       to: "public",
@@ -210,6 +281,15 @@ export const legalListVerificationReadReceipts = p.pgTable(
       .index("verification_read_receipts_run_idx")
       .on(table.workspaceId, table.runId),
     p.index("verification_read_receipts_user_idx").on(table.userId),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+      ]),
+    ),
     ...wsOrganizationUserPolicies("legal_list_verification_read_receipts"),
   ],
 );
@@ -254,7 +334,15 @@ export const legalListVerificationBlocks = p.pgTable(
       sql`(${table.kind} = 'docx-block' AND ${table.pageNumber} IS NULL)
         OR (${table.kind} = 'pdf-page' AND ${table.pageNumber} > 0)`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -348,7 +436,15 @@ export const legalListClaims = p.pgTable(
       "legal_list_claims_position_check",
       sql`${table.position} >= 0 AND ${table.position} < ${sql.raw(String(VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX))}`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -400,6 +496,12 @@ export const legalListClaimReviewEvents = p.pgTable(
     p.check(
       "legal_list_claim_review_events_payload_kind_check",
       sql`${table.payload}->>'kind' = ${table.kind}`,
+    ),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.claimId, { kind: "owned-by-parent", parent: legalListClaims }],
+      ]),
     ),
     p.pgPolicy("workspace_select", {
       for: "select",

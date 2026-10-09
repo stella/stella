@@ -14,7 +14,7 @@ import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
 } from "../execution-profile";
-import { apiDelete, apiPut } from "../helpers/api";
+import { apiDelete, E2E_API_ORIGIN, apiGet, apiPut } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import {
@@ -37,11 +37,21 @@ import {
   mergeResampledMetrics,
   summarizeCapture,
 } from "../helpers/network";
+import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
+import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
-  declarePublicKnowledgeSmoke,
-  PUBLIC_VISITOR_ROUTE_DEFS,
-} from "../helpers/public-knowledge-smoke";
+  assertSmokeRouteCoverage,
+  networkBaselineKey,
+} from "../helpers/smoke-route-coverage";
+import {
+  SMOKE_ROUTE_DEFS,
+  type SmokeRouteDef,
+  type SmokeWorld,
+  type RouteExpectation,
+} from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
+import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
+import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
 import {
   type TestWorkspace,
   createTestWorkspace,
@@ -53,7 +63,6 @@ import {
 // the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
-const NONEXISTENT_VERIFICATION_CODE = "abcdmnp239";
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
 // (seed-test-user.ts writes it there). The route walk owns its API request
@@ -67,11 +76,6 @@ const ROUTE_TREE_PATH = path.resolve(
   import.meta.dirname,
   "../../src/routeTree.gen.ts",
 );
-
-type RouteExpectation =
-  | { kind: "rendersInPlace" }
-  | { kind: "redirectsTo"; to: string }
-  | { kind: "settles" };
 
 // The concrete route smoked by a single test case: template (stable key),
 // resolved path, optional settle window, and where it is expected to land.
@@ -88,152 +92,6 @@ type SmokeRoute = {
   // is assertable.
   expectation?: RouteExpectation;
 };
-
-// Runtime fixtures every dynamic route path is resolved against. Populated once
-// in beforeAll and shared across the per-route test cases.
-type SmokeWorld = {
-  workspace: TestWorkspace;
-  contactId: string;
-  documentRoute: { entityId: string; path: string };
-  correspondenceId: string;
-};
-
-// A route case declared at collection time. `path` is a function so dynamic
-// routes (workspace/contact/document ids) resolve against the beforeAll world
-// when the case actually runs, while templates stay static so the per-route
-// `test()` cases and the coverage assertion can be built before setup runs.
-type SmokeRouteDef = {
-  template: string;
-  path: (world: SmokeWorld) => string;
-  settleMs?: number;
-  expectation?: RouteExpectation;
-};
-
-const staticRoute = (
-  template: string,
-  extra: Omit<SmokeRouteDef, "template" | "path"> = {},
-): SmokeRouteDef => ({ template, path: () => template, ...extra });
-
-// Every authenticated route smoked, one case each. Order is the walk order; the
-// heavy document route stays last. Kept as declarations (not live SmokeRoutes)
-// so each route is its own `test()` with its own timeout instead of one 300s
-// mega-test whose budget any single slow or dev-server-stalled route can blow.
-const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
-  staticRoute("/chat"),
-  {
-    template: "/chat/$threadId",
-    path: () => `/chat/${randomUUID()}`,
-  },
-  staticRoute("/chat/new", { expectation: { kind: "settles" } }),
-  staticRoute("/contacts"),
-  staticRoute("/dev/autocomplete", { expectation: { kind: "settles" } }),
-  staticRoute("/knowledge"),
-  staticRoute("/knowledge/clauses"),
-  // Reachable in dev/staging (playbooks preview gate is open there); redirects
-  // to /knowledge only in production where the flag is off.
-  staticRoute("/knowledge/playbooks"),
-  staticRoute("/knowledge/styles"),
-  staticRoute("/knowledge/templates"),
-  staticRoute("/knowledge/tools"),
-  staticRoute("/knowledge/workflows"),
-  staticRoute("/settings", {
-    expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
-  }),
-  staticRoute("/settings/account/beta", { expectation: { kind: "settles" } }),
-  staticRoute("/settings/account/connections"),
-  staticRoute("/settings/account/desktop"),
-  staticRoute("/settings/account/memory", {
-    expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
-  }),
-  staticRoute("/settings/account/profile"),
-  staticRoute("/settings/organization", {
-    expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
-  }),
-  staticRoute("/settings/organization/ai"),
-  staticRoute("/settings/organization/anonymization"),
-  staticRoute("/settings/organization/audit-logs"),
-  staticRoute("/settings/organization/catalogue", {
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
-  }),
-  staticRoute("/settings/organization/document-types"),
-  staticRoute("/settings/organization/matter-numbering"),
-  staticRoute("/settings/organization/billing", {
-    expectation: { kind: "settles" },
-  }),
-  staticRoute("/settings/organization/members"),
-  staticRoute("/settings/organization/usage"),
-  staticRoute("/inbox"),
-  staticRoute("/workspaces"),
-  {
-    template: "/chat/workspaces/$workspaceId/$threadId",
-    path: (world) => `/chat/workspaces/${world.workspace.id}/${randomUUID()}`,
-  },
-  {
-    template: "/chat/workspaces/$workspaceId/new",
-    path: (world) => `/chat/workspaces/${world.workspace.id}/new`,
-    expectation: { kind: "settles" },
-  },
-  {
-    template: "/workspaces/$workspaceId",
-    path: (world) => `/workspaces/${world.workspace.id}`,
-    expectation: { kind: "redirectsTo", to: "" },
-  },
-  {
-    template: "/workspaces/$workspaceId/expenses",
-    path: (world) => `/workspaces/${world.workspace.id}/expenses`,
-  },
-  {
-    template: "/workspaces/$workspaceId/invoices",
-    path: (world) => `/workspaces/${world.workspace.id}/invoices`,
-  },
-  {
-    template: "/workspaces/$workspaceId/lists",
-    path: (world) => `/workspaces/${world.workspace.id}/lists`,
-  },
-  {
-    template: "/workspaces/$workspaceId/timesheets",
-    path: (world) => `/workspaces/${world.workspace.id}/timesheets`,
-  },
-  {
-    template: "/workspaces/$workspaceId/workflows",
-    path: (world) => `/workspaces/${world.workspace.id}/workflows`,
-  },
-  {
-    template: "/workspaces/$workspaceId/$viewId",
-    path: (world) =>
-      `/workspaces/${world.workspace.id}/${world.workspace.viewId}`,
-  },
-  {
-    template: "/contacts/$contactId",
-    path: (world) => `/contacts/${world.contactId}`,
-  },
-  {
-    template: "/workspaces/$workspaceId/$viewId/document",
-    path: (world) => world.documentRoute.path,
-    settleMs: 2000,
-  },
-  // Routes are partitioned round-robin into serial groups whose shared state
-  // (threads, contacts created by earlier routes) shapes the recorded network
-  // baseline. Append new routes here so existing routes keep their group.
-  staticRoute("/contacts/import"),
-  {
-    template: "/verify/$code",
-    path: () => `/verify/${NONEXISTENT_VERIFICATION_CODE}`,
-  },
-  {
-    template: "/workspaces/$workspaceId/correspondence/$correspondenceId",
-    path: (world) =>
-      `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
-  },
-  staticRoute("/time"),
-  staticRoute("/settings/organization/time-policy"),
-  staticRoute("/settings/organization/vat-rates", {
-    expectation: { kind: "settles" },
-  }),
-  staticRoute("/settings/organization/number-series", {
-    expectation: { kind: "settles" },
-  }),
-];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
 // so their `expectation.to` is resolved here rather than in the static table.
@@ -263,26 +121,38 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
   };
 };
 
-// These routes need richer domain setup than cheap route smoke should own.
-// Keeping them explicit means a newly added authenticated route fails the
-// coverage assertion until it is either smoked or deliberately placed here.
-const INTENTIONALLY_NOT_SMOKED = new Set([
-  // Requires a connected desktop registry account and a real company record.
-  "/knowledge/company-formats/$registry/$companyId",
-  // A file download handler, not a page.
-  "/knowledge/tools/$entry/download",
-  "/workspaces/$workspaceId/invoices/$invoiceId",
-  "/workspaces/$workspaceId/reports/$exportId",
-]);
+type TimeBillingRedirectDestinationOptions = {
+  template: string;
+  workspace: TestWorkspace;
+};
+
+const timeBillingRedirectDestination = ({
+  template,
+  workspace,
+}: TimeBillingRedirectDestinationOptions): string => {
+  // The workspace index forwards to the workspace's default view.
+  if (template.startsWith("/workspaces/")) {
+    return `/workspaces/${workspace.id}/${workspace.viewId}`;
+  }
+  if (template.startsWith("/settings/organization/")) {
+    return "/settings/organization/members";
+  }
+  if (template === "/time") {
+    return "/workspaces";
+  }
+  throw new Error(`No unenrolled redirect expectation for ${template}`);
+};
 
 const declareRouteSmokeGroup = ({
   defs,
   name,
   requireAllRoutes,
+  checkUnenrolledRoutes,
 }: {
   defs: readonly SmokeRouteDef[];
   name: string;
   requireAllRoutes: boolean;
+  checkUnenrolledRoutes: boolean;
 }) => {
   // Serial within one fixture-owning group; separate groups are independent
   // Playwright scheduling units and can run on different workers or CI shards.
@@ -303,6 +173,14 @@ const declareRouteSmokeGroup = ({
         storageState: STORAGE_STATE,
       });
       browserForPages = browser;
+      const navigation = await apiGet<{ features: { timeBilling: boolean } }>(
+        apiRequest,
+        "/workspaces/navigation",
+      );
+      expect(
+        navigation.features.timeBilling,
+        "the persisted smoke principal is enrolled and verified",
+      ).toBe(true);
 
       const workspace = await createTestWorkspace(apiRequest, "route-smoke");
       createdWorkspace = workspace;
@@ -379,6 +257,136 @@ const declareRouteSmokeGroup = ({
       declareRouteTest(def);
     }
 
+    if (checkUnenrolledRoutes) {
+      test("unenrolled callers leave every time-billing route before its loader", async () => {
+        test.setTimeout(180_000);
+        const negativeRequest = await apiRequestFactory.newContext({
+          extraHTTPHeaders: {
+            origin: new URL(
+              process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+            ).origin,
+          },
+        });
+        let negativeWorkspace: TestWorkspace | null = null;
+        let negativeOrganizationId: string | null = null;
+        const gatedRoutes = listTimeBillingRoutes();
+        expect(gatedRoutes.length).toBeGreaterThan(0);
+        try {
+          const token = randomUUID();
+          await signInWithEmailOtp(
+            negativeRequest,
+            `unenrolled-route-smoke-${token}@stella.dev`,
+          );
+          const organizationResponse = await negativeRequest.post(
+            `${E2E_API_ORIGIN}/api/auth/organization/create`,
+            {
+              data: {
+                name: `Unenrolled route smoke ${token}`,
+                slug: `unenrolled-smoke-${token}`,
+              },
+            },
+          );
+          expect(
+            organizationResponse.ok(),
+            await organizationResponse.text(),
+          ).toBe(true);
+          const organization: unknown = await organizationResponse.json();
+          if (
+            typeof organization !== "object" ||
+            organization === null ||
+            !("id" in organization) ||
+            typeof organization.id !== "string"
+          ) {
+            throw new Error("Organization creation returned no id");
+          }
+          negativeOrganizationId = organization.id;
+          const activation = await negativeRequest.post(
+            `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
+            { data: { organizationId: negativeOrganizationId } },
+          );
+          expect(activation.ok(), await activation.text()).toBe(true);
+          const sessionResponse = await negativeRequest.get(
+            `${E2E_API_ORIGIN}/api/auth/get-session`,
+            { params: { disableCookieCache: "true" } },
+          );
+          expect(sessionResponse.ok()).toBe(true);
+          expect(await sessionResponse.json()).toMatchObject({
+            user: { emailVerified: true },
+            session: { activeOrganizationId: negativeOrganizationId },
+          });
+          negativeWorkspace = await createTestWorkspace(
+            negativeRequest,
+            "unenrolled-route-smoke",
+          );
+          const workspace = negativeWorkspace;
+          const workspaceId = workspace.id;
+          const storageState = await negativeRequest.storageState();
+          const navigation = await apiGet<{
+            features: { timeBilling: boolean };
+          }>(negativeRequest, "/workspaces/navigation");
+          expect(
+            navigation.features.timeBilling,
+            "the isolated verified principal is not enrolled",
+          ).toBe(false);
+          const isolatedBrowser = browserForPages;
+          for (const gatedRoute of gatedRoutes) {
+            const template = gatedRoute.routePath.replace("/_protected", "");
+            const routePath = template
+              .replace("$workspaceId", () => workspaceId)
+              .replace("$invoiceId", () => randomUUID());
+            const destination = timeBillingRedirectDestination({
+              template,
+              workspace,
+            });
+            await test.step(template, async () => {
+              const { context, page } = await openCleanPage(
+                isolatedBrowser,
+                storageState,
+              );
+              const browserErrors = createBrowserErrorCollector({
+                tolerateColdMountWarning: true,
+              });
+              const detachPage = browserErrors.trackPage(page);
+              try {
+                const route = {
+                  template,
+                  path: routePath,
+                  expectation: { kind: "redirectsTo", to: destination },
+                } as const satisfies SmokeRoute;
+                await renderSmokeRoute({ page, route });
+                assertFinalDestination(page, route);
+                await assertNoRouteBoundary(page, template);
+                browserErrors.assertEmpty(
+                  `unexpected browser errors on ${template}`,
+                );
+              } finally {
+                detachPage();
+                await context.close();
+              }
+            });
+          }
+        } finally {
+          try {
+            if (negativeWorkspace !== null) {
+              await deleteTestWorkspace(negativeRequest, negativeWorkspace.id);
+            }
+          } finally {
+            try {
+              if (negativeOrganizationId !== null) {
+                const deleted = await negativeRequest.post(
+                  `${E2E_API_ORIGIN}/api/auth/organization/delete`,
+                  { data: { organizationId: negativeOrganizationId } },
+                );
+                expect(deleted.ok(), await deleted.text()).toBe(true);
+              }
+            } finally {
+              await negativeRequest.dispose();
+            }
+          }
+        }
+      });
+    }
+
     test("network manifest matches the committed baseline", async () => {
       await test.info().attach("observed-network-baseline", {
         body: JSON.stringify(
@@ -394,6 +402,7 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+declareVisualSandboxSmoke();
 declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {
@@ -401,13 +410,7 @@ test("route coverage matches the authenticated route tree", async () => {
   // A write run may be adding the missing route entry; check the committed
   // baseline only in comparison mode.
   if (baselineMode !== "write" && baselineMode !== "rewrite") {
-    assertNetworkBaselineCoverage(
-      SMOKE_ROUTE_DEFS.map((def) =>
-        def.expectation?.kind === "redirectsTo"
-          ? `${def.template} target`
-          : def.template,
-      ),
-    );
+    assertNetworkBaselineCoverage(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
   }
 });
 
@@ -419,6 +422,7 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
     defs: SMOKE_ROUTE_DEFS,
     name: "authenticated routes render without browser errors",
     requireAllRoutes: true,
+    checkUnenrolledRoutes: true,
   });
 } else {
   const { routeSmokeGroupCount } = resolveE2eExecutionProfile(
@@ -430,6 +434,7 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
       defs,
       name: `authenticated routes render without browser errors ${groupIndex + 1}/${groups.length}`,
       requireAllRoutes: false,
+      checkUnenrolledRoutes: groupIndex === 0,
     });
   }
 }
@@ -469,7 +474,7 @@ const smokeRoute = async ({
       browser,
       results,
       route: {
-        template: `${route.template} target`,
+        template: networkBaselineKey(route),
         path: expectation.to,
         ...(route.settleMs === undefined ? {} : { settleMs: route.settleMs }),
         expectation: { kind: "redirectsTo", to: expectation.to },
@@ -589,15 +594,22 @@ const assertRedirectRoute = async ({
 // authenticated storage state; server-side fixtures stay shared.
 const openCleanPage = async (
   browser: Browser,
+  storageState:
+    | string
+    | Awaited<ReturnType<APIRequestContext["storageState"]>> = STORAGE_STATE,
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ storageState: STORAGE_STATE });
+  const context = await browser.newContext({ storageState });
   try {
     // Guards the clean start: the page must not inherit browser storage that
     // an earlier route wrote into a shared context.
     expect(
       storedKeys(await context.storageState()),
       "route-smoke pages must start from the seeded storage state only",
-    ).toEqual(await seededStorageKeys(browser));
+    ).toEqual(
+      typeof storageState === "string"
+        ? await seededStorageKeys(browser)
+        : storedKeys(storageState),
+    );
     return { context, page: await context.newPage() };
   } catch (error) {
     await context.close();
@@ -777,46 +789,5 @@ const assertRouteContentVisible = async (page: Page, routeTemplate: string) => {
 const expectAuthenticatedRouteCoverage = async (
   routeDefs: readonly SmokeRouteDef[],
 ) => {
-  const actual = await readAuthenticatedRouteTemplates();
-  const expected = [
-    ...routeDefs.map((def) => def.template),
-    ...PUBLIC_VISITOR_ROUTE_DEFS.map((def) => def.template),
-    ...INTENTIONALLY_NOT_SMOKED,
-  ].toSorted();
-
-  expect(actual).toEqual(expected);
+  assertSmokeRouteCoverage(await readFile(ROUTE_TREE_PATH, "utf-8"), routeDefs);
 };
-
-const readAuthenticatedRouteTemplates = async (): Promise<string[]> => {
-  const source = await readFile(ROUTE_TREE_PATH, "utf-8");
-  const marker = "export interface FileRoutesByTo {";
-  const bodyStart = source.indexOf(marker);
-  if (bodyStart === -1) {
-    throw new Error("Could not find FileRoutesByTo in routeTree.gen.ts");
-  }
-  const routeBodyStart = bodyStart + marker.length;
-  const bodyEnd = source.indexOf("\n}", routeBodyStart);
-  if (bodyEnd === -1) {
-    throw new Error("Could not find end of FileRoutesByTo in routeTree.gen.ts");
-  }
-  const body = source.slice(routeBodyStart, bodyEnd);
-
-  return body
-    .split("\n")
-    .map(parseAuthenticatedRouteTemplate)
-    .filter((route): route is string => route !== null)
-    .toSorted();
-};
-
-// The generated route tree types every authenticated `to` path against a
-// `Protected*` route (the `_protected` layout) or a `Knowledge*` route (the
-// Knowledge tree, which keeps the same sign-in guard beside it). Deriving the
-// smoke set from those structural markers, rather than a hand-maintained
-// prefix allow-list, means a newly added authenticated top-level section
-// fails the coverage test until it is either smoked or placed in
-// INTENTIONALLY_NOT_SMOKED.
-const PROTECTED_ROUTE_LINE =
-  /^'(?<path>[^']+)':\s*typeof\s+(?:Protected|Knowledge)/u;
-
-const parseAuthenticatedRouteTemplate = (line: string): string | null =>
-  PROTECTED_ROUTE_LINE.exec(line.trimStart())?.groups?.["path"] ?? null;

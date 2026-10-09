@@ -1,5 +1,8 @@
 {
   "jobs": {
+    "ci.yml/api-test-durations": "main",
+    "fetch-public-documents.yml/fetch": "main",
+    "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
     "autofix.yml/regenerate-scope": "pr-fast",
@@ -16,6 +19,7 @@
     "publish-product-media.yml/publish": "main",
     "docs-source-policy.yml/docs-source-policy": "main",
     "nightly-test.yml/workspace-replay": "main",
+    "nightly-test.yml/full-test-plan": "main",
     "nightly-test.yml/full-test": "main",
     "nightly-test.yml/web-build-profile": "main",
     "nightly-test.yml/marketing-screenshots": "main",
@@ -57,6 +61,7 @@
     "release-desktop.yml/promote-latest": "main",
     "release-desktop.yml/carry-forward": "main",
     "mcp-canary.yml/mcp-canary": "main",
+    "mcp-canary.yml/desktop-transport-canary": "main",
     "cla.yml/verify-signatures": "pr-fast",
     "label-sync.yml/label-sync": "main",
     "landing-canary.yml/served": "main",
@@ -66,7 +71,9 @@
     "marketing-screenshots.yml/check": "main",
     "marketing-screenshots.yml/update": "main",
     "model-catalog-check.yml/model-catalog-check": "main",
+    "ci-pr-pilot-metrics.yml/metrics": "main",
     "network-baseline-record.yml/build": "main",
+    "network-baseline-record.yml/deliver": "main",
     "network-baseline-record.yml/record": "main",
     "network-baseline-request.yml/request": "pr-fast",
     "typecheck-base.yml/record": "main",
@@ -96,6 +103,7 @@
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
     "desktop-release-canary.yml/check-latest": "main",
+    "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
     "deploy-landing.yml/scope": "main",
     "deploy-landing.yml/build": "main",
@@ -106,19 +114,17 @@
     "ci.yml/ci-generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
     "ci.yml/parser-version-guard": "pr-fast",
+    "ci.yml/ci-checks-docs": "pr-fast",
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
     "ci.yml/ci-tests": "pr-fast",
-    "ci.yml/ci-browser": "queue",
+    "ci.yml/ci-browser": "pr-fast",
     "ci.yml/code-quality-api": "pr-fast",
-    "ci.yml/code-quality-web": "pr-fast",
-    "ci.yml/code-quality-rest": "pr-fast",
-    "ci.yml/service-suites": "queue",
+    "ci.yml/service-suites": "pr-opt-in",
     "ci.yml/migration-upgrade-rehearsal": "queue",
     "ci.yml/release-typecheck": "queue",
     "ci.yml/fix-tests-on-base": "pr-opt-in",
-    "ci.yml/typecheck-baseline": "pr-fast",
     "ci.yml/web-build": "queue",
     "ci.yml/web-image-smoke": "queue",
     "ci.yml/mobile-build": "queue",
@@ -141,7 +147,11 @@
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "scorecard.yml/scorecard": "main",
-    "codeql.yml/scope": "release-pr"
+    "codeql.yml/scope": "release-pr",
+    "ci.yml/code-quality-web-rest": "pr-fast",
+    "main-pr-depth.yml/validate": "main",
+    "main-pr-depth.yml/suites": "main",
+    "main-pr-depth.yml/status": "main"
   },
   "pushMain": {
     "typecheck-base.yml": {
@@ -176,5 +186,6 @@
       "role": "analysis",
       "cancelInProgress": true
     }
-  }
+  },
+  "periodicJobs": ["ci.yml/release-typecheck"]
 }

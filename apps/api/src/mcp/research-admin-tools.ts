@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -17,17 +18,14 @@ import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/
 import {
   MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
   MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
-  type MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
+  MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
   MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
 import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
-import {
-  type AssertNoExtraFields,
-  projectionPayload,
-} from "@/api/lib/projection-totality";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedUserId,
@@ -239,6 +237,7 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       resourceType: v.string(),
       resourceId: v.string(),
       changes: v.unknown(),
+      changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
   ),
   limit: v.pipe(v.number(), v.integer()),
@@ -608,11 +607,9 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
           }),
         }),
   };
-  type SearchLegislationPayload = AssertNoExtraFields<
-    typeof payload,
-    v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
-  >;
-  return toolDataResult(payload satisfies SearchLegislationPayload);
+  return toolDataResult(
+    projectionPayload(SEARCH_BOE_LEGISLATION_PROJECTION, payload),
+  );
 });
 
 // --- list_audit_log -----------------------------------------------------
@@ -671,6 +668,8 @@ const handleListAuditLogTool: McpToolHandler<
     queryAuditLogPage({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
+      userId: context.userId,
+      featureAccessSnapshot: context.featureAccessSnapshot,
       recordAuditEvent: context.recordAuditEvent,
       query: filter,
     }),
@@ -690,6 +689,7 @@ const handleListAuditLogTool: McpToolHandler<
         resourceType: item.resourceType,
         resourceId: item.resourceId,
         changes: item.changes,
+        changesStatus: item.changesStatus,
       })),
     }),
   );
@@ -942,7 +942,7 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
-  accountAccess: "standard",
+  accountAccess: "account-control",
   permissions: selectOperationByValue<(typeof MANAGE_ORG_ACTIONS)[number]>(
     "action",
     {
@@ -1128,16 +1128,12 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  type ManageOrganizationSettingsPayload = AssertNoExtraFields<
-    typeof updated.value,
-    v.InferInput<typeof MANAGE_ORGANIZATION_SETTINGS_PROJECTION>
-  >;
   return toolDataResult(
-    updated.value satisfies ManageOrganizationSettingsPayload,
+    projectionPayload(MANAGE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),
   );
 };
 
-export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
+const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   SEARCH_BOE_LEGISLATION_TOOL_DEFINITION,
   LIST_AUDIT_LOG_TOOL_DEFINITION,
   MANAGE_ORGANIZATION_TOOL_DEFINITION,

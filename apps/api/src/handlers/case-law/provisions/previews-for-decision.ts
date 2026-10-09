@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
@@ -18,6 +20,7 @@ import {
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationVersionAstRow } from "@/api/lib/legal-search/legislation-version-blocks";
 import { resolveWorksAtDate } from "@/api/lib/legal-search/legislation-works-at-date";
+import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import type { Page } from "@/api/lib/pagination";
@@ -29,6 +32,7 @@ type CitationRow = {
   anchor: string;
   jurisdiction: string;
   versionValidFrom: string | null;
+  versionBasis: ProvisionVersionBasis;
   workEli: string | null;
 };
 
@@ -52,15 +56,8 @@ const previewKeyOf = (
   anchor: string,
 ): string => `${documentId}#${anchor}`;
 
-/**
- * The date a citation's wording is read at: the version the reference itself
- * states, and the decision's own date otherwise. A court applies the text in
- * force when it decided, so that is the truthful fallback.
- */
-const citationAsOf = (
-  row: CitationRow,
-  decisionDate: string | null,
-): string | null => row.versionValidFrom ?? decisionDate;
+const citationAsOf = (row: CitationRow, decisionDate: string | null) =>
+  provisionVersionAsOf(row, decisionDate);
 
 const workRequestsFor = (
   rows: readonly CitationRow[],
@@ -94,7 +91,13 @@ const workRequestsFor = (
   return requests;
 };
 
-type ResolvedVersion = LegislationVersionAstRow & { language: string };
+type ResolvedVersion = LegislationVersionAstRow & {
+  language: string;
+  country: string;
+  eli: string;
+  slug: string | null;
+  versionValidFrom: string | null;
+};
 
 type ResolvedWorks = {
   versionByWork: Map<string, ResolvedVersion>;
@@ -152,7 +155,10 @@ type PreviewsForPageOptions<TRow extends CitationRow> = {
 };
 
 /** A preview plus the key this page's items reference it by. */
-type KeyedProvisionPreview = ProvisionPreview & { key: string };
+type KeyedProvisionPreview = ProvisionPreview & {
+  key: string;
+  appUrl: string | null;
+};
 
 type PreviewsForPage<TRow extends CitationRow> = Page<
   TRow & { previewKey: string | null }
@@ -222,6 +228,14 @@ export const attachDecisionProvisionPreviews = async <
 
       previewByKey.set(key, {
         key,
+        appUrl: buildLegislationDocumentAppUrl({
+          country: version.country,
+          documentId: version.id,
+          eli: version.eli,
+          slug: version.slug,
+          version: version.versionValidFrom,
+          anchor: row.anchor,
+        }),
         ...buildProvisionPreview({
           version,
           blocks,

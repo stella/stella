@@ -8,7 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
@@ -19,7 +19,7 @@ import {
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
@@ -29,6 +29,7 @@ import {
   chatThreads,
   chatTurns,
   documentTranslationRuns,
+  desktopPresence,
   entities,
   entityViews,
   entityVersions,
@@ -47,6 +48,7 @@ import {
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
@@ -81,6 +83,7 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
+import readDesktopPresence from "@/api/handlers/desktop-presence/read";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
@@ -125,6 +128,14 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -186,6 +197,33 @@ type IsolationCase = {
   expectDenied: (result: unknown, context: IsolationContext) => void;
   expectPositive: (result: unknown, context: IsolationContext) => void;
 };
+
+const legalListAccess = ({ session, user }: TestHandlerContext) =>
+  createFeatureAccessSnapshot({
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+    decisions: new Map([
+      [
+        LEGAL_LISTS_FEATURE_ID,
+        decideFeatureAccess({
+          registry: FEATURE_REGISTRY,
+          featureId: LEGAL_LISTS_FEATURE_ID,
+          grants: {
+            [LEGAL_LISTS_FEATURE_ID]: [
+              {
+                type: "organization",
+                organizationId: session.activeOrganizationId,
+              },
+            ],
+          },
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+        }),
+      ],
+    ]),
+  });
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -511,6 +549,7 @@ const savedSearchCriteria = (
 });
 
 const isolationCases: IsolationCase[] = [
+  ...desktopPresenceIsolationCases(),
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -712,7 +751,7 @@ const isolationCases: IsolationCase[] = [
         params: { workspaceId: testIds.wsB1, entityId: testIds.entityB1 },
         query: { limit: 100 },
       }),
-    expectDenied: expectEmptyPage,
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
   },
@@ -1081,7 +1120,7 @@ const isolationCases: IsolationCase[] = [
       await runHandler(readExpenses, workspaceB, {
         query: { limit: 25, matterId: testIds.entityB1 },
       }),
-    expectDenied: expectEmptyPage,
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.expenseB1),
   },
@@ -1104,10 +1143,12 @@ const isolationCases: IsolationCase[] = [
     name: "legal list list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listLegalLists, workspaceA, {
+        featureAccessSnapshot: legalListAccess(workspaceA),
         query: { limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listLegalLists, workspaceB, {
+        featureAccessSnapshot: legalListAccess(workspaceB),
         query: { limit: 100 },
       }),
     expectDenied: (result) => expectPageExcludesId(result, legalListB),
@@ -1770,8 +1811,7 @@ const isolationCases: IsolationCase[] = [
       await runHandler(readFileChatThread, workspaceA, {
         query: { entityId: testIds.entityA1, fieldId: testIds.fieldA1 },
       }),
-    expectDenied: (result) =>
-      expect(result).toMatchObject({ messages: [], threadId: null }),
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(
         result,
@@ -1818,6 +1858,54 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(
+      inArray(authUser.id, [ids.userA1, ids.userA2, ids.userB1, ids.userAdmin]),
+    );
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
+  await testDb.insert(desktopPresence).values({
+    userId: ids.userA1,
+    organizationId: ids.orgB,
+    desktopId: "22222222-2222-4222-8222-222222222270",
+    version: "0.9.48",
+    protocol: 1,
+  });
   await testDb.insert(billingArrangements).values({
     workspaceId: ids.wsB1,
     organizationId: ids.orgB,
@@ -2293,6 +2381,35 @@ const runHandler = async <TContext>(
     return error;
   }
 };
+
+function desktopPresenceIsolationCases(): IsolationCase[] {
+  return [
+    {
+      name: "desktop presence across organizations",
+      runAAgainstB: async ({ workspaceA }) =>
+        await runHandler(readDesktopPresence, workspaceA, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+    {
+      name: "desktop presence in the same organization with another owner",
+      runAAgainstB: async ({ workspaceB }) =>
+        await runHandler(readDesktopPresence, workspaceB, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+  ];
+}
 
 function expectStatus(expectedStatus: number): (result: unknown) => void {
   return (result: unknown): void => {

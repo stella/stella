@@ -15,7 +15,10 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { sleep } from "@stll/concurrency/sleep";
+import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
+import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
@@ -28,6 +31,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   getExternalMcpConnectorApprovalGrant,
+  getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getCurrentApprovalPendingMessageId,
   getExternalMcpConnectorSlugFromToolName,
@@ -69,9 +73,9 @@ import {
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
-import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
+import "@/components/chat/create-document-draft-inspector";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -92,7 +96,12 @@ import {
   setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
-import { reconcilePlaybookSaveToolCalls } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import {
+  followReconciledPlaybookSave,
+  playbookPaneReaction,
+  reconcilePlaybookSaveToolCalls,
+} from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
   createInitialSendQueueState,
@@ -104,9 +113,17 @@ import {
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { fetchOlderMessages } from "@/features/chat/queries";
+import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
+import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import { useOwnerScopedState } from "@/lib/account/use-owner-scoped-state";
+import {
+  isCurrentStorageOwner,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
+import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -125,11 +142,19 @@ import {
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
-import { sha256Hex } from "@/lib/files/sha256";
-import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import {
+  isPlaybookDraftViewPayload,
+  PLAYBOOK_DRAFT_VIEW,
+  playbookDraftTabId,
+} from "@/lib/knowledge/playbook-draft-view";
+import {
+  knowledgeKeys,
+  mcpConnectorsOptions,
+  playbookDetailOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   workspacesKeys,
@@ -166,6 +191,8 @@ type UseChatSessionOptions = {
    * here — only the live transition matters.
    */
   onError?: ((error: Error) => void) | undefined;
+  /** Whether a playbook this thread saves opens beside it by itself. */
+  playbookPane: PlaybookPaneMode;
   threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
 };
@@ -192,6 +219,12 @@ type PreparedCreateDocumentDraft = {
 type OpenCreateDocumentDraftOptions = {
   draft: CreateDocumentDraft;
   mode: "automatic" | "explicit";
+};
+
+type FollowPlaybookSaveOptions = {
+  playbookId: string;
+  /** The thread pane that was current when the save was reconciled. */
+  paneTabId: string;
 };
 
 const prepareCreateDocumentDraft = async (
@@ -263,6 +296,8 @@ const resetAskUserToolCall = (
 
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
+const emptyApprovedTools = () => new Set<ToolApprovalGrant>();
+
 export const useChatSession = ({
   chat,
   conversationId,
@@ -272,21 +307,62 @@ export const useChatSession = ({
   getSendMode,
   initialOlderCursor,
   onError,
+  playbookPane,
   threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
   useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
+  const { activeOrganizationId: organizationId, id: userId } =
+    useAuthenticatedUser();
+  const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
+  const mcpCatalogView = useQueryView(mcpCatalogQuery);
+  useQueryViewError(mcpCatalogView);
+  const mcpCatalog =
+    mcpCatalogView.type === "items" ? mcpCatalogView.items : undefined;
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
-  const [conversationApprovedTools, setConversationApprovedTools] = useState(
-    () => readConversationApprovedTools(conversationId),
+  const readConversationGrants = useCallback(
+    (owner: StorageOwner) =>
+      readConversationApprovedTools(conversationId, owner),
+    [conversationId],
   );
-  const [alwaysApprovedTools, setAlwaysApprovedTools] = useState(() =>
-    readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities: [] }),
+  const writeConversationGrants = useCallback(
+    (tools: Set<ToolApprovalGrant>, owner: StorageOwner) =>
+      writeStoredApprovedTools(
+        getConversationApprovedToolsStorageKey(conversationId, owner),
+        tools,
+        "session",
+      ),
+    [conversationId],
   );
+  const {
+    owner: conversationGrantsOwner,
+    value: conversationApprovedTools,
+    updateValue: updateConversationApprovedTools,
+    refresh: refreshConversationApprovedTools,
+  } = useOwnerScopedState({
+    getDefaultValue: emptyApprovedTools,
+    read: readConversationGrants,
+    write: writeConversationGrants,
+  });
+  const readAlwaysGrants = useCallback(
+    (owner: StorageOwner) =>
+      readAlwaysApprovedTools({
+        organizationId,
+        mcpConnectorIdentities,
+        owner,
+      }),
+    [organizationId, mcpConnectorIdentities],
+  );
+  const {
+    owner: alwaysGrantsOwner,
+    value: alwaysApprovedTools,
+    refresh: refreshAlwaysApprovedTools,
+  } = useOwnerScopedState({
+    read: readAlwaysGrants,
+    getDefaultValue: emptyApprovedTools,
+  });
 
   const snapshot = useSyncExternalStore(
     chat.subscribe,
@@ -486,9 +562,7 @@ export const useChatSession = ({
               });
             },
             wait: async () => {
-              await new Promise<void>((resolve) => {
-                setTimeout(resolve, 250);
-              });
+              await sleep(250);
             },
           });
           if (settleResult.status === "failed") {
@@ -737,6 +811,30 @@ export const useChatSession = ({
     [applySendQueueEvent],
   );
 
+  // "Send now" on a queued message: it moves to the front of the queue.
+  // During a turn the turn is stopped, and the queue drain sends it once
+  // the stop settles; with the queue held after a failed turn it is sent
+  // at once, like a manual send.
+  const sendQueuedMessageNow = useCallback(
+    (id: string) => {
+      applySendQueueEvent({ type: "queued-message-promoted", id });
+      if (sendQueueRef.current.isGenerating) {
+        stop();
+        return;
+      }
+      const dispatched = applySendQueueEvent({
+        type: "oldest-dispatch-started",
+      });
+      if (dispatched) {
+        detached(
+          dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+          "use-chat-session.send-queued-message-now",
+        );
+      }
+    },
+    [applySendQueueEvent, dispatchQueuedMessage, stop],
+  );
+
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
       const latestAssistant = messages.findLast(
@@ -769,14 +867,11 @@ export const useChatSession = ({
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
-      const next = new Set(conversationApprovedTools).add(
-        getToolApprovalGrant(toolName),
-      );
-      setConversationApprovedTools(next);
-      writeStoredApprovedTools(
-        getConversationApprovedToolsStorageKey(conversationId),
-        next,
-        "session",
+      if (!isCurrentStorageOwner(conversationGrantsOwner)) {
+        return;
+      }
+      updateConversationApprovedTools((previous) =>
+        new Set(previous).add(getToolApprovalGrant(toolName)),
       );
       dispatchApprovedToolsChanged({
         conversationId,
@@ -784,10 +879,18 @@ export const useChatSession = ({
       });
       await resolveToolApproval({ id, approved: true });
     },
-    [resolveToolApproval, conversationApprovedTools, conversationId],
+    [
+      resolveToolApproval,
+      conversationGrantsOwner,
+      updateConversationApprovedTools,
+      conversationId,
+    ],
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
+        return;
+      }
       const approvalKey = getAlwaysApprovalKey({
         mcpConnectorIdentities,
         organizationId,
@@ -800,22 +903,27 @@ export const useChatSession = ({
 
       const nextStored = new Set(
         readStoredStrings(
-          userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+          userStorageKey(
+            CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+            alwaysGrantsOwner,
+          ),
         ),
       ).add(approvalKey);
-      setAlwaysApprovedTools(
-        new Set(alwaysApprovedTools).add(getToolApprovalGrant(toolName)),
-      );
       writeStoredApprovedStrings(
-        userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+        userStorageKey(
+          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+          alwaysGrantsOwner,
+        ),
         nextStored,
       );
+      refreshAlwaysApprovedTools();
       dispatchApprovedToolsChanged({ scope: "local" });
       await resolveToolApproval({ id, approved: true });
     },
     [
       resolveToolApproval,
-      alwaysApprovedTools,
+      alwaysGrantsOwner,
+      refreshAlwaysApprovedTools,
       mcpConnectorIdentities,
       organizationId,
     ],
@@ -935,7 +1043,7 @@ export const useChatSession = ({
 
   const createDocumentMattersView = useQueryView(
     useQuery({
-      ...workspacesNavigationOptions(organizationId),
+      ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
         navigation.workspaces.map((matter) => ({
           id: matter.id,
@@ -978,20 +1086,135 @@ export const useChatSession = ({
     );
   }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
-  // A chat `save_playbook` writes an org-level playbook from any surface, so
-  // an open playbooks list or editor refetches once per completed save.
+  const playbookPaneTabId = playbookDraftTabId(threadRef.threadId);
+  /** The tab label for a playbook: its cached name, until the pane reads it. */
+  const playbookPaneLabel = useCallback(
+    (playbookId: string) => {
+      const detail = queryClient.getQueryData(
+        playbookDetailOptions(organizationId, playbookId).queryKey,
+      );
+      return detail !== undefined && "name" in detail && detail.name !== ""
+        ? detail.name
+        : t("knowledge.playbooks.review.playbookLabel");
+    },
+    [organizationId, queryClient, t],
+  );
+
+  const isMobile = useIsMobile();
+  const openedPlaybookPaneIdsRef = useRef(new Set<string>());
+  const playbookPaneShown = useInspectorTabsStore((state) =>
+    state.tabs.some(({ id }) => id === playbookPaneTabId),
+  );
+  // A pane restored with the inspector counts as opened, so closing it keeps
+  // the next save from reopening it.
   useExternalSyncEffect(() => {
+    if (playbookPaneShown) {
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
+    }
+  }, [playbookPaneShown, playbookPaneTabId]);
+  /** Opens (or focuses) this thread's playbook pane on `playbookId`. */
+  const handleOpenPlaybook = useCallback(
+    (playbookId: string) => {
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
+      useInspectorTabsStore.getState().openView({
+        type: PLAYBOOK_DRAFT_VIEW,
+        id: playbookPaneTabId,
+        label: playbookPaneLabel(playbookId),
+        payload: { type: "playbook", playbookId },
+      });
+    },
+    [playbookPaneLabel, playbookPaneTabId],
+  );
+
+  /**
+   * Moves or opens this thread's pane as `playbookPaneReaction` decides. A
+   * save that finishes after the page moved to another thread is dropped.
+   */
+  const followPlaybookSave = useLatestCallback(
+    ({ playbookId, paneTabId }: FollowPlaybookSaveOptions) => {
+      if (paneTabId !== playbookPaneTabId) {
+        return;
+      }
+      const inspector = useInspectorTabsStore.getState();
+      const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
+      const reaction = playbookPaneReaction({
+        mode: playbookPane,
+        isMobile,
+        openedThisSession: openedPlaybookPaneIdsRef.current.has(paneTabId),
+        shownPlaybookId:
+          tab?.type === "view" &&
+          tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+          isPlaybookDraftViewPayload(tab.payload)
+            ? tab.payload.playbookId
+            : null,
+        savedPlaybookId: playbookId,
+      });
+      switch (reaction) {
+        case "none":
+          return;
+        case "open":
+          handleOpenPlaybook(playbookId);
+          return;
+        case "update":
+          inspector.updateView({
+            id: playbookPaneTabId,
+            label: playbookPaneLabel(playbookId),
+            payload: { type: "playbook", playbookId },
+          });
+          return;
+        default:
+          reaction satisfies never;
+          panic(`Unhandled playbook pane reaction: ${String(reaction)}`);
+      }
+    },
+  );
+
+  // A chat `save_playbook` writes an org-level playbook from any surface, so
+  // an open playbooks list or editor refetches once per completed save. The
+  // pane follows only the newest save: a refetch that settles after a later
+  // save's is dropped.
+  const playbookSaveSequenceRef = useRef(0);
+  const observedPlaybookSaveRuntimesRef = useRef(new WeakSet<object>());
+  useExternalSyncEffect(() => {
+    const source = observedPlaybookSaveRuntimesRef.current.has(chat)
+      ? "live"
+      : "history";
+    observedPlaybookSaveRuntimesRef.current.add(chat);
+    const reconciliation = reconcilePlaybookSaveToolCalls({
+      handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
+      messages,
+      organizationId,
+      playbookKeys: knowledgeKeys.playbooks,
+      queryClient,
+      source,
+    });
+    if (reconciliation === null) {
+      return;
+    }
+    const paneTabId = playbookPaneTabId;
+    if (reconciliation.playbookId !== null) {
+      playbookSaveSequenceRef.current += 1;
+    }
+    const sequence = playbookSaveSequenceRef.current;
+    const requestedChat = chat;
     detached(
-      reconcilePlaybookSaveToolCalls({
-        handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
-        messages,
-        organizationId,
-        playbookKeys: knowledgeKeys.playbooks,
-        queryClient,
+      followReconciledPlaybookSave({
+        reconciliation,
+        isCurrent: () =>
+          seededChatRef.current === requestedChat &&
+          playbookSaveSequenceRef.current === sequence,
+        follow: (playbookId) => followPlaybookSave({ playbookId, paneTabId }),
       }),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
-  }, [messages, organizationId, queryClient]);
+  }, [
+    chat,
+    followPlaybookSave,
+    messages,
+    organizationId,
+    playbookPaneTabId,
+    queryClient,
+  ]);
 
   // A chat highlight or comment on the open decision or statute writes outside
   // the reader's own mutations, so its margin refetches once per completed write.
@@ -1306,6 +1529,14 @@ export const useChatSession = ({
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
   }, [applySendQueueEvent, isGenerating]);
+  useChatTurnNotifications({
+    conversationId,
+    phase: getChatTurnPhase({
+      awaitingUser: getAwaitedAssistantMessageId(messages) !== null,
+      hasError: error !== undefined,
+      isGenerating,
+    }),
+  });
 
   // Notify `onError` exactly once per new error instance. TanStack keeps
   // the same Error reference alive across renders until the turn is
@@ -1389,12 +1620,6 @@ export const useChatSession = ({
   ]);
 
   useExternalSyncEffect(() => {
-    setConversationApprovedTools(readConversationApprovedTools(conversationId));
-    setAlwaysApprovedTools(
-      readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-    );
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
-  useExternalSyncEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);
       if (!detail) {
@@ -1402,9 +1627,7 @@ export const useChatSession = ({
       }
 
       if (detail.scope === "local") {
-        setAlwaysApprovedTools(
-          readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-        );
+        refreshAlwaysApprovedTools();
         return;
       }
 
@@ -1412,20 +1635,20 @@ export const useChatSession = ({
         return;
       }
 
-      setConversationApprovedTools(
-        readConversationApprovedTools(conversationId),
-      );
+      refreshConversationApprovedTools();
     };
     const handleStorage = (event: StorageEvent) => {
       if (
-        event.key !== userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY)
+        event.key !==
+        userStorageKey(
+          CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+          alwaysGrantsOwner,
+        )
       ) {
         return;
       }
 
-      setAlwaysApprovedTools(
-        readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-      );
+      refreshAlwaysApprovedTools();
     };
 
     window.addEventListener(
@@ -1441,7 +1664,12 @@ export const useChatSession = ({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
+  }, [
+    conversationId,
+    alwaysGrantsOwner,
+    refreshAlwaysApprovedTools,
+    refreshConversationApprovedTools,
+  ]);
 
   return {
     clientStatus: status,
@@ -1455,6 +1683,7 @@ export const useChatSession = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -1470,6 +1699,7 @@ export const useChatSession = ({
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -1493,23 +1723,34 @@ type ApprovedToolsChangedDetail =
       conversationId: string;
     };
 
-const getConversationApprovedToolsStorageKey = (conversationId: string) =>
-  `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`;
+const getConversationApprovedToolsStorageKey = (
+  conversationId: string,
+  owner: StorageOwner,
+) =>
+  userStorageKey(
+    `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`,
+    owner,
+  );
 
-const readConversationApprovedTools = (conversationId: string) =>
+const readConversationApprovedTools = (
+  conversationId: string,
+  owner: StorageOwner,
+) =>
   readStoredApprovedTools(
-    getConversationApprovedToolsStorageKey(conversationId),
+    getConversationApprovedToolsStorageKey(conversationId, owner),
   );
 
 const readAlwaysApprovedTools = ({
   mcpConnectorIdentities,
   organizationId,
+  owner,
 }: {
   mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
   organizationId: string;
+  owner: StorageOwner;
 }) => {
   const stored = readStoredStrings(
-    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY, owner),
   );
   const approvedTools: ToolApprovalGrant[] = [];
 
@@ -1537,7 +1778,9 @@ const getStorage = (scope: "local" | "session") => {
     return null;
   }
 
-  return scope === "local" ? window.localStorage : window.sessionStorage;
+  return scope === "local"
+    ? browserStateStorage("local")
+    : browserStateStorage("session");
 };
 
 const readStoredApprovedTools = (

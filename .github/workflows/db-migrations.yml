@@ -83,7 +83,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Test migration safety rules and historical findings
-        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts
+        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
 
       - name: Check migration coverage
         env:
@@ -256,6 +256,9 @@ jobs:
             "DROP TABLE drizzle.__migration_history_smoke_backup" \
             >/dev/null
           (cd apps/api && bun run src/db/migrate.ts)
+
+      - name: Prepare API runtime sources
+        run: bun --filter @stll/api generate:capability-runtime
 
       - name: Verify API boots with migration check enabled
         working-directory: apps/api

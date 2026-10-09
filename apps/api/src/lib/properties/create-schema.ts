@@ -56,7 +56,7 @@ const arrayOrEmpty = <T>(value: T[] | undefined): T[] => {
   return value;
 };
 
-export const areSelectOptionsValid = (
+const areSelectOptionsValid = (
   rawOptions: SelectOption[],
   contentType: "single-select" | "multi-select",
 ): boolean =>

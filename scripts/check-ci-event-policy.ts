@@ -15,6 +15,7 @@ const policySchema = v.object({
       "release-pr",
     ]),
   ),
+  periodicJobs: v.optional(v.array(v.string()), []),
   pushMain: v.optional(
     v.record(
       v.string(),
@@ -152,6 +153,8 @@ const checkMainConcurrency = ({
             values: {
               "github.event_name": "push",
               "github.ref": "refs/heads/main",
+              "github.event.head_commit.message": "fix: ordinary change",
+              "inputs.sha": "",
             },
           });
     if (
@@ -209,6 +212,7 @@ type CheckJobEventPolicyOptions = {
   job: v.InferOutput<typeof workflowSchema>["jobs"][string];
   eventPolicy: v.InferOutput<typeof policySchema>["jobs"][string];
   triggers: v.InferOutput<typeof workflowSchema>["on"];
+  periodic: boolean;
 };
 
 const checkJobEventPolicy = ({
@@ -217,6 +221,7 @@ const checkJobEventPolicy = ({
   job,
   eventPolicy,
   triggers,
+  periodic,
 }: CheckJobEventPolicyOptions) => {
   const problems: string[] = [];
   if (file === "codeql.yml" && eventPolicy !== "release-pr") {
@@ -231,6 +236,26 @@ const checkJobEventPolicy = ({
   if (eventPolicy === "pr-opt-in") {
     const condition =
       typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+    if (key === "ci.yml/service-suites") {
+      if (
+        !condition.includes("vars.CI_POSTGRES_PR_SELECTION == 'on'") ||
+        ["", "off"].some(
+          (value) =>
+            !definitelyFalse(condition, {
+              values: {
+                "github.event_name": "pull_request",
+                "vars.CI_POSTGRES_PR_SELECTION": value,
+                "needs.ci-plan.outputs.corpus_suites_required": "false",
+              },
+            }),
+        )
+      ) {
+        problems.push(
+          `${key}: Postgres PR suites must require the disabled-by-default switch`,
+        );
+      }
+      return problems;
+    }
     if (
       key !== "ci.yml/fix-tests-on-base" ||
       !condition.includes(
@@ -249,6 +274,35 @@ const checkJobEventPolicy = ({
   }
   if (eventPolicy === "schema-pr" && file !== "db-migrations.yml") {
     problems.push(`${key}: schema policy belongs to Database Migrations`);
+  }
+  if (periodic) {
+    const condition =
+      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+    const scopeValues = Object.fromEntries(
+      Array.from(
+        condition.matchAll(/needs\.ci-plan\.outputs\.(\w+_required)/gu),
+        (match) => [match[0], "true"],
+      ),
+    );
+    if (
+      evaluate(condition, {
+        values: {
+          ...scopeValues,
+          "github.event_name": "schedule",
+          "github.ref": "refs/heads/main",
+          "github.event.head_commit.message": "ordinary main change",
+          "inputs.heavy_only": true,
+          "inputs.pr_depth_only": false,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.queue_depth": "full",
+          "needs.ci-plan.outputs.trusted": "true",
+        },
+      }) !== true
+    ) {
+      problems.push(
+        `${key}: release-periodic job must run on non-release scheduled main`,
+      );
+    }
   }
   if (eventPolicy !== "queue" && eventPolicy !== "main") {
     return problems;
@@ -353,6 +407,7 @@ export const checkCiEventPolicies = ({
           job,
           eventPolicy,
           triggers: workflow.on,
+          periodic: declared.periodicJobs.includes(key),
         }),
       );
     }
@@ -382,6 +437,11 @@ export const checkCiEventPolicies = ({
   for (const file of Object.keys(declared.pushMain)) {
     if (!mainWorkflows.has(file)) {
       problems.push(`${file}: stale main-push concurrency policy`);
+    }
+  }
+  for (const key of declared.periodicJobs) {
+    if (!seen.has(key)) {
+      problems.push(`${key}: stale periodic job`);
     }
   }
   for (const key of Object.keys(declared.jobs)) {

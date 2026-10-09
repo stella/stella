@@ -17,6 +17,10 @@ import type {
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  MCP_APP_EXTENSION_ID,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
@@ -51,6 +55,7 @@ import {
 } from "@/api/mcp/errors";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
+import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
@@ -885,6 +890,9 @@ describe("handleMcpHttpRequest", () => {
         "lookup_case_law",
         "read_case_law_decision",
         "read_case_law_citations",
+        "open_case_law_decision",
+        "read_case_law_decision_blocks",
+        "preview_cited_provision",
         "search_legislation",
         "read_statute",
         "read_statute_provisions",
@@ -1027,7 +1035,13 @@ describe("handleMcpHttpRequest", () => {
         jsonrpc: "2.0",
         method: "initialize",
         params: {
-          capabilities: {},
+          capabilities: {
+            extensions: {
+              [MCP_APP_EXTENSION_ID]: {
+                mimeTypes: [MCP_APP_RESOURCE_MIME_TYPE, "application/private"],
+              },
+            },
+          },
           clientInfo: { name: `  ${"n".repeat(200)}  `, version: "1.2.3" },
           protocolVersion: "2025-06-18",
         },
@@ -1043,6 +1057,8 @@ describe("handleMcpHttpRequest", () => {
         properties: {
           client_name: "n".repeat(128),
           client_version: "1.2.3",
+          ui_apps_supported: true,
+          ui_apps_mime_types: [MCP_APP_RESOURCE_MIME_TYPE],
           credential_type: "oauth_client",
           mode: "default",
         },
@@ -1270,6 +1286,11 @@ describe("handleMcpHttpRequest", () => {
         },
       ],
       isError: true,
+      _meta: {
+        "mcp/www_authenticate": [
+          getMcpWwwAuthenticateHeader({ error: "insufficient_scope" }),
+        ],
+      },
     });
   });
 
@@ -1365,6 +1386,13 @@ describe("handleMcpHttpRequest", () => {
           "Insufficient permissions. Required scope: stella:documents_write",
       }),
     );
+    // Hosts that read tool-level challenges offer to reconnect in place.
+    expect(body.result.isError).toBe(true);
+    expect(body.result._meta).toEqual({
+      "mcp/www_authenticate": [
+        getMcpWwwAuthenticateHeader({ error: "insufficient_scope" }),
+      ],
+    });
     expect(getMcpToolDefinitionMock).not.toHaveBeenCalled();
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
   });
@@ -1972,7 +2000,7 @@ describe("mcpOmittedToolNamesByReason", () => {
   test("attests each omitted tool under exactly one reason", () => {
     const omitted = mcpOmittedToolNamesByReason({
       grantedScopes: ["stella:read"],
-      isFeatureEnabled: (feature) => feature !== "FEATURE_TIME_BILLING",
+      isFeatureEnabled: (feature) => feature !== "FEATURE_PUBLIC_LAW",
       mode: "default",
     });
 

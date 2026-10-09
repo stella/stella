@@ -1,8 +1,12 @@
-// parser-output-unchanged: Absence provenance changes metadata only; canonical documents and replay comparison inputs are unchanged.
+// parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
 import { panic } from "better-result";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  SK_US_ECLI_AVAILABILITY_STATUSES,
+  SK_COURTS_SOURCE_URL_STATUSES,
+  type SkUsEcliAvailability,
+  type SkCourtsSourceUrlStatus,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
@@ -155,6 +159,35 @@ export const storeTextField = (field: TextField): string | undefined => {
   }
 };
 
+const ECLI_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  not_published: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  not_stated: undefined,
+} as const satisfies Record<
+  SkUsEcliAvailability["status"],
+  TextAbsenceReason | undefined
+>;
+
+const SOURCE_URL_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  "rejected-url": TEXT_ABSENCE_REASON.PARSE_FAILED,
+  "detail-unavailable": undefined,
+} as const satisfies Record<
+  SkCourtsSourceUrlStatus,
+  TextAbsenceReason | undefined
+>;
+
+const isEcliAvailabilityStatus = (
+  status: unknown,
+): status is SkUsEcliAvailability["status"] =>
+  SK_US_ECLI_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isSourceUrlStatus = (
+  status: unknown,
+): status is SkCourtsSourceUrlStatus =>
+  SK_COURTS_SOURCE_URL_STATUSES.some((candidate) => candidate === status);
+
 type StoreDecisionTextFieldsOptions = {
   metadata: Record<string, unknown>;
   textFields: DecisionTextFields;
@@ -237,6 +270,35 @@ export const storeDecisionTextFields = ({
       absent.push({ field: key, reason: field.reason });
     }
   }
+  const ecliAvailability = metadata["ecliAvailability"];
+  if (ecliAvailability !== undefined) {
+    if (
+      !isRecord(ecliAvailability) ||
+      !isEcliAvailabilityStatus(ecliAvailability["status"])
+    ) {
+      return panic("ECLI availability must carry a publisher status");
+    }
+    const reason = ECLI_ABSENCE_REASON_BY_STATUS[ecliAvailability["status"]];
+    if (reason !== undefined) {
+      absent.push({ field: "ecli", reason });
+    }
+  }
+  const sourceUrlStatus = metadata["sourceUrlStatus"];
+  if (sourceUrlStatus !== undefined) {
+    if (!isSourceUrlStatus(sourceUrlStatus)) {
+      return panic("Unhandled source URL publication status");
+    }
+    if (
+      sourceUrlStatus === "rejected-url" &&
+      typeof metadata["statedSourceUrl"] !== "string"
+    ) {
+      return panic("Rejected publisher URLs must retain their stated value");
+    }
+    const reason = SOURCE_URL_ABSENCE_REASON_BY_STATUS[sourceUrlStatus];
+    if (reason !== undefined) {
+      absent.push({ field: "sourceUrl", reason });
+    }
+  }
   if (absent.length > 0) {
     stored[DECISION_TEXT_ABSENCE_METADATA_KEY] = absent;
   }
@@ -253,9 +315,24 @@ export const readTextField = (value: unknown): TextField => {
   return presentTextField(value);
 };
 
+// parser-output-unchanged: keyword reading is extracted unchanged and the headnote budget defaults to the compact row.
+/** Publisher classifications stay distinct from publisher prose. */
+export const readDecisionKeywords = (value: unknown) => {
+  const classification = normalizeDecisionKeywords(value);
+  return classification === null
+    ? null
+    : ({
+        type: DECISION_HEADNOTE_KEYWORDS,
+        items: classification.items,
+        omitted: classification.omitted,
+      } as const);
+};
+
 type ReadDecisionHeadnoteOptions = {
   /** The publisher's sentence, as the row's SQL read it. */
   headnote: unknown;
+  /** Internal presentation budget; the default remains the compact row. */
+  maxChars?: number;
   /** The terms they filed the decision under, where they wrote no sentence. */
   keywords: unknown;
 };
@@ -269,21 +346,16 @@ type ReadDecisionHeadnoteOptions = {
 export const readDecisionHeadnote = ({
   headnote,
   keywords,
+  maxChars,
 }: ReadDecisionHeadnoteOptions): DecisionHeadnotePreview => {
   const field = readTextField(headnote);
   switch (field.type) {
     case TEXT_FIELD_TYPE.ABSENT: {
-      const classification = normalizeDecisionKeywords(keywords);
-      return classification === null
-        ? field
-        : {
-            type: DECISION_HEADNOTE_KEYWORDS,
-            items: classification.items,
-            omitted: classification.omitted,
-          };
+      const classification = readDecisionKeywords(keywords);
+      return classification ?? field;
     }
     case TEXT_FIELD_TYPE.PRESENT: {
-      const preview = normalizeDecisionHeadnote(field.text);
+      const preview = normalizeDecisionHeadnote(field.text, maxChars);
       return preview === null
         ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
         : {

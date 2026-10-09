@@ -45,6 +45,8 @@
     "apps/api": {
       "entry": [
         "src/server.ts!",
+        // Browser entrypoints bundled by build-mcp-apps.ts.
+        "src/mcp/apps/*/app.tsx",
         // Ignored runtime aggregates import every committed capability shard.
         "src/mcp/generated/capability-dispatch.ts!",
         "src/mcp/generated/capability-catalog.ts!",
@@ -67,6 +69,8 @@
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
         "src/handlers/case-law/ingestion/adapters/update-fixtures.ts",
         "src/tests/load/*.ts",
+        // Passed to Bun by the API test command builder.
+        "src/tests/publisher-gate-preload.ts",
         "drizzle.config.ts",
         "src/**/*.test.ts",
         "scripts/**/*.test.ts"
@@ -144,6 +148,9 @@
         "src/**/*.test.ts"
       ]
     },
+    "packages/decision-reader": {
+      "entry": ["src/**/*.test.{ts,tsx}"]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
@@ -215,6 +222,9 @@
     },
     "packages/uuid-codec": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "apps/visual-preview": {
+      "entry": ["src/handler.ts", "src/**/*.test.ts", "browser/**/*.test.ts"]
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],

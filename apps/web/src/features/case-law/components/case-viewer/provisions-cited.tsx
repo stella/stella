@@ -4,12 +4,14 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   groupProvisionsByWork,
   type ProvisionGroup,
@@ -42,6 +44,7 @@ import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import type { StatuteLinkTarget } from "@/lib/statute-route";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The statutes a decision applies, as the decision itself states them.
@@ -85,8 +88,9 @@ export const ProvisionsCited = ({
   const citedWorkByGroup = new Map<string, CitedWorkAtDate>();
   for (const group of groups) {
     const asOf =
-      group.provisions.find((provision) => provision.versionValidFrom !== null)
-        ?.versionValidFrom ?? decisionAsOf;
+      group.provisions
+        .map((provision) => provisionVersionAsOf(provision, decisionAsOf))
+        .find((date) => date !== null) ?? null;
     if (group.workEli !== null && asOf !== null) {
       citedWorkByGroup.set(group.key, {
         asOf,
@@ -95,10 +99,14 @@ export const ProvisionsCited = ({
       });
     }
   }
-  const { data: resolved } = useQuery({
+  const resolvedQuery = useQuery({
     ...statutesResolveOptions([...citedWorkByGroup.values()]),
     enabled: open && citedWorkByGroup.size > 0,
   });
+  const resolvedView = useQueryView(resolvedQuery);
+  useQueryViewError(resolvedView);
+  const resolved =
+    resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
   const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
@@ -140,6 +148,7 @@ export const ProvisionsCited = ({
         const citedWork = citedWorkByGroup.get(group.key);
         return (
           <WorkReferences
+            decisionAsOf={decisionAsOf}
             group={group}
             key={group.key}
             publisherInconsistent={
@@ -204,11 +213,13 @@ export const ProvisionsCited = ({
 };
 
 const WorkReferences = ({
+  decisionAsOf,
   group,
   publisherInconsistent,
   renderPart,
   statute,
 }: {
+  decisionAsOf: string | null;
   group: WorkGroup;
   /**
    * Whether the publisher's own inconsistent dates leave the cited date
@@ -220,12 +231,19 @@ const WorkReferences = ({
   statute: ResolvedCitedStatute | undefined;
 }) => {
   const t = useTranslations();
-  const { data: versions } = useQuery({
+  const versionsQuery = useQuery({
     ...statuteVersionsOptions(statute?.id ?? ""),
     enabled:
       statute !== undefined &&
-      referencesOutsideVersion(statute, group.provisions),
+      referencesOutsideVersion(statute, {
+        decisionAsOf,
+        references: group.provisions,
+      }),
   });
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
 
   /**
    * The consolidation a reference was made against, or null while it is not
@@ -241,22 +259,27 @@ const WorkReferences = ({
     if (statute === undefined) {
       return null;
     }
-
-    if (provision.versionValidFrom === null) {
-      return statute;
+    const asOf = provisionVersionAsOf(provision, decisionAsOf);
+    if (asOf === null) {
+      return null;
     }
 
     // The wording in force is the inferred version for most references,
     // which is why the versions read is not started for them.
-    if (versionCoversDate(statute, provision.versionValidFrom)) {
+    if (versionCoversDate(statute, asOf)) {
       return statute;
     }
 
-    return pickVersionAt(optionalArray(versions), provision.versionValidFrom);
+    return pickVersionAt(optionalArray(versions), asOf);
   };
 
   return (
     <div className="flex flex-col gap-1">
+      {statute !== undefined &&
+        referencesOutsideVersion(statute, {
+          decisionAsOf,
+          references: group.provisions,
+        }) && <QueryViewFeedback view={versionsView} />}
       <p className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))] tracking-wide">
         <BidiText as="span" className="shrink-0">
           {group.title}

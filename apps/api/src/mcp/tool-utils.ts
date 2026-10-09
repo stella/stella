@@ -12,17 +12,7 @@ import {
   askSentence,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
-import {
-  createCaseLawDecisionPath,
-  createCaseLawDecisionRouteParams,
-} from "@stll/api-contract/case-law-decision-route";
-import type { CaseLawDecisionRouteInput } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
-import {
-  createStatutePath,
-  createStatuteRouteParams,
-} from "@stll/api-contract/statute-route";
-import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
 import { declareFailureClass } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -33,10 +23,17 @@ import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  isSearchIndexUnavailable,
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+  SEARCH_INDEX_UNAVAILABLE_HINT,
+  SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+} from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
@@ -121,6 +118,13 @@ export const featureDisabledHint = (feature: string | undefined): string =>
  */
 export const uuidInputSchema = (description: string) =>
   v.pipe(v.string(), v.uuid(), v.description(description));
+
+/** Native task references use the same visibility owner as safe HTTP handlers. */
+export const entityIdInputSchema = (description: string) =>
+  v.pipe(
+    uuidInputSchema(description),
+    v.metadata({ "x-stella-resource-kind": "entity" }),
+  );
 
 /**
  * A country input, in any spelling that carries one meaning.
@@ -399,12 +403,13 @@ export const enumProp = (description: string, values: readonly string[]) =>
   ({ type: "string", enum: values, description }) as const;
 
 /**
- * Boolean `confirm` gate for a destructive tool. The guardrail in
- * `handleMcpToolCall` rejects a `destructiveHint` call unless `confirm === true`,
- * so every destructive tool advertises this property with the same contract:
- * set it only after a human has approved the irreversible operation. Pass a
- * custom `description` for a tool whose gate is action-scoped (e.g.
- * `manage_organization`, where only the `remove_member` action requires it).
+ * Boolean input for a server confirmation gate declared by
+ * `destructiveBehavior`. `handleMcpToolCall` requires `confirm === true` when
+ * that behavior selects an irreversible operation or outbound send;
+ * `destructiveHint` alone does not require confirmation. Set it only after a
+ * human has approved the selected operation. Pass a custom `description` for
+ * outbound sends or an action-scoped gate (e.g. `manage_organization`, where
+ * only the `remove_member` action requires it).
  */
 export const confirmProp = (
   description = "Must be true to run this irreversible operation. Set it only after a " +
@@ -784,6 +789,34 @@ export const notFoundResult = (
 ): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
 
+const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
+  event: "mcp.search_index_unavailable",
+  expected: [],
+});
+
+/**
+ * Envelope for a search whose index could not be reached. Every tool backed
+ * by the public-law search index answers it the same way, whichever path the
+ * refusal took to the boundary (a thrown handler error, a failed `Result`, a
+ * safe handler's 503 body): the stable code to branch on, the cause in the
+ * message, and a retry, because the arguments did not cause it. The cause
+ * is still observed, so an index that stays away is seen.
+ */
+export const searchIndexUnavailableResult = (
+  error: unknown,
+): InternalToolErrorResult => {
+  observeFailure(error, {
+    sink: SEARCH_INDEX_UNAVAILABLE_SINK,
+    ctx: { source: "mcp" },
+  });
+  return structuredErrorResult({
+    code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+    hint: SEARCH_INDEX_UNAVAILABLE_HINT,
+    retryable: true,
+  });
+};
+
 /**
  * Envelope for a failed backing-handler `Result`, the single sink for the
  * `errorResult(result.error.message)` class. Every tool site that unwraps a
@@ -809,6 +842,9 @@ export const notFoundResult = (
 export const internalFailureResult = (
   error: unknown,
 ): InternalToolErrorResult => {
+  if (isSearchIndexUnavailable(error)) {
+    return searchIndexUnavailableResult(error);
+  }
   if (HandlerError.is(error)) {
     if (error.code === "upstream_unavailable") {
       captureError(error, { source: "mcp" });
@@ -1223,20 +1259,11 @@ export const legalCitationLinkFields = ({
   };
 };
 
-export const buildCaseLawDecisionAppUrl = (
-  input: CaseLawDecisionRouteInput,
-): string | null =>
-  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
-    ? buildCaseLawDecisionUrl(input)
-    : null;
-
-/**
- * The route shape is owned by `@stll/api-contract/case-law-decision-route`, so
- * an agent-facing URL and the web route cannot address different pages: a
- * decision without a stored slug links by id, not by case number.
- */
-export const buildCaseLawDecisionUrl = (input: CaseLawDecisionRouteInput) =>
-  `${getAppBaseUrl()}${createCaseLawDecisionPath(createCaseLawDecisionRouteParams(input))}`;
+export {
+  buildCaseLawDecisionAppUrl,
+  buildCaseLawDecisionUrl,
+  buildLegislationDocumentAppUrl,
+} from "@/api/lib/legal-search/public-law-app-urls";
 
 /**
  * The plain text of one corpus document: its stored plain-text consolidation
@@ -1266,36 +1293,6 @@ export const toPlainCorpusText = ({
     .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
     .join("\n\n");
 };
-
-/**
- * A statute's canonical public address: its stored slug, or the id form when
- * the corpus holds none. A version and provision anchor preserve a dated read. The
- * route shape is owned by `@stll/api-contract/statute-route`, so the address
- * a tool reports and the page the web serves cannot diverge. Null only when
- * the public-law surface is off.
- */
-export const buildLegislationDocumentAppUrl = ({
-  country,
-  documentId,
-  eli,
-  slug,
-  version = null,
-  anchor,
-}: Omit<StatuteRouteInput, "version"> & {
-  version?: string | null;
-  anchor?: string;
-}): string | null =>
-  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
-    ? `${getAppBaseUrl()}${createStatutePath(
-        createStatuteRouteParams({
-          country,
-          documentId,
-          eli,
-          slug,
-          version,
-        }),
-      )}${anchor === undefined ? "" : `#${encodeURIComponent(anchor)}`}`
-    : null;
 
 /**
  * Plain text for a search snippet built for the web UI. A snippet is

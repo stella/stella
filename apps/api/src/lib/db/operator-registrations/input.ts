@@ -5,8 +5,8 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decodePaginationCursor } from "@/api/lib/pagination";
 
-export const REGISTRATION_LOOKBACK_MS = 31 * DAY_IN_MS;
-export const REGISTRATION_PAGE_CAP = 100;
+const REGISTRATION_LOOKBACK_MS = 31 * DAY_IN_MS;
+const REGISTRATION_PAGE_CAP = 100;
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_CURSOR_LENGTH = 1024;
 

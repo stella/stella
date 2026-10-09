@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { LogRecord } from "@/api/lib/observability/logger";
 import {
   resetLogSinkForTesting,
@@ -46,6 +46,7 @@ import {
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 const PRIVATE_TEXT = "private-content-and-query-37a9";
 true satisfies {
@@ -69,6 +70,10 @@ const contextFor = () =>
     accessibleWorkspaces: [],
     scopedDb: async () => [],
     recordAuditEvent: async () => undefined,
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "private-organization-37a9",
+      userId: "private-user-37a9",
+    }),
   });
 
 const createArgs = {
@@ -175,14 +180,14 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
 
   test("the documents surface capability refusal emits a tool error", async () => {
     const result = await handleMcpToolCall({
-      toolName: "invoke_capability",
+      toolName: "write_capability",
       args: { capability: "private.unsupported" },
       context: contextFor(),
       mode: "documents",
     });
     expect(JSON.stringify(result)).toContain("feature_disabled");
     expectOutcome({
-      tool: "invoke_capability",
+      tool: "write_capability",
       outcome: "tool_error",
       mode: "documents",
     });

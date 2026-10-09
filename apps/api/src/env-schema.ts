@@ -11,6 +11,8 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
+  FRONTEND_ADDRESS_HEADER,
+  FRONTEND_VERIFY_HEADER,
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
@@ -18,12 +20,12 @@ import {
   resolveInboundMailReceiving,
   type InboundMailReceivingInput,
 } from "@/api/lib/email/inbound/receiving-config";
-import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
@@ -69,7 +71,47 @@ export const resolveEmailProvider = ({
  * etc.). Scripts and CLI tools that only need DB + S3 import
  * envBase from env-base.ts instead.
  */
+// A header an edge sets to the viewer's address; never one the API sets,
+// verifies or reads only beside the frontend verify value.
+const edgeAddressHeaderName = v.pipe(
+  v.string(),
+  v.trim(),
+  v.toLowerCase(),
+  v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+  v.check(
+    (name) =>
+      name !== AUTH_CLIENT_ADDRESS_HEADER &&
+      name !== ORIGIN_VERIFY_HEADER &&
+      name !== FRONTEND_VERIFY_HEADER &&
+      name !== FRONTEND_ADDRESS_HEADER,
+    "must not be a header the API sets, verifies or reads from the frontend edge",
+  ),
+);
+
+// Comma-separated values an edge proves itself with, each long enough not to
+// be guessed.
+const edgeVerifyValues = v.pipe(
+  v.string(),
+  v.check(
+    (value) =>
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .every((part) => part.length >= 32),
+    "each value must be at least 32 characters",
+  ),
+);
+
 export const envApiServerSchema = {
+  ...verificationRunCapEnvSchema,
+  VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(
+        /^(?:[A-Za-z0-9_-]{1,64}(?::[A-Za-z0-9_-]+)?|arn:aws(?:-us-gov|-cn)?:lambda:[a-z0-9-]+:\d{12}:function:[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?)$/u,
+      ),
+    ),
+  ),
   PORT: v.optional(v.pipe(v.string(), v.digits())),
   STELLA_API_PORT: v.optional(v.pipe(v.string(), v.digits())),
   AI_PROVIDER: v.optional(
@@ -168,6 +210,11 @@ export const envApiServerSchema = {
   E2E_DISABLE_AUTH_RATE_LIMIT: v.optional(
     v.pipe(v.string(), v.parseBoolean()),
     "false",
+  ),
+  /** Seeded local stacks must not mutate their sealed corpus on a timer. */
+  SCHEDULED_JOBS_MODE: v.optional(
+    v.picklist(["enabled", "disabled"]),
+    "enabled",
   ),
   /**
    * Local executable the Dev menu runs to reach the public-law corpus that
@@ -331,6 +378,18 @@ export const envApiServerSchema = {
   ),
 
   /**
+   * One restricted review account that signs in with a password and stays
+   * inside its own organization. Set both or neither. Every other address is
+   * refused password sign-in with the ordinary invalid-credentials answer.
+   */
+  APP_REVIEW_ACCOUNT_EMAIL: v.optional(
+    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
+  ),
+  APP_REVIEW_ORGANIZATION_ID: v.optional(
+    v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  ),
+
+  /**
    * Plain-text token served at `/.well-known/openai-apps-challenge` so an
    * external verifier can confirm control of this API's host. Unset (the
    * default), the endpoint returns 404.
@@ -353,19 +412,7 @@ export const envApiServerSchema = {
    * `STELLA_TRUSTED_PROXY_CIDRS`, ahead of the `x-forwarded-for` chain. Set it
    * only when every route to the API adds this header.
    */
-  STELLA_CLIENT_ADDRESS_HEADER: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.toLowerCase(),
-      v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
-      v.check(
-        (name) =>
-          name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
-        "must not be a header the API sets or verifies itself",
-      ),
-    ),
-  ),
+  STELLA_CLIENT_ADDRESS_HEADER: v.optional(edgeAddressHeaderName),
 
   /**
    * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
@@ -381,19 +428,16 @@ export const envApiServerSchema = {
    * first, then the next one during a rotation). When set, the client address
    * header is read only from requests carrying one of them.
    */
-  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
-    v.pipe(
-      v.string(),
-      v.check(
-        (value) =>
-          value
-            .split(",")
-            .map((part) => part.trim())
-            .every((part) => part.length >= 32),
-        "each value must be at least 32 characters",
-      ),
-    ),
-  ),
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(edgeVerifyValues),
+
+  /**
+   * Comma-separated values the frontend edge sends in
+   * `x-stella-frontend-verify` (current first, then the next one during a
+   * rotation). From peers in `STELLA_TRUSTED_PROXY_CIDRS` carrying one of
+   * them, the browser's bare address in `x-stella-viewer-address` is read
+   * ahead of every other source; unset, that header is never read.
+   */
+  STELLA_FRONTEND_VERIFY_SECRET: v.optional(edgeVerifyValues),
 
   /**
    * Comma-separated user IDs allowed to publish an in-app announcement to
@@ -635,12 +679,11 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */
   FEATURE_LEGAL_LISTS: featureFlagSchema,
-  /** Operator-owned grants keyed by registered feature id; empty hides all. */
-  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   /** Dark-launch governed work obligations and compatibility task behavior. */
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */
@@ -781,6 +824,14 @@ export const envApiServerSchema = {
    */
   FEATURE_ORG_ACCESS_STATE: featureFlagSchema,
 
+  /**
+   * Falls every organization whose evaluation or paid access has lapsed back
+   * to the seeded `free` usage policy instead of ending its access. The free
+   * budget is the policy's service actions per `ACTION_ADMISSION_PERIOD_MS`
+   * (one month in production; staging may run a daily period for tests).
+   */
+  FEATURE_FREE_TIER: featureFlagSchema,
+
   /** Enforces organization file byte reservations at storage writes. */
 
   /** Length of an organization's evaluation period, in days. */
@@ -870,6 +921,8 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = InboundMailReceivingInput & {
+  APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
+  APP_REVIEW_ORGANIZATION_ID?: string | undefined;
   AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
   FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
   MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
@@ -881,12 +934,17 @@ type EnvApiInvariantInput = InboundMailReceivingInput & {
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
+  SCHEDULED_JOBS_MODE?:
+    | v.InferOutput<typeof envApiServerSchema.SCHEDULED_JOBS_MODE>
+    | undefined;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
   FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
   FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
   FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+  FEATURE_FREE_TIER?: boolean | undefined;
   FEATURE_USAGE?: boolean | undefined;
+  USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
   PAYMENT_RETRY_WINDOW_MS?: number | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
@@ -954,19 +1012,85 @@ const managedProviderCheckInvariantViolation = ({
   return null;
 };
 
+type FreeTierInvariantInput = Pick<
+  EnvApiInvariantInput,
+  | "FEATURE_FREE_TIER"
+  | "FEATURE_ORG_ACCESS_STATE"
+  | "FEATURE_ORG_SERVICE_BUDGETS"
+  | "USAGE_ENFORCEMENT_ENABLED"
+>;
+
+/**
+ * The free floor resolves from the access state and draws on the service
+ * budget. Usage enforcement refuses any organization without a usage
+ * entitlement, which a free organization never has, so the two cannot run
+ * together.
+ */
+export const freeTierInvariantViolation = ({
+  FEATURE_FREE_TIER,
+  FEATURE_ORG_ACCESS_STATE,
+  FEATURE_ORG_SERVICE_BUDGETS,
+  USAGE_ENFORCEMENT_ENABLED,
+}: FreeTierInvariantInput): string | null => {
+  if (!FEATURE_FREE_TIER) {
+    return null;
+  }
+  if (USAGE_ENFORCEMENT_ENABLED) {
+    return "FEATURE_FREE_TIER requires USAGE_ENFORCEMENT_ENABLED to be off.";
+  }
+  if (!FEATURE_ORG_ACCESS_STATE || !FEATURE_ORG_SERVICE_BUDGETS) {
+    return "FEATURE_FREE_TIER requires FEATURE_ORG_ACCESS_STATE and FEATURE_ORG_SERVICE_BUDGETS.";
+  }
+  return null;
+};
+
+type ReviewAccountInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "APP_REVIEW_ACCOUNT_EMAIL" | "APP_REVIEW_ORGANIZATION_ID"
+>;
+
+const reviewAccountInvariantViolation = ({
+  APP_REVIEW_ACCOUNT_EMAIL,
+  APP_REVIEW_ORGANIZATION_ID,
+}: ReviewAccountInvariantInput): string | null =>
+  (APP_REVIEW_ACCOUNT_EMAIL === undefined) ===
+  (APP_REVIEW_ORGANIZATION_ID === undefined)
+    ? null
+    : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.";
+
 // Feature-owned invariants, kept out of the top-level check's branch budget.
 const delegatedInvariantViolation = (
-  input: ManagedProviderCheckInvariantInput & InboundMailReceivingInput,
+  input: ManagedProviderCheckInvariantInput &
+    InboundMailReceivingInput &
+    FreeTierInvariantInput &
+    ReviewAccountInvariantInput &
+    Pick<EnvApiInvariantInput, "SCHEDULED_JOBS_MODE" | "runtimeMode">,
 ): string | null => {
+  if (
+    input.SCHEDULED_JOBS_MODE === "disabled" &&
+    input.runtimeMode.mode !== RUNTIME_MODE.open
+  ) {
+    return "SCHEDULED_JOBS_MODE=disabled is only supported in local development and tests.";
+  }
+  const reviewAccountViolation = reviewAccountInvariantViolation(input);
+  if (reviewAccountViolation !== null) {
+    return reviewAccountViolation;
+  }
   const managedViolation = managedProviderCheckInvariantViolation(input);
   if (managedViolation !== null) {
     return managedViolation;
+  }
+  const freeTierViolation = freeTierInvariantViolation(input);
+  if (freeTierViolation !== null) {
+    return freeTierViolation;
   }
   const inboundMail = resolveInboundMailReceiving(input);
   return inboundMail.isErr() ? inboundMail.error.message : null;
 };
 
 export const envApiInvariantViolation = ({
+  APP_REVIEW_ACCOUNT_EMAIL,
+  APP_REVIEW_ORGANIZATION_ID,
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
@@ -978,12 +1102,15 @@ export const envApiInvariantViolation = ({
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
+  SCHEDULED_JOBS_MODE,
   EMAIL_PROVIDER,
   FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
   FEATURE_ORG_SERVICE_BUDGETS,
   FEATURE_CONFIGURED_ACCESS,
+  FEATURE_FREE_TIER,
   FEATURE_USAGE,
+  USAGE_ENFORCEMENT_ENABLED,
   PAYMENT_RETRY_WINDOW_MS,
   FRONTEND_URL,
   GOTENBERG_URL,
@@ -1019,6 +1146,8 @@ export const envApiInvariantViolation = ({
     return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
   }
   const delegatedViolation = delegatedInvariantViolation({
+    APP_REVIEW_ACCOUNT_EMAIL,
+    APP_REVIEW_ORGANIZATION_ID,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
@@ -1032,6 +1161,12 @@ export const envApiInvariantViolation = ({
     INBOUND_MAIL_TOPIC_ARN,
     INBOUND_MAIL_BUCKET,
     INBOUND_MAIL_KEY_PREFIX,
+    FEATURE_FREE_TIER,
+    FEATURE_ORG_ACCESS_STATE,
+    FEATURE_ORG_SERVICE_BUDGETS,
+    USAGE_ENFORCEMENT_ENABLED,
+    SCHEDULED_JOBS_MODE,
+    runtimeMode,
   });
   if (delegatedViolation !== null) {
     return delegatedViolation;

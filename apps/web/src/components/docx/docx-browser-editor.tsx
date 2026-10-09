@@ -20,9 +20,9 @@ import {
   EyeIcon,
   GitCommitHorizontalIcon,
   PenLineIcon,
-  RefreshCwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
 import type { ReviewOutOfDateReason } from "@stll/ui/review-out-of-date-notice";
 import {
@@ -715,7 +715,7 @@ const CollaborationStatusIndicator = ({
         return <EyeIcon className="size-3.5" />;
       case "connecting":
       case "reconnecting":
-        return <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />;
+        return <Loader className="size-3.5" size="sm" variant="decorative" />;
       default: {
         status satisfies never;
         return panic(`Unhandled status: ${String(status)}`);

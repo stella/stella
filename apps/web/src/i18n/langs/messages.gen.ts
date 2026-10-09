@@ -96,6 +96,9 @@ type Messages = {
     "weekStartSunday": "Sunday";
   };
   "auth": {
+    "accessReset": {
+      "description": "Continuing disconnects these sign-in methods: <identity>{providers}</identity>, and signs out other devices. These connections have not verified your email. Continue?";
+    };
     "betaNoticeTitle": "Beta";
     "bootstrapToken": "Setup token";
     "checkSpamHint": "If you don't see it, check your spam folder.";
@@ -111,7 +114,6 @@ type Messages = {
     "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.";
       "generic": "Something went wrong while signing you in. Please try again.";
       "title": "We couldn't sign you in";
     };
@@ -135,6 +137,13 @@ type Messages = {
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
     "signInWithPassword": "Sign in with password";
+    "socialLink": {
+      "connect": "Connect <identity>{provider}</identity> for next time?";
+      "connectButton": "Connect <identity>{provider}</identity>";
+      "emailProof": "Sign in with an email code to continue.";
+      "methodHint": "This email already uses <identity>{method}</identity>. Sign in with an email code to continue.";
+      "skip": "Skip for now";
+    };
     "subtitle": "Documents, case law, and review under control. Powered by AI.";
     "twoFactor": {
       "backupCodePlaceholder": "Enter backup code";
@@ -148,6 +157,7 @@ type Messages = {
       "useBackupCode": "Use a backup code instead";
     };
     "useDifferentEmail": "Use a different email";
+    "usePassword": "Use a password instead";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";
   };
   "avt": {
@@ -306,8 +316,6 @@ type Messages = {
     "save": {
       "failed": "Not saved";
       "failedTitle": "Your change was not saved";
-      "saved": "Saved";
-      "saving": "Saving…";
     };
     "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.";
     "states": {
@@ -351,6 +359,7 @@ type Messages = {
     };
     "view": {
       "chooseList": "Choose a list";
+      "createList": "Create a list";
       "evidenceList": "Facts from";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
@@ -875,6 +884,8 @@ type Messages = {
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
       "perPage": "Per page";
     };
+    "paragraphRangeNotFound": "{count, plural, one {Paragraph {range} not found in this text.} other {Paragraphs {range} not found in this text.}}";
+    "paragraphRangeSelected": "{count, plural, one {Paragraph {range} highlighted.} other {Paragraphs {range} highlighted.}}";
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";
@@ -884,6 +895,7 @@ type Messages = {
       "subsection": "para. {value}";
     };
     "reader": {
+      "documentUpdated": "The document was updated.";
       "expandProvisions": "Expand provisions";
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
@@ -963,6 +975,9 @@ type Messages = {
     };
     "viewer": {
       "abstract": "Abstract";
+      "appliedVersionNotStated": "Applied version not stated";
+      "appliedVersionStatedAmendment": "Wording as amended by <reference>{amendment}</reference>";
+      "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}";
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
       "cites": "Cites";
@@ -1194,6 +1209,8 @@ type Messages = {
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
     "forkingThread": "Creating a new chat…";
+    "generatedView": "Generated view";
+    "generatedViewDrill": "Search decisions with court filter {court} and year {year}.";
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
@@ -1266,6 +1283,8 @@ type Messages = {
     "officeCitationUnavailable": "This citation is no longer available.";
     "openCitation": "Open citation {label}";
     "openThread": "Open conversation";
+    "overlayLoadFailed": "The document chat couldn't load.";
+    "overlayUpdated": "stella was updated. Reload the page to use the document chat.";
     "pastedChars": "Pasted · {count} chars";
     "pastedText": {
       "expand": "Show full text";
@@ -1325,6 +1344,7 @@ type Messages = {
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.";
     "sendPrompt": "Send message";
+    "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {
       "scope": {
@@ -1472,6 +1492,14 @@ type Messages = {
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
+    };
+    "turnNotification": {
+      "failedBody": "A chat reply in stella did not finish.";
+      "failedTitle": "Reply failed";
+      "needsInputBody": "A chat is waiting for your approval or answer.";
+      "needsInputTitle": "stella needs your input";
+      "replyReadyBody": "stella finished answering in your chat.";
+      "replyReadyTitle": "Reply ready";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -1687,6 +1715,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled";
     "disconnect": "Disconnect";
     "dismiss": "Dismiss";
     "displayName": "Display name";
@@ -1822,6 +1851,8 @@ type Messages = {
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
+    "openInStella": "Open in stella";
+    "openOriginalSource": "Open original source";
     "options": "Options";
     "or": "Or";
     "organization": "Organization";
@@ -1862,6 +1893,8 @@ type Messages = {
     "saveAndLeave": "Save and leave";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
+    "saved": "Saved";
+    "saving": "Saving…";
     "scopeThisPage": "(this page)";
     "scrollToBottom": "Scroll to bottom";
     "scrollToTop": "Scroll to top";
@@ -1896,6 +1929,7 @@ type Messages = {
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
     "unassigned": "Unassigned";
+    "unavailable": "Unavailable";
     "uncategorized": "Uncategorized";
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
@@ -2353,6 +2387,7 @@ type Messages = {
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
       "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
       "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
+      "fileSecurityRejected": "The file was rejected by a security check. Remove the flagged content and upload a cleaned copy.";
       "forbidden": "You do not have permission to do this.";
       "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.";
       "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.";
@@ -2367,6 +2402,8 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
+      "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";
     };
     "failedToAcceptInvitation": "Failed to accept invitation";
@@ -3551,6 +3588,11 @@ type Messages = {
       "askContentLabel": "Answer type";
       "askQuestionLabel": "Question";
       "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
+      "autosave": {
+        "failed": "Could not save";
+        "nameMissing": "Not saved: add a name";
+        "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention";
+      };
       "check": "Use an exact rule instead of AI";
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";
       "checkKind": {
@@ -3580,6 +3622,7 @@ type Messages = {
       "deletePlaybook": "Delete playbook";
       "deletePosition": "Delete position";
       "deleted": "Playbook deleted";
+      "deletedElsewhere": "This playbook has been deleted.";
       "derivedAutomatically": "The extraction question and answer format are generated from this position. No setup is needed.";
       "derivedQuestion": "Extraction question";
       "derivedType": "Answer format";
@@ -3632,10 +3675,12 @@ type Messages = {
       };
       "noPositions": "No positions yet. Add the first one.";
       "noSettledPosition": "No settled position";
+      "openInPane": "Open playbook";
       "optionPlaceholder": "Option value";
       "optionsLabel": "Options";
       "outline": "Outline";
       "positionOfTotal": "Position {index} of {total}";
+      "positionRemoved": "Position removed";
       "positions": "Positions";
       "recent": "Recently used";
       "recommended": "Recommended starters";
@@ -3835,6 +3880,16 @@ type Messages = {
       "citationWithQuote": "Citation with quote";
       "quoteWithCitation": "Quote with citation";
       "textOnly": "Text only";
+    };
+  };
+  "lists": {
+    "sources": {
+      "add": "Add source";
+      "documentRequired": "Choose a document.";
+      "invalidPage": "Enter a whole page number of at least 1.";
+      "page": "PDF page (optional)";
+      "quote": "Quoted passage (optional)";
+      "quoteTooLong": "Use at most {limit} characters.";
     };
   };
   "markdownEditor": {
@@ -4369,6 +4424,11 @@ type Messages = {
       "betaInbox": "Inbox & notifications";
       "betaInboxDescription": "Show the Inbox and the notification bell";
       "betaTimeBillingDescription": "Show time tracking, invoices, and expenses";
+      "chatNotifications": "Chat notifications";
+      "chatNotificationsBlocked": "Notifications are blocked for stella in this browser. Allow them in the browser’s site settings.";
+      "chatNotificationsDescription": "Get a notification from this browser when a chat reply finishes while stella is in the background.";
+      "chatNotificationsToggle": "Notify me when a reply is ready or needs my input";
+      "chatNotificationsUnsupported": "This browser does not support notifications.";
       "confirmDelete": "Confirm delete account";
       "dangerZone": "Danger zone";
       "dangerZoneDescription": "Permanently delete your account access and private account data.";
@@ -4738,6 +4798,7 @@ type Messages = {
     };
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
+    "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}";
     "wordingValidFrom": "Wording in force since {date}";
     "wordingVersionUnknown": "Wording version date unavailable";
   };
@@ -5319,7 +5380,6 @@ type Messages = {
       "noLanguagesFound": "No languages found";
       "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";
       "outputLabel": "Translation type";
-      "progress": "Translation progress";
       "progressCount": "{completed} of {total} completed";
       "providerUnavailable": "The translation service is unavailable. Try again later or contact your administrator.";
       "runFailed": "The translation could not be completed.";
@@ -5451,14 +5511,8 @@ type Messages = {
     "exportToCsv": "Export to CSV";
     "fields": {
       "calculating": "Calculating...";
-      "currencyLabel": "Currency (optional)";
-      "currencyPlaceholder": "e.g. USD, EUR";
-      "editFieldValue": "Edit field value";
       "errored": "Errored";
-      "fieldValueLabel": "Field value";
-      "fieldValuePlaceholder": "Enter field value";
       "formatNotSupported": "Format not supported";
-      "numberPlaceholder": "Enter number";
       "selectAValue": "Select a value";
       "selectValues": "Select values";
     };
@@ -5502,6 +5556,7 @@ type Messages = {
       "desktopGate": {
         "alreadyInstalled": "Already installed? Connect it";
         "connect": "Connect stella desktop";
+        "connected": "stella desktop is connected";
         "editNone": "Download stella desktop to edit this file";
         "editOutdated": "Update stella desktop to edit";
         "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.";
@@ -5523,6 +5578,7 @@ type Messages = {
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued for the next OCR batch";
       "pdfSigning": {
+        "alreadySigningTitle": "Signing is already in progress in stella desktop";
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.";
         "cancelledCertificateDescription": "The selected certificate cannot be used for signing. Choose one that allows digital signatures.";
         "cancelledCertifiedDescription": "This PDF is certified, and its certification does not allow further signatures.";
@@ -5543,6 +5599,9 @@ type Messages = {
         "inProgressDescription": "This file is already being signed. Finish or cancel that signing in stella desktop first.";
         "noFileDescription": "This document has no file to sign.";
         "notAPdfDescription": "Only PDF files can be signed.";
+        "notOpeningConnect": "Not opening? Connect stella desktop";
+        "notPickedUpDescription": "stella desktop may not be running or connected to this account. Connect it, then retry.";
+        "notPickedUpTitle": "stella desktop did not open the PDF";
         "placementBox": "Stamp position";
         "placementConfirm": "Open stella desktop";
         "placementDescription": "Choose how the signature appears in the PDF.";
@@ -5557,10 +5616,12 @@ type Messages = {
         "placementTooSmall": "This page is too small for a stamp. Choose another page.";
         "placementVisible": "Visible stamp";
         "placementVisibleDescription": "A box on the page shows who signed and when.";
+        "preparingDescription": "Preparing the PDF for stella desktop.";
         "readOnlyDescription": "This document is read-only.";
         "signedDescription": "The signature was saved as version {versionNumber, number}.";
         "signedDescriptionNoVersion": "The signature was saved as a new version.";
         "signedTitle": "PDF signed";
+        "signingLabel": "Signing in stella desktop…";
         "stampLocation": "Location";
         "stampRejectedDescription": "The stamp could not be placed there. Place it again and retry.";
         "stampSignedBy": "Digitally signed by";

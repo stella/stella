@@ -6,6 +6,7 @@ import {
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
+import { validateFetchedToolsList } from "./registry-trust.js";
 import type {
   FlagSpec,
   LeafCommandSpec,
@@ -84,6 +85,51 @@ const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
+  test("preserves deployment ownership on every discriminator leaf", () => {
+    const organization =
+      TOOL_ANNOTATIONS["manage_organization"] ??
+      expect.unreachable("Missing organization CLI metadata");
+    const annotated = {
+      ...TOOL_ANNOTATIONS,
+      manage_organization: {
+        ...organization,
+        feature: "FEATURE_EXAMPLE",
+      },
+    };
+    const generated = generateRouteMap(snapshotListings, annotated);
+    const leaves = leafEntries(generated).filter(
+      ({ spec }) => spec.toolName === "manage_organization",
+    );
+    const discriminator =
+      organization.discriminator ??
+      expect.unreachable("Missing organization CLI discriminator");
+    const expectedPaths = Object.values(discriminator.subcommands).map(
+      ({ command }) => [...organization.command, command].join(" "),
+    );
+    expect(expectedPaths.length).toBeGreaterThan(0);
+    expect(leaves.map(({ path }) => path.join(" ")).toSorted()).toEqual(
+      expectedPaths.toSorted(),
+    );
+    for (const { spec } of leaves) {
+      expect(spec.feature).toBe(annotated.manage_organization.feature);
+    }
+  });
+
+  test("preserves deployment ownership supplied by a registry listing", () => {
+    const listing = {
+      name: "read_example",
+      description: "Read example",
+      inputSchema: { type: "object", properties: {} },
+      feature: "FEATURE_EXAMPLE",
+    } satisfies RegistryToolListing;
+    const generated = generateRouteMap([listing], {
+      read_example: { command: ["example", "read"] },
+    });
+    expect(findLeaf(generated, ["example", "read"])?.feature).toBe(
+      listing.feature,
+    );
+  });
+
   test("excludes compat and host adapters from the command tree", () => {
     const paths = leafPaths(tree);
     expect(paths).not.toContain("search");
@@ -201,9 +247,12 @@ describe("generateRouteMap: discriminator split (S2)", () => {
   });
 
   test("capability invocation defers destructiveness to the selected target", () => {
-    const invoke = findLeaf(tree, ["capability", "invoke"]);
-    expect(invoke?.destructive).toBe(false);
-    expect(invoke?.confirmPassthrough).toBe(true);
+    const write = findLeaf(tree, ["capability", "write"]);
+    expect(write?.destructive).toBe(false);
+    expect(write?.confirmPassthrough).toBe(true);
+    const read = findLeaf(tree, ["capability", "read"]);
+    expect(read?.destructive).toBe(false);
+    expect(read?.confirmPassthrough).toBeUndefined();
   });
 
   test("no manage_organization subcommand emits a --confirm flag", () => {
@@ -538,6 +587,56 @@ describe("generateRouteMap: Phase 4 domains (S1/S3)", () => {
 });
 
 describe("generateRouteMap: unknown fetched tools (S1 rule 5)", () => {
+  for (const [name, command] of [
+    ["skill__", ["skill--"]],
+    ["list__", ["list--"]],
+    ["skill_", ["skill-"]],
+    ["list_", ["list-"]],
+    ["skill__-foo", ["skill", "foo"]],
+    ["list_-foo", ["foo", "list"]],
+    ["skill__-", ["skill---"]],
+    ["list__-", ["list---"]],
+  ] as const) {
+    test(`an accepted separator suffix ${name} keeps a nonempty command path`, () => {
+      const listing = {
+        name,
+        description: "List documents",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies RegistryToolListing;
+      const trusted = validateFetchedToolsList(
+        JSON.stringify({ tools: [listing] }),
+      );
+      expect(trusted.ok).toBe(true);
+      if (!trusted.ok) {
+        return;
+      }
+      const node = generateRouteMap(trusted.listings, {});
+      const leaf = findLeaf(node, command);
+      expect(leaf?.toolName).toBe(name);
+      expect(leafPaths(node)).toEqual([command.join(" ")]);
+      expect(
+        leaf?.commandPath.every(
+          (segment) => segment.length > 0 && !segment.startsWith("-"),
+        ),
+      ).toBe(true);
+    });
+  }
+
+  for (const slug of ["compare-default", `compare-${"a".repeat(56)}`]) {
+    test(`a hyphenated skill ${slug} maps to usable command segments`, () => {
+      const listing = {
+        name: `skill__${slug}`,
+        description: "Compare documents",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies RegistryToolListing;
+      const node = generateRouteMap([listing], {});
+      const leaf = findLeaf(node, ["skill", slug]);
+      expect(leaf?.toolName).toBe(listing.name);
+      expect(leaf?.commandPath).toEqual(["skill", slug]);
+      expect(leafPaths(node)).toEqual([`skill ${slug}`]);
+    });
+  }
+
   test("a tool with no annotation gets a heuristic verb/domain command path", () => {
     const unknown: RegistryToolListing = {
       name: "list_widgets",

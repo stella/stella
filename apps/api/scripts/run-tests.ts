@@ -41,7 +41,6 @@ import {
   snapshotKey,
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
-import durations from "./test-durations.json";
 import {
   API_TEST_SHARD_ENV,
   restrictApiTestFiles,
@@ -54,7 +53,17 @@ import {
   runInLanes,
 } from "./test-lanes";
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
-import { TestProcessSupervisor } from "./test-process-supervisor";
+import {
+  TestProcessSupervisor,
+  testProcessBudgets,
+} from "./test-process-supervisor";
+import {
+  API_TEST_DURATIONS_FILE_ENV,
+  API_TEST_DURATIONS_HASH_ENV,
+  assertTestDurationsIdentity,
+  loadTestDurationWeights,
+  testFileDurationWeights,
+} from "./test-timings";
 
 const PROPERTY_FLAG = "--property";
 const TEST_ROOT_SET = new Set<string>(TEST_ROOTS);
@@ -75,12 +84,20 @@ const allTestPaths = restrictApiTestFiles(
   listApiTestPaths(apiRoot),
   process.env["API_TEST_FILES"],
 );
+const durationWeights = loadTestDurationWeights({
+  files: allTestPaths,
+  path: process.env[API_TEST_DURATIONS_FILE_ENV],
+});
 const { testPaths, shard } = selectApiTestFiles({
   files: allTestPaths,
-  durations,
+  durations: durationWeights,
   shardValue: process.env[API_TEST_SHARD_ENV],
 });
 if (shard !== null) {
+  assertTestDurationsIdentity({
+    path: process.env[API_TEST_DURATIONS_FILE_ENV],
+    hash: process.env[API_TEST_DURATIONS_HASH_ENV],
+  });
   console.log(
     `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
   );
@@ -161,8 +178,11 @@ const printError = (text: string) => {
 
 const processSupervisor = new TestProcessSupervisor({
   // The dedicated memory workflow allows two hours for a serial per-file
-  // sweep; regular CI shards retain the supervisor's twenty-minute deadline.
-  ...(rssMode.mode === "measure-rss" ? { deadlineMs: 110 * 60_000 } : {}),
+  // sweep; nightly jobs declare budgets explicitly, while PR defaults stay bounded.
+  ...testProcessBudgets(
+    process.env,
+    rssMode.mode === "measure-rss" ? 110 * 60_000 : undefined,
+  ),
   directory:
     process.env["API_TEST_ARTIFACT_DIR"] ??
     mkdtempSync(path.join(tmpdir(), "stella-api-test-diagnostics-")),
@@ -325,6 +345,7 @@ const composedBatches = await planApiTestBatches({
 });
 const plannedBatches = orderBatchesForLanes(
   composedBatches.flatMap((group) => planBatches(group)),
+  testFileDurationWeights(allTestPaths, durationWeights),
 );
 
 const testProcessEnv: Record<string, string | undefined> = {

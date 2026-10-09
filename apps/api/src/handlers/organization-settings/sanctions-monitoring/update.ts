@@ -13,7 +13,7 @@ import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime"
 export default createSafeRootHandler(
   {
     realtime: organizationResourceSetUpdates(RESOURCE_TYPE.CONTACT),
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     description:
       "Enable or disable sanctions monitoring for the active organization. Disabling hides active hits and preserves history. Enabling queues a bounded backfill; contact opt-outs still apply. Read contacts.sanctions.get for eventual screening results. Changes are audited.",
     permissions: { organizationSettings: ["update"] },

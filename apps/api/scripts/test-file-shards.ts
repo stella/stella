@@ -1,12 +1,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
-import {
-  assertTestDurations,
-  durationSeconds,
-  readDurationWeights,
-  readTimingArtifact,
-} from "./test-timings";
+import { testFileDurationWeights } from "./test-timings";
 
 /** Resolve the explicit selection before duration bins partition it. */
 export const restrictApiTestFiles = (
@@ -56,28 +51,18 @@ export const partitionTestFiles = ({
   if (new Set(files).size !== files.length) {
     panic("Test paths must be unique");
   }
-  const measured = files
-    .flatMap((file) => {
-      const duration = durations[file];
-      if (duration === undefined) {
-        return [];
-      }
-      if (!Number.isFinite(duration) || duration < 0) {
-        panic(`Invalid duration for ${file}`);
-      }
-      return [duration];
-    })
-    .toSorted((a, b) => a - b);
-  const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
+  const canonicalFiles = files.toSorted();
+  const weights = testFileDurationWeights(canonicalFiles, durations);
   if (count === 1) {
-    return [[...files]];
+    return [canonicalFiles];
   }
-  const weight = (file: string) => durations[file] ?? fallback;
+  const weight = (file: string) =>
+    weights[file] ?? panic(`Missing resolved duration for ${file}`);
   const bins = Array.from({ length: count }, () => ({
     files: new Set<string>(),
     seconds: 0,
   }));
-  for (const file of files.toSorted(
+  for (const file of canonicalFiles.toSorted(
     (a, b) => weight(b) - weight(a) || (a < b ? -1 : Number(a > b)),
   )) {
     let bin = bins.at(0);
@@ -92,7 +77,9 @@ export const partitionTestFiles = ({
     bin.files.add(file);
     bin.seconds += weight(file);
   }
-  return bins.map((bin) => files.filter((file) => bin.files.has(file)));
+  return bins.map((bin) =>
+    canonicalFiles.filter((file) => bin.files.has(file)),
+  );
 };
 
 export const parseApiTestShard = (value: string | undefined) => {
@@ -114,7 +101,7 @@ export const parseApiTestShard = (value: string | undefined) => {
 
 type SelectApiTestFilesOptions = {
   files: readonly string[];
-  durations: unknown;
+  durations: Readonly<Record<string, number>>;
   shardValue: string | undefined;
 };
 
@@ -127,22 +114,9 @@ export const selectApiTestFiles = ({
   if (shard === null) {
     return { testPaths: files, shard };
   }
-  const measurementPath = process.env["API_TEST_MEASUREMENTS"];
-  const weights = readDurationWeights(durations);
-  assertTestDurations({
-    files,
-    durations: weights,
-    ...(measurementPath === undefined
-      ? {}
-      : {
-          measurements: readTimingArtifact(
-            readFileSync(measurementPath, "utf-8"),
-          ),
-        }),
-  });
   const testPaths = partitionTestFiles({
     files,
-    durations: durationSeconds(weights),
+    durations,
     count: shard.count,
   }).at(shard.index - 1);
   if (testPaths === undefined || testPaths.length === 0) {

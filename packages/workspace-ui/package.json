@@ -1,6 +1,6 @@
 {
   "name": "@stll/workspace-ui",
-  "version": "0.11.22",
+  "version": "0.12.0",
   "description": "Reusable workspace presentation components and view helpers for Stella.",
   "keywords": [
     "calculations",
@@ -44,8 +44,7 @@
     "./table-skeleton-rows": "./src/table-skeleton-rows.tsx",
     "./types": "./src/types.ts",
     "./view-switcher": "./src/view-switcher.tsx",
-    "./workspace-frame": "./src/workspace-frame.tsx",
-    "./view-switcher-logic": "./src/view-switcher.logic.ts"
+    "./workspace-frame": "./src/workspace-frame.tsx"
   },
   "publishConfig": {
     "access": "public"
@@ -72,8 +71,8 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
+    "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^3.0.0",
     "@base-ui/react": "catalog:",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
@@ -88,8 +87,8 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
+    "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^3.0.0",
     "@base-ui/react": "^1.7.0",
     "@tanstack/react-table": "^9.1.2",
     "@types/react": ">=19",

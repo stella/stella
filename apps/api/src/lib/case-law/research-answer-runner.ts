@@ -1,8 +1,10 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { declareFailureClass } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -21,6 +23,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
   ResearchAnswerClaim,
   ResearchAnswerCell,
@@ -46,8 +49,10 @@ import {
 } from "@/api/lib/case-law/research-answers-system-one";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
-import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import {
+  CorpusIndexGroupNotReadyError,
+  readServingCorpusIndexTargetTx,
+} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusFreeTextClause,
@@ -67,6 +72,9 @@ import {
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import {
@@ -77,13 +85,49 @@ import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
-const NO_HITS: readonly CorpusIndexHit[] = [];
+
+const RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK = failureSink({
+  event: "case_law.research_passage_retrieval_failed",
+  expected: [],
+});
+
+const RESEARCH_PASSAGE_RETRIEVAL_REASON = {
+  INDEX_NOT_READY: "index-not-ready",
+  TARGET_UNAVAILABLE: "target-unavailable",
+  SEARCH_FAILED: "search-failed",
+} as const;
+
+type ResearchPassageRetrievalReason =
+  (typeof RESEARCH_PASSAGE_RETRIEVAL_REASON)[keyof typeof RESEARCH_PASSAGE_RETRIEVAL_REASON];
+
+const RESEARCH_PASSAGE_FAILURE_REASON = {
+  "index-not-ready": "research_index_not_ready",
+  "target-unavailable": "research_passage_target_failed",
+  "search-failed": "research_passage_search_failed",
+} as const satisfies Record<ResearchPassageRetrievalReason, FailureReason>;
+
+export class ResearchPassageRetrievalError extends TaggedError(
+  "ResearchPassageRetrievalError",
+)<{
+  message: string;
+  reason: ResearchPassageRetrievalReason;
+  cause: unknown;
+}> {
+  static {
+    declareFailureClass(
+      this,
+      ({ reason }) => RESEARCH_PASSAGE_FAILURE_REASON[reason],
+    );
+  }
+}
 
 export type ResearchRunColumn = ResearchQuestion & {
   columnId: SafeId<"caseLawResearchColumn">;
 };
 
 export type RunResearchAnswersInput = {
+  /** The queuing request's admission: the whole run is one action. */
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   columns: readonly ResearchRunColumn[];
@@ -193,12 +237,20 @@ export const runResearchAnswers = async (
 };
 
 type DecisionTextSource =
-  | { kind: "passages"; passages: ResearchPassage[]; retrieved: boolean }
+  | {
+      kind: "passages";
+      passages: ResearchPassage[];
+      retrieved: boolean;
+      // Set when retrieval was attempted and failed; it is already reported,
+      // so later stages fall back instead of retrying it.
+      retrievalFailed: boolean;
+    }
   | { kind: "none" };
 
 type SelectDecisionPassagesOptions = {
   fallback: readonly ResearchPassage[];
   retrieved: readonly ResearchPassage[];
+  retrievalFailed: boolean;
   budgetChars: number;
 };
 
@@ -206,6 +258,7 @@ type SelectDecisionPassagesOptions = {
 export const selectDecisionPassages = ({
   fallback,
   retrieved,
+  retrievalFailed,
   budgetChars,
 }: SelectDecisionPassagesOptions): DecisionTextSource => {
   const selected = selectPassagesWithinBudget(
@@ -217,7 +270,12 @@ export const selectDecisionPassages = ({
   );
   return selected.length === 0
     ? { kind: "none" }
-    : { kind: "passages", passages: selected, retrieved: retrieved.length > 0 };
+    : {
+        kind: "passages",
+        passages: selected,
+        retrieved: retrieved.length > 0,
+        retrievalFailed,
+      };
 };
 
 type ResearchDecisionRow = {
@@ -368,6 +426,7 @@ const answerDecision = async (
         orgAIConfig: input.orgAIConfig,
         managedAIResidency: input.managedAIResidency,
         organizationId: input.organizationId,
+        admission: input.admission,
         // The corpus is global; answers are tenant rows written separately.
         tenantWorkspaceIds: [],
         analytics: aiAnalytics,
@@ -551,13 +610,23 @@ const resolveDecisionText = async (
     0,
   );
   if (total <= budgetChars) {
-    return { kind: "passages", passages, retrieved: false };
+    return {
+      kind: "passages",
+      passages,
+      retrieved: false,
+      retrievalFailed: false,
+    };
   }
 
-  const retrieved = await retrievePassages(decision, questions, caseLawDb);
+  const retrieved = await retrieveResearchPassages({
+    decision,
+    questions,
+    caseLawDb,
+  });
   return selectDecisionPassages({
     fallback: passages,
-    retrieved,
+    retrieved: retrieved.unwrapOr([]),
+    retrievalFailed: retrieved.isErr(),
     budgetChars,
   });
 };
@@ -602,7 +671,7 @@ const readDecisionBlocks = async (
     read: readCorpusAst,
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
-  const ast = stored === null ? null : parseUsableDocumentAst(stored);
+  const ast = stored === null ? null : parseCaseLawDecisionAst(stored);
   return ast === null ? null : ast.blocks;
 };
 
@@ -620,53 +689,102 @@ const readDecisionFulltextPassage = async (
   return trimmed.length === 0 ? [] : [{ anchorId: "text", excerpt: trimmed }];
 };
 
+type RetrieveResearchPassagesOptions = {
+  decision: Pick<ResearchDecisionRow, "id" | "country">;
+  questions: readonly { question: string }[];
+  caseLawDb: CaseLawPublicReadDb;
+  clientForCluster?: typeof getCorpusIndexClient;
+};
+
 /** The passages of one decision that match the questions, best first. */
-const retrievePassages = async (
-  decision: ResearchDecisionRow,
-  questions: readonly { question: string }[],
-  caseLawDb: CaseLawPublicReadDb,
-): Promise<ResearchPassage[]> => {
+export const retrieveResearchPassages = async ({
+  decision,
+  questions,
+  caseLawDb,
+  clientForCluster = getCorpusIndexClient,
+}: RetrieveResearchPassagesOptions) => {
   const freeText = corpusFreeTextClause(
     questions.map((question) => question.question).join(" "),
   );
   if (freeText === null) {
-    return [];
+    return Result.ok([]);
   }
-  const searched = await Result.tryPromise(async () => {
-    const target = await caseLawDb(
-      async (tx) =>
-        await readServingCorpusIndexTargetTx(tx, {
-          family: "case_law",
-          jurisdiction: decision.country,
-        }),
-    );
-    // An unready index group reads as no passages, as a failed search does.
-    if (Result.isError(target)) {
-      return NO_HITS;
-    }
-    const { serving, manifest } = target.value;
+  const searched = await Result.gen(async function* () {
+    const target = yield* (
+      await Result.tryPromise(
+        async () =>
+          await caseLawDb(
+            async (tx) =>
+              await readServingCorpusIndexTargetTx(tx, {
+                family: "case_law",
+                jurisdiction: decision.country,
+              }),
+          ),
+      )
+    )
+      .andThen((result) => result)
+      .mapError(
+        (cause) =>
+          new ResearchPassageRetrievalError({
+            message:
+              "Research passage retrieval could not read its serving target",
+            reason: CorpusIndexGroupNotReadyError.is(cause)
+              ? RESEARCH_PASSAGE_RETRIEVAL_REASON.INDEX_NOT_READY
+              : RESEARCH_PASSAGE_RETRIEVAL_REASON.TARGET_UNAVAILABLE,
+            cause,
+          }),
+      );
+    const { serving, manifest } = target;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
-    const response = await getCorpusIndexClient(serving.cluster).search({
-      observer: "unobserved",
-      indexId,
-      query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
-      maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
-      sortBy: "_score",
+    const response = yield* (
+      await Result.tryPromise(
+        async () =>
+          await clientForCluster(serving.cluster).search({
+            observer: "unobserved",
+            indexId,
+            query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
+            maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
+            sortBy: "_score",
+          }),
+      )
+    )
+      .andThen((result) => result)
+      .mapError(
+        (cause) =>
+          new ResearchPassageRetrievalError({
+            message:
+              "Research passage retrieval could not search its serving index",
+            reason: RESEARCH_PASSAGE_RETRIEVAL_REASON.SEARCH_FAILED,
+            cause,
+          }),
+      );
+    const passages = response.hits.flatMap((hit) => {
+      const anchorId = hit["anchor_id"];
+      const text = hit["text"];
+      return typeof anchorId === "string" &&
+        anchorId.length > 0 &&
+        typeof text === "string"
+        ? [{ anchorId, excerpt: text }]
+        : [];
     });
-    return Result.isError(response) ? NO_HITS : response.value.hits;
+    reportCaseLawIncompleteAnswer({
+      surface: "research",
+      reason: "retrieved_passage_invalid",
+      count: response.hits.length - passages.length,
+    });
+    return Result.ok(passages);
   });
-  if (Result.isError(searched)) {
-    return [];
+  if (searched.isErr()) {
+    observeFailure(searched.error, {
+      sink: RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK,
+      ctx: {
+        decisionId: decision.id,
+        jurisdiction: decision.country,
+        stage: searched.error.reason,
+      },
+    });
   }
-  return searched.value.flatMap((hit) => {
-    const anchorId = hit["anchor_id"];
-    const text = hit["text"];
-    return typeof anchorId === "string" &&
-      anchorId.length > 0 &&
-      typeof text === "string"
-      ? [{ anchorId, excerpt: text }]
-      : [];
-  });
+  return searched;
 };
 
 type SystemOnePassOptions = {
@@ -676,7 +794,11 @@ type SystemOnePassOptions = {
   orgAIConfig: OrgAIConfig | null;
   decision: ResearchDecisionRow;
   questions: readonly ResearchRunColumn[];
-  text: { passages: readonly ResearchPassage[]; retrieved: boolean };
+  text: {
+    passages: readonly ResearchPassage[];
+    retrieved: boolean;
+    retrievalFailed: boolean;
+  };
 };
 
 type SystemOnePass = {
@@ -712,8 +834,14 @@ const answerWithSystemOne = async ({
   // opening. Text already resolved by retrieval is ranked, so it is only cut.
   const overBudget = exceedsSystemOneSourceBudget(text.passages);
   const ranked =
-    overBudget && !text.retrieved
-      ? await retrievePassages(decision, asked, caseLawDb)
+    overBudget && !text.retrieved && !text.retrievalFailed
+      ? (
+          await retrieveResearchPassages({
+            decision,
+            questions: asked,
+            caseLawDb,
+          })
+        ).unwrapOr([])
       : [];
   const sources = systemOneSourcesFromPassages(
     ranked.length > 0 ? ranked : text.passages,

@@ -44,11 +44,11 @@ import {
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
+import { readChatPaste } from "@/components/chat-editor-paste.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
 import { ChatMention } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { insertChatMention } from "@/components/chat-mention-helpers";
-import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
   insertPastedTextChip,
   PastedText,
@@ -90,8 +90,6 @@ const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
 // load-bearing.
 const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 250;
 const CHAT_DRAFT_PERSIST_MAX_WAIT_MS = 1500;
-
-export { CHAT_FILE_INPUT_ACCEPT };
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
@@ -207,7 +205,7 @@ const readMentionSources = async (
 
 const EMPTY_MENTION_SOURCES: readonly ChatInputMentionSource[] = [];
 
-export type ChatInputPluginRegistration = {
+type ChatInputPluginRegistration = {
   key: string | PluginKey;
   plugin: Plugin;
 };
@@ -965,39 +963,41 @@ export const useChatEditor = ({
         "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
     }),
     handlePaste: (_view, event) => {
-      // ProseMirror processes paste before any React `onPaste`
-      // handler, so the chip-on-large-paste logic has to live
-      // here — by the time the React handler fires, the text is
-      // already in the editor.
-      const clipboardData = event.clipboardData;
-      if (clipboardData === null) {
-        return false;
-      }
-
-      const hasFiles = Array.from(clipboardData.items).some(
-        (item) => item.kind === "file",
-      );
-      if (hasFiles) {
-        return false;
-      }
-
-      const pastedText = clipboardData.getData("text/plain");
-      if (!pastedText || !shouldChipPaste(pastedText)) {
-        return false;
-      }
-
+      // Consume every paste before ProseMirror can parse clipboard HTML.
+      // File uploads still bubble to the React handler on the input surface.
+      event.preventDefault();
+      const paste = readChatPaste(event.clipboardData);
       const targetEditor = editorRef.current;
       if (targetEditor === null) {
-        return false;
+        return true;
       }
-
-      event.preventDefault();
-      insertPastedTextChip(targetEditor, {
-        label: "",
-        source: "paste",
-        text: pastedText,
-      });
-      return true;
+      switch (paste.type) {
+        case "ignore":
+        case "files":
+          return true;
+        case "decision":
+          targetEditor.commands.insertContent(
+            decisionPassageContent(paste.passage),
+          );
+          return true;
+        case "chip":
+          insertPastedTextChip(targetEditor, {
+            label: "",
+            source: "paste",
+            text: paste.text,
+          });
+          return true;
+        case "text":
+          targetEditor.commands.insertContent(paste.content, {
+            applyInputRules: false,
+            applyPasteRules: false,
+          });
+          return true;
+        default: {
+          paste satisfies never;
+          return panic("Unhandled chat paste");
+        }
+      }
     },
     handleKeyDown: (view, event) => {
       if (handleMessageHistoryKeyDown(view.state, event)) {
@@ -1316,7 +1316,7 @@ export const useChatEditor = ({
       }
 
       if (files.length === 0) {
-        // Plain-text paste collapsing happens earlier inside
+        // Text and typed paste handling happens earlier inside
         // ProseMirror via `editorProps.handlePaste`; nothing to do
         // at the React layer here.
         return;

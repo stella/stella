@@ -1,0 +1,1044 @@
+{
+  "open_case_law_decision": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "enum": [
+          "available",
+          "withheld",
+          "unavailable"
+        ],
+        "type": "string"
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "decisionId": {
+            "type": "string"
+          },
+          "caseNumber": {
+            "type": "string"
+          },
+          "caseNumberType": {
+            "enum": [
+              "case-number",
+              "neutral-citation",
+              "reporter-citation"
+            ],
+            "type": "string"
+          },
+          "courtAbbreviation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "courtTier": {
+            "enum": [
+              "constitutional",
+              "supreme",
+              "regional",
+              "other"
+            ],
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "court": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ecli": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "decisionId",
+          "caseNumber",
+          "caseNumberType",
+          "courtAbbreviation",
+          "courtTier",
+          "language",
+          "court",
+          "country",
+          "date",
+          "ecli",
+          "appUrl"
+        ],
+        "additionalProperties": false
+      },
+      "outline": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "anchorId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "level": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "anchorId",
+            "title",
+            "level"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "window": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "anchorId": {
+              "type": "string"
+            },
+            "number": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "anchorId",
+            "number",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "truncated": {
+        "type": "boolean"
+      },
+      "withheldReason": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "enum": [
+              "source_licence"
+            ],
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "status",
+      "metadata"
+    ],
+    "additionalProperties": false
+  },
+  "read_case_law_decision_blocks": {
+    "type": "object",
+    "properties": {
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "decisionId": {
+            "type": "string"
+          },
+          "caseNumber": {
+            "type": "string"
+          },
+          "caseNumberType": {
+            "enum": [
+              "case-number",
+              "neutral-citation",
+              "reporter-citation"
+            ],
+            "type": "string"
+          },
+          "courtAbbreviation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "courtTier": {
+            "enum": [
+              "constitutional",
+              "supreme",
+              "regional",
+              "other"
+            ],
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "court": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ecli": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "decisionId",
+          "caseNumber",
+          "caseNumberType",
+          "courtAbbreviation",
+          "courtTier",
+          "language",
+          "court",
+          "country",
+          "date",
+          "ecli",
+          "appUrl"
+        ],
+        "additionalProperties": false
+      },
+      "content": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "enum": [
+              "available",
+              "withheld",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "blocks",
+              "citations",
+              "provisions"
+            ],
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "blockFragments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "citationAnchors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "provisionAnchors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "enum": [
+              60000
+            ],
+            "type": "number"
+          },
+          "withheldReason": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "enum": [
+                  "source_licence"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "metadata",
+      "content"
+    ],
+    "additionalProperties": false,
+    "$defs": {
+      "0": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "text",
+              "bold",
+              "italic",
+              "underline",
+              "superscript",
+              "subscript",
+              "link",
+              "citation",
+              "line-break",
+              "page-anchor"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "anonymized": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/0"
+            }
+          },
+          "href": {
+            "type": "string"
+          },
+          "cite": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "identified",
+                  "unresolved"
+                ],
+                "type": "string"
+              },
+              "identifiers": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                ],
+                "minItems": 1,
+                "additionalItems": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "maxItems": 32
+              },
+              "reason": {
+                "enum": [
+                  "missing-antecedent",
+                  "ambiguous-antecedent",
+                  "ambiguous-reporter",
+                  "authority-barrier",
+                  "scope-unknown",
+                  "conflicting-parallels"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "pin": {
+            "type": "object",
+            "properties": {
+              "raw": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "parts": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                ],
+                "minItems": 1,
+                "additionalItems": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "maxItems": 8
+              },
+              "reporter": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "raw",
+              "parts"
+            ],
+            "additionalProperties": false
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    }
+  },
+  "preview_cited_provision": {
+    "type": "object",
+    "properties": {
+      "appUrl": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "documentId": {
+        "type": "string"
+      },
+      "language": {
+        "type": "string"
+      },
+      "anchorId": {
+        "type": "string"
+      },
+      "citedAnchorId": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "headings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "anchorId": {
+              "type": "string"
+            },
+            "level": {
+              "type": "number"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "anchorId",
+            "level",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "heading": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "anchorId": {
+            "type": "string"
+          },
+          "level": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "anchorId",
+          "level",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "blocks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "anchorId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "anchorId",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "appUrl",
+      "documentId",
+      "language",
+      "anchorId",
+      "citedAnchorId",
+      "headings",
+      "heading",
+      "blocks"
+    ],
+    "additionalProperties": false
+  },
+  "search_case_law": {
+    "type": "object",
+    "properties": {
+      "code": {
+        "enum": [
+          "public_country_unavailable"
+        ],
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "unavailable"
+        ],
+        "type": "string"
+      },
+      "country": {
+        "enum": [
+          "AUT",
+          "CZE",
+          "EU",
+          "HUN",
+          "POL",
+          "SVK",
+          "USA"
+        ],
+        "type": "string"
+      },
+      "reason": {
+        "enum": [
+          "pending_public",
+          "withdrawn"
+        ],
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "hint": {
+        "type": "string"
+      },
+      "headnotes": {
+        "enum": [
+          "included",
+          "omitted"
+        ],
+        "type": "string"
+      },
+      "facets": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "court": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "courtYear": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "year": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "decisionType": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "source": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "language": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "court",
+          "courtYear",
+          "year",
+          "decisionType",
+          "source",
+          "language"
+        ],
+        "additionalProperties": false
+      },
+      "nextCursor": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "paginationOutcome": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "complete",
+              "truncated"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "exclusion_budget"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "searches": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "queryUsed": {
+              "type": "string"
+            },
+            "paginationOutcome": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "query",
+            "queryUsed",
+            "warnings"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "appUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_url": {
+              "type": "string"
+            },
+            "caseNumber": {
+              "type": "string"
+            },
+            "citationCount": {
+              "type": "number"
+            },
+            "citationAuthority": {
+              "type": "number"
+            },
+            "country": {
+              "type": "string"
+            },
+            "court": {
+              "type": "string"
+            },
+            "courtAbbreviation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "decisionDate": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "decisionId": {
+              "type": "string"
+            },
+            "resourceName": {
+              "type": "string"
+            },
+            "decisionType": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ecli": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "language": {
+              "type": "string"
+            },
+            "matchedQueries": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "matchingPassages": {
+              "type": "number"
+            },
+            "sourceUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "snippet": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "keywords": {
+              "anyOf": [
+                {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "headnote": {
+              "anyOf": [
+                {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "excerpt": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "appUrl",
+            "url",
+            "caseNumber",
+            "citationCount",
+            "citationAuthority",
+            "country",
+            "court",
+            "courtAbbreviation",
+            "decisionDate",
+            "decisionId",
+            "resourceName",
+            "decisionType",
+            "ecli",
+            "language",
+            "matchedQueries",
+            "matchingPassages",
+            "sourceUrl",
+            "keywords",
+            "headnote"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "exact",
+              "estimate",
+              "not_counted"
+            ],
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "nextStep": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "lookup_case_law": {
+    "type": "object",
+    "properties": {
+      "code": {
+        "enum": [
+          "public_country_unavailable"
+        ],
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "unavailable"
+        ],
+        "type": "string"
+      },
+      "country": {
+        "enum": [
+          "AUT",
+          "CZE",
+          "EU",
+          "HUN",
+          "POL",
+          "SVK",
+          "USA"
+        ],
+        "type": "string"
+      },
+      "reason": {
+        "enum": [
+          "pending_public",
+          "withdrawn"
+        ],
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "hint": {
+        "type": "string"
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "identifier": {
+              "type": "string"
+            },
+            "appUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_url": {
+              "type": "string"
+            },
+            "caseNumber": {
+              "type": "string"
+            },
+            "caseNumberType": {
+              "enum": [
+                "case-number",
+                "neutral-citation",
+                "reporter-citation"
+              ],
+              "type": "string"
+            },
+            "court": {
+              "type": "string"
+            },
+            "courtAbbreviation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "decisionDate": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "decisionId": {
+              "type": "string"
+            },
+            "ecli": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "resourceName": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "found",
+                "ambiguous",
+                "not_found",
+                "lookup_failed"
+              ],
+              "type": "string"
+            },
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "message": {
+              "type": "string"
+            },
+            "hint": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "identifier",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "additionalProperties": false
+  }
+}

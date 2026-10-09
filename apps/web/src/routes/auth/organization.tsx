@@ -33,10 +33,10 @@ import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { optionalArray } from "@/lib/arrays";
 import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -59,6 +59,7 @@ import {
   onboardingNavigation,
 } from "@/lib/redirect";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 
 const searchSchema = v.object({
   devQuickStart: v.optional(v.boolean()),
@@ -157,11 +158,10 @@ const OrganizationSkeleton = () => (
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const { data: organizations, isPending } = useQuery(
-    organizationListOptions(userId),
+  const organizationView = useQueryView(
+    useQuery(organizationListOptions(userId)),
   );
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
-  const hasOrganizations = (organizations?.length ?? 0) > 0;
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,
   });
@@ -169,20 +169,34 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
     isOauthPostLoginFromSearch ||
     (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
 
-  if (hydrated && !isPending && !hasOrganizations && !isOauthPostLogin) {
+  if (hydrated && organizationView.type === "empty" && !isOauthPostLogin) {
     return <Navigate {...onboardingNavigation(redirectTo)} />;
   }
 
-  if (!hydrated || isPending || (!hasOrganizations && !isOauthPostLogin)) {
+  if (!hydrated || organizationView.type === "pending") {
     return <OrganizationSkeleton />;
   }
 
+  if (
+    organizationView.type === "error" ||
+    (organizationView.type === "items" && organizationView.items.length === 0)
+  ) {
+    return (
+      <Frame className="w-full max-w-sm">
+        <FramePanel>
+          <QueryViewFeedback view={organizationView} />
+        </FramePanel>
+      </Frame>
+    );
+  }
+
   return (
-    <div className="flex flex-1 items-center justify-center">
-      {hasOrganizations ? (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3">
+      <QueryViewFeedback view={organizationView} />
+      {organizationView.type === "items" ? (
         <OrganizationList
           isOauthPostLogin={isOauthPostLogin}
-          organizations={optionalArray(organizations)}
+          organizations={organizationView.items}
         />
       ) : (
         <CreateOrganizationForm isOauthPostLogin={isOauthPostLogin} />

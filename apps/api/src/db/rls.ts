@@ -5,6 +5,8 @@ import * as p from "drizzle-orm/pg-core";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
+import type { EntityReferenceClassification } from "./entity-feature-policies";
+import { entityFeaturePolicies } from "./entity-feature-policies";
 import { INGESTION_ROLE_NAME } from "./role-names";
 
 export const stella = p.pgRole("stella").existing();
@@ -304,7 +306,15 @@ const userFileScopeCheck = sql`(
   ${chatDerivedThreadScopeCheck(sql`user_files.thread_id`)}
 )`;
 
-export const wsPolicies = () => [
+type EntityFeaturePolicyOptions = {
+  columns: Record<string, p.AnyPgColumn>;
+  references?: ReadonlyMap<p.AnyPgColumn, EntityReferenceClassification>;
+};
+
+export const wsPolicies = (entityAccess?: EntityFeaturePolicyOptions) => [
+  ...(entityAccess === undefined
+    ? []
+    : entityFeaturePolicies(entityAccess.columns, entityAccess.references)),
   p.pgPolicy("workspace_select", {
     for: "select",
     to: stella,
@@ -379,7 +389,13 @@ const workspaceOrganizationCheck = sql`(
  * workspace pin from authorizing a row whose organization_id was corrupted or
  * supplied from another tenant.
  */
-export const wsOrganizationPolicies = (tableName: string) => [
+export const wsOrganizationPolicies = (
+  tableName: string,
+  entityAccess?: EntityFeaturePolicyOptions,
+) => [
+  ...(entityAccess === undefined
+    ? []
+    : entityFeaturePolicies(entityAccess.columns, entityAccess.references)),
   p.pgPolicy(`${tableName}_workspace_select`, {
     for: "select",
     to: stella,
@@ -846,6 +862,15 @@ export const caseLawAnalysisReaderPolicies = () => [
     for: "select",
     to: stellaCaseLawAnalysisReader,
     using: allowAllRows,
+  }),
+];
+
+/** Decisions a redaction marked stay invisible to the analysis reader. */
+export const caseLawAnalysisReaderDecisionPolicies = () => [
+  p.pgPolicy("case_law_analysis_reader_read", {
+    for: "select",
+    to: stellaCaseLawAnalysisReader,
+    using: sql`redacted_at IS NULL`,
   }),
 ];
 

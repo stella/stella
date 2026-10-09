@@ -17,9 +17,9 @@ const _delete = tx.delete(versions);
 
 // expect-clean: no-direct-template-version-write/no-direct-template-version-write
 const _unrelatedInsert = tx.insert(unrelatedTable);
-// oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding that shadows the imported table must remain valid
+// oxlint-disable-next-line no-shadow -- fixture: a local binding that shadows the imported table must remain valid
 const _shadowedInsert = (versions: unknown) => tx.insert(versions);
-// oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding that shadows the schema namespace must remain valid
+// oxlint-disable-next-line no-shadow -- fixture: a local binding that shadows the schema namespace must remain valid
 const _shadowedNamespaceUpdate = (schema: { templateVersions: unknown }) =>
   tx.update(schema.templateVersions);
 

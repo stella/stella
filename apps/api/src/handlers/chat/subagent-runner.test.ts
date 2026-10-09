@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { createPipelineContext } from "@stll/anonymize";
+import { AI_ERROR_KINDS } from "@stll/api-contract";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
@@ -17,6 +19,10 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
@@ -27,6 +33,7 @@ import {
 } from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -35,7 +42,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 
-import { runSubagent } from "./subagent-runner";
+import { runSubagent, subagentRunErrorMessage } from "./subagent-runner";
 import type { RunSubagentOptions } from "./subagent-runner";
 
 // Drives `runSubagent` through the real `chat()` loop with a scripted provider,
@@ -90,6 +97,7 @@ type RunScriptedSubagentOverrides = Partial<
 > & {
   /** Wraps the scripted transport, e.g. to record what the provider receives. */
   wrapAdapter?: ((adapter: AnyTextAdapter) => AnyTextAdapter) | undefined;
+  admission?: ModelDispatchAdmission | undefined;
 };
 
 const runScriptedSubagent = async (
@@ -134,6 +142,7 @@ const runScriptedSubagent = async (
         workspaceId: ids.wsA1,
       },
       organizationId: ids.orgA,
+      admission: overrides.admission ?? testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       role: "fast",
@@ -363,6 +372,52 @@ describe("a subagent run across several model steps", () => {
   });
 });
 
+describe("a subagent run on its parent's admitted action", () => {
+  test("stops when the admitted action's lease is lost", async () => {
+    const lease = new AbortController();
+    const reached = Promise.withResolvers<AbortSignal>();
+    const run = admitModelDispatch({
+      organizationId: ids.orgA,
+      actionKind: "chat.send",
+      signal: lease.signal,
+      run: async (admission) =>
+        await runScriptedSubagent(
+          [{ finishReason: "stop", text: "never sent", type: "text" }],
+          {
+            admission,
+            wrapAdapter: (adapter) => ({
+              ...adapter,
+              async *chatStream(options) {
+                const signal = options.request?.signal;
+                if (!signal) {
+                  throw new Error(
+                    "Expected the engine to pass an abort signal.",
+                  );
+                }
+                reached.resolve(signal);
+                const aborted = Promise.withResolvers<never>();
+                signal.addEventListener(
+                  "abort",
+                  () => aborted.reject(signal.reason),
+                  { once: true },
+                );
+                await aborted.promise;
+                yield* adapter.chatStream(options);
+              },
+            }),
+          },
+        ),
+    });
+
+    const providerSignal = await reached.promise;
+    expect(providerSignal.aborted).toBe(false);
+    lease.abort();
+
+    expect(await rejectionOf(run)).toMatchObject({ name: "AbortError" });
+    expect(providerSignal.aborted).toBe(true);
+  });
+});
+
 describe("a subagent run that ends without a complete answer", () => {
   test("reports a provider error as a failure, keeping the usage spent before it", async () => {
     const { result } = await runScriptedSubagent([
@@ -375,6 +430,24 @@ describe("a subagent run that ends without a complete answer", () => {
       reason: "run-error",
       usage: LOOKUP_STEP_USAGE,
     });
+  });
+
+  test("names a provider error by its kind, never by the provider's text", async () => {
+    const sentinel = "SENTINEL_SUBAGENT_PROVIDER_TEXT";
+    const { result } = await runScriptedSubagent([
+      lookupStep,
+      {
+        code: `${sentinel}_code`,
+        message: JSON.stringify({ error: { message: sentinel, code: 503 } }),
+        type: "error",
+      },
+    ]);
+
+    expect(result).toMatchObject({ outcome: "failed", reason: "run-error" });
+    expect(JSON.stringify(result)).not.toContain(sentinel);
+    expect(
+      AI_ERROR_KINDS.map((kind) => subagentRunErrorMessage(kind)),
+    ).toContain(result.outcome === "failed" ? result.message : "");
   });
 
   test("adds the usage a failed step reported to the steps before it", async () => {

@@ -46,14 +46,20 @@ import {
 import { registryFormatHtml } from "./registry-format";
 
 const SEARCH_DEBOUNCE_MS = 300;
+const CONNECTION_FAILURE_MESSAGES = {
+  lookup: "registryErrorState",
+  connect: "registryErrorConnect",
+} as const;
 // Emitted by the native bridge once a browser handoff stored a credential;
 // the non-activating panel gets no focus event to notice it otherwise.
 const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
 
 type Connection =
   | { status: "disconnected" }
+  | { status: "expired" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
+export type DesktopConnectionStatus = Connection["status"] | "loading";
 type ResultCard = Omit<
   DesktopRegistrySearchResponse["results"][number],
   "rendered"
@@ -82,6 +88,10 @@ type RegistrySearchProps = {
   /** The shared search field; in registry scope ArrowUp and Enter act on the highlighted result. */
   searchInput: RefObject<HTMLInputElement | null>;
   children: (slots: {
+    connectionStatus: DesktopConnectionStatus;
+    connectionError: string | null;
+    connectControl: ReactNode;
+    retryConnection: () => void;
     controls: ReactNode;
     results: ReactNode;
     feedback: ReactNode;
@@ -100,7 +110,11 @@ export const RegistrySearch = ({
   children,
 }: RegistrySearchProps) => {
   const t = useTranslations("clipboard");
+  const settingsT = useTranslations("settings");
   const [connection, setConnection] = useState<Connection | null>(null);
+  const [connectionReadAttempt, setConnectionReadAttempt] = useState(0);
+  const retryConnection = () =>
+    setConnectionReadAttempt((current) => current + 1);
   const [registryId, setRegistryId] = useState("");
   const [searchState, setSearchState] = useState<SearchState>({
     status: "idle",
@@ -109,9 +123,9 @@ export const RegistrySearch = ({
     scope: string;
     message: string;
   } | null>(null);
-  const [connectionFailure, setConnectionFailure] = useState<string | null>(
-    null,
-  );
+  const [connectionFailure, setConnectionFailure] = useState<
+    keyof typeof CONNECTION_FAILURE_MESSAGES | null
+  >(null);
   const [attempt, setAttempt] = useState(0);
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
@@ -121,7 +135,10 @@ export const RegistrySearch = ({
   const formatRequests = useRef(new Map<string, number>());
   const defaultFormatRequests = useRef(0);
   const [savingDefaultFormat, setSavingDefaultFormat] = useState(false);
-  const connectionError = t("registryErrorState");
+  const connectionError =
+    connectionFailure === null
+      ? null
+      : t(CONNECTION_FAILURE_MESSAGES[connectionFailure]);
   const searchError = t("registryErrorSearch");
   const connected = connection?.status === "connected";
   const formatType =
@@ -137,7 +154,7 @@ export const RegistrySearch = ({
     attempt,
   ]);
   const errorMessage =
-    failure?.scope === scope ? failure.message : connectionFailure;
+    failure?.scope === scope ? failure.message : connectionError;
   const setError = (message: string | null) =>
     setFailure(message === null ? null : { scope, message });
 
@@ -175,7 +192,7 @@ export const RegistrySearch = ({
             return;
           }
           setConnection({ status: "unavailable" });
-          setConnectionFailure(connectionError);
+          setConnectionFailure("lookup");
         });
     };
     refresh();
@@ -200,7 +217,14 @@ export const RegistrySearch = ({
       window.removeEventListener("focus", refresh);
       stopListening();
     };
-  }, [connectionError]);
+  }, []);
+
+  useEffect(() => {
+    if (connectionReadAttempt === 0) {
+      return;
+    }
+    connectionRefresh.current();
+  }, [connectionReadAttempt]);
 
   const connectionExpiresAt =
     connection?.status === "connected" ? connection.expiresAt : null;
@@ -291,10 +315,11 @@ export const RegistrySearch = ({
     generation.current += 1;
     setSearchState({ status: "idle" });
     setError(null);
+    setConnectionFailure(null);
     onConnectionFlowChange("signIn");
     void onConnectAccount().catch(() => {
       onConnectionFlowChange("idle");
-      setError(t("registryErrorConnect"));
+      setConnectionFailure("connect");
     });
   };
   const disconnect = () => {
@@ -495,6 +520,8 @@ export const RegistrySearch = ({
   let emptyText = t("registrySearchHint");
   if (connection === null) {
     emptyText = t("registryLoading");
+  } else if (connection.status === "expired") {
+    emptyText = settingsT("connectionExpiredDescription");
   } else if (!connected) {
     emptyText = t("registryDisconnected");
   } else if (connection.registries.length === 0) {
@@ -728,16 +755,16 @@ export const RegistrySearch = ({
           <p role="status" className="max-w-sm text-sm">
             {errorMessage ? "" : emptyText}
           </p>
-          {connection?.status === "disconnected" ? (
+          {connection?.status === "disconnected" ||
+          connection?.status === "expired" ? (
             <Button className="min-h-11" onClick={connect}>
-              {t("registryConnect")}
+              {connection.status === "expired"
+                ? settingsT("reconnectToStella")
+                : t("registryConnect")}
             </Button>
           ) : null}
           {connection?.status === "unavailable" ? (
-            <Button
-              className="min-h-11"
-              onClick={() => connectionRefresh.current()}
-            >
+            <Button className="min-h-11" onClick={retryConnection}>
               {t("registryRetry")}
             </Button>
           ) : null}
@@ -761,7 +788,23 @@ export const RegistrySearch = ({
       ) : null}
     </div>
   );
-  return children({ controls, results, feedback });
+  return children({
+    controls,
+    results,
+    feedback,
+    connectionStatus: connection?.status ?? "loading",
+    connectionError,
+    connectControl: (
+      <Button className="min-h-11 rounded-xl" onClick={connect} type="button">
+        {settingsT(
+          connection?.status === "expired"
+            ? "reconnectToStella"
+            : "connectToStella",
+        )}
+      </Button>
+    ),
+    retryConnection,
+  });
 };
 
 type DefaultFormatItemProps = DesktopRegistryDefaultFormat & {

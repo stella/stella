@@ -1122,6 +1122,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
+  "open-playbook": READS_ONLY,
   "remove-queued-message": notModelled(
     "The send queue lives in the session hook, which the harness does not render.",
   ),
@@ -1146,6 +1147,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
       SendUserMessage.allows(model) ||
       SupersedeCards.allows(model) ||
       isBusy(model),
+  ),
+  "send-queued-message-now": notModelled(
+    "The send queue lives in the session hook, which the harness does not render; the stop it issues is modelled as stop.",
   ),
   stop: byCommands("StopRunningCall, StopMidStream", StopRunningCall.allows),
   "toggle-anonymization": PAGE_STATE,

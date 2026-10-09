@@ -37,6 +37,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
@@ -122,6 +123,7 @@ import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
 import { verifyAuthRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
+import { handleVisualSandboxRequest } from "@/api/handlers/visual-sandbox/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
 import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
@@ -156,6 +158,7 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
+import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
 import {
   enrichRequestContext,
@@ -167,6 +170,7 @@ import {
   completeRequest,
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
+import { emitEventLoopDelayMetric } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
@@ -205,6 +209,7 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -250,6 +255,19 @@ const startMemoryPressureHandler = () => {
       },
     }),
   );
+};
+
+// One stall on this loop delays every request the task is serving, so it is
+// reported as soon as the loop is free, and its window's delay as a metric.
+const startEventLoopDelayReporting = () => {
+  startEventLoopDelayMonitor({
+    onReport: emitEventLoopDelayMetric,
+    onStall: (stallMs) => {
+      logger.warn("runtime.event_loop_stalled", {
+        "event_loop.stall_ms": stallMs,
+      });
+    },
+  });
 };
 
 const allowedBrowserOrigins = (): (string | RegExp)[] => {
@@ -371,7 +389,10 @@ const api = new Elysia()
       return mcpPreflightResponse;
     }
 
-    return handleMcpAppSandboxRequest(request, set);
+    return (
+      handleMcpAppSandboxRequest(request, set) ??
+      handleVisualSandboxRequest(request, set)
+    );
   })
   .use(
     cors({
@@ -560,7 +581,7 @@ const api = new Elysia()
   // TypeScript's instantiation limit for the browser's Eden client. The
   // signing route carries the version prefix itself.
   .use(feedbackRoute)
-  .use(pdfSigningSessionsRoute);
+  .use(new Elysia().use(pdfSigningSessionsRoute).use(desktopPresenceRoute));
 
 export default api;
 
@@ -745,11 +766,17 @@ const startServer = async (): Promise<void> => {
     idleTimeout: HTTP_IDLE_TIMEOUT_S,
   });
 
+  // From here the loop serves requests; boot work before this point delays
+  // none, so it stays out of the stall signal.
+  startEventLoopDelayReporting();
+
   // Filled in after the handlers below are attached, so a signal arriving
   // during scheduler registration still finds a shutdown path. A holder rather
   // than a binding because the shutdown closure is created before the loop
   // exists and has to observe it once it does.
-  const scheduler: { loop?: ReturnType<typeof startSchedulerLoop> } = {};
+  const scheduler: {
+    loop: ReturnType<typeof startSchedulerLoop> | undefined;
+  } = { loop: undefined };
 
   // Graceful shutdown: stop accepting HTTP requests, close long-lived SSE
   // streams, then drain the BullMQ workers on SIGTERM/SIGINT (deploy,
@@ -831,16 +858,18 @@ const startServer = async (): Promise<void> => {
   // After the signal handlers, because registration is awaited,
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
-  await ensureDefaultSchedulerJobs();
-  scheduler.loop = startSchedulerLoop({
-    registry: createSchedulerTaskRegistry(
-      createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
-    ),
+  scheduler.loop = await startConfiguredScheduler({
+    mode: env.SCHEDULED_JOBS_MODE,
+    ensureDefaultJobs: ensureDefaultSchedulerJobs,
+    startLoop: () =>
+      startSchedulerLoop({
+        registry: createSchedulerTaskRegistry(
+          createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+        ),
+      }),
+    logger,
   });
   markScheduledJobsReady();
-  logger.info("scheduler.started", {
-    "scheduler.runner_id": scheduler.loop.runnerId,
-  });
 };
 
 if (import.meta.main) {

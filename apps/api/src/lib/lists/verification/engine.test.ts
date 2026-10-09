@@ -13,10 +13,11 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
-import { decideFeatureAccess } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { decideFeatureAccess } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
@@ -32,8 +33,10 @@ import {
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
+import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type Captured = { tenantWorkspaceIds: readonly string[]; messages: unknown[] };
@@ -56,6 +59,7 @@ const access = decideFeatureAccess({
   featureId: LIST_VERIFICATION_FEATURE_ID,
   userId: "user-fixture",
   grants: {
+    [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
     [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
   },
   organizationId,
@@ -66,8 +70,10 @@ if (access.status !== "enabled") {
   throw new Error("Fixture requires access");
 }
 const deps: VerificationModelDeps = {
+  admission: testModelAdmission(organizationId),
   accessProof: access.proof,
   refreshAccessProof: async () => access.proof,
+  checkRunBudget: async () => Result.ok(),
   organizationId,
   workspaceId,
   entityVersionId: toSafeId<"entityVersion">("version-fixture"),
@@ -664,6 +670,7 @@ test("model dispatch requires proofs bound to the requester and organization", a
   const other = decideFeatureAccess({
     registry: FEATURE_REGISTRY,
     grants: {
+      [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
       [LIST_VERIFICATION_FEATURE_ID]: [
         { type: "organization", organizationId },
       ],
@@ -695,4 +702,35 @@ test("model dispatch requires proofs bound to the requester and organization", a
     );
   }
   expect(captured).toHaveLength(0);
+});
+
+test("each model request rechecks its run budget before dispatch", async () => {
+  let checks = 0;
+  const capError = new ListVerificationRunCapError({
+    reason: "active",
+    message: "Verification limit reached",
+    hint: "Wait for an active run.",
+  });
+  const call = createVerificationCall({
+    deps: {
+      ...deps,
+      checkRunBudget: async () => {
+        checks += 1;
+        return checks === 1 ? Result.ok() : Result.err(capError);
+      },
+    },
+    feature: "verification-budget-test",
+    system: "Fixture instruction",
+    shared: null,
+    outputSchema: v.object({ value: v.string() }),
+  });
+  answers.push({ value: "fixture" });
+  expect(await call.generate([])).toEqual(Result.ok({ value: "fixture" }));
+  const refusal = await call.generate([]);
+  expect(Result.isError(refusal)).toBe(true);
+  if (Result.isError(refusal)) {
+    expect(refusal.error).toBe(capError);
+  }
+  expect(checks).toBe(2);
+  expect(captured).toHaveLength(1);
 });

@@ -28,6 +28,8 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
@@ -71,7 +73,7 @@ const updateAIConfigBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: updateAIConfigBody,
 } satisfies HandlerConfig;
@@ -187,7 +189,11 @@ const updateAIConfig = createSafeRootHandler(
 
     const validationResults = await Promise.all(
       providersToValidate.map(
-        async (providerConfig) => await validateProviderKey(providerConfig),
+        async (providerConfig) =>
+          await validateProviderKey(
+            providerConfig,
+            grantThirdPartyOutboundPermit(),
+          ),
       ),
     );
 
@@ -507,10 +513,14 @@ const SETTINGS_PROBE_TIMEOUT_MS = 20_000;
  */
 const validateProviderKey = async (
   providerConfig: TanStackBYOKProviderConfig,
+  permit: ThirdPartyOutboundPermit,
 ): Promise<ValidationResult> => {
   const result = await Result.tryPromise({
     try: async () =>
-      await probeProvider(providerConfig.provider, providerConfig.apiKey, {
+      await probeProvider({
+        apiKey: providerConfig.apiKey,
+        permit,
+        provider: providerConfig.provider,
         timeoutMs: SETTINGS_PROBE_TIMEOUT_MS,
       }),
     catch: (error: unknown) =>

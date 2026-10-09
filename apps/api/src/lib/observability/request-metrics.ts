@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
+import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -19,15 +20,57 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
  * The `class` dimension is the whole point: it lets the p95 latency
  * alarm watch `class=crud` in isolation, so an inherently multi-second
  * synchronous AI endpoint (template field suggestions, chat, summaries)
- * cannot trip an SLO meant for CRUD. A separate, looser alarm watches
- * `class=ai`. Keeping `class` the only dimension caps this at two
- * extracted metrics regardless of route cardinality; `http.route` and
+ * or search read cannot trip an SLO meant for CRUD. Looser alarms watch
+ * `class=ai` and `class=search`; `class=batch` (crawler reads) stays out of
+ * every latency SLO and is logged without an extracted metric. Keeping
+ * `class` the only dimension caps this at one extracted metric per extracted
+ * class regardless of route cardinality; `http.route` and
  * `http.status_code` ride along as queryable properties, not dimensions.
  */
 
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+/** Counts observed failure transitions; a later transaction rollback does not
+ * retract telemetry. Only the failure class is a metric dimension. */
+export const emitVerificationRunFailureMetric = (
+  errorCode: VerificationRunErrorCode,
+): void => {
+  switch (errorCode) {
+    case "extraction_failed":
+    case "grading_failed":
+    case "no_text":
+    case "access_revoked":
+      writeMetricLine({
+        event: `list_verification_run.${errorCode}`,
+        errorCode,
+        _aws: {
+          Timestamp: Temporal.Now.instant().epochMilliseconds,
+          CloudWatchMetrics: [
+            {
+              Namespace: METRIC_NAMESPACE,
+              Dimensions: [["errorCode"]],
+              Metrics: [{ Name: "VerificationRunFailures", Unit: "Count" }],
+            },
+          ],
+        },
+        VerificationRunFailures: 1,
+      });
+      return;
+    case "pin_unresolved":
+    case "pin_content_changed":
+    case "unsupported_format":
+    case "ai_unavailable":
+    case "enqueue_failed":
+    case "run_limit_reached":
+    case "internal":
+      return;
+    default:
+      errorCode satisfies never;
+      panic("Unknown verification failure code");
+  }
+};
 
 export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
   const name = "AdmissionStoreEvictionPolicyRefused";
@@ -43,6 +86,41 @@ export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
       ],
     },
     [name]: refused ? 1 : 0,
+  });
+};
+
+const EVENT_LOOP_DELAY_METRIC = {
+  max: "EventLoopDelayMax",
+  p99: "EventLoopDelayP99",
+} as const;
+
+/**
+ * One reporting window of the process's event-loop delay. Undimensioned: the
+ * process is the unit, and a task or route id would only multiply series.
+ */
+export const emitEventLoopDelayMetric = ({
+  maxMs,
+  p99Ms,
+}: {
+  maxMs: number;
+  p99Ms: number;
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [
+            { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
+            { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
+          ],
+        },
+      ],
+    },
+    [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
+    [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
   });
 };
 
@@ -76,7 +154,8 @@ const writeMetricLine = (record: object): void => {
   process.stdout.write(`${line}\n`);
 };
 
-export type RequestClass = "ai" | "crud";
+export const REQUEST_CLASSES = ["ai", "crud", "search", "batch"] as const;
+export type RequestClass = (typeof REQUEST_CLASSES)[number];
 
 type EmitRequestDurationMetricInput = {
   durationMs: number;
@@ -84,6 +163,15 @@ type EmitRequestDurationMetricInput = {
   statusCode: number;
   route: string;
 };
+
+// No alarm reads `class=batch`, so its records stay queryable log lines
+// without paying for an extracted metric series.
+const REQUEST_CLASS_METRIC = {
+  ai: "extracted",
+  crud: "extracted",
+  search: "extracted",
+  batch: "log_only",
+} as const satisfies Record<RequestClass, "extracted" | "log_only">;
 
 /**
  * Build the EMF record. Pure (caller supplies the timestamp) so the
@@ -96,22 +184,39 @@ export const buildRequestDurationRecord = ({
   statusCode,
   route,
   timestamp,
-}: EmitRequestDurationMetricInput & { timestamp: number }) => ({
-  _aws: {
-    Timestamp: timestamp,
-    CloudWatchMetrics: [
-      {
-        Namespace: METRIC_NAMESPACE,
-        Dimensions: [["class"]],
-        Metrics: [{ Name: METRIC_NAME, Unit: "Milliseconds" }],
-      },
-    ],
-  },
-  class: requestClass,
-  [METRIC_NAME]: Math.round(durationMs),
-  "http.route": route,
-  "http.status_code": statusCode,
-});
+}: EmitRequestDurationMetricInput & { timestamp: number }) => {
+  const fields = {
+    class: requestClass,
+    [METRIC_NAME]: Math.round(durationMs),
+    "http.route": route,
+    "http.status_code": statusCode,
+  };
+  switch (REQUEST_CLASS_METRIC[requestClass]) {
+    case "log_only":
+      return { type: "log_only", record: fields } as const;
+    case "extracted":
+      return {
+        type: "extracted",
+        record: {
+          _aws: {
+            Timestamp: timestamp,
+            CloudWatchMetrics: [
+              {
+                Namespace: METRIC_NAMESPACE,
+                Dimensions: [["class"]],
+                Metrics: [{ Name: METRIC_NAME, Unit: "Milliseconds" }],
+              },
+            ],
+          },
+          ...fields,
+        },
+      } as const;
+    default: {
+      REQUEST_CLASS_METRIC[requestClass] satisfies never;
+      return panic("Unknown request class metric disposition");
+    }
+  }
+};
 
 export const emitRequestDurationMetric = (
   input: EmitRequestDurationMetricInput,
@@ -120,7 +225,7 @@ export const emitRequestDurationMetric = (
     buildRequestDurationRecord({
       ...input,
       timestamp: Temporal.Now.instant().epochMilliseconds,
-    }),
+    }).record,
   );
 };
 
