@@ -1332,8 +1332,7 @@ jobs:
             echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           else
-            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
-            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
+            bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
