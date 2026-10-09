@@ -1815,21 +1815,34 @@ const buildApiScriptStep = ({
   args,
   label,
   ...envOptions
-}: ApiScriptStepOptions): Step => ({
+}: ApiScriptStepOptions) => ({
   cmd: [resolveCommandPath("bun"), ...args],
   cwd: path.resolve(envOptions.rootDir, "apps/api"),
   env: buildApiEnv(envOptions),
   label,
 });
 
+// A seeded stack serves only what its seed wrote. The case-law fixture lives
+// in this database's Postgres search projection, so search reads it there
+// whichever provider apps/api/.env names; a public-law database URL in that
+// file then fails the API's startup check instead of serving another corpus.
+const SEEDED_STACK_LEGAL_SEARCH_PROVIDER = "pg-fts";
+
+const withSeededStackSearch = (env: NodeJS.ProcessEnv) => ({
+  ...env,
+  LEGAL_SEARCH_PROVIDER: SEEDED_STACK_LEGAL_SEARCH_PROVIDER,
+});
+
 // The test user, its session and Playwright storage state, then the fixture
-// matters, contacts and documents.
-const buildSeedStep = (options: BuildApiEnvOptions) =>
-  buildApiScriptStep({
+// matters, contacts, documents and public case law.
+const buildSeedStep = (options: BuildApiEnvOptions): Step => {
+  const step = buildApiScriptStep({
     ...options,
     args: ["run", "db:seed-local"],
     label: "Seeding local fixtures",
   });
+  return { ...step, env: withSeededStackSearch(step.env) };
+};
 
 const buildSealCheckStep = (options: BuildApiEnvOptions) =>
   buildApiScriptStep({
@@ -1892,12 +1905,15 @@ export const buildPersistentSteps = ({
   mode,
   ports,
   rootDir,
+  seeded,
 }: {
   infraOffset: number;
   infraPorts: InfraPorts;
   mode: DevMode;
   ports: DevPorts;
   rootDir: string;
+  /** Whether this run seeds the stack (`--seed`). */
+  seeded: boolean;
 }): PersistentSteps => {
   const webBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
@@ -1907,7 +1923,15 @@ export const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: path.resolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = buildApiEnv({ infraOffset, infraPorts, ports, rootDir });
+  const configuredApiEnv = buildApiEnv({
+    infraOffset,
+    infraPorts,
+    ports,
+    rootDir,
+  });
+  const apiEnv = seeded
+    ? withSeededStackSearch(configuredApiEnv)
+    : configuredApiEnv;
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
     ...createWebEnv({
@@ -2384,6 +2408,7 @@ const main = async () => {
     mode,
     ports,
     rootDir: gitContext.currentRoot,
+    seeded: parsedArgs.seed,
   });
   const readinessChecks = buildReadinessChecks({
     mode,
