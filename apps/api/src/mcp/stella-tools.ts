@@ -841,7 +841,7 @@ const lookupCaseLawArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(LIMITS.caseLawLookupIdentifiersMax),
       v.description(
-        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.`,
+        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own.`,
       ),
     ),
     country: countryInputSchema(

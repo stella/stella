@@ -387,7 +387,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
         },
         "country": {
           "type": "string",
@@ -7301,7 +7301,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
         },
         "country": {
           "type": "string",
@@ -8995,7 +8995,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
         },
         "country": {
           "type": "string",
