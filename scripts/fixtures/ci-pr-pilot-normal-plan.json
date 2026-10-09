@@ -110,6 +110,9 @@
     },
     "ci-result": {
       "if": "always()"
+    },
+    "api-test-durations": {
+      "if": "needs.ci-plan.outputs.run_required != 'false' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.ci-tests.result == 'success' && needs.ci-plan.outputs.api_test_shards != '0'"
     }
   }
 }

@@ -3,12 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
-import durations from "../apps/api/scripts/test-durations.json" with { type: "json" };
 import {
   parseApiTestShard,
   partitionTestFiles,
 } from "../apps/api/scripts/test-file-shards";
-import { durationSeconds } from "../apps/api/scripts/test-timings";
 import { allApiTests } from "./api-test-impact";
 import { planCiApiTests } from "./ci-api-test-plan";
 import {
@@ -158,7 +156,6 @@ test("API sub-shards cover every discovered file exactly once, including new fil
   );
   const newFile = "src/new-shard-census.test.ts";
   expect(files).not.toContain(newFile);
-  expect(durations).not.toHaveProperty(newFile);
   const input = [...files, newFile];
   const selected = TEST_SHARD_IDS.flatMap((id) => {
     const shard = parseApiTestShard(apiShardValue(id));
@@ -166,7 +163,7 @@ test("API sub-shards cover every discovered file exactly once, including new fil
       ? []
       : (partitionTestFiles({
           files: input,
-          durations: durationSeconds(durations),
+          durations: {},
           count: shard.count,
         }).at(shard.index - 1) ?? []);
   });

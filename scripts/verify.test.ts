@@ -278,7 +278,6 @@ test("verify executes every marked CI step and nothing else", () => {
   for (const command of [
     "code-check:affected",
     "typecheck-baseline.ts --check-delta",
-    "refresh-test-durations.ts --check",
     "ratchet.ts --check",
     "design-lint-baseline.ts --check",
   ]) {
@@ -317,11 +316,10 @@ test("fix mode executes exact autofix workflow blocks", () => {
   expect(lint.run.indexOf("typecheck-coverage.ts --autofix")).toBeLessThan(
     lint.run.indexOf("--type-aware --fix"),
   );
-  expect(
-    steps.some(({ run }) =>
-      run.includes("refresh-test-durations.ts --add-missing"),
-    ),
-  ).toBe(true);
+  // API test weights are measured on main and cached, never fixed locally.
+  expect(steps.some(({ run }) => run.includes("refresh-test-durations"))).toBe(
+    false,
+  );
   expect(steps.some(({ run }) => run.includes("oxfmt"))).toBe(true);
   expect(
     steps.some(({ run }) => run.includes("fix-tauri-package-alignment.ts")),
