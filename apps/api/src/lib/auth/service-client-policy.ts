@@ -15,7 +15,7 @@ export type ServiceOAuthPrincipal = {
   type: "service";
   clientId: string;
   organizationId: string;
-  scopes: string[];
+  scopes: (typeof SERVICE_CLIENT_SCOPES)[number][];
   requestsPerMinute: number;
   dailyBudget: number;
 };
@@ -62,7 +62,7 @@ export const servicePrincipalFromClaims = (
     type: "service",
     clientId: client.clientId,
     organizationId: client.organizationId,
-    scopes,
+    scopes: SERVICE_CLIENT_SCOPES.filter((allowed) => scopes.includes(allowed)),
     requestsPerMinute: client.requestsPerMinute,
     dailyBudget: client.dailyBudget,
   };
