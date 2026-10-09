@@ -234,7 +234,7 @@ const isAuditCall = (context: RuleContext, node: unknown): boolean => {
 
 type Range = [number, number];
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
+const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "..");
 
 const FUNCTION_TYPES: ReadonlySet<string> = new Set([
   "FunctionDeclaration",
